@@ -48,7 +48,9 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 ## Run
 
 - python3 backtesting.py
+
 or
+
 - python3 mimic_binance_forward_trading.py
 
 

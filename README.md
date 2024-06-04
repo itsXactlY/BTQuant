@@ -26,9 +26,9 @@ This framework is designed to provide robust and efficient tools for backtesting
 ## Getting Started
 
 ### Prerequisites
-- Python 3.7+
+- Python 3.12+
 - (Custom-)Backtrader
-- JackRabbitRelay (fully pre-installed for forward/live trading)
+- [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (fully pre-installed for forward/live trading)
 
 ### Installation
 

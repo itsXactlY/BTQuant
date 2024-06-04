@@ -28,7 +28,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 ### Prerequisites
 - Python 3.7+
 - (Custom-)Backtrader
-- JackRabbitRelay (fully installed)
+- JackRabbitRelay (fully pre-installed for forward/live trading)
 
 ### Installation
 
@@ -37,6 +37,18 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 - [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
 - [JackRabbitRelay Installation and Setup Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
 
-## License
+- python3 -m venv .venv
+- source .venv/bin/activate
+- cd dependencies
+- pip install .
+- cd BTQCCXT
+- pip install .
+- cd ../..
 
-[MIT](https://choosealicense.com/licenses/mit)
+## Run
+
+- python3 backtesting.py
+or
+- python3 mimic_binance_forward_trading.py
+
+

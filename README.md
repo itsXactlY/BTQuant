@@ -1,4 +1,4 @@
-Work in Progress. If u came that far: https://discord.gg/Y7uBxmRg3Z
+Work in Progress. If you came this far: [Join our Discord](https://discord.gg/Y7uBxmRg3Z)
 
 # BTQuant Framework
 
@@ -21,19 +21,36 @@ This framework is designed to provide robust and efficient tools for backtesting
 - Integrated with **Binance Websocket** (for now) for real-time data.
 - Supports 1-second websocket data feeds for precise and timely trading decisions.
 - Implements real-time dollar cost averaging.
-- Requires as few as 50 lines of code to get started with your own trading Strategy.
+- Requires as few as 50 lines of code to get started with your own trading strategy.
 
 ## Getting Started
 
 ### Prerequisites
-- Python 3.7+
-- Backtrader
-- JackRabbitRelay
+- Python 3.12+
+- (Custom-)Backtrader
+- [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (fully pre-installed for forward/live trading)
 
 ### Installation
 
+For installing JackRabbitRelay, please follow the instructions provided in the links below:
 
-License
-=======
+- [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
+- [JackRabbitRelay Installation and Setup Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
 
-[MIT](https://choosealicense.com/licenses/mit)
+- python3 -m venv .venv
+- source .venv/bin/activate
+- cd dependencies
+- pip install .
+- cd BTQCCXT
+- pip install .
+- cd ../..
+
+## Run
+
+- python3 backtesting.py
+
+or
+
+- python3 mimic_binance_forward_trading.py
+
+

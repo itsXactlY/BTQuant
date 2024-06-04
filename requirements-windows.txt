@@ -1,0 +1,5 @@
+matplotlib==3.6.2
+pandas
+requests
+python_binance
+quantstats

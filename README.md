@@ -47,6 +47,10 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 
 ## Run
 
+- Copy dontcommit.py.template to dontcommit.py
+- Fill identify str from JackRabbitRelay Setup above
+
+
 - python3 backtesting.py
 
 or

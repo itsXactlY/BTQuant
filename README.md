@@ -27,7 +27,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 
 ### Prerequisites
 - Python 3.7+
-- Backtrader
+- (Custom-)Backtrader
 - JackRabbitRelay
 
 ### Installation

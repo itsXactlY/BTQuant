@@ -1,7 +1,7 @@
 import requests
 from dontcommit import identify, jrr_webhook_url
 
-discord_webhook_url = '' # 'https://discord.com/api/webhooks/123/...'
+discord_webhook_url = ''
 
 
 class Alert:
@@ -43,13 +43,15 @@ class JrrOrderBase:
         self.alert_instance = Alert(discord_webhook_url)
 
     def send_jrr_buy_request(self, exchange, account, asset, amount):
+        _amount = int(amount)
+        
         payload = {
             "Exchange": exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Buy",
             "Asset": asset,
-            "USD": amount,
+            "USD": str(_amount),
             "Identity": identify
         }
         try:

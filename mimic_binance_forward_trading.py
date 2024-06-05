@@ -1,9 +1,6 @@
-import backtrader as bt
+from imports import *
 from live_strategys.QQE_Hullband_VolumeOsc import *
 
-from ccxtBTQ import binance_store
-import datetime as dt
-from dontcommit import *
 
 # JackRabbitRelay
 _coin = 'PEPE'
@@ -11,8 +8,10 @@ _collateral = 'USDT'
 _exchange = 'mimic'
 _account = 'JackRabbit_SubaccountName' # Change me, im a dummy name :)
 _asset = f'{_coin}/{_collateral}'
-_amount = 69 # Dollar amount
-_backtest = False
+_amount = '69' # Dollar amount
+_amount = float(_amount)
+
+
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)
@@ -38,7 +37,7 @@ def run():
     
     data._dataname = f"{_coin}{_collateral}"
 
-    cerebro.addstrategy(QQE_Example, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=_backtest)
+    cerebro.addstrategy(QQE_Example, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=False)
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run()
 

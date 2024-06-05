@@ -162,6 +162,7 @@ class BaseStrategy(bt.Strategy):
                 return
             if live == True and self.live_data == True:
                 self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
+                print(f'debug {self.stake}')
                 
                 if not self.buy_executed:
                     self.buy_or_short_condition()

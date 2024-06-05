@@ -1,5 +1,7 @@
 from imports import *
 from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
+from template_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
+
 
 def backtest():
     running_backtest(True)
@@ -15,7 +17,7 @@ def backtest():
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data)
-    cerebro.addstrategy(QQE_Example, backtest=True)
+    cerebro.addstrategy(QQE_DCA_Example, backtest=True)
     
     startcash = 10000
     cerebro.broker.setcash(startcash)

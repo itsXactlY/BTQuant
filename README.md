@@ -41,6 +41,9 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 
 
 Quick way for Framework itself below:
+
+- git clone https://github.com/itsXactlY/BTQuant.git
+- cd BTQuant
 - python3 -m venv .venv
 - source .venv/bin/activate
 - cd dependencies

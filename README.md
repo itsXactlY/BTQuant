@@ -40,7 +40,7 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 - [JackRabbitRelay Mimic Setup and Configuration](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic)
 
 
-Quick way below:
+Quick way for Framework itself below:
 - python3 -m venv .venv
 - source .venv/bin/activate
 - cd dependencies

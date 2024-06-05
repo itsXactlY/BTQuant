@@ -30,8 +30,6 @@ class QQEIndicator(bt.Indicator):
         self.dar = bt.indicators.EMA(self.atr - self.p.q, period=int((self.p.period * 2) - 1))
         self.lines.qqe_line = self.rsi + self.dar
 
-live = True
-
 class QQE_Example(BaseStrategy):
     params = (
         ("ema_length", 20),

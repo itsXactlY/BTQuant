@@ -36,8 +36,7 @@ class QQE_DCA_Example(BaseStrategy):
     params = (
         ('dca_threshold', 1.5),
         ('take_profit', 2),
-        ('percent_sizer', 0.045), # 0.01 -> 1%
-        ('premium', 0.003), # 0.003 -> 0.3%
+        ('percent_sizer', 0.01), # 0.01 -> 1%
         ("ema_length", 20),
         ('hull_length', 53),
         ("printlog", True),

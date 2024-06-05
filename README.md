@@ -29,7 +29,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 - Python 3.12+
 - (Custom-)Backtrader (out of dependencies folder)
 - [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (live trading)
-- [JackRabbitRelay Mimic](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic#setup-and-configuration) (forward trading)
+- [JackRabbitRelay Mimic](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) (forward trading)
 
 ### Installation
 
@@ -37,6 +37,7 @@ For installing JackRabbitRelay, please follow the instructions provided in the l
 
 - [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
 - [JackRabbitRelay Installation and Setup Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
+- [JackRabbitRelay Mimic Setup and Configuration](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic)
 
 
 Quick way below:

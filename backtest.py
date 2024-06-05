@@ -1,7 +1,7 @@
 from imports import *
 from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
 from template_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
-
+from template_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
 def backtest():
     running_backtest(True)
@@ -10,14 +10,14 @@ def backtest():
     my_data_frame = pd.read_csv(rvn, index_col=0, parse_dates=True)
     my_data_frame = my_data_frame.sort_index()
 
-    start = "2022-01-01"
-    end = "2022-02-27"
-    df = my_data_frame.loc[start:end]
+    _start = "2022-01-01"
+    _end = "2022-02-27"
+    df = my_data_frame.loc[_start:_end]
     data = MyPandasData(dataname=df)
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data)
-    cerebro.addstrategy(QQE_DCA_Example, backtest=True)
+    cerebro.addstrategy(SuperSTrend_Scalper, backtest=True)
     
     startcash = 10000
     cerebro.broker.setcash(startcash)
@@ -52,10 +52,10 @@ def backtest():
 
     # Format the filename with coin name, start date, end date, and current date
     current_date = dt.datetime.now().strftime("%Y-%m-%d")
-    filename = f"QuantStat_{start}_to_{end}_generated_on_{current_date}.html"
+    filename = f"QuantStat_{_start}_to_{_end}_generated_on_{current_date}.html"
 
     # Generate QuantStats report
-    quantstats.reports.html(returns, output=filename, title=f'{current_date}_{start}_to_{end}_1m')
+    quantstats.reports.html(returns, output=filename, title=f'{current_date}_{_start}_to_{_end}_1m')
     
     def print_trade_analyzer_results(trade_analyzer, indent=0):
         for key, value in trade_analyzer.items():

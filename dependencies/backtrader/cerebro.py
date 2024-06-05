@@ -41,7 +41,7 @@ from .strategy import Strategy, SignalStrategy
 from .tradingcal import (TradingCalendarBase, TradingCalendar,
                          PandasMarketCalendar)
 from .timer import Timer
-from line_profiler import profile
+
 # Defined here to make it pickable. Ideally it could be defined inside Cerebro
 
 

@@ -26,6 +26,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 ## Getting Started
 
 ### Prerequisites
+- A Linux VPS for JackRabbitRelay (tested & running on: Arch (Garuda Linux) / Debian 12.5 (Bookworm)
 - Python 3.12+
 - (Custom-)Backtrader (out of dependencies folder)
 - [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (live trading)

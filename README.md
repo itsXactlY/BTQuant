@@ -31,6 +31,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 - (Custom-)Backtrader (out of dependencies folder)
 - [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (live trading)
 - [JackRabbitRelay Mimic](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) (forward trading)
+- Data in CSV Format. And alot of them. [CANDLE STASH at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m)
 
 ### Installation
 

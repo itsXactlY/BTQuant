@@ -32,9 +32,10 @@ class BinanceStore(object):
         (TimeFrame.Months, 1): KLINE_INTERVAL_1MONTH,
     }
 
-    def __init__(self, api_key, api_secret, coin_refer, coin_target, testnet=False, retries=5):
-        self.binance = Client(api_key, api_secret, testnet=testnet)
-        self.binance_socket = ThreadedWebsocketManager(api_key, api_secret, testnet=testnet)
+    # def __init__(self, api_key, api_secret, coin_refer, coin_target, testnet=False, retries=5):
+    def __init__(self, coin_refer, coin_target, exchange, account, testnet=False, retries=5):
+        self.binance = Client(testnet=testnet)
+        self.binance_socket = ThreadedWebsocketManager(testnet=testnet)
         self.binance_socket.daemon = True
         self.binance_socket.start()
         self.coin_refer = coin_refer
@@ -81,18 +82,6 @@ class BinanceStore(object):
     
     def format_quantity(self, size):
         return self._format_value(size, self._step_size)
-
-    @retry
-    def get_asset_balance(self, asset):
-        balance = self.binance.get_asset_balance(asset)
-        return float(balance['free']), float(balance['locked'])
-    
-    def get_balance(self):
-        free, locked = self.get_asset_balance(self.coin_target)
-        self._cash = free
-        self._value = free + locked
-        print(f"Free: {free}, Locked: {locked}, Total Value: {self._value}")
-        return float(self._cash), float(self._value)
     
     def getbroker(self):
         return self._broker
@@ -107,7 +96,7 @@ class BinanceStore(object):
 
     @retry
     def get_symbol_info(self, symbol):
-        print(f'Trying to get Symbol Info via Relay. for {symbol}')
+        print(f'Trying to get Symbol Info via websocket for {symbol}')
         return self.binance.get_symbol_info(symbol)
 
     def stop_socket(self):

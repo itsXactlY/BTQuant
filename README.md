@@ -53,6 +53,7 @@ Quick way for Framework itself below:
 - cd BTQCCXT
 - pip install .
 - cd ../..
+- pip install requirements-linux/windows.txt
 
 ## Run
 

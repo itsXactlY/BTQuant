@@ -1,16 +1,13 @@
 from collections import deque
-
 import pandas as pd
-
 from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
-from datetime import timedelta, datetime
 import time
 
 class BinanceData(DataBase):
     params = (
-        ('drop_newest', True),
+        ('drop_newest', False),
         ('update_interval_seconds', 1),
     )
     

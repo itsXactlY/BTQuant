@@ -52,8 +52,9 @@ class QQE_Example(BaseStrategy):
     def buy_or_short_condition(self):
         if not self.buy_executed and not self.conditions_checked:
             if (self.qqe.qqe_line[-1] > 0) and \
-            (self.data.close[-1] > self.hma[0]) and \
-            (self.volosc.osc[-1] > self.volosc.lines[0]):
+                (self.data.close[-1] > self.hma[0]) and \
+                (self.volosc.osc[-1] > self.volosc.lines[0]
+            ):
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.amount)
@@ -64,12 +65,15 @@ class QQE_Example(BaseStrategy):
                 elif self.params.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
-                    self.conditions_checked = True
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    self.calc_averages()
 
     def sell_or_cover_condition(self):
         if self.buy_executed and (self.qqe.qqe_line[-1] > 0) and \
-        (self.data.close[-1] < self.hma[0]) and \
-        (self.volosc.osc[-1] < self.volosc.lines[0]):
+            (self.data.close[-1] < self.hma[0]) and \
+            (self.volosc.osc[-1] < self.volosc.lines[0]
+        ):
             if self.params.backtest == False:
                 self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
             elif self.params.backtest == True:

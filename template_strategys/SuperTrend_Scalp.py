@@ -57,9 +57,10 @@ class SuperSTrend_Scalper(BaseStrategy):
                 self.conditions_checked = True
             elif self.params.backtest == True:
                 self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.take_profit_price = self.data.close[-1] * (1 + self.params.take_profit / 100)
                 self.buy_executed = True
-                self.conditions_checked = True
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(self.stake)
+                self.calc_averages()
 
     def dca_or_short_condition(self):
         if (self.position and \
@@ -67,7 +68,7 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.minusDI[0] > self.params.adxth and \
             self.plusDI[0] < self.params.adxth and \
             self.supertrend_uptrend_signal
-            ):
+        ):
             
             if self.params.backtest == False:
                 self.entry_prices.append(self.data.close[0])
@@ -78,13 +79,30 @@ class SuperSTrend_Scalper(BaseStrategy):
                 self.conditions_checked = True
             elif self.params.backtest == True:
                 self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.take_profit_price = self.data.close[-1] * (1 + self.params.take_profit / 100)
                 self.buy_executed = True
-                self.conditions_checked = True
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(self.stake)
+                self.calc_averages()
 
-    
     def sell_or_cover_condition(self):
         if self.buy_executed and self.data.close[0] >= self.take_profit_price:
+            average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
+
+            # Avoid selling at a loss or below the take profit price
+            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
+                self.log(
+                    f"| - Avoiding sell at a loss or below take profit. "
+                    f"| - Current close price: {self.data.close[0]:.12f}, "
+                    f"| - Average entry price: {average_entry_price:.12f}, "
+                    f"| - Take profit price: {self.take_profit_price:.12f}"
+                )
+                return
+
+        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
+            if self.data.close[0] < self.average_entry_price:
+                print(f'Nothing Todo here. {self.average_entry_price, self.take_profit_price}')
+                return
+            
             if self.params.backtest == False:
                 self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
             elif self.params.backtest == True:

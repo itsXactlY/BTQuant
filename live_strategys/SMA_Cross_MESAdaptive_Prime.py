@@ -1,0 +1,101 @@
+import backtrader as bt
+from live_strategys.live_functions import BaseStrategy, datetime
+from custom_indicators.MesaAdaptiveMovingAverage import MAMA
+
+class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
+    params = (
+        ('fast', 13),
+        ('slow', 37),
+        ('dca_threshold', 1.5),
+        ('take_profit', 1),
+        ('percent_sizer', 0.045), # 4.5%
+        ('debug', False),
+        ("backtest", None)
+        )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Simple Moving Averages
+        self.sma17 = bt.ind.SMA(period=17)
+        self.sma47 = bt.ind.SMA(period=47)
+        # Mesa Adaptive Moving Average
+        self.mama = MAMA(self.data, fast=self.p.fast, slow=self.p.slow)
+        # Crossover signal
+        self.crossover = bt.ind.CrossOver(self.sma17, self.sma47)
+        # Momentum
+        self.momentum = bt.ind.Momentum(period=42)
+        self.DCA = True
+        self.buy_executed = False
+        self.conditions_checked = False
+        self.average_entry_price = None
+
+    def buy_or_short_condition(self):
+        if not self.buy_executed and not self.conditions_checked:
+            if self.crossover > 0 and self.momentum > 0 and self.mama.lines.MAMA > self.mama.lines.FAMA:
+                if self.params.backtest == False:
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.amount)
+                    self.load_trade_data()
+                    self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.buy_executed = True
+                    self.conditions_checked = True
+                elif self.params.backtest == True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.buy_executed = True
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    self.calc_averages()
+
+    def dca_or_short_condition(self):
+        if self.buy_executed and not self.conditions_checked:
+            if self.crossover > 0 and self.momentum > 0 and self.mama.lines.MAMA > self.mama.lines.FAMA:
+                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
+                    if self.params.backtest == False:
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.amount)
+                        self.load_trade_data()
+                        self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                        self.buy_executed = True
+                        self.conditions_checked = True
+                    elif self.params.backtest == True:
+                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                        self.buy_executed = True
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.stake)
+                        self.calc_averages()
+
+    def sell_or_cover_condition(self):
+        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
+            average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
+
+            # Avoid selling at a loss or below the take profit price
+            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
+                self.log(
+                    f"| - Avoiding sell at a loss or below take profit. "
+                    f"| - Current close price: {self.data.close[0]:.12f}, "
+                    f"| - Average entry price: {average_entry_price:.12f}, "
+                    f"| - Take profit price: {self.take_profit_price:.12f}"
+                )
+                return
+        # if self.buy_executed and self.crossover < 0 and self.momentum < 0 and self.mama.lines.MAMA < self.mama.lines.FAMA:
+        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
+            if self.data.close[0] < self.average_entry_price:
+                print(f'Nothing Todo here. {self.average_entry_price, self.take_profit_price}')
+                return
+            
+            if self.params.backtest == False:
+                self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
+            elif self.params.backtest == True:
+                self.close()
+            self.reset_position_state()
+            self.buy_executed = False
+            self.conditions_checked = True
+
+    def next(self):
+        BaseStrategy.next(self)
+        self.conditions_checked = False
+
+        if self.p.backtest == False and self.live_data and self.buy_executed:
+            self.print_counter += 1
+            if self.print_counter % 5 == 0:  # reduce logging spam
+                print(f'|\n| {datetime.now()}\n| Price: {self.data.close[0]:.12f} Entry: {self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')

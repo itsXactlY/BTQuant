@@ -11,6 +11,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 ### Backtesting
 - Utilizes **Backtrader** for comprehensive backtesting of trading strategies.
 - Test and validate your strategies with historical data to ensure robustness and reliability.
+- (Optional) Incorporating Microsoft SQL into the BTQuant framework offers significant advantages for data management, automated backtesting, and overall infrastructure simplicity. By leveraging MS SQL's capabilities, you can ensure efficient, secure, and scalable handling of your trading data, enabling more effective strategy development and execution.
 
 ### Forward Trading
 - Powered by **Backtrader** in conjunction with **JackRabbitRelay**.
@@ -25,13 +26,17 @@ This framework is designed to provide robust and efficient tools for backtesting
 
 ## Getting Started
 
-### Prerequisites
+### Pre-requisites
 - A Linux VPS for JackRabbitRelay (tested & running on: Arch (Garuda Linux) / Debian 12.5 (Bookworm)
 - Python 3.12+
 - (Custom-)Backtrader (out of dependencies folder)
 - [JackRabbitRelay](https://github.com/rapmd73/JackrabbitRelay) (live trading)
 - [JackRabbitRelay Mimic](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) (forward trading)
 - Data in CSV Format. And alot of them. [CANDLE STASH at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m)
+
+### Optional Pre-requisites
+- Microsoft SQL Database (to keep it simple, stupid for automated Backtests and what not.)
+
 
 ### Installation
 

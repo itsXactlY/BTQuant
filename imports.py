@@ -8,6 +8,7 @@ import backtrader as bt
 from ccxtBTQ import binance_store
 import datetime as dt
 from dontcommit import *
+import pyodbc
 
 #########
 

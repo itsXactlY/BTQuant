@@ -2,6 +2,12 @@
 identify = ""
 jrr_webhook_url = "http://127.0.0.1:80"
 
+# SQL Server connection details
+server = 'localhost'
+database = ''
+username = ''
+password = ''
+driver = '{ODBC Driver 18 for SQL Server}'  # Adjust the driver version if necessary
 
 def ptu():
     unicorn_art = [

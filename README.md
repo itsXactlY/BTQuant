@@ -35,7 +35,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 - Data in CSV Format. And alot of them. [CANDLE STASH at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m)
 
 ### Optional Pre-requisites
-- Microsoft SQL Database (Microsoft SQL Server 2022 Copyright (C) 2022 Microsoft Corporation Developer Edition (64-bit) on Linux (Garuda Linux) <X64>)
+- Microsoft SQL Database (Tested and confirmed working: Microsoft SQL Server 2022 Copyright (C) 2022 Microsoft Corporation Developer Edition (64-bit) on Linux (Garuda Linux) <X64>)
 
 
 ### Installation

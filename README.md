@@ -67,9 +67,10 @@ Quick way for Framework itself below:
 or
 
 - Copy dontcommit.py.template to dontcommit.py
+
+
 - Fill identify str from JackRabbitRelay Setup above
 
 
+
 - python3 mimic_binance_forward_trading.py
-
-

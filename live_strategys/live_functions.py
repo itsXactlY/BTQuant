@@ -127,9 +127,22 @@ class BaseStrategy(bt.Strategy):
             else:
                 self.reset_position_state()
 
+        except FileNotFoundError:
+            print(f"History file not found for account {self.account}.")
+            self.reset_position_state()
+            self.stake_to_use = 1000.0  # Default stake when file is not found
+        except PermissionError:
+            print(f"Permission denied when trying to access the history file for account {self.account}.")
+            self.reset_position_state()
+            self.stake_to_use = 1000.0  # Default stake when permission is denied
         except requests.exceptions.RequestException as e:
             print(f"Error fetching trade data: {e}")
             self.reset_position_state()
+            self.stake_to_use = 1000.0  # Default stake when there's a request exception
+        except Exception as e:
+            print(f"Unexpected error occurred while loading trade data: {e}")
+            self.reset_position_state()
+            self.stake_to_use = 1000.0  # Default stake for any other unexpected errors
             
 
     def calc_averages(self):

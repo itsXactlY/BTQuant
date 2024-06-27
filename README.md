@@ -62,15 +62,11 @@ Quick way for Framework itself below:
 
 ## Run
 
-- python3 backtesting.py
+python3 backtesting.py
 
 or
 
-- Copy dontcommit.py.template to dontcommit.py
+Copy dontcommit.py.template to dontcommit.py
+Fill identify str from JackRabbitRelay Setup above
 
-
-- Fill identify str from JackRabbitRelay Setup above
-
-
-
-- python3 mimic_binance_forward_trading.py
+python3 mimic_binance_forward_trading.py

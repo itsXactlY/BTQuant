@@ -1,7 +1,7 @@
 from imports import *
 from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
-from template_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
-from template_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
+from live_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
+from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
 #########
 # Quantstats

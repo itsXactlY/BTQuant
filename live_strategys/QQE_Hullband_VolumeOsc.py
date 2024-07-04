@@ -58,8 +58,8 @@ class QQE_Example(BaseStrategy):
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.amount)
-                    self.load_trade_data()
-                    self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
                 elif self.params.backtest == True:
@@ -75,13 +75,12 @@ class QQE_Example(BaseStrategy):
             (self.volosc.osc[-1] < self.volosc.lines[0]
         ):
             if self.params.backtest == False:
-                self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
+                self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
             elif self.params.backtest == True:
                 self.close()
             self.reset_position_state()
             self.buy_executed = False
             self.conditions_checked = True
-
 
     def next(self):
         BaseStrategy.next(self)

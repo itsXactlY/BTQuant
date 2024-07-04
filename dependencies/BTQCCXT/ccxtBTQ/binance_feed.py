@@ -7,7 +7,7 @@ import time
 
 class BinanceData(DataBase):
     params = (
-        ('drop_newest', False),
+        ('drop_newest', True),
         ('update_interval_seconds', 1),
     )
     

@@ -1,7 +1,7 @@
 import requests
 from dontcommit import identify, jrr_webhook_url
 
-discord_webhook_url = 'https://discord.com/api/webhooks/1247966677765718217/yFMsNV635fYwHfgX8mYpJ38hneppBJBIRYyj6D90ziZVzBVuCN741KMAuVMfc7EqLMDp'
+discord_webhook_url = ''
 
 
 class Alert:

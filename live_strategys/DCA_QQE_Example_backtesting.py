@@ -63,8 +63,8 @@ class QQE_DCA_Example(BaseStrategy):
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.amount)
-                    self.load_trade_data()
-                    self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
                 elif self.params.backtest == True:
@@ -81,21 +81,24 @@ class QQE_DCA_Example(BaseStrategy):
                 (self.volosc.osc[-1] > self.volosc.lines[0]
             ):
             
-                if self.params.backtest == False:
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.amount)
-                    self.load_trade_data()
-                    self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.buy_executed = True
-                    self.conditions_checked = True
-                elif self.params.backtest == True:
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.stake)
-                    self.calc_averages()
+                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
+                    if self.params.backtest == False:
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.amount)
+                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                        self.calc_averages()
+                        self.buy_executed = True
+                        self.conditions_checked = True
+                    elif self.params.backtest == True:
+                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                        self.buy_executed = True
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.stake)
+                        self.calc_averages()
 
     def sell_or_cover_condition(self):
+        if self.p.debug:
+            print(f'| - sell_or_cover_condition {self.data._name} Entry:{self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
         if self.buy_executed and self.data.close[0] >= self.take_profit_price:
             average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
 
@@ -109,19 +112,14 @@ class QQE_DCA_Example(BaseStrategy):
                 )
                 return
 
-        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-            if self.data.close[0] < self.average_entry_price:
-                print(f'Nothing Todo here. {self.average_entry_price, self.take_profit_price}')
-                return
-            
             if self.params.backtest == False:
-                self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
+                self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
             elif self.params.backtest == True:
                 self.close()
+
             self.reset_position_state()
             self.buy_executed = False
             self.conditions_checked = True
-
 
     def next(self):
         BaseStrategy.next(self)

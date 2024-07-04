@@ -1,11 +1,15 @@
 from datetime import datetime
 import backtrader as bt
 import requests
-import logging
 from live_strategys.jrr_orders import *
 from dontcommit import *
 import json
-from datetime import datetime
+
+import threading
+import queue
+import time
+
+import logging
 # Configure logging
 log_file = 'BaseStrategy.log'
 logging.basicConfig(filename=log_file, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,26 +22,19 @@ trade_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 trade_handler.setFormatter(trade_formatter)
 trade_logger.addHandler(trade_handler)
 
-live = True
-
-from datetime import datetime
-
 class BaseStrategy(bt.Strategy):
-
     params = (
-        ("printlog", True),
-        ('debug', True),
-        ('period', 50),
+        ("printlog", False),
+        ('debug', False),
         ('take_profit', 0),
-        ('percent_sizer', 0.001), # 0.001 -> 1% as Default
         ('exchange', None),
         ('account', None),
         ('asset', None),
         ('amount', None),
         ('coin', None),
-        ('collateral', None)
-        )
-
+        ('collateral', None),
+        ("backtest", None)
+    )
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,14 +51,50 @@ class BaseStrategy(bt.Strategy):
         self.stake_to_use = None # new default set later if stays empty handed to its gunfight :<
         self.stake_to_sell = None
         self.stake = None
-        self.premium_price = None
+        self.amount = self.p.amount
+        self.conditions_checked = False
+        self.order_queue = queue.Queue()
+        self.order_thread = threading.Thread(target=self.process_orders)
+        self.order_thread.daemon = True
+        self.order_thread.start()
+        self.last_order_time = 0
+        self.order_cooldown = 5
         if self.params.backtest == False:
             # JackRabbitRelay Init
             self.exchange = self.p.exchange
             self.account = self.p.account
             self.asset = self.p.asset
-            self.amount = self.p.amount
             self.rabbit = JrrOrderBase()
+
+    def process_orders(self):
+        while True:
+            order = self.order_queue.get()
+            print(order)
+            if order is None:
+                break
+            action, params = order
+            if action == 'buy':
+                print('-'*99)
+                print('BUY REQUEST')
+                print('-'*99)
+                self.rabbit.send_jrr_buy_request(**params)
+            elif action == 'sell':
+                print('-'*99)
+                print('SELL REQUEST')
+                print('-'*99)
+                self.rabbit.send_jrr_close_request(**params)
+                self.reset_position_state()
+            self.order_queue.task_done()
+
+    def enqueue_order(self, action, **params):
+        current_time = time.time()
+        if current_time - self.last_order_time >= self.order_cooldown:
+            self.order_queue.put((action, params))
+            self.last_order_time = current_time          
+
+    def stop(self):
+        self.order_queue.put(None)
+        self.order_thread.join()
 
     def buy_or_short_condition(self):
         return False
@@ -123,7 +156,7 @@ class BaseStrategy(bt.Strategy):
                 except json.JSONDecodeError:
                     print("Error parsing the last order, resetting position state.")
                     self.reset_position_state()
-                    self.stake_to_use = 10000.0 # new Default :<
+                    self.stake_to_use = 1000.0 # new Default :<
             else:
                 self.reset_position_state()
 
@@ -144,9 +177,7 @@ class BaseStrategy(bt.Strategy):
             self.reset_position_state()
             self.stake_to_use = 1000.0  # Default stake for any other unexpected errors
             
-
     def calc_averages(self):
-        print('Calculating Average Prices!')
         total_value = sum(entry_price * size for entry_price, size in zip(self.entry_prices, self.sizes))
         total_size = sum(self.sizes)
         if total_size:
@@ -157,7 +188,8 @@ class BaseStrategy(bt.Strategy):
             self.take_profit_price = None
 
         if self.entry_prices:
-            print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
+            if self.p.backtest == False:
+                print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
             self.buy_executed = True
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
@@ -165,23 +197,21 @@ class BaseStrategy(bt.Strategy):
     def start(self):
         if self.params.backtest == False:
             ptu()
-            print('STUXNET INITATED... Scanning for Orders...')
+            print('STUXNET INITATED...')
             self.load_trade_data()
-
 
     def next(self):
         if self.params.backtest == False:
             if self.order:
                 return
-            if live == True and self.live_data == True:
-                self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
-                print(f'debug {self.stake}')
+            if self.live_data == True:
+                self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose # TODO figure out why no default stake is set on empty history
                 
                 if not self.buy_executed:
                     self.buy_or_short_condition()
                 elif self.DCA == True:
-                    self.dca_or_short_condition()
                     self.sell_or_cover_condition()
+                    self.dca_or_short_condition()
                 elif self.DCA == False and self.buy_executed:
                     self.sell_or_cover_condition()
                     
@@ -190,26 +220,17 @@ class BaseStrategy(bt.Strategy):
                     if self.print_counter % 1 == 60: # reduce logging spam
                         if self.p.take_profit == 0: self.take_profit_price = 0.00
                         print(f'| {datetime.utcnow()}\n|{'-'*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{'-'*99}¬')
+        
         elif self.params.backtest == True:
+            self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
+            
             if not self.buy_executed:
                     self.buy_or_short_condition()
             elif self.DCA == True:
-                self.dca_or_short_condition()
                 self.sell_or_cover_condition()
+                self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
-    
-    
-    
-    def notify_order(self, order):
-        # Notification for a completed, canceled, or margin order
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.order = None
-            elif order.issell():
-                self.order = None
-        elif order.status in [order.Canceled, order.Margin]:
-            self.order = None
 
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
@@ -239,20 +260,14 @@ class BaseStrategy(bt.Strategy):
         self.buy_executed = False
         self.entry_price = None
         self.entry_prices = []
+        self.average_entry_price = None
         self.take_profit_price = None
         self.sizes = []
-
-    def stop(self):
-        self.log(f"Final Portfolio Value: {self.broker.getvalue():.2f}")
+        self.stop_loss_price = None
 
     def notify_trade(self, trade):
         if not trade.isclosed:
             return
-
-
-def running_backtest(running):
-    print(f'Backtest:{running}\n')
-    return running
 
 class MyPandasData(bt.feeds.PandasData):
     params = (
@@ -264,3 +279,28 @@ class MyPandasData(bt.feeds.PandasData):
         ('volume', 'volume'),
         ('openinterest', None)
     )
+
+import numpy as np
+class CustomSQN(bt.Analyzer):
+    params = (('compressionFactor', 1e6),)
+
+    def __init__(self):
+        super(CustomSQN, self).__init__()
+        self.pnl = []
+        self.count = 0
+
+    def notify_trade(self, trade):
+        if trade.status == trade.Closed:
+            self.pnl.append(trade.pnlcomm / self.p.compressionFactor)
+            self.count += 1
+
+    def stop(self):
+        if self.count > 1:
+            pnl_array = np.array(self.pnl)
+            sqrt_n = np.sqrt(len(pnl_array))
+            sqn = sqrt_n * np.mean(pnl_array) / np.std(pnl_array, ddof=1)
+            self.rets['sqn'] = sqn
+            self.rets['trades'] = self.count
+        else:
+            self.rets['sqn'] = 0.0
+            self.rets['trades'] = self.count

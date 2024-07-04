@@ -1,6 +1,6 @@
 import backtrader as bt
 import pandas as pd
-from template_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
+from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 import quantstats
 import datetime as dt
 import os

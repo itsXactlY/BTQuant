@@ -1,24 +1,21 @@
 from imports import *
-from live_strategys.QQE_Hullband_VolumeOsc import *
+from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
+from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
-
-# JackRabbitRelay
-_coin = 'PEPE'
+# JackRabbitRelay WIP
+_coin = 'BETA'
 _collateral = 'USDT'
 _exchange = 'mimic'
-_account = 'JackRabbit_SubaccountName' # Change me, im a dummy name :)
+_account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
-_amount = '69' # Dollar amount
+_amount = '39'
 _amount = float(_amount)
-
 
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)
 
     store = binance_store.BinanceStore(
-        api_key=api,
-        api_secret=sec,
         coin_refer=_coin,
         coin_target=_collateral,
         testnet=False)
@@ -37,7 +34,7 @@ def run():
     
     data._dataname = f"{_coin}{_collateral}"
 
-    cerebro.addstrategy(QQE_Example, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=False)
+    cerebro.addstrategy(SuperSTrend_Scalper, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=False)
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run()
 

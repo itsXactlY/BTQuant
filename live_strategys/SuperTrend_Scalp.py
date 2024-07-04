@@ -48,19 +48,19 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.supertrend_uptrend_signal
         ):
             
-            if self.params.backtest == False:
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.amount)
-                self.load_trade_data()
-                self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                self.buy_executed = True
-                self.conditions_checked = True
-            elif self.params.backtest == True:
-                self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.buy_executed = True
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.stake)
-                self.calc_averages()
+                if self.params.backtest == False:
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.calc_averages()
+                    self.buy_executed = True
+                    self.conditions_checked = True
+                elif self.params.backtest == True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.buy_executed = True
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    self.calc_averages()
 
     def dca_or_short_condition(self):
         if (self.position and \
@@ -70,19 +70,20 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.supertrend_uptrend_signal
         ):
             
-            if self.params.backtest == False:
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.amount)
-                self.load_trade_data()
-                self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                self.buy_executed = True
-                self.conditions_checked = True
-            elif self.params.backtest == True:
-                self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.buy_executed = True
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.stake)
-                self.calc_averages()
+            if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
+                if self.params.backtest == False:
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.calc_averages()
+                    self.buy_executed = True
+                    self.conditions_checked = True
+                elif self.params.backtest == True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.buy_executed = True
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    self.calc_averages()
 
     def sell_or_cover_condition(self):
         if self.buy_executed and self.data.close[0] >= self.take_profit_price:
@@ -112,4 +113,4 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.conditions_checked = True
 
     def next(self):
-        BaseStrategy.next(self)
+        BaseStrategy.next(self) 

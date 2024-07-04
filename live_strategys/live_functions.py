@@ -269,6 +269,16 @@ class BaseStrategy(bt.Strategy):
         if not trade.isclosed:
             return
 
+    def notify_order(self, order):
+        if order.status in [order.Completed]:
+            if order.isbuy():
+                self.order = None
+            elif order.issell():
+                self.order = None
+        elif order.status in [order.Canceled, order.Margin]:
+            self.order = None
+
+
 class MyPandasData(bt.feeds.PandasData):
     params = (
         ('Datetime', 'datetime'),

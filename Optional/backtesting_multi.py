@@ -4,9 +4,7 @@ from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 import quantstats
 import datetime as dt
 import os
-import pyodbc
-
-from dontcommit import driver, server, database, username, password
+from dontcommit import *
 
 # C++ Microsoft SQL
 connection_string = (f'DRIVER={driver};'
@@ -19,12 +17,13 @@ connection_string = (f'DRIVER={driver};'
 import importlib
 import sys
 import os
-module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), './Optional/MsSQL/build/lib.linux-x86_64-cpython-312/fast_mssql.cpython-312-x86_64-linux-gnu.so'))
+module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), './MsSQL/build/lib.linux-x86_64-cpython-312/fast_mssql.cpython-312-x86_64-linux-gnu.so'))
 spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
 fast_mssql = importlib.util.module_from_spec(spec)
 sys.modules["fast_mssql"] = fast_mssql
 spec.loader.exec_module(fast_mssql)
 import pandas as pd
+debug = False
 
 class MSSQLData(bt.feeds.PandasData):
     @classmethod
@@ -65,22 +64,16 @@ class MSSQLData(bt.feeds.PandasData):
         
         return df
 
-def backtest():
-    startdate = "2024-01-01"
-    enddate = "9999-01-01"
-    timeframe = "1m"
-    coin_name = "BTC"
-
-    # Convert string dates to datetime objects
-    start_date = dt.datetime.strptime(startdate, "%Y-%m-%d")
-    end_date = dt.datetime.strptime(enddate, "%Y-%m-%d")
-    
-    df = MSSQLData.get_data_from_db(connection_string, coin_name, timeframe, start_date, end_date)
-    
-    if df.empty:
-        print("No data returned from the database. Please check your query and date range.")
-        return
-    data = MSSQLData(dataname=df)
+def backtest(table_name, start_date, end_date, timeframe, output_dir):
+    try:
+        print(f"Starting backtest for {table_name}")
+        df = MSSQLData.get_data_from_db(connection_string, table_name, timeframe, start_date, end_date)
+        
+        if df.empty:
+            print(f"No data returned from the database for table {table_name}. Please check your query and date range.")
+            return
+        
+        data = MSSQLData(dataname=df)
         
         cerebro = bt.Cerebro()
         cerebro.adddata(data)
@@ -111,15 +104,17 @@ def backtest():
         portvalue = cerebro.broker.getvalue()
         pnl = portvalue - startcash
 
+        # Save results
         current_date = dt.datetime.now().strftime("%Y-%m-%d")
         backtest_folder = os.path.join(output_dir, f"{table_name}_{start_date}_to_{end_date}")
         os.makedirs(backtest_folder, exist_ok=True)
-    
-
+        
+        # Save QuantStats report
         html_filename = f"QuantStats_Report_{current_date}.html"
         html_filepath = os.path.join(backtest_folder, html_filename)
         quantstats.reports.html(returns, output=html_filepath, title=f'{table_name} {start_date} to {end_date}')
 
+        # Save results to a text file
         results_filename = f"Backtest_Results_{current_date}.txt"
         results_filepath = os.path.join(backtest_folder, results_filename)
         with open(results_filepath, 'w') as f:

@@ -7,49 +7,80 @@ import os
 import pyodbc
 
 from dontcommit import driver, server, database, username, password
-connection_string = (f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password};TrustServerCertificate=yes;')
+
+# C++ Microsoft SQL
+connection_string = (f'DRIVER={driver};'
+                     f'SERVER={server};'
+                     f'DATABASE={database};'
+                     f'UID={username};'
+                     f'PWD={password};'
+                     f'TrustServerCertificate=yes;')
+
+import importlib
+import sys
+import os
+module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), './Optional/MsSQL/build/lib.linux-x86_64-cpython-312/fast_mssql.cpython-312-x86_64-linux-gnu.so'))
+spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
+fast_mssql = importlib.util.module_from_spec(spec)
+sys.modules["fast_mssql"] = fast_mssql
+spec.loader.exec_module(fast_mssql)
+import pandas as pd
 
 class MSSQLData(bt.feeds.PandasData):
-    params = (
-        ('datetime', None),
-        ('open', 'Open'),
-        ('high', 'High'),
-        ('low', 'Low'),
-        ('close', 'Close'),
-        ('volume', 'Volume'),
-        ('openinterest', None),
-    )
-
     @classmethod
-    def get_data_from_db(cls, connection_string, table_name, timeframe, start_date, end_date):
-        conn = pyodbc.connect(connection_string)
-        try:
-            query = f"""
-            SELECT 
-                TimestampStart,
-                [Open], [High], [Low], [Close], Volume
-            FROM {table_name}
-            WHERE Timeframe = '{timeframe}'
-            ORDER BY TimestampStart
-            """
-            df = pd.read_sql(query, conn)
-            df['TimestampStart'] = pd.to_datetime(df['TimestampStart'], unit='ms')
-            df = df[(df['TimestampStart'] >= start_date) & (df['TimestampStart'] <= end_date)]
-            df.set_index('TimestampStart', inplace=True)
-            return df
-        finally:
-            conn.close()
+    def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
+        # Convert datetime to Unix timestamp (milliseconds)
+        start_timestamp = int(start_date.timestamp() * 1000)
+        end_timestamp = int(end_date.timestamp() * 1000)
 
-def backtest(table_name, start_date, end_date, timeframe, output_dir):
-    try:
-        print(f"Starting backtest for {table_name}")
-        df = MSSQLData.get_data_from_db(connection_string, table_name, timeframe, start_date, end_date)
+        query = f"""
+        SELECT 
+            TimestampStart, 
+            [Open], 
+            [High], 
+            [Low], 
+            [Close], 
+            Volume
+        FROM {coin}USDT_klines
+        WHERE Timeframe = '{timeframe}'
+        AND TimestampStart BETWEEN {start_timestamp} AND {end_timestamp}
+        ORDER BY TimestampStart
+        """
         
-        if df.empty:
-            print(f"No data returned from the database for table {table_name}. Please check your query and date range.")
-            return
+        # Use the C++ function to fetch data
+        data = fast_mssql.fetch_data_from_db(connection_string, query)
         
-        data = MSSQLData(dataname=df)
+        # Convert to DataFrame
+        df = pd.DataFrame(data, columns=['TimestampStart', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        
+        # Convert TimestampStart from bigint (milliseconds) to datetime
+        df['TimestampStart'] = pd.to_datetime(df['TimestampStart'].astype(int), unit='ms')
+        
+        # Convert numeric columns to float
+        numeric_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        df[numeric_columns] = df[numeric_columns].astype(float)
+        
+        # Set TimestampStart as index
+        df.set_index('TimestampStart', inplace=True)
+        
+        return df
+
+def backtest():
+    startdate = "2024-01-01"
+    enddate = "9999-01-01"
+    timeframe = "1m"
+    coin_name = "BTC"
+
+    # Convert string dates to datetime objects
+    start_date = dt.datetime.strptime(startdate, "%Y-%m-%d")
+    end_date = dt.datetime.strptime(enddate, "%Y-%m-%d")
+    
+    df = MSSQLData.get_data_from_db(connection_string, coin_name, timeframe, start_date, end_date)
+    
+    if df.empty:
+        print("No data returned from the database. Please check your query and date range.")
+        return
+    data = MSSQLData(dataname=df)
         
         cerebro = bt.Cerebro()
         cerebro.adddata(data)

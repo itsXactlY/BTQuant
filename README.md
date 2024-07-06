@@ -60,6 +60,13 @@ Quick way for Framework itself below:
 - cd ../..
 - pip install requirements-linux.txt # requirements-windows.txt
 
+
+Optional for C++ PyBinding MsSQL Adapter
+
+- cd Optional/MsSQL_CPP
+- python setup.py build_ext --inplace
+ 
+
 ## Run
 
 python3 backtesting.py

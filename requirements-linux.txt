@@ -3,3 +3,5 @@ pandas
 requests
 python_binance
 quantstats
+numpy
+joblib

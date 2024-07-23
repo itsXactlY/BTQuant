@@ -55,7 +55,7 @@ Quick way for Framework itself below:
 - source .venv/bin/activate
 - cd dependencies
 - pip install .
-- cd BTQCCXT
+- cd BTQ_BinanceFeed
 - pip install .
 - cd ../..
 - pip install requirements-linux.txt # requirements-windows.txt

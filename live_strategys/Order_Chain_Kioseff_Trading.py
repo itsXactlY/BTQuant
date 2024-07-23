@@ -15,7 +15,7 @@ def setup_logger(name, log_file, level=logging.INFO):
     logger.addHandler(handler)
     return logger
 
-trade_logger = setup_logger('TradeLogger', 'BaseStrategy_Trade_Monitor.log', level=logging.DEBUG)
+trade_logger = setup_logger('TradeLogger', 'OrderChain_Trade_Monitor.log', level=logging.DEBUG)
 
 
 class OrderChainIndicator(bt.Indicator):

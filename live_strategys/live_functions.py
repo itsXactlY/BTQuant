@@ -4,36 +4,32 @@ import requests
 from live_strategys.jrr_orders import *
 from dontcommit import *
 import json
-
 import threading
 import queue
 import time
 
 import logging
-# Configure logging
-log_file = 'BaseStrategy.log'
-logging.basicConfig(filename=log_file, level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+from logging.handlers import RotatingFileHandler
 
-trade_log_file = f'BaseStrategy_Trade_Monitor.log'
-trade_logger = logging.getLogger('TradeMonitor')
-trade_handler = logging.FileHandler(trade_log_file)
-trade_handler.setLevel(logging.DEBUG)
-trade_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-trade_handler.setFormatter(trade_formatter)
-trade_logger.addHandler(trade_handler)
+def setup_logger(name, log_file, level=logging.INFO):
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler = RotatingFileHandler(log_file)
+    handler.setFormatter(formatter)
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
 
 class BaseStrategy(bt.Strategy):
     params = (
-        ("printlog", False),
-        ('debug', False),
-        ('take_profit', 0),
         ('exchange', None),
         ('account', None),
         ('asset', None),
         ('amount', None),
         ('coin', None),
         ('collateral', None),
-        ("backtest", None)
+        ('debug', False),
+        ('backtest', None),
     )
     
     def __init__(self, **kwargs):
@@ -43,11 +39,11 @@ class BaseStrategy(bt.Strategy):
         self.DCA = False
         self.entry_price = None
         self.take_profit_price = None
+        self.stop_loss_price = None
         self.buy_executed = False
         self.average_entry_price = None
         self.entry_prices = []
         self.sizes = []
-        self.print_counter = 0
         self.stake_to_use = None # new default set later if stays empty handed to its gunfight :<
         self.stake_to_sell = None
         self.stake = None
@@ -59,6 +55,8 @@ class BaseStrategy(bt.Strategy):
         self.order_thread.start()
         self.last_order_time = 0
         self.order_cooldown = 5
+        self.position_count = 0
+        self.position_history = []
         if self.params.backtest == False:
             # JackRabbitRelay Init
             self.exchange = self.p.exchange
@@ -92,14 +90,13 @@ class BaseStrategy(bt.Strategy):
             self.order_queue.put((action, params))
             self.last_order_time = current_time          
 
-    def stop(self):
-        self.order_queue.put(None)
-        self.order_thread.join()
-
     def buy_or_short_condition(self):
         return False
     
     def dca_or_short_condition(self):
+        return False
+    
+    def check_stop_loss(self):
         return False
 
     def sell_or_cover_condition(self):
@@ -202,14 +199,16 @@ class BaseStrategy(bt.Strategy):
 
     def next(self):
         if self.params.backtest == False:
-            if self.order:
-                return
             if self.live_data == True:
                 self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose # TODO figure out why no default stake is set on empty history
                 
                 if not self.buy_executed:
                     self.buy_or_short_condition()
-                elif self.DCA == True:
+                elif self.DCA == True and self.buy_executed:
+                    if self.params.use_stoploss:
+                        self.check_stop_loss()
+                        if not self.buy_executed:
+                            return
                     self.sell_or_cover_condition()
                     self.dca_or_short_condition()
                 elif self.DCA == False and self.buy_executed:
@@ -218,44 +217,23 @@ class BaseStrategy(bt.Strategy):
                 if self.live_data == True and self.buy_executed and self.p.debug:
                     self.print_counter += 1
                     if self.print_counter % 1 == 60: # reduce logging spam
-                        if self.p.take_profit == 0: self.take_profit_price = 0.00
                         print(f'| {datetime.utcnow()}\n|{'-'*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{'-'*99}¬')
         
         elif self.params.backtest == True:
             self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
             
             if not self.buy_executed:
-                    self.buy_or_short_condition()
-            elif self.DCA == True:
+                self.buy_or_short_condition()
+            elif self.DCA == True and self.buy_executed:
+                if self.params.use_stoploss:
+                    self.check_stop_loss()
+                    if not self.buy_executed:
+                        return
                 self.sell_or_cover_condition()
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
-
-    def notify_data(self, data, status, *args, **kwargs):
-        dn = data._name
-        dt = datetime.now()
-        msg= 'Data Status: {}'.format(data._getstatusname(status))
-        print(dt,dn,msg)
-        if data._getstatusname(status) == 'LIVE':
-            self.live_data = True
-        else:
-            self.live_data = False
-
-    def log(self, txt, dt=None):
-        if self.p.printlog:
-            if dt is not None:
-                if isinstance(dt, float):
-                    dt_str = f"dt:.2f"
-                else:
-                    dt_str = dt.isoformat()
-                print(f"{dt_str} {txt}")
-            else:
-                print(txt)
     
-    def log_trade(self, message):
-        trade_logger.info(message)
-
     def reset_position_state(self):
         self.buy_executed = False
         self.entry_price = None
@@ -263,21 +241,12 @@ class BaseStrategy(bt.Strategy):
         self.average_entry_price = None
         self.take_profit_price = None
         self.sizes = []
-        self.stop_loss_price = None
+        self.position_count = 0
+        self.stop_loss_price = 0.0
 
     def notify_trade(self, trade):
         if not trade.isclosed:
             return
-
-    def notify_order(self, order):
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.order = None
-            elif order.issell():
-                self.order = None
-        elif order.status in [order.Canceled, order.Margin]:
-            self.order = None
-
 
 class MyPandasData(bt.feeds.PandasData):
     params = (

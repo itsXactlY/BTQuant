@@ -1,3 +1,0 @@
-backtrader
-ccxt
-ipython

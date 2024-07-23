@@ -36,7 +36,7 @@ def run():
 
     cerebro.addstrategy(SuperSTrend_Scalper, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=False)
     cerebro.adddata(data=data, name=data._dataname)
-    cerebro.run()
+    cerebro.run(live=True)
 
 
 if __name__ == '__main__':

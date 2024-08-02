@@ -6,7 +6,7 @@ from pprint import pprint
 from pairs import *
 from live_strategys.live_functions import MyPandasData
 import backtrader as bt
-from ccxtBTQ import binance_store
+from BTQuant_Exchange_Adapters import binance_store, bybit_store
 import datetime as dt
 from dontcommit import *
 
@@ -14,7 +14,7 @@ from dontcommit import *
 #########
 
 # Quantstats
-import quantstats
+import quantstats_lumi as quantstats
 
 import datetime as dt
 class PandasData(bt.feeds.PandasData):

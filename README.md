@@ -55,15 +55,16 @@ Quick way for Framework itself below:
 - source .venv/bin/activate
 - cd dependencies
 - pip install .
-- cd BTQ_BinanceFeed
+- cd BTQ_Exchanges
 - pip install .
 - cd ../..
-- pip install requirements-linux.txt # requirements-windows.txt
+- pip install -r requirements-linux.txt or for Windows: pip install -r requirements-windows.txt
 
 
 Optional for C++ PyBinding MsSQL Adapter
 
 - cd Optional/MsSQL_CPP
+- pip install -r requirements.txt
 - python setup.py build_ext --inplace
  
 

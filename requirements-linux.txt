@@ -2,6 +2,7 @@ matplotlib
 pandas
 requests
 python_binance
-quantstats
+quantstats-lumi
 numpy
 joblib
+websockets

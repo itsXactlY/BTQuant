@@ -5,7 +5,7 @@ from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
 #########
 # Quantstats
-import quantstats
+import quantstats_lumi as quantstats
 import datetime as dt
 
 # C++ Microsoft SQL

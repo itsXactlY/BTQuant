@@ -19,7 +19,7 @@ This framework is designed to provide robust and efficient tools for backtesting
 - We act as our own broker, providing full control and customization.
 
 ### Live Trading
-- Integrated with **Binance Websocket** (for now) for real-time data.
+- Integrated with **Binance Websocket** and **ByBit Websocket** for real-time data.
 - Supports 1-second websocket data feeds for precise and timely trading decisions.
 - Implements real-time dollar cost averaging.
 - Requires as few as 50 lines of code to get started with your own trading strategy.
@@ -77,4 +77,8 @@ or
 Copy dontcommit.py.template to dontcommit.py
 Fill identify str from JackRabbitRelay Setup above
 
-python3 mimic_binance_forward_trading.py
+python3 mimic_binance_forward_trading.py (Binance)
+
+or
+
+python3 mimic_bybit_forward_trading.py (ByBit)

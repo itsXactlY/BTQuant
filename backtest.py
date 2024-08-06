@@ -1,6 +1,12 @@
 from imports import *
-from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
-from live_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
+'''
+############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
+############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
+############## CAUSING ALOT OF WARMUP TIME (TIME IS MONEY!) ##############
+'''
+
+# from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
+# from live_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
 from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
 def run_backtest():

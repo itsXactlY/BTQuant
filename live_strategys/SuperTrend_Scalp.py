@@ -25,7 +25,7 @@ class SuperSTrend_Scalper(BaseStrategy):
         ('reversal_malen', 40),
         ('reversal_mult', 2.2),
         ('reversal_rangethreshold', 0.9),
-        ('debug', False),
+        ('debug', True),
         ("backtest", None)
         )
 

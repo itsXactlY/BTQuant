@@ -1,7 +1,6 @@
 matplotlib
 pandas
 requests
-python_binance
 quantstats-lumi
 numpy
 joblib

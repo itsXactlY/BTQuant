@@ -57,6 +57,7 @@ class BaseStrategy(bt.Strategy):
         self.order_cooldown = 5
         self.position_count = 0
         self.position_history = []
+        self.print_counter = 0
         if self.params.backtest == False:
             # JackRabbitRelay Init
             self.exchange = self.p.exchange
@@ -205,7 +206,7 @@ class BaseStrategy(bt.Strategy):
                 if not self.buy_executed:
                     self.buy_or_short_condition()
                 elif self.DCA == True and self.buy_executed:
-                    if self.params.use_stoploss:
+                    if self.p.use_stoploss:
                         self.check_stop_loss()
                         if not self.buy_executed:
                             return
@@ -225,7 +226,7 @@ class BaseStrategy(bt.Strategy):
             if not self.buy_executed:
                 self.buy_or_short_condition()
             elif self.DCA == True and self.buy_executed:
-                if self.params.use_stoploss:
+                if self.p.use_stoploss:
                     self.check_stop_loss()
                     if not self.buy_executed:
                         return
@@ -233,6 +234,16 @@ class BaseStrategy(bt.Strategy):
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
+
+    def notify_data(self, data, status, *args, **kwargs):
+        dn = data._name
+        dt = datetime.now()
+        msg= 'Data Status: {}'.format(data._getstatusname(status))
+        print(dt,dn,msg)
+        if data._getstatusname(status) == 'LIVE':
+            self.live_data = True
+        else:
+            self.live_data = False
     
     def reset_position_state(self):
         self.buy_executed = False

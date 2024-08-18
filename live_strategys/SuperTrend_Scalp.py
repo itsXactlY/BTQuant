@@ -59,7 +59,7 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.plusDI[0] < self.params.adxth and \
             self.supertrend_uptrend_signal
         ):
-            
+
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.amount)

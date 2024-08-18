@@ -54,6 +54,7 @@ Quick way for Framework itself below:
 - python3 -m venv .venv
 - source .venv/bin/activate
 - cd dependencies
+- pip install wheel
 - pip install .
 - cd BTQ_Exchanges
 - pip install .

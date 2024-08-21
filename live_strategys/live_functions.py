@@ -218,7 +218,7 @@ class BaseStrategy(bt.Strategy):
                 if self.live_data == True and self.buy_executed and self.p.debug:
                     self.print_counter += 1
                     if self.print_counter % 1 == 60: # reduce logging spam
-                        print(f'| {datetime.utcnow()}\n|{'-'*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{'-'*99}¬')
+                        print(f'| {datetime.utcnow()}\n|{"-"*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{"-"*99}¬')
         
         elif self.params.backtest == True:
             self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose

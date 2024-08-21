@@ -3,12 +3,12 @@ from imports import binance_store, dt, bt
 from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 
 # JackRabbitRelay WIP
-_coin = 'BETA'
+_coin = '<COIN>'
 _collateral = 'USDT'
 _exchange = 'mimic'
 _account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
-_amount = '39'
+_amount = '139'
 _amount = float(_amount)
 
 

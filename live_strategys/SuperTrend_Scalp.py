@@ -6,8 +6,8 @@ trade_logger = setup_logger('TradeLogger', 'SuperSTrendScalper_Trade_Monitor.log
 
 class SuperSTrend_Scalper(BaseStrategy):
     params = (
-        ("dca_threshold", 2.5),
-        ("take_profit", 4),
+        ("dca_threshold", 0.2),
+        ("take_profit", 0.4),
         ('percent_sizer', 0.01), # 0.01 -> 1%
         # Trend Strenght
         ("adx_period", 13),
@@ -20,11 +20,7 @@ class SuperSTrend_Scalper(BaseStrategy):
         ('st_fast_multiplier', 3),
         ("st_slow", 6),
         ('st_slow_multiplier', 7),
-        # RevFinder
-        ('reversal_lookback', 10),
-        ('reversal_malen', 40),
-        ('reversal_mult', 2.2),
-        ('reversal_rangethreshold', 0.9),
+
         ('debug', True),
         ("backtest", None)
         )
@@ -60,21 +56,21 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.supertrend_uptrend_signal
         ):
 
-                if self.params.backtest == False:
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.calc_averages()
-                    self.buy_executed = True
-                    self.conditions_checked = True
-                    self.log_entry()
-                elif self.params.backtest == True:
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.stake)
-                    self.calc_averages()
-                    self.log_entry()
+            if self.params.backtest == False:
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(self.amount)
+                self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                self.calc_averages()
+                self.buy_executed = True
+                self.conditions_checked = True
+                self.log_entry()
+            elif self.params.backtest == True:
+                self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                self.buy_executed = True
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(self.stake)
+                self.calc_averages()
+                self.log_entry()
 
     def dca_or_short_condition(self):
         if (self.position and \
@@ -83,7 +79,7 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.plusDI[0] < self.params.adxth and \
             self.supertrend_uptrend_signal
         ):
-            
+
             if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
@@ -131,7 +127,11 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.conditions_checked = True
 
     def next(self):
-        BaseStrategy.next(self) 
+        if self.live_data == True and self.buy_executed and self.p.debug:
+            self.print_counter += 1
+            if self.print_counter % 1 == 60: # reduce logging spam
+                print(f'| {datetime.utcnow()}\n|{'-'*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{'-'*99}¬')
+        BaseStrategy.next(self)
 
     def log_entry(self):
         trade_logger.debug("-" * 100)

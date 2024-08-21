@@ -11,7 +11,7 @@ import time
 import logging
 from logging.handlers import RotatingFileHandler
 
-def setup_logger(name, log_file, level=logging.INFO):
+def setup_logger(name, log_file, level=logging.DEBUG):
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler = RotatingFileHandler(log_file)
     handler.setFormatter(formatter)
@@ -28,7 +28,7 @@ class BaseStrategy(bt.Strategy):
         ('amount', None),
         ('coin', None),
         ('collateral', None),
-        ('debug', False),
+        ('debug', True),
         ('backtest', None),
     )
     
@@ -206,10 +206,10 @@ class BaseStrategy(bt.Strategy):
                 if not self.buy_executed:
                     self.buy_or_short_condition()
                 elif self.DCA == True and self.buy_executed:
-                    if self.p.use_stoploss:
-                        self.check_stop_loss()
-                        if not self.buy_executed:
-                            return
+                    # if self.p.use_stoploss:
+                    #     self.check_stop_loss()
+                    #     if not self.buy_executed:
+                    #         return
                     self.sell_or_cover_condition()
                     self.dca_or_short_condition()
                 elif self.DCA == False and self.buy_executed:
@@ -226,10 +226,10 @@ class BaseStrategy(bt.Strategy):
             if not self.buy_executed:
                 self.buy_or_short_condition()
             elif self.DCA == True and self.buy_executed:
-                if self.p.use_stoploss:
-                    self.check_stop_loss()
-                    if not self.buy_executed:
-                        return
+                # if self.p.use_stoploss:
+                #     self.check_stop_loss()
+                #     if not self.buy_executed:
+                #         return
                 self.sell_or_cover_condition()
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:

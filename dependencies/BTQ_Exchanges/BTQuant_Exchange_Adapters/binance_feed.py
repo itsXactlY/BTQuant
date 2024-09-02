@@ -67,6 +67,12 @@ class BinanceData(DataBase):
 
         timestamp, open_, high, low, close, volume = kline
 
+        # Skip processing if the volume is zero
+        if volume == 0:
+            if self.p.debug:
+                print(f"Skipping kline with zero volume: {kline}")
+            return self._load_kline()  # check the next kline instead
+
         self.lines.datetime[0] = date2num(pd.Timestamp(timestamp))
         self.lines.open[0] = open_
         self.lines.high[0] = high
@@ -74,6 +80,7 @@ class BinanceData(DataBase):
         self.lines.close[0] = close
         self.lines.volume[0] = volume
         return True
+
 
     def _parser_dataframe(self, data):
         df = data.copy()

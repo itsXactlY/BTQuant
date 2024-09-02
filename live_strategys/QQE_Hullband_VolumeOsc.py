@@ -17,7 +17,7 @@ class VolumeOscillator(bt.Indicator):
     def next(self):
         self.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
 
-class QQE(bt.Indicator):
+class QQEIndicator(bt.Indicator):
     params = (
         ("period", 6),
         ("fast", 5),

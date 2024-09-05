@@ -7,7 +7,7 @@ _collateral = 'USDT'
 _exchange = 'mimic'
 _account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
-_amount = '11' # we use %Sizer
+_amount = '11'
 _amount = float(_amount)
 
 

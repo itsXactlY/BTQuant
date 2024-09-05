@@ -6,9 +6,9 @@ from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
 _coin = 'DODO'
 _collateral = 'USDT'
 _exchange = 'mimic'
-_account = 'binance_sub2' # <JackRabbit_SubaccountName>
+_account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
-_amount = '139'
+_amount = '11'
 _amount = float(_amount)
 
 

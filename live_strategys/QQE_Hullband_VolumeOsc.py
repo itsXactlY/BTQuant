@@ -4,7 +4,7 @@ import backtrader as bt
 trade_logger = setup_logger('TradeLogger', 'QQE_Example_Trade_Monitor.log', level=logging.DEBUG)
 
 class VolumeOscillator(bt.Indicator):
-    lines = ('osc',)
+    lines = ('short', 'long', 'osc')
     params = (('shortlen', 5),
             ('longlen', 10))
     
@@ -12,10 +12,12 @@ class VolumeOscillator(bt.Indicator):
         shortlen, longlen = self.params.shortlen, self.params.longlen
         self.lines.short = bt.indicators.ExponentialMovingAverage(self.data.volume, period=shortlen)
         self.lines.long = bt.indicators.ExponentialMovingAverage(self.data.volume, period=longlen)
-        self.lines.osc = (self.lines.short - self.lines.long) / self.lines.long * 100
 
     def next(self):
-        self.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
+        if self.lines.long[0] > 0:
+            self.lines.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
+        else:
+            self.lines.osc[0] = 0
 
 class QQEIndicator(bt.Indicator):
     params = (

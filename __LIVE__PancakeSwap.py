@@ -1,7 +1,7 @@
 import backtrader as bt
 from BTQuant_Exchange_Adapters import pancakeswap_store
 import datetime as dt
-from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm # requires web3==6.20.1
+from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
 import pytz
 
 # Web3 Decentral Exchanges

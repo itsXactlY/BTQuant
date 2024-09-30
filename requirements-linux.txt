@@ -1,7 +1,0 @@
-matplotlib
-pandas
-requests
-quantstats-lumi
-numpy
-joblib
-websockets

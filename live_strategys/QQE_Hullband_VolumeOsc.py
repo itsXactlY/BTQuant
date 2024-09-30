@@ -54,6 +54,8 @@ class QQE_Example(BaseStrategy):
         ("ema_length", 20),
         ('hull_length', 53),
         ("printlog", True),
+        ('percent_sizer', 0.01), # 0.01 -> 1%
+        ('take_profit', 1),
         ("backtest", None)
     )
 
@@ -78,6 +80,7 @@ class QQE_Example(BaseStrategy):
         self.current_cycle_buys = 0
 
     def buy_or_short_condition(self):
+        print('buy_or_short_condition')
         if not self.buy_executed and not self.conditions_checked:
             if (self.qqe.qqe_line[-1] > 0) and \
                 (self.data.close[-1] > self.hma[0]) and \
@@ -100,6 +103,7 @@ class QQE_Example(BaseStrategy):
                     self.log_entry()
 
     def sell_or_cover_condition(self):
+        print('sell_or_cover_condition')
         if self.buy_executed and (self.qqe.qqe_line[-1] > 0) and \
             (self.data.close[-1] < self.hma[0]) and \
             (self.volosc.osc[-1] < self.volosc.lines[0]

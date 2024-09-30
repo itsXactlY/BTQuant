@@ -48,24 +48,31 @@ class BybitStore(object):
 
     def start_socket(self):
         async def run_socket():
-            print("Starting WebSocket connection...")
-            try:
-                async with websockets.connect(self.ws_url) as websocket:
-                    self.websocket = websocket
-                    print("WebSocket connection established.")
-                    subscription_message = {
-                        "op": "subscribe",
-                        "args": [f"kline.{self.get_interval(TimeFrame.Seconds, 1)}.{self.symbol}"]
-                    }
-                    await self.websocket.send(json.dumps(subscription_message))
-                    while True:
-                        message = await self.websocket.recv()
-                        self.message_queue.put(message)
-            except Exception as e:
-                print(f"Error in WebSocket connection: {e}")
+            while True:
+                print("Starting WebSocket connection...")
+                try:
+                    async with websockets.connect(self.ws_url) as websocket:
+                        self.websocket = websocket
+                        print("WebSocket connection established.")
+                        subscription_message = {
+                            "op": "subscribe",
+                            "args": [f"kline.{self.get_interval(TimeFrame.Seconds, 1)}.{self.symbol}"]
+                        }
+                        await self.websocket.send(json.dumps(subscription_message))
+                        while True:
+                            message = await self.websocket.recv()
+                            self.message_queue.put(message)
+                except Exception as e:
+                    print(f"Error in WebSocket connection: {e}")
+                    print("Attempting to reconnect in 5 seconds...")
+                    await asyncio.sleep(5)  # Wait for 5 seconds before attempting to reconnect
 
-        # Use asyncio.run to start the WebSocket connection
-        self.websocket_thread = threading.Thread(target=lambda: asyncio.run(run_socket()), daemon=True)
+        def run_asyncio_loop():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(run_socket())
+
+        self.websocket_thread = threading.Thread(target=run_asyncio_loop, daemon=True)
         self.websocket_thread.start()
 
     def stop_socket(self):

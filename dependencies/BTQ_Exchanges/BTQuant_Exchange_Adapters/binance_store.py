@@ -1,9 +1,7 @@
-import threading
-import requests
+import threading, time, requests, websockets.sync.client
 from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
-import websockets.sync.client
 
 class BinanceStore(object):
     _GRANULARITIES = {
@@ -47,14 +45,18 @@ class BinanceStore(object):
     def start_socket(self):
         def run_socket():
             print("Starting WebSocket connection...")
-            try:
-                self.websocket = websockets.sync.client.connect(self.ws_url)
-                print("WebSocket connection established.")
-                while True:
-                    message = self.websocket.recv()
-                    self.message_queue.put(message)
-            except Exception as e:
-                print(f"Error in WebSocket connection: {e}")
+            while True:
+                try:
+                    with websockets.sync.client.connect(self.ws_url) as websocket:
+                        self.websocket = websocket
+                        print("WebSocket connection established.")
+                        while True:
+                            message = self.websocket.recv()
+                            self.message_queue.put(message)
+                except Exception as e:
+                    print(f"Error in WebSocket connection: {e}")
+                    print("Attempting to reconnect in 5 seconds...")
+                    time.sleep(5)
 
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()

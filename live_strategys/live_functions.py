@@ -20,6 +20,10 @@ def setup_logger(name, log_file, level=logging.DEBUG):
     logger.addHandler(handler)
     return logger
 
+class BuySellArrows(bt.observers.BuySell):
+    plotlines = dict(buy=dict(marker='$\u21E7$', markersize=12.0),
+                     sell=dict(marker='$\u21E9$', markersize=12.0))
+
 class BaseStrategy(bt.Strategy):
     params = (
         ('exchange', None),

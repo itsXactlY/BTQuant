@@ -12,7 +12,7 @@ class ByBitData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', False)
+        ('debug', True)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -157,5 +157,6 @@ class ByBitData(DataBase):
             try:
                 message = self._store.message_queue.get(timeout=1)
                 self.handle_websocket_message(message)
+                time.sleep(1)
             except Empty:
                 time.sleep(1)

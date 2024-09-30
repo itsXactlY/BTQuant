@@ -9,9 +9,8 @@ import threading
 from collections import deque
 import time
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
 
-class BSCData(DataBase):
+class PancakeSwapData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
@@ -70,10 +69,10 @@ class BSCData(DataBase):
 
         timestamp, open_, high, low, close, volume = kline
         # Skip processing if the volume is zero
-        if volume == 0:
-            if self.p.debug:
-                print(f"Skipping kline with zero volume") #: {kline}"
-            return self._load_kline()  # Load the next kline instead
+        # if volume == 0:
+        #     if self.p.debug:
+        #         print(f"Skipping kline with zero volume") #: {kline}"
+        #     return self._load_kline()  # Load the next kline instead
 
         self.lines.datetime[0] = date2num(pd.Timestamp(timestamp, unit='s'))
         self.lines.open[0] = open_
@@ -99,7 +98,7 @@ class BSCData(DataBase):
         return self._parser_dataframe(df)
 
     def _start_live(self):
-        print("Starting live data...")
+        print("Starting live data...")  # Debugging
         self._store.start_socket(self.token_address)
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)

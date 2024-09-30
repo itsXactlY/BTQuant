@@ -8,6 +8,6 @@ New Linux All-in-One simple installer! More intel soon.
 ### curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/dev/install.sh | sh
 
 
-##Examples
+###Examples
 
 - https://github.com/itsXactlY/BTQuant/tree/dev/dependencies/fastquant/examples

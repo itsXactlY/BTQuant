@@ -21,7 +21,7 @@ source .btq/bin/activate
 pip install --upgrade pip setuptools wheel
 
 # Clone the repository
-git clone https://github.com/itsXactlY/testing BTQuant
+git clone https://github.com/itsXactlY/BTQuant/tree/dev BTQuant
 cd BTQuant
 
 # Install backtrader dependencies

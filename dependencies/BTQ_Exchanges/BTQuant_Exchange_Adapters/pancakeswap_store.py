@@ -1,14 +1,11 @@
-from .pancakeswap_feed import Web3, geth_poa_middleware, FACTORY_ABI, PAIR_ABI, Queue, threading, time, TimeFrame, BSCData
+from .pancakeswap_feed import Web3, FACTORY_ABI, PAIR_ABI, Queue, threading, time, TimeFrame, PancakeSwapData
 import threading
 import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from .pancakeswap_feed import BSCData
-import websockets.sync.client
+from .pancakeswap_feed import PancakeSwapData
 
-
-
-class BSCStore(object):
+class PancakeSwapStore(object):
     _GRANULARITIES = {
         (TimeFrame.Seconds, 1): '1s',
         (TimeFrame.Minutes, 1): '1m',
@@ -39,10 +36,12 @@ class BSCStore(object):
         self.message_queue = Queue()
         self.websocket = None
         self.websocket_thread = None
+        self.w3 = Web3(Web3.LegacyWebSocketProvider(self.ws_url))
+        self.factory_contract = self.w3.eth.contract(address=self.factory_address, abi=FACTORY_ABI)
 
     def getdata(self, start_date=None):
         if not hasattr(self, '_data'):
-            self._data = BSCData(store=self, token_address=self.coin_refer, start_date=start_date)
+            self._data = PancakeSwapData(store=self, token_address=self.coin_refer, start_date=start_date)
         return self._data
 
     def get_interval(self, timeframe, compression):
@@ -50,31 +49,30 @@ class BSCStore(object):
 
     def start_socket(self, token_address):
         def run_socket():
-            while True:  # Outer loop for reconnection
-                print("Starting WebSocket connection...")
+            print("Starting WebSocket connection...")
+            pair_address = self.get_pair_address(token_address)
+            if pair_address == '0x0000000000000000000000000000000000000000':
+                print("No liquidity pair found for this token with BNB")
+                return
+
+            pair_contract = self.w3.eth.contract(address=pair_address, abi=PAIR_ABI)
+            token0 = pair_contract.functions.token0().call()
+            is_token0 = token_address.lower() == token0.lower()
+
+            bnb_price_usd = self.get_bnb_price_in_usd()
+            if bnb_price_usd is None:
+                print(f"Couldn't fetch BNB price in USD.")
+                return
+
+            last_price = None
+            high = low = open_price = close_price = None
+            volume = 0
+            start_time = time.time()
+
+            while True:
                 try:
-                    self.websocket = websockets.sync.client.connect(self.ws_url)
-                    print("WebSocket connection established.")
-                    pair_address = self.get_pair_address(token_address)
-                    if pair_address == '0x0000000000000000000000000000000000000000':
-                        print("No liquidity pair found for this token with BNB")
-                        return
-
-                    pair_contract = self.w3.eth.contract(address=pair_address, abi=PAIR_ABI)
-                    token0 = pair_contract.functions.token0().call()
-                    is_token0 = token_address.lower() == token0.lower()
-
-                    last_price = None
-                    high = low = open_price = close_price = None
-                    volume = 0
-                    start_time = time.time()
-                    
-                    bnb_price_usd = self.get_bnb_price_in_usd()
-                    if bnb_price_usd is None:
-                        print(f"Couldn't fetch BNB price in USD.")
-                        return
-
-                    while True:
+                    current_time = time.time()
+                    if current_time - start_time >= 1:  # 1-second candlestick
                         reserves = pair_contract.functions.getReserves().call()
                         reserve0, reserve1, _ = reserves
 
@@ -93,31 +91,31 @@ class BSCStore(object):
                             low = min(low, current_price_in_usd)
 
                         volume += abs(current_price_in_usd - last_price) if last_price else 0
+                        close_price = current_price_in_usd
+
+                        price_data = {
+                            'timestamp': int(current_time),
+                            'open': open_price,
+                            'high': high,
+                            'low': low,
+                            'close': close_price,
+                            'volume': volume
+                        }
+                        self.message_queue.put(price_data)
+
+                        # Reset for next candlestick
+                        open_price = current_price_in_usd
+                        high = low = current_price_in_usd
+                        volume = 0
                         last_price = current_price_in_usd
+                        start_time = current_time
 
-                        elapsed_time = time.time() - start_time
-                        if elapsed_time >= 1:  # 1-second candlestick
-                            close_price = current_price_in_usd
-                            price_data = {
-                                'timestamp': int(time.time()),
-                                'open': open_price,
-                                'high': high,
-                                'low': low,
-                                'close': close_price,
-                                'volume': volume
-                            }
-                            self.message_queue.put(price_data)
+                    time.sleep(0.5)  # Sleep for 500ms to reduce CPU usage
 
-                            open_price = current_price_in_usd
-                            high = low = current_price_in_usd
-                            volume = price_data['volume']
-                            start_time = time.time()
-
-                        time.sleep(1)
                 except Exception as e:
-                    print(f"Error in WebSocket connection: {e}")
+                    print(f"Error in data fetching: {e}")
                     print("Attempting to reconnect in 5 seconds...")
-                    time.sleep(5)  # Wait for 5 seconds before attempting to reconnect
+                    time.sleep(5)
 
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
@@ -145,10 +143,7 @@ class BSCStore(object):
             return None
 
     def get_pair_address(self, token_address):
-        if not self.w3:
-            self.w3 = Web3(Web3.WebsocketProvider(self.ws_url))
-            self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-            self.factory_contract = self.w3.eth.contract(address=self.factory_address, abi=FACTORY_ABI)
-
+        token_address = Web3.to_checksum_address(token_address)
         pair_address = self.factory_contract.functions.getPair(token_address, self.bnb_address).call()
         return pair_address
+

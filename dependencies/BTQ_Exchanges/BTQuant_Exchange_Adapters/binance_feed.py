@@ -71,7 +71,7 @@ class BinanceData(DataBase):
         if volume == 0:
             if self.p.debug:
                 print(f"Skipping kline with zero volume: {kline}")
-            return self._load_kline()  # Load the next kline instead
+            return self._load_kline()  # check the next kline instead
 
         self.lines.datetime[0] = date2num(pd.Timestamp(timestamp))
         self.lines.open[0] = open_

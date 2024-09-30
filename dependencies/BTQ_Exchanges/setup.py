@@ -9,5 +9,5 @@ setup(
     author_email='no',
     license='MIT',
     packages=find_packages(),  # Automatically find the package directory
-    install_requires=['backtrader', 'ipython'],
+    install_requires=['backtrader', 'ipython', 'websockets'],
 )

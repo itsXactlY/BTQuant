@@ -1,7 +1,0 @@
-matplotlib==3.6.2
-pandas
-requests
-quantstats-lumi
-numpy
-joblib
-websockets

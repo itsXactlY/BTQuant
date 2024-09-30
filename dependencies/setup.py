@@ -102,14 +102,16 @@ setuptools.setup(
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
     packages=setuptools.find_packages(exclude=['docs', 'docs2', 'samples']),
-    # packages=['backtrader', '],
+    # packages=['backtrader', ],
 
     # List run-time dependencies here.
     # These will be installed by pip when your
-    # project is installed. For an analysis of "install_requires" vs pip's
-    # requirements files see:
-    # https://packaging.python.org/en/latest/requirements.html
-    # install_requires=['six'],
+    # project is installed.
+    install_requires=[
+        'pybind11',  # Include pybind11 here
+        'Web3'
+        # Add other dependencies as needed
+    ],
 
     # List additional groups of dependencies here
     # (e.g. development dependencies).
@@ -133,7 +135,6 @@ setuptools.setup(
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
     # pip to create the appropriate form of executable for the target platform.
-    # entry_points={'console_scripts': ['sample=sample:main',],},
     entry_points={'console_scripts': ['btrun=backtrader.btrun:btrun']},
 
     scripts=['tools/bt-run.py'],

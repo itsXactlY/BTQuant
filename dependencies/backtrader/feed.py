@@ -2,7 +2,7 @@
 # -*- coding: utf-8; py-indent-offset:4 -*-
 ###############################################################################
 #
-# Copyright (C) 2015-2020 Daniel Rodriguez
+# Copyright (C) 2015-2023 Daniel Rodriguez
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ from time import sleep
 
 class MetaAbstractDataBase(dataseries.OHLCDateTime.__class__):
     _indcol = dict()
-    # @profile
+
     def __init__(cls, name, bases, dct):
         '''
         Class has already been created ... register subclasses
@@ -51,7 +51,7 @@ class MetaAbstractDataBase(dataseries.OHLCDateTime.__class__):
         if not cls.aliased and \
            name != 'DataBase' and not name.startswith('_'):
             cls._indcol[name] = cls
-    # @profile
+
     def dopreinit(cls, _obj, *args, **kwargs):
         _obj, args, kwargs = \
             super(MetaAbstractDataBase, cls).dopreinit(_obj, *args, **kwargs)
@@ -64,7 +64,7 @@ class MetaAbstractDataBase(dataseries.OHLCDateTime.__class__):
         _obj._dataname = _obj.p.dataname
         _obj._name = ''
         return _obj, args, kwargs
-    # @profile
+
     def dopostinit(cls, _obj, *args, **kwargs):
         _obj, args, kwargs = \
             super(MetaAbstractDataBase, cls).dopostinit(_obj, *args, **kwargs)
@@ -126,7 +126,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
         ('dataname', None),
         ('name', ''),
         ('compression', 1),
-        ('timeframe', TimeFrame.Minutes), # Days
+        ('timeframe', TimeFrame.Days),
         ('fromdate', None),
         ('todate', None),
         ('sessionstart', None),
@@ -163,7 +163,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
     replaying = 0
 
     _started = False
-    # @profile
+
     def _start_finish(self):
         # A live feed (for example) may have learnt something about the
         # timezones after the start and that's why the date/time related
@@ -198,16 +198,16 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             self._calendar = PandasMarketCalendar(calendar=cal)
 
         self._started = True
-    # @profile
+
     def _start(self):
         self.start()
 
         if not self._started:
             self._start_finish()
-    # @profile
+
     def _timeoffset(self):
         return self._tmoffset
-    # @profile
+
     def _getnexteos(self):
         '''Returns the next eos using a trading calendar if available'''
         if self._clone:
@@ -254,31 +254,29 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             return num2date(self.lines.datetime[0], tz or self._tz, naive)
 
         return num2date(dt, tz or self._tz, naive)
-    # @profile
+
     def haslivedata(self):
         return False  # must be overriden for those that can
-    # @profile
+
     def do_qcheck(self, onoff, qlapse):
         # if onoff is True the data will wait p.qcheck for incoming live data
         # on its queue.
         qwait = self.p.qcheck if onoff else 0.0
         qwait = max(0.0, qwait - qlapse)
         self._qcheck = qwait
-        if self.islive == True:
-            sleep(1)
-    # @profile
+
     def islive(self):
         '''If this returns True, ``Cerebro`` will deactivate ``preload`` and
         ``runonce`` because a live data source must be fetched tick by tick (or
         bar by bar)'''
         return False
-    # @profile
+
     def put_notification(self, status, *args, **kwargs):
         '''Add arguments to notification queue'''
         if self._laststatus != status:
             self.notifs.append((status, args, kwargs))
             self._laststatus = status
-    # @profile
+
     def get_notifications(self):
         '''Return the pending "store" notifications'''
         # The background thread could keep on adding notifications. The None
@@ -292,43 +290,43 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             notifs.append(notif)
 
         return notifs
-    # @profile
+
     def getfeed(self):
         return self._feed
-    # @profile
+
     def qbuffer(self, savemem=0, replaying=False):
         extrasize = self.resampling or replaying
         for line in self.lines:
             line.qbuffer(savemem=savemem, extrasize=extrasize)
-    # @profile
+
     def start(self):
         self._barstack = collections.deque()
         self._barstash = collections.deque()
         self._laststatus = self.CONNECTED
-    # @profile
+
     def stop(self):
         pass
-    # @profile
+
     def clone(self, **kwargs):
         return DataClone(dataname=self, **kwargs)
-    # @profile
+
     def copyas(self, _dataname, **kwargs):
         d = DataClone(dataname=self, **kwargs)
         d._dataname = _dataname
         d._name = _dataname
         return d
-    # @profile
+
     def setenvironment(self, env):
         '''Keep a reference to the environment'''
         self._env = env
-    # @profile
+
     def getenvironment(self):
         return self._env
-    # @profile
+
     def addfilter_simple(self, f, *args, **kwargs):
         fp = SimpleFilterWrapper(self, f, *args, **kwargs)
         self._filters.append((fp, fp.args, fp.kwargs))
-    # @profile
+
     def addfilter(self, p, *args, **kwargs):
         if inspect.isclass(p):
             pobj = p(self, *args, **kwargs)
@@ -339,13 +337,13 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
 
         else:
             self._filters.append((p, args, kwargs))
-    # @profile
+
     def compensate(self, other):
         '''Call it to let the broker know that actions on this asset will
         compensate open positions in another'''
 
         self._compensate = other
-    # @profile
+
     def _tick_nullify(self):
         # These are the updating prices in case the new bar is "updated"
         # and the length doesn't change like if a replay is happening or
@@ -356,7 +354,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                 setattr(self, 'tick_' + lalias, None)
 
         self.tick_last = None
-    # @profile
+
     def _tick_fill(self, force=False):
         # If nothing filled the tick_xxx attributes, the bar is the tick
         alias0 = self._getlinealias(0)
@@ -367,13 +365,13 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                             getattr(self.lines, lalias)[0])
 
             self.tick_last = getattr(self.lines, alias0)[0]
-    # @profile
+
     def advance_peek(self):
         if len(self) < self.buflen():
             return self.lines.datetime[1]  # return the future
 
         return float('inf')  # max date else
-    # @profile
+
     def advance(self, size=1, datamaster=None, ticks=True):
         if ticks:
             self._tick_nullify()
@@ -394,12 +392,11 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             else:
                 if ticks:
                     self._tick_fill()
-                    print('Using ticks...')
         elif len(self) < self.buflen():
             # a resampler may have advance us past the last point
             if ticks:
                 self._tick_fill()
-    # @profile
+
     def next(self, datamaster=None, ticks=True):
 
         if len(self) >= self.buflen():
@@ -426,6 +423,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             if self.lines.datetime[0] > datamaster.lines.datetime[0]:
                 # can't deliver new bar, too early, go back
                 self.rewind()
+                return False
             else:
                 if ticks:
                     self._tick_fill()
@@ -436,14 +434,14 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
 
         # tell the world there is a bar (either the new or the previous
         return True
-    # @profile
+
     def preload(self):
         while self.load():
             pass
 
         self._last()
         self.home()
-    # @profile
+
     def _last(self, datamaster=None):
         # Last chance for filters to deliver something
         ret = 0
@@ -462,7 +460,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             self._tick_fill()
 
         return bool(ret)
-    # @profile
+
     def _check(self, forcedata=None):
         ret = 0
         for ff, fargs, fkwargs in self._filters:
@@ -490,7 +488,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                     # return the actual returned value which may be None to
                     # signal no bar is available, but the data feed is not
                     # done. False means game over
-                    sleep(0.01)
+                    sleep(0.01) # aLca was here for 100% CPU FIX ;)
                     return _loadret
 
             # Get a reference to current loaded time

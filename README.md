@@ -51,7 +51,7 @@ To install **JackRabbitRelay**, follow the detailed guides:
 
 - [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
 - [Installation Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
-- [Mimic Setup](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic)
+- [Mimic "Brokerage" Setup](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic)
 
 ### **⚡ Quick Setup for BTQuant**
 
@@ -73,11 +73,11 @@ This script will handle the setup of the virtual environment, installation of de
 python3 Crypto_CCXT_BollingerBands.py
 ```
 
-### **For Forward Trading:**
+### **For Forward/Live Trading:**
 - **Setup**: Copy `dontcommit.py.template` to `dontcommit.py` and fill in the identification strings from your JackRabbitRelay setup, or Privatekey for Web3 Access.
 - **Run Forward Trading on Binance:**
 ```bash
-_WORK_IN_PROGRSS_
+python3 __LIVE_Binance.py
 ```
 - **Run Forward Trading on PancakeSwap:**
 ```bash

@@ -20,7 +20,7 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 ### 🚀 **2. Forward Trading**
 - **Next-Level Simulation**: Forward test on **400+ simulated exchanges** with **JackRabbitRelay**—a powerful tool to mimic market conditions and test strategies before going live.
 - **Broker Independence**: No need to rely on external brokers. **Act as your own broker**, giving you unmatched flexibility.
-- **Hyper-Realistic Environments**: Designed to simulate minute-by-minute market dynamics, enabling robust performance analysis.
+- **Hyper-Realistic Environments**: Designed to simulate second-by-second market dynamics, enabling robust performance analysis.
 
 ### ⏱️ **3. Live Trading**
 - **Real-Time Trading**: Live trade using **1-second WebSocket data feeds** from **Binance**, **ByBit**, and now **PancakeSwap** for decentralized exchanges.

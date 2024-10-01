@@ -111,13 +111,11 @@ class PancakeSwapData(DataBase):
 
     def start(self):
         DataBase.start(self)
-
         print("Starting WebSocket connection...")
-        print("WebSocket connection started.")
-
         if self.start_date:
             self._state = self._ST_HISTORBACK
             self.put_notification(self.DELAYED)
+            print("WebSocket connection started.")
 
             # Fetch historical data (you may need to implement this method in the store)
             klines = self._store.fetch_ohlcv(
@@ -152,9 +150,6 @@ class PancakeSwapData(DataBase):
                 self.handle_websocket_message(message)
             except Empty:
                 time.sleep(1)
-
-
-
 
 # Factory and Pair ABIs
 FACTORY_ABI = [{

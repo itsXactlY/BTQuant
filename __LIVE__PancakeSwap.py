@@ -5,7 +5,7 @@ from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
 import pytz
 
 # Web3 Decentral Exchanges
-_coin = "0x6894cde390a3f51155ea41ed24a33a4827d3063d" # Simon the CAT
+_coin = "0xb265cba9bd6e34fa412bd8b4c1514c902c0e7e7d" #Giggle Academy  #"0x6894cde390a3f51155ea41ed24a33a4827d3063d" # Simon the CAT
 _collateral = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" # WRAPPED BNB
 _exchange = 'pancakeswap'
 _account = 'web3'

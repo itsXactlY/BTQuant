@@ -25,10 +25,10 @@ class PancakeSwapStore(object):
         (TimeFrame.Months, 1): '1M',
     }
 
-    def __init__(self, coin_refer, coin_target):
+    def __init__(self, coin_refer, coin_target, web3ws):
         self.coin_refer = coin_refer
         self.coin_target = coin_target
-        self.ws_url = "wss://bsc-rpc.publicnode.com"
+        self.ws_url = web3ws #""
         self.w3 = None
         self.factory_address = Web3.to_checksum_address('0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73')
         self.bnb_address = Web3.to_checksum_address(coin_target)

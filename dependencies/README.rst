@@ -1,4 +1,4 @@
-backtrader - 1.9.76.123 (working on Linux also on Windows with proper Plots! Such wow, much nice!)
+backtrader - 1.9.77-Custom with tiny, yet super effective livetrading bug fixes. (working on Linux also on Windows with proper Plots! Such wow, much nice!)
 ==========
 
 .. image:: https://img.shields.io/pypi/v/backtrader.svg

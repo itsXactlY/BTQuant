@@ -75,11 +75,11 @@ python3 Crypto_CCXT_BollingerBands.py
 
 ### **For Forward/Live Trading:**
 - **Setup**: Copy `dontcommit.py.template` to `dontcommit.py` and fill in the identification strings from your JackRabbitRelay setup, or Privatekey for Web3 Access.
-- **Run Forward Trading on Binance:**
+- **Run Forward/Live Trading on Binance:**
 ```bash
 python3 __LIVE__Binance.py
 ```
-- **Run Forward Trading on PancakeSwap:**
+- **Run Forward/Live Trading on PancakeSwap:**
 ```bash
 python3 __LIVE__PancakeSwap.py
 ```

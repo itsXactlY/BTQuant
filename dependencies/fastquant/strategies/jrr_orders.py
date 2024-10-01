@@ -1,9 +1,7 @@
 import requests
 from fastquant.strategies.dontcommit import identify, jrr_webhook_url
 
-# discord_webhook_url = 'https://discord.com/api/webhooks/1226983403853975682/wp1X9YdBTMTADUKQyq4dAdEobvc49LKq3Y2yLAbPmxTk_5yePzNpXYJaVINgmRTFeZLT'
-discord_webhook_url = 'https://discord.com/api/webhooks/1246830431199039569/gAdGo25Dv4B0I6MqZui4yAl2aiDCvKlagIPlPH074vyeZDqsVFj6357SdsgUHJZIABSZ'
-quant_showcase_url = 'https://discord.com/api/webhooks/1247966677765718217/yFMsNV635fYwHfgX8mYpJ38hneppBJBIRYyj6D90ziZVzBVuCN741KMAuVMfc7EqLMDp'
+discord_webhook_url = 'https://discord.com/api/webhooks/1226983403853975682/wp1X9YdBTMTADUKQyq4dAdEobvc49LKq3Y2yLAbPmxTk_5yePzNpXYJaVINgmRTFeZLT'
 
 class Alert:
     def __init__(self, discord_webhook_url):

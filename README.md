@@ -86,6 +86,39 @@ python3 __LIVE__PancakeSwap.py
 
 ---
 
+## 🎯 Strategy Selection
+
+BTQuant provides a wide variety of **pre-built trading strategies** that you can quickly plug into your trading environment. Whether you're backtesting, forward trading, or live trading, you can choose from the following strategies:
+
+### **Available Strategies:**
+
+- **RSI Strategy** (`"rsi"`) - Relative Strength Index-based strategy for identifying overbought/oversold conditions.
+- **SMAC Strategy** (`"smac"`) - Simple Moving Average Crossover strategy for trend-following trades.
+- **MACD Strategy** (`"macd"`) - Moving Average Convergence Divergence strategy for momentum and trend following.
+- **EMAC Strategy** (`"emac"`) - Exponential Moving Average Crossover strategy for more reactive trend trading.
+- **BBands Strategy** (`"bbands"`) - Bollinger Bands-based strategy for volatility and mean reversion trades.
+- **Buy And Hold Strategy** (`"buynhold"`) - A simple buy-and-hold strategy.
+- **Ternary Strategy** (`"ternary"`) - A custom ternary decision-based strategy.
+- **QQE Example Strategy** (`"qqe"`) - A Quantitative Qualitative Estimation (QQE) trading strategy for smoother signals.
+- **Order Chain by KioseffTrading** (`"OrChainKioseff"`) - Advanced order chaining strategy for complex execution.
+- **SMACross with MESAdaptivePrime Strategy** (`"msa"`) - Enhanced moving average cross strategy with adaptive prime filters.
+- **SuperSTrend Scalping Strategy** (`"STScalp"`) - A scalping strategy designed around SuperSTrend indicators for quick entries and exits.
+
+### **How to Choose a Strategy**
+
+You can specify the strategy when configuring your backtest, forward trading, or live trading setup by using the corresponding string:
+
+```bash
+strategy_name = "rsi"  # Replace with your desired strategy
+```
+
+Simply replace `"rsi"` with any of the above strategy codes to select the one that fits your needs!
+
+---
+
+> **Note**: These strategies can be customized or extended to fit your unique trading style.
+
+
 ## **🚀 Why BTQuant?**
 
 ### **What We Offer That Others Don’t**

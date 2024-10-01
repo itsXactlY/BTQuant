@@ -58,7 +58,7 @@ To install **JackRabbitRelay**, follow the detailed guides:
 Run this command in your terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/dev/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/mainv2/install.sh | sh
 ```
 
 This script will handle the setup of the virtual environment, installation of dependencies, and configuration of the framework for Linux systems.

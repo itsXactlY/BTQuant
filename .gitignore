@@ -36,3 +36,4 @@ binance_debug_stx.py
 *.venv
 build
 .so
+testing.py

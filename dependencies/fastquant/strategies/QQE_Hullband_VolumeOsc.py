@@ -51,6 +51,9 @@ class QQE_Example(BaseStrategy):
     params = (
         ("ema_length", 20),
         ('hull_length', 53),
+        '''Sidenot by aLca :: this values are "None", as i expect to run the strategy (backtest/livetrade) with the kwargs from there.
+                           :: otherwise hardcode TP, DCA Deviation, % per Buy here if want to
+        '''
         ('take_profit_percent', None),
         ('dca_deviation', None),  # DCA deviation
         ('percent_sizer', None),

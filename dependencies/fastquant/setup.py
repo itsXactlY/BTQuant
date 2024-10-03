@@ -18,7 +18,7 @@ setuptools.setup(
     package_dir={"": "python"},
     package_data={"fastquant": ["data/*"]},
     include_package_data=True,
-    scripts=["python/scripts/get_disclosures", "python/scripts/update_cache"],
+    scripts=["scripts/get_disclosures", "scripts/update_cache"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

@@ -1,20 +1,32 @@
 import backtrader as bt
 from fastquant.strategies.base import BaseStrategy
+from numpy import isnan
 
 class VolumeOscillator(bt.Indicator):
     lines = ('short', 'long', 'osc')
     params = (('shortlen', 5),
-            ('longlen', 10))
-    
+              ('longlen', 10))
+
     def __init__(self):
+        # self.addminperiod(self.p.longlen)
         shortlen, longlen = self.params.shortlen, self.params.longlen
         self.lines.short = bt.indicators.ExponentialMovingAverage(self.data.volume, period=shortlen)
         self.lines.long = bt.indicators.ExponentialMovingAverage(self.data.volume, period=longlen)
 
     def next(self):
-        if self.lines.long[0] > 0:
-            self.lines.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
-        else:
+        try:
+            # Log the volume data and EMAs to check for issues
+            print(f"Volume: {self.data.volume[0]}, Short EMA: {self.lines.short[0]}, Long EMA: {self.lines.long[0]}")
+
+            # Check if the volume data or EMAs are None, zero, or NaN to avoid division by zero
+            if not (self.lines.long[0] and self.lines.long[0] > 0 and not isnan(self.lines.long[0])):
+                print(f"Invalid volume data detected: Long EMA is {self.lines.long[0]}. Setting oscillator to 0.")
+                self.lines.osc[0] = 0
+            else:
+                # Calculate oscillator only when valid values exist
+                self.lines.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
+        except Exception as e:
+            print(f"Error calculating Volume Oscillator: {e}")
             self.lines.osc[0] = 0
 
 class QQEIndicator(bt.Indicator):

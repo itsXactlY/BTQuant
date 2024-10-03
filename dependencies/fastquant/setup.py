@@ -14,7 +14,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/enzoampil/fastquant",
-    # packages=setuptools.find_packages(where="./python", exclude=["docs", "tests"]),
+    packages=setuptools.find_packages(where=".", exclude=["docs", "tests"]),
     package_dir={"": "python"},
     package_data={"fastquant": ["data/*"]},
     include_package_data=True,

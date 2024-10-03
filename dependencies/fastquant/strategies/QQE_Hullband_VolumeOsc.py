@@ -85,7 +85,7 @@ class QQE_Example(BaseStrategy):
                     self.entry_prices.append(self.data.close[0])
                     print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
                     self.sizes.append(self.amount)
-                    # self.load_trade_data()
+                    self.load_trade_data()
                     self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                     self.calc_averages()
                     self.buy_executed = True
@@ -108,7 +108,7 @@ class QQE_Example(BaseStrategy):
                     if self.params.backtest == False:
                         self.entry_prices.append(self.data.close[0])
                         self.sizes.append(self.amount)
-                        # self.load_trade_data()
+                        self.load_trade_data()
                         print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
                         self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                         self.calc_averages()

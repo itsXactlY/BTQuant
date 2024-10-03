@@ -28,15 +28,18 @@ cd BTQuant
 cd dependencies
 pip install .
 
-# Continue with the rest of your installation
+# Install BTQ_Exchanges
 cd BTQ_Exchanges
 pip install .
 
+# Install FastQuant
 cd ../fastquant
 pip install .
 
+# Install and build fast_mssql
 cd ../MsSQL
 pip install .
+python setup.py build_ext --inplace
 
 cd ../..
 

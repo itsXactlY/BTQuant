@@ -1,12 +1,11 @@
 import requests
 from fastquant.strategies.dontcommit import identify, jrr_webhook_url
 
-discord_webhook_url = 'https://discord.com/api/webhooks/1226983403853975682/wp1X9YdBTMTADUKQyq4dAdEobvc49LKq3Y2yLAbPmxTk_5yePzNpXYJaVINgmRTFeZLT'
+discord_webhook_url = ''
 
 class Alert:
     def __init__(self, discord_webhook_url):
         self.discord_webhook_url = discord_webhook_url
-        # self.quant_showcase_url = quant_showcase_url
 
     def send_alert(self, message):
         message_payload = {

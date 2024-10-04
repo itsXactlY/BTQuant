@@ -14,6 +14,7 @@ from fastquant.strategies import (
     Order_Chain_Kioseff_Trading,
     SMA_Cross_MESAdaptivePrime,
     SuperSTrend_Scalper,
+    pancakeswap_dca_marketmaker,
 )
 
 # Register your strategy here
@@ -31,4 +32,5 @@ STRATEGY_MAPPING = {
     "OrChainKioseff": Order_Chain_Kioseff_Trading,
     "msa": SMA_Cross_MESAdaptivePrime,
     "STScalp": SuperSTrend_Scalper,
+    "web3mm": pancakeswap_dca_marketmaker,
 }

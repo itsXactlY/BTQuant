@@ -30,6 +30,7 @@ class BuyAndHoldStrategy(BaseStrategy):
     def buy_signal(self):
         if not self.position:
             self.buy_and_hold = True
+            self.buy()
         return self.buy_and_hold
 
     def sell_signal(self):
@@ -37,4 +38,5 @@ class BuyAndHoldStrategy(BaseStrategy):
             self.buy_and_hold_sell = True
         else:
             self.buy_and_hold_sell = False
+            self.sell()
         return self.buy_and_hold_sell

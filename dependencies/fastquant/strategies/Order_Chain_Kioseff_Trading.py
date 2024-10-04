@@ -2,7 +2,7 @@
 # Originally inspired by: https://www.tradingview.com/script/JNCGeDj7-Order-Chain-Kioseff-Trading/
 
 import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, np
+from fastquant.strategies.base import BaseStrategy, np, BuySellArrows
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -123,6 +123,7 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
 
     def __init__(self):
         super().__init__()
+        BuySellArrows(self.data0, barplot=True)
         self.order_chain = OrderChainIndicator(chain=self.p.chain, ticks=self.p.ticks, tick_size=self.p.tick_size)
 
         self.buy_executed = False

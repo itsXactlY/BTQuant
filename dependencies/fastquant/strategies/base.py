@@ -126,7 +126,7 @@ class BaseStrategy(bt.Strategy):
             self.order_thread.daemon = True
             self.order_thread.start()
         elif self.params.backtest == False:
-            self.pcswap = _web3order()
+            self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
             self.web3order_queue = queue.Queue()
             self.web3order_thread = threading.Thread(target=self.process_web3orders)
             self.web3order_thread.daemon = True

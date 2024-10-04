@@ -1,4 +1,7 @@
 from fastquant import livetrade_web3 as livetrade
+from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
+# I have no dang idea why this is one and only strategy yet what will not work with the strategy_mapping.
+# Im on it to figure out.
 
 # Web3 Decentral Exchanges
 _coin = "0xb265cba9bd6e34fa412bd8b4c1514c902c0e7e7d" #Giggle Academy
@@ -14,7 +17,7 @@ _amount = float(_amount)
 livetrade(
     coin=_coin,
     collateral=_collateral,
-    strategy="qqe",
+    strategy=Pancakeswap_dca_mm,
     exchange=_exchange,
     web3ws=_websocket,
     account=_account,

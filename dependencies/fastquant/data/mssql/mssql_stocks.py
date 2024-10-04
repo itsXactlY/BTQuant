@@ -12,7 +12,7 @@ def get_database_stock_data(
     end = dt.datetime.strptime(end_date, "%Y-%m-%d")
     start_time = time.time()
 
-    df = MSSQLData_Stocks.get_data_from_db(connection_string, coin_name, "1m", start, end)
+    df = MSSQLData_Stocks.get_data_from_db(connection_string, coin_name, time_resolution, start, end)
 
     # Calculate the elapsed time
     elapsed_time = time.time() - start_time
@@ -26,6 +26,8 @@ def get_database_stock_data(
 
     # Dynamically convert time resolution to Pandas offset alias
     def convert_time_resolution(time_resolution):
+        if time_resolution.endswith('s'):  # seconds
+            return time_resolution.replace('s', 'S')
         if time_resolution.endswith('m'):  # minutes
             return time_resolution.replace('m', 'T')
         elif time_resolution.endswith('h'):  # hours

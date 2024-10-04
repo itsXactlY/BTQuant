@@ -28,9 +28,7 @@ class Alert:
 
         try:
             response = requests.post(self.discord_webhook_url, json=message_payload, headers=headers)
-            # _respone_showcase = requests.post(self.quant_showcase_url, json=message_payload, headers=headers)
             response.raise_for_status()  # Raise an error for bad responses
-            # _respone_showcase.raise_for_status()
             print(f"Discord response status code: {response.status_code}")
             print(f"Discord response content: {response.text}")
 

@@ -26,6 +26,8 @@ def get_database_data(
 
     # Dynamically convert time resolution to Pandas offset alias
     def convert_time_resolution(time_resolution):
+        if time_resolution.endswith('s'):  # seconds
+            return time_resolution.replace('s', 'S')
         if time_resolution.endswith('m'):  # minutes
             return time_resolution.replace('m', 'T')
         elif time_resolution.endswith('h'):  # hours

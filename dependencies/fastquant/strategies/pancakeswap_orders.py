@@ -1,15 +1,9 @@
 import requests
-
-# discord_webhook_url = 'https://discord.com/api/webhooks/1226983403853975682/wp1X9YdBTMTADUKQyq4dAdEobvc49LKq3Y2yLAbPmxTk_5yePzNpXYJaVINgmRTFeZLT'
-discord_webhook_url = 'https://discord.com/api/webhooks/1246830431199039569/gAdGo25Dv4B0I6MqZui4yAl2aiDCvKlagIPlPH074vyeZDqsVFj6357SdsgUHJZIABSZ'
-quant_showcase_url = 'https://discord.com/api/webhooks/1247966677765718217/yFMsNV635fYwHfgX8mYpJ38hneppBJBIRYyj6D90ziZVzBVuCN741KMAuVMfc7EqLMDp'
-quant_showcase_pcswap = 'https://discord.com/api/webhooks/1289976072024358922/zpjybv8XY_x7RQGLJeQZ2bmTQ7mUyWhddYOS0jinM0Mg-DZlkoZHfly2hKMdJV2-IPGB'
-
+discord_webhook_url = ''
 
 class Alert:
     def __init__(self, discord_webhook_url):
         self.discord_webhook_url = discord_webhook_url
-        # self.quant_showcase_url = quant_showcase_url
 
     def send_alert(self, message):
         message_payload = {
@@ -49,14 +43,14 @@ from web3 import Web3
 from .dontcommit import bsc_privaccount1, bsc_privaccountaddress
 
 class PancakeSwapV2DirectOrderBase:
-    def __init__(self, **kwargs):
+    def __init__(self, coin, collateral, **kwargs):
         super().__init__(**kwargs)
         self.BSC_RPC_URL = "https://bsc-dataseed.binance.org/"
         self.PRIVATE_KEY = bsc_privaccount1
         self.WALLET_ADDRESS = Web3.to_checksum_address(bsc_privaccountaddress)
         self.PANCAKE_ROUTER_ADDRESS = Web3.to_checksum_address('0x10ED43C718714eb63d5aA57B78B54704E256024E')
-        self.TOKEN_ADDRESS = Web3.to_checksum_address('0x6894cde390a3f51155ea41ed24a33a4827d3063d')
-        self.WBNB_ADDRESS = Web3.to_checksum_address('0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c')
+        self.TOKEN_ADDRESS = Web3.to_checksum_address(coin)
+        self.WBNB_ADDRESS = Web3.to_checksum_address(collateral)
         self.web3 = Web3(Web3.HTTPProvider(self.BSC_RPC_URL))
         if not self.web3.is_connected():
             raise Exception("Failed to connect to Binance Smart Chain")

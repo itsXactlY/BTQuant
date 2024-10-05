@@ -35,5 +35,6 @@ binance_debug_spell.py
 binance_debug_stx.py
 *.venv
 build
-.so
+*.so
 testing.py
+*.egg-info

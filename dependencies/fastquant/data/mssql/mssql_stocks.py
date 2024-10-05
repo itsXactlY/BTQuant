@@ -1,6 +1,6 @@
 import time
 import datetime as dt
-from .dontcommit import MSSQLData_Stocks, connection_string
+from fastquant.dontcommit import MSSQLData_Stocks, connection_string
 
 def get_database_stock_data(
     ticker, start_date, end_date, time_resolution="1d"

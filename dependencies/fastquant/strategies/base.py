@@ -3,7 +3,7 @@ import backtrader as bt
 import requests
 from fastquant.strategies.jrr_orders import *
 from fastquant.strategies.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
-from fastquant.strategies.dontcommit import *
+from fastquant.dontcommit import *
 import json
 import threading
 import queue
@@ -368,12 +368,12 @@ class BaseStrategy(bt.Strategy):
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             ptu()
-            print('STUXNET INITATED...')
+            print(f"STUXNET INITATED FOR {self.p.exchange} ...")
             self.load_trade_data()
-        else:
+        elif self.params.backtest == False:
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
-        print(f"Exchange: {self.p.exchange}")
+        
 
     def next(self):
         self.conditions_checked = False
@@ -381,7 +381,7 @@ class BaseStrategy(bt.Strategy):
             if self.live_data == True:
                 self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose # TODO figure out why no default stake is set on empty history
                 if self.stake < 10:
-                    print('No free margin. Cant buy. Send the highly trained apes for help.')
+                    print('No free margin. Cant buy. Send the highly trained apes for help - Account seem liquidated.')
                     return
                 
                 if not self.buy_executed:

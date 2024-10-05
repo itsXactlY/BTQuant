@@ -1,16 +1,17 @@
 import backtrader as bt
 import joblib
 
+# JackRabbit
 identify = ""
 jrr_webhook_url = "http://127.0.0.1:80"
 jrr_order_history = ""
 jrr_order_history_sub1 = ""
 
-
-
+#Web3
 bsc_privaccount1 = ""
 bsc_privaccountaddress = ""
 
+# MsSQL
 import importlib
 import sys
 import os

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Import standard library
 from __future__ import (
     absolute_import,
     division,
@@ -8,35 +7,37 @@ from __future__ import (
     unicode_literals,
 )
 
-# Import modules
-import backtrader as bt
-
-# Import from package
-from fastquant.strategies.base import BaseStrategy
-
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 
 class BuyAndHoldStrategy(BaseStrategy):
     """
-    Buy and Hold Strategy
+    Buy and Hold Strategy with a fixed budget
     """
 
-    def _init_(self):
-        # Initialize global variables
+    def __init__(self):
+        BuySellArrows(self.data0, barplot=True)
         super().__init__()
-        # Strategy level variables
-        self.buy_and_hold = None
-        self.buy_and_hold_sell = None
+        self.price = self.data.close
+        self.order = None
+        self.bought = False
+        self.amount = 0
+        self.initial_cash = self.broker.getcash()
 
-    def buy_signal(self):
-        if not self.position:
-            self.buy_and_hold = True
-            self.buy()
-        return self.buy_and_hold
+    def next(self):
+        if not self.bought and not self.position:
+            cash = self.broker.getcash()
+            # Calculate the maximum amount we can buy, accounting for commission
+            max_size = cash / self.price[0]
+            # Use 99% of the maximum to ensure we dont exceed available cash
+            self.amount = 0.99 * max_size
+            self.order = self.buy(size=self.amount)
+            self.bought = True
 
-    def sell_signal(self):
-        if (len(self) + 2) >= self.len_data:
-            self.buy_and_hold_sell = True
-        else:
-            self.buy_and_hold_sell = False
-            self.sell()
-        return self.buy_and_hold_sell
+    def stop(self):
+        self.final_value = self.broker.getvalue()
+        self.pnl = self.final_value - self.initial_cash
+        print(f"Initial cash: ${self.initial_cash:.2f}")
+        print(f"End value: ${self.final_value:.2f}")
+        print(f"Profit: ${self.pnl:.2f}")
+        print(f"Assets held: {self.amount:.8f}")
+        print(f"Final Asset price: ${self.price[0]:.2f}")

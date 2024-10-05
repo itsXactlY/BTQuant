@@ -109,8 +109,8 @@ setuptools.setup(
     # project is installed.
     install_requires=[
         'pybind11',  # Include pybind11 here
-        'Web3'
-        'pyodbc'
+        'Web3',
+        'pyodbc',
         # Add other dependencies as needed
     ],
 

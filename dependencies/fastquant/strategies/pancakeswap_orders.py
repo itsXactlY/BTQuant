@@ -38,7 +38,7 @@ class Alert:
 
 import time
 from web3 import Web3
-from .dontcommit import bsc_privaccount1, bsc_privaccountaddress
+from fastquant.dontcommit import bsc_privaccount1, bsc_privaccountaddress
 
 class PancakeSwapV2DirectOrderBase:
     def __init__(self, coin, collateral, **kwargs):

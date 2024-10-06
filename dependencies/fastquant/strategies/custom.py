@@ -13,7 +13,7 @@ from __future__ import (
 import backtrader as bt
 
 # Import from package
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 from fastquant.indicators.custom import CustomIndicator
 
 
@@ -41,6 +41,7 @@ class CustomStrategy(BaseStrategy):
     )
 
     def __init__(self):
+        BuySellArrows(self.data0, barplot=True)
         # Initialize global variables
         super().__init__()
         # Strategy level variables

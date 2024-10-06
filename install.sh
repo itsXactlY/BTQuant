@@ -13,16 +13,16 @@ if ! command_exists python3 || ! command_exists pip; then
     exit 1
 fi
 
+# Clone the repository
+git clone https://github.com/itsXactlY/BTQuant/ BTQuant
+cd BTQuant
+
 # Create and activate virtual environment
 python3 -m venv .btq
 source .btq/bin/activate
 
 # Upgrade pip and install necessary packages
 pip install --upgrade pip setuptools wheel
-
-# Clone the repository
-git clone https://github.com/itsXactlY/BTQuant/ BTQuant
-cd BTQuant
 
 # Install backtrader dependencies
 cd dependencies

@@ -38,3 +38,5 @@ build
 *.so
 testing.py
 *.egg-info
+*.btq
+.btq

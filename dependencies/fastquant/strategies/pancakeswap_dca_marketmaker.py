@@ -1,4 +1,4 @@
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 
 class Pancakeswap_dca_mm(BaseStrategy):
     params = (
@@ -10,6 +10,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
         ('backtest', None)
     )
     def __init__(self, **kwargs):
+        BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         self.DCA = True
 

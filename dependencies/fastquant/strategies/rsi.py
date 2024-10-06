@@ -12,7 +12,7 @@ from __future__ import (
 import backtrader as bt
 
 # Import from package
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 
 
 class RSIStrategy(BaseStrategy):
@@ -32,6 +32,7 @@ class RSIStrategy(BaseStrategy):
     params = (("rsi_period", 14), ("rsi_upper", 70), ("rsi_lower", 30))
 
     def __init__(self):
+        BuySellArrows(self.data0, barplot=True)
 
         # Initialize global variables
         super().__init__()

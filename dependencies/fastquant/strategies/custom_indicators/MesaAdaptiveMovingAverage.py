@@ -4,7 +4,7 @@ import numpy as np
 class MAMA(bt.Indicator):
 
     lines = ('p', 'S', 'D', 'mp', 'Q1', 'I1', 'Q2', 'I2', 'jI', 'jQ', 'Re', 'Im', 'phi', 'smoothPeriod',
-             'MAMA','FAMA')
+            'MAMA','FAMA')
 
     params = (
         ('fast', 20),
@@ -12,20 +12,20 @@ class MAMA(bt.Indicator):
     )
 
     plotlines = dict(p=dict(_plotskip=True, ),
-                     S=dict(_plotskip=True, ),
-                     D=dict(_plotskip=True, ),
-                     mp=dict(_plotskip=True, ),
-                     Q1=dict(_plotskip=True, ),
-                     I1=dict(_plotskip=True, ),
-                     Q2=dict(_plotskip=True, ),
-                     I2=dict(_plotskip=True, ),
-                     jI=dict(_plotskip=True, ),
-                     jQ=dict(_plotskip=True, ),
-                     Re=dict(_plotskip=True, ),
-                     Im=dict(_plotskip=True, ),
-                     phi=dict(_plotskip=True, ),
-                     smoothPeriod=dict(_plotskip=True, )
-                     )
+                    S=dict(_plotskip=True, ),
+                    D=dict(_plotskip=True, ),
+                    mp=dict(_plotskip=True, ),
+                    Q1=dict(_plotskip=True, ),
+                    I1=dict(_plotskip=True, ),
+                    Q2=dict(_plotskip=True, ),
+                    I2=dict(_plotskip=True, ),
+                    jI=dict(_plotskip=True, ),
+                    jQ=dict(_plotskip=True, ),
+                    Re=dict(_plotskip=True, ),
+                    Im=dict(_plotskip=True, ),
+                    phi=dict(_plotskip=True, ),
+                    smoothPeriod=dict(_plotskip=True, )
+                    )
 
     plotinfo = dict(
         plot=True,
@@ -34,7 +34,6 @@ class MAMA(bt.Indicator):
         plotlinelabels=True)
 
     def hilbertTransform(self,data):
-
         a, b, c, d = [0.0962, 0.5769, 0.075, 0.54]
         d0 = data[0]
         d2 = data[-2]
@@ -44,7 +43,6 @@ class MAMA(bt.Indicator):
         return hilbert*(c*self.l.mp[0] + d)
 
     def smoother(self,data):
-
         return 0.2*data[0] + 0.8*data[-1]
 
     def deg(self,arg):

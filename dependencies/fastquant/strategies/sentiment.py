@@ -14,7 +14,7 @@ import backtrader.feeds as btfeed
 
 # Import from package
 from fastquant.indicators.sentiment import Sentiment
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 
 
 class SentimentStrategy(BaseStrategy):
@@ -34,6 +34,7 @@ class SentimentStrategy(BaseStrategy):
     params = (("senti", 0.2),)
 
     def __init__(self):
+        BuySellArrows(self.data0, barplot=True)
         # Initialize global variables
         super().__init__()
         # Strategy level variables

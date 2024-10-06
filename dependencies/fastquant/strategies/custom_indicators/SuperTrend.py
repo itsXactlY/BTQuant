@@ -1,5 +1,6 @@
 import backtrader as bt
 
+
 class SuperTrend(bt.Indicator):
     lines = ('super_trend',)
     params = (('period', 7),
@@ -8,7 +9,7 @@ class SuperTrend(bt.Indicator):
     plotlines = dict(
         super_trend=dict(
             _name='SuperTrend',
-            color='cyan',
+            color='blue',
             alpha=1
         )
     )

@@ -1,5 +1,5 @@
 import requests
-from fastquant.strategies.dontcommit import identify, jrr_webhook_url
+from fastquant.dontcommit import identify, jrr_webhook_url
 
 discord_webhook_url = ''
 

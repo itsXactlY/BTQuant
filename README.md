@@ -55,7 +55,7 @@ To install **JackRabbitRelay**, follow the detailed guides:
 
 ### **⚡ Quick Setup for BTQuant**
 
-Run this command in your terminal:
+Run this command in your terminal (Make sure to have build-essential, unixodbc-dev, and Python3-dev packages installed):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/mainv2/install.sh | bash

@@ -12,7 +12,7 @@ class ByBitData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', True)
+        ('debug', False)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -34,9 +34,9 @@ class ByBitData(DataBase):
             if 'data' in data and isinstance(data['data'], list):
                 for kline in data['data']:
                     kline_data = self._parser_to_kline(
-                        kline['timestamp'],
+                        kline['start'],
                         [
-                            kline['timestamp'],
+                            kline['start'],
                             kline['open'],
                             kline['high'],
                             kline['low'],
@@ -81,16 +81,15 @@ class ByBitData(DataBase):
             return self._load_kline()  # Load the next kline instead
 
         self.lines.datetime[0] = date2num(pd.Timestamp(timestamp, unit='ms'))
-        self.lines.open[0] = open_
-        self.lines.high[0] = high
-        self.lines.low[0] = low
-        self.lines.close[0] = close
-        self.lines.volume[0] = volume
+        self.lines.open[0] = float(open_)
+        self.lines.high[0] = float(high)
+        self.lines.low[0] = float(low)
+        self.lines.close[0] = float(close)
+        self.lines.volume[0] = float(volume)
         return True
 
     def _parser_dataframe(self, data):
         if isinstance(data, list):
-            # aLca :: hack for the first 6 columns are what we need
             df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'ignore'])
             df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]  # dropping the extra column
         elif isinstance(data, pd.DataFrame):
@@ -140,16 +139,18 @@ class ByBitData(DataBase):
             if self.p.debug:
                 print(f"Fetched historical klines: {klines}")
 
-            if klines:
-                if self.p.drop_newest and klines:
-                    klines.pop()
+            if klines and 'result' in klines and 'list' in klines['result']:
+                if self.p.drop_newest and klines['result']['list']:
+                    klines['result']['list'].pop()
 
-                df = self._parser_dataframe(klines)
+                df = self._parser_dataframe(klines['result']['list'])
                 self._data.extend(df.values.tolist())
             else:
                 print("No historical data fetched")
         else:
             self._start_live()
+        
+        # Start processing WebSocket messages
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     def _process_websocket_messages(self):
@@ -157,6 +158,5 @@ class ByBitData(DataBase):
             try:
                 message = self._store.message_queue.get(timeout=1)
                 self.handle_websocket_message(message)
-                time.sleep(1)
             except Empty:
-                time.sleep(1)
+                time.sleep(0.1)  # Short sleep to prevent busy-waiting

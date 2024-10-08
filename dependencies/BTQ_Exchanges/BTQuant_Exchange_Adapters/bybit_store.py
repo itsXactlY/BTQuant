@@ -4,8 +4,7 @@ from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .bybit_feed import ByBitData
 import json
-import asyncio
-import websockets
+import websocket
 
 class BybitStore(object):
     _GRANULARITIES = {
@@ -46,31 +45,42 @@ class BybitStore(object):
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
 
-    def start_socket(self):
-        async def run_socket():
-            print("Starting WebSocket connection...")
-            try:
-                async with websockets.connect(self.ws_url) as websocket:
-                    self.websocket = websocket
-                    print("WebSocket connection established.")
-                    subscription_message = {
-                        "op": "subscribe",
-                        "args": [f"kline.{self.get_interval(TimeFrame.Seconds, 1)}.{self.symbol}"]
-                    }
-                    await self.websocket.send(json.dumps(subscription_message))
-                    while True:
-                        message = await self.websocket.recv()
-                        self.message_queue.put(message)
-            except Exception as e:
-                print(f"Error in WebSocket connection: {e}")
+    def on_message(self, ws, message):
+        self.message_queue.put(message)
 
-        # Use asyncio.run to start the WebSocket connection
-        self.websocket_thread = threading.Thread(target=lambda: asyncio.run(run_socket()), daemon=True)
+    def on_error(self, ws, error):
+        print(f"WebSocket error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+
+    def on_open(self, ws):
+        print("WebSocket connection opened")
+        subscription_message = {
+            "op": "subscribe",
+            "args": [f"kline.{self.get_interval(TimeFrame.Seconds, 1)}.{self.symbol}"]
+        }
+        ws.send(json.dumps(subscription_message))
+
+    def start_socket(self):
+        def run_socket():
+            print("Starting WebSocket connection...")
+            # websocket.enableTrace(True)
+            self.websocket = websocket.WebSocketApp(
+                self.ws_url,
+                on_message=self.on_message,
+                on_error=self.on_error,
+                on_close=self.on_close,
+                on_open=self.on_open
+            )
+            self.websocket.run_forever(reconnect=5)
+
+        self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
     def stop_socket(self):
         if self.websocket:
-            asyncio.run(self.websocket.close())
+            self.websocket.close()
             print("WebSocket connection closed.")
 
     def fetch_ohlcv(self, symbol, interval, since=None):
@@ -82,7 +92,7 @@ class BybitStore(object):
             data = response.json()
             if 'ret_code' in data and data['ret_code'] != 0:
                 raise Exception(f"Error fetching data: {data['ret_msg']}")
-            return data['result']#['list']
+            return data['result']
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
             print(f"Error fetching OHLCV data: {e}")
             return []

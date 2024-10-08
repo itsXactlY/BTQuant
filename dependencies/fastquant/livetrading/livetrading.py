@@ -79,7 +79,7 @@ def livetrade_crypto_binance(
     account: str,
     asset: str,
     amount: float,
-    strategy: str,
+    strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
 ) -> None:
@@ -145,7 +145,7 @@ def livetrade_crypto_bybit(
     account: str,
     asset: str,
     amount: float,
-    strategy: bt.Strategy = Pancakeswap_dca_mm,
+    strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
 ) -> None:

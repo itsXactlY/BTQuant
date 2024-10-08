@@ -3,7 +3,8 @@ import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
-import websockets.sync.client
+import websocket
+import rel
 
 class BinanceStore(object):
     _GRANULARITIES = {
@@ -44,17 +45,27 @@ class BinanceStore(object):
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
 
+    def on_message(self, ws, message):
+        self.message_queue.put(message)
+
+    def on_error(self, ws, error):
+        print(f"WebSocket error: {error}")
+
+    def on_close(self, ws, close_status_code, close_msg):
+        print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+
+    def on_open(self, ws):
+        print("WebSocket connection opened")
+
     def start_socket(self):
         def run_socket():
             print("Starting WebSocket connection...")
-            try:
-                self.websocket = websockets.sync.client.connect(self.ws_url)
-                print("WebSocket connection established.")
-                while True:
-                    message = self.websocket.recv()
-                    self.message_queue.put(message)
-            except Exception as e:
-                print(f"Error in WebSocket connection: {e}")
+            self.websocket = websocket.WebSocketApp(self.ws_url,
+                                                    on_message=self.on_message,
+                                                    on_error=self.on_error,
+                                                    on_close=self.on_close,
+                                                    on_open=self.on_open)
+            self.websocket.run_forever(reconnect=5)
 
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
@@ -64,7 +75,7 @@ class BinanceStore(object):
             self.websocket.close()
             print("WebSocket connection closed.")
 
-    def fetch_ohlcv(self, symbol, interval, since=None): # Historical data on startup. In theory its not needed to warmup indicators. Better have it on hand, over needing it.
+    def fetch_ohlcv(self, symbol, interval, since=None):
         url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}"
         if since:
             url += f"&startTime={since}"

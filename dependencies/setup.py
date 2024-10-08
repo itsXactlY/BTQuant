@@ -111,6 +111,7 @@ setuptools.setup(
         'pybind11',  # Include pybind11 here
         'Web3',
         'pyodbc',
+        'websocket-client',
         # Add other dependencies as needed
     ],
 

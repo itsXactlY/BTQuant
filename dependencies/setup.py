@@ -112,16 +112,9 @@ setuptools.setup(
         'Web3',
         'pyodbc',
         'websocket-client',
+        'matplotlib',
         # Add other dependencies as needed
     ],
-
-    # List additional groups of dependencies here
-    # (e.g. development dependencies).
-    # You can install these using the following syntax, for example:
-    # $ pip install -e .[dev,test]
-    extras_require={
-        'plotting':  ['matplotlib'],
-    },
 
     # If there are data files included in your packages that need to be
     # installed, specify them here.  If using Python 2.6 or less, then these

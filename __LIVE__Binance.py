@@ -4,7 +4,7 @@ from fastquant import livetrade_crypto_binance as livetrade
 _coin = "BTC" 
 _collateral = "USDT"
 _exchange = 'Binance'
-_account = 'JackRabbit_Binance'
+_account = 'binance_sub1'
 _asset = f'{"$BTC"}/{"USDT"}'
 _amount = '0.1'
 _amount = float(_amount)

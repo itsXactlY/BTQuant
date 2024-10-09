@@ -4,7 +4,6 @@ from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
 import websocket
-import rel
 
 class BinanceStore(object):
     _GRANULARITIES = {

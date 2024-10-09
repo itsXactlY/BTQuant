@@ -42,6 +42,8 @@ class BaseStrategy(bt.Strategy):
         ("periodic_logging", False),
         ("transaction_logging", True),
         ("strategy_logging", True),
+        ("pnl", None),
+        ("final_value", None),
         ("channel", ""),
         ("symbol", ""),
         ("allow_short", False),
@@ -68,6 +70,7 @@ class BaseStrategy(bt.Strategy):
     )
     
     def __init__(self, **kwargs):
+        BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         self.dataclose = self.datas[0].close
         self.order = None
@@ -380,9 +383,6 @@ class BaseStrategy(bt.Strategy):
         if self.params.backtest == False:
             if self.live_data == True:
                 self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose # TODO figure out why no default stake is set on empty history
-                if self.stake < 10:
-                    print('No free margin. Cant buy. Send the highly trained apes for help - Account seem liquidated.')
-                    return
                 
                 if not self.buy_executed:
                     self.buy_or_short_condition()

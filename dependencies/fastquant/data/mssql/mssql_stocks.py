@@ -3,11 +3,16 @@ import datetime as dt
 from fastquant.dontcommit import MSSQLData_Stocks, connection_string
 
 def get_database_stock_data(
-    ticker, start_date, end_date, time_resolution="1d"
+    ticker, start_date, end_date, time_resolution="1m"
 ):
-
+    def identify_gaps(df, expected_interval):
+        df['timestamp'] = pd.to_datetime(df.index)
+        df['time_diff'] = df['timestamp'].diff()
+        gaps = df[df['time_diff'] > expected_interval]
+        return gaps
+    
     resample = False
-    coin_name = ticker #+ "USDT_klines"
+    coin_name = ticker
     start = dt.datetime.strptime(start_date, "%Y-%m-%d")
     end = dt.datetime.strptime(end_date, "%Y-%m-%d")
     start_time = time.time()
@@ -55,6 +60,14 @@ def get_database_stock_data(
             'Close': 'last',   # Take the last close in the window
             'Volume': 'sum'    # Sum the volume
         })
+        df = df_resampled
+
+        # Identify gaps
+        gaps = identify_gaps(df_resampled, pd.Timedelta(time_resolution))
+        if not gaps.empty:
+            print(f"Gaps found in the data:")
+            print(gaps)
+        
         df = df_resampled
     print('Data extraction & manipulation took: ', time.time() - start_time, 'seconds')
     return df

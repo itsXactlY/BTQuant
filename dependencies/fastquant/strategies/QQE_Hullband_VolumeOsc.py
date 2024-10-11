@@ -4,8 +4,11 @@ from numpy import isnan
 
 class VolumeOscillator(bt.Indicator):
     lines = ('short', 'long', 'osc')
-    params = (('shortlen', 5),
-              ('longlen', 10))
+    params = (
+        ('shortlen', 5),
+        ('longlen', 10),
+        ('debug', False),
+        )
 
     def __init__(self):
         # self.addminperiod(self.p.longlen)
@@ -15,8 +18,9 @@ class VolumeOscillator(bt.Indicator):
 
     def next(self):
         try:
-            # Log the volume data and EMAs to check for issues
-            print(f"Volume: {self.data.volume[0]}, Short EMA: {self.lines.short[0]}, Long EMA: {self.lines.long[0]}")
+            if self.p.debug:
+                # Log the volume data and EMAs to check for issues
+                print(f"Volume: {self.data.volume[0]}, Short EMA: {self.lines.short[0]}, Long EMA: {self.lines.long[0]}")
 
             # Check if the volume data or EMAs are None, zero, or NaN to avoid division by zero
             if not (self.lines.long[0] and self.lines.long[0] > 0 and not isnan(self.lines.long[0])):
@@ -63,12 +67,13 @@ class QQE_Example(BaseStrategy):
     params = (
         ("ema_length", 20),
         ('hull_length', 53),
-        ('take_profit_percent', None),
-        ('dca_deviation', None),  # DCA deviation
-        ('percent_sizer', None),
+        ('take_profit_percent', 2),
+        ('dca_deviation', 1.5),  # DCA deviation
+        ('percent_sizer', 0.1),
     )
 
     def __init__(self, **kwargs):
+        print('Initialized QQE')
         BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         self.qqe = QQEIndicator(self.data)
@@ -76,6 +81,7 @@ class QQE_Example(BaseStrategy):
         self.ema = bt.indicators.EMA(self.data.close, period=self.params.ema_length)
         self.volosc = VolumeOscillator(self.data)
         self.DCA = True
+        self.conditions_checked = False
 
         if self.strategy_logging:
             print("===Strategy level arguments===")
@@ -155,3 +161,7 @@ class QQE_Example(BaseStrategy):
             self.reset_position_state()
             self.buy_executed = False
             self.conditions_checked = True
+
+    # def next(self):
+    #     self.conditions_checked = False  # Reset at the start of every next iteration
+    #     BaseStrategy.next(self)

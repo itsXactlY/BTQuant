@@ -1,3 +1,6 @@
+'''
+Ask in BTQuant kindly for full Binance candle-database
+'''
 from fastquant import get_database_data, backtest
-crypto = get_database_data("BTC", "2024-01-01", "2024-12-31", "13m")
-backtest('bbands', crypto, init_cash=1000, percent_sizer=0.3)
+data = get_database_data("BTC", "2018-01-01", "2024-08-08", "1m")
+backtest("bbands", data, init_cash=1000, backtest=True, plot=True, verbose=True)

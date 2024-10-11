@@ -35,13 +35,12 @@ class BaseStrategy(bt.Strategy):
         ('coin', None),
         ('collateral', None),
         ('debug', False),
-        ('backtest', True),
+        ('backtest', None),
         ('is_training', None),
         ('use_stoploss', None),
         ("strategy_logging", True),
         ("periodic_logging", False),
         ("transaction_logging", True),
-        ("strategy_logging", True),
         ("pnl", None),
         ("final_value", None),
         ("channel", ""),
@@ -62,9 +61,6 @@ class BaseStrategy(bt.Strategy):
         ("stop_trail", 0),  # Zero means no stop loss
         ("take_profit", 0.1),  # Zero means no take profit -> Default: 1.0%
         ("percent_sizer", 0.95), # # Zero means no percentage usage per buy -> Default: 95% (keep 5% to cover fees, etc.)
-        ("allow_short", False),
-        ("short_max", SHORT_MAX),
-        ("add_cash_amount", 0),
         ("order_cooldown", 5)
 
     )
@@ -104,6 +100,8 @@ class BaseStrategy(bt.Strategy):
         self.periodic_logging = self.params.periodic_logging
         self.transaction_logging = self.params.transaction_logging
         self.strategy_logging = self.params.strategy_logging
+        self.pnl = self.params.pnl
+        self.final_value = self.params.final_value
         self.slippage = self.params.slippage
         self.single_position = self.params.single_position
         self.commission = self.params.commission
@@ -496,17 +494,6 @@ class BaseStrategy(bt.Strategy):
                 self.log("Final PnL: {}".format(self.pnl))
             self.order_history_df = pd.DataFrame(self.order_history)
             self.periodic_history_df = pd.DataFrame(self.periodic_history)
-
-class MyPandasData(bt.feeds.PandasData):
-    params = (
-        ('Datetime', 'datetime'),
-        ('open', 'open'),
-        ('high', 'high'),
-        ('low', 'low'),
-        ('close', 'close'),
-        ('volume', 'volume'),
-        ('openinterest', None)
-    )
 
 import backtrader.utils as btu
 class CustomPandasData(bt.feeds.PandasData):

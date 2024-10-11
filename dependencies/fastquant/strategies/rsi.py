@@ -32,8 +32,6 @@ class RSIStrategy(BaseStrategy):
     params = (("rsi_period", 14), ("rsi_upper", 70), ("rsi_lower", 30))
 
     def __init__(self):
-        BuySellArrows(self.data0, barplot=True)
-
         # Initialize global variables
         super().__init__()
         # Strategy level variables

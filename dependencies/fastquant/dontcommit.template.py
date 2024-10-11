@@ -1,5 +1,6 @@
 import backtrader as bt
 import joblib
+import pyodbc
 
 # JackRabbit Relay Setup
 identify = ""
@@ -37,7 +38,7 @@ connection_string = (f'DRIVER={driver};'
                      f'PWD={password};'
                      f'TrustServerCertificate=yes;')
 
-class MSSQLData(bt.feeds.PandasData):
+class MSSQLData(bt.feeds.GenericCSV):
   @classmethod
   def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
       start_timestamp = int(start_date.timestamp() * 1000)
@@ -74,9 +75,7 @@ class MSSQLData(bt.feeds.PandasData):
       return [row[0] for row in data]
 
 
-import pyodbc
-import pandas as pd
-from datetime import datetime
+
 
 class MSSQLData_Stocks(bt.feeds.PandasData):
     @classmethod
@@ -160,5 +159,3 @@ def ptu():
     ]
     for line in art:
         print(line)
-
-

@@ -161,7 +161,3 @@ class QQE_Example(BaseStrategy):
             self.reset_position_state()
             self.buy_executed = False
             self.conditions_checked = True
-
-    # def next(self):
-    #     self.conditions_checked = False  # Reset at the start of every next iteration
-    #     BaseStrategy.next(self)

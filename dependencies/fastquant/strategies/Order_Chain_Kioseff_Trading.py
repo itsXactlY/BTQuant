@@ -2,21 +2,7 @@
 # Originally inspired by: https://www.tradingview.com/script/JNCGeDj7-Order-Chain-Kioseff-Trading/
 
 import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, np, BuySellArrows
-import logging
-from logging.handlers import RotatingFileHandler
-
-def setup_logger(name, log_file, level=logging.INFO):
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler = RotatingFileHandler(log_file)
-    handler.setFormatter(formatter)
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(handler)
-    return logger
-
-trade_logger = setup_logger('TradeLogger', 'OrderChain_Trade_Monitor.log', level=logging.DEBUG)
-
+from fastquant.strategies.base import BaseStrategy, np
 
 class OrderChainIndicator(bt.Indicator):
     lines = ('order_chain',)
@@ -123,7 +109,6 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
 
     def __init__(self):
         super().__init__()
-        BuySellArrows(self.data0, barplot=True)
         self.order_chain = OrderChainIndicator(chain=self.p.chain, ticks=self.p.ticks, tick_size=self.p.tick_size)
 
         self.buy_executed = False
@@ -132,8 +117,6 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
 
     def buy_or_short_condition(self):
         if self.order_chain.lines.order_chain[0] > self.p.signal_threshold:
-            if self.p.debug == True:
-                print(f'| {datetime.utcnow()} - buy_or_short_condition {self.data._name}')
             if not self.buy_executed and not self.conditions_checked:
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
@@ -154,8 +137,6 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
 
     def dca_or_short_condition(self):
         if self.order_chain.lines.order_chain[0] > self.p.signal_threshold:
-            if self.p.debug and self.buy_executed:
-                print(f'| {datetime.utcnow()} - dca_or_short_condition {self.data._name} Entry:{self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
             if self.buy_executed and not self.conditions_checked:
                 if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
                     if self.params.backtest == False:

@@ -761,6 +761,21 @@ class LinesOperation(LineActions):
         else:
             self._once_val_op_r(start, end)
 
+    # def _once_op(self, start, end):
+    #     # cache python dictionary lookups
+    #     dst = self.array
+    #     srca = self.a.array
+    #     srcb = self.b.array
+    #     op = self.operation
+
+    #     for i in range(start, end):
+    #         try:
+    #             dst[i] = op(srca[i], srcb[i])
+    #         except ZeroDivisionError:
+    #             dst[i] = dst[i-1]
+    #             print('_once_op: nan')
+
+    # aLca :: Dirty Alternative
     def _once_op(self, start, end):
         # cache python dictionary lookups
         dst = self.array
@@ -769,7 +784,10 @@ class LinesOperation(LineActions):
         op = self.operation
 
         for i in range(start, end):
-            dst[i] = op(srca[i], srcb[i])
+            if srcb[i] == 0 and op.__name__ in ['truediv', 'floordiv']:
+                dst[i] = float('nan')
+            else:
+                dst[i] = op(srca[i], srcb[i])
 
     def _once_time_op(self, start, end):
         # cache python dictionary lookups

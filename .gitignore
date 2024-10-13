@@ -40,3 +40,4 @@ testing.py
 *.egg-info
 *.btq
 .btq
+MADR_short.py

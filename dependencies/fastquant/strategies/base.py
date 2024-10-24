@@ -60,13 +60,11 @@ class BaseStrategy(bt.Strategy):
         ("stop_loss", 0),  # Zero means no stop loss
         ("stop_trail", 0),  # Zero means no stop loss
         ("take_profit", 0.1),  # Zero means no take profit -> Default: 1.0%
-        ("percent_sizer", 0.95), # # Zero means no percentage usage per buy -> Default: 95% (keep 5% to cover fees, etc.)
+        ("percent_sizer", 0.1), # # Zero means no percentage usage per buy -> Default: 95% (keep 5% to cover fees, etc.)
         ("order_cooldown", 5)
-
     )
     
     def __init__(self, **kwargs):
-        BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         self.dataclose = self.datas[0].close
         self.order = None
@@ -209,14 +207,14 @@ class BaseStrategy(bt.Strategy):
                 break
             action, params = order
             if action == 'buy':
-                print('-'*99)
-                print('BUY REQUEST')
-                print('-'*99)
+                # print('-'*99)
+                # print('BUY REQUEST')
+                # print('-'*99)
                 self.rabbit.send_jrr_buy_request(**params)
             elif action == 'sell':
-                print('-'*99)
-                print('SELL REQUEST')
-                print('-'*99)
+                # print('-'*99)
+                # print('SELL REQUEST')
+                # print('-'*99)
                 self.rabbit.send_jrr_close_request(**params)
                 self.reset_position_state()
             self.order_queue.task_done()
@@ -251,7 +249,7 @@ class BaseStrategy(bt.Strategy):
                 print('-'*99)
                 try:
                     self.pcswap.send_pcs_close_request(**params)
-                except Exception as e: 
+                except Exception as e:
                     print(e)
                 self.reset_position_state()
             self.web3order_queue.task_done()
@@ -307,6 +305,7 @@ class BaseStrategy(bt.Strategy):
                     entry_price = order_data.get('Price', 0.0)
                     self.entry_prices.append(entry_price)
                     self.sizes.append(self.p.amount)
+                    self.buy_executed = True
 
             if self.entry_prices and self.sizes:
                 print(f"Loaded {len(self.entry_prices)} buy orders after the last sell.")
@@ -327,11 +326,12 @@ class BaseStrategy(bt.Strategy):
                     self.stake_to_use = usdt_value
                 except json.JSONDecodeError:
                     print("Error parsing the last order, resetting position state.")
-                    self.reset_position_state()
                     self.stake_to_use = 1000.0 # new Default :<
+                    self.reset_position_state()
             else:
                 self.reset_position_state()
 
+        # TODO :: Figure out why still doesnt set an default when account history file is empty
         except FileNotFoundError:
             print(f"History file not found for account {self.account}.")
             self.reset_position_state()
@@ -369,7 +369,7 @@ class BaseStrategy(bt.Strategy):
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             ptu()
-            print(f"STUXNET INITATED FOR {self.p.exchange} ...")
+            print(f"BTQuant initialized for {self.p.exchange}")
             self.load_trade_data()
         elif self.params.backtest == False:
             ptu()

@@ -8,6 +8,11 @@ from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
 
+def identify_gaps(df, expected_interval):
+    df['timestamp'] = pd.to_datetime(df.index)
+    df['time_diff'] = df['timestamp'].diff()
+    gaps = df[df['time_diff'] > expected_interval]
+    return gaps
 
 class BinanceData(DataBase):
     params = (
@@ -68,10 +73,10 @@ class BinanceData(DataBase):
         timestamp, open_, high, low, close, volume = kline
 
         # Skip processing if the volume is zero
-        if volume == 0:
-            if self.p.debug:
-                print(f"Skipping kline with zero volume: {kline}")
-            return self._load_kline()  # check the next kline instead
+        # if volume == 0:
+        #     # if self.p.debug:
+        #     print(f"Skipping kline with zero volume: {kline}")
+        #     return self._load_kline()  # check the next kline instead
 
         self.lines.datetime[0] = date2num(pd.Timestamp(timestamp))
         self.lines.open[0] = open_
@@ -120,6 +125,7 @@ class BinanceData(DataBase):
             self.put_notification(self.DELAYED)
 
             # Fetch historical data
+            print('Fetching historical data')
             klines = self._store.fetch_ohlcv(
                 self._store.symbol,
                 self._store.get_interval(TimeFrame.Seconds, 1),
@@ -133,8 +139,14 @@ class BinanceData(DataBase):
                 if self.p.drop_newest and klines:
                     if klines:
                         klines.pop()
-
+                
                 df = pd.DataFrame(klines)
+                # Identify gaps
+                gaps = identify_gaps(df, pd.Timedelta(self.start_date.timestamp() * 1000))
+                if not gaps.empty:
+                    print(f"Gaps found in the data:")
+                    print(gaps)
+
                 if df.shape[1] > 6:
                     df.drop(df.columns[6:], axis=1, inplace=True)
                 df = self._parser_dataframe(df)

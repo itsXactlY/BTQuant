@@ -10,9 +10,6 @@ import queue
 import time
 import numpy as np
 
-# import logging
-# from logging.handlers import RotatingFileHandler
-
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
@@ -81,6 +78,7 @@ class BaseStrategy(bt.Strategy):
         self.stake = None
         self.amount = self.p.amount
         self.conditions_checked = False
+        self.print_counter = 0
                 
         self.last_order_time = 0
         self.order_cooldown = self.p.order_cooldown

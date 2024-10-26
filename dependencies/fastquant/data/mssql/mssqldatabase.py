@@ -1,10 +1,7 @@
 import time
 import datetime as dt
 from fastquant.dontcommit import MSSQLData, pd, connection_string
-
 import pandas as pd
-import datetime as dt
-import time
 
 def get_database_data(ticker, start_date, end_date, time_resolution="1d"):
     def identify_gaps(df, expected_interval):

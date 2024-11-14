@@ -1,4 +1,6 @@
+from datetime import datetime
 import threading
+import pytz
 import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
@@ -74,10 +76,39 @@ class BinanceStore(object):
             self.websocket.close()
             print("WebSocket connection closed.")
 
-    def fetch_ohlcv(self, symbol, interval, since=None):
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}"
-        if since:
-            url += f"&startTime={since}"
-        response = requests.get(url)
-        data = response.json()
+    def fetch_ohlcv(self, symbol, interval, since=None, until=None):
+        print('STORE::FETCH SINCE:', since)
+        start_timestamp = since
+        data = []
+
+        while True:
+            params = {
+                'symbol': symbol,
+                'interval': interval,
+                'limit': 1000  # Maximum limit per request
+            }
+
+            if start_timestamp:
+                params['startTime'] = start_timestamp
+
+            if until:
+                params['endTime'] = until
+
+            url = f"https://api.binance.com/api/v3/klines"
+            response = requests.get(url, params=params)
+            new_data = response.json()
+
+            if not new_data or len(new_data) == 0:
+                break
+
+            data.extend(new_data)
+
+            # Update the start timestamp for the next request
+            start_timestamp = new_data[-1][0] + 1
+
+        if data:
+            start_time = datetime.fromtimestamp(data[0][0]/1000, tz=pytz.UTC)
+            end_time = datetime.fromtimestamp(data[-1][0]/1000, tz=pytz.UTC)
+            print(f"Fetched data from {start_time} to {end_time}")
+
         return data

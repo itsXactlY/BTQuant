@@ -67,9 +67,9 @@ class QQE_Example(BaseStrategy):
     params = (
         ("ema_length", 20),
         ('hull_length', 53),
-        ('take_profit_percent', 2),
-        ('dca_deviation', 1.5),  # DCA deviation
-        ('percent_sizer', 0.1),
+        ('take_profit_percent', 4),
+        ('dca_deviation', 4),
+        ('percent_sizer', 1),
     )
 
     def __init__(self, **kwargs):
@@ -101,12 +101,12 @@ class QQE_Example(BaseStrategy):
             if (self.qqe.qqe_line[-1] > 0) and \
                (self.data.close[-1] < self.hma[0]) and \
                (self.volosc.osc[-1] < self.volosc.lines.short[0]):
+            
+                print(f"Buy signal triggered at {self.data.close[0]}")
 
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
-                    # print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
                     self.sizes.append(self.amount)
-                    # self.load_trade_data()
                     self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                     self.calc_averages()
                     self.buy_executed = True
@@ -124,13 +124,10 @@ class QQE_Example(BaseStrategy):
             if (self.qqe.qqe_line[-1] > 0) and \
                (self.data.close[-1] < self.hma[0]) and \
                (self.volosc.osc[-1] < self.volosc.lines.short[0]):
-
                 if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):    
                     if self.params.backtest == False:
                         self.entry_prices.append(self.data.close[0])
                         self.sizes.append(self.amount)
-                        # self.load_trade_data()
-                        # print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
                         self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                         self.calc_averages()
                         self.buy_executed = True

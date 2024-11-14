@@ -205,14 +205,8 @@ class BaseStrategy(bt.Strategy):
                 break
             action, params = order
             if action == 'buy':
-                # print('-'*99)
-                # print('BUY REQUEST')
-                # print('-'*99)
                 self.rabbit.send_jrr_buy_request(**params)
             elif action == 'sell':
-                # print('-'*99)
-                # print('SELL REQUEST')
-                # print('-'*99)
                 self.rabbit.send_jrr_close_request(**params)
                 self.reset_position_state()
             self.order_queue.task_done()
@@ -234,17 +228,11 @@ class BaseStrategy(bt.Strategy):
                 break
             action, params = order
             if action == 'buy':
-                print('-'*99)
-                print('WEB3 BUY REQUEST')
-                print('-'*99)
                 try:
                     self.pcswap.send_pcs_buy_request(**params)
                 except Exception as e: 
                     print(e)
             elif action == 'sell':
-                print('-'*99)
-                print('WEB3 SELL REQUEST')
-                print('-'*99)
                 try:
                     self.pcswap.send_pcs_close_request(**params)
                 except Exception as e:

@@ -1,9 +1,30 @@
 import backtrader as bt
 from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store
-import datetime as dt
-from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
+from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
+
+
+# Global variable to store the latest data
+latest_data = []
+
+class DataCollectorStrategy(bt.Strategy):
+    print("DataCollectorStrategy Init...")
+    def next(self):
+        global latest_data
+        current_time = self.data.datetime.datetime(0)
+        data = {
+            'time': int(current_time.timestamp()),
+            'open': float(self.data.open[0]),
+            'high': float(self.data.high[0]),
+            'low': float(self.data.low[0]),
+            'close': float(self.data.close[0]),
+            'volume': float(self.data.volume[0]),
+        }
+        latest_data.append(data)
+        # we keep only the last 1000 data points
+        if len(latest_data) > 1000:
+            latest_data = latest_data[-1000:]
 
 
 def livetrade_web3(
@@ -50,9 +71,9 @@ def livetrade_web3(
         web3ws=web3ws)
 
     tz = pytz.timezone(timezone)
-    utc_now = dt.datetime.now(pytz.utc)
+    utc_now = datetime.now(pytz.utc)
     local_now = utc_now.astimezone(tz)
-    from_date = local_now - dt.timedelta(hours=start_hours_ago)
+    from_date = local_now - timedelta(hours=start_hours_ago)
 
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"
@@ -80,8 +101,7 @@ def livetrade_crypto_binance(
     asset: str,
     amount: float,
     strategy: str = "",
-    timezone: str = 'Europe/Berlin',
-    start_hours_ago: int = 2,
+    start_hours_ago: int = 5,
 ) -> None:
     """
     Live trade a strategy on Binance.
@@ -113,15 +133,21 @@ def livetrade_crypto_binance(
         coin_target=collateral
     )
 
-    tz = pytz.timezone(timezone)
-    utc_now = dt.datetime.now(pytz.utc)
-    local_now = utc_now.astimezone(tz)
-    from_date = local_now - dt.timedelta(hours=start_hours_ago)
+    # Set the timezone to UTC+2
+    tz = pytz.timezone('Europe/Berlin')
+    current_time = datetime.now(tz)
 
+    # Add extra buffer time to ensure smooth transition
+    buffer_minutes = 2
+    from_date = current_time - timedelta(hours=start_hours_ago, minutes=buffer_minutes)
+
+    print(f"Current time (UTC+2): {current_time}")
+    print(f"Fetching historical data from (UTC+2): {from_date}")
+    
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"
     
-    # Add strategy using the resolved strategy class
+    cerebro.addstrategy(DataCollectorStrategy)
     cerebro.addstrategy(
         strategy_class,
         exchange=exchange,
@@ -178,9 +204,9 @@ def livetrade_crypto_bybit(
         coin_target=collateral)
 
     tz = pytz.timezone(timezone)
-    utc_now = dt.datetime.now(pytz.utc)
+    utc_now = datetime.now(pytz.utc)
     local_now = utc_now.astimezone(tz)
-    from_date = local_now - dt.timedelta(hours=start_hours_ago)
+    from_date = local_now - timedelta(hours=start_hours_ago)
 
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"

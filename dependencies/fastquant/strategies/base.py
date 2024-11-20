@@ -128,6 +128,8 @@ class BaseStrategy(bt.Strategy):
             self.web3order_thread = threading.Thread(target=self.process_web3orders)
             self.web3order_thread.daemon = True
             self.web3order_thread.start()
+        elif self.params.backtest == False and self.p.exchange.lower() == "raydium":
+                print('SWAP PART MISSING')
 
         if self.strategy_logging and self.p.backtest:
             self.log("===Global level arguments===")

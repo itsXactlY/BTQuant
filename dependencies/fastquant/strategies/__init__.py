@@ -14,3 +14,4 @@ from fastquant.strategies.SMA_Cross_MESAdaptive_Prime import SMA_Cross_MESAdapti
 from fastquant.strategies.SuperTrend_Scalp import SuperSTrend_Scalper
 from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
 from fastquant.strategies.pancakeswap_orders import PancakeSwapV2DirectOrderBase
+from fastquant.strategies.Aligator_supertrend import AliG_STrend

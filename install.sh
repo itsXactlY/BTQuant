@@ -56,7 +56,7 @@ fi
 git clone https://github.com/itsXactlY/BTQuant/ BTQuant
 cd BTQuant
 
-# Create and activate virtual environment - moving it one folder backwards to keep the IDE clean to not disturb the workflow.
+# Create and activate virtual environment - moving it one folder backwards
 python3 -m venv ../.btq
 source ../.btq/bin/activate
 
@@ -84,16 +84,26 @@ pip install .
 # Install and build fast_mssql
 cd ../MsSQL
 pip install .
-python setup.py build_ext --inplace
 
-# Move compiled .so files to the site-packages directory
-BUILD_DIR=$(find build -type d -name "lib.*" | head -n 1)
-if [ -d "$BUILD_DIR" ]; then
-    echo "Moving compiled .so files from $BUILD_DIR to ${SITE_PACKAGES}"
-    find "$BUILD_DIR" -name "*.so" -exec mv {} "${SITE_PACKAGES}" \;
+# Look for the built .so file explicitly using a pattern.
+# This should match files like fast_mssql.cpython-313-x86_64-linux-gnu.so
+SO_FILE=$(find . -maxdepth 1 -type f -name "fast_mssql*.so" | head -n 1)
+
+if [ -z "$SO_FILE" ]; then
+    echo "No fast_mssql .so file found in the current directory."
 else
-    echo "Warning: No .so files found in build directory!"
+    echo "Found shared library: ${SO_FILE}"
+    # Define the target directory that dontcommit.py (inside fastquant) expects:
+    TARGET_DIR="${SITE_PACKAGES}/fastquant/data/mssql/MsSQL"
+    echo "Ensuring target directory exists: ${TARGET_DIR}"
+    mkdir -p "${TARGET_DIR}"
+
+    echo "Moving ${SO_FILE} to ${TARGET_DIR}"
+    mv "${SO_FILE}" "${TARGET_DIR}/"
 fi
+
+cd ../..
+
 
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

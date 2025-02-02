@@ -57,7 +57,7 @@ class BaseStrategy(bt.Strategy):
         ("stop_loss", 0),  # Zero means no stop loss
         ("stop_trail", 0),  # Zero means no stop loss
         ("take_profit", 0.1),  # Zero means no take profit -> Default: 1.0%
-        ("percent_sizer", 0.1), # # Zero means no percentage usage per buy -> Default: 95% (keep 5% to cover fees, etc.)
+        ("percent_sizer", 0.1), # Zero means no percentage usage per buy -> Default: 1%
         ("order_cooldown", 5)
     )
     

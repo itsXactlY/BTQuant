@@ -25,7 +25,7 @@ import setuptools
 here = os.path.abspath(os.path.dirname(__file__))
 
 # Get the long description from the relevant file
-with codecs.open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
+with codecs.open(os.path.join(here, 'backtrader/README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 # Package name

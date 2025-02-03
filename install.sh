@@ -25,7 +25,7 @@ install_dependencies() {
                 sudo yum groupinstall -y 'Development Tools'
                 sudo yum install -y python3-devel unixODBC-devel git
                 ;;
-            arch)
+            arch|garuda)
                 echo "Detected Arch Linux. Installing base-devel and other dependencies..."
                 sudo pacman -Syu --noconfirm
                 sudo pacman -S --noconfirm base-devel python-pybind11 unixodbc git
@@ -44,21 +44,27 @@ install_dependencies() {
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
-    install_dependencies
 }
 
 # Check if python3 and pip are installed
 if ! command_exists python3 || ! command_exists pip; then
     echo "Python3 and pip are required. Installing Python3 and pip..."
+    install_dependencies
 fi
 
 # Clone the repository
 git clone https://github.com/itsXactlY/BTQuant/ BTQuant
 cd BTQuant
 
-# Create and activate virtual environment
-python3 -m venv .btq
-source .btq/bin/activate
+# Create and activate virtual environment - moving it one folder backwards
+python3 -m venv ../.btq
+source ../.btq/bin/activate
+
+# Get Python version inside the venv
+PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PYTHON_VERSION_MAJOR=$(python -c "import sys; print(sys.version_info.major)")
+PYTHON_VERSION_MINOR=$(python -c "import sys; print(sys.version_info.minor)")
+SITE_PACKAGES="../.btq/lib/python${PYTHON_VERSION}/site-packages"
 
 # Upgrade pip and install necessary packages
 pip install --upgrade pip setuptools wheel
@@ -78,9 +84,26 @@ pip install .
 # Install and build fast_mssql
 cd ../MsSQL
 pip install .
-python setup.py build_ext --inplace
+
+# Look for the built .so file explicitly using a pattern.
+# This should match files like fast_mssql.cpython-313-x86_64-linux-gnu.so
+SO_FILE=$(find . -maxdepth 1 -type f -name "fast_mssql*.so" | head -n 1)
+
+if [ -z "$SO_FILE" ]; then
+    echo "No fast_mssql .so file found in the current directory."
+else
+    echo "Found shared library: ${SO_FILE}"
+    # Define the target directory that dontcommit.py (inside fastquant) expects:
+    TARGET_DIR="${SITE_PACKAGES}/fastquant/data/mssql/MsSQL"
+    echo "Ensuring target directory exists: ${TARGET_DIR}"
+    mkdir -p "${TARGET_DIR}"
+
+    echo "Moving ${SO_FILE} to ${TARGET_DIR}"
+    mv "${SO_FILE}" "${TARGET_DIR}/"
+fi
 
 cd ../..
+
 
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

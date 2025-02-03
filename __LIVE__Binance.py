@@ -1,7 +1,7 @@
 from fastquant import livetrade_crypto_binance as livetrade
 
 # Web3 Decentral Exchanges
-_coin = 'OOKI'
+_coin = 'BTC'
 _collateral = 'USDT'
 _exchange = 'mimic'
 _account = 'binance_sub2'
@@ -13,7 +13,7 @@ _amount = float(_amount)
 livetrade(
     coin=_coin,
     collateral=_collateral,
-    strategy="qqe",
+    strategy="STScalp",
     exchange=_exchange,
     account=_account,
     asset=_asset,

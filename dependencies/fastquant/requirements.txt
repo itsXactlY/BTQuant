@@ -25,3 +25,4 @@ nltk>=3.5
 # flammkuchen
 pre-commit
 scipy
+tabulate

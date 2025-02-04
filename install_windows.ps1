@@ -69,6 +69,18 @@ function Install-ODBC {
 
         Remove-Item $installerPath -Force
         Write-Host "ODBC Driver installed successfully."
+
+        # Update $PATH environment variable
+        Write-Host "Updating PATH environment variable for ODBC..."
+        $odbcLibPath = "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.19041.0\um\x64"
+        if (-not (Test-Path $odbcLibPath)) {
+            Write-Warning "ODBC library path not found at $odbcLibPath. Ensure it is installed correctly."
+        }
+        else {
+            [Environment]::SetEnvironmentVariable("PATH", "$($env:PATH);$odbcLibPath", [EnvironmentVariableTarget]::Machine)
+            Write-Host "ODBC library path added to PATH: $odbcLibPath"
+        }
+
         return $true
     }
     catch {

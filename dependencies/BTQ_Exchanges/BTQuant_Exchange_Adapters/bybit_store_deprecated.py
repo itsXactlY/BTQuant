@@ -2,7 +2,7 @@ import threading
 import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from .bybit_feed import ByBitData
+from .bybit_feed_deprecated import ByBitData
 import json
 import websocket
 

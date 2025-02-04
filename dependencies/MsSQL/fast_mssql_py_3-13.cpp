@@ -1,3 +1,7 @@
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <sql.h>

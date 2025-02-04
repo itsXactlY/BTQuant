@@ -62,30 +62,6 @@ class BinanceData(DataBase):
             else:
                 self._start_live()
 
-    # def _load_kline(self):
-    #     try:
-    #         kline = self._data.popleft()
-    #         if self.p.debug:
-    #             print(f"Processing kline: {kline}")
-    #     except IndexError:
-    #         return None
-
-    #     timestamp, open_, high, low, close, volume = kline
-
-    #     # Skip processing if the volume is zero
-    #     if volume == 0:
-    #         # if self.p.debug:
-    #         # print(f"Skipping kline with zero volume: {kline}")
-    #         return self._load_kline()  # check the next kline instead
-
-    #     self.lines.datetime[0] = date2num(pd.Timestamp(timestamp))
-    #     self.lines.open[0] = open_
-    #     self.lines.high[0] = high
-    #     self.lines.low[0] = low
-    #     self.lines.close[0] = close
-    #     self.lines.volume[0] = volume
-    #     return True
-
     def _load_kline(self):
         try:
             kline = self._data.popleft()
@@ -97,9 +73,9 @@ class BinanceData(DataBase):
         timestamp, open_, high, low, close, volume = kline
 
         if volume == 0:
-            return self._load_kline()  # Check the next kline if volume is zero
+            return self._load_kline()
 
-        self.lines.datetime[0] = date2num(timestamp)  # Assuming timestamp is now a pd.Timestamp
+        self.lines.datetime[0] = date2num(timestamp)
         self.lines.open[0] = open_
         self.lines.high[0] = high
         self.lines.low[0] = low
@@ -118,14 +94,9 @@ class BinanceData(DataBase):
         df['volume'] = df['volume'].astype(float)
         return df
 
-    # def _parser_to_kline(self, timestamp, kline):
-    #     df = pd.DataFrame([[timestamp, kline[1], kline[2], kline[3], kline[4], kline[5]]])
-    #     return self._parser_dataframe(df)
-
     def _parser_to_kline(self, timestamp, kline):
-        # Instead of creating an dataFrame, just cast values as needed
         return [
-            pd.Timestamp(timestamp),      # or just timestamp if already a datetime
+            pd.Timestamp(timestamp),
             float(kline[1]),
             float(kline[2]),
             float(kline[3]),

@@ -12,7 +12,7 @@ class ByBitData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', False)
+        ('debug', True)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)

@@ -1,6 +1,6 @@
 from fastquant import livetrade_crypto_binance as livetrade
 
-# Web3 Decentral Exchanges
+# Binance.com Exchange
 _coin = 'BTC'
 _collateral = 'USDT'
 _exchange = 'mimic'

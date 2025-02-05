@@ -24,10 +24,6 @@ Medium Priority
    - Ensure efficient processing of large historical datasets (Replacing Pandas with Polars)  
    - Improve memory handling in Backtrader with MSSQL  
 
-✅ **Enhance Backtesting & Live Trading Flow**  
-   - Ensure seamless transition between backtest and live trading  
-   - Improve handling of fractional shares, DCA, and risk management  
-
 Low Priority
 ============
 

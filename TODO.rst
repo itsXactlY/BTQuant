@@ -1,31 +1,42 @@
-- High Priority
-✅ Integrate Jackrabbit Relay
-    Ensure modular REST API support for all future changes
-    Maintain seamless integration with existing BTQ structure
+=========================
+BTQuant TODO List
+=========================
 
-✅ Rebuild x125 Cross Liquidation Strategy
-    Rework the famous long/short strategy on liquidation events
-    Optimize execution speed and capital efficiency
+High Priority
+=============
 
-✅ Expand Out-of-the-Box Strategies
-    Develop additional private strategies for future public release
-    Keep them modular and scalable
+✅ **Integrate Jackrabbit Relay to its full extend**  
+   - Ensure modular REST API support for all future exchanges  
+   - Maintain seamless integration with existing BTQ structure  
 
-- Medium Priority
+✅ **Rebuild x125 Cross Liquidation Strategy**  
+   - Rework the famous long/short strategy on liquidation events  
+   - Optimize execution speed and capital efficiency  
 
-✅ Optimize Performance for Large Dataset Processing
-    Ensure efficient processing of large historical datasets (Replacing Pandas with Polars)
-    Improve memory handling in Backtrader with MSSQL
+✅ **Expand Out-of-the-Box Strategies**  
+   - Develop additional private strategies for future public release  
+   - Keep them modular and scalable  
 
-✅ Enhance Backtesting & Live Trading Flow
-    Ensure seamless transition between backtest and live trading
-    Improve handling of fractional shares, DCA, and risk management
+Medium Priority
+===============
 
-- Low Priority
+✅ **Optimize Performance for Large Dataset Processing**  
+   - Ensure efficient processing of large historical datasets (Replacing Pandas with Polars)  
+   - Improve memory handling in Backtrader with MSSQL  
 
-✅ Rework Windows Installer
-    Minimal effort unless demand increases
-    Lack of Windows support as a security-related reason
+✅ **Enhance Backtesting & Live Trading Flow**  
+   - Ensure seamless transition between backtest and live trading  
+   - Improve handling of fractional shares, DCA, and risk management  
 
-✅ Unknowns / Open Ideas
-    ??? (Open for suggestions)
+Low Priority
+============
+
+✅ **Rework Windows Installer**  
+   - Minimal effort unless demand increases  
+   - Lack of Windows support as a security-related reason  
+
+Unknowns / Open Ideas
+=====================
+
+✅ **???**  
+   - Open for suggestions  

@@ -27,5 +27,5 @@
     Minimal effort unless demand increases
     Lack of Windows support as a security-related reason
 
-- Unknowns / Open Ideas
+✅ Unknowns / Open Ideas
     ??? (Open for suggestions)

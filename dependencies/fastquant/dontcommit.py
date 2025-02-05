@@ -10,15 +10,20 @@ bsc_privaccount1 = ""
 bsc_privaccountaddress = ""
 
 
-import importlib
-import sys
-import os
+
 import pandas as pd
-module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data/mssql/MsSQL/fast_mssql.cpython-313-x86_64-linux-gnu.so'))
-spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
-fast_mssql = importlib.util.module_from_spec(spec)
-sys.modules["fast_mssql"] = fast_mssql
-spec.loader.exec_module(fast_mssql)
+
+## MsSQL is now optional - if you want to use it, you need to uncomment the following lines
+# import importlib
+# import sys
+# import os
+# module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data/mssql/MsSQL/fast_mssql.cpython-313-x86_64-linux-gnu.so'))
+# spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
+# fast_mssql = importlib.util.module_from_spec(spec)
+# sys.modules["fast_mssql"] = fast_mssql
+# spec.loader.exec_module(fast_mssql)
+## End of MsSQL
+
 
 # SQL Server connection details
 server = ''

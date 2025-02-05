@@ -14,7 +14,7 @@
 - Medium Priority
 
 ✅ Optimize Performance for Large Dataset Processing
-    Ensure efficient chunk-wise processing of large historical datasets
+    Ensure efficient processing of large historical datasets (Replacing Pandas with Polars)
     Improve memory handling in Backtrader with MSSQL
 
 ✅ Enhance Backtesting & Live Trading Flow

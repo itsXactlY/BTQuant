@@ -17,7 +17,7 @@ import time
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
-    GLOBAL_PARAMS,
+    # GLOBAL_PARAMS,
     DEFAULT_PANDAS,
 )
 from fastquant.strategies.mappings import STRATEGY_MAPPING
@@ -54,7 +54,7 @@ def backtest(
     fractional=False,
     slippage=0.001,
     single_position=None,
-    verbose=1,
+    verbose=3,
     sort_by="rnorm",
     sentiments=[],
     strats={},  # Only used when strategy = "multi"
@@ -63,7 +63,6 @@ def backtest(
     # BTFastQuantchannel="",
     symbol="",
     allow_short=False,
-    short_max=1.5,
     figsize=(30, 15),
     multi_line_indicators=None,
     data_class=None,
@@ -104,8 +103,6 @@ def backtest(
         Symbol to be referenced in the channel notification if not None (default=None)
     allow_short : bool
         Whether to allow short selling, with max set as `short_max` times the portfolio value (default=False)
-    short_max : float
-        The maximum short position allowable as a ratio relative to the portfolio value at that time point (default=1.5)
     figsize : tuple
         The size of the figure to be displayed at the end of the backtest (default=(30, 15))
     data_class : bt.feed.DataBase
@@ -121,7 +118,6 @@ def backtest(
     cerebro = bt.Cerebro(stdstats=False, maxcpus=1, optreturn=False)
     cerebro.addobserver(bt.observers.Broker)
     cerebro.addobserver(bt.observers.Trades)
-    # cerebro.addobserver(bt.observers.BuySell)
 
     # Convert all non iterables and strings into lists
     kwargs = {
@@ -148,7 +144,6 @@ def backtest(
                 fractional=fractional,
                 slippage=slippage,
                 single_position=single_position,
-                short_max=short_max,
                 **params,
             )
             strat_names.append(strat)
@@ -173,7 +168,6 @@ def backtest(
             slippage=slippage,
             single_position=single_position,
             allow_short=allow_short,
-            short_max=short_max,
             **kwargs,
         )
         strat_names.append(strat_name)
@@ -239,7 +233,7 @@ def backtest(
                 strategy,
                 data,
                 plot=plot,
-                verbose=0,
+                verbose=verbose,
                 sort_by=sort_by,
                 return_plot=return_plot,
                 plot_kwargs=plot_kwargs,

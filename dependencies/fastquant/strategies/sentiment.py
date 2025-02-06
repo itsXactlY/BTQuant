@@ -10,7 +10,6 @@ from __future__ import (
 
 # Import modules
 import backtrader as bt
-import backtrader.feeds as btfeed
 
 # Import from package
 from fastquant.indicators.sentiment import Sentiment

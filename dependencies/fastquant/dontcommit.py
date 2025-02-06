@@ -13,16 +13,17 @@ bsc_privaccountaddress = ""
 
 import pandas as pd
 
-## MsSQL is now optional - if you want to use it, you need to uncomment the following lines
-# import importlib
-# import sys
-# import os
-# module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data/mssql/MsSQL/fast_mssql.cpython-313-x86_64-linux-gnu.so'))
-# spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
-# fast_mssql = importlib.util.module_from_spec(spec)
-# sys.modules["fast_mssql"] = fast_mssql
-# spec.loader.exec_module(fast_mssql)
-## End of MsSQL
+# MsSQL is now optional - if you want to use it, you need to uncomment the following lines
+'''
+import importlib
+import sys
+import os
+module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data/mssql/MsSQL/fast_mssql.cpython-313-x86_64-linux-gnu.so'))
+spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
+fast_mssql = importlib.util.module_from_spec(spec)
+sys.modules["fast_mssql"] = fast_mssql
+spec.loader.exec_module(fast_mssql)
+
 
 
 # SQL Server connection details
@@ -132,6 +133,8 @@ class MSSQLData_Stocks(bt.feeds.PandasData):
             print(f"An unexpected error occurred: {str(e)}")
             return []
 
+'''
+# End of MsSQL
 
 def ptu():
     art = [

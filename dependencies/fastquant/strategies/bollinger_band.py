@@ -74,25 +74,11 @@ class BBandsStrategy(BaseStrategy):
 
     def sell_or_cover_condition(self):
         if self.dataclose[0] > self.top:
-            if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-                average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
+            if self.params.backtest == False:
+                self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+            elif self.params.backtest == True:
+                self.close()
 
-                # Avoid selling at a loss or below the take profit price
-                if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                    print(
-                        f"| - Avoiding sell at a loss or below take profit. "
-                        f"| - Current close price: {self.data.close[0]:.12f}, "
-                        f"| - Average entry price: {average_entry_price:.12f}, "
-                        f"| - Take profit price: {self.take_profit_price:.12f}"
-                    )
-                    self.conditions_checked = True
-                    return
-
-                if self.params.backtest == False:
-                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-                elif self.params.backtest == True:
-                    self.close()
-
-                self.reset_position_state()
-                self.buy_executed = False
-                self.conditions_checked = True
+            self.reset_position_state()
+            self.buy_executed = False
+            self.conditions_checked = True

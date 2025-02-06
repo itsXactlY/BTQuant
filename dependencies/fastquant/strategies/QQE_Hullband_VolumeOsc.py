@@ -70,6 +70,7 @@ class QQE_Example(BaseStrategy):
         ('take_profit_percent', 4),
         ('dca_deviation', 4),
         ('percent_sizer', 1),
+        ('debug', False),
     )
 
     def __init__(self, **kwargs):
@@ -101,8 +102,9 @@ class QQE_Example(BaseStrategy):
             if (self.qqe.qqe_line[-1] > 0) and \
                (self.data.close[-1] < self.hma[0]) and \
                (self.volosc.osc[-1] < self.volosc.lines.short[0]):
-            
-                print(f"Buy signal triggered at {self.data.close[0]}")
+
+                if self.p.debug:
+                    print(f"Buy signal triggered at {self.data.close[0]}")
 
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])

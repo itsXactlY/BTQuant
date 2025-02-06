@@ -22,6 +22,7 @@ test2.py
 test4.py
 test3.py
 test5.py
+test.py
 *.lprof
 binance_debug_btc.py
 binance_debug_dash.py

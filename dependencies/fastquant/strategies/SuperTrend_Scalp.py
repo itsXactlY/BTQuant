@@ -1,12 +1,12 @@
 import backtrader as bt
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, BuySellArrows
 from fastquant.strategies.custom_indicators.SuperTrend import SuperTrend
 
 class SuperSTrend_Scalper(BaseStrategy):
     params = (
-        ("dca_deviation", 2.5),
-        ("take_profit_percent", 4.5),
-        ('percent_sizer', 0.01), # 0.01 -> 1%
+        ("dca_deviation", 4.5),
+        ("take_profit", 2),
+        ('percent_sizer', 0.1),
         # Trend Strenght
         ("adx_period", 13),
         ("adx_strength", 31),
@@ -25,6 +25,7 @@ class SuperSTrend_Scalper(BaseStrategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # BuySellArrows(self.data0, barplot=True)
         self.adx = bt.indicators.ADX(self.data, period=self.p.adx_period, plot=False)
         self.plusDI = bt.indicators.PlusDI(self.data, period=self.p.di_period, plot=False)
         self.minusDI = bt.indicators.MinusDI(self.data, period=self.p.di_period, plot=False)
@@ -43,90 +44,56 @@ class SuperSTrend_Scalper(BaseStrategy):
             self.plusDI[0] < self.params.adxth and \
             self.supertrend_uptrend_signal
         ):
-
-            if self.params.backtest == False:
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.amount)
-                self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                self.calc_averages()
-                self.buy_executed = True
-                self.conditions_checked = True
-            elif self.params.backtest == True:
-                self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.buy_executed = True
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.stake)
-                self.calc_averages()
-
-    def dca_or_short_condition(self):
-        if (self.position and \
-            self.adx[0] >= self.params.adxth and \
-            self.minusDI[0] > self.params.adxth and \
-            self.plusDI[0] < self.params.adxth and \
-            self.supertrend_uptrend_signal
-        ):
-
-            if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):    
                 if self.params.backtest == False:
                     self.entry_prices.append(self.data.close[0])
+                    print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
                     self.sizes.append(self.amount)
+                    # self.load_trade_data()
                     self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                     self.calc_averages()
-                    # self.buy_executed = True
-                    # self.conditions_checked = True
+                    self.buy_executed = True
+                    self.conditions_checked = True
                 elif self.params.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
                     self.calc_averages()
+                    self.conditions_checked = True
 
-    # def sell_or_cover_condition(self):
-    #     if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-    #         average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
-
-    #         # Avoid selling at a loss or below the take profit price
-    #         if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-    #             self.log(
-    #                 f"| - Avoiding sell at a loss or below take profit. "
-    #                 f"| - Current close price: {self.data.close[0]:.12f}, "
-    #                 f"| - Average entry price: {average_entry_price:.12f}, "
-    #                 f"| - Take profit price: {self.take_profit_price:.12f}"
-    #             )
-    #             return
-
-    #     # if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-    #     #     if self.data.close[0] < self.average_entry_price:
-    #     #         print(f'Nothing Todo here. {self.average_entry_price, self.take_profit_price}')
-    #     #         return
-            
-    #         if self.params.backtest == False:
-    #             self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
-    #         elif self.params.backtest == True:
-    #             self.close()
-            
-    #     self.reset_position_state()
-    #     self.buy_executed = False
-    #     self.conditions_checked = True
+    def dca_or_short_condition(self):
+        if self.buy_executed and not self.conditions_checked:
+                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):    
+                    if self.params.backtest == False:
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.amount)
+                        # self.load_trade_data()
+                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                        self.calc_averages()
+                        self.buy_executed = True
+                        self.conditions_checked = True
+                    elif self.params.backtest == True:
+                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                        self.buy_executed = True
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.stake)
+                        self.calc_averages()
+                        self.conditions_checked = True
 
     def sell_or_cover_condition(self):
-        if self.p.debug:
-            print(f'| - sell_or_cover_condition {self.data._name} Entry:{self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
         if self.buy_executed and self.data.close[0] >= self.take_profit_price:
             average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
 
             # Avoid selling at a loss or below the take profit price
             if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                self.log(
+                print(
                     f"| - Avoiding sell at a loss or below take profit. "
                     f"| - Current close price: {self.data.close[0]:.12f}, "
                     f"| - Average entry price: {average_entry_price:.12f}, "
                     f"| - Take profit price: {self.take_profit_price:.12f}"
                 )
-                return
 
             if self.params.backtest == False:
-                print(f'\n\n\nSELL EXECUTED AT {self.data.close[0]}\n\n\n')
                 self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
             elif self.params.backtest == True:
                 self.close()

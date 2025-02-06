@@ -13,10 +13,6 @@ import numpy as np
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
-    GLOBAL_PARAMS,
-    BUY_PROP,
-    SELL_PROP,
-    SHORT_MAX,
 )
 
 class BuySellArrows(bt.observers.BuySell):
@@ -43,26 +39,24 @@ class BaseStrategy(bt.Strategy):
         ("channel", ""),
         ("symbol", ""),
         ("allow_short", False),
-        ("short_max", SHORT_MAX),
         ("add_cash_amount", 0),
         ("add_cash_freq", "M"),
-        ("invest_div", True),
+        ("invest_div", False),
         ("init_cash", INIT_CASH),
-        ("buy_prop", BUY_PROP),
-        ("sell_prop", SELL_PROP),
         ("fractional", False),
         ("slippage", 0.001),
         ("single_position", None),
         ("commission", COMMISSION_PER_TRANSACTION),
-        ("stop_loss", 0),  # Zero means no stop loss
-        ("stop_trail", 0),  # Zero means no stop loss
-        ("take_profit", 0.1),  # Zero means no take profit -> Default: 1.0%
-        ("percent_sizer", 0.1), # Zero means no percentage usage per buy -> Default: 1%
+        ("stop_loss", 0),
+        ("stop_trail", 0),
+        ("take_profit", 0),
+        ("percent_sizer", 0),
         ("order_cooldown", 5)
     )
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
         self.order = None
         self.DCA = False
@@ -90,8 +84,6 @@ class BaseStrategy(bt.Strategy):
         self.average_buy_price = 0
 
         self.init_cash = self.params.init_cash
-        self.buy_prop = self.params.buy_prop
-        self.sell_prop = self.params.sell_prop
         self.strategy_logging = self.params.strategy_logging
         self.periodic_logging = self.params.periodic_logging
         self.transaction_logging = self.params.transaction_logging
@@ -105,11 +97,22 @@ class BaseStrategy(bt.Strategy):
         self.stop_trail = self.params.stop_trail
         self.take_profit = self.params.take_profit
         self.allow_short = self.params.allow_short
-        self.short_max = self.params.short_max
         self.add_cash_amount = self.params.add_cash_amount
         self.percent_sizer = self.params.percent_sizer
         # Attribute that tracks how much cash was added over time
         self.total_cash_added = 0
+        self.total_pnl = 0.0
+        self.total_wins = 0
+        self.total_losses = 0
+        self.total_trades = 0
+        self.win_rate = 0
+        self.final_value = 0.0
+
+        #### Liquidation Based Strategy
+        # self.lines.size[0] = 0.0
+        # self.lines.price[0] = 0.0
+        # self.lines.symbol[0] = ''
+        # self.lines.side[0] = 0.0
 
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             # JackRabbitRelay Init
@@ -165,6 +168,31 @@ class BaseStrategy(bt.Strategy):
 
         self.dataclose = self.datas[0].close
         self.dataopen = self.datas[0].open
+
+    def _load(self):
+        try:
+            if len(self._data):
+                liquidation = self._data.popleft()
+                if self.p.debug:
+                    print(f"Processing liquidation: {liquidation}")
+                
+                timestamp, size, price, symbol, side = liquidation
+                
+                # Update line values
+                self.lines.datetime[0] = date2num(timestamp)
+                self.lines.size[0] = float(size)
+                self.lines.price[0] = float(price)
+                self.lines.symbol[0] = str(symbol)
+                self.lines.side[0] = float(side)
+            else:
+                # No new liquidation, maintain last values
+                self.lines.size[0] = 0.0
+            
+            return True
+        except Exception as e:
+            print(f"Error loading liquidation data: {e}")
+            return False
+
 
     def log(self, txt, dt=None):
         dt = dt or self.datas[0].datetime.datetime(0)
@@ -456,9 +484,20 @@ class BaseStrategy(bt.Strategy):
             self.order = None
 
     def notify_trade(self, trade):
-        if self.p.backtest:
-            if not trade.isclosed:
-                return
+        # Only process closed trades
+        if trade.isclosed:
+            self.total_trades += 1
+            self.total_pnl += trade.pnl
+            # Check if it's a win or a loss
+            if trade.pnl > 0:
+                self.total_wins += 1
+            else:
+                self.total_losses += 1
+            
+            # Calculate win rate
+            self.win_rate = (self.total_wins / self.total_trades) * 100 if self.total_trades > 0 else 0
+            
+            # Print the results for this trade (optional)
             if self.transaction_logging:
                 self.log(
                     "OPERATION PROFIT, GROSS: %.2f, NET: %.2f" % (trade.pnl, trade.pnlcomm)
@@ -471,17 +510,41 @@ class BaseStrategy(bt.Strategy):
         self.cash = cash
         self.value = value
 
+    # def stop(self):
+    #     if self.p.backtest:
+    #         # Saving to self so it's accessible later during optimization
+    #         self.final_value = self.broker.getvalue()
+    #         # Note that PnL is the final portfolio value minus the initial cash balance minus the total cash added
+    #         self.pnl = round(self.final_value - self.init_cash - self.total_cash_added, 2)
+    #         if self.strategy_logging:
+    #             self.log("Final Portfolio Value: {}".format(self.final_value))
+    #             self.log("Final PnL: {}".format(self.pnl))
+    #         self.order_history_df = pd.DataFrame(self.order_history)
+    #         self.periodic_history_df = pd.DataFrame(self.periodic_history)
+    
     def stop(self):
         if self.p.backtest:
-            # Saving to self so it's accessible later during optimization
             self.final_value = self.broker.getvalue()
-            # Note that PnL is the final portfolio value minus the initial cash balance minus the total cash added
-            self.pnl = round(self.final_value - self.init_cash - self.total_cash_added, 2)
-            if self.strategy_logging:
-                self.log("Final Portfolio Value: {}".format(self.final_value))
-                self.log("Final PnL: {}".format(self.pnl))
-            self.order_history_df = pd.DataFrame(self.order_history)
-            self.periodic_history_df = pd.DataFrame(self.periodic_history)
+
+            # Print the backtest summary (optional)
+            print("\n=== STRATEGY BACKTEST RESULTS ===")
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
+            print("| Strategy                            | Initial Capital | Final Value | Total P&L | Return (%) | Avg Return (%) | Sharpe Ratio | Max Drawdown (%) | Win Rate (%) | Wins | Losses |")
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
+            print("| {0:<35} | {1:<15} | {2:<11} | {3:<9} | {4:<10} | {5:<14} | {6:<12} | {7:<16} | {8:<12} | {9:<4} | {10:<6} |".format(
+                self.__class__.__name__,
+                1000,  # initial capital (example)
+                round(self.final_value, 2),
+                round(self.total_pnl, 2),
+                round(self.total_pnl / 1000 * 100, 2),  # Return in percentage
+                round(self.total_pnl / self.total_trades, 6) if self.total_trades > 0 else 0,
+                'N/A',  # Sharpe Ratio (You can implement this based on your needs)
+                'N/A',  # Max Drawdown (This can be calculated with a custom function)
+                round(self.win_rate, 2),
+                self.total_wins,
+                self.total_losses
+            ))
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
 
 import backtrader.utils as btu
 class CustomPandasData(bt.feeds.PandasData):

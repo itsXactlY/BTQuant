@@ -38,13 +38,16 @@ binance_debug_stx.py
 build
 *.so
 testing.py
+testing2.py
+testing3.py
 *.egg-info
 *.btq
 .btq
 MADR_short.py
-testing2.py
+
 sk-or-v1-1b74a3f7c2fde110d3e3cdf8ec338ac.txt
 binance_liq.py
 deleteme.py
 deleteme2_.py
 deleteme2.py
+test.py

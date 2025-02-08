@@ -13,6 +13,8 @@ import numpy as np
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
+    BUY_PROP,
+    SELL_PROP,
 )
 
 class BuySellArrows(bt.observers.BuySell):
@@ -43,6 +45,8 @@ class BaseStrategy(bt.Strategy):
         ("add_cash_freq", "M"),
         ("invest_div", False),
         ("init_cash", INIT_CASH),
+        ("buy_prop", BUY_PROP),
+        ("sell_prop", SELL_PROP),
         ("fractional", False),
         ("slippage", 0.001),
         ("single_position", None),
@@ -84,6 +88,8 @@ class BaseStrategy(bt.Strategy):
         self.average_buy_price = 0
 
         self.init_cash = self.params.init_cash
+        self.buy_prop = self.params.buy_prop
+        self.sell_prop = self.params.sell_prop
         self.strategy_logging = self.params.strategy_logging
         self.periodic_logging = self.params.periodic_logging
         self.transaction_logging = self.params.transaction_logging
@@ -168,30 +174,10 @@ class BaseStrategy(bt.Strategy):
 
         self.dataclose = self.datas[0].close
         self.dataopen = self.datas[0].open
-
-    def _load(self):
-        try:
-            if len(self._data):
-                liquidation = self._data.popleft()
-                if self.p.debug:
-                    print(f"Processing liquidation: {liquidation}")
-                
-                timestamp, size, price, symbol, side = liquidation
-                
-                # Update line values
-                self.lines.datetime[0] = date2num(timestamp)
-                self.lines.size[0] = float(size)
-                self.lines.price[0] = float(price)
-                self.lines.symbol[0] = str(symbol)
-                self.lines.side[0] = float(side)
-            else:
-                # No new liquidation, maintain last values
-                self.lines.size[0] = 0.0
-            
-            return True
-        except Exception as e:
-            print(f"Error loading liquidation data: {e}")
-            return False
+        self.datahigh = self.datas[0].high
+        self.datalow = self.datas[0].low
+        self.datavolume = self.datas[0].volume
+        
 
 
     def log(self, txt, dt=None):
@@ -509,21 +495,18 @@ class BaseStrategy(bt.Strategy):
             self.log("Cash %s Value %s" % (cash, value))
         self.cash = cash
         self.value = value
-
-    # def stop(self):
-    #     if self.p.backtest:
-    #         # Saving to self so it's accessible later during optimization
-    #         self.final_value = self.broker.getvalue()
-    #         # Note that PnL is the final portfolio value minus the initial cash balance minus the total cash added
-    #         self.pnl = round(self.final_value - self.init_cash - self.total_cash_added, 2)
-    #         if self.strategy_logging:
-    #             self.log("Final Portfolio Value: {}".format(self.final_value))
-    #             self.log("Final PnL: {}".format(self.pnl))
-    #         self.order_history_df = pd.DataFrame(self.order_history)
-    #         self.periodic_history_df = pd.DataFrame(self.periodic_history)
     
     def stop(self):
         if self.p.backtest:
+            # Saving to self so it's accessible later during optimization
+            self.final_value = self.broker.getvalue()
+            # Note that PnL is the final portfolio value minus the initial cash balance minus the total cash added
+            self.pnl = round(self.final_value - self.init_cash - self.total_cash_added, 2)
+            if self.strategy_logging:
+                self.log("Final Portfolio Value: {}".format(self.final_value))
+                self.log("Final PnL: {}".format(self.pnl))
+            self.order_history_df = pd.DataFrame(self.order_history)
+            self.periodic_history_df = pd.DataFrame(self.periodic_history)
             self.final_value = self.broker.getvalue()
 
             # Print the backtest summary (optional)

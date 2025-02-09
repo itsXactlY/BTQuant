@@ -106,6 +106,8 @@ setuptools.setup(
         'pyodbc',
         'websocket-client',
         'matplotlib',
+        'polars',
+        'pyarrow'
         # Add other dependencies as needed
     ],
 

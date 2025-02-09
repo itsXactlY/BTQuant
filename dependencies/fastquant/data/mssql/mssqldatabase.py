@@ -1,26 +1,40 @@
 import time
 import datetime as dt
-from fastquant.dontcommit import MSSQLData, pd, connection_string
-import pandas as pd
+import polars as pl
+from fastquant.dontcommit import MSSQLData, connection_string
 
-def get_database_data(ticker, start_date, end_date, time_resolution="1d"):
+def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="USDT"):
     def identify_gaps(df, expected_interval):
-        df['timestamp'] = pd.to_datetime(df.index)
-        df['time_diff'] = df['timestamp'].diff()
-        gaps = df[df['time_diff'] > expected_interval]
-        return gaps
+        if expected_interval.endswith('h'):
+            duration = pl.duration(hours=int(expected_interval[:-1]))
+        elif expected_interval.endswith('m'):
+            duration = pl.duration(minutes=int(expected_interval[:-1]))
+        else:
+            duration = pl.duration(days=1)
+            
+        return (df
+            .with_columns([
+                pl.col("TimestampStart").diff().alias("time_diff")
+            ])
+            .filter(pl.col("time_diff") > duration)
+        )
 
     resample = True
-    coin_name = ticker + "USDT_klines"
+    if pair == "USDT":
+        coin_name = ticker + "USDT_klines"
+    elif pair != "USDT":
+        coin_name = ticker + pair + "_klines"
+        
     start = dt.datetime.strptime(start_date, "%Y-%m-%d")
     end = dt.datetime.strptime(end_date, "%Y-%m-%d")
     start_time = time.time()
 
-    df = MSSQLData.get_data_from_db(connection_string, coin_name, "1m", start, end)
+    pdf = MSSQLData.get_data_from_db(connection_string, coin_name, "1m", start, end)
+    df = pl.from_pandas(pdf.reset_index())
 
     elapsed_time = time.time() - start_time
 
-    if df.empty:
+    if df.is_empty():
         print("No data returned from the database - Please check your query and date range")
         return
 
@@ -29,19 +43,19 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d"):
 
     def convert_time_resolution(time_resolution):
         if time_resolution.endswith('s'):  # seconds
-            return time_resolution.replace('s', 'S')
+            return time_resolution.lower()
         if time_resolution.endswith('m'):  # minutes
-            return time_resolution.replace('m', 'T')
+            return time_resolution.lower()
         elif time_resolution.endswith('h'):  # hours
-            return time_resolution.replace('h', 'H')
+            return time_resolution.lower()
         elif time_resolution.endswith('d'):  # days
-            return time_resolution.replace('d', 'D')
+            return time_resolution.lower()
         elif time_resolution.endswith('w'):  # weeks
-            return time_resolution.replace('w', 'W')
+            return time_resolution.lower()
         elif time_resolution.endswith('M'):  # months
-            return time_resolution.replace('M', 'M')
+            return 'mo'
         elif time_resolution.endswith('Y'):  # years
-            return time_resolution.replace('Y', 'A')
+            return 'y'
         else:
             raise ValueError(f"Unsupported time resolution: {time_resolution}")
 
@@ -50,35 +64,35 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d"):
     if resample:
         print(f'Resampling data into {time_resolution} Candle data')
         
-        # Create a complete date range
-        full_date_range = pd.date_range(start=df.index.min(), end=df.index.max(), freq=time_resolution)
+        df_resampled = (df
+            .group_by_dynamic("TimestampStart", 
+                           every=time_resolution)
+            .agg([
+                pl.col("Open").first(),
+                pl.col("High").max(),
+                pl.col("Low").min(),
+                pl.col("Close").last(),
+                pl.col("Volume").sum()
+            ])
+        )
         
-        # Resample the data into the specified intervals
-        df_resampled = df.resample(time_resolution).agg({
-            'Open': 'first',
-            'High': 'max',
-            'Low': 'min',
-            'Close': 'last',
-            'Volume': 'sum'
-        })
-        
-        # Reindex with the full date range to include missing periods
-        df_resampled = df_resampled.reindex(full_date_range)
-        
-        # Forward fill the missing values
-        df_resampled['Close'] = df_resampled['Close'].ffill()
-        df_resampled['Open'] = df_resampled['Open'].fillna(df_resampled['Close'])
-        df_resampled['High'] = df_resampled['High'].fillna(df_resampled['Close'])
-        df_resampled['Low'] = df_resampled['Low'].fillna(df_resampled['Close'])
-        df_resampled['Volume'] = df_resampled['Volume'].fillna(0)
+        df_resampled = df_resampled.with_columns([
+            pl.col("Close").forward_fill(),
+            pl.col("Open").forward_fill().fill_null(pl.col("Close")),
+            pl.col("High").forward_fill().fill_null(pl.col("Close")),
+            pl.col("Low").forward_fill().fill_null(pl.col("Close")),
+            pl.col("Volume").fill_null(0)
+        ])
         
         # Identify gaps
-        gaps = identify_gaps(df_resampled, pd.Timedelta(time_resolution))
-        if not gaps.empty:
+        gaps = identify_gaps(df_resampled, time_resolution)
+        if not gaps.is_empty():
             print(f"Gaps found in the data:")
             print(gaps)
         
         df = df_resampled
 
     print('Data extraction & manipulation took: ', time.time() - start_time, 'seconds')
-    return df
+    
+    # convert back to pandas for compatibility with BTQuant
+    return df.to_pandas().set_index("TimestampStart")

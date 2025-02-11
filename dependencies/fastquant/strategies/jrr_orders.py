@@ -1,75 +1,127 @@
 import requests
-from fastquant.dontcommit import identify, jrr_webhook_url
+import asyncio
+from telethon import TelegramClient
+from abc import ABC, abstractmethod
+from typing import Dict, Any
+from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_id
 
-discord_webhook_url = ''
+class MessagingService(ABC):
+    @abstractmethod
+    async def send_message(self, message: str) -> None:
+        pass
 
-class Alert:
-    def __init__(self, discord_webhook_url):
-        self.discord_webhook_url = discord_webhook_url
+class TelegramService(MessagingService):
+    def __init__(self, api_id: int, api_hash: str, session_file: str, channel_id: int):
+        self.api_id = api_id
+        self.api_hash = api_hash
+        self.session_file = session_file
+        self.channel_id = channel_id
+        self.client = None
+        
+    async def initialize(self, loop=None):
+        """Initialize with optional event loop - took me just half an day..."""
+        self.client = TelegramClient(
+            self.session_file, 
+            self.api_id, 
+            self.api_hash,
+            loop=loop
+        )
+        
+        await self.client.connect()
+        if not await self.client.is_user_authorized():
+            raise Exception("⚠️ Telegram client is not authorized! Use a valid session.")
+        print("✅ Telegram client is now connected and ready to send messages.")
 
-    def send_alert(self, message):
-        message_payload = {
+    async def send_message(self, message: str) -> None:
+        """Implements abstract method from MessagingService"""
+        if not self.client:
+            raise Exception("Telegram client not initialized")
+        try:
+            entity = await self.client.get_entity(self.channel_id)
+            await self.client.send_message(entity, message)
+            print(f"✅ Telegram alert sent: {message}")
+        except Exception as e:
+            print(f"❌ Telegram alert failed: {e}")
+
+
+class DiscordService(MessagingService):
+    def __init__(self, webhook_url: str):
+        self.webhook_url = webhook_url
+
+    async def send_message(self, message: str) -> None:
+        payload = {
             "username": "DEBUG SHOWCASE",
             "avatar_url": "https://i.imgur.com/TISmmHs.jpg",
-            "embeds": [
-                {
-                    "title": "Alert arrived!",
-                    "description": message,
-                    "color": 3066993,  # Lightning green color code
-                    "footer": {
-                        "text": "Powered by aLca for Quants!",
-                        "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYQY8CsntTC-nQ4nTVvSp_fY6zcWtLfdubhg&s"
-                    }
+            "embeds": [{
+                "title": "Alert arrived!",
+                "description": message,
+                "color": 3066993,
+                "footer": {
+                    "text": "Powered by aLca for Quants!",
+                    "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYQY8CsntTC-nQ4nTVvSp_fY6zcWtLfdubhg&s"
                 }
-            ]
-        }
-        
-        headers = {
-            "Content-Type": "application/json"
+            }]
         }
         
         try:
-            response = requests.post(self.discord_webhook_url, json=message_payload, headers=headers)
-            # _respone_showcase = requests.post(self.quant_showcase_url, json=message_payload, headers=headers)
-            response.raise_for_status()  # Raise an error for bad responses
-            # _respone_showcase.raise_for_status()
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: requests.post(self.webhook_url, json=payload, headers={"Content-Type": "application/json"})
+            )
+            response.raise_for_status()
             print(f"Discord response status code: {response.status_code}")
-            print(f"Discord response content: {response.text}")
-
         except Exception as e:
-            print(f"Error in send_alert: {e}")
+            print(f"Error in Discord alert: {e}")
+
+class AlertManager:
+    def __init__(self, messaging_services: list[MessagingService], loop=None):
+        self.messaging_services = messaging_services
+        self.loop = loop or asyncio.new_event_loop()
+        
+    def send_alert(self, message: str) -> None:
+        async def _send():
+            tasks = [service.send_message(message) for service in self.messaging_services]
+            await asyncio.gather(*tasks)
+            
+        future = asyncio.run_coroutine_threadsafe(_send(), self.loop)
+        try:
+            future.result(timeout=10)
+        except Exception as e:
+            print(f"Error sending alert: {e}")
+
 
 class JrrOrderBase:
-    def __init__(self):
-        self.alert_instance = Alert(discord_webhook_url)
+    def __init__(self, alert_manager: AlertManager):
+        self.alert_manager = alert_manager
 
-    def send_jrr_buy_request(self, exchange, account, asset, amount):
-        _amount = int(amount)
-        
+    def _send_jrr_request(self, payload: Dict[str, Any]) -> str:
+        try:
+            response = requests.post(jrr_webhook_url, json=payload)
+            response.raise_for_status()
+            response_msg = response.text
+            print(f"Response status code: {response.status_code}")
+            print("Response content:\n", response_msg)
+            
+            self.alert_manager.send_alert(response_msg)
+            return response_msg
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Error: {str(e)}"
+            print(error_msg)
+            return error_msg
+
+    def send_jrr_buy_request(self, exchange: str, account: str, asset: str, amount: float) -> str:
         payload = {
             "Exchange": exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Buy",
             "Asset": asset,
-            "USD": str(_amount),
+            "USD": str(int(amount)),
             "Identity": identify
         }
-        try:
-            response = requests.post(jrr_webhook_url, json=payload)
-            response.raise_for_status()
-            jrr_response_buy_msg = response.text
-            print(f"Response status code: {response.status_code}")
-            print("Response content:\n", response.text)
+        return self._send_jrr_request(payload)
 
-            self.alert_instance.send_alert(jrr_response_buy_msg)  # Sending response.text to Discord
-            return jrr_response_buy_msg
-
-        except requests.exceptions.RequestException as e:
-            print("Error:", e)
-            return "Error: " + str(e)
-
-    def send_jrr_close_request(self, exchange, account, asset):
+    def send_jrr_close_request(self, exchange: str, account: str, asset: str) -> str:
         payload = {
             "Exchange": exchange,
             "Market": "spot",
@@ -78,16 +130,19 @@ class JrrOrderBase:
             "Asset": asset,
             "Identity": identify
         }
-        try:
-            response = requests.post(jrr_webhook_url, json=payload)
-            response.raise_for_status()
-            jrr_response_close_msg = response.text
-            print(f"Response status code: {response.status_code}")
-            print("Response content:\n", response.text)
+        return self._send_jrr_request(payload)
 
-            self.alert_instance.send_alert(jrr_response_close_msg)  # Sending response.text to Discord
-            return jrr_response_close_msg
-
-        except requests.exceptions.RequestException as e:
-            print("Error:", e)
-            return "Error: " + str(e)
+async def initialize_services():
+    telegram_service = TelegramService(
+        api_id=telegram_api_id,
+        api_hash=telegram_api_hash,
+        session_file=telegram_session_file,
+        channel_id=telegram_channel_id
+    )
+    await telegram_service.initialize()
+    
+    discord_service = DiscordService(discord_webhook_url)
+    alert_manager = AlertManager([telegram_service, discord_service])
+    jrr_order_base = JrrOrderBase(alert_manager)
+    
+    return jrr_order_base

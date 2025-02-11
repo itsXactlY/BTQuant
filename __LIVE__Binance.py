@@ -6,9 +6,8 @@ _collateral = 'USDT'
 _exchange = 'mimic'
 _account = 'binance_sub2'
 _asset = f'{_coin}/{_collateral}'
-_amount = '11'
+_amount = '20'
 _amount = float(_amount)
-
 
 livetrade(
     coin=_coin,

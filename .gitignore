@@ -51,3 +51,6 @@ deleteme.py
 deleteme2_.py
 deleteme2.py
 test.py
+*.session
+test_alerts.py
+*.session-journal

@@ -1,5 +1,6 @@
 from datetime import datetime
 import backtrader as bt
+from backtrader import indicators as btind
 import requests
 from fastquant.strategies.jrr_orders import *
 from fastquant.strategies.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
@@ -9,12 +10,14 @@ import threading
 import queue
 import time
 import numpy as np
+import shutil
+import os
+import uuid
+
 
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
-    BUY_PROP,
-    SELL_PROP,
 )
 
 class BuySellArrows(bt.observers.BuySell):
@@ -45,8 +48,6 @@ class BaseStrategy(bt.Strategy):
         ("add_cash_freq", "M"),
         ("invest_div", False),
         ("init_cash", INIT_CASH),
-        ("buy_prop", BUY_PROP),
-        ("sell_prop", SELL_PROP),
         ("fractional", False),
         ("slippage", 0.001),
         ("single_position", None),
@@ -57,7 +58,115 @@ class BaseStrategy(bt.Strategy):
         ("percent_sizer", 0),
         ("order_cooldown", 5)
     )
-    
+
+    def init_live_trading(self):
+        """Initialize live trading components based on exchange type"""
+        if self.p.exchange.lower() == "pancakeswap":
+            self._init_pancakeswap()
+        elif self.p.exchange.lower() == "raydium":
+            self._init_raydium()
+        else:
+            self._init_standard_exchange()
+
+
+    def _init_alert_system(self, coin_name="__!__"):
+        """Initialize alert system with Telegram and Discord services"""
+        try:
+            base_session_file = "base.session"
+            new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
+
+            if not os.path.exists(base_session_file):
+                raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
+            shutil.copy(base_session_file, new_session_file)
+            print(f"✅ Copied base session to {new_session_file}")
+
+            self.alert_loop = asyncio.new_event_loop()
+
+            self.telegram_service = TelegramService(
+                api_id=telegram_api_id,
+                api_hash=telegram_api_hash,
+                session_file=new_session_file,
+                channel_id=telegram_channel_id
+            )
+
+            async def init_services():
+                await self.telegram_service.initialize(loop=self.alert_loop)
+                return AlertManager(
+                    [self.telegram_service, DiscordService(discord_webhook_url)],
+                    loop=self.alert_loop
+                )
+
+            def run_alert_loop():
+                asyncio.set_event_loop(self.alert_loop)
+                self.alert_manager = self.alert_loop.run_until_complete(init_services())
+                self.alert_loop.run_forever()
+
+            self.alert_thread = threading.Thread(target=run_alert_loop, daemon=True)
+            self.alert_thread.start()
+
+            time.sleep(2)
+            print("✅ Alert system initialized successfully")
+            return self.alert_manager
+
+        except Exception as e:
+            print(f"❌ Error initializing alert system: {str(e)}")
+            return None
+
+    def _init_standard_exchange(self):
+        """Initialize standard exchange trading with JackRabbitRelay"""
+        self.alert_manager = self._init_alert_system()
+        
+        if self.alert_manager is None:
+            print("Warning: Alert system initialization failed")
+        
+        self.exchange = self.p.exchange
+        self.account = self.p.account
+        self.asset = self.p.asset
+        self.rabbit = JrrOrderBase(alert_manager=self.alert_manager)
+
+        self.order_queue = queue.Queue()
+        self.order_thread = threading.Thread(target=self.process_orders)
+        self.order_thread.daemon = True
+        self.order_thread.start()
+
+    def send_alert(self, message: str):
+        """Helper method to safely send alerts"""
+        if hasattr(self, 'alert_manager') and self.alert_manager is not None:
+            try:
+                self.alert_manager.send_alert(message)
+            except Exception as e:
+                print(f"Error sending alert: {str(e)}")
+
+    def _init_standard_exchange(self):
+        """Initialize standard exchange trading with JackRabbitRelay"""
+        alert_manager = self._init_alert_system()
+        
+        # Wait briefly for alert system initialization
+        time.sleep(1)
+        
+        self.exchange = self.p.exchange
+        self.account = self.p.account
+        self.asset = self.p.asset
+        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
+
+        self.order_queue = queue.Queue()
+        self.order_thread = threading.Thread(target=self.process_orders)
+        self.order_thread.daemon = True
+        self.order_thread.start()
+
+    def _init_pancakeswap(self):
+        """Initialize PancakeSwap trading"""
+        self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
+        self.web3order_queue = queue.Queue()
+        self.web3order_thread = threading.Thread(target=self.process_web3orders)
+        self.web3order_thread.daemon = True
+        self.web3order_thread.start()
+
+    def _init_raydium(self):
+        """Initialize Raydium trading"""
+        print('Raydium integration not implemented yet')
+        raise NotImplementedError("Raydium trading not yet implemented")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         BuySellArrows(self.data0, barplot=True)
@@ -88,8 +197,6 @@ class BaseStrategy(bt.Strategy):
         self.average_buy_price = 0
 
         self.init_cash = self.params.init_cash
-        self.buy_prop = self.params.buy_prop
-        self.sell_prop = self.params.sell_prop
         self.strategy_logging = self.params.strategy_logging
         self.periodic_logging = self.params.periodic_logging
         self.transaction_logging = self.params.transaction_logging
@@ -114,31 +221,12 @@ class BaseStrategy(bt.Strategy):
         self.win_rate = 0
         self.final_value = 0.0
 
-        #### Liquidation Based Strategy
-        # self.lines.size[0] = 0.0
-        # self.lines.price[0] = 0.0
-        # self.lines.symbol[0] = ''
-        # self.lines.side[0] = 0.0
-
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
-            # JackRabbitRelay Init
-            self.exchange = self.p.exchange
-            self.account = self.p.account
-            self.asset = self.p.asset
-            self.rabbit = JrrOrderBase()
-
-            self.order_queue = queue.Queue()
-            self.order_thread = threading.Thread(target=self.process_orders)
-            self.order_thread.daemon = True
-            self.order_thread.start()
+            self.init_live_trading()
         elif self.params.backtest == False:
-            self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
-            self.web3order_queue = queue.Queue()
-            self.web3order_thread = threading.Thread(target=self.process_web3orders)
-            self.web3order_thread.daemon = True
-            self.web3order_thread.start()
+            self.init_live_trading()
         elif self.params.backtest == False and self.p.exchange.lower() == "raydium":
-                print('SWAP PART MISSING')
+            self.init_live_trading()
 
         if self.strategy_logging and self.p.backtest:
             self.log("===Global level arguments===")
@@ -174,10 +262,30 @@ class BaseStrategy(bt.Strategy):
 
         self.dataclose = self.datas[0].close
         self.dataopen = self.datas[0].open
-        self.datahigh = self.datas[0].high
-        self.datalow = self.datas[0].low
-        self.datavolume = self.datas[0].volume
-        
+
+    def _load(self):
+        try:
+            if len(self._data):
+                liquidation = self._data.popleft()
+                if self.p.debug:
+                    print(f"Processing liquidation: {liquidation}")
+                
+                timestamp, size, price, symbol, side = liquidation
+                
+                # Update line values
+                self.lines.datetime[0] = btu.date2num(timestamp)
+                self.lines.size[0] = float(size)
+                self.lines.price[0] = float(price)
+                self.lines.symbol[0] = str(symbol)
+                self.lines.side[0] = float(side)
+            else:
+                # No new liquidation, maintain last values
+                self.lines.size[0] = 0.0
+            
+            return True
+        except Exception as e:
+            print(f"Error loading liquidation data: {e}")
+            return False
 
 
     def log(self, txt, dt=None):
@@ -495,18 +603,9 @@ class BaseStrategy(bt.Strategy):
             self.log("Cash %s Value %s" % (cash, value))
         self.cash = cash
         self.value = value
-    
+
     def stop(self):
         if self.p.backtest:
-            # Saving to self so it's accessible later during optimization
-            self.final_value = self.broker.getvalue()
-            # Note that PnL is the final portfolio value minus the initial cash balance minus the total cash added
-            self.pnl = round(self.final_value - self.init_cash - self.total_cash_added, 2)
-            if self.strategy_logging:
-                self.log("Final Portfolio Value: {}".format(self.final_value))
-                self.log("Final PnL: {}".format(self.pnl))
-            self.order_history_df = pd.DataFrame(self.order_history)
-            self.periodic_history_df = pd.DataFrame(self.periodic_history)
             self.final_value = self.broker.getvalue()
 
             # Print the backtest summary (optional)
@@ -528,6 +627,23 @@ class BaseStrategy(bt.Strategy):
                 self.total_losses
             ))
             print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
+        
+        elif self.p.backtest == False:
+            """Clean up resources when strategy stops"""
+            if hasattr(self, 'alert_loop') and self.alert_loop:
+                self.alert_loop.call_soon_threadsafe(self.alert_loop.stop)
+            
+            if hasattr(self, 'alert_thread') and self.alert_thread:
+                self.alert_thread.join(timeout=5)
+                
+            if hasattr(self, 'telegram_service') and self.telegram_service.client:
+                async def disconnect():
+                    await self.telegram_service.client.disconnect()
+                
+                if self.alert_loop and self.alert_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(disconnect(), self.alert_loop)
+            
+            super().stop()
 
 import backtrader.utils as btu
 class CustomPandasData(bt.feeds.PandasData):

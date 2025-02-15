@@ -56,3 +56,4 @@ test_alerts.py
 *.session-journal
 trading_logs
 tele_to_dc.py
+__LIVE__Binance_aLca.py

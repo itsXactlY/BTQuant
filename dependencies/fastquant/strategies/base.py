@@ -69,10 +69,10 @@ class BaseStrategy(bt.Strategy):
             self._init_standard_exchange()
 
 
-    def _init_alert_system(self, coin_name="__!__"):
+    def _init_alert_system(self, coin_name=".__!_"):
         """Initialize alert system with Telegram and Discord services"""
         try:
-            base_session_file = "base.session"
+            base_session_file = ".base.session"
             new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
 
             if not os.path.exists(base_session_file):

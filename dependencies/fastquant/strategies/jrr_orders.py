@@ -102,7 +102,14 @@ class JrrOrderBase:
             print(f"Response status code: {response.status_code}")
             print("Response content:\n", response_msg)
             
-            self.alert_manager.send_alert(response_msg)
+            # JackRabbit reponses are only directed into Discord service and send only to Discord, over spamming Telegram
+            discord_service = next(s for s in self.alert_manager.messaging_services if isinstance(s, DiscordService))
+            future = asyncio.run_coroutine_threadsafe(
+                discord_service.send_message(response_msg),
+                self.alert_manager.loop
+            )
+            future.result(timeout=10)
+            
             return response_msg
         except requests.exceptions.RequestException as e:
             error_msg = f"Error: {str(e)}"

@@ -54,3 +54,5 @@ test.py
 *.session
 test_alerts.py
 *.session-journal
+trading_logs
+tele_to_dc.py

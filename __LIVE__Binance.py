@@ -17,5 +17,5 @@ livetrade(
     account=_account,
     asset=_asset,
     amount=_amount,
-    alert_engine=False
+    alert_engine=True
 )

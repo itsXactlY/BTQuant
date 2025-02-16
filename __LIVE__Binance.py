@@ -1,10 +1,10 @@
 from fastquant import livetrade_crypto_binance as livetrade
 
 # Binance.com Exchange
-_coin = 'TRX'
+_coin = 'EUR'
 _collateral = 'USDT'
 _exchange = 'mimic' # Exchange Name
-_account = 'binance_sub2' # Mimic Account name - or leave empty for livetrading
+_account = 'binance_sub2' # JackRabbitRelay Account name
 _asset = f'{_coin}/{_collateral}'
 _amount = '20'
 _amount = float(_amount)
@@ -16,5 +16,6 @@ livetrade(
     exchange=_exchange,
     account=_account,
     asset=_asset,
-    amount=_amount
+    amount=_amount,
+    alert_engine=False
 )

@@ -4,6 +4,7 @@ from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_id
+from typing import Optional
 
 class MessagingService(ABC):
     @abstractmethod
@@ -91,7 +92,11 @@ class AlertManager:
 
 
 class JrrOrderBase:
-    def __init__(self, alert_manager: AlertManager):
+    def __init__(self, alert_manager: Optional[AlertManager] = None):
+        """
+        Initialize with an optional alert_manager.
+        If alerts are disabled (alert_manager is None), no alerts will be sent.
+        """
         self.alert_manager = alert_manager
 
     def _send_jrr_request(self, payload: Dict[str, Any]) -> str:
@@ -102,14 +107,24 @@ class JrrOrderBase:
             print(f"Response status code: {response.status_code}")
             print("Response content:\n", response_msg)
             
-            # JackRabbit reponses are only directed into Discord service and send only to Discord, over spamming Telegram
-            discord_service = next(s for s in self.alert_manager.messaging_services if isinstance(s, DiscordService))
-            future = asyncio.run_coroutine_threadsafe(
-                discord_service.send_message(response_msg),
-                self.alert_manager.loop
-            )
-            future.result(timeout=10)
-            
+            # Only attempt to send a Discord alert if an alert_manager is provided.
+            if self.alert_manager is not None:
+                # JackRabbit responses are sent only to Discord to avoid spamming Telegram.
+                discord_service = next(
+                    (s for s in self.alert_manager.messaging_services if isinstance(s, DiscordService)),
+                    None
+                )
+                if discord_service is not None:
+                    future = asyncio.run_coroutine_threadsafe(
+                        discord_service.send_message(response_msg),
+                        self.alert_manager.loop
+                    )
+                    future.result(timeout=10)
+                else:
+                    print("Discord service not found in alert_manager services.")
+            else:
+                print("Alert manager is not set (alerts disabled); skipping alert sending.")
+
             return response_msg
         except requests.exceptions.RequestException as e:
             error_msg = f"Error: {str(e)}"

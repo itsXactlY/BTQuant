@@ -406,7 +406,6 @@ class BaseStrategy(bt.Strategy):
             with open(file_path, 'r') as file:
                 orders = file.read().strip().split('\n')
                 orders.reverse()
-                print(orders)
 
             found_sell = False
             for order in orders:

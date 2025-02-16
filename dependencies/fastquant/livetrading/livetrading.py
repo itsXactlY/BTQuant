@@ -39,7 +39,7 @@ def livetrade_web3(
     strategy: str = "",  # Allow passing strategy as a string
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
-    alert_engine: bool = False,
+    enable_alerts: bool = False,
 ) -> None:
     """
     Live trade a strategy on PancakeSwap.
@@ -55,7 +55,7 @@ def livetrade_web3(
     - strategy (bt.Strategy): The strategy to use. Defaults to Pancakeswap_dca_mm.
     - timezone (str): The timezone to use. Defaults to 'Europe/Berlin'.
     - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 2.
-    - alert_engine (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     """
 
     # Get the strategy class from the mapping if the strategy is passed as a string
@@ -89,7 +89,7 @@ def livetrade_web3(
         coin=coin,
         collateral=collateral,
         backtest=False,
-        enable_alerts=alert_engine
+        enable_alerts=enable_alerts
     )
     
     cerebro.adddata(data=data, name=data._dataname)
@@ -105,7 +105,7 @@ def livetrade_crypto_binance(
     amount: float,
     strategy: str = "",
     start_hours_ago: int = 5,
-    alert_engine: bool = False
+    enable_alerts: bool = False
 ) -> None:
     """
     Live trade a strategy on Binance.
@@ -120,7 +120,7 @@ def livetrade_crypto_binance(
     - strategy (str): The strategy name as a string or strategy class.
                     Defaults to "".
     - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
-    - alert_engine (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     """
 
     # Get the strategy class from the mapping if the strategy is passed as a string
@@ -161,7 +161,7 @@ def livetrade_crypto_binance(
         coin=coin,
         collateral=collateral,
         backtest=False,
-        enable_alerts=alert_engine
+        enable_alerts=enable_alerts
     )
     
     cerebro.adddata(data=data, name=data._dataname)
@@ -179,7 +179,7 @@ def livetrade_crypto_bybit(
     strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
-    alert_engine: bool = False,
+    enable_alerts: bool = False,
 ) -> None:
     """
     Live trade a strategy on PancakeSwap.
@@ -194,7 +194,7 @@ def livetrade_crypto_bybit(
     - strategy (bt.Strategy): The strategy to use. Defaults to Pancakeswap_dca_mm.
     - timezone (str): The timezone to use. Defaults to 'Europe/Berlin'.
     - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 2.
-    - alert_engine (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     """
 
     # Get the strategy class from the mapping if the strategy is passed as a string
@@ -228,7 +228,7 @@ def livetrade_crypto_bybit(
         coin=coin,
         collateral=collateral,
         backtest=False,
-        enable_alerts=alert_engine
+        enable_alerts=enable_alerts
     )
     
     cerebro.adddata(data=data, name=data._dataname)

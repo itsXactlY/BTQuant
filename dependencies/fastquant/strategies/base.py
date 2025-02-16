@@ -18,6 +18,8 @@ import uuid
 from fastquant.config import (
     INIT_CASH,
     COMMISSION_PER_TRANSACTION,
+    BUY_PROP,
+    SELL_PROP
 )
 
 class BuySellArrows(bt.observers.BuySell):
@@ -52,11 +54,14 @@ class BaseStrategy(bt.Strategy):
         ("slippage", 0.001),
         ("single_position", None),
         ("commission", COMMISSION_PER_TRANSACTION),
+        ("buy_prop", BUY_PROP),
+        ("sell_prop", SELL_PROP),
         ("stop_loss", 0),
         ("stop_trail", 0),
         ("take_profit", 0),
         ("percent_sizer", 0),
-        ("order_cooldown", 5)
+        ("order_cooldown", 5),
+        ("enable_alerts", False)
     )
 
     def init_live_trading(self):
@@ -70,7 +75,11 @@ class BaseStrategy(bt.Strategy):
 
 
     def _init_alert_system(self, coin_name=".__!_"):
-        """Initialize alert system with Telegram and Discord services"""
+        """Initialize alert system with Telegram and Discord services if enabled"""
+        if not self.p.enable_alerts:
+            print("Alert system disabled (not enabled via configuration)")
+            return None
+
         try:
             base_session_file = ".base.session"
             new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
@@ -114,15 +123,14 @@ class BaseStrategy(bt.Strategy):
 
     def _init_standard_exchange(self):
         """Initialize standard exchange trading with JackRabbitRelay"""
-        self.alert_manager = self._init_alert_system()
-        
-        if self.alert_manager is None:
-            print("Warning: Alert system initialization failed")
-        
+        # Initialize the alert system only if alerts are enabled
+        alert_manager = self._init_alert_system()
+        time.sleep(1)
+
         self.exchange = self.p.exchange
         self.account = self.p.account
         self.asset = self.p.asset
-        self.rabbit = JrrOrderBase(alert_manager=self.alert_manager)
+        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
 
         self.order_queue = queue.Queue()
         self.order_thread = threading.Thread(target=self.process_orders)
@@ -130,12 +138,15 @@ class BaseStrategy(bt.Strategy):
         self.order_thread.start()
 
     def send_alert(self, message: str):
-        """Helper method to safely send alerts"""
-        if hasattr(self, 'alert_manager') and self.alert_manager is not None:
+        """Helper method to safely send alerts if enabled"""
+        if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
             try:
                 self.alert_manager.send_alert(message)
             except Exception as e:
                 print(f"Error sending alert: {str(e)}")
+        else:
+            print('Alert System not enabled.')
+            pass
 
     def _init_standard_exchange(self):
         """Initialize standard exchange trading with JackRabbitRelay"""
@@ -206,6 +217,8 @@ class BaseStrategy(bt.Strategy):
         self.slippage = self.params.slippage
         self.single_position = self.params.single_position
         self.commission = self.params.commission
+        self.buy_prop = self.params.buy_prop
+        self.sell_prop = self.params.sell_prop
         self.stop_loss = self.params.stop_loss
         self.stop_trail = self.params.stop_trail
         self.take_profit = self.params.take_profit
@@ -388,9 +401,12 @@ class BaseStrategy(bt.Strategy):
     def load_trade_data(self):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
+            if sys.platform != "win32":
+                os.sync() # Sync before reading attempt - it might being open/write from JRR
             with open(file_path, 'r') as file:
                 orders = file.read().strip().split('\n')
                 orders.reverse()
+                print(orders)
 
             found_sell = False
             for order in orders:
@@ -434,6 +450,7 @@ class BaseStrategy(bt.Strategy):
                     usdt_value = last_order_data.get('USDT', 0.0)
                     print(f"Free USDT: {usdt_value:.9f}")
                     self.stake_to_use = usdt_value
+                    print(f"Last modified: {os.path.getmtime(file_path)}")
                 except json.JSONDecodeError:
                     print("Error parsing the last order, resetting position state.")
                     self.stake_to_use = 1000.0 # new Default :<

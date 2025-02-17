@@ -3,8 +3,6 @@ import joblib
 
 identify = ""
 jrr_webhook_url = "http://127.0.0.1:80"
-jrr_order_history = ""
-jrr_order_history_sub1 = ""
 
 bsc_privaccount1 = ""
 bsc_privaccountaddress = ""
@@ -13,8 +11,8 @@ discord_webhook_url = ''
 
 telegram_api_id = 123456789
 telegram_api_hash = "abc123456"
-telegram_session_file = "base.session"
-telegram_channel_id = -100 # -100 is important infront of
+telegram_session_file = ".base.session"
+telegram_channel_id = -100 # -100 is important infront of for channel/groups
 
 import pandas as pd
 

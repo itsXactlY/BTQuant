@@ -22,5 +22,6 @@ livetrade(
     web3ws=_websocket,
     account=_account,
     asset=_asset,
-    amount=_amount
+    amount=_amount,
+    enable_alerts = False
 )

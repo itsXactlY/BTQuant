@@ -1,41 +1,3 @@
-import requests
-discord_webhook_url = ''
-
-class Alert:
-    def __init__(self, discord_webhook_url):
-        self.discord_webhook_url = discord_webhook_url
-
-    def send_alert(self, message):
-        message_payload = {
-            "username": "DEBUG SHOWCASE",
-            "avatar_url": "https://i.imgur.com/TISmmHs.jpg",
-            "embeds": [
-                {
-                    "title": "Alert arrived!",
-                    "description": message,
-                    "color": 3066993,  # Lightning green color code
-                    "footer": {
-                        "text": "Powered by aLca for Quants!",
-                        "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYQY8CsntTC-nQ4nTVvSp_fY6zcWtLfdubhg&s"
-                    }
-                }
-            ]
-        }
-        
-        headers = {
-            "Content-Type": "application/json"
-        }
-
-        try:
-            response = requests.post(self.discord_webhook_url, json=message_payload, headers=headers)
-            response.raise_for_status()  # Raise an error for bad responses
-            print(f"Discord response status code: {response.status_code}")
-            print(f"Discord response content: {response.text}")
-
-        except Exception as e:
-            print(f"Error in send_alert: {e}")
-
-
 import time
 from web3 import Web3
 from fastquant.dontcommit import bsc_privaccount1, bsc_privaccountaddress
@@ -52,7 +14,6 @@ class PancakeSwapV2DirectOrderBase:
         self.web3 = Web3(Web3.HTTPProvider(self.BSC_RPC_URL))
         if not self.web3.is_connected():
             raise Exception("Failed to connect to Binance Smart Chain")
-        self.alert_instance = Alert(discord_webhook_url)
 
         self.pancake_router_abi = [
             {

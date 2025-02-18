@@ -57,3 +57,6 @@ test_alerts.py
 trading_logs
 tele_to_dc.py
 __LIVE__Binance_aLca.py
+ML_Testing.py
+ML_Testing2_backtest.py
+ML_Testing2.py

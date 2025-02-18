@@ -1,10 +1,10 @@
 import backtrader as bt
-from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store, binance_liquidation_store, binance_liquidation_feed
+from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
 
-
+''' DEPRECATED - AS IT WAS USED FOR PLOTTING WITH AN TRADINGVIEW WIDGET
 # Global variable to store the latest data
 latest_data = []
 
@@ -25,7 +25,7 @@ class DataCollectorStrategy(bt.Strategy):
         # we keep only the last 1000 data points
         if len(latest_data) > 1000:
             latest_data = latest_data[-1000:]
-
+'''
 
 def livetrade_web3(
 
@@ -105,7 +105,8 @@ def livetrade_crypto_binance(
     amount: float,
     strategy: str = "",
     start_hours_ago: int = 5,
-    enable_alerts: bool = False
+    enable_alerts: bool = False,
+    alert_channel: str = ""
 ) -> None:
     """
     Live trade a strategy on Binance.
@@ -121,6 +122,7 @@ def livetrade_crypto_binance(
                     Defaults to "".
     - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
     - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
 
     # Get the strategy class from the mapping if the strategy is passed as a string
@@ -151,7 +153,6 @@ def livetrade_crypto_binance(
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"
     
-    cerebro.addstrategy(DataCollectorStrategy)
     cerebro.addstrategy(
         strategy_class,
         exchange=exchange,
@@ -161,12 +162,12 @@ def livetrade_crypto_binance(
         coin=coin,
         collateral=collateral,
         backtest=False,
-        enable_alerts=enable_alerts
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
     )
     
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
-
 
 def livetrade_crypto_bybit(
 
@@ -233,4 +234,86 @@ def livetrade_crypto_bybit(
     
     cerebro.adddata(data=data, name=data._dataname)
     print(f"Daten vorhanden? {len(cerebro.datas) > 0}")
+    cerebro.run(live=True)
+
+
+def livetrade_crypto_binance_ML(
+    coin: str,
+    collateral: str,
+    exchange: str,
+    account: str,
+    asset: str,
+    amount: float,
+    strategy: str = "",
+    start_hours_ago: int = 5,
+    enable_alerts: bool = False,
+    alert_channel: str = ""
+) -> None:
+    """
+    Live trade a strategy on Binance.
+
+    Args:
+    - coin (str): The address of the coin to trade.
+    - collateral (str): The address of the collateral coin.
+    - exchange (str): The exchange to use (e.g., 'binance').
+    - account (str): The account type to use (e.g., 'JackRabbit_Binance').
+    - asset (str): The asset to trade (e.g., '$BTC/USDT').
+    - amount (float): The amount to trade.
+    - strategy (str): The strategy name as a string or strategy class.
+                    Defaults to "".
+    - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
+    """
+    import backtrader as bt
+    import pytz
+    from datetime import datetime, timedelta
+
+    # Get the strategy class from STRATEGY_MAPPING if a string was provided
+    if isinstance(strategy, str):
+        strategy_class = STRATEGY_MAPPING.get(strategy)
+        if not strategy_class:
+            raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    # Initialize Binance store
+    store = binance_store.BinanceStore(
+        coin_refer=coin,
+        coin_target=collateral
+    )
+
+    # Set time range for fetching historical data (for indicator warmup)
+    tz = pytz.timezone('Europe/Berlin')
+    current_time = datetime.now(tz)
+    from_date = current_time - timedelta(hours=start_hours_ago, minutes=2)
+    print(f"Fetching historical data from: {from_date} (UTC+2)")
+
+    # get a data feed that backfills historical data then continues with live updates.
+    data = store.getdata(start_date=from_date)
+    data._dataname = f"{coin}{collateral}"
+    data.live = True  
+
+    cerebro = bt.Cerebro(quicknotify=True)
+
+    # add the combined (historical + live) data feed
+    cerebro.adddata(data, name=data._dataname)
+
+    # add strategy with all necessary parameters
+    cerebro.addstrategy(
+        strategy_class,
+        exchange=exchange,
+        account=account,
+        asset=asset,
+        amount=amount,
+        coin=coin,
+        collateral=collateral,
+        backtest=False,
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
+    )
+
+    # Run live trading. The data feed will first replay historical data
+    # (warming up all your indicators) and then switch into live mode.
+    print("Starting live trading with historical backfill...")
     cerebro.run(live=True)

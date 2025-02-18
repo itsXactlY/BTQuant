@@ -23,8 +23,19 @@ from fastquant.config import (
 )
 
 class BuySellArrows(bt.observers.BuySell):
-    plotlines = dict(buy=dict(marker='$\u21E7$', markersize=16.0),
-                     sell=dict(marker='$\u21E9$', markersize=16.0))
+    def next(self):
+        super().next()
+        
+        if self.lines.buy[0]:
+            self.lines.buy[0] -= self.data.low[0] * 0.2
+            
+        if self.lines.sell[0]:
+            self.lines.sell[0] += self.data.high[0] * 0.2
+            
+    plotlines = dict(
+        buy=dict(marker='$\u21E7$', markersize=12.0),
+        sell=dict(marker='$\u21E9$', markersize=12.0)
+    )
 
 class BaseStrategy(bt.Strategy):
     params = (
@@ -61,7 +72,8 @@ class BaseStrategy(bt.Strategy):
         ("take_profit", 0),
         ("percent_sizer", 0),
         ("order_cooldown", 5),
-        ("enable_alerts", False)
+        ("enable_alerts", False),
+         ("alert_channel", None)
     )
 
     def init_live_trading(self):
@@ -95,7 +107,7 @@ class BaseStrategy(bt.Strategy):
                 api_id=telegram_api_id,
                 api_hash=telegram_api_hash,
                 session_file=new_session_file,
-                channel_id=telegram_channel_id
+                channel_id=self.p.alert_channel or telegram_channel_debug
             )
 
             async def init_services():
@@ -191,7 +203,7 @@ class BaseStrategy(bt.Strategy):
         self.average_entry_price = None
         self.entry_prices = []
         self.sizes = []
-        self.stake_to_use = None # new default set later if stays empty handed to its gunfight :<
+        self.stake_to_use = None
         self.stake_to_sell = None
         self.stake = None
         self.amount = self.p.amount
@@ -211,7 +223,6 @@ class BaseStrategy(bt.Strategy):
         self.strategy_logging = self.params.strategy_logging
         self.periodic_logging = self.params.periodic_logging
         self.transaction_logging = self.params.transaction_logging
-        self.strategy_logging = self.params.strategy_logging
         self.pnl = self.params.pnl
         self.final_value = self.params.final_value
         self.slippage = self.params.slippage
@@ -276,34 +287,14 @@ class BaseStrategy(bt.Strategy):
         self.dataclose = self.datas[0].close
         self.dataopen = self.datas[0].open
 
-    def _load(self):
-        try:
-            if len(self._data):
-                liquidation = self._data.popleft()
-                if self.p.debug:
-                    print(f"Processing liquidation: {liquidation}")
-                
-                timestamp, size, price, symbol, side = liquidation
-                
-                # Update line values
-                self.lines.datetime[0] = btu.date2num(timestamp)
-                self.lines.size[0] = float(size)
-                self.lines.price[0] = float(price)
-                self.lines.symbol[0] = str(symbol)
-                self.lines.side[0] = float(side)
-            else:
-                # No new liquidation, maintain last values
-                self.lines.size[0] = 0.0
-            
-            return True
-        except Exception as e:
-            print(f"Error loading liquidation data: {e}")
-            return False
-
 
     def log(self, txt, dt=None):
+        if len(self.datas) == 0 or len(self.datas[0]) == 0:
+            print("No data available yet, skipping log entry.")
+            return
         dt = dt or self.datas[0].datetime.datetime(0)
         print("%s, %s" % (dt.isoformat(), txt))
+
 
     def update_order_history(self, order):
         self.order_history["dt"].append(self.datas[0].datetime.datetime(0))

@@ -18,12 +18,13 @@ class BinanceData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', True)
+        ('debug', False)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
 
     def __init__(self, store, start_date=None):
+        super().__init__()
         self.start_date = start_date
         self._store = store
         self._data = deque()
@@ -31,6 +32,12 @@ class BinanceData(DataBase):
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")
         self.ws_url = store.ws_url
+        self._state = self._ST_HISTORBACK if start_date else self._ST_LIVE
+
+    def reset_warmed(self):
+        """Reset warming state without clearing indicators"""
+        self._warm_up = False
+        self._warm_up_bars = 0
 
     def handle_websocket_message(self, message):
         try:
@@ -45,9 +52,10 @@ class BinanceData(DataBase):
                 data['k']['c'],
                 data['k']['v'],
             ])
-            self._data.extend(kline.values.tolist())
+            # append the kline directly since it is already a list now
+            self._data.append(kline)
             if self.p.debug:
-                print('recieved fresh data:', kline)
+                print('received fresh data:', kline)
         except Exception as e:
             print(f"Error handling WebSocket message: {e}")
 
@@ -95,8 +103,9 @@ class BinanceData(DataBase):
         return df
 
     def _parser_to_kline(self, timestamp, kline):
+        dt = pd.to_datetime(timestamp, unit='ms', utc=True)
         return [
-            pd.Timestamp(timestamp),
+            dt,
             float(kline[1]),
             float(kline[2]),
             float(kline[3]),
@@ -157,7 +166,6 @@ class BinanceData(DataBase):
         else:
             self._start_live()
 
-        # Process the messages from the WebSocket
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     def _process_websocket_messages(self):

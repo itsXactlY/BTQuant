@@ -60,3 +60,6 @@ __LIVE__Binance_aLca.py
 ML_Testing.py
 ML_Testing2_backtest.py
 ML_Testing2.py
+# NO more overwriting while i test things
+__LIVE__Binance.py
+__LIVE__Binance_MachineLearning.py

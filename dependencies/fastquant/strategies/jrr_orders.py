@@ -3,7 +3,7 @@ import asyncio
 from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_id
+from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_debug, telegram_channel_machinelearning
 from typing import Optional
 
 class MessagingService(ABC):
@@ -159,7 +159,7 @@ async def initialize_services():
         api_id=telegram_api_id,
         api_hash=telegram_api_hash,
         session_file=telegram_session_file,
-        channel_id=telegram_channel_id
+        channel_id=telegram_channel_debug
     )
     await telegram_service.initialize()
     

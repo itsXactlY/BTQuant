@@ -105,6 +105,7 @@ BTQuant provides a wide variety of **pre-built trading strategies** that you can
 >- **Order Chain by KioseffTrading** (`"OrChainKioseff"`) - Advanced order chaining strategy for complex execution.
 >- **SMACross with MESAdaptivePrime Strategy** (`"msa"`) - Enhanced moving average cross strategy with adaptive prime filters.
 >- **SuperSTrend Scalping Strategy** (`"STScalp"`) - A scalping strategy designed around SuperSTrend indicators for quick entries and exits.
+>- **Nearest Neighbors + Rational Quadratic Kernel feat. Custom Indicators** (`"NNRQK"`) - NearestNeighbors Rational Quadratic Kernel Machine Learning Strategy with alot magic inside. Simple, yet effective.
 
 ### **How to Choose a Strategy**
 

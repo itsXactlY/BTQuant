@@ -15,6 +15,8 @@ from fastquant.strategies import (
     SMA_Cross_MESAdaptivePrime,
     SuperSTrend_Scalper,
     pancakeswap_dca_marketmaker,
+    NearestNeighbors_RationalQuadraticKernel_DCA_Strategy
+
 )
 
 # Register your strategy here
@@ -33,4 +35,5 @@ STRATEGY_MAPPING = {
     "msa": SMA_Cross_MESAdaptivePrime,
     "STScalp": SuperSTrend_Scalper,
     "web3mm": pancakeswap_dca_marketmaker,
+    "NNRQK": NearestNeighbors_RationalQuadraticKernel_DCA_Strategy,
 }

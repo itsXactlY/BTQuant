@@ -22,7 +22,7 @@ all its values from before.
 livetrade(
     coin=_coin,
     collateral=_collateral,
-    strategy="<placeholder>", # Add here ur existing Machine Learning Strategy
+    strategy="NNRQK", # pip install scikit-learn
     exchange=_exchange,
     account=_account,
     asset=_asset,

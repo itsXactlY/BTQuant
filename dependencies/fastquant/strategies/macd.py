@@ -1,18 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Import standard library
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals,
-)
-
-# Import modules
-import backtrader as bt
-
 # Import from package
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy
 
 
 class MACDStrategy(BaseStrategy):
@@ -47,10 +34,8 @@ class MACDStrategy(BaseStrategy):
         ("dir_period", 10),
     )
 
-    def __init__(self):
-        BuySellArrows(self.data0, barplot=True)
-        # Initialize global variables
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # Strategy level variables
         self.fast_period = self.params.fast_period
         self.slow_period = self.params.slow_period

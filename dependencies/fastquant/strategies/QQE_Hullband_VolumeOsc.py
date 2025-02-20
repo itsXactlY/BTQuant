@@ -42,7 +42,8 @@ class QQEIndicator(bt.Indicator):
     )
     lines = ("qqe_line",)
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.rsi = bt.indicators.RSI(self.data.close, period=self.p.period)
         self.atr = bt.indicators.ATR(self.data, period=self.p.fast)
         self.dar = bt.If(self.atr > 0, bt.indicators.EMA(self.atr - self.p.q, period=int((self.p.period * 2) - 1)), 0)

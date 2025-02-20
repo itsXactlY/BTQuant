@@ -1,5 +1,5 @@
 import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy
 from fastquant.strategies.custom_indicators.MesaAdaptiveMovingAverage import MAMA
 
 class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
@@ -14,7 +14,6 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
         )
 
     def __init__(self, **kwargs):
-        BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         # Simple Moving Averages
         self.sma17 = bt.ind.SMA(period=17)

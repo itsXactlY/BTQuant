@@ -1,18 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Import standard library
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals,
-)
-
-# Import modules
-import backtrader as bt
-
 # Import from package
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy
 
 
 class RSIStrategy(BaseStrategy):
@@ -31,9 +18,8 @@ class RSIStrategy(BaseStrategy):
 
     params = (("rsi_period", 14), ("rsi_upper", 70), ("rsi_lower", 30))
 
-    def __init__(self):
-        # Initialize global variables
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # Strategy level variables
         self.rsi_period = self.params.rsi_period
         self.rsi_upper = self.params.rsi_upper

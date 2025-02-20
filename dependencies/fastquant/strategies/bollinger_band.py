@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# Import standard library
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals,
-)
-
-# Import modules
-import backtrader as bt
-
 # Import from package
 from fastquant.strategies.base import BaseStrategy, BuySellArrows
 
@@ -34,10 +21,9 @@ class BBandsStrategy(BaseStrategy):
         ("devfactor", 2.0),
     )
 
-    def __init__(self):
-        BuySellArrows(self.data0, barplot=True)
-        # Initialize global variables
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
         # Strategy level variables
         self.period = self.params.period
         self.devfactor = self.params.devfactor

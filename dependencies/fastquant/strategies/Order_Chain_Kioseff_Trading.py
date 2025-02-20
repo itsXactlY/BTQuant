@@ -96,20 +96,19 @@ class OrderChainIndicator(bt.Indicator):
 
 class Order_Chain_Kioseff_Trading(BaseStrategy):
     params = (
-        ('chain', 150),
-        ('ticks', 50),
+        ('chain', 1500),
+        ('ticks', 150),
         ('tick_size', 0.00010),
-        ('signal_threshold', 100),  # 1000 threshold for generating signals
+        ('signal_threshold', 1000),  # 1000 threshold for generating signals
         ('debug', False),
         ('backtest', None),
-        ("dca_deviation", 1),
-        ("take_profit_percent", 1),
+        ("dca_deviation", 2.5),
+        ("take_profit_percent", 2),
         ('percent_sizer', 0.001), # 0.01 -> 1%
     )
 
-    def __init__(self):
-        super().__init__()
-        BuySellArrows(self.data0, barplot=True)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.order_chain = OrderChainIndicator(chain=self.p.chain, ticks=self.p.ticks, tick_size=self.p.tick_size)
 
         self.buy_executed = False

@@ -60,14 +60,23 @@ class BinanceStore(object):
 
     def start_socket(self):
         def run_socket():
-            print("Starting WebSocket connection...")
-            self.websocket = websocket.WebSocketApp(self.ws_url,
-                                                    on_message=self.on_message,
-                                                    on_error=self.on_error,
-                                                    on_close=self.on_close,
-                                                    on_open=self.on_open)
-            self.websocket.run_forever(reconnect=5)
+            import time
+            while True:
+                try:
+                    print("Starting WebSocket connection...")
+                    self.websocket = websocket.WebSocketApp(
+                        self.ws_url,
+                        on_message=self.on_message,
+                        on_error=self.on_error,
+                        on_close=self.on_close,
+                        on_open=self.on_open
+                    )
 
+                    self.websocket.run_forever(ping_interval=10, ping_timeout=3)
+                except Exception as e:
+                    print(f"WebSocket encountered an exception: {e}")
+                print("WebSocket disconnected. Reconnecting in 3 seconds...")
+                time.sleep(3)
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
@@ -77,9 +86,12 @@ class BinanceStore(object):
             print("WebSocket connection closed.")
 
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
+        import time
+
         print('STORE::FETCH SINCE:', since)
         start_timestamp = since
         data = []
+        max_retries = 5
 
         while True:
             params = {
@@ -94,9 +106,24 @@ class BinanceStore(object):
             if until:
                 params['endTime'] = until
 
-            url = f"https://api.binance.com/api/v3/klines"
-            response = requests.get(url, params=params)
-            new_data = response.json()
+            url = "https://api.binance.com/api/v3/klines"
+
+            retries = 0
+            new_data = None
+            while retries < max_retries:
+                try:
+                    response = requests.get(url, params=params, timeout=10)
+                    new_data = response.json()
+                    break  # exit retry loop if successful
+                except (requests.exceptions.RequestException, requests.exceptions.JSONDecodeError) as e:
+                    wait_time = 2 ** retries  # exponential backoff
+                    print(f"Error fetching data (attempt {retries + 1}/{max_retries}): {e}. Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                    retries += 1
+
+            if retries == max_retries:
+                print("Max retries reached. Exiting fetch.")
+                break
 
             if not new_data or len(new_data) == 0:
                 break
@@ -107,8 +134,8 @@ class BinanceStore(object):
             start_timestamp = new_data[-1][0] + 1
 
         if data:
-            start_time = datetime.fromtimestamp(data[0][0]/1000, tz=pytz.UTC)
-            end_time = datetime.fromtimestamp(data[-1][0]/1000, tz=pytz.UTC)
+            start_time = datetime.fromtimestamp(data[0][0] / 1000, tz=pytz.UTC)
+            end_time = datetime.fromtimestamp(data[-1][0] / 1000, tz=pytz.UTC)
             print(f"Fetched data from {start_time} to {end_time}")
 
         return data

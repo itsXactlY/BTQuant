@@ -1,22 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals,
-)
-
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy
 
 class BuyAndHoldStrategy(BaseStrategy):
     """
     Buy and Hold Strategy with a fixed budget
     """
 
-    def __init__(self):
-        BuySellArrows(self.data0, barplot=True)
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.price = self.data.close
         self.order = None
         self.bought = False

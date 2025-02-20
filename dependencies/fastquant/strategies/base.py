@@ -27,14 +27,14 @@ class BuySellArrows(bt.observers.BuySell):
         super().next()
         
         if self.lines.buy[0]:
-            self.lines.buy[0] -= self.data.low[0] * 0.2
+            self.lines.buy[0] -= self.data.low[0] * 0.02
             
         if self.lines.sell[0]:
-            self.lines.sell[0] += self.data.high[0] * 0.2
+            self.lines.sell[0] += self.data.high[0] * 0.02
             
     plotlines = dict(
-        buy=dict(marker='$\u21E7$', markersize=12.0),
-        sell=dict(marker='$\u21E9$', markersize=12.0)
+        buy=dict(marker='$\u21E7$', markersize=16.0),
+        sell=dict(marker='$\u21E9$', markersize=16.0)
     )
 
 class BaseStrategy(bt.Strategy):
@@ -45,7 +45,7 @@ class BaseStrategy(bt.Strategy):
         ('amount', None),
         ('coin', None),
         ('collateral', None),
-        ('debug', False),
+        ('debug', True),
         ('backtest', None),
         ('is_training', None),
         ('use_stoploss', None),
@@ -84,7 +84,6 @@ class BaseStrategy(bt.Strategy):
             self._init_raydium()
         else:
             self._init_standard_exchange()
-
 
     def _init_alert_system(self, coin_name=".__!_"):
         """Initialize alert system with Telegram and Discord services if enabled"""
@@ -159,23 +158,6 @@ class BaseStrategy(bt.Strategy):
         else:
             print('Alert System not enabled.')
             pass
-
-    def _init_standard_exchange(self):
-        """Initialize standard exchange trading with JackRabbitRelay"""
-        alert_manager = self._init_alert_system()
-        
-        # Wait briefly for alert system initialization
-        time.sleep(1)
-        
-        self.exchange = self.p.exchange
-        self.account = self.p.account
-        self.asset = self.p.asset
-        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
-
-        self.order_queue = queue.Queue()
-        self.order_thread = threading.Thread(target=self.process_orders)
-        self.order_thread.daemon = True
-        self.order_thread.start()
 
     def _init_pancakeswap(self):
         """Initialize PancakeSwap trading"""
@@ -289,9 +271,10 @@ class BaseStrategy(bt.Strategy):
 
 
     def log(self, txt, dt=None):
-        if len(self.datas) == 0 or len(self.datas[0]) == 0:
-            print("No data available yet, skipping log entry.")
-            return
+        if self.p.backtest == False:
+            if len(self.datas) == 0 or len(self.datas[0]) == 0:
+                print("No data available yet, skipping log entry.")
+                return
         dt = dt or self.datas[0].datetime.datetime(0)
         print("%s, %s" % (dt.isoformat(), txt))
 
@@ -393,31 +376,26 @@ class BaseStrategy(bt.Strategy):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
             if sys.platform != "win32":
-                os.sync() # Sync before reading attempt - it might being open/write from JRR
+                os.sync()  # Ensure file is in sync before reading
             with open(file_path, 'r') as file:
-                orders = file.read().strip().split('\n')
-                orders.reverse()
+                orders = [line for line in file.read().strip().split('\n') if line.strip()]
 
-            found_sell = False
-            for order in orders:
-                if not order.strip():  # Skip empty strings
-                    continue
-
+            # Process orders starting from the most recent
+            for order_str in reversed(orders):
                 try:
-                    order_data = json.loads(order)
+                    order_data = json.loads(order_str)
                 except json.JSONDecodeError:
-                    print(f"Skipping invalid JSON: {order}")
+                    print(f"Skipping invalid JSON: {order_str}")
                     continue
 
                 action = order_data.get('Action')
                 asset = order_data.get('Asset')
 
+                # Stop if a sell is encountered – meaning any prior buys are irrelevant
                 if action == 'sell' and asset == self.asset:
-                    found_sell = True
-                    continue
+                    break
 
-                if not found_sell and action == 'buy' and asset == self.asset:
-                    # _amount = order_data.get(self.p.coin, 0.0)
+                if action == 'buy' and asset == self.asset:
                     entry_price = order_data.get('Price', 0.0)
                     self.entry_prices.append(entry_price)
                     self.sizes.append(self.p.amount)
@@ -426,45 +404,41 @@ class BaseStrategy(bt.Strategy):
             if self.entry_prices and self.sizes:
                 print(f"Loaded {len(self.entry_prices)} buy orders after the last sell.")
                 self.calc_averages()
-                self.buy_executed = True
                 self.entry_price = self.average_entry_price
             else:
-                if found_sell:
-                    print("No buy orders found after the last sell.")
-                else:
-                    print("No executed sell orders found.")
-            
-            if orders and orders[0].strip():
+                print("No buy orders found after the last sell.")
+
+            # Process the last order for free USDT etc.
+            if orders and orders[-1].strip():
                 try:
-                    last_order_data = json.loads(orders[0])
+                    last_order_data = json.loads(orders[-1])
                     usdt_value = last_order_data.get('USDT', 0.0)
                     print(f"Free USDT: {usdt_value:.9f}")
                     self.stake_to_use = usdt_value
                     print(f"Last modified: {os.path.getmtime(file_path)}")
                 except json.JSONDecodeError:
                     print("Error parsing the last order, resetting position state.")
-                    self.stake_to_use = 1000.0 # new Default :<
+                    self.stake_to_use = 1000.0
                     self.reset_position_state()
             else:
                 self.reset_position_state()
 
-        # TODO :: Figure out why still doesnt set an default when account history file is empty
         except FileNotFoundError:
             print(f"History file not found for account {self.account}.")
             self.reset_position_state()
-            self.stake_to_use = 1000.0  # Default stake when file is not found
+            self.stake_to_use = 1000.0
         except PermissionError:
             print(f"Permission denied when trying to access the history file for account {self.account}.")
             self.reset_position_state()
-            self.stake_to_use = 1000.0  # Default stake when permission is denied
+            self.stake_to_use = 1000.0
         except requests.exceptions.RequestException as e:
             print(f"Error fetching trade data: {e}")
             self.reset_position_state()
-            self.stake_to_use = 1000.0  # Default stake when there's a request exception
+            self.stake_to_use = 1000.0
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
             self.reset_position_state()
-            self.stake_to_use = 1000.0  # Default stake for any other unexpected errors
+            self.stake_to_use = 1000.0
             
     def calc_averages(self):
         total_value = sum(entry_price * size for entry_price, size in zip(self.entry_prices, self.sizes))
@@ -495,23 +469,36 @@ class BaseStrategy(bt.Strategy):
 
     def next(self):
         self.conditions_checked = False
-        if self.params.backtest == False:
-            if self.live_data == True:
-                self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose # TODO figure out why no default stake is set on empty history
+        if self.params.backtest == False and self.live_data == True:
+            # Ensure we have live data and update the stake if so
+            if not self.params.backtest and getattr(self, 'live_data', False):
+                self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
+
+            # Debug: Print current state
+            if self.p.debug:
+                print(f"DEBUG: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
+
+            # If we already have a buy, update and print the position report every 10th call
+            if self.buy_executed and self.p.debug:
+                self.print_counter += 1
+                if self.print_counter % 10 == 0:
+                    print(f'| {datetime.utcnow()}'
+                        f'\n|{"-"*99}¬'
+                        f'\n| Position Report'
+                        f'\n| Price: {self.data.close[0]:.9f}'
+                        f'\n| Entry: {self.average_entry_price:.9f}'
+                        f'\n| TakeProfit: {self.take_profit_price:.9f}'
+                        f'\n|{"-"*99}¬')
                 
-                if not self.buy_executed:
-                    self.buy_or_short_condition()
-                elif self.DCA == True and self.buy_executed:
-                    self.sell_or_cover_condition()
-                    self.dca_or_short_condition()
-                elif self.DCA == False and self.buy_executed:
-                    self.sell_or_cover_condition()
-                    
-                if self.live_data == True and self.buy_executed and self.p.debug:
-                    self.print_counter += 1
-                    if self.print_counter % 1 == 60: # reduce logging spam
-                        print(f'| {datetime.utcnow()}\n|{"-"*99}¬\n| Position Report\n| Price: {self.data.close[0]:.9f}\n| Entry: {self.average_entry_price:.9f}\n| TakeProfit: {self.take_profit_price:.9f}\n|{"-"*99}¬')
-        
+                    if not self.buy_executed:
+                        self.buy_or_short_condition()
+                    elif self.DCA == True and self.buy_executed:
+                        self.sell_or_cover_condition()
+                        self.dca_or_short_condition()
+                    elif self.DCA == False and self.buy_executed:
+                        self.sell_or_cover_condition()
+
+
         elif self.params.backtest == True:
             self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
             if not self.buy_executed:
@@ -622,7 +609,7 @@ class BaseStrategy(bt.Strategy):
             print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
             print("| {0:<35} | {1:<15} | {2:<11} | {3:<9} | {4:<10} | {5:<14} | {6:<12} | {7:<16} | {8:<12} | {9:<4} | {10:<6} |".format(
                 self.__class__.__name__,
-                1000,  # initial capital (example)
+                1000,
                 round(self.final_value, 2),
                 round(self.total_pnl, 2),
                 round(self.total_pnl / 1000 * 100, 2),  # Return in percentage

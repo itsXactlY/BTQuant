@@ -10,7 +10,7 @@ from fastquant.strategies.custom_indicators.ChaikinMoneyFlow import ChaikinMoney
 from fastquant.strategies.custom_indicators.ChaikinVolatility import ChaikinVolatility
 
 '''
-It was actually planned as a “keep it simple stupid” proof of concept. But as things happen, it totally escalated once again. 
+It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
 But anyway, I can pull more rabbits out of my hat - so I've decided to make this available to everyone. 
 
 Sharing is caring.

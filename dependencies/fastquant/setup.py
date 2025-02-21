@@ -15,7 +15,7 @@ setuptools.setup(
     package_data={
         "fastquant": ["data/*"],
         "fastquant.strategys": ["*"],
-        "fastquant.strategys.*": ["*"]
+        "fastquant.strategys.*": ["*"],
         "fastquant.strategys/custom_indicators.*": ["*"]
     },
     include_package_data=True,

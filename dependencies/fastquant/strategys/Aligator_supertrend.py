@@ -1,7 +1,7 @@
 from datetime import datetime
-from fastquant.strategies.base import BaseStrategy
-from fastquant.strategies.custom_indicators.SuperTrend import SuperTrend
-from fastquant.strategies.custom_indicators.WilliamsAligator import WilliamsAlligator
+from fastquant.strategys.base import BaseStrategy
+from fastquant.strategys.custom_indicators.SuperTrend import SuperTrend
+from fastquant.strategys.custom_indicators.WilliamsAligator import WilliamsAlligator
 
 
 class AliG_STrend(BaseStrategy):

@@ -1,5 +1,5 @@
 # Import from package
-from fastquant.strategies.base import BaseStrategy, bt
+from fastquant.strategys.base import BaseStrategy, bt
 
 
 class RSIStrategy(BaseStrategy):

@@ -1,5 +1,5 @@
-from fastquant.strategies.base import BaseStrategy, bt
-from fastquant.strategies.custom_indicators.MesaAdaptiveMovingAverage import MAMA
+from fastquant.strategys.base import BaseStrategy, bt
+from fastquant.strategys.custom_indicators.MesaAdaptiveMovingAverage import MAMA
 
 class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
     params = (

@@ -1,6 +1,6 @@
 # Import from package
 from fastquant.indicators.sentiment import Sentiment
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, bt
 
 
 class SentimentStrategy(BaseStrategy):

@@ -1,5 +1,5 @@
 # Import from package
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, bt
 
 
 class MACDStrategy(BaseStrategy):

@@ -1,5 +1,5 @@
 # Import from package
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy, bt
 
 class BBandsStrategy(BaseStrategy):
     """

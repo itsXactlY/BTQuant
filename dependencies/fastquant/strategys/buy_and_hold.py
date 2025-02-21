@@ -1,4 +1,4 @@
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategys.base import BaseStrategy
 
 class BuyAndHoldStrategy(BaseStrategy):
     """

@@ -2,7 +2,7 @@
 # Originally inspired by: https://www.tradingview.com/script/JNCGeDj7-Order-Chain-Kioseff-Trading/
 
 import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, np, BuySellArrows
+from fastquant.strategys.base import BaseStrategy, np, BuySellArrows
 
 class OrderChainIndicator(bt.Indicator):
     lines = ('order_chain',)

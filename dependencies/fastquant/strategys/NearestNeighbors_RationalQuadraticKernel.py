@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors # pip install scikit-learn
-from fastquant.strategies.base import BaseStrategy, bt
+from fastquant.strategys.base import BaseStrategy, bt
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
 But anyway, I can pull more rabbits out of my hat - so I've decided to make this available to everyone. 

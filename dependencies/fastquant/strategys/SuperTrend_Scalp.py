@@ -1,5 +1,5 @@
-from fastquant.strategies.base import BaseStrategy, bt
-from fastquant.strategies.custom_indicators.SuperTrend import SuperTrend
+from fastquant.strategys.base import BaseStrategy, bt
+from fastquant.strategys.custom_indicators.SuperTrend import SuperTrend
 
 class SuperSTrend_Scalper(BaseStrategy):
     params = (

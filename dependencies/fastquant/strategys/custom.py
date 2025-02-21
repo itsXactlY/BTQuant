@@ -13,7 +13,7 @@ from __future__ import (
 import backtrader as bt
 
 # Import from package
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategys.base import BaseStrategy, BuySellArrows
 from fastquant.indicators.custom import CustomIndicator
 
 

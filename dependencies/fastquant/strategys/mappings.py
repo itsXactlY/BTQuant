@@ -1,5 +1,5 @@
 # Import from package
-from fastquant.strategies import (
+from fastquant.strategys import (
     RSIStrategy,
     SMACStrategy,
     BaseStrategy,

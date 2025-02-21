@@ -1,4 +1,4 @@
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategys.base import BaseStrategy, BuySellArrows
 
 class Pancakeswap_dca_mm(BaseStrategy):
     params = (

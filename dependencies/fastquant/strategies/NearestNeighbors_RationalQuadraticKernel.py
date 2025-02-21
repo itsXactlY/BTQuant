@@ -1,7 +1,6 @@
-import backtrader as bt
 import numpy as np
 from sklearn.neighbors import NearestNeighbors # pip install scikit-learn
-from fastquant.strategies.base import BaseStrategy
+from fastquant.strategies.base import BaseStrategy, bt
 from fastquant.strategies.custom_indicators.FibonacciLevels import FibonacciLevels
 from fastquant.strategies.custom_indicators.ElhersDecyclerOscillator import DecyclerOscillator
 from fastquant.strategies.custom_indicators.MADRV2 import ModifiedMADR

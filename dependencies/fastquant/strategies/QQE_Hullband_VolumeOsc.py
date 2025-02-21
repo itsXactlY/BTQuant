@@ -1,5 +1,4 @@
-import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy, bt
 from numpy import isnan
 
 class VolumeOscillator(bt.Indicator):
@@ -76,7 +75,6 @@ class QQE_Example(BaseStrategy):
 
     def __init__(self, **kwargs):
         print('Initialized QQE')
-        BuySellArrows(self.data0, barplot=True)
         super().__init__(**kwargs)
         self.qqe = QQEIndicator(self.data)
         self.hma = bt.indicators.HullMovingAverage(self.data, period=self.p.hull_length)

@@ -1,14 +1,11 @@
 #!/bin/bash
 
-set -e  # Exit immediately if a command exits with a non-zero status.
-
 # Detect Linux distribution and install necessary development packages
 install_dependencies() {
     echo "Detecting Linux distribution..."
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         DISTRO=$ID
-
         case "$DISTRO" in
             ubuntu|debian)
                 echo "Detected Ubuntu/Debian. Installing build-essential and other dependencies..."
@@ -32,12 +29,12 @@ install_dependencies() {
                 ;;
             *)
                 echo "Unsupported distribution: $DISTRO. Please install build-essential or equivalent manually."
-                exit 1
+                return 1
                 ;;
         esac
     else
         echo "Cannot detect distribution. Please install the necessary dependencies manually."
-        exit 1
+        return 1
     fi
 }
 
@@ -49,15 +46,21 @@ command_exists() {
 # Check if python3 and pip are installed
 if ! command_exists python3 || ! command_exists pip; then
     echo "Python3 and pip are required. Installing Python3 and pip..."
-    install_dependencies
+    install_dependencies || exit 1
 fi
 
 # Clone the repository
-git clone https://github.com/itsXactlY/BTQuant/ BTQuant
+git clone https://github.com/itsXactlY/BTQuant/ BTQuant || {
+    echo "Failed to clone repository"
+    exit 1
+}
 cd BTQuant
 
-# Create and activate virtual environment - moving it one folder backwards
-python3 -m venv ../.btq
+# Create and activate virtual environment
+python3 -m venv ../.btq || {
+    echo "Failed to create virtual environment"
+    exit 1
+}
 source ../.btq/bin/activate
 
 # Get Python version inside the venv
@@ -69,41 +72,44 @@ SITE_PACKAGES="../.btq/lib/python${PYTHON_VERSION}/site-packages"
 # Upgrade pip and install necessary packages
 pip install --upgrade pip setuptools wheel
 
-# Install backtrader dependencies
+# Install dependencies with error handling
 cd dependencies
-pip install .
+pip install . || {
+    echo "Warning: Failed to install dependencies package"
+}
 
-# Install BTQ_Exchanges
 cd BTQ_Exchanges
-pip install .
+pip install . || {
+    echo "Warning: Failed to install BTQ_Exchanges package"
+}
 
-# Install FastQuant
 cd ../fastquant
-pip install .
+pip install . || {
+    echo "Warning: Failed to install FastQuant package"
+}
 
-# Install and build fast_mssql
+# Install MSSQL with error handling
 cd ../MsSQL
-pip install .
-
-# Look for the built .so file explicitly using a pattern.
-# This should match files like fast_mssql.cpython-313-x86_64-linux-gnu.so
-SO_FILE=$(find . -maxdepth 1 -type f -name "fast_mssql*.so" | head -n 1)
-
-if [ -z "$SO_FILE" ]; then
-    echo "No fast_mssql .so file found in the current directory."
+if ! pip install .; then
+    echo "Warning: MSSQL installation failed, but continuing with installation"
 else
-    echo "Found shared library: ${SO_FILE}"
-    # Define the target directory that dontcommit.py (inside fastquant) expects:
-    TARGET_DIR="${SITE_PACKAGES}/fastquant/data/mssql/MsSQL"
-    echo "Ensuring target directory exists: ${TARGET_DIR}"
-    mkdir -p "${TARGET_DIR}"
-
-    echo "Moving ${SO_FILE} to ${TARGET_DIR}"
-    mv "${SO_FILE}" "${TARGET_DIR}/"
+    # Look for the built .so file
+    SO_FILE=$(find . -maxdepth 1 -type f -name "fast_mssql*.so" | head -n 1)
+    if [ -z "$SO_FILE" ]; then
+        echo "Warning: No fast_mssql .so file found in the current directory"
+    else
+        echo "Found shared library: ${SO_FILE}"
+        TARGET_DIR="${SITE_PACKAGES}/fastquant/data/mssql/MsSQL"
+        echo "Ensuring target directory exists: ${TARGET_DIR}"
+        mkdir -p "${TARGET_DIR}"
+        if mv "${SO_FILE}" "${TARGET_DIR}/"; then
+            echo "Successfully moved ${SO_FILE} to ${TARGET_DIR}"
+        else
+            echo "Warning: Failed to move ${SO_FILE} to ${TARGET_DIR}"
+        fi
+    fi
 fi
 
 cd ../..
-
-
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

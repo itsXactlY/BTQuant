@@ -1,5 +1,4 @@
-import backtrader as bt
-from fastquant.strategies.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy, bt
 from fastquant.strategies.custom_indicators.SuperTrend import SuperTrend
 
 class SuperSTrend_Scalper(BaseStrategy):
@@ -25,7 +24,6 @@ class SuperSTrend_Scalper(BaseStrategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # BuySellArrows(self.data0, barplot=True)
         self.adx = bt.indicators.ADX(self.data, period=self.p.adx_period, plot=False)
         self.plusDI = bt.indicators.PlusDI(self.data, period=self.p.di_period, plot=False)
         self.minusDI = bt.indicators.MinusDI(self.data, period=self.p.di_period, plot=False)

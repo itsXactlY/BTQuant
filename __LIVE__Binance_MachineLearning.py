@@ -27,6 +27,6 @@ livetrade(
     account=_account,
     asset=_asset,
     amount=_amount,
-    enable_alerts=True,
+    enable_alerts=False,
     alert_channel=-100123456789 # Telegram channel/group
 )

@@ -1,13 +1,6 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors # pip install scikit-learn
 from fastquant.strategies.base import BaseStrategy, bt
-from fastquant.strategies.custom_indicators.FibonacciLevels import FibonacciLevels
-from fastquant.strategies.custom_indicators.ElhersDecyclerOscillator import DecyclerOscillator
-from fastquant.strategies.custom_indicators.MADRV2 import ModifiedMADR
-from fastquant.strategies.custom_indicators.MesaAdaptiveMovingAverage import MAMA
-from fastquant.strategies.custom_indicators.ChaikinMoneyFlow import ChaikinMoneyFlow
-from fastquant.strategies.custom_indicators.ChaikinVolatility import ChaikinVolatility
-
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
 But anyway, I can pull more rabbits out of my hat - so I've decided to make this available to everyone. 
@@ -46,10 +39,6 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
         ('kernel_x', 25),
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
-        # New Indicators
-        ('fib_period', 2880),
-        ('mesa_fast', 13),
-        ('mesa_slow', 37),
         # DCA Parameters
         ("dca_deviation", 1.5),
         ("take_profit", 2),
@@ -75,33 +64,13 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
                                                        x=self.p.kernel_x)
         if self.p.use_kernel_smoothing:
             self.kernel_smooth = bt.indicators.SMA(self.kernel_estimate, period=self.p.kernel_smoothing_lag)
-        
-        # New Indicators
-        self.fib_levels = FibonacciLevels(self.data, period=self.p.fib_period, subplot=False)
-        self.decycler_osc = DecyclerOscillator(self.data)
-        self.madr_indicator = ModifiedMADR(self.data)
-        self.mama = MAMA(self.data, fast=self.p.mesa_fast, slow=self.p.mesa_slow)
-        self.sma17 = bt.ind.SMA(period=17)
-        self.sma47 = bt.ind.SMA(period=47)
-        self.crossover = bt.ind.CrossOver(self.sma17, self.sma47)
-        self.momentum = bt.ind.Momentum(period=42)
-        self.chaikin_mf = ChaikinMoneyFlow(self.data)
-        self.chaikin_vola = ChaikinVolatility(self.data)
 
         # Features for the ML model – note the duplicate RSI to mimic the original 5-feature setup
         self.features = [self.rsi, 
                          self.wt, 
                          self.cci, 
                          self.adx, 
-                         self.rsi, 
-                         self.fib_levels, 
-                         self.decycler_osc, 
-                         self.madr_indicator, 
-                         self.mama, 
-                         self.crossover, 
-                         self.momentum, 
-                         self.chaikin_mf, 
-                         self.chaikin_vola]
+                         self.rsi]
         self.feature_data = []
 
         self.DCA = True
@@ -116,28 +85,11 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
         
         # Standard indicators: RSI, Williams %R, CCI, ADX, and duplicate RSI (for the original 5-feature setup)
         standard_indicators = [self.rsi, self.wt, self.cci, self.adx, self.rsi]
-        new_indicators = [
-            self.fib_levels,
-            self.decycler_osc,
-            self.madr_indicator,
-            self.mama,
-            self.crossover,
-            self.momentum,
-            self.chaikin_mf,
-            self.chaikin_vola
-        ]
         
         current_features = []
         
         # Append values for standard indicators
         for indicator in standard_indicators:
-            try:
-                current_features.append(indicator[0])
-            except IndexError:
-                current_features.append(np.nan)
-        
-        # Append values for new indicators
-        for indicator in new_indicators:
             try:
                 current_features.append(indicator[0])
             except IndexError:

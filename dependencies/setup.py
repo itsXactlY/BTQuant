@@ -101,9 +101,9 @@ setuptools.setup(
         'websocket-client',
         'matplotlib',
         'polars',
-        'pyarrow'
-        'telethon'
-        'scikit-learn'
+        'pyarrow',
+        'telethon',
+        'scikit-learn',
         # Add other dependencies as needed
     ],
 

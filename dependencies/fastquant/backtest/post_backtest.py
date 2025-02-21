@@ -1,4 +1,4 @@
-from fastquant.strategies.buy_and_hold import BuyAndHoldStrategy
+from fastquant.strategys.buy_and_hold import BuyAndHoldStrategy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

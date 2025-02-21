@@ -1,4 +1,4 @@
-from fastquant.strategies.base import BaseStrategy, bt
+from fastquant.strategys.base import BaseStrategy, bt
 from numpy import isnan
 
 class VolumeOscillator(bt.Indicator):

@@ -73,7 +73,7 @@ class BaseStrategy(bt.Strategy):
         ("percent_sizer", 0),
         ("order_cooldown", 5),
         ("enable_alerts", False),
-         ("alert_channel", None)
+        ("alert_channel", None)
     )
 
     def init_live_trading(self):
@@ -490,13 +490,13 @@ class BaseStrategy(bt.Strategy):
                         f'\n| TakeProfit: {self.take_profit_price:.9f}'
                         f'\n|{"-"*99}¬')
                 
-                    if not self.buy_executed:
-                        self.buy_or_short_condition()
-                    elif self.DCA == True and self.buy_executed:
-                        self.sell_or_cover_condition()
-                        self.dca_or_short_condition()
-                    elif self.DCA == False and self.buy_executed:
-                        self.sell_or_cover_condition()
+            if not self.buy_executed:
+                self.buy_or_short_condition()
+            elif self.DCA == True and self.buy_executed:
+                self.sell_or_cover_condition()
+                self.dca_or_short_condition()
+            elif self.DCA == False and self.buy_executed:
+                self.sell_or_cover_condition()
 
 
         elif self.params.backtest == True:

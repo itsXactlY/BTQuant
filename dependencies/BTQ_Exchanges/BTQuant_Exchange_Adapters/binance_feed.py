@@ -7,6 +7,8 @@ from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
+import gc
+
 
 def identify_gaps(df, expected_interval):
     df['timestamp'] = pd.to_datetime(df.index)
@@ -27,7 +29,7 @@ class BinanceData(DataBase):
         super().__init__()
         self.start_date = start_date
         self._store = store
-        self._data = deque()
+        self._data = deque(maxlen=25)
         self.interval = self._store.get_interval(TimeFrame.Seconds, compression=1)
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")
@@ -118,6 +120,10 @@ class BinanceData(DataBase):
         self._store.start_socket()
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
+        print("Starting live data and purging historical data...")
+        self._data = deque(maxlen=25) 
+        self._data.clear()
+        gc.collect()
 
     def haslivedata(self):
         return self._state == self._ST_LIVE and len(self._data) > 0
@@ -161,6 +167,11 @@ class BinanceData(DataBase):
                     df.drop(df.columns[6:], axis=1, inplace=True)
                 df = self._parser_dataframe(df)
                 self._data.extend(df.values.tolist())
+                # ------------- FREE THE MEMORY -------------
+                del df
+                del klines
+                gc.collect()
+                # -------------------------------------------
             else:
                 print("No historical data fetched")
         else:

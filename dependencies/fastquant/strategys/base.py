@@ -2,8 +2,8 @@ from datetime import datetime
 import backtrader as bt
 from backtrader import indicators as btind
 import requests
-from fastquant.strategies.jrr_orders import *
-from fastquant.strategies.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
+from fastquant.strategys.jrr_orders import *
+from fastquant.strategys.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
 from fastquant.dontcommit import *
 import json
 import threading

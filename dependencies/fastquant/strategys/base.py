@@ -13,7 +13,7 @@ import numpy as np
 import shutil
 import os
 import uuid
-
+import sys
 
 from fastquant.config import (
     INIT_CASH,

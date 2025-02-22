@@ -3,7 +3,7 @@
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!
 > 
-> **Curious what 100 lines of Machine Learning Algo can do**? — [Find out here!](https://t.me/BTQuant) it wont bite, i promise!
+> **Curious what 100 lines of code for an Machine Learning Algo can do?** — [Find out here!](https://t.me/BTQuant) it wont bite, i promise!
 
 ---
 

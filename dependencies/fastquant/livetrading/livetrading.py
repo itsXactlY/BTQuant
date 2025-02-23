@@ -1,32 +1,11 @@
 import backtrader as bt
-from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store# , bybit_store
+from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store #, bybit_store
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
+from fastquant.strategys.base import function_trapper
 
-''' DEPRECATED - AS IT WAS USED FOR PLOTTING WITH AN TRADINGVIEW WIDGET
-# Global variable to store the latest data
-latest_data = []
-
-class DataCollectorStrategy(bt.Strategy):
-    print("DataCollectorStrategy Init...")
-    def next(self):
-        global latest_data
-        current_time = self.data.datetime.datetime(0)
-        data = {
-            'time': int(current_time.timestamp()),
-            'open': float(self.data.open[0]),
-            'high': float(self.data.high[0]),
-            'low': float(self.data.low[0]),
-            'close': float(self.data.close[0]),
-            'volume': float(self.data.volume[0]),
-        }
-        latest_data.append(data)
-        # we keep only the last 1000 data points
-        if len(latest_data) > 1000:
-            latest_data = latest_data[-1000:]
-'''
-
+@function_trapper
 def livetrade_web3(
 
     coin: str,
@@ -95,7 +74,7 @@ def livetrade_web3(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-
+@function_trapper
 def livetrade_crypto_binance(
     coin: str,
     collateral: str,
@@ -238,6 +217,8 @@ def livetrade_crypto_bybit(
     cerebro.run(live=True)
 '''
 
+
+@function_trapper
 def livetrade_crypto_binance_ML(
     coin: str,
     collateral: str,

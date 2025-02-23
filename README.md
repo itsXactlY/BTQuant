@@ -3,7 +3,7 @@
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!
 > 
-> **Curious what 100 lines of Machine Learning Algo can do**? — [Find out here!](https://t.me/BTQuant) it wont bite, i promise!
+> **Curious what 100 lines of code for an Machine Learning Algo can do?** — [Find out here!](https://t.me/BTQuant) it wont bite, i promise!
 
 ---
 
@@ -106,7 +106,7 @@ BTQuant provides a wide variety of **pre-built trading strategies** that you can
 >- **Order Chain by KioseffTrading** (`"OrChainKioseff"`) - Advanced order chaining strategy for complex execution.
 >- **SMACross with MESAdaptivePrime Strategy** (`"msa"`) - Enhanced moving average cross strategy with adaptive prime filters.
 >- **SuperSTrend Scalping Strategy** (`"STScalp"`) - A scalping strategy designed around SuperSTrend indicators for quick entries and exits.
->- **Nearest Neighbors + Rational Quadratic Kernel feat. Custom Indicators** (`"NNRQK"`) - NearestNeighbors Rational Quadratic Kernel Machine Learning Strategy with alot magic inside. Simple, yet effective.
+>- **Nearest Neighbors + Rational Quadratic Kernel** (`"NNRQK"`) - NearestNeighbors Rational Quadratic Kernel Machine Learning Strategy with alot magic inside. Simple, yet effective.
 
 ### **How to Choose a Strategy**
 

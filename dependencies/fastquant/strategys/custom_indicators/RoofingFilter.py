@@ -1,7 +1,7 @@
 import backtrader as bt
-from custom_indicators.ElhersHighPass import ElhersHighPass
-from custom_indicators.SuperSmoothFilter import SuperSmoothFilter
-from custom_indicators.iFisher import iFisher
+from fastquant.strategys.custom_indicators.ElhersHighPass import ElhersHighPass
+from fastquant.strategys.custom_indicators.SuperSmoothFilter import SuperSmoothFilter
+from fastquant.strategys.custom_indicators.iFisher import iFisher
 
 class RoofingFilter(bt.Indicator):
 

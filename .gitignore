@@ -64,3 +64,5 @@ ML_Testing2.py
 __LIVE__Binance.py
 __LIVE__Binance_MachineLearning.py
 testing*.*
+saved_models
+*.ipynb

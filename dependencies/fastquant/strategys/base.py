@@ -699,3 +699,81 @@ class CustomSQN(bt.Analyzer):
         else:
             self.rets['sqn'] = 0.0
             self.rets['trades'] = self.count
+
+
+
+################################################################
+# Debugging tools
+################################################################
+from os import mkdir
+import datetime
+import threading
+
+LoggingLock=threading.Lock()
+LoggingTimeout=60
+
+LoggingStorage=f'Logs'
+
+# Append a single line to an existing file
+
+def AppendFile(fname,text):
+    fh=open(fname,'a+')
+    fh.write(text)
+    fh.close()
+
+
+def WriteFile(fn,data):
+    cf=open(fn,'w')
+    cf.write(data)
+    cf.close()
+
+def ErrorLog(text):
+    if LoggingLock.acquire(timeout=LoggingTimeout):
+        try:
+            txt=text.replace('\n','\\n').replace('\r','\\r')
+
+            time=(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
+
+            s=f'{time} {txt}\n'
+
+            mkdir(LoggingStorage)
+            fn=LoggingStorage+'/Errors.log'
+            AppendFile(fn,s)
+
+            # print to console
+            print(txt)
+        except:
+            pass
+
+def function_trapper(failed_result=None):
+    import functools
+    import inspect
+    import traceback
+    def decorator(func):
+        if inspect.iscoroutinefunction(func):  # Handle async functions
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as err:
+                    tb=traceback.extract_tb(err.__traceback__)
+                    errline=tb[-1].lineno if tb else 'Unknown'
+                    ErrorLog(f"{func.__name__}/{errline}: {err}")
+                    return failed_result
+            return async_wrapper
+        else:  # Handle sync functions
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as err:
+                    tb=traceback.extract_tb(err.__traceback__)
+                    errline=tb[-1].lineno if tb else 'Unknown'
+                    ErrorLog(f"{func.__name__}/{errline}: {err}")
+                    return failed_result
+            return sync_wrapper
+
+    # Handle decorator usage with or without parentheses
+    if callable(failed_result):  # Used without parentheses
+        return decorator(failed_result)
+    return decorator

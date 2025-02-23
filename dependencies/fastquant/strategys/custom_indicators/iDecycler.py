@@ -1,6 +1,6 @@
 import backtrader as bt
-from custom_indicators.DecyclerOscillator import DecyclerOscillator
-from custom_indicators.iFisher import iFisher
+from fastquant.strategys.custom_indicators.DecyclerOscillator import DecyclerOscillator
+from fastquant.strategys.custom_indicators.iFisher import iFisher
 
 class iDecycler(bt.Indicator):
 

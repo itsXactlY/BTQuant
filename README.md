@@ -26,7 +26,7 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 >- **Hyper-Realistic Environments**: Designed to simulate second-by-second market dynamics, enabling robust performance analysis.
 
 ### ⏱️ **3. Live Trading**
->- **Real-Time Trading**: Live trade using **1-second WebSocket data feeds** from **Binance**, **ByBit**, and now **PancakeSwap** for decentralized exchanges.
+>- **Real-Time Trading**: Live trade using **1-second WebSocket data feeds** from **Binance**, **ByBit**, **Mexc** and **PancakeSwap** for decentralized exchanges.
 >- **Seamless Strategy Deployment**: Deploy your trading strategy in as few as **50 lines of code**, empowering you to focus on market analysis rather than infrastructure headaches.
 >- **DCA Logic**: Implement automatic **Dollar Cost Averaging (DCA)** to refine your entry and exit points.
 >- **PancakeSwap**: Experience decentralized trading with **1-second WebSocket data**.

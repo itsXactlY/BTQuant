@@ -4,6 +4,7 @@ import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .pancakeswap_feed import PancakeSwapData
+from fastquant.strategys.base import function_trapper
 
 class PancakeSwapStore(object):
     _GRANULARITIES = {
@@ -39,14 +40,17 @@ class PancakeSwapStore(object):
         self.w3 = Web3(Web3.LegacyWebSocketProvider(self.ws_url))
         self.factory_contract = self.w3.eth.contract(address=self.factory_address, abi=FACTORY_ABI)
 
+    @function_trapper
     def getdata(self, start_date=None):
         if not hasattr(self, '_data'):
             self._data = PancakeSwapData(store=self, token_address=self.coin_refer, start_date=start_date)
         return self._data
-
+    
+    @function_trapper
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
-
+    
+    @function_trapper
     def start_socket(self, token_address):
         def run_socket():
             print("Starting WebSocket connection...")
@@ -120,11 +124,13 @@ class PancakeSwapStore(object):
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
+    @function_trapper
     def stop_socket(self):
         if self.websocket:
             self.websocket.close()
             print("WebSocket connection closed.")
 
+    @function_trapper
     def fetch_ohlcv(self, token_address, interval, since=None):
         # This method is left as a placeholder.
         # Fetching historical OHLCV data from BSC would require additional off-chain data sources
@@ -132,6 +138,7 @@ class PancakeSwapStore(object):
         print("Warning: fetch_ohlcv not implemented for BSC. Returning empty list.")
         return []
 
+    @function_trapper
     def get_bnb_price_in_usd(self):
         try:
             url = 'https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd'
@@ -142,6 +149,7 @@ class PancakeSwapStore(object):
             print(f"Error fetching BNB price: {e}")
             return None
 
+    @function_trapper
     def get_pair_address(self, token_address):
         token_address = Web3.to_checksum_address(token_address)
         pair_address = self.factory_contract.functions.getPair(token_address, self.bnb_address).call()

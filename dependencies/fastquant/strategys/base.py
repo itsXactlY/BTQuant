@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 import backtrader as bt
 from backtrader import indicators as btind
 import requests
@@ -21,6 +21,83 @@ from fastquant.config import (
     BUY_PROP,
     SELL_PROP
 )
+
+################################################################
+# Debugging tools
+
+from os import mkdir
+import threading
+
+LoggingLock=threading.Lock()
+LoggingTimeout=60
+
+LoggingStorage=f'Logs'
+
+# Append a single line to an existing file
+
+def AppendFile(fname,text):
+    fh=open(fname,'a+')
+    fh.write(text)
+    fh.close()
+
+
+def WriteFile(fn,data):
+    cf=open(fn,'w')
+    cf.write(data)
+    cf.close()
+
+def ErrorLog(text):
+    if LoggingLock.acquire(timeout=LoggingTimeout):
+        try:
+            txt=text.replace('\n','\\n').replace('\r','\\r')
+
+            time=(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
+
+            s=f'{time} {txt}\n'
+
+            mkdir(LoggingStorage)
+            fn=LoggingStorage+'/Errors.log'
+            AppendFile(fn,s)
+
+            # print to console
+            print(txt)
+        except:
+            pass
+
+def function_trapper(failed_result=None):
+    import functools
+    import inspect
+    import traceback
+    def decorator(func):
+        if inspect.iscoroutinefunction(func):  # Handle async functions
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as err:
+                    tb=traceback.extract_tb(err.__traceback__)
+                    errline=tb[-1].lineno if tb else 'Unknown'
+                    ErrorLog(f"{func.__name__}/{errline}: {err}")
+                    return failed_result
+            return async_wrapper
+        else:  # Handle sync functions
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as err:
+                    tb=traceback.extract_tb(err.__traceback__)
+                    errline=tb[-1].lineno if tb else 'Unknown'
+                    ErrorLog(f"{func.__name__}/{errline}: {err}")
+                    return failed_result
+            return sync_wrapper
+
+    # Handle decorator usage with or without parentheses
+    if callable(failed_result):  # Used without parentheses
+        return decorator(failed_result)
+    return decorator
+################################################################
+
 
 class BuySellArrows(bt.observers.BuySell):
     def next(self):
@@ -45,7 +122,7 @@ class BaseStrategy(bt.Strategy):
         ('amount', None),
         ('coin', None),
         ('collateral', None),
-        ('debug', True),
+        ('debug', False),
         ('backtest', None),
         ('is_training', None),
         ('use_stoploss', None),
@@ -308,6 +385,7 @@ class BaseStrategy(bt.Strategy):
     def wallet_balance(self):
         return self.broker.cash
 
+    @function_trapper
     def process_orders(self):
         while True:
             order = self.order_queue.get()
@@ -322,6 +400,7 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.order_queue.task_done()
 
+    @function_trapper
     def enqueue_order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -331,6 +410,7 @@ class BaseStrategy(bt.Strategy):
             else:
                 self.last_order_time = time.time()        
 
+    @function_trapper
     def process_web3orders(self):
         while True:
             order = self.web3order_queue.get()
@@ -351,6 +431,7 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.web3order_queue.task_done()
 
+    @function_trapper
     def enqueue_web3order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -372,6 +453,7 @@ class BaseStrategy(bt.Strategy):
     def sell_or_cover_condition(self):
         return False
 
+    @function_trapper
     def load_trade_data(self):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
@@ -439,7 +521,8 @@ class BaseStrategy(bt.Strategy):
             print(f"Unexpected error occurred while loading trade data: {e}")
             self.reset_position_state()
             self.stake_to_use = 1000.0
-            
+
+    @function_trapper
     def calc_averages(self):
         total_value = sum(entry_price * size for entry_price, size in zip(self.entry_prices, self.sizes))
         total_size = sum(self.sizes)
@@ -457,6 +540,7 @@ class BaseStrategy(bt.Strategy):
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
 
+    @function_trapper
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             ptu()
@@ -465,8 +549,8 @@ class BaseStrategy(bt.Strategy):
         elif self.params.backtest == False:
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
-        
 
+    @function_trapper
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
@@ -509,16 +593,18 @@ class BaseStrategy(bt.Strategy):
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
 
+    @function_trapper
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
-        dt = datetime.now()
+        dt = datetime.now ()
         msg= 'Data Status: {}'.format(data._getstatusname(status))
         print(dt,dn,msg)
         if data._getstatusname(status) == 'LIVE':
             self.live_data = True
         else:
             self.live_data = False
-    
+
+    @function_trapper
     def reset_position_state(self):
         self.buy_executed = False
         self.entry_price = None
@@ -532,32 +618,32 @@ class BaseStrategy(bt.Strategy):
     def notify_order(self, order):
         if self.p.backtest:
             if order.status in [order.Submitted, order.Accepted]:
-                return
+                # return
 
-            if order.status in [order.Completed]:
-                # Update order history whenever an order is completed
-                self.update_order_history(order)
-                if order.isbuy():
-                    self.action = "buy"
-                    self.buyprice = order.executed.price
-                    self.buycomm = order.executed.comm
+                if order.status in [order.Completed]:
+                    # Update order history whenever an order is completed
+                    self.update_order_history(order)
+                    if order.isbuy():
+                        self.action = "buy"
+                        self.buyprice = order.executed.price
+                        self.buycomm = order.executed.comm
 
-                else:  # Sell
-                    self.action = "sell"
+                    else:  # Sell
+                        self.action = "sell"
 
-                self.bar_executed = len(self)
+                    self.bar_executed = len(self)
 
-                if self.transaction_logging:
-                    self.log(
-                        "%s EXECUTED, Price: %.2f, Cost: %.2f, Comm: %.2f, Size: %.2f"
-                        % (
-                            self.action.upper(),
-                            order.executed.price,
-                            order.executed.value,
-                            order.executed.comm,
-                            order.executed.size,
+                    if self.transaction_logging:
+                        self.log(
+                            "%s EXECUTED, Price: %.2f, Cost: %.2f, Comm: %.2f, Size: %.2f"
+                            % (
+                                self.action.upper(),
+                                order.executed.price,
+                                order.executed.value,
+                                order.executed.comm,
+                                order.executed.size,
+                            )
                         )
-                    )
 
             elif order.status in [order.Canceled, order.Margin, order.Rejected]:
                 if self.transaction_logging:
@@ -598,6 +684,7 @@ class BaseStrategy(bt.Strategy):
         self.cash = cash
         self.value = value
 
+    @function_trapper
     def stop(self):
         if self.p.backtest:
             self.final_value = self.broker.getvalue()
@@ -699,81 +786,3 @@ class CustomSQN(bt.Analyzer):
         else:
             self.rets['sqn'] = 0.0
             self.rets['trades'] = self.count
-
-
-
-################################################################
-# Debugging tools
-################################################################
-from os import mkdir
-import datetime
-import threading
-
-LoggingLock=threading.Lock()
-LoggingTimeout=60
-
-LoggingStorage=f'Logs'
-
-# Append a single line to an existing file
-
-def AppendFile(fname,text):
-    fh=open(fname,'a+')
-    fh.write(text)
-    fh.close()
-
-
-def WriteFile(fn,data):
-    cf=open(fn,'w')
-    cf.write(data)
-    cf.close()
-
-def ErrorLog(text):
-    if LoggingLock.acquire(timeout=LoggingTimeout):
-        try:
-            txt=text.replace('\n','\\n').replace('\r','\\r')
-
-            time=(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f'))
-
-            s=f'{time} {txt}\n'
-
-            mkdir(LoggingStorage)
-            fn=LoggingStorage+'/Errors.log'
-            AppendFile(fn,s)
-
-            # print to console
-            print(txt)
-        except:
-            pass
-
-def function_trapper(failed_result=None):
-    import functools
-    import inspect
-    import traceback
-    def decorator(func):
-        if inspect.iscoroutinefunction(func):  # Handle async functions
-            @functools.wraps(func)
-            async def async_wrapper(*args, **kwargs):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as err:
-                    tb=traceback.extract_tb(err.__traceback__)
-                    errline=tb[-1].lineno if tb else 'Unknown'
-                    ErrorLog(f"{func.__name__}/{errline}: {err}")
-                    return failed_result
-            return async_wrapper
-        else:  # Handle sync functions
-            @functools.wraps(func)
-            def sync_wrapper(*args, **kwargs):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as err:
-                    tb=traceback.extract_tb(err.__traceback__)
-                    errline=tb[-1].lineno if tb else 'Unknown'
-                    ErrorLog(f"{func.__name__}/{errline}: {err}")
-                    return failed_result
-            return sync_wrapper
-
-    # Handle decorator usage with or without parentheses
-    if callable(failed_result):  # Used without parentheses
-        return decorator(failed_result)
-    return decorator

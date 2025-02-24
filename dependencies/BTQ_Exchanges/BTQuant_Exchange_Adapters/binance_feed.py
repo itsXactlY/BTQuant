@@ -1,6 +1,6 @@
 from collections import deque
-import json
 import time
+import json
 import pandas as pd
 from queue import Empty
 from backtrader.dataseries import TimeFrame
@@ -8,6 +8,7 @@ from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
 import gc
+from fastquant.strategys.base import function_trapper
 
 
 def identify_gaps(df, expected_interval):
@@ -36,11 +37,7 @@ class BinanceData(DataBase):
         self.ws_url = store.ws_url
         self._state = self._ST_HISTORBACK if start_date else self._ST_LIVE
 
-    def reset_warmed(self):
-        """Reset warming state without clearing indicators"""
-        self._warm_up = False
-        self._warm_up_bars = 0
-
+    @function_trapper
     def handle_websocket_message(self, message):
         try:
             data = json.loads(message)  # Parse the JSON message
@@ -61,6 +58,7 @@ class BinanceData(DataBase):
         except Exception as e:
             print(f"Error handling WebSocket message: {e}")
 
+    @function_trapper
     def _load(self):
         if self._state == self._ST_OVER:
             return False
@@ -72,6 +70,7 @@ class BinanceData(DataBase):
             else:
                 self._start_live()
 
+    @function_trapper
     def _load_kline(self):
         try:
             kline = self._data.popleft()
@@ -93,6 +92,7 @@ class BinanceData(DataBase):
         self.lines.volume[0] = volume
         return True
 
+    @function_trapper
     def _parser_dataframe(self, data):
         df = data.copy()
         df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
@@ -115,6 +115,7 @@ class BinanceData(DataBase):
             float(kline[5])
         ]
 
+    @function_trapper
     def _start_live(self):
         print("Starting live data...")
         self._store.start_socket()
@@ -125,12 +126,15 @@ class BinanceData(DataBase):
         self._data.clear()
         gc.collect()
 
+    @function_trapper
     def haslivedata(self):
         return self._state == self._ST_LIVE and len(self._data) > 0
 
+    @function_trapper
     def islive(self):
         return True
 
+    @function_trapper
     def start(self):
         DataBase.start(self)
 
@@ -179,6 +183,7 @@ class BinanceData(DataBase):
 
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
+    @function_trapper
     def _process_websocket_messages(self):
         while True:
             try:

@@ -66,3 +66,4 @@ __LIVE__Binance_MachineLearning.py
 testing*.*
 saved_models
 *.ipynb
+/Example imgs/

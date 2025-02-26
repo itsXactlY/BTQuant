@@ -3,7 +3,7 @@ from fastquant import livetrade_crypto_binance_ML as livetrade
 # Binance.com Exchange
 _coin = 'BTC'
 _collateral = 'USDT'
-_exchange = 'mimic' # Exchange Name
+_exchange = 'mimic' # JackRabbitRelay Exchange Name
 _account = 'binance_machinelearning' # JackRabbitRelay Account name
 _asset = f'{_coin}/{_collateral}'
 _amount = '40'

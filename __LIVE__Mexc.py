@@ -3,7 +3,7 @@ from fastquant import livetrade_crypto_mexc as livetrade
 # Mexc.com Exchange
 _coin = 'PI'
 _collateral = 'USDT'
-_exchange = 'mimic' # Exchange Name
+_exchange = 'mimic' # JackRabbitRelay Exchange Name
 _account = 'mexc_testing' # JackRabbitRelay Account name
 _asset = f'{_coin}/{_collateral}'
 _amount = '40'

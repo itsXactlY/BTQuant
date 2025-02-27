@@ -1,5 +1,5 @@
 import backtrader as bt
-from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store #, bybit_store
+from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store, mexc_store, bitget_store
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
@@ -7,7 +7,6 @@ from fastquant.strategys.base import function_trapper
 
 @function_trapper
 def livetrade_web3(
-
     coin: str,
     collateral: str,
     web3ws: str,
@@ -148,7 +147,7 @@ def livetrade_crypto_binance(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-''' DEPRECATED
+@function_trapper
 def livetrade_crypto_bybit(
 
     coin: str,
@@ -213,10 +212,8 @@ def livetrade_crypto_bybit(
     )
     
     cerebro.adddata(data=data, name=data._dataname)
-    print(f"Daten vorhanden? {len(cerebro.datas) > 0}")
+    # print(f"{len(cerebro.datas) > 0}")
     cerebro.run(live=True)
-'''
-
 
 @function_trapper
 def livetrade_crypto_binance_ML(
@@ -270,8 +267,6 @@ def livetrade_crypto_binance_ML(
     current_time = datetime.now(tz)
     from_date = current_time - timedelta(hours=start_hours_ago, minutes=2)
     print(f"Fetching historical data from: {from_date} (UTC+2)")
-
-    # get a data feed that backfills historical data then continues with live updates.
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"
     data.live = True  
@@ -298,4 +293,154 @@ def livetrade_crypto_binance_ML(
     # Run live trading. The data feed will first replay historical data
     # (warming up all your indicators) and then switch into live mode.
     print("Starting live trading with historical backfill...")
+    cerebro.run(live=True)
+
+
+@function_trapper
+def livetrade_crypto_mexc(
+    coin: str,
+    collateral: str,
+    exchange: str,
+    account: str,
+    asset: str,
+    amount: float,
+    strategy: str = "",
+    start_hours_ago: int = 5,
+    enable_alerts: bool = False,
+    alert_channel: str = ""
+) -> None:
+    """
+    Live trade a strategy on Mexc.
+
+    Args:
+    - coin (str): The address of the coin to trade.
+    - collateral (str): The address of the collateral coin.
+    - exchange (str): The exchange to use (e.g., 'mexc').
+    - account (str): The account type to use (e.g., 'JackRabbit_Mexc').
+    - asset (str): The asset to trade (e.g., '$BTC/USDT').
+    - amount (float): The amount to trade.
+    - strategy (str): The strategy name as a string or strategy class.
+                    Defaults to "".
+    - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
+    """
+
+    # Get the strategy class from the mapping if the strategy is passed as a string
+    if isinstance(strategy, str):
+        strategy_class = STRATEGY_MAPPING.get(strategy)
+        if strategy_class is None:
+            raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    cerebro = bt.Cerebro(quicknotify=True)
+    store = mexc_store.MexcStore(
+        coin_refer=coin,
+        coin_target=collateral
+    )
+
+    # Set the timezone to UTC+2
+    tz = pytz.timezone('Europe/Berlin')
+    current_time = datetime.now(tz)
+
+    # Add extra buffer time to ensure smooth transition
+    buffer_minutes = 2
+    from_date = current_time - timedelta(hours=start_hours_ago, minutes=buffer_minutes)
+
+    print(f"Current time (UTC+2): {current_time}")
+    print(f"Fetching historical data from (UTC+2): {from_date}")
+    
+    data = store.getdata(start_date=from_date)
+    data._dataname = f"{coin}{collateral}"
+    
+    cerebro.addstrategy(
+        strategy_class,
+        exchange=exchange,
+        account=account,
+        asset=asset,
+        amount=amount,
+        coin=coin,
+        collateral=collateral,
+        backtest=False,
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
+    )
+    
+    cerebro.adddata(data=data, name=data._dataname)
+    cerebro.run(live=True)
+
+
+@function_trapper
+def livetrade_crypto_bitget(
+    coin: str,
+    collateral: str,
+    exchange: str,
+    account: str,
+    asset: str,
+    amount: float,
+    strategy: str = "",
+    start_hours_ago: int = 5,
+    enable_alerts: bool = False,
+    alert_channel: str = ""
+) -> None:
+    """
+    Live trade a strategy on Bitget.
+
+    Args:
+    - coin (str): The address of the coin to trade.
+    - collateral (str): The address of the collateral coin.
+    - exchange (str): The exchange to use (e.g., 'bitget').
+    - account (str): The account type to use (e.g., 'JackRabbit_bitget').
+    - asset (str): The asset to trade (e.g., 'BTCUSDT').
+    - amount (float): The amount to trade.
+    - strategy (str): The strategy name as a string or strategy class.
+                    Defaults to "".
+    - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
+    """
+
+    # Get the strategy class from the mapping if the strategy is passed as a string
+    if isinstance(strategy, str):
+        strategy_class = STRATEGY_MAPPING.get(strategy)
+        if strategy_class is None:
+            raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    cerebro = bt.Cerebro(quicknotify=True)
+    store = bitget_store.BitgetStore(
+        coin_refer=coin,
+        coin_target=collateral
+    )
+
+    # Set the timezone to UTC+2
+    tz = pytz.timezone('Europe/Berlin')
+    current_time = datetime.now(tz)
+
+    # Add extra buffer time to ensure smooth transition
+    buffer_minutes = 2
+    from_date = current_time - timedelta(hours=start_hours_ago, minutes=buffer_minutes)
+
+    print(f"Current time (UTC+2): {current_time}")
+    print(f"Fetching historical data from (UTC+2): {from_date}")
+    
+    data = store.getdata(start_date=from_date)
+    data._dataname = f"{coin}{collateral}"
+    
+    cerebro.addstrategy(
+        strategy_class,
+        exchange=exchange,
+        account=account,
+        asset=asset,
+        amount=amount,
+        coin=coin,
+        collateral=collateral,
+        backtest=False,
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
+    )
+    
+    cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)

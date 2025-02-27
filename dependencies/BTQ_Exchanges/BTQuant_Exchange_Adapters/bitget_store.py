@@ -55,8 +55,8 @@ class BitgetStore(object):
     def on_message(self, ws, message):
         self.message_queue.put(message)
         # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
-        if message == "pong":
-            print("Pong received successfully.")
+        # if message == "pong":
+        #    print("Pong received successfully.")
 
     @function_trapper
     def on_error(self, ws, error):
@@ -90,14 +90,12 @@ class BitgetStore(object):
             while True:
                 try:
                     ws.send("ping")
-                    print("Sent manual ping: ping")
+                    # print("Sent manual ping: ping")
                 except Exception as e:
                     print("Error sending ping:", e)
                 time.sleep(30)
         threading.Thread(target=ping_loop, daemon=True).start()
 
-
-    # Remove automatic ping/pong by not specifying ping_interval and ping_timeout.
     @function_trapper
     def start_socket(self):
         def run_socket():

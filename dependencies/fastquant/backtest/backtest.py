@@ -27,7 +27,6 @@ from fastquant.backtest.data_prep import initalize_data
 from fastquant.backtest.post_backtest import analyze_strategies, plot_results
 
 strat_docs = "\nExisting strategies:\n\n" + "\n".join(
-    # [key + "\n" + value.__doc__ for key, value in STRATEGY_MAPPING.items()]
     [key + "\n" + (value.__doc__ or "") for key, value in STRATEGY_MAPPING.items()]
 )
 
@@ -118,6 +117,7 @@ def backtest(
     cerebro = bt.Cerebro(stdstats=False, maxcpus=1, optreturn=False)
     cerebro.addobserver(bt.observers.Broker)
     cerebro.addobserver(bt.observers.Trades)
+    cerebro.addobserver(bt.observers.BuySell)
 
     # Convert all non iterables and strings into lists
     kwargs = {

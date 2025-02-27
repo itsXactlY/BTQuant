@@ -1,4 +1,5 @@
-from fastquant.strategys.base import BaseStrategy, bt
+import backtrader as bt
+from fastquant.strategys.base import BaseStrategy
 from fastquant.strategys.custom_indicators.MesaAdaptiveMovingAverage import MAMA
 
 class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):

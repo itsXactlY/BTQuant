@@ -488,7 +488,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                     # return the actual returned value which may be None to
                     # signal no bar is available, but the data feed is not
                     # done. False means game over
-                    sleep(0.01) # aLca was here for 100% CPU FIX ;)
+                    sleep(0.01)
                     return _loadret
 
             # Get a reference to current loaded time

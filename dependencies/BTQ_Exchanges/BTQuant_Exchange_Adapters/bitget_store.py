@@ -13,11 +13,11 @@ from .bitget_feed import BitgetData
 class BitgetStore(object):
     _GRANULARITIES = {
         (TimeFrame.Seconds, 1): '1s',
-        (TimeFrame.Minutes, 1): '1m',
-        (TimeFrame.Minutes, 3): '3m',
-        (TimeFrame.Minutes, 5): '5m',
-        (TimeFrame.Minutes, 15): '15m',
-        (TimeFrame.Minutes, 30): '30m',
+        (TimeFrame.Minutes, 1): '1min',
+        (TimeFrame.Minutes, 3): '3min',
+        (TimeFrame.Minutes, 5): '5min',
+        (TimeFrame.Minutes, 15): '15min',
+        (TimeFrame.Minutes, 30): '30min',
         (TimeFrame.Minutes, 60): '1h',
         (TimeFrame.Minutes, 120): '2h',
         (TimeFrame.Minutes, 240): '4h',
@@ -53,10 +53,14 @@ class BitgetStore(object):
 
     @function_trapper
     def on_message(self, ws, message):
-        self.message_queue.put(message)
-        # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
-        # if message == "pong":
-        #    print("Pong received successfully.")
+        try:
+            if isinstance(message, str):
+                self.message_queue.put(message)
+                # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
+            else:
+                self.message_queue.put(json.dumps(message))
+        except Exception as e:
+            print(f"Error processing WebSocket message: {e}")
 
     @function_trapper
     def on_error(self, ws, error):
@@ -65,12 +69,14 @@ class BitgetStore(object):
     @function_trapper
     def on_close(self, ws, close_status_code, close_msg):
         print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        self.keep_pinging = False
 
     @function_trapper
     def on_open(self, ws):
-        print("WebSocket connection opened")
+        print(f"{datetime.now()} WebSocket connection opened")
+        print("No Warmup for BITGET - HACK :: Caching Live Candles till start - Warming up...")
         granularity = self.get_interval(TimeFrame.Seconds, 1)
-        sub_msg = {
+        payload = {
             "op": "subscribe",
             "args": [
                 {
@@ -80,19 +86,24 @@ class BitgetStore(object):
                 }
             ]
         }
-        ws.send(json.dumps(sub_msg))
+        ws.send(json.dumps(payload))
         print(f"Subscribed to {self.symbol} candlestick data with granularity {granularity}")
         self.start_ping(ws)
 
     @function_trapper
     def start_ping(self, ws):
+        self.keep_pinging = True 
+
         def ping_loop():
-            while True:
-                try:
-                    ws.send("ping")
-                    # print("Sent manual ping: ping")
-                except Exception as e:
-                    print("Error sending ping:", e)
+            while self.keep_pinging:
+                if ws.sock and ws.sock.connected:
+                    try:
+                        ws.send("ping")
+                    except Exception as e:
+                        print("Error sending ping:", e)
+                        break
+                else:
+                    break
                 time.sleep(30)
         threading.Thread(target=ping_loop, daemon=True).start()
 
@@ -124,51 +135,8 @@ class BitgetStore(object):
             self.websocket.close()
             print("WebSocket connection closed.")
 
+
     @function_trapper
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
-        print('STORE::FETCH SINCE:', since)
-        start_timestamp = since
-        data = []
-        max_retries = 5
-        url = "https://api.bitget.com/api/spot/v1/market/history-candles"
-        while True:
-            params = {
-                'symbol': symbol,
-                'period': interval,
-                'limit': 1000
-            }
-            if start_timestamp:
-                params['after'] = start_timestamp
-            if until:
-                params['before'] = until
-
-            retries = 0
-            new_data = None
-            while retries < max_retries:
-                try:
-                    response = requests.get(url, params=params, timeout=10)
-                    new_data = response.json()
-                    new_data = new_data.get('data', [])
-                    break
-                except (requests.exceptions.RequestException, requests.exceptions.JSONDecodeError) as e:
-                    wait_time = 2 ** retries
-                    print(f"Error fetching data (attempt {retries + 1}/{max_retries}): {e}. Retrying in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                    retries += 1
-
-            if retries == max_retries:
-                print("Max retries reached. Exiting fetch.")
-                break
-
-            if not new_data or len(new_data) == 0:
-                break
-
-            data.extend(new_data)
-            start_timestamp = int(new_data[-1][0]) + 1
-
-        if data:
-            start_time = datetime.fromtimestamp(int(data[0][0]) / 1000, tz=pytz.UTC)
-            end_time = datetime.fromtimestamp(int(data[-1][0]) / 1000, tz=pytz.UTC)
-            print(f"Fetched data from {start_time} to {end_time}")
-
-        return data
+        '''BITGET IS A BIT HACKY - NOT IN A GOOD WAY...'''
+        return

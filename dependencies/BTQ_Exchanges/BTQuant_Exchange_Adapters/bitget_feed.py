@@ -42,6 +42,10 @@ class BitgetData(DataBase):
             data = json.loads(message)
             if self.p.debug:
                 print(f"Received websocket message: {data}")
+            if "action" in data and data["action"] == "snapshot":
+                if self.p.debug:
+                    print('HACK :: dropping snapshot... dont preprocess old candles...')
+                return
             if 'arg' in data and 'channel' in data['arg'] and data['arg']['channel'].startswith('candle'):
                 for k in data.get('data', []):
                     kline = self._parser_to_kline(k[0], k)
@@ -115,12 +119,10 @@ class BitgetData(DataBase):
     def _start_live(self):
         print("Starting live data...")
         self._store.start_socket()
-        print("Starting live data and purging historical data...")
-        # self._data = deque(maxlen=25)
-        # self._data.clear()
-        # gc.collect()
-        self.put_notification(self.LIVE)
         self._state = self._ST_LIVE
+        self.put_notification(self.LIVE)
+        print("Starting live data and purging historical data...")
+        threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     # @function_trapper
     def haslivedata(self):
@@ -137,42 +139,7 @@ class BitgetData(DataBase):
         print("Starting WebSocket connection...")
         print("WebSocket connection started.")
 
-        if self.start_date:
-            self._state = self._ST_HISTORBACK
-            self.put_notification(self.DELAYED)
-
-            # Fetch historical data via REST API
-            klines = self._store.fetch_ohlcv(
-                self._store.symbol,
-                self._store.get_interval(TimeFrame.Seconds, 1),
-                since=int(self.start_date.timestamp() * 1000)
-            )
-
-            if self.p.debug:
-                print(f"Fetched historical klines: {klines}")
-
-            if klines:
-                if self.p.drop_newest and klines:
-                    klines.pop()
-
-                df = pd.DataFrame(klines)
-                gaps = identify_gaps(df, pd.Timedelta(self.start_date.timestamp() * 1000))
-                if not gaps.empty:
-                    print("Gaps found in the data:")
-                    print(gaps)
-                if df.shape[1] > 6:
-                    df.drop(df.columns[6:], axis=1, inplace=True)
-                df = self._parser_dataframe(df)
-                self._data.extend(df.values.tolist())
-                del df
-                del klines
-                gc.collect()
-            else:
-                print("No historical data fetched")
-        else:
-            self._start_live()
-
-        threading.Thread(target=self._process_websocket_messages, daemon=True).start()
+        self._start_live()
 
     # @function_trapper
     def _process_websocket_messages(self):

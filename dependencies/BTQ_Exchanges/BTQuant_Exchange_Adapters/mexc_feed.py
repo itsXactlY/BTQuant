@@ -7,7 +7,6 @@ from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
-import gc
 from fastquant.strategys.base import function_trapper
 
 
@@ -19,7 +18,7 @@ def identify_gaps(df, expected_interval):
 
 class MexcData(DataBase):
     params = (
-        ('drop_newest', False),
+        ('drop_newest', True),
         ('update_interval_seconds', 1),
         ('debug', False)
     )
@@ -30,8 +29,8 @@ class MexcData(DataBase):
         super().__init__()
         self.start_date = start_date
         self._store = store
-        self._data = deque(maxlen=25)
-        self.interval = self._store.get_interval(TimeFrame.Minutes, 1)  # Use 1 minute interval
+        self._data = deque()
+        self.interval = self._store.get_interval(TimeFrame.Minutes, 1)
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")
         self.ws_url = store.ws_url
@@ -40,13 +39,13 @@ class MexcData(DataBase):
     @function_trapper
     def handle_websocket_message(self, message):
         try:
-            data = json.loads(message)  # Parse the JSON message
+            data = json.loads(message)
             
             if 'd' in data and 'k' in data['d']:
                 kline_data = data['d']['k']
 
                 kline = self._parser_to_kline(int(kline_data['t']), [
-                    int(kline_data['t']), # Timestamp (Start time of kline)
+                    int(kline_data['t']),
                     float(kline_data['o']),
                     float(kline_data['h']),
                     float(kline_data['l']),
@@ -132,9 +131,7 @@ class MexcData(DataBase):
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
         print("Starting live data and purging historical data...")
-        self._data = deque(maxlen=25) 
-        self._data.clear()
-        gc.collect()
+        threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     @function_trapper
     def haslivedata(self):
@@ -155,7 +152,6 @@ class MexcData(DataBase):
             self._state = self._ST_HISTORBACK
             self.put_notification(self.DELAYED)
 
-            # Fetch historical data
             klines = self._store.fetch_ohlcv(
                 self._store.symbol,
                 self.interval,
@@ -165,13 +161,11 @@ class MexcData(DataBase):
                 print(f"Fetched historical klines: {len(klines) if klines else 0}")
 
             if klines:
-                # Check if klines have the required number of elements before popping
                 if self.p.drop_newest and klines:
                     if klines:
                         klines.pop()
                 
                 df = pd.DataFrame(klines)
-                # Identify gaps
                 if self.start_date:
                     gaps = identify_gaps(df, pd.Timedelta(minutes=1))
                     if not gaps.empty:
@@ -182,17 +176,10 @@ class MexcData(DataBase):
                     df.drop(df.columns[6:], axis=1, inplace=True)
                 df = self._parser_dataframe(df)
                 self._data.extend(df.values.tolist())
-                # ------------- FREE THE MEMORY -------------
-                del df
-                del klines
-                gc.collect()
-                # -------------------------------------------
             else:
                 print("No historical data fetched")
         else:
             self._start_live()
-
-        threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     @function_trapper
     def _process_websocket_messages(self):

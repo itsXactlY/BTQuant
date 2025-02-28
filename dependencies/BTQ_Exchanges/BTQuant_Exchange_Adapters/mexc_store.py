@@ -57,6 +57,7 @@ class MexcStore(object):
         try:
             if isinstance(message, str):
                 self.message_queue.put(message)
+                # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
             else:
                 self.message_queue.put(json.dumps(message))
         except Exception as e:
@@ -73,6 +74,7 @@ class MexcStore(object):
     @function_trapper
     def on_open(self, ws):
         print("WebSocket connection opened")
+
         payload = {
             "method": "SUBSCRIPTION",
             "params": [f"spot@public.kline.v3.api@{self.symbol}@{self.get_interval(TimeFrame.Minutes, 1)}"],
@@ -159,13 +161,4 @@ class MexcStore(object):
             start_time = datetime.fromtimestamp(data[0][0] / 1000, tz=pytz.UTC)
             end_time = datetime.fromtimestamp(data[-1][0] / 1000, tz=pytz.UTC)
             print(f"Fetched {len(data)} candles from {start_time} to {end_time}")
-            
-            # sample data for verification (first 2 candles)
-            # if len(data) > 1:
-            #     print("sample data (first 2 candles):")
-            #     for i in range(min(2, len(data))):
-            #         candle = data[i]
-            #         timestamp = datetime.fromtimestamp(candle[0] / 1000, tz=pytz.UTC)
-            #         print(f"{timestamp}: Open={candle[1]}, High={candle[2]}, Low={candle[3]}, Close={candle[4]}, Volume={candle[5]}")
-
         return data

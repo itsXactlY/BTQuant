@@ -18,7 +18,7 @@ def identify_gaps(df, expected_interval):
 
 class MexcData(DataBase):
     params = (
-        ('drop_newest', True),
+        ('drop_newest', False),
         ('update_interval_seconds', 1),
         ('debug', False)
     )

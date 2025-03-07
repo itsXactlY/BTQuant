@@ -1,6 +1,7 @@
+import backtrader as bt
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from fastquant.strategys.base import BaseStrategy, bt
+from fastquant.strategys.base import BaseStrategy
 
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
@@ -25,12 +26,12 @@ class RationalQuadraticKernel(bt.indicators.PeriodN):
         w = (1 + ((x - self.p.x)**2) / (2 * self.p.r * (self.p.h**2)))**(-self.p.r)
         self.lines.yhat[0] = np.sum(w * y) / np.sum(w)
 
-class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
+class NRK(BaseStrategy):
     params = (
         # ML Parameters
         ('source', 'close'),
         ('neighbors_count', 8),
-        ('max_bars_back', 2000),
+        ('max_bars_back', 2000), # Slow, better for higher TF than 5m+
         ('use_volatility_filter', True),
         ('regime_threshold', -0.1),
         ('adx_threshold', 20),
@@ -43,7 +44,7 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
         # DCA Parameters
         ("dca_deviation", 1.5),
         ("take_profit", 2),
-        ('percent_sizer', 0.01),
+        ('percent_sizer', 0.1),
         ('backtest', None),
     )
 
@@ -52,11 +53,11 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
         # Primary data series (e.g., close)
         self.source = getattr(self.data, self.p.source)
         # Standard technical indicators
-        self.atr = bt.indicators.ATR(self.data, period=14)
-        self.rsi = bt.indicators.RSI(self.data, period=14)
-        self.wt = bt.indicators.WilliamsR(self.data, period=10)
-        self.cci = bt.indicators.CCI(self.data, period=20)
-        self.adx = bt.indicators.ADX(self.data, period=14)
+        self.atr = bt.indicators.ATR(self.data, period=14, plot=False)
+        self.rsi = bt.indicators.RSI(self.data, period=14, plot=False)
+        self.wt = bt.indicators.WilliamsR(self.data, period=10, plot=False)
+        self.cci = bt.indicators.CCI(self.data, period=20, plot=False)
+        self.adx = bt.indicators.ADX(self.data, period=14, plot=False)
         
         # Kernel estimator (and smoothing) for an extra filter
         self.kernel_estimate = RationalQuadraticKernel(self.data.close, 
@@ -64,7 +65,7 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
                                                        r=self.p.kernel_r, 
                                                        x=self.p.kernel_x)
         if self.p.use_kernel_smoothing:
-            self.kernel_smooth = bt.indicators.SMA(self.kernel_estimate, period=self.p.kernel_smoothing_lag)
+            self.kernel_smooth = bt.indicators.SMA(self.kernel_estimate, period=self.p.kernel_smoothing_lag, plot=False)
 
         # Features for the ML model – note the duplicate RSI to mimic the original 5-feature setup
         self.features = [self.rsi, 
@@ -168,8 +169,6 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
                     self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
-                    # Set take profit price based on the take_profit parameter
-                    self.take_profit_price = self.data.close[0] * (1 + self.p.take_profit / 100)
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
@@ -219,7 +218,3 @@ class NearestNeighbors_RationalQuadraticKernel_DCA_Strategy(BaseStrategy):
             self.reset_position_state()
             self.buy_executed = False
             self.conditions_checked = True
-
-
-    def stop(self):
-        print('Final Portfolio Value: %.2f' % self.broker.getvalue())

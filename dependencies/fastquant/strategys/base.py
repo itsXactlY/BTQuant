@@ -110,8 +110,8 @@ class BuySellArrows(bt.observers.BuySell):
             self.lines.sell[0] += self.data.high[0] * 0.02
             
     plotlines = dict(
-        buy=dict(marker='$\u21E7$', markersize=16.0),
-        sell=dict(marker='$\u21E9$', markersize=16.0)
+        buy=dict(marker='$\u21E7$', markersize=8.0),
+        sell=dict(marker='$\u21E9$', markersize=8.0)
     )
 
 class BaseStrategy(bt.Strategy):
@@ -148,7 +148,7 @@ class BaseStrategy(bt.Strategy):
         ("stop_trail", 0),
         ("take_profit", 0),
         ("percent_sizer", 0),
-        ("order_cooldown", 5),
+        ("order_cooldown", 15),
         ("enable_alerts", False),
         ("alert_channel", None)
     )
@@ -233,7 +233,6 @@ class BaseStrategy(bt.Strategy):
             except Exception as e:
                 print(f"Error sending alert: {str(e)}")
         else:
-            print('Alert System not enabled.')
             pass
 
     def _init_pancakeswap(self):
@@ -251,7 +250,8 @@ class BaseStrategy(bt.Strategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        BuySellArrows(self.data0, barplot=True)
+        if self.p.backtest == True:
+            BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
         self.order = None
         self.DCA = False
@@ -385,7 +385,7 @@ class BaseStrategy(bt.Strategy):
     def wallet_balance(self):
         return self.broker.cash
 
-    @function_trapper
+    # @function_trapper
     def process_orders(self):
         while True:
             order = self.order_queue.get()
@@ -400,7 +400,7 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.order_queue.task_done()
 
-    @function_trapper
+    # @function_trapper
     def enqueue_order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -410,7 +410,7 @@ class BaseStrategy(bt.Strategy):
             else:
                 self.last_order_time = time.time()        
 
-    @function_trapper
+    # @function_trapper
     def process_web3orders(self):
         while True:
             order = self.web3order_queue.get()
@@ -431,7 +431,7 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.web3order_queue.task_done()
 
-    @function_trapper
+    # @function_trapper
     def enqueue_web3order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -453,7 +453,7 @@ class BaseStrategy(bt.Strategy):
     def sell_or_cover_condition(self):
         return False
 
-    @function_trapper
+    # @function_trapper
     def load_trade_data(self):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
@@ -487,6 +487,7 @@ class BaseStrategy(bt.Strategy):
                 print(f"Loaded {len(self.entry_prices)} buy orders after the last sell.")
                 self.calc_averages()
                 self.entry_price = self.average_entry_price
+                self.buy_executed = True
             else:
                 print("No buy orders found after the last sell.")
 
@@ -522,7 +523,7 @@ class BaseStrategy(bt.Strategy):
             self.reset_position_state()
             self.stake_to_use = 1000.0
 
-    @function_trapper
+    # @function_trapper
     def calc_averages(self):
         total_value = sum(entry_price * size for entry_price, size in zip(self.entry_prices, self.sizes))
         total_size = sum(self.sizes)
@@ -540,7 +541,7 @@ class BaseStrategy(bt.Strategy):
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
 
-    @function_trapper
+    # @function_trapper
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             ptu()
@@ -550,7 +551,7 @@ class BaseStrategy(bt.Strategy):
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
 
-    @function_trapper
+    # @function_trapper
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
@@ -593,7 +594,7 @@ class BaseStrategy(bt.Strategy):
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
 
-    @function_trapper
+    # @function_trapper
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
         dt = datetime.now ()
@@ -604,7 +605,7 @@ class BaseStrategy(bt.Strategy):
         else:
             self.live_data = False
 
-    @function_trapper
+    # @function_trapper
     def reset_position_state(self):
         self.buy_executed = False
         self.entry_price = None
@@ -684,30 +685,30 @@ class BaseStrategy(bt.Strategy):
         self.cash = cash
         self.value = value
 
-    @function_trapper
+    # @function_trapper
     def stop(self):
         if self.p.backtest:
             self.final_value = self.broker.getvalue()
 
             # Print the backtest summary (optional)
             print("\n=== STRATEGY BACKTEST RESULTS ===")
-            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
-            print("| Strategy                            | Initial Capital | Final Value | Total P&L | Return (%) | Avg Return (%) | Sharpe Ratio | Max Drawdown (%) | Win Rate (%) | Wins | Losses |")
-            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
-            print("| {0:<35} | {1:<15} | {2:<11} | {3:<9} | {4:<10} | {5:<14} | {6:<12} | {7:<16} | {8:<12} | {9:<4} | {10:<6} |".format(
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+---------------+")
+            print("| Strategy                            | Initial Capital | Final Value | Total P&L | Return (%) | Avg Return (%) | Win Rate (%) | Wins | Losses |")
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+---------------+")
+            print("| {0:<35} | {1:<15} | {2:<11} | {3:<9} | {4:<10} | {5:<14} | {8:<12} | {9:<4} | {10:<6} |".format(
                 self.__class__.__name__,
                 1000,
                 round(self.final_value, 2),
                 round(self.total_pnl, 2),
-                round(self.total_pnl / 1000 * 100, 2),  # Return in percentage
+                round(self.total_pnl / 1000 * 100, 2),
                 round(self.total_pnl / self.total_trades, 6) if self.total_trades > 0 else 0,
-                'N/A',  # Sharpe Ratio (You can implement this based on your needs)
-                'N/A',  # Max Drawdown (This can be calculated with a custom function)
+                'N/A',
+                'N/A',
                 round(self.win_rate, 2),
                 self.total_wins,
                 self.total_losses
             ))
-            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+------------------+--------------+------+--------+")
+            print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+---------------+")
         
         elif self.p.backtest == False:
             """Clean up resources when strategy stops"""

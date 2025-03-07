@@ -1,4 +1,3 @@
-from fastquant.strategys.buy_and_hold import BuyAndHoldStrategy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -279,7 +278,7 @@ def plot_results(cerebro, data_format_dict, figsize=(30, 15), **plot_kwargs):
     )
 
     # Set matplotlib parameters
-    plt.style.use("classic")  # ggplot is also fine')
+    plt.style.use("ggplot")  # ggplot is also fine')
     plt.rcParams["figure.figsize"] = figsize
 
     fig = cerebro.plot(style='candles', barup='lightgreen', bardown='red', volume=has_volume, iplot=iplot, **plot_kwargs)

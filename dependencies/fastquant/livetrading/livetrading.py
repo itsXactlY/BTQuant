@@ -14,7 +14,7 @@ def livetrade_web3(
     account: str,
     asset: str,
     amount: float,
-    strategy: str = "",  # Allow passing strategy as a string
+    strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
     enable_alerts: bool = False,

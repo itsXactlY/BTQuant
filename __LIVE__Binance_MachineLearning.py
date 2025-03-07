@@ -1,4 +1,5 @@
 from fastquant import livetrade_crypto_binance_ML as livetrade
+from fastquant.strategys.NearestNeighbors_RationalQuadraticKernel import NRK
 
 # Binance.com Exchange
 _coin = 'BTC'
@@ -22,7 +23,7 @@ all its values from before.
 livetrade(
     coin=_coin,
     collateral=_collateral,
-    strategy="NNRQK", # pip install scikit-learn
+    strategy=NRK,
     exchange=_exchange,
     account=_account,
     asset=_asset,

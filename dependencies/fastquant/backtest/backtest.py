@@ -117,7 +117,7 @@ def backtest(
     cerebro = bt.Cerebro(stdstats=False, maxcpus=1, optreturn=False)
     cerebro.addobserver(bt.observers.Broker)
     cerebro.addobserver(bt.observers.Trades)
-    cerebro.addobserver(bt.observers.BuySell)
+    # cerebro.addobserver(bt.observers.BuySell)
 
     # Convert all non iterables and strings into lists
     kwargs = {

@@ -44,6 +44,20 @@ class TelegramService(MessagingService):
         except Exception as e:
             print(f"❌ Telegram alert failed: {e}")
 
+async def initialize_services():
+    telegram_service = TelegramService(
+        api_id=telegram_api_id,
+        api_hash=telegram_api_hash,
+        session_file=telegram_session_file,
+        channel_id=telegram_channel_debug
+    )
+    await telegram_service.initialize()
+    
+    discord_service = DiscordService(discord_webhook_url)
+    alert_manager = AlertManager([telegram_service, discord_service])
+    jrr_order_base = JrrOrderBase(alert_manager)
+    
+    return jrr_order_base
 
 class DiscordService(MessagingService):
     def __init__(self, webhook_url: str):
@@ -58,7 +72,7 @@ class DiscordService(MessagingService):
                 "description": message,
                 "color": 3066993,
                 "footer": {
-                    "text": "Powered by aLca for Quants!",
+                    "text": "Powered by BTQuant!",
                     "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTYQY8CsntTC-nQ4nTVvSp_fY6zcWtLfdubhg&s"
                 }
             }]
@@ -153,18 +167,3 @@ class JrrOrderBase:
             "Identity": identify
         }
         return self._send_jrr_request(payload)
-
-async def initialize_services():
-    telegram_service = TelegramService(
-        api_id=telegram_api_id,
-        api_hash=telegram_api_hash,
-        session_file=telegram_session_file,
-        channel_id=telegram_channel_debug
-    )
-    await telegram_service.initialize()
-    
-    discord_service = DiscordService(discord_webhook_url)
-    alert_manager = AlertManager([telegram_service, discord_service])
-    jrr_order_base = JrrOrderBase(alert_manager)
-    
-    return jrr_order_base

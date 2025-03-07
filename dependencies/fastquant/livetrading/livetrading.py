@@ -82,7 +82,7 @@ def livetrade_crypto_binance(
     asset: str,
     amount: float,
     strategy: str = "",
-    start_hours_ago: int = 5,
+    start_hours_ago: int = 1,
     enable_alerts: bool = False,
     alert_channel: str = ""
 ) -> None:
@@ -224,7 +224,7 @@ def livetrade_crypto_binance_ML(
     asset: str,
     amount: float,
     strategy: str = "",
-    start_hours_ago: int = 5,
+    start_hours_ago: int = 1,
     enable_alerts: bool = False,
     alert_channel: str = ""
 ) -> None:
@@ -244,9 +244,7 @@ def livetrade_crypto_binance_ML(
     - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
-    import backtrader as bt
-    import pytz
-    from datetime import datetime, timedelta
+
 
     # Get the strategy class from STRATEGY_MAPPING if a string was provided
     if isinstance(strategy, str):
@@ -269,7 +267,6 @@ def livetrade_crypto_binance_ML(
     print(f"Fetching historical data from: {from_date} (UTC+2)")
     data = store.getdata(start_date=from_date)
     data._dataname = f"{coin}{collateral}"
-    data.live = True  
 
     cerebro = bt.Cerebro(quicknotify=True)
 
@@ -293,6 +290,7 @@ def livetrade_crypto_binance_ML(
     # Run live trading. The data feed will first replay historical data
     # (warming up all your indicators) and then switch into live mode.
     print("Starting live trading with historical backfill...")
+    data.live = True  
     cerebro.run(live=True)
 
 
@@ -305,7 +303,7 @@ def livetrade_crypto_mexc(
     asset: str,
     amount: float,
     strategy: str = "",
-    start_hours_ago: int = 5,
+    start_hours_ago: int = 1,
     enable_alerts: bool = False,
     alert_channel: str = ""
 ) -> None:
@@ -380,7 +378,7 @@ def livetrade_crypto_bitget(
     asset: str,
     amount: float,
     strategy: str = "",
-    start_hours_ago: int = 5,
+    start_hours_ago: int = 1,
     enable_alerts: bool = False,
     alert_channel: str = ""
 ) -> None:
@@ -443,4 +441,58 @@ def livetrade_crypto_bitget(
     )
     
     cerebro.adddata(data=data, name=data._dataname)
+    cerebro.run(live=True)
+
+''' Experimental WIP '''
+''' Strategy example still WIP in debugging state '''
+def livetrade_multiple_pairs(
+    pairs: list,
+    exchange: str,
+    account: str,
+    strategy: str = "",
+    start_hours_ago: int = 1,
+    enable_alerts: bool = False,
+    alert_channel: str = ""
+) -> None:
+    cerebro = bt.Cerebro(quicknotify=True)
+    
+    if isinstance(strategy, str):
+        strategy_class = STRATEGY_MAPPING.get(strategy)
+        if strategy_class is None:
+            raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    asset_mapping = {}
+    amount_mapping = {}
+    
+    for pair in pairs:
+        store = bitget_store.BitgetStore(
+            coin_refer=pair['coin'],
+            coin_target=pair['collateral']
+        )
+
+        tz = pytz.timezone('Europe/Berlin')
+        current_time = datetime.now(tz)
+        buffer_minutes = 2
+        from_date = current_time - timedelta(hours=start_hours_ago, minutes=buffer_minutes)
+        data = store.getdata(start_date=from_date)
+
+        data_name = f"{pair['coin']}{pair['collateral']}"
+        data._dataname = data_name
+        cerebro.adddata(data=data, name=data._dataname)
+        asset_mapping[data_name] = pair["asset"]
+        amount_mapping[data_name] = pair["amount"]
+
+    cerebro.addstrategy(
+        strategy_class,
+        exchange=exchange,
+        account=account,
+        asset_mapping=asset_mapping,
+        amount_mapping=amount_mapping,
+        backtest=False,
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
+    )
+    
     cerebro.run(live=True)

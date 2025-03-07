@@ -9,8 +9,6 @@ import threading
 from collections import deque
 import time
 from web3 import Web3
-from fastquant.strategys.base import function_trapper
-
 
 class PancakeSwapData(DataBase):
     params = (
@@ -32,7 +30,6 @@ class PancakeSwapData(DataBase):
         self.ws_url = store.ws_url
         self.message_queue = store.message_queue
 
-    @function_trapper
     def handle_websocket_message(self, price_data):
         try:
             if self.p.debug:
@@ -51,7 +48,6 @@ class PancakeSwapData(DataBase):
         except Exception as e:
             print(f"Error handling WebSocket message: {e}")
 
-    @function_trapper
     def _load(self):
         if self._state == self._ST_OVER:
             return False
@@ -63,7 +59,6 @@ class PancakeSwapData(DataBase):
             else:
                 self._start_live()
 
-    @function_trapper
     def _load_kline(self):
         try:
             kline = self._data.popleft()
@@ -87,7 +82,6 @@ class PancakeSwapData(DataBase):
         self.lines.volume[0] = volume
         return True
 
-    @function_trapper
     def _parser_dataframe(self, data):
         df = data.copy()
         df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
@@ -99,27 +93,22 @@ class PancakeSwapData(DataBase):
         df['volume'] = df['volume'].astype(float)
         return df
 
-    @function_trapper
     def _parser_to_kline(self, timestamp, kline):
         df = pd.DataFrame([[timestamp, kline[1], kline[2], kline[3], kline[4], kline[5]]])
         return self._parser_dataframe(df)
 
-    @function_trapper
     def _start_live(self):
         print("Starting live data...")  # Debugging
         self._store.start_socket(self.token_address)
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
 
-    @function_trapper
     def haslivedata(self):
         return self._state == self._ST_LIVE and len(self._data) > 0
 
-    @function_trapper
     def islive(self):
         return True
 
-    @function_trapper
     def start(self):
         DataBase.start(self)
         print("Starting WebSocket connection...")
@@ -154,7 +143,6 @@ class PancakeSwapData(DataBase):
         # Process the messages from the WebSocket
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
-    @function_trapper
     def _process_websocket_messages(self):
         while True:
             try:

@@ -40,8 +40,8 @@ class BitgetData(DataBase):
     def handle_websocket_message(self, message):
         try:
             data = json.loads(message)
-            if self.p.debug:
-                print(f"Received websocket message: {data}")
+            # if self.p.debug:
+            #     print(f"Received websocket message: {data}")
             if "action" in data and data["action"] == "snapshot":
                 if self.p.debug:
                     print('HACK :: dropping snapshot... dont preprocess old candles...')
@@ -50,8 +50,8 @@ class BitgetData(DataBase):
                 for k in data.get('data', []):
                     kline = self._parser_to_kline(k[0], k)
                     self._data.append(kline)
-                    if self.p.debug:
-                        print('Received fresh data:', kline)
+                    # if self.p.debug:
+                    #     print('Received fresh data:', kline)
         except Exception as e:
             if self.p.debug:
                 print(f"Error handling WebSocket message: {e}")

@@ -121,7 +121,7 @@ class BitgetData(DataBase):
         self._store.start_socket()
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
-        print("Starting live data and purging historical data...")
+        print("Starting live data...")
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     # @function_trapper

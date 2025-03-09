@@ -7,7 +7,6 @@ from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
-from fastquant.strategys.base import function_trapper
 
 
 def identify_gaps(df, expected_interval):
@@ -36,7 +35,7 @@ class MexcData(DataBase):
         self.ws_url = store.ws_url
         self._state = self._ST_HISTORBACK if start_date else self._ST_LIVE
 
-    @function_trapper
+    # @function_trapper
     def handle_websocket_message(self, message):
         try:
             data = json.loads(message)
@@ -67,7 +66,7 @@ class MexcData(DataBase):
             print(f"Message was: {message}")
 
 
-    @function_trapper
+    # @function_trapper
     def _load(self):
         if self._state == self._ST_OVER:
             return False
@@ -79,7 +78,7 @@ class MexcData(DataBase):
             else:
                 self._start_live()
 
-    @function_trapper
+    # @function_trapper
     def _load_kline(self):
         try:
             kline = self._data.popleft()
@@ -91,6 +90,7 @@ class MexcData(DataBase):
         timestamp, open_, high, low, close, volume = kline
 
         if volume == 0:
+            print('skipping candle == volume 0')
             return self._load_kline()
 
         self.lines.datetime[0] = date2num(timestamp)
@@ -101,7 +101,7 @@ class MexcData(DataBase):
         self.lines.volume[0] = volume
         return True
 
-    @function_trapper
+    # @function_trapper
     def _parser_dataframe(self, data):
         df = data.copy()
         df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
@@ -124,7 +124,7 @@ class MexcData(DataBase):
             float(kline[5])
         ]
 
-    @function_trapper
+    # @function_trapper
     def _start_live(self):
         print("Starting live data...")
         self._store.start_socket()
@@ -133,15 +133,15 @@ class MexcData(DataBase):
         print("Starting live data and purging historical data...")
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
-    @function_trapper
+    # @function_trapper
     def haslivedata(self):
         return self._state == self._ST_LIVE and len(self._data) > 0
 
-    @function_trapper
+    # @function_trapper
     def islive(self):
         return True
 
-    @function_trapper
+    # @function_trapper
     def start(self):
         DataBase.start(self)
 
@@ -181,7 +181,7 @@ class MexcData(DataBase):
         else:
             self._start_live()
 
-    @function_trapper
+    # @function_trapper
     def _process_websocket_messages(self):
         while True:
             try:

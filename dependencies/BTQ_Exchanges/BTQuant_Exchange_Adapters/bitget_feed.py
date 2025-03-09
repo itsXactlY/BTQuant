@@ -7,7 +7,6 @@ from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
-import gc
 # from fastquant.strategys.base import function_trapper
 
 def identify_gaps(df, expected_interval):
@@ -20,7 +19,7 @@ class BitgetData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', False)
+        ('debug', True)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -121,7 +120,7 @@ class BitgetData(DataBase):
         self._store.start_socket()
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
-        print("Starting live data...")
+        print("Starting live data and purging historical data...")
         threading.Thread(target=self._process_websocket_messages, daemon=True).start()
 
     # @function_trapper
@@ -139,6 +138,9 @@ class BitgetData(DataBase):
         print("Starting WebSocket connection...")
         print("WebSocket connection started.")
 
+        if self.start_date:
+            self._state = self._ST_HISTORBACK
+            self.put_notification(self.DELAYED)
         self._start_live()
 
     # @function_trapper

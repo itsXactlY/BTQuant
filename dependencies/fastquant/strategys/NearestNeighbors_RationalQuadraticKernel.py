@@ -11,7 +11,7 @@ Sharing is caring.
 
 © by aLca (itsXactlY) // BTQuant
 '''
-# 2179.040000000000 TakeProfit: 2183.398080000000
+
 class RationalQuadraticKernel(bt.indicators.PeriodN):
     lines = ('yhat',)
     params = (('h', 8), ('r', 8), ('x', 25))
@@ -31,7 +31,7 @@ class NRK(BaseStrategy):
         # ML Parameters
         ('source', 'close'),
         ('neighbors_count', 8),
-        ('max_bars_back', 100), # Slow, better for higher TF than 5m+
+        ('max_bars_back', 100), # Standard: 2000 what is slow on HFT, better suited for higher TF than 5m+
         ('use_volatility_filter', True),
         ('regime_threshold', -0.1),
         ('adx_threshold', 20),
@@ -228,6 +228,4 @@ Take Profit: {self.take_profit_price:.9f}"""
                     self.buy_executed = False
                 elif self.params.backtest == True:
                     self.close()
-
-
             self.conditions_checked = True

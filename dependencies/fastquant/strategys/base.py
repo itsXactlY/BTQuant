@@ -258,7 +258,7 @@ class BaseStrategy(bt.Strategy):
         self.entry_price = None
         self.take_profit_price = None
         self.stop_loss_price = None
-        self.buy_executed = False
+        self.buy_executed = None
         self.average_entry_price = None
         self.entry_prices = []
         self.sizes = []
@@ -266,7 +266,7 @@ class BaseStrategy(bt.Strategy):
         self.stake_to_sell = None
         self.stake = None
         self.amount = self.p.amount
-        self.conditions_checked = False
+        self.conditions_checked = None
         self.print_counter = 0
                 
         self.last_order_time = 0
@@ -344,7 +344,6 @@ class BaseStrategy(bt.Strategy):
         self.periodic_history_df = None
 
         self.dataclose = self.datas[0].close
-        self.dataopen = self.datas[0].open
 
 
     def log(self, txt, dt=None):
@@ -371,21 +370,7 @@ class BaseStrategy(bt.Strategy):
         self.periodic_history["portfolio_value"].append(self.broker.getvalue())
         self.periodic_history["cash"].append(self.broker.getcash())
         self.periodic_history["size"].append(self.position.size)
-
-
-    @property
-    def current_price(self):
-        return self.data.close[0]
-
-    @property
-    def position_value(self):
-        return self.position_size * self.current_price
-
-    @property
-    def wallet_balance(self):
-        return self.broker.cash
-
-    # @function_trapper
+    
     def process_orders(self):
         while True:
             order = self.order_queue.get()
@@ -400,7 +385,6 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.order_queue.task_done()
 
-    # @function_trapper
     def enqueue_order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -408,9 +392,9 @@ class BaseStrategy(bt.Strategy):
             if action == 'sell':
                 self.last_order_time = time.time()
             else:
-                self.last_order_time = time.time()        
+                self.last_order_time = time.time()
 
-    # @function_trapper
+    
     def process_web3orders(self):
         while True:
             order = self.web3order_queue.get()
@@ -431,7 +415,6 @@ class BaseStrategy(bt.Strategy):
                 self.reset_position_state()
             self.web3order_queue.task_done()
 
-    # @function_trapper
     def enqueue_web3order(self, action, **params):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
@@ -453,43 +436,61 @@ class BaseStrategy(bt.Strategy):
     def sell_or_cover_condition(self):
         return False
 
-    # @function_trapper
     def load_trade_data(self):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
             if sys.platform != "win32":
-                os.sync()  # Ensure file is in sync before reading
+                os.sync()
             with open(file_path, 'r') as file:
                 orders = [line for line in file.read().strip().split('\n') if line.strip()]
-
-            # Process orders starting from the most recent
+            
+            self.entry_prices = []
+            self.sizes = []
+            
+            if self.p.debug:
+                print("Debug :: Processing order history")
+            
             for order_str in reversed(orders):
                 try:
                     order_data = json.loads(order_str)
+                    if self.p.debug:
+                        print(f"Debug :: Order data: {order_data}")
                 except json.JSONDecodeError:
                     print(f"Skipping invalid JSON: {order_str}")
                     continue
-
+                    
                 action = order_data.get('Action')
                 asset = order_data.get('Asset')
-
-                # Stop if a sell is encountered – meaning any prior buys are irrelevant
+                
+                if self.p.debug:
+                    print(f"Debug :: Checking order - Action: {action}, Asset: {asset}")
+                
                 if action == 'sell' and asset == self.asset:
+                    if self.p.debug:
+                        print("Debug :: Found sell order - breaking")
                     break
-
+                    
                 if action == 'buy' and asset == self.asset:
                     entry_price = order_data.get('Price', 0.0)
+                    amount = order_data.get('Amount', 0.0)
+                    
+                    if self.p.debug:
+                        print(f"Debug :: Adding buy order - Price: {entry_price}, Amount: {amount}")
+                    
                     self.entry_prices.append(entry_price)
-                    self.sizes.append(self.p.amount)
+                    self.sizes.append(amount)
                     self.buy_executed = True
-
+            
+            if self.p.debug:
+                print(f"Debug :: Loaded entries - Prices: {self.entry_prices}, Sizes: {self.sizes}")
+            
             if self.entry_prices and self.sizes:
-                print(f"Loaded {len(self.entry_prices)} buy orders after the last sell.")
+                print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
                 self.calc_averages()
                 self.entry_price = self.average_entry_price
                 self.buy_executed = True
             else:
-                print("No buy orders found after the last sell.")
+                print("No buy orders found after the last sell")
 
             # Process the last order for free USDT etc.
             if orders and orders[-1].strip():
@@ -500,7 +501,7 @@ class BaseStrategy(bt.Strategy):
                     self.stake_to_use = usdt_value
                     print(f"Last modified: {os.path.getmtime(file_path)}")
                 except json.JSONDecodeError:
-                    print("Error parsing the last order, resetting position state.")
+                    print("Error parsing the last order, resetting position state")
                     self.stake_to_use = 1000.0
                     self.reset_position_state()
             else:
@@ -511,7 +512,7 @@ class BaseStrategy(bt.Strategy):
             self.reset_position_state()
             self.stake_to_use = 1000.0
         except PermissionError:
-            print(f"Permission denied when trying to access the history file for account {self.account}.")
+            print(f"Permission denied when trying to access the history file for account {self.account}")
             self.reset_position_state()
             self.stake_to_use = 1000.0
         except requests.exceptions.RequestException as e:
@@ -523,25 +524,31 @@ class BaseStrategy(bt.Strategy):
             self.reset_position_state()
             self.stake_to_use = 1000.0
 
-    # @function_trapper
+    
     def calc_averages(self):
-        total_value = sum(entry_price * size for entry_price, size in zip(self.entry_prices, self.sizes))
+        _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
+        total_value = sum(_amount)
         total_size = sum(self.sizes)
+        
+        if self.p.debug:
+            print(f"Debug :: amount of price×size: {_amount}")
+            print(f"Debug :: Total value: {total_value}, Total size: {total_size}")
+        
         if total_size:
             self.average_entry_price = total_value / total_size
             self.take_profit_price = self.average_entry_price * (1 + self.params.take_profit / 100)
         else:
             self.average_entry_price = None
             self.take_profit_price = None
-
+            
         if self.entry_prices:
-            if self.p.backtest == False:
+            if self.p.backtest == False and self.p.debug:
                 print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
             self.buy_executed = True
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
 
-    # @function_trapper
+    
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
             ptu()
@@ -551,19 +558,15 @@ class BaseStrategy(bt.Strategy):
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
 
-    # @function_trapper
+    
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
-            # Ensure we have live data and update the stake if so
-            if not self.params.backtest and getattr(self, 'live_data', False):
-                self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
+            self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
 
-            # Debug: Print current state
             if self.p.debug:
-                print(f"DEBUG: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
+                print(f"Debug :: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
 
-            # If we already have a buy, update and print the position report every 10th call
             if self.buy_executed and self.p.debug:
                 self.print_counter += 1
                 if self.print_counter % 10 == 0:
@@ -594,7 +597,6 @@ class BaseStrategy(bt.Strategy):
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
 
-    # @function_trapper
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
         dt = datetime.now ()
@@ -605,7 +607,6 @@ class BaseStrategy(bt.Strategy):
         else:
             self.live_data = False
 
-    # @function_trapper
     def reset_position_state(self):
         self.buy_executed = False
         self.entry_price = None
@@ -685,7 +686,6 @@ class BaseStrategy(bt.Strategy):
         self.cash = cash
         self.value = value
 
-    # @function_trapper
     def stop(self):
         if self.p.backtest:
             self.final_value = self.broker.getvalue()

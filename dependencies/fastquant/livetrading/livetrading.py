@@ -1,5 +1,5 @@
 import backtrader as bt
-from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store, mexc_store, bitget_store
+from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, mexc_store, bitget_store
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
@@ -147,7 +147,8 @@ def livetrade_crypto_binance(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-@function_trapper
+
+''' DEPRECATED
 def livetrade_crypto_bybit(
 
     coin: str,
@@ -214,6 +215,7 @@ def livetrade_crypto_bybit(
     cerebro.adddata(data=data, name=data._dataname)
     # print(f"{len(cerebro.datas) > 0}")
     cerebro.run(live=True)
+'''
 
 @function_trapper
 def livetrade_crypto_binance_ML(

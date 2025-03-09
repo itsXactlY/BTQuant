@@ -42,17 +42,17 @@ class MexcStore(object):
         self.websocket_thread = None
         self.message_queue = Queue()
 
-    @function_trapper
+    # @function_trapper
     def getdata(self, start_date=None):
         if not hasattr(self, '_data'):
             self._data = MexcData(store=self, start_date=start_date)
         return self._data
 
-    @function_trapper
+    # @function_trapper
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
 
-    @function_trapper
+    # @function_trapper
     def on_message(self, ws, message):
         try:
             if isinstance(message, str):
@@ -63,15 +63,15 @@ class MexcStore(object):
         except Exception as e:
             print(f"Error processing WebSocket message: {e}")
 
-    @function_trapper
+    # @function_trapper
     def on_error(self, ws, error):
         print(f"WebSocket error: {error}")
 
-    @function_trapper
+    # @function_trapper
     def on_close(self, ws, close_status_code, close_msg):
         print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
 
-    @function_trapper
+    # @function_trapper
     def on_open(self, ws):
         print("WebSocket connection opened")
 
@@ -82,7 +82,7 @@ class MexcStore(object):
         }
         ws.send(json.dumps(payload))
 
-    @function_trapper
+    # @function_trapper
     def start_socket(self):
         def run_socket():
             while True:
@@ -103,13 +103,13 @@ class MexcStore(object):
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
-    @function_trapper
+    # @function_trapper
     def stop_socket(self):
         if self.websocket:
             self.websocket.close()
             print("WebSocket connection closed.")
 
-    @function_trapper
+    # @function_trapper
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
         print('STORE::FETCH SINCE:', since)
         print(f"Fetching historical data for {symbol} with interval {interval}")

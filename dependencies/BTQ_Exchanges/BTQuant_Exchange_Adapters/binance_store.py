@@ -53,7 +53,7 @@ class BinanceStore(object):
     @function_trapper
     def on_message(self, ws, message):
         self.message_queue.put(message)
-        # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug, etc...)
+        # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
 
     @function_trapper
     def on_error(self, ws, error):

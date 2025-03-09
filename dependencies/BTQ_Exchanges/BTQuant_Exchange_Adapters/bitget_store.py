@@ -1,13 +1,11 @@
 from datetime import datetime
 import threading
 import time
-import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
 from fastquant.strategys.base import function_trapper
 import websocket
 import json
-import pytz
 from .bitget_feed import BitgetData
 
 class BitgetStore(object):

@@ -1,8 +1,12 @@
 # Modules available for fastquant.data.*
 
 from fastquant.data.crypto.crypto import get_crypto_data, CRYPTO_EXCHANGES
-from fastquant.data.mssql.mssqldatabase import get_database_data
-from fastquant.data.mssql.mssql_stocks import get_database_stock_data
+'''HACK :: MsSQL is now optional - if you want to use it, you need to uncomment the following lines
+        :: PLANING AN CLEAN BRANCH OF NO SQL NEEDED
+
+# from fastquant.data.mssql.mssqldatabase import get_database_data
+# from fastquant.data.mssql.mssql_stocks import get_database_stock_data
+'''
 
 from fastquant.data.stocks.pse import (
     # Gets from yahoo finance

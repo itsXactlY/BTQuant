@@ -7,8 +7,6 @@ _collateral = 'USDT'
 _exchange = 'mimic' # JackRabbitRelay Exchange Name
 _account = 'binance_sub2' # JackRabbitRelay Account name
 _asset = f'{_coin}/{_collateral}'
-_amount = '40'
-_amount = float(_amount)
 
 livetrade(
     coin=_coin,
@@ -17,7 +15,6 @@ livetrade(
     exchange=_exchange,
     account=_account,
     asset=_asset,
-    amount=_amount,
-    enable_alerts=True,
+    enable_alerts=False,
     alert_channel=-100123456789 # Telegram channel/group
 )

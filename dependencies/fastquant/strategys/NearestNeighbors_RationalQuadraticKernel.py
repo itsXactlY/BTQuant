@@ -45,7 +45,7 @@ class NRK(BaseStrategy):
         ('dca_deviation', 1.5),
         ('take_profit', 2),
         ('percent_sizer', 0.1),
-        ('debug', True),
+        ('debug', False),
         ('backtest', None),
     )
 
@@ -64,10 +64,10 @@ class NRK(BaseStrategy):
         if self.p.use_kernel_smoothing:
             self.kernel_smooth = bt.indicators.SMA(self.kernel_estimate, period=self.p.kernel_smoothing_lag, plot=False)
         
-        self.features = [self.rsi, 
-                         self.wt, 
-                         self.cci, 
-                         self.adx, 
+        self.features = [self.rsi,
+                         self.wt,
+                         self.cci,
+                         self.adx,
                          self.rsi]
         self.feature_data = []
         ####
@@ -157,75 +157,62 @@ class NRK(BaseStrategy):
         signal = self.compute_ml_signal()
         if not self.buy_executed:
             if signal > 0:
-                if self.p.backtest is False:
+                if self.p.backtest == False:
                     self.entry_prices.append(self.data.close[0])
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
                     self.sizes.append(self.amount)
                     self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
                     self.calc_averages()
                     self.buy_executed = True
-                    self.conditions_checked = True
-                    alert_message = f"""\nBuy Alert arrived!
-Exchange: {self.exchange}
-Action: buy {self.asset}
-Entry Price: {self.data.close[0]:.9f}
-Take Profit: {self.take_profit_price:.9f}"""
-
-                    self.send_alert(alert_message)
-                elif self.p.backtest is True:
+                elif self.p.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
                     self.calc_averages()
-                    self.conditions_checked = True
+        self.conditions_checked = True
 
     def dca_or_short_condition(self):
-        print('dca_or_short_condition')
-        if self.live_data and self.buy_executed:
-            print(f'|\n| {datetime.now()}\n| Price: {self.data.close[0]:.12f} Entry: {self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
-        signal = self.compute_ml_signal()
-        print(f'Signal: {signal}')
-        
-        if signal > 0:
-            if self.p.backtest is False:
-                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.calc_averages()
-                    self.buy_executed = True
-                    self.conditions_checked = True
-                    alert_message = f"""\nDCA Alert arrived!
-        Exchange: {self.exchange}
-        Action: buy {self.asset}
-        Entry Price: {self.data.close[0]:.9f}
-        Take Profit: {self.take_profit_price:.9f}"""
-                    self.send_alert(alert_message)
+        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
+            signal = self.compute_ml_signal()
+            if signal > 0:
+                if self.p.backtest is False:
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.amount)
+                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                        self.calc_averages()
+                        self.buy_executed = True
+                        self.conditions_checked = True
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
                     self.calc_averages()
-                    self.conditions_checked = True
+        self.conditions_checked = True
 
     def sell_or_cover_condition(self):
-        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                print(
-                    f"| - Avoiding sell at a loss or below take profit. "
-                    f"| - Current close price: {self.data.close[0]:.12f}, "
-                    f"| - Average entry price: {self.average_entry_price:.12f}, "
-                    f"| - Take profit price: {self.take_profit_price:.12f}"
-                )
+        if self.buy_executed:
+            current_price = round(self.data.close[0], 9)
+            avg_price = round(self.average_entry_price, 9)
+            tp_price = round(self.take_profit_price, 9)
 
-                if self.params.backtest == False:
-                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-                    alert_message = f"""Close {self.asset}"""
-                    self.send_alert(alert_message)
+            if current_price >= tp_price and current_price >= avg_price:
+                if self.params.backtest:
+                    self.close()
                     self.reset_position_state()
                     self.buy_executed = False
-                elif self.params.backtest == True:
-                    self.close()
-            self.conditions_checked = True
+                    if self.p.debug:
+                        print(f"Position closed at {current_price:.9f}, profit taken")
+                else:
+                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    self.reset_position_state()
+                    self.buy_executed = False
+            else:
+                if self.p.debug == True:
+                    print(
+                        f"| - Avoiding sell at a loss or below take profit.\n"
+                        f"| - Current close price: {self.data.close[0]:.12f},\n "
+                        f"| - Average entry price: {self.average_entry_price:.12f},\n "
+                        f"| - Take profit price: {self.take_profit_price:.12f}")
+        self.conditions_checked = True

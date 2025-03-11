@@ -1,11 +1,11 @@
 import backtrader as bt
-from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, mexc_store, bitget_store
+from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_store, mexc_store, bitget_store
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
 from fastquant.strategys.base import function_trapper
 
-@function_trapper
+# @function_trapper
 def livetrade_web3(
     coin: str,
     collateral: str,
@@ -13,7 +13,6 @@ def livetrade_web3(
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
@@ -63,7 +62,6 @@ def livetrade_web3(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -73,14 +71,13 @@ def livetrade_web3(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-@function_trapper
+# @function_trapper
 def livetrade_crypto_binance(
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     start_hours_ago: int = 1,
     enable_alerts: bool = False,
@@ -136,7 +133,6 @@ def livetrade_crypto_binance(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -147,8 +143,7 @@ def livetrade_crypto_binance(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-
-''' DEPRECATED
+# @function_trapper
 def livetrade_crypto_bybit(
 
     coin: str,
@@ -156,7 +151,6 @@ def livetrade_crypto_bybit(
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     timezone: str = 'Europe/Berlin',
     start_hours_ago: int = 2,
@@ -205,7 +199,6 @@ def livetrade_crypto_bybit(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -215,16 +208,14 @@ def livetrade_crypto_bybit(
     cerebro.adddata(data=data, name=data._dataname)
     # print(f"{len(cerebro.datas) > 0}")
     cerebro.run(live=True)
-'''
 
-@function_trapper
+# @function_trapper
 def livetrade_crypto_binance_ML(
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     start_hours_ago: int = 1,
     enable_alerts: bool = False,
@@ -281,7 +272,6 @@ def livetrade_crypto_binance_ML(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -296,14 +286,13 @@ def livetrade_crypto_binance_ML(
     cerebro.run(live=True)
 
 
-@function_trapper
+# @function_trapper
 def livetrade_crypto_mexc(
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     start_hours_ago: int = 1,
     enable_alerts: bool = False,
@@ -359,7 +348,6 @@ def livetrade_crypto_mexc(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -371,14 +359,13 @@ def livetrade_crypto_mexc(
     cerebro.run(live=True)
 
 
-@function_trapper
+# @function_trapper
 def livetrade_crypto_bitget(
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
-    amount: float,
     strategy: str = "",
     start_hours_ago: int = 1,
     enable_alerts: bool = False,
@@ -434,7 +421,6 @@ def livetrade_crypto_bitget(
         exchange=exchange,
         account=account,
         asset=asset,
-        amount=amount,
         coin=coin,
         collateral=collateral,
         backtest=False,
@@ -466,7 +452,6 @@ def livetrade_multiple_pairs(
         strategy_class = strategy
 
     asset_mapping = {}
-    amount_mapping = {}
     
     for pair in pairs:
         store = bitget_store.BitgetStore(
@@ -484,14 +469,12 @@ def livetrade_multiple_pairs(
         data._dataname = data_name
         cerebro.adddata(data=data, name=data._dataname)
         asset_mapping[data_name] = pair["asset"]
-        amount_mapping[data_name] = pair["amount"]
 
     cerebro.addstrategy(
         strategy_class,
         exchange=exchange,
         account=account,
         asset_mapping=asset_mapping,
-        amount_mapping=amount_mapping,
         backtest=False,
         enable_alerts=enable_alerts,
         alert_channel=alert_channel

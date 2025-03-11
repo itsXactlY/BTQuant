@@ -12,8 +12,6 @@ _exchange = 'pancakeswap'
 _websocket = "wss://bsc-rpc.publicnode.com"
 _account = 'web3'
 _asset = f'{"$Giggle"}/{"wBNB"}'
-_amount = '0.00042'
-_amount = float(_amount)
 
 
 livetrade(
@@ -24,6 +22,5 @@ livetrade(
     web3ws=_websocket,
     account=_account,
     asset=_asset,
-    amount=_amount,
     enable_alerts = False
 )

@@ -158,12 +158,15 @@ class NRK(BaseStrategy):
         if not self.buy_executed:
             if signal > 0:
                 if self.p.backtest == False:
+                    self.calculate_position_size()
                     self.entry_prices.append(self.data.close[0])
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
-                    self.sizes.append(self.amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                    self.sizes.append(self.usdt_amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
                     self.calc_averages()
                     self.buy_executed = True
+                    alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    self.send_alert(alert_message)
                 elif self.p.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
@@ -177,12 +180,15 @@ class NRK(BaseStrategy):
             signal = self.compute_ml_signal()
             if signal > 0:
                 if self.p.backtest is False:
+                        self.calculate_position_size()
                         self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.amount)
-                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
+                        self.sizes.append(self.usdt_amount)
+                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
                         self.calc_averages()
                         self.buy_executed = True
                         self.conditions_checked = True
+                        alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                        self.send_alert(alert_message)
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.buy_executed = True
@@ -206,6 +212,8 @@ class NRK(BaseStrategy):
                         print(f"Position closed at {current_price:.9f}, profit taken")
                 else:
                     self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    alert_message = f"""Close {self.asset}"""
+                    self.send_alert(alert_message)
                     self.reset_position_state()
                     self.buy_executed = False
             else:

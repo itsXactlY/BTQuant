@@ -1,6 +1,5 @@
 import datetime
 import backtrader as bt
-from backtrader import indicators as btind
 import requests
 from fastquant.strategys.jrr_orders import *
 from fastquant.strategys.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
@@ -14,6 +13,8 @@ import shutil
 import os
 import uuid
 import sys
+
+order_lock = threading.Lock()
 
 from fastquant.config import (
     INIT_CASH,
@@ -304,11 +305,7 @@ class BaseStrategy(bt.Strategy):
         self.win_rate = 0
         self.final_value = 0.0
 
-        if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
-            self.init_live_trading()
-        elif self.params.backtest == False:
-            self.init_live_trading()
-        elif self.params.backtest == False and self.p.exchange.lower() == "raydium":
+        if self.params.backtest == False:
             self.init_live_trading()
 
         if self.strategy_logging and self.p.backtest:
@@ -345,7 +342,6 @@ class BaseStrategy(bt.Strategy):
 
         self.dataclose = self.datas[0].close
 
-
     def log(self, txt, dt=None):
         if self.p.backtest == False:
             if len(self.datas) == 0 or len(self.datas[0]) == 0:
@@ -353,7 +349,6 @@ class BaseStrategy(bt.Strategy):
                 return
         dt = dt or self.datas[0].datetime.datetime(0)
         print("%s, %s" % (dt.isoformat(), txt))
-
 
     def update_order_history(self, order):
         self.order_history["dt"].append(self.datas[0].datetime.datetime(0))
@@ -374,7 +369,6 @@ class BaseStrategy(bt.Strategy):
     def process_orders(self):
         while True:
             order = self.order_queue.get()
-            print(order)
             if order is None:
                 break
             action, params = order
@@ -386,13 +380,13 @@ class BaseStrategy(bt.Strategy):
             self.order_queue.task_done()
 
     def enqueue_order(self, action, **params):
-        current_time = time.time()
-        if current_time - self.last_order_time >= self.order_cooldown:
-            self.order_queue.put((action, params))
-            if action == 'sell':
-                self.last_order_time = time.time()
-            else:
-                self.last_order_time = time.time()
+        with order_lock:
+            current_time = time.time()
+            if current_time - self.last_order_time >= self.order_cooldown:
+                self.order_queue.put((action, params))
+                self.last_order_time = current_time
+                return True
+        return False
 
     
     def process_web3orders(self):
@@ -435,6 +429,54 @@ class BaseStrategy(bt.Strategy):
 
     def sell_or_cover_condition(self):
         return False
+
+    def calculate_position_size(self):
+        """Calculate the position size based on available USDT and current price"""
+        min_order_value = 5.50
+        usdt_to_use = self.stake_to_use * self.p.percent_sizer
+
+        if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
+            self.amount = usdt_to_use / self.dataclose[0]
+            order_value = self.amount * self.dataclose[0]
+
+            if order_value < min_order_value:
+                self.amount = min_order_value / self.dataclose[0]
+                usdt_to_use = min_order_value
+                print(f"Adjusted to minimum order value: ${min_order_value}")
+            
+            self.amount = round(self.amount, 8)
+            self.usdt_amount = round(self.amount * self.dataclose[0], 2)
+            
+            print(f"Calculated position size: {self.amount} units worth {self.usdt_amount:.2f} USDT")
+        else:
+            self.amount = min_order_value / 1000  # Arbitrary placeholder price
+            self.usdt_amount = min_order_value
+            print(f"No price data available. Using default amount: {self.amount}")
+        
+        return self.amount
+
+    def calc_averages(self):
+        _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
+        total_value = sum(_amount)
+        total_size = sum(self.sizes)
+        
+        if self.p.debug:
+            print(f"Debug :: amount of price×size: {_amount}")
+            print(f"Debug :: Total value: {total_value}, Total size: {total_size}")
+        
+        if total_size:
+            self.average_entry_price = total_value / total_size
+            self.take_profit_price = self.average_entry_price * (1 + self.params.take_profit / 100)
+        else:
+            self.average_entry_price = None
+            self.take_profit_price = None
+            
+        if self.entry_prices:
+            if self.p.backtest == False and self.p.debug:
+                print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
+            self.buy_executed = True
+        else:
+            print("No positions exist. Entry and Take Profit prices reset to None")
 
     def load_trade_data(self):
         try:
@@ -506,48 +548,12 @@ class BaseStrategy(bt.Strategy):
                     self.reset_position_state()
             else:
                 self.reset_position_state()
-
-        except FileNotFoundError:
-            print(f"History file not found for account {self.account}.")
-            self.reset_position_state()
-            self.stake_to_use = 1000.0
-        except PermissionError:
-            print(f"Permission denied when trying to access the history file for account {self.account}")
-            self.reset_position_state()
-            self.stake_to_use = 1000.0
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching trade data: {e}")
-            self.reset_position_state()
-            self.stake_to_use = 1000.0
+                self.stake_to_use = 1000.0
+                
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
             self.reset_position_state()
             self.stake_to_use = 1000.0
-
-    
-    def calc_averages(self):
-        _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
-        total_value = sum(_amount)
-        total_size = sum(self.sizes)
-        
-        if self.p.debug:
-            print(f"Debug :: amount of price×size: {_amount}")
-            print(f"Debug :: Total value: {total_value}, Total size: {total_size}")
-        
-        if total_size:
-            self.average_entry_price = total_value / total_size
-            self.take_profit_price = self.average_entry_price * (1 + self.params.take_profit / 100)
-        else:
-            self.average_entry_price = None
-            self.take_profit_price = None
-            
-        if self.entry_prices:
-            if self.p.backtest == False and self.p.debug:
-                print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
-            self.buy_executed = True
-        else:
-            print("No positions exist. Entry and Take Profit prices reset to None")
-
     
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
@@ -557,12 +563,10 @@ class BaseStrategy(bt.Strategy):
         elif self.params.backtest == False:
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
-
     
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
-            self.stake = self.stake_to_use * self.p.percent_sizer / self.dataclose
 
             if self.p.debug:
                 print(f"Debug :: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
@@ -570,7 +574,7 @@ class BaseStrategy(bt.Strategy):
             if self.buy_executed and self.p.debug:
                 self.print_counter += 1
                 if self.print_counter % 10 == 0:
-                    print(f'| {datetime.utcnow()}'
+                    print(f'| {datetime.now()}'
                         f'\n|{"-"*99}¬'
                         f'\n| Position Report'
                         f'\n| Price: {self.data.close[0]:.9f}'
@@ -579,9 +583,11 @@ class BaseStrategy(bt.Strategy):
                         f'\n|{"-"*99}¬')
                 
             if not self.buy_executed:
-                self.buy_or_short_condition()
+                if self.buy_or_short_condition():
+                    return
             elif self.DCA == True and self.buy_executed:
-                self.sell_or_cover_condition()
+                if self.sell_or_cover_condition():
+                    return
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
@@ -590,16 +596,18 @@ class BaseStrategy(bt.Strategy):
         elif self.params.backtest == True:
             self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
             if not self.buy_executed:
-                self.buy_or_short_condition()
+                if self.buy_or_short_condition():
+                    return
             elif self.DCA == True and self.buy_executed:
-                self.sell_or_cover_condition()
+                if self.sell_or_cover_condition():
+                    return
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
 
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
-        dt = datetime.now ()
+        dt = datetime.now()
         msg= 'Data Status: {}'.format(data._getstatusname(status))
         print(dt,dn,msg)
         if data._getstatusname(status) == 'LIVE':

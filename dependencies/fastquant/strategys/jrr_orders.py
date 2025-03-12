@@ -1,9 +1,11 @@
 import requests
 import asyncio
-from telethon import TelegramClient
+import logging
+from telethon import TelegramClient, events
+from telethon.errors import ServerError
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_debug, telegram_channel_machinelearning
+from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_debug
 from typing import Optional
 
 class MessagingService(ABC):
@@ -18,31 +20,93 @@ class TelegramService(MessagingService):
         self.session_file = session_file
         self.channel_id = channel_id
         self.client = None
+        self.is_connected = False
+        self.max_retries = 5
+        self.retry_delay = 5
+        self.logger = logging.getLogger(__name__)
+        self.setup_logging()
         
+    def setup_logging(self):
+        """Set up basic logging configuration"""
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+            self.logger.setLevel(logging.INFO)
+
     async def initialize(self, loop=None):
-        """Initialize with optional event loop - took me just half an day..."""
+        """Initialize with automatic reconnection handling"""
         self.client = TelegramClient(
-            self.session_file, 
-            self.api_id, 
+            self.session_file,
+            self.api_id,
             self.api_hash,
-            loop=loop
+            loop=loop,
+            connection_retries=10,
+            retry_delay=self.retry_delay,
+            auto_reconnect=True
         )
         
-        await self.client.connect()
-        if not await self.client.is_user_authorized():
-            raise Exception("⚠️ Telegram client is not authorized! Use a valid session.")
-        print("✅ Telegram client is now connected and ready to send messages.")
+        await self.connect_with_retry()
+        self.logger.info("✅ Telegram client is now connected and ready to send messages.")
+
+    async def connect_with_retry(self):
+        """Connect to Telegram with retry logic"""
+        retry_count = 0
+        
+        while retry_count < self.max_retries:
+            try:
+                if not self.client.is_connected():
+                    await self.client.connect()
+                
+                if not await self.client.is_user_authorized():
+                    self.logger.error("⚠️ Telegram client is not authorized! Use a valid session.")
+                    raise Exception("Telegram client is not authorized! Use a valid session.")
+                    
+                self.is_connected = True
+                return
+                
+            except Exception as e:
+                retry_count += 1
+                self.logger.warning(f"Connection attempt {retry_count} failed: {str(e)}")
+                
+                if retry_count >= self.max_retries:
+                    self.logger.error(f"Failed to connect after {self.max_retries} attempts")
+                    raise
+                
+                await asyncio.sleep(self.retry_delay * retry_count)  # Exponential backoff
 
     async def send_message(self, message: str) -> None:
-        """Implements abstract method from MessagingService"""
+        """Implements abstract method from MessagingService with reconnection logic"""
         if not self.client:
             raise Exception("Telegram client not initialized")
-        try:
-            entity = await self.client.get_entity(self.channel_id)
-            await self.client.send_message(entity, message)
-            print(f"✅ Telegram alert sent: {message}")
-        except Exception as e:
-            print(f"❌ Telegram alert failed: {e}")
+        
+        for attempt in range(3):
+            try:
+                if not self.client.is_connected():
+                    self.logger.warning("Connection lost before sending message. Reconnecting...")
+                    await self.connect_with_retry()
+                
+                entity = await self.client.get_entity(self.channel_id)
+                await self.client.send_message(entity, message)
+                self.logger.info(f"✅ Telegram alert sent: {message}")
+                return
+                
+            except Exception as e:
+                self.logger.error(f"Failed to send message (attempt {attempt+1}/3): {str(e)}")
+                
+                if attempt < 2:
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+        
+        self.logger.error("Failed to send message after multiple attempts")
+        raise Exception("Failed to send Telegram message after multiple attempts")
+        
+    async def disconnect(self):
+        """Safely disconnect the client"""
+        if self.client and self.client.is_connected():
+            await self.client.disconnect()
+            self.is_connected = False
+            self.logger.info("Telegram client disconnected")
 
 async def initialize_services():
     telegram_service = TelegramService(
@@ -65,7 +129,7 @@ class DiscordService(MessagingService):
 
     async def send_message(self, message: str) -> None:
         payload = {
-            "username": "DEBUG SHOWCASE",
+            "username": "BTQuant Alerts",
             "avatar_url": "https://i.imgur.com/TISmmHs.jpg",
             "embeds": [{
                 "title": "Alert arrived!",
@@ -147,23 +211,25 @@ class JrrOrderBase:
 
     def send_jrr_buy_request(self, exchange: str, account: str, asset: str, amount: float) -> str:
         payload = {
-            "Exchange": exchange,
+            "Exchange": "mimic", #exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Buy",
             "Asset": asset,
-            "USD": str(int(amount)),
+            "USD": str(amount),# str(int(amount)),
             "Identity": identify
         }
+        print(payload)
         return self._send_jrr_request(payload)
 
     def send_jrr_close_request(self, exchange: str, account: str, asset: str) -> str:
         payload = {
-            "Exchange": exchange,
+            "Exchange": "mimic", #exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Close",
             "Asset": asset,
             "Identity": identify
         }
+        print(payload)
         return self._send_jrr_request(payload)

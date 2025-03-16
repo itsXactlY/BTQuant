@@ -2,6 +2,11 @@
 BTQuant TODO List
 =========================
 
+Critical Priority
+=============
+✅ **Make sure on startup all needed data are fetched** 
+   - Specially the DCA logic needs more attention, to calculate everything properly, to avoid buys when its not the right time (wrong entry calculation, ignores calculated dca price, etc.)
+
 High Priority
 =============
 

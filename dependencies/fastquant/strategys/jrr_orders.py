@@ -141,7 +141,7 @@ class DiscordService(MessagingService):
                 }
             }]
         }
-        
+
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
@@ -211,7 +211,7 @@ class JrrOrderBase:
 
     def send_jrr_buy_request(self, exchange: str, account: str, asset: str, amount: float) -> str:
         payload = {
-            "Exchange": "mimic", #exchange,
+            "Exchange": exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Buy",
@@ -224,7 +224,7 @@ class JrrOrderBase:
 
     def send_jrr_close_request(self, exchange: str, account: str, asset: str) -> str:
         payload = {
-            "Exchange": "mimic", #exchange,
+            "Exchange": exchange,
             "Market": "spot",
             "Account": account,
             "Action": "Close",

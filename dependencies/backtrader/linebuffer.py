@@ -741,14 +741,26 @@ class LinesOperation(LineActions):
 
     def next(self):
         if self.bline:
-            self[0] = self.operation(self.a[0], self.b[0])
+            try:
+                self[0] = self.operation(self.a[0], self.b[0])
+            except ZeroDivisionError:
+                self[0] = 0
+                print(f'DEBUG :: self.operation(self.a[0], self.b[0]) first check')
         elif not self.r:
             if not self.btime:
-                self[0] = self.operation(self.a[0], self.b)
+                try:
+                    self[0] = self.operation(self.a[0], self.b)
+                except ZeroDivisionError:
+                    self[0] = 0
+                    print(f'DEBUG :: self.operation(self.a[0], self.b[0]) self.btime second check')
             else:
                 self[0] = self.operation(self.a.time(), self.b)
         else:
-            self[0] = self.operation(self.a, self.b[0])
+            try:
+                self[0] = self.operation(self.a, self.b[0])
+            except ZeroDivisionError:
+                self[0] = 0
+                print(f'DEBUG :: self.operation(self.a[0], self.b[0]) else block last check')
 
     def once(self, start, end):
         if self.bline:

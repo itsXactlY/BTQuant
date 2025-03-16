@@ -2,6 +2,7 @@ from collections import deque
 import time
 import json
 import pandas as pd
+import numpy as np
 from queue import Empty
 from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
@@ -19,7 +20,7 @@ class BitgetData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', True)
+        ('debug', False)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -79,9 +80,22 @@ class BitgetData(DataBase):
 
         timestamp, open_, high, low, close, volume = kline
 
+        # Quick 'n dirty check for missing, None, or NaN values
+        values = [timestamp, open_, high, low, close, volume]
+        if any(v is None for v in values):
+            if self.p.debug:
+                print(f"Skipping kline due to None value: {kline}")
+            return self._load_kline()
+        if any(np.isnan(v) if isinstance(v, (int, float)) else False for v in values):  # Check for NaN
+            if self.p.debug:
+                print(f"Skipping kline due to NaN value: {kline}")
+            return self._load_kline()
         if volume == 0:
+            if self.p.debug:
+                print(f"Skipping kline due to zero volume: {kline}")
             return self._load_kline()
 
+        # All values are valid, proceed to load the kline
         self.lines.datetime[0] = date2num(timestamp)
         self.lines.open[0] = open_
         self.lines.high[0] = high

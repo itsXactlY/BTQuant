@@ -49,7 +49,7 @@ def backtest(
     data,  # Treated as csv path is str, and dataframe of pd.DataFrame
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
-    plot=True,
+    plot=False,
     fractional=False,
     slippage=0.001,
     single_position=None,
@@ -62,7 +62,7 @@ def backtest(
     # BTFastQuantchannel="",
     symbol="",
     allow_short=False,
-    figsize=(30, 15),
+    figsize=(20, 10),
     multi_line_indicators=None,
     data_class=None,
     data_kwargs={},
@@ -132,6 +132,8 @@ def backtest(
     # Add Strategy
     strat_names = []
     strat_name = None
+    '''
+    Fix me later - strategy mapping is obsolete for now, till i find an better solution
     if strategy == "multi" and strats is not None:
         for strat, params in strats.items():
             cerebro.optstrategy(
@@ -147,39 +149,37 @@ def backtest(
                 **params,
             )
             strat_names.append(strat)
-    else:
+        else:'''
 
-        # Allow instance of BaseStrategy or from the predefined mapping
-        if not isinstance(strategy, str) and issubclass(strategy, bt.Strategy):
-            strat_name = (
-                strategy.__name__ if hasattr(strategy, "__name__") else str(strategy)
-            )
-        else:
-            strat_name = strategy
-            strategy = STRATEGY_MAPPING[strategy]
-
-        cerebro.optstrategy(
-            strategy,
-            init_cash=[init_cash],
-            commission=commission,
-            # channel=channel,
-            symbol=symbol,
-            fractional=fractional,
-            slippage=slippage,
-            single_position=single_position,
-            allow_short=allow_short,
-            **kwargs,
+    # Allow instance of BaseStrategy or from the predefined mapping
+    if not isinstance(strategy, str) and issubclass(strategy, bt.Strategy):
+        strat_name = (
+            strategy.__name__ if hasattr(strategy, "__name__") else str(strategy)
         )
-        strat_names.append(strat_name)
+    else:
+        strat_name = strategy
+        strategy = STRATEGY_MAPPING[strategy]
+
+    cerebro.optstrategy(
+        strategy,
+        init_cash=[init_cash],
+        commission=commission,
+        # channel=channel,
+        symbol=symbol,
+        fractional=fractional,
+        slippage=slippage,
+        single_position=single_position,
+        allow_short=allow_short,
+        **kwargs,
+    )
+    strat_names.append(strat_name)
 
     # Apply Total, Average, Compound and Annualized Returns calculated using a logarithmic approach
     cerebro.addanalyzer(btanalyzers.Returns, _name="returns")
     cerebro.addanalyzer(btanalyzers.SharpeRatio, _name="mysharpe")
     cerebro.addanalyzer(btanalyzers.DrawDown, _name="drawdown")
     cerebro.addanalyzer(btanalyzers.TimeDrawDown, _name="timedraw")
-    cerebro.addanalyzer(
-        btanalyzers.TradeAnalyzer, _name="tradeanalyzer"
-    )  # trade analyzer
+    cerebro.addanalyzer(btanalyzers.TradeAnalyzer, _name="tradeanalyzer")  # trade analyzer
 
     cerebro.broker.setcommission(commission=commission)
 
@@ -191,7 +191,7 @@ def backtest(
     cerebro.broker.setcash(init_cash)
     # Allows us to set buy price based on next day closing
     # (technically impossible, but reasonable assuming you use all your money to buy market at the end of the next day)
-    cerebro.broker.set_coc(True)
+    cerebro.broker.set_coc(False)
     if verbose > 0:
         print("Starting Portfolio Value: %.2f" % cerebro.broker.getvalue())
 

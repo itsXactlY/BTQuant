@@ -1,5 +1,5 @@
 from fastquant import livetrade_crypto_binance_ML as livetrade
-from fastquant.strategys.NearestNeighbors_RationalQuadraticKernel import NRK
+from fastquant.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
 # Binance.com Exchange
 _coin = 'BTC'
@@ -9,7 +9,7 @@ _account = 'binance_machinelearning' # JackRabbitRelay Account name
 _asset = f'{_coin}/{_collateral}'
 
 '''
-As most Machine learning Strategys need to pre-compute it indicator(s),
+As most Machine learning strategies need to pre-compute it indicator(s),
 and in this fast living world we have no time to sit tight and wait for
 2000 Candles~ on LIVE processing to arrive, i created an sneaky workaround
 to use the historical DATA fetched via REST Endpoint, run an warmup,

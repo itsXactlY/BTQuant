@@ -1,7 +1,6 @@
 import backtrader as bt
-import numpy as np
 from sklearn.neighbors import NearestNeighbors
-from fastquant.strategys.base import BaseStrategy, datetime
+from fastquant.strategies.base import BaseStrategy, np
 
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
@@ -24,7 +23,14 @@ class RationalQuadraticKernel(bt.indicators.PeriodN):
         x = np.arange(len(self.data.get(size=self.p.x)))
         y = self.data.get(size=self.p.x)
         w = (1 + ((x - self.p.x)**2) / (2 * self.p.r * (self.p.h**2)))**(-self.p.r)
-        self.lines.yhat[0] = np.sum(w * y) / np.sum(w)
+        
+        # Add check for zero denominator
+        sum_w = np.sum(w)
+        if sum_w != 0:
+            self.lines.yhat[0] = np.sum(w * y) / sum_w
+        else:
+            # Handle zero case - use the most recent data point as fallback
+            self.lines.yhat[0] = y[-1] if len(y) > 0 else 0
 
 class NRK(BaseStrategy):
     params = (
@@ -44,7 +50,7 @@ class NRK(BaseStrategy):
         # DCA Parameters
         ('dca_deviation', 1.5),
         ('take_profit', 2),
-        ('percent_sizer', 0.1),
+        ('percent_sizer', 0.01),
         ('debug', False),
         ('backtest', None),
     )
@@ -125,10 +131,17 @@ class NRK(BaseStrategy):
             print(f"Signal after volatility filter: {signal}")
 
 
-        regime = (self.data.close[0] / self.data.close[-20] - 1) * 100
+        # New code with zero check
+        if self.data.close[-20] != 0:
+            regime = (self.data.close[0] / self.data.close[-20] - 1) * 100
+        else:
+            # Handle zero case - can use a default value or log the issue
+            regime = 0
+            # if self.p.debug:
+            print("Warning: self.data.close[-20] is zero, setting regime to 0")
         if regime <= self.p.regime_threshold:
-            if self.p.debug:
-                print(f"Regime filter zeroed signal. Regime={regime}, threshold={self.p.regime_threshold}")
+            # if self.p.debug:
+            print(f"Regime filter zeroed signal. Regime={regime}, threshold={self.p.regime_threshold}")
             signal = 0
 
         if self.adx[0] <= self.p.adx_threshold:
@@ -163,16 +176,23 @@ class NRK(BaseStrategy):
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
                     self.sizes.append(self.usdt_amount)
                     self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
                     self.calc_averages()
                     self.buy_executed = True
                     alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
                     self.send_alert(alert_message)
                 elif self.p.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+
                     self.calc_averages()
+                    self.buy_executed = True
+                    if self.p.debug:
+                        self.log_entry()
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
@@ -180,21 +200,23 @@ class NRK(BaseStrategy):
             signal = self.compute_ml_signal()
             if signal > 0:
                 if self.p.backtest is False:
-                        self.calculate_position_size()
-                        self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.usdt_amount)
-                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
-                        self.calc_averages()
-                        self.buy_executed = True
-                        self.conditions_checked = True
-                        alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
-                        self.send_alert(alert_message)
+                    self.calculate_position_size()
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.usdt_amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    self.calc_averages()
+                    self.buy_executed = True
+                    self.conditions_checked = True
+                    alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    self.send_alert(alert_message)
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
                     self.calc_averages()
+                    self.buy_executed = True
+                    if self.p.debug:
+                        self.log_entry()
         self.conditions_checked = True
 
     def sell_or_cover_condition(self):
@@ -203,13 +225,14 @@ class NRK(BaseStrategy):
             avg_price = round(self.average_entry_price, 9)
             tp_price = round(self.take_profit_price, 9)
 
-            if current_price >= tp_price and current_price >= avg_price:
+            if current_price >= tp_price:
                 if self.params.backtest:
                     self.close()
-                    self.reset_position_state()
                     self.buy_executed = False
                     if self.p.debug:
                         print(f"Position closed at {current_price:.9f}, profit taken")
+                        self.log_exit("Sell Signal - Take Profit")
+                    self.reset_position_state()
                 else:
                     self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
                     alert_message = f"""Close {self.asset}"""
@@ -219,8 +242,8 @@ class NRK(BaseStrategy):
             else:
                 if self.p.debug == True:
                     print(
-                        f"| - Avoiding sell at a loss or below take profit.\n"
-                        f"| - Current close price: {self.data.close[0]:.12f},\n "
-                        f"| - Average entry price: {self.average_entry_price:.12f},\n "
+                        f"| - Awaiting take profit target.\n"
+                        f"| - Current close price: {self.data.close[0]:.12f},\n"
+                        f"| - Average entry price: {self.average_entry_price:.12f},\n"
                         f"| - Take profit price: {self.take_profit_price:.12f}")
         self.conditions_checked = True

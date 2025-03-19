@@ -24,7 +24,7 @@ __LIVE__Binance_MachineLearning.py
 testing*.*
 saved_models
 *.ipynb
-dependencies/fastquant/strategys/custom_strategys/
+dependencies/fastquant/strategies/custom_strategies/
 binance_liq.py
 ML_Testing.py
 ML_Testing2_backtest.py
@@ -32,3 +32,14 @@ ML_Testing2.py
 tele_to_dc.py
 payload.json
 *.pkl
+dependencies/fastquant/strategies/custom_strategys/Fixed_Final_MADR_hyperopt.py
+dependencies/fastquant/strategies/custom_strategys/Fixed_Final_MADR.py
+dependencies/fastquant/strategies/custom_strategys/laguerre_williams.py
+dependencies/fastquant/strategies/custom_strategys/protype8.py
+dependencies/fastquant/strategies/custom_strategys/OrderChain.py
+dependencies/fastquant/strategies/custom_strategys/MACD_ADX.py
+dependencies/fastquant/strategies/custom_strategys/new_madr.py
+dependencies/fastquant/strategies/custom_strategys/ST_RSX_ASI.py
+dependencies/fastquant/strategies/custom_strategys/StagedConvergenceStrategy.py
+dependencies/fastquant/strategies/custom_strategys/TrendDirectionForceIndex.py
+dependencies/fastquant/strategies/base_original.py

@@ -5,6 +5,9 @@ from fastquant.strategies.Order_Chain_Kioseff_Trading import Order_Chain_Kioseff
 from fastquant.strategies.SMA_Cross_MESAdaptive_Prime import SMA_Cross_MESAdaptivePrime
 from fastquant.strategies.SuperTrend_Scalp import SuperSTrend_Scalp
 from fastquant.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+from fastquant.strategies.Vumanchu_A import VuManchCipher_A
+from fastquant.strategies.Vumanchu_B import VuManchCipher_B
+
 data_cache = None
 
 def get_data():
@@ -21,6 +24,8 @@ def run_backtest():
     backtest(SMA_Cross_MESAdaptivePrime, data_cache, init_cash=1000, backtest=True, plot=True, verbose=0)
     backtest(SuperSTrend_Scalp, data_cache, init_cash=1000, backtest=True, plot=True, verbose=0)
     backtest(NRK, data_cache, init_cash=1000, backtest=True, plot=True, verbose=0)
+    backtest(VuManchCipher_A, data_cache, init_cash=1000, backtest=True, plot=True, verbose=0)
+    backtest(VuManchCipher_B, data_cache, init_cash=1000, backtest=True, plot=True, verbose=0)
 
 if __name__ == "__main__":
     run_backtest()

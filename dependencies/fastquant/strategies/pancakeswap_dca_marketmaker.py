@@ -1,4 +1,4 @@
-from fastquant.strategys.base import BaseStrategy, BuySellArrows
+from fastquant.strategies.base import BaseStrategy
 
 class Pancakeswap_dca_mm(BaseStrategy):
     params = (
@@ -26,7 +26,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
                 self.enqueue_web3order('buy', amount=self.usdt_amount)
                 self.calc_averages()
                 self.buy_executed = True
-                self.conditions_checked = True
+        self.conditions_checked = True
 
 
     def dca_or_short_condition(self):
@@ -41,7 +41,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
                     self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
- 
+        self.conditions_checked = True
 
     def sell_or_cover_condition(self):
         if self.buy_executed:

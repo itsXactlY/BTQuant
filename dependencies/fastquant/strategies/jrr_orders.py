@@ -1,8 +1,7 @@
 import requests
 import asyncio
 import logging
-from telethon import TelegramClient, events
-from telethon.errors import ServerError
+from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from fastquant.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_debug
@@ -141,7 +140,7 @@ class DiscordService(MessagingService):
                 }
             }]
         }
-
+        
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
@@ -167,7 +166,6 @@ class AlertManager:
             future.result(timeout=10)
         except Exception as e:
             print(f"Error sending alert: {e}")
-
 
 class JrrOrderBase:
     def __init__(self, alert_manager: Optional[AlertManager] = None):
@@ -216,10 +214,10 @@ class JrrOrderBase:
             "Account": account,
             "Action": "Buy",
             "Asset": asset,
-            "USD": str(amount),# str(int(amount)),
+            "USD": str(amount),
             "Identity": identify
         }
-        print(payload)
+        print(f"payload: {payload}")
         return self._send_jrr_request(payload)
 
     def send_jrr_close_request(self, exchange: str, account: str, asset: str) -> str:
@@ -231,5 +229,5 @@ class JrrOrderBase:
             "Asset": asset,
             "Identity": identify
         }
-        print(payload)
+        print(f"payload: {payload}")
         return self._send_jrr_request(payload)

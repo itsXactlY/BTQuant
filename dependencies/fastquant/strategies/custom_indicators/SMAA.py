@@ -1,13 +1,5 @@
 import backtrader as bt
 
-'''Howto use in Strategy
-
-if self.crossover > 0:
-or
-self.crossover < 0:
-
-'''
-
 class SSMA(bt.Indicator):
     lines = ('ssma',)
     params = (
@@ -15,7 +7,7 @@ class SSMA(bt.Indicator):
         ('smoothing', 0.5),
         ('sensitivity', 0.3),
     )
-
+    
     def __init__(self):
         self.ma = bt.indicators.SimpleMovingAverage(self.data, period=self.p.period)
         self.smoothed_ma = 0

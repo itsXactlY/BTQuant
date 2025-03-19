@@ -1,5 +1,5 @@
 from fastquant import livetrade_crypto_bitget as livetrade
-from fastquant.strategys.SuperTrend_Scalp import SuperSTrend_Scalper
+from fastquant.strategies.SuperTrend_Scalp import SuperSTrend_Scalp
 
 
 _coin = 'PI'
@@ -11,7 +11,7 @@ _asset = f'{_coin}/{_collateral}'
 livetrade(
     coin=_coin,
     collateral=_collateral,
-    strategy=SuperSTrend_Scalper,
+    strategy=SuperSTrend_Scalp,
     exchange=_exchange,
     account=_account,
     asset=_asset,

@@ -3,7 +3,7 @@ import threading
 import time
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from fastquant.strategys.base import function_trapper
+from fastquant.strategies.base import function_trapper
 import websocket
 import json
 from .bitget_feed import BitgetData

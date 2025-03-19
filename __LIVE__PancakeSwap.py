@@ -1,7 +1,7 @@
 '''HIGHLY EXPERIMENTAL - USE ON OWN RISK'''
 
 from fastquant import livetrade_web3 as livetrade
-from fastquant.strategys.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
+from fastquant.strategies.pancakeswap_dca_marketmaker import Pancakeswap_dca_mm
 # I have no dang idea why this is one and only strategy yet what will not work with the strategy_mapping.
 # Im on it to figure out.
 

@@ -1,5 +1,5 @@
 from fastquant import livetrade_crypto_binance as livetrade
-from fastquant.strategys.SuperTrend_Scalp import SuperSTrend_Scalper
+from fastquant.strategies.SuperTrend_Scalp import SuperSTrend_Scalper
 
 # Binance.com Exchange
 _coin = 'EUR'

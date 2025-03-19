@@ -3,7 +3,9 @@ from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, bybit_st
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
-from fastquant.strategys.base import function_trapper
+# from fastquant.strategys.base import function_trapper
+# from btplotting import BacktraderPlottingLive
+
 
 # @function_trapper
 def livetrade_web3(

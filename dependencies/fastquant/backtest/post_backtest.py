@@ -52,6 +52,14 @@ def analyze_strategies(
                 bt.utils.date.num2date(num) for num in strat.lines.datetime.plot()
             ]
             indicators_dict = get_indicators_as_dict(strat, multi_line_indicators)
+
+            # For debugging weird behaving of indicator dict
+            # print("Debug :: Indicator array lengths in indicators_dict:")
+            # data_length = len(strat.data.close)
+            # print(f"Data length: {data_length}")
+            # for key, values in indicators_dict.items():
+            #     print(f"{key}: {len(values)}")
+
             indicators_df = pd.DataFrame(indicators_dict)
             indicators_df.insert(0, "dt", st_dtime)
 

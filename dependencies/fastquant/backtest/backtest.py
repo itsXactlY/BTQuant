@@ -20,7 +20,7 @@ from fastquant.config import (
     # GLOBAL_PARAMS,
     DEFAULT_PANDAS,
 )
-from fastquant.strategys.mappings import STRATEGY_MAPPING
+from fastquant.strategies.mappings import STRATEGY_MAPPING
 
 # Other backtest components
 from fastquant.backtest.data_prep import initalize_data
@@ -74,7 +74,7 @@ def backtest(
 
     Parameters
     ----------------
-    strategy : str or an instance of `fastquant.strategys.base.BaseStrategy`
+    strategy : str or an instance of `fastquant.strategies.base.BaseStrategy`
         see list of accepted strategy keys below
     data : pandas.DataFrame
         dataframe with at least close price indexed with time

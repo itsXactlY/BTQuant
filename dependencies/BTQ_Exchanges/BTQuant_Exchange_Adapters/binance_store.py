@@ -6,7 +6,7 @@ from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
 import websocket
-from fastquant.strategys.base import function_trapper
+from fastquant.strategies.base import function_trapper
 
 
 class BinanceStore(object):

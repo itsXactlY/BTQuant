@@ -5,7 +5,6 @@ import backtrader as bt
 class VuManchCipherA(bt.Indicator):
     '''
     VuManChu Cipher A indicator for Backtrader, based on TradingView script
-    brought to u by BTQuant
     '''
     lines = ('wt1', 'wt2', 'ema1', 'ema2', 'ema3', 'ema4', 'ema5', 'ema6', 'ema7', 'ema8', 'rsi', 'rsi_mfi',
              'long_ema', 'red_cross', 'blue_triangle', 'red_diamond', 'blood_diamond', 'yellow_cross', 'bull_candle', 'short_ema')

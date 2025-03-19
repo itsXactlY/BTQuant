@@ -1,8 +1,8 @@
 import datetime
 import backtrader as bt
 import requests
-from fastquant.strategys.jrr_orders import *
-from fastquant.strategys.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
+from fastquant.strategies.jrr_orders import *
+from fastquant.strategies.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
 from fastquant.dontcommit import *
 import json
 import threading
@@ -13,6 +13,21 @@ import shutil
 import os
 import uuid
 import sys
+
+
+### Logging
+import logging
+from logging.handlers import RotatingFileHandler
+
+def setup_logger(name, log_file, level=logging.INFO):
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler = RotatingFileHandler(log_file)
+    handler.setFormatter(formatter)
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    return logger
+trade_logger = setup_logger('TradeLogger', 'TradeLog.log', level=logging.INFO)
 
 order_lock = threading.Lock()
 
@@ -258,6 +273,7 @@ class BaseStrategy(bt.Strategy):
         self.DCA = False
         self.entry_price = None
         self.take_profit_price = None
+        self.first_entry_price = None
         self.stop_loss_price = None
         self.buy_executed = None
         self.average_entry_price = None
@@ -339,8 +355,17 @@ class BaseStrategy(bt.Strategy):
         }
         self.order_history_df = None
         self.periodic_history_df = None
-
-        self.dataclose = self.datas[0].close
+        
+        if self.p.debug:
+            # Forensic Logging
+            self.trade_cycles = 0
+            self.total_profit_usd = 0
+            self.last_profit_usd = 0
+            self.start_time = datetime.utcnow()
+            self.position_start_time = None
+            self.max_buys_per_cycle = 0
+            self.total_buys = 0
+            self.current_cycle_buys = 0
 
     def log(self, txt, dt=None):
         if self.p.backtest == False:
@@ -455,6 +480,8 @@ class BaseStrategy(bt.Strategy):
         
         return self.amount
 
+    '''
+    Keep the Average Entry price(s) for later FUTURES trading usage - reworked version below for SPOT market
     def calc_averages(self):
         _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
         total_value = sum(_amount)
@@ -474,6 +501,39 @@ class BaseStrategy(bt.Strategy):
         if self.entry_prices:
             if self.p.backtest == False and self.p.debug:
                 print(f"Calculated average_entry_price: {self.average_entry_price:.9f} and take_profit_price: {self.take_profit_price:.9f}")
+            self.buy_executed = True
+        else:
+            print("No positions exist. Entry and Take Profit prices reset to None")'''
+
+    def calc_averages(self):
+        _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
+        total_value = sum(_amount)
+        total_size = sum(self.sizes)
+        
+        if self.p.debug:
+            print(f"Debug :: amount of price×size: {_amount}")
+            print(f"Debug :: Total value: {total_value}, Total size: {total_size}")
+        
+        if total_size:
+            self.average_entry_price = total_value / total_size
+            
+            if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                self.first_entry_price = self.entry_prices[0] if self.entry_prices else None
+        
+            if self.first_entry_price:
+                self.take_profit_price = self.first_entry_price * (1 + self.params.take_profit / 100)
+            else:
+                self.take_profit_price = self.average_entry_price * (1 + self.params.take_profit / 100)
+        else:
+            self.average_entry_price = None
+            self.take_profit_price = None
+            self.first_entry_price = None
+        
+        if self.entry_prices:
+            if self.p.backtest == False and self.p.debug:
+                print(f"Calculated average_entry_price: {self.average_entry_price:.9f}")
+                print(f"Using first entry price for take profit: {self.first_entry_price:.9f}")
+                print(f"Take profit price: {self.take_profit_price:.9f}")
             self.buy_executed = True
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
@@ -526,8 +586,16 @@ class BaseStrategy(bt.Strategy):
             if self.p.debug:
                 print(f"Debug :: Loaded entries - Prices: {self.entry_prices}, Sizes: {self.sizes}")
             
+            '''
+            Keep in place for FUTURES trading rework
             if self.entry_prices and self.sizes:
                 print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
+                self.calc_averages()
+                self.entry_price = self.average_entry_price
+                self.buy_executed = True'''
+            if self.entry_prices and self.sizes:
+                print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
+                self.first_entry_price = self.entry_prices[0]  # Set the first entry price
                 self.calc_averages()
                 self.entry_price = self.average_entry_price
                 self.buy_executed = True
@@ -601,8 +669,13 @@ class BaseStrategy(bt.Strategy):
             elif self.DCA == True and self.buy_executed:
                 if self.sell_or_cover_condition():
                     return
+                if self.broker.getcash() < 10.0:
+                    print('Rejected Margin - decrease percent sizer or increase DCA deviation')
+                    return
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
+                if self.broker.getcash() < 10.0:
+                    print('Rejected Margin - decrease percent sizer or increase DCA deviation')
                 self.sell_or_cover_condition()
 
     def notify_data(self, data, status, *args, **kwargs):
@@ -621,9 +694,19 @@ class BaseStrategy(bt.Strategy):
         self.entry_prices = []
         self.average_entry_price = None
         self.take_profit_price = None
+        self.first_entry_price = None
         self.sizes = []
         self.position_count = 0
         self.stop_loss_price = 0.0
+        
+        if self.p.debug:
+            self.current_cycle_buys = 0
+            self.position_start_time = None
+            self.total_buys = 0
+            self.max_buys_per_cycle = 0
+            self.trade_cycles = 0
+            self.total_profit_usd = 0
+            self.last_profit_usd = 0
 
     def notify_order(self, order):
         if self.p.backtest:
@@ -663,8 +746,6 @@ class BaseStrategy(bt.Strategy):
                     self.log("Canceled: {}".format(order.status == order.Canceled))
                     self.log("Margin: {}".format(order.status == order.Margin))
                     self.log("Rejected: {}".format(order.status == order.Rejected))
-
-            # Write down: no pending order
             self.order = None
 
     def notify_trade(self, trade):
@@ -734,6 +815,52 @@ class BaseStrategy(bt.Strategy):
                     asyncio.run_coroutine_threadsafe(disconnect(), self.alert_loop)
             
             super().stop()
+
+    def log_entry(self):
+        trade_logger.info("-" * 100)
+        self.total_buys += 1
+        self.current_cycle_buys += 1
+        self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+
+        trade_logger.info(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
+        trade_logger.info(f"Entry price: {self.entry_prices[-1]:.12f}")
+        trade_logger.info(f"Position size: {self.sizes[-1]}")
+        trade_logger.info(f"Current cash: {self.broker.getcash():.2f}")
+        trade_logger.info(f"Current portfolio value: {self.broker.getvalue():.2f}")
+        trade_logger.info("*" * 100)
+
+    def log_exit(self, exit_type):
+        trade_logger.info("-" * 100)
+        trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
+        
+        position_size = sum(self.sizes)
+        exit_price = self.data.close[0]
+        profit_usd = (exit_price - self.first_entry_price) * position_size
+        self.last_profit_usd = profit_usd
+        self.total_profit_usd += profit_usd
+        self.trade_cycles += 1
+        
+        trade_logger.info(f"Exit price: {exit_price:.12f}")
+        trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
+        trade_logger.info(f"Position size: {position_size}")
+        trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
+        trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
+        trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
+        trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
+        trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
+        if self.position_start_time:
+            trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
+        trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
+        trade_logger.info(f"Total buys: {self.total_buys}")
+        trade_logger.info("*" * 100)
+
+        self.current_cycle_buys = 0
+        self.position_start_time = None
+        self.total_buys = 0
+        self.max_buys_per_cycle = 0
+        self.trade_cycles = 0
+        self.total_profit_usd = 0
+        self.last_profit_usd = 0
 
 import backtrader.utils as btu
 class CustomPandasData(bt.feeds.PandasData):

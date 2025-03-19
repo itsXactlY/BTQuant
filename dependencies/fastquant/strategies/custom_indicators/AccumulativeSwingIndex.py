@@ -7,7 +7,6 @@ class AccumulativeSwingIndex(bt.Indicator):
     )
 
     def __init__(self):
-        super(AccumulativeSwingIndex, self).__init__()
         self.addminperiod(self.params.period)
         self.lines.asi = bt.indicators.WMA(
         self.data.close - self.data.open,

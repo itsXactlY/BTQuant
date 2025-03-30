@@ -1,8 +1,10 @@
 # Modules available for fastquant.data.*
 
 from fastquant.data.crypto.crypto import get_crypto_data, CRYPTO_EXCHANGES
-from fastquant.data.mssql.mssqldatabase import get_database_data
-from fastquant.data.mssql.mssql_stocks import get_database_stock_data
+
+# TODO :: Rework for no mssql version
+# from fastquant.data.mssql.mssqldatabase import get_database_data
+# from fastquant.data.mssql.mssql_stocks import get_database_stock_data
 
 from fastquant.data.stocks.pse import (
     # Gets from yahoo finance

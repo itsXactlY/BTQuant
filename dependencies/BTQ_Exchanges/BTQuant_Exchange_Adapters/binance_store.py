@@ -6,7 +6,7 @@ from queue import Queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
 import websocket
-from fastquant.strategies.base import function_trapper
+
 
 
 class BinanceStore(object):
@@ -40,34 +40,34 @@ class BinanceStore(object):
         self.websocket_thread = None
         self.message_queue = Queue()
 
-    @function_trapper
+    
     def getdata(self, start_date=None):
         if not hasattr(self, '_data'):
             self._data = BinanceData(store=self, start_date=start_date)
         return self._data
 
-    @function_trapper
+    
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
 
-    @function_trapper
+    
     def on_message(self, ws, message):
         self.message_queue.put(message)
         # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
 
-    @function_trapper
+    
     def on_error(self, ws, error):
         print(f"WebSocket error: {error}")
 
-    @function_trapper
+    
     def on_close(self, ws, close_status_code, close_msg):
         print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
 
-    @function_trapper
+    
     def on_open(self, ws):
         print("WebSocket connection opened")
 
-    @function_trapper
+    
     def start_socket(self):
         def run_socket():
             import time
@@ -90,13 +90,13 @@ class BinanceStore(object):
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
-    @function_trapper
+    
     def stop_socket(self):
         if self.websocket:
             self.websocket.close()
             print("WebSocket connection closed.")
 
-    @function_trapper
+    
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
         import time
 

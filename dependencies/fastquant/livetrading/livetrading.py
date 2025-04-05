@@ -3,11 +3,11 @@ from BTQuant_Exchange_Adapters import pancakeswap_store, binance_store, mexc_sto
 from datetime import datetime, timedelta
 import pytz
 from fastquant import STRATEGY_MAPPING
-# from fastquant.strategies.base import function_trapper
+# 
 # from btplotting import BacktraderPlottingLive
 
 
-# @function_trapper
+# 
 def livetrade_web3(
     coin: str,
     collateral: str,
@@ -73,7 +73,7 @@ def livetrade_web3(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-# @function_trapper
+# 
 def livetrade_crypto_binance(
     coin: str,
     collateral: str,
@@ -145,73 +145,7 @@ def livetrade_crypto_binance(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-'''
-def livetrade_crypto_bybit(
-
-    coin: str,
-    collateral: str,
-    exchange: str,
-    account: str,
-    asset: str,
-    strategy: str = "",
-    timezone: str = 'Europe/Berlin',
-    start_hours_ago: int = 2,
-    enable_alerts: bool = False,
-) -> None:
-    """
-    Live trade a strategy on PancakeSwap.
-
-    Args:
-    - coin (str): The address of the coin to trade.
-    - collateral (str): The address of the collateral coin.
-    - exchange (str): The exchange to use (e.g., 'pancakeswap').
-    - account (str): The account type to use (e.g., 'web3').
-    - asset (str): The asset to trade (e.g., '$CAT/wBNB').
-    - amount (float): The amount to trade.
-    - strategy (bt.Strategy): The strategy to use. Defaults to Pancakeswap_dca_mm.
-    - timezone (str): The timezone to use. Defaults to 'Europe/Berlin'.
-    - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 2.
-    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
-    """
-
-    # Get the strategy class from the mapping if the strategy is passed as a string
-    if isinstance(strategy, str):
-        strategy_class = STRATEGY_MAPPING.get(strategy)
-        if strategy_class is None:
-            raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
-        strategy_class = strategy
-
-    cerebro = bt.Cerebro(quicknotify=True)
-    store = bybit_store.BybitStore(
-        coin_refer=coin,
-        coin_target=collateral)
-
-    tz = pytz.timezone(timezone)
-    utc_now = datetime.now(pytz.utc)
-    local_now = utc_now.astimezone(tz)
-    from_date = local_now - timedelta(hours=start_hours_ago)
-
-    data = store.getdata(start_date=from_date)
-    data._dataname = f"{coin}{collateral}"
-    
-    # Add strategy using the resolved strategy class
-    cerebro.addstrategy(
-        strategy_class,
-        exchange=exchange,
-        account=account,
-        asset=asset,
-        coin=coin,
-        collateral=collateral,
-        backtest=False,
-        enable_alerts=enable_alerts
-    )
-    
-    cerebro.adddata(data=data, name=data._dataname)
-    # print(f"{len(cerebro.datas) > 0}")
-    cerebro.run(live=True)'''
-
-# @function_trapper
+# 
 def livetrade_crypto_binance_ML(
     coin: str,
     collateral: str,
@@ -288,7 +222,7 @@ def livetrade_crypto_binance_ML(
     cerebro.run(live=True)
 
 
-# @function_trapper
+# 
 def livetrade_crypto_mexc(
     coin: str,
     collateral: str,
@@ -361,7 +295,7 @@ def livetrade_crypto_mexc(
     cerebro.run(live=True)
 
 
-# @function_trapper
+# 
 def livetrade_crypto_bitget(
     coin: str,
     collateral: str,

@@ -3,7 +3,7 @@ import threading
 import time
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from fastquant.strategies.base import function_trapper
+
 import websocket
 import json
 from .bitget_feed import BitgetData
@@ -39,17 +39,17 @@ class BitgetStore(object):
         self.websocket_thread = None
         self.message_queue = Queue()
 
-    @function_trapper
+    
     def getdata(self, start_date=None):
         if not hasattr(self, '_data'):
             self._data = BitgetData(store=self, start_date=start_date)
         return self._data
 
-    @function_trapper
+    
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
 
-    @function_trapper
+    
     def on_message(self, ws, message):
         try:
             if isinstance(message, str):
@@ -60,16 +60,16 @@ class BitgetStore(object):
         except Exception as e:
             print(f"Error processing WebSocket message: {e}")
 
-    @function_trapper
+    
     def on_error(self, ws, error):
         print(f"WebSocket error: {error}")
 
-    @function_trapper
+    
     def on_close(self, ws, close_status_code, close_msg):
         print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
         self.keep_pinging = False
 
-    @function_trapper
+    
     def on_open(self, ws):
         print(f"{datetime.now()} WebSocket connection opened")
         print("No Warmup for BITGET - HACK :: Caching Live Candles till start - Warming up...")
@@ -88,7 +88,7 @@ class BitgetStore(object):
         print(f"Subscribed to {self.symbol} candlestick data with granularity {granularity}")
         self.start_ping(ws)
 
-    @function_trapper
+    
     def start_ping(self, ws):
         self.keep_pinging = True 
 
@@ -105,7 +105,7 @@ class BitgetStore(object):
                 time.sleep(30)
         threading.Thread(target=ping_loop, daemon=True).start()
 
-    @function_trapper
+    
     def start_socket(self):
         def run_socket():
             while True:
@@ -127,14 +127,14 @@ class BitgetStore(object):
         self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
         self.websocket_thread.start()
 
-    @function_trapper
+    
     def stop_socket(self):
         if self.websocket:
             self.websocket.close()
             print("WebSocket connection closed.")
 
 
-    @function_trapper
+    
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
         '''BITGET IS A BIT HACKY - NOT IN A GOOD WAY...'''
         return

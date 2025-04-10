@@ -30,7 +30,7 @@ class BinanceData(DataBase):
         super().__init__()
         self.start_date = start_date
         self._store = store
-        self._data = deque()
+        self._data = deque(maxlen=1000)  # limit to 1000 entries to prevent memory bloat
         self.interval = self._store.get_interval(TimeFrame.Seconds, compression=1)
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")

@@ -22,7 +22,7 @@ class PancakeSwapData(DataBase):
     def __init__(self, store, token_address, start_date=None):
         self.start_date = start_date
         self._store = store
-        self._data = deque()
+        self._data = deque(maxlen=1000)  # limit to 1000 entries to prevent memory bloat
         self.token_address = Web3.to_checksum_address(token_address)
         self.interval = self._store.get_interval(TimeFrame.Seconds, compression=1)
         if self.interval is None:

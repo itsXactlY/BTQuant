@@ -16,7 +16,7 @@ class RaydiumData(DataBase):
     def __init__(self, store, start_date=None):
         self.store = store
         self.token_info = store.token_info
-        self._data = deque()
+        self._data = deque(maxlen=1000)  # limit to 1000 entries to prevent memory bloat
 
     def start(self):
         super().start()

@@ -1,0 +1,179 @@
+import backtrader as bt
+from .base import BaseStrategy
+from numpy import isnan
+
+class VolumeOscillator(bt.Indicator):
+    lines = ('short', 'long', 'osc')
+    params = (
+        ('shortlen', 5),
+        ('longlen', 10),
+        ('debug', False),
+        )
+
+    def __init__(self):
+        # self.addminperiod(self.p.longlen)
+        shortlen, longlen = self.params.shortlen, self.params.longlen
+        self.lines.short = bt.indicators.ExponentialMovingAverage(self.data.volume, period=shortlen)
+        self.lines.long = bt.indicators.ExponentialMovingAverage(self.data.volume, period=longlen)
+
+    def next(self):
+        try:
+            if self.p.debug:
+                # Log the volume data and EMAs to check for issues
+                print(f"Volume: {self.data.volume[0]}, Short EMA: {self.lines.short[0]}, Long EMA: {self.lines.long[0]}")
+
+            # Check if the volume data or EMAs are None, zero, or NaN to avoid division by zero
+            if not (self.lines.long[0] and self.lines.long[0] > 0 and not isnan(self.lines.long[0])):
+                print(f"Invalid volume data detected: Long EMA is {self.lines.long[0]}. Setting oscillator to 0.")
+                self.lines.osc[0] = 0
+            else:
+                # Calculate oscillator only when valid values exist
+                self.lines.osc[0] = (self.lines.short[0] - self.lines.long[0]) / self.lines.long[0] * 100
+        except Exception as e:
+            print(f"Error calculating Volume Oscillator: {e}")
+            self.lines.osc[0] = 0
+
+class QQEIndicator(bt.Indicator):
+    params = (
+        ("period", 6),
+        ("fast", 5),
+        ("q", 3.0),
+        ("debug", False)
+    )
+    lines = ("qqe_line",)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.rsi = bt.indicators.RSI(self.data.close, period=self.p.period)
+        self.atr = bt.indicators.ATR(self.data, period=self.p.fast)
+        self.dar = bt.If(self.atr > 0, bt.indicators.EMA(self.atr - self.p.q, period=int((self.p.period * 2) - 1)), 0)
+        self.lines.qqe_line = bt.If(self.rsi > 0, self.rsi + self.dar, 0)
+
+    def next(self):
+        # check if ATR is not zero to avoid division by zero errors
+        if self.atr[0] == 0:
+            print("ATR is zero, skipping this iteration to avoid division by zero.")
+            return
+
+        # check if RSI and DAR are valid before computing the QQE line
+        if self.rsi[0] != 0 and self.dar[0] != 0:
+            self.lines.qqe_line[0] = self.rsi[0] + self.dar[0]
+        else:
+            self.lines.qqe_line[0] = 0
+        
+        if self.p.debug:
+            print(f"RSI: {self.rsi[0]}, DAR: {self.dar[0]}, ATR: {self.atr[0]}, QQE: {self.lines.qqe_line[0]}")
+
+class QQE_Example(BaseStrategy):
+    params = (
+        ("ema_length", 20),
+        ('hull_length', 53),
+        ('take_profit_percent', 4),
+        ('dca_deviation', 4),
+        ('percent_sizer', 1),
+        ('debug', False),
+    )
+
+    def __init__(self, **kwargs):
+        print('Initialized QQE')
+        super().__init__(**kwargs)
+        self.qqe = QQEIndicator(self.data)
+        self.hma = bt.indicators.HullMovingAverage(self.data, period=self.p.hull_length)
+        self.ema = bt.indicators.EMA(self.data.close, period=self.params.ema_length)
+        self.volosc = VolumeOscillator(self.data)
+        self.DCA = True
+        self.conditions_checked = False
+
+        if self.strategy_logging:
+            print("===Strategy level arguments===")
+            print("ema_length :", self.p.ema_length)
+            print("hull_length :", self.p.hull_length)
+            print("takeprofit :", self.p.take_profit_percent)
+            print("dca_deviation :", self.p.dca_deviation)
+            print("percent_sizer :", self.p.percent_sizer)
+
+    def buy_or_short_condition(self):
+        if not self.buy_executed and not self.conditions_checked:
+            if (self.qqe.qqe_line[-1] > 0) and \
+               (self.data.close[-1] < self.hma[0]) and \
+               (self.volosc.osc[-1] < self.volosc.lines.short[0]):
+
+                if self.p.backtest == False:
+                    self.calculate_position_size()
+                    self.entry_prices.append(self.data.close[0])
+                    print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
+                    self.sizes.append(self.usdt_amount)
+                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+                    self.calc_averages()
+                    self.buy_executed = True
+                    alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    self.send_alert(alert_message)
+                elif self.p.backtest == True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+
+                    self.calc_averages()
+                    self.buy_executed = True
+                    if self.p.debug:
+                        self.log_entry()
+        self.conditions_checked = True
+
+    def dca_or_short_condition(self):
+        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):   
+            if self.buy_executed and not self.conditions_checked:
+                if (self.qqe.qqe_line[-1] > 0) and \
+                (self.data.close[-1] < self.hma[0]) and \
+                (self.volosc.osc[-1] < self.volosc.lines.short[0]): 
+                    if self.p.backtest is False:
+                        self.calculate_position_size()
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.usdt_amount)
+                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                        self.calc_averages()
+                        self.buy_executed = True
+                        self.conditions_checked = True
+                        alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                        self.send_alert(alert_message)
+                    elif self.p.backtest is True:
+                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                        self.entry_prices.append(self.data.close[0])
+                        self.sizes.append(self.stake)
+                        self.calc_averages()
+                        self.buy_executed = True
+                        if self.p.debug:
+                            self.log_entry()
+            self.conditions_checked = True
+
+    def sell_or_cover_condition(self):
+        if self.buy_executed:
+            current_price = round(self.data.close[0], 9)
+            avg_price = round(self.average_entry_price, 9)
+            tp_price = round(self.take_profit_price, 9)
+
+            if current_price >= tp_price:
+                if self.params.backtest:
+                    self.close()
+                    self.buy_executed = False
+                    if self.p.debug:
+                        print(f"Position closed at {current_price:.9f}, profit taken")
+                        self.log_exit("Sell Signal - Take Profit")
+                    self.reset_position_state()
+                else:
+                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    alert_message = f"""Close {self.asset}"""
+                    self.send_alert(alert_message)
+                    self.reset_position_state()
+                    self.buy_executed = False
+            else:
+                if self.p.debug == True:
+                    print(
+                        f"| - Awaiting take profit target.\n"
+                        f"| - Current close price: {self.data.close[0]:.12f},\n"
+                        f"| - Average entry price: {self.average_entry_price:.12f},\n"
+                        f"| - Take profit price: {self.take_profit_price:.12f}")
+        self.conditions_checked = True

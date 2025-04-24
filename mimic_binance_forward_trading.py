@@ -1,9 +1,6 @@
 from backtrader.stores.binance_store import BinanceStore
-from imports import dt, bt
-# from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
-# from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
-
-from live_strategys.NearestNeighbors_RationalQuadraticKernel import NRK
+from backtrader.imports import dt, bt
+from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
 # JackRabbitRelay WIP
 _coin = 'GAS'

@@ -78,38 +78,6 @@ pip install . || {
     echo "Warning: Failed to install dependencies package"
 }
 
-cd BTQ_Exchanges
-pip install . || {
-    echo "Warning: Failed to install BTQ_Exchanges package"
-}
-
-cd ../fastquant
-pip install . || {
-    echo "Warning: Failed to install FastQuant package"
-}
-
-# Install MSSQL with error handling
-cd ../MsSQL
-if ! pip install .; then
-    echo "Warning: MSSQL installation failed, but continuing with installation"
-else
-    # Look for the built .so file
-    SO_FILE=$(find . -maxdepth 1 -type f -name "fast_mssql*.so" | head -n 1)
-    if [ -z "$SO_FILE" ]; then
-        echo "Warning: No fast_mssql .so file found in the current directory"
-    else
-        echo "Found shared library: ${SO_FILE}"
-        TARGET_DIR="${SITE_PACKAGES}/fastquant/data/mssql/MsSQL"
-        echo "Ensuring target directory exists: ${TARGET_DIR}"
-        mkdir -p "${TARGET_DIR}"
-        if mv "${SO_FILE}" "${TARGET_DIR}/"; then
-            echo "Successfully moved ${SO_FILE} to ${TARGET_DIR}"
-        else
-            echo "Warning: Failed to move ${SO_FILE} to ${TARGET_DIR}"
-        fi
-    fi
-fi
-
-cd ../..
+cd ..
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

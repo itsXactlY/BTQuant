@@ -1,4 +1,4 @@
-from imports import *
+from backtrader.imports import *
 '''
 ############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
 ############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############

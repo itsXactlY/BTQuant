@@ -5,7 +5,7 @@ import pandas as pd
 from pprint import pprint
 from backtrader.stores import binance_store, bitget_store, mexc_store, pancakeswap_store
 import datetime as dt
-from dontcommit import *
+from backtrader.dontcommit import *
 
 
 #########

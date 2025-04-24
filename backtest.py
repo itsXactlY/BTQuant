@@ -1,14 +1,10 @@
-from backtrader.imports import *
 '''
 ############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
 ############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
 ############## CAUSING ALOT OF WARMUP TIME (TIME IS MONEY!) ##############
 '''
-# from live_strategys.QQE_Hullband_VolumeOsc import QQE_Example
-# from live_strategys.DCA_QQE_Example_backtesting import QQE_DCA_Example
-# from live_strategys.SuperTrend_Scalp import SuperSTrend_Scalper
-from live_strategys.NearestNeighbors_RationalQuadraticKernel import NRK
-
+from backtrader.imports import CustomPandasData, bt, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
+from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 from backtrader.feeds.mssql_crypto import get_database_data
 rawdata = get_database_data("BTC", "2024-01-01", "2024-01-02", "1m")
 
@@ -21,14 +17,12 @@ def run_backtest():
     
     startcash = 1000
     cerebro.broker.setcash(startcash)
-    
-    # Add analyzers
+
     cerebro.addanalyzer(TimeReturn, _name='time_return')
     cerebro.addanalyzer(SharpeRatio, _name='sharpe_ratio')
     cerebro.addanalyzer(DrawDown, _name='drawdown')
     cerebro.addanalyzer(TradeAnalyzer, _name='trade_analyzer')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    # cerebro.addanalyzer(SQN, _name='sqn')
     cerebro.addanalyzer(CustomSQN, _name='customsqn')
     cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     

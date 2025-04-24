@@ -1,6 +1,6 @@
 import backtrader as bt
 from sklearn.neighbors import NearestNeighbors
-from live_strategys.base import BaseStrategy, np
+from backtrader.strategies.base import BaseStrategy, np
 
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
@@ -138,11 +138,11 @@ class NRK(BaseStrategy):
         else:
             # Handle zero case - can use a default value or log the issue
             regime = 0
-            # if self.p.debug:
-            print("Warning: self.data.close[-20] is zero, setting regime to 0")
+            if self.p.debug:
+                print("Warning: self.data.close[-20] is zero, setting regime to 0")
         if regime <= self.p.regime_threshold:
-            # if self.p.debug:
-            print(f"Regime filter zeroed signal. Regime={regime}, threshold={self.p.regime_threshold}")
+            if self.p.debug:
+                print(f"Regime filter zeroed signal. Regime={regime}, threshold={self.p.regime_threshold}")
             signal = 0
 
         if self.adx[0] <= self.p.adx_threshold:

@@ -1,5 +1,5 @@
 from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
-from live_strategys.base import CustomSQN, CustomPandasData
+from backtrader.strategies.base import CustomSQN, CustomPandasData
 import backtrader as bt
 import pandas as pd
 from pprint import pprint

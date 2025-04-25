@@ -1,3 +1,7 @@
 dontcommit.py
 install_windows.ps1
 *.session
+dependencies/backtrader.egg-info
+dependencies/build
+dependencies/backtrader/dontcommit.py
+dependencies/backtrader/dontcommit.py

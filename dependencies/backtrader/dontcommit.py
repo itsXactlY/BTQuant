@@ -44,15 +44,6 @@ connection_string = (f'DRIVER={driver};'
                      f'PWD={password};'
                      f'TrustServerCertificate=yes;')
 
-connection_string_jrr = (f'DRIVER={driver};'
-                     f'SERVER={server};'
-                     f'DATABASE={database_jrr};'
-                     f'UID={username};'
-                     f'PWD={password};'
-                     f'TrustServerCertificate=yes;')
-
-
-
 
 def ptu():
     art = [

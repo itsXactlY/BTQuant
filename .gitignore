@@ -7,3 +7,4 @@ dependencies/build
 dependencies/TradeLog.log
 TradeLog.log
 testing*.py
+QuantStat_*.html

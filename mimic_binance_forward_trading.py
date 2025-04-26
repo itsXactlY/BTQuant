@@ -6,7 +6,7 @@ from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 _coin = 'GAS'
 _collateral = 'USDT'
 _exchange = 'binance'
-_account = 'binance_debug1' #_account = '<JackRabbit_SubaccountName>'
+_account = '' #_account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)
@@ -26,10 +26,10 @@ def run():
     cerebro.run(live=True)
 
 if __name__ == '__main__':
-    run()
-
-
-
-#####
-# 322MB on startup 24.4.25 01:14
-# 
+    try:
+        run()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()

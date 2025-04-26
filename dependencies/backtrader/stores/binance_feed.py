@@ -117,7 +117,7 @@ class BinanceData(DataBase):
         return df
 
     def _parser_to_kline(self, timestamp, kline):
-        dt = pd.to_datetime(timestamp, unit='ms', utc=True)
+        dt = pd.to_datetime(pd.to_numeric(timestamp), unit='ms', utc=True)
         return [
             dt,
             float(kline[1]),

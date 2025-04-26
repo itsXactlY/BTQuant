@@ -1,8 +1,16 @@
 from backtrader.stores.binance_store import BinanceStore
 from backtrader.imports import dt, bt
+
+'''
+############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
+############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
+############## CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!) ##############
+'''
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
-# JackRabbitRelay WIP
+
+
+# JackRabbitRelay
 _coin = 'GAS'
 _collateral = 'USDT'
 _exchange = 'binance'
@@ -21,7 +29,16 @@ def run():
     from_date = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=6*15)
     data = store.getdata(start_date=from_date)
     data._dataname = f"{_coin}{_collateral}"
-    cerebro.addstrategy(NRK, exchange=_exchange, account=_account, asset=_asset, amount=_amount, coin=_coin, collateral=_collateral, backtest=False)
+    cerebro.addstrategy(NRK,
+                        exchange=_exchange,
+                        account=_account,
+                        asset=_asset,
+                        amount=_amount,
+                        coin=_coin,
+                        collateral=_collateral,
+                        enable_alerts=False,
+                        alert_channel=-100,
+                        backtest=False)
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 

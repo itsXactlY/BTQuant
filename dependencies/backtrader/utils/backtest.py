@@ -1,23 +1,44 @@
-'''
-############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
-############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
-############## CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!) ##############
-'''
-from backtrader.imports import CustomPandasData, bt, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
-from backtrader.feeds.mssql_crypto import get_database_data
+import backtrader as bt
+from collections.abc import Iterable
 
-rawdata = get_database_data("ETH", "2023-01-01", "2024-01-02", "1m")
+INIT_CASH = 100_000.0
+COMMISSION_PER_TRANSACTION = 0.00075
 
-def run_backtest():
-    data = CustomPandasData(dataname=rawdata)
+def backtest(
+    strategy,
+    data,  # Treated as csv path is str, and dataframe of pd.DataFrame
+    commission=COMMISSION_PER_TRANSACTION,
+    init_cash=INIT_CASH,
+    plot=False,
+    fig=None,
+    **kwargs,
+):
+    # TODO :: aLca :: Quick 'n Dirty circular import workaround
+    from backtrader.imports import CustomPandasData, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
+    
+    kwargs = {
+        k: v if isinstance(v, Iterable) and not isinstance(v, str) else [v]
+        for k, v in kwargs.items()
+    }
+
+    data = CustomPandasData(dataname=data)
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data)
-    cerebro.addstrategy(NRK, backtest=True)
+    cerebro.addstrategy(strategy, backtest=True)
+
+    # Add Strategy
+    strat_names = []
+    strat_name = None
+    if not isinstance(strategy, str) and issubclass(strategy, bt.Strategy):
+        strat_name = (
+            strategy.__name__ if hasattr(strategy, "__name__") else str(strategy)
+        )
+    else:
+        strat_name = strategy
     
-    startcash = 1000
-    cerebro.broker.setcash(startcash)
+    strat_names.append(strat_name)
+    cerebro.broker.setcash(init_cash)
 
     cerebro.addanalyzer(TimeReturn, _name='time_return')
     cerebro.addanalyzer(SharpeRatio, _name='sharpe_ratio')
@@ -31,6 +52,8 @@ def run_backtest():
     # cerebro.addobserver(bt.observers.DrawDown)
     # cerebro.addobserver(bt.observers.Cash)
     
+    cerebro.broker.setcommission(commission=commission)
+
     start = cerebro.broker.getvalue()
     strategy = cerebro.run()[0]
 
@@ -55,23 +78,13 @@ def run_backtest():
             else:
                 print("  " * indent + f"{key}: {value}")
 
-    # Print all analyzer results
     print_trade_analyzer_results(trade_analyzer)
     pprint(f"Max Drawdown: {max_drawdown}")
     portvalue = cerebro.broker.getvalue()
-    pnl = portvalue - startcash
+    pnl = portvalue - init_cash
     pprint('Final Portfolio Value: ${}'.format(portvalue))
     pprint('P/L: ${}'.format(pnl))
     
     cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
     
-    return start - cerebro.broker.getvalue()
-
-if __name__ == '__main__':
-    try:
-        run_backtest()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        print("Full traceback:")
-        traceback.print_exc()
+    return start - cerebro.broker.getvalue(), fig

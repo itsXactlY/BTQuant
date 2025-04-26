@@ -1,19 +1,17 @@
-from backtrader.stores.binance_store import BinanceStore
-from backtrader.imports import dt, bt
+'''
+IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE!
+BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE!
+CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!)
+'''
 
-'''
-############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
-############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
-############## CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!) ##############
-'''
+from backtrader.stores.bitget_store import BitgetStore
+from backtrader.imports import dt, bt
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
-
-
 # JackRabbitRelay
-_coin = 'GAS'
+_coin = 'FLOKI'
 _collateral = 'USDT'
-_exchange = 'binance'
+_exchange = 'Bitget'
 _account = '' #_account = '<JackRabbit_SubaccountName>'
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
@@ -21,7 +19,7 @@ _amount = float(_amount)
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)
-    store = BinanceStore(
+    store = BitgetStore(
         coin_refer=_coin,
         coin_target=_collateral
         )

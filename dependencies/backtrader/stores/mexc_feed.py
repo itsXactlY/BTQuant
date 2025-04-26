@@ -2,6 +2,7 @@ from collections import deque
 import time
 import json
 import pandas as pd
+import numpy as np
 from queue import Empty
 from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase

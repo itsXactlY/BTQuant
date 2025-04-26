@@ -6,3 +6,4 @@ dependencies/backtrader.egg-info
 dependencies/build
 dependencies/TradeLog.log
 TradeLog.log
+testing*.py

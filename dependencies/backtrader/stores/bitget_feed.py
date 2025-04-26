@@ -118,7 +118,7 @@ class BitgetData(DataBase):
 
     # @function_trapper
     def _parser_to_kline(self, timestamp, kline):
-        dt = pd.to_datetime(timestamp, unit='ms', utc=True)
+        dt = pd.to_datetime(pd.to_numeric(timestamp), unit='ms', utc=True)
         return [
             dt,
             float(kline[1]),

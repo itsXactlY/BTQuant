@@ -26,7 +26,6 @@ from __future__ import (absolute_import, division, print_function,
 
 from .bbroker import BackBroker, BrokerBack
 from .jrrbroker import *
-from .jrr_orders import *
 from .pancakeswap_orders import *
 try:
     from .ibbroker import IBBroker

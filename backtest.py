@@ -1,12 +1,13 @@
 '''
 ############## IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE! ##############
 ############## BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE! ##############
-############## CAUSING ALOT OF WARMUP TIME (TIME IS MONEY!) ##############
+############## CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!) ##############
 '''
 from backtrader.imports import CustomPandasData, bt, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 from backtrader.feeds.mssql_crypto import get_database_data
-rawdata = get_database_data("BTC", "2024-01-01", "2024-01-02", "1m")
+
+rawdata = get_database_data("ETH", "2023-01-01", "2024-01-02", "1m")
 
 def run_backtest():
     data = CustomPandasData(dataname=rawdata)

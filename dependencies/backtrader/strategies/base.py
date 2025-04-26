@@ -566,7 +566,8 @@ class BaseStrategy(bt.Strategy):
             self.live_data = False
 
     def reset_position_state(self):
-        print("RESET CALLED FROM:", traceback.extract_stack()[-2][2])
+        if self.p.debug:
+            print("RESET CALLED FROM:", traceback.extract_stack()[-2][2])
         self.buy_executed = False
         self.entry_price = None
         self.entry_prices = []

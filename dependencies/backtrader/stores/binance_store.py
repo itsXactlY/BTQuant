@@ -65,6 +65,7 @@ class BinanceStore(object):
                 
             # Add to queue
             self.message_queue.put(message)
+            del message
         except Exception as e:
             print(f"Error processing message: {e}, message: {message[:100]}...")
 

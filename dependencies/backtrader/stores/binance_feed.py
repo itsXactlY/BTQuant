@@ -21,7 +21,7 @@ class BinanceData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', False)
+        ('debug', False),
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -30,7 +30,7 @@ class BinanceData(DataBase):
         super().__init__()
         self.start_date = start_date
         self._store = store
-        self._data = deque()#(maxlen=1000)  # limit to 1000 entries to prevent memory bloat
+        self._data = deque()
         self.interval = self._store.get_interval(TimeFrame.Seconds, compression=1)
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")
@@ -41,8 +41,7 @@ class BinanceData(DataBase):
     def handle_websocket_message(self, message):
         try:
             data = json.loads(message)
-            # if self.p.debug:
-            #     print(f"Received websocket message: {data}")
+            
             kline = self._parser_to_kline(data['k']['t'], [
                 data['k']['t'],
                 data['k']['o'],
@@ -51,8 +50,10 @@ class BinanceData(DataBase):
                 data['k']['c'],
                 data['k']['v'],
             ])
-
+            
             self._data.append(kline)
+            del data
+            
             if self.p.debug:
                 print('received fresh data:', kline)
         except Exception as e:
@@ -102,6 +103,8 @@ class BinanceData(DataBase):
         self.lines.low[0] = low
         self.lines.close[0] = close
         self.lines.volume[0] = volume
+
+        del kline
         return True
 
     # 
@@ -191,5 +194,6 @@ class BinanceData(DataBase):
             try:
                 message = self._store.message_queue.get(timeout=1)
                 self.handle_websocket_message(message)
+                del message
             except Empty:
                 time.sleep(1)

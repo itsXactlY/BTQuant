@@ -60,6 +60,7 @@ class MexcStore(object):
                 # print("Raw message received:", repr(message))  # check exactly what is received (ping/pong debug...)
             else:
                 self.message_queue.put(json.dumps(message))
+            del message
         except Exception as e:
             print(f"Error processing WebSocket message: {e}")
 

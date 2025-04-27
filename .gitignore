@@ -10,3 +10,4 @@ Example_*.py
 testing*.py
 QuantStat_*.html
 
+.*.session-journal

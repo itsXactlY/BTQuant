@@ -96,10 +96,10 @@ setuptools.setup(
 
     install_requires=[
         'pybind11',
-        'Web3',
         'pyodbc',
-        'websocket',
+        'websockets',
         'websocket-client==1.8.0',
+        'Web3',
         'matplotlib',
         'pandas',
         'numpy',

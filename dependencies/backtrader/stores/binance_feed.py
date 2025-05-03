@@ -1,15 +1,13 @@
 from collections import deque
+import queue
 import time
 import json
 import pandas as pd
 import numpy as np
-from queue import Empty
 from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
-
-
 
 def identify_gaps(df, expected_interval):
     df['timestamp'] = pd.to_datetime(df.index)
@@ -22,6 +20,7 @@ class BinanceData(DataBase):
         ('drop_newest', False),
         ('update_interval_seconds', 1),
         ('debug', False),
+        ('max_buffer', 1)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -30,7 +29,7 @@ class BinanceData(DataBase):
         super().__init__()
         self.start_date = start_date
         self._store = store
-        self._data = deque()
+        self._data = deque(maxlen=self.p.max_buffer)
         self.interval = self._store.get_interval(TimeFrame.Seconds, compression=1)
         if self.interval is None:
             raise ValueError("Unsupported timeframe/compression")
@@ -51,8 +50,9 @@ class BinanceData(DataBase):
                 data['k']['v'],
             ])
             
+            print('DEBUG :: POPLEFT handle_websocket_message')
+            self._data.popleft()
             self._data.append(kline)
-            del data
             
             if self.p.debug:
                 print('received fresh data:', kline)
@@ -149,51 +149,81 @@ class BinanceData(DataBase):
     # 
     def start(self):
         DataBase.start(self)
-
-        print("Starting WebSocket connection...")
-        print("WebSocket connection started.")
-
         if self.start_date:
             self._state = self._ST_HISTORBACK
             self.put_notification(self.DELAYED)
-
-            # Fetch historical data
             klines = self._store.fetch_ohlcv(
                 self._store.symbol,
-                self._store.get_interval(TimeFrame.Seconds, 1),
+                self.interval,
                 since=int(self.start_date.timestamp() * 1000))
-
-            if self.p.debug:
-                print(f"Fetched historical klines: {klines}")
-
             if klines:
                 if self.p.drop_newest and klines:
-                    if klines:
-                        klines.pop()
+                    klines.pop()
                 
                 df = pd.DataFrame(klines)
-                gaps = identify_gaps(df, pd.Timedelta(seconds=1))
-                if not gaps.empty:
-                    print(f"Gaps found in the data:")
-                    print(gaps)
-
                 if df.shape[1] > 6:
                     df.drop(df.columns[6:], axis=1, inplace=True)
                 df = self._parser_dataframe(df)
                 self._data.extend(df.values.tolist())
-            else:
-                print("No historical data fetched")
-        else:
+        
+        self.data_queue = self._store.start_socket()
+        if not hasattr(self, '_processing_thread') or not self._processing_thread.is_alive():
+            self._processing_thread = threading.Thread(
+                target=self._process_queue, 
+                daemon=True,
+                name="BinanceDataProcessor"
+            )
+            self._processing_thread.start()
+        
+        if self._state == self._ST_HISTORBACK:
             self._start_live()
+        else:
+            self._state = self._ST_LIVE
+            self.put_notification(self.LIVE)
 
-        threading.Thread(target=self._process_websocket_messages, daemon=True).start()
+    def _process_queue(self):
+        """Process data from queue with memory management"""
+        cleanup_counter = 0
+        while self._state != self._ST_OVER:
+            try:
+                kline_data = self.data_queue.get(timeout=1)
+
+                timestamp = pd.to_datetime(kline_data[0], unit='ms')
+                processed_data = [
+                    timestamp,
+                    kline_data[1],  # open
+                    kline_data[2],  # high
+                    kline_data[3],  # low
+                    kline_data[4],  # close
+                    kline_data[5]   # volume
+                ]
+                
+                while len(self._data) >= self.p.max_buffer:
+                    self._data.popleft()
+                    
+                self._data.append(processed_data)
+                
+                # Clean up
+                del kline_data
+                del processed_data
+                
+                cleanup_counter += 1
+                if cleanup_counter >= 100:
+                    import gc
+                    gc.collect()
+                    cleanup_counter = 0
+                    
+            except queue.Empty:
+                time.sleep(0.01)
+            except Exception as e:
+                print(f"Error in _process_queue: {e}")
 
     # 
     def _process_websocket_messages(self):
-        while True:
+        while not self._state == self._ST_OVER:
             try:
                 message = self._store.message_queue.get(timeout=1)
                 self.handle_websocket_message(message)
                 del message
-            except Empty:
-                time.sleep(1)
+            except queue.Empty:
+                time.sleep(0.1)

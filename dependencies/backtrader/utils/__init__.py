@@ -27,3 +27,4 @@ import sys
 from .date import *
 from .ordereddefaultdict import *
 from .autodict import *
+from .backtest import *

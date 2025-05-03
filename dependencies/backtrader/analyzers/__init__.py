@@ -35,9 +35,9 @@ from .positions import *
 from .transactions import *
 from .pyfolio import *
 from .returns import *
-from .vwr import *
+# from .vwr import *
 
-from .logreturnsrolling import *
+# from .logreturnsrolling import *
 
 from .calmar import *
 from .periodstats import *

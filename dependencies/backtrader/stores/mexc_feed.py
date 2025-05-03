@@ -54,7 +54,6 @@ class MexcData(DataBase):
                 ])
 
                 self._data.append(kline)
-                del data
 
                 if self.p.debug:
                     print('Received fresh data:', kline)
@@ -114,8 +113,6 @@ class MexcData(DataBase):
         self.lines.low[0] = low
         self.lines.close[0] = close
         self.lines.volume[0] = volume
-        
-        del kline
         return True
 
     # @function_trapper

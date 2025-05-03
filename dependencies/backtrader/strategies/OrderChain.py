@@ -3,19 +3,19 @@
 
 import backtrader as bt
 from .base import BaseStrategy, np, datetime
-import logging
-from logging.handlers import RotatingFileHandler
+# import logging
+# from logging.handlers import RotatingFileHandler
 
-def setup_logger(name, log_file, level=logging.INFO):
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler = RotatingFileHandler(log_file)
-    handler.setFormatter(formatter)
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(handler)
-    return logger
+# def setup_logger(name, log_file, level=logging.INFO):
+#     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#     handler = RotatingFileHandler(log_file)
+#     handler.setFormatter(formatter)
+#     logger = logging.getLogger(name)
+#     logger.setLevel(level)
+#     logger.addHandler(handler)
+#     return logger
 
-trade_logger = setup_logger('TradeLogger', 'BaseStrategy_Trade_Monitor.log', level=logging.DEBUG)
+# trade_logger = setup_logger('TradeLogger', 'BaseStrategy_Trade_Monitor.log', level=logging.DEBUG)
 
 
 class OrderChainIndicator(bt.Indicator):
@@ -164,22 +164,22 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
                     self.sizes.append(self.stake)
                     self.calc_averages()
                     
-                    ### FORENSIC LOGGING
-                    trade_logger.debug("-" * 100)
-                    self.total_buys += 1
-                    self.current_cycle_buys += 1
-                    self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
-                    if self.position_start_time is None:
-                        self.position_start_time = datetime.utcnow()
+                    # ### FORENSIC LOGGING
+                    # trade_logger.debug("-" * 100)
+                    # self.total_buys += 1
+                    # self.current_cycle_buys += 1
+                    # self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+                    # if self.position_start_time is None:
+                    #     self.position_start_time = datetime.utcnow()
 
-                    trade_logger.debug(f"{datetime.utcnow()} - buy_or_short_condition triggered: {self.data._name}")
-                    trade_logger.debug(f"Current close price: {self.data.close[0]:.12f}")
-                    trade_logger.debug(f"Position size: {self.position.size}")
-                    trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-                    trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
-                    trade_logger.debug(f"Entry prices: {self.entry_prices}")
-                    trade_logger.debug(f"Sizes: {self.sizes}")
-                    trade_logger.debug("*" * 100)
+                    # trade_logger.debug(f"{datetime.utcnow()} - buy_or_short_condition triggered: {self.data._name}")
+                    # trade_logger.debug(f"Current close price: {self.data.close[0]:.12f}")
+                    # trade_logger.debug(f"Position size: {self.position.size}")
+                    # trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
+                    # trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
+                    # trade_logger.debug(f"Entry prices: {self.entry_prices}")
+                    # trade_logger.debug(f"Sizes: {self.sizes}")
+                    # trade_logger.debug("*" * 100)
 
     def dca_or_short_condition(self):
         if self.order_chain.lines.order_chain[0] > self.p.signal_threshold:
@@ -206,32 +206,32 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
                         self.sizes.append(self.stake)
                         self.calc_averages()
                         
-                        ### FORENSIC LOGGING
-                        trade_logger.debug("-" * 100)
-                        self.total_buys += 1
-                        self.current_cycle_buys += 1
-                        self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
-                        if self.buy_executed:
-                            trade_logger.debug(
-                                f"{datetime.utcnow()} - dca_or_short_condition triggered: {self.data._name} "
-                                f"Entry price: {self.average_entry_price:.12f} "
-                                f"Take profit price: {self.take_profit_price:.12f}"
-                            )
+                        # ### FORENSIC LOGGING
+                        # trade_logger.debug("-" * 100)
+                        # self.total_buys += 1
+                        # self.current_cycle_buys += 1
+                        # self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+                        # if self.buy_executed:
+                        #     trade_logger.debug(
+                        #         f"{datetime.utcnow()} - dca_or_short_condition triggered: {self.data._name} "
+                        #         f"Entry price: {self.average_entry_price:.12f} "
+                        #         f"Take profit price: {self.take_profit_price:.12f}"
+                        #     )
 
-                            trade_logger.debug(f"Position size: {self.position.size}")
-                            trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-                            trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
-                            trade_logger.debug(f"Entry prices: {self.entry_prices}")
-                            trade_logger.debug(f"Sizes: {self.sizes}")
-                            trade_logger.debug("*" * 100)
+                        #     trade_logger.debug(f"Position size: {self.position.size}")
+                        #     trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
+                        #     trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
+                        #     trade_logger.debug(f"Entry prices: {self.entry_prices}")
+                        #     trade_logger.debug(f"Sizes: {self.sizes}")
+                        #     trade_logger.debug("*" * 100)
 
     def sell_or_cover_condition(self):
-        if self.p.debug:
-            trade_logger.debug(
-                f"{datetime.utcnow()} - sell_or_cover_condition triggered: {self.data._name} "
-                f"Entry price: {self.average_entry_price:.12f} "
-                f"Take profit price: {self.take_profit_price:.12f}"
-            )
+        # if self.p.debug:
+        #     trade_logger.debug(
+        #         f"{datetime.utcnow()} - sell_or_cover_condition triggered: {self.data._name} "
+        #         f"Entry price: {self.average_entry_price:.12f} "
+        #         f"Take profit price: {self.take_profit_price:.12f}"
+        #     )
 
         if self.buy_executed and self.data.close[0] >= self.take_profit_price or self.order_chain.lines.order_chain[0] < -self.p.signal_threshold:
 
@@ -245,10 +245,10 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
                     f"| - Take profit price: {self.take_profit_price:.12f}"
                 )
                 return
-            trade_logger.info("-" * 100)
-            trade_logger.info(f"{datetime.utcnow()} - Sell operation executed: {self.data._name}")
-            trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-            trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
+            # trade_logger.info("-" * 100)
+            # trade_logger.info(f"{datetime.utcnow()} - Sell operation executed: {self.data._name}")
+            # trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
+            # trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
             
             if self.params.backtest == False:
                 self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
@@ -264,31 +264,22 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
             self.trade_cycles += 1
             
             # Log the sell operation and metrics
-            trade_logger.info(f"Sell price: {self.data.close[0]:.12f}")
-            trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
-            trade_logger.info(f"Take profit price: {self.take_profit_price:.12f}")
-            trade_logger.info(f"Position size: {position_size}")
-            trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
-            trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
-            trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
-            trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
-            trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
-            if self.position_start_time:
-                trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
-            trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
-            trade_logger.info(f"Total buys: {self.total_buys}")
-            trade_logger.info("*" * 100)
+            # trade_logger.info(f"Sell price: {self.data.close[0]:.12f}")
+            # trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
+            # trade_logger.info(f"Take profit price: {self.take_profit_price:.12f}")
+            # trade_logger.info(f"Position size: {position_size}")
+            # trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
+            # trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
+            # trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
+            # trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
+            # trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
+            # if self.position_start_time:
+            #     trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
+            # trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
+            # trade_logger.info(f"Total buys: {self.total_buys}")
+            # trade_logger.info("*" * 100)
             
             self.reset_position_state()
             self.conditions_checked = True
             self.current_cycle_buys = 0
             self.position_start_time = None
-
-
-    def next(self):
-        BaseStrategy.next(self)
-        self.conditions_checked = False
-
-        if self.p.backtest == False and self.live_data and self.buy_executed:
-            if self.print_counter % 5 == 0:  # reduce logging spam
-                trade_logger.debug(f'Price: {self.data.close[0]:.12f} Entry: {self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')

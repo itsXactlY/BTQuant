@@ -148,6 +148,7 @@ class PancakeSwapData(DataBase):
             try:
                 message = self.message_queue.get(timeout=1)
                 self.handle_websocket_message(message)
+                del message
             except Empty:
                 time.sleep(1)
 

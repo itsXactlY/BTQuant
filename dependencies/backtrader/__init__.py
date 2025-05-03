@@ -26,7 +26,7 @@ from .version import __version__, __btversion__
 from .errors import *
 from . import errors as errors
 
-from .utils import num2date, date2num, time2num, num2time
+from .utils import num2date, date2num, time2num, num2time, backtest
 
 from .linebuffer import *
 from .functions import *
@@ -85,7 +85,7 @@ from . import stores as stores
 from . import brokers as brokers
 from . import timer as timer
 
-from . import talib as talib
+# from . import talib as talib
 
 # Load contributed indicators and studies
 import backtrader.indicators.contrib

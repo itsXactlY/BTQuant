@@ -2,11 +2,12 @@ from datetime import datetime
 import threading
 import pytz
 import requests
-from queue import Queue
+import queue
 from backtrader.dataseries import TimeFrame
 from .binance_feed import BinanceData
 import websocket
-
+import json
+import time
 
 
 class BinanceStore(object):
@@ -29,91 +30,213 @@ class BinanceStore(object):
         (TimeFrame.Months, 1): '1M',
     }
 
-    def __init__(self, coin_refer, coin_target):
+    def __init__(self, coin_refer, coin_target, queue_maxsize=1000):
         self.coin_refer = coin_refer
         self.coin_target = coin_target
         self.symbol = f"{coin_refer}{coin_target}".upper()
         self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{self.get_interval(TimeFrame.Seconds, 1)}"
         print(f"WebSocket URL: {self.ws_url}")
-
+        self._data = None
+        self.broker = None
+        self._running = False
         self.websocket = None
         self.websocket_thread = None
-        self.message_queue = Queue()
+        self._ST_OVER = 'OVER'  # For clean shutdown
+        self._state = None
+        
+        # Initialize separate queues for different purposes
+        self.q_streaming = queue.Queue()
+        self.q_store = queue.Queue()
+        self.q_notifications = queue.Queue()
 
-    
     def getdata(self, start_date=None):
-        if not hasattr(self, '_data'):
+        if self._data is None:
             self._data = BinanceData(store=self, start_date=start_date)
         return self._data
 
-    
     def get_interval(self, timeframe, compression):
         return self._GRANULARITIES.get((timeframe, compression))
+        
+    def put_notification(self, msg, *args, **kwargs):
+        self.q_notifications.put((msg, args, kwargs))
+        
+    def get_notifications(self):
+        """Return pending notifications"""
+        notifications = []
+        while True:
+            try:
+                notifications.append(self.q_notifications.get_nowait())
+            except queue.Empty:
+                break
+        return notifications
 
-    
-    def on_message(self, ws, message):
-        try:
-            # import json
-            # Quick validation check
-            # msg_data = json.loads(message)
-            # if 'e' in msg_data and msg_data['e'] == 'kline':
-            #     print(f"Valid kline message received for {msg_data['s']}")
-            # elif 'result' in msg_data:
-            #     print(f"Subscription response: {msg_data}")
-            # else:
-            #     print(f"Unknown message type: {message[:100]}...")
+    def start_socket(self, timeframe=TimeFrame.Seconds, compression=1):
+        """Start websocket connection and return queue for data consumption"""
+        if self._running:
+            return self.q_store
+            
+        interval = self.get_interval(timeframe, compression)
+        if not interval:
+            self.put_notification(f"Unsupported timeframe-compression combination: {timeframe}-{compression}")
+            return None
+            
+        self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{interval}"
+        print(f"WebSocket URL: {self.ws_url}")
+        
+        # Start the websocket thread
+        self._running = True
+        t = threading.Thread(target=self._t_streaming_listener)
+        t.daemon = True
+        t.start()
+        self.websocket_thread = t
+        
+        # Start the processing thread that moves data from streaming queue to store queue
+        t = threading.Thread(target=self._t_data_processor)
+        t.daemon = True
+        t.start()
+        self._processing_thread = t
+        
+        return self.q_store
+
+    def _t_streaming_listener(self):
+        """Thread that handles the websocket connection and pushes data to streaming queue"""
+        retry_count = 0
+        max_retries = 5
+        
+        while self._running and retry_count < max_retries:
+            try:
+                websocket.enableTrace(False)
+                ws = websocket.WebSocketApp(
+                    self.ws_url,
+                    on_open=self._on_open,
+                    on_message=self._on_message,
+                    on_error=self._on_error,
+                    on_close=self._on_close
+                )
+                self.websocket = ws
+                ws.run_forever(ping_interval=10, ping_timeout=5, reconnect=5)
                 
-            # Add to queue
-            self.message_queue.put(message)
-            del message
-        except Exception as e:
-            print(f"Error processing message: {e}, message: {message[:100]}...")
+                # If we get here, the websocket was closed
+                if not self._running:
+                    break
+                    
+                retry_count += 1
+                wait_time = 2 ** retry_count  # exponential backoff
+                print(f"WebSocket disconnected, retrying in {wait_time} seconds ({retry_count}/{max_retries})")
+                time.sleep(wait_time)
+                
+            except Exception as e:
+                self.put_notification(f"WebSocket error: {e}")
+                retry_count += 1
+                time.sleep(2 ** retry_count)
+        
+        if retry_count >= max_retries:
+            self.put_notification("Max retries reached for WebSocket connection")
 
-    
-    def on_error(self, ws, error):
-        print(f"WebSocket error: {error}")
-
-    
-    def on_close(self, ws, close_status_code, close_msg):
-        print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
-
-    
-    def on_open(self, ws):
-        print("WebSocket connection opened")
-
-    
-    def start_socket(self):
-        def run_socket():
-            import time
-            while True:
+    def _t_data_processor(self):
+        """Thread that processes data from streaming queue to store queue"""
+        while self._running:
+            try:
+                message = self.q_streaming.get(timeout=1.0)
+                if message is None:  # sentinel value for shutdown
+                    break
+                    
+                # Process the message
                 try:
-                    print("Starting WebSocket connection...")
-                    self.websocket = websocket.WebSocketApp(
-                        self.ws_url,
-                        on_message=self.on_message,
-                        on_error=self.on_error,
-                        on_close=self.on_close,
-                        on_open=self.on_open
-                    )
-
-                    self.websocket.run_forever(ping_interval=10, ping_timeout=3)
+                    data = json.loads(message)
+                    if 'k' in data:
+                        kline_data = (
+                            data['k']['t'],  # timestamp
+                            float(data['k']['o']),  # open
+                            float(data['k']['h']),  # high
+                            float(data['k']['l']),  # low
+                            float(data['k']['c']),  # close
+                            float(data['k']['v'])   # volume
+                        )
+                        
+                        try:
+                            self.q_store.put(kline_data, block=False)
+                        except queue.Full:
+                            # If store queue is full, remove oldest item
+                            _ = self.q_store.get(block=False)
+                            self.q_store.put(kline_data, block=False)
+                            
+                    # Explicitly delete references to help with memory management
+                    del data
+                    
+                except json.JSONDecodeError:
+                    self.put_notification(f"Invalid JSON received: {message[:100]}...")
                 except Exception as e:
-                    print(f"WebSocket encountered an exception: {e}")
-                print("WebSocket disconnected. Reconnecting in 3 seconds...")
-                time.sleep(3)
-        self.websocket_thread = threading.Thread(target=run_socket, daemon=True)
-        self.websocket_thread.start()
+                    self.put_notification(f"Error processing message: {e}")
+                    
+            except queue.Empty:
+                continue
+            except Exception as e:
+                self.put_notification(f"Error in data processor: {e}")
+                
+        print("Data processor thread exiting")
 
-    
-    def stop_socket(self):
+    def _on_open(self, ws):
+        print("WebSocket connection opened")
+        self.put_notification("WebSocket connection opened")
+
+    def _on_message(self, ws, message):
+        try:
+            self.q_streaming.put(message, block=False)
+        except queue.Full:
+            # If queue is full, remove oldest item and add new one
+            _ = self.q_streaming.get(block=False)
+            self.q_streaming.put(message, block=False)
+
+    def _on_error(self, ws, error):
+        print(f"WebSocket error: {error}")
+        self.put_notification(f"WebSocket error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        print(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        self.put_notification(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+
+    def stop(self):
+        """Clean shutdown of data feed"""
+        print(f"Stopping BinanceStore for {self.symbol}")
+        self._running = False
+        self._state = self._ST_OVER
+        
+        # Signal threads to exit
+        try:
+            self.q_streaming.put(None, block=False)  # sentinel value
+        except queue.Full:
+            _ = self.q_streaming.get(block=False)
+            self.q_streaming.put(None, block=False)
+            
+        # Close the websocket
         if self.websocket:
             self.websocket.close()
-            print("WebSocket connection closed.")
+            
+        # Wait for processing thread to terminate
+        if hasattr(self, '_processing_thread') and self._processing_thread.is_alive():
+            self._processing_thread.join(timeout=2)
+            
+        # Clear data structures
+        if self._data:
+            self._data.clear()
+            
+        # Clear queues
+        self._clear_queue(self.q_streaming)
+        self._clear_queue(self.q_store)
+        
+        print(f"Data feed for {self.symbol} shut down cleanly")
+        
+    def _clear_queue(self, q):
+        """Clear all items from a queue"""
+        try:
+            while True:
+                q.get_nowait()
+        except queue.Empty:
+            pass
 
-    
     def fetch_ohlcv(self, symbol, interval, since=None, until=None):
-        import time
-
+        """Fetch historical OHLCV data from Binance API"""
         print('STORE::FETCH SINCE:', since)
         start_timestamp = since
         data = []
@@ -165,3 +288,24 @@ class BinanceStore(object):
             print(f"Fetched data from {start_time} to {end_time}")
 
         return data
+
+    def start_memory_monitor(self, interval_seconds=900):
+        """Start a thread to monitor memory usage at regular intervals"""
+        def _monitor_memory():
+            while getattr(self, '_running', True):
+                try:
+                    import psutil
+                    process = psutil.Process()
+                    memory_mb = process.memory_info().rss / 1024 / 1024
+                    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Memory usage: {memory_mb:.2f} MB")
+                except ImportError:
+                    print("psutil not installed. Cannot monitor memory.")
+                    break
+                except Exception as e:
+                    print(f"Error in memory monitor: {e}")
+                
+                time.sleep(interval_seconds)
+        
+        monitor_thread = threading.Thread(target=_monitor_memory, daemon=True)
+        monitor_thread.start()
+        return monitor_thread

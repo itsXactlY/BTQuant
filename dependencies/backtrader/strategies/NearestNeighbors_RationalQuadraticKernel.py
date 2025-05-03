@@ -97,7 +97,7 @@ class NRK(BaseStrategy):
                 current_features.append(np.nan)
         self.feature_data.append(current_features)
         if len(self.feature_data) > self.p.max_bars_back:
-            self.feature_data.pop(0)
+            self.feature_data.pop()
         if len(self.feature_data) < self.p.neighbors_count:
             return 0
 
@@ -176,13 +176,13 @@ class NRK(BaseStrategy):
                     self.entry_prices.append(self.data.close[0])
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
                     self.sizes.append(self.usdt_amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    # self.enqueue_order('buy', exchange=self.exchange, account=self.p.account, asset=self.asset, amount=self.usdt_amount)
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                         self.first_entry_price = self.data.close[0]
                     self.calc_averages()
                     self.buy_executed = True
-                    alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
-                    self.send_alert(alert_message)
+                    # alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    # self.send_alert(alert_message)
                 elif self.p.backtest == True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
@@ -192,8 +192,6 @@ class NRK(BaseStrategy):
 
                     self.calc_averages()
                     self.buy_executed = True
-                    if self.p.debug:
-                        self.log_entry()
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
@@ -204,12 +202,12 @@ class NRK(BaseStrategy):
                     self.calculate_position_size()
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    # self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
                     self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
-                    alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
-                    self.send_alert(alert_message)
+                    # alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    # self.send_alert(alert_message)
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
@@ -235,9 +233,9 @@ class NRK(BaseStrategy):
                         self.log_exit("Sell Signal - Take Profit")
                     self.reset_position_state()
                 else:
-                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-                    alert_message = f"""Close {self.asset}"""
-                    self.send_alert(alert_message)
+                    # self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    # alert_message = f"""Close {self.asset}"""
+                    # self.send_alert(alert_message)
                     self.reset_position_state()
                     self.buy_executed = False
             else:
@@ -248,3 +246,19 @@ class NRK(BaseStrategy):
                         f"| - Average entry price: {self.average_entry_price:.12f},\n"
                         f"| - Take profit price: {self.take_profit_price:.12f}")
         self.conditions_checked = True
+    
+    # def next(self):
+    #     super().next()
+    #     # Memory management for machine learning data
+    #     if len(self.feature_data) > self.p.max_bars_back:
+    #         # More efficient than pop(0) in a loop
+    #         excess = len(self.feature_data) - self.p.max_bars_back
+    #         if excess > 0:
+    #             self.feature_data = self.feature_data[excess:]
+        
+        # Force garbage collection periodically (every 100 bars)
+        # if len(self) % 100 == 0: #and self.p.debug:
+        #     import gc
+        #     collected = gc.collect()
+        #     # if self.p.debug:
+        #     print(f"GC collected {collected} objects")

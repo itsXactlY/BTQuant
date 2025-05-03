@@ -1,6 +1,7 @@
 import backtrader as bt
 from collections.abc import Iterable
 
+
 INIT_CASH = 100_000.0
 COMMISSION_PER_TRANSACTION = 0.00075
 
@@ -9,7 +10,7 @@ def backtest(
     data,  # Treated as csv path is str, and dataframe of pd.DataFrame
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
-    plot=False,
+    plot=True,
     fig=None,
     **kwargs,
 ):
@@ -85,6 +86,7 @@ def backtest(
     pprint('Final Portfolio Value: ${}'.format(portvalue))
     pprint('P/L: ${}'.format(pnl))
     
-    cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
+    if plot:
+        cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
     
     return start - cerebro.broker.getvalue(), fig

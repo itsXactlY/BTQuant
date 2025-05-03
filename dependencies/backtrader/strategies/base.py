@@ -15,19 +15,6 @@ import uuid
 import sys
 
 # TODO fix order pickup & calculations once again on restart
-### Logging
-import logging
-from logging.handlers import RotatingFileHandler
-
-def setup_logger(name, log_file, level=logging.INFO):
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler = RotatingFileHandler(log_file)
-    handler.setFormatter(formatter)
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    logger.addHandler(handler)
-    return logger
-trade_logger = setup_logger('TradeLogger', 'TradeLog.log', level=logging.INFO)
 
 order_lock = threading.Lock()
 
@@ -74,100 +61,100 @@ class BaseStrategy(bt.Strategy):
         ("alert_channel", None)
     )
 
-    def init_live_trading(self):
-        """Initialize live trading components based on exchange type"""
-        if self.p.exchange.lower() == "pancakeswap":
-            self._init_pancakeswap()
-        elif self.p.exchange.lower() == "raydium":
-            self._init_raydium()
-        else:
-            self._init_standard_exchange()
+    # def init_live_trading(self):
+    #     """Initialize live trading components based on exchange type"""
+    #     if self.p.exchange.lower() == "pancakeswap":
+    #         self._init_pancakeswap()
+    #     elif self.p.exchange.lower() == "raydium":
+    #         self._init_raydium()
+    #     else:
+    #         self._init_standard_exchange()
 
-    def _init_alert_system(self, coin_name=".__!_"):
-        """Initialize alert system with Telegram and Discord services if enabled"""
-        if not self.p.enable_alerts:
-            print("Alert system disabled (not enabled via configuration)")
-            return None
+    # def _init_alert_system(self, coin_name=".__!_"):
+    #     """Initialize alert system with Telegram and Discord services if enabled"""
+    #     if not self.p.enable_alerts:
+    #         print("Alert system disabled (not enabled via configuration)")
+    #         return None
 
-        try:
-            base_session_file = ".base.session"
-            new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
+    #     try:
+    #         base_session_file = ".base.session"
+    #         new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
 
-            if not os.path.exists(base_session_file):
-                raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
-            shutil.copy(base_session_file, new_session_file)
-            print(f"✅ Copied base session to {new_session_file}")
+    #         if not os.path.exists(base_session_file):
+    #             raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
+    #         shutil.copy(base_session_file, new_session_file)
+    #         print(f"✅ Copied base session to {new_session_file}")
 
-            self.alert_loop = asyncio.new_event_loop()
+    #         self.alert_loop = asyncio.new_event_loop()
 
-            self.telegram_service = TelegramService(
-                api_id=telegram_api_id,
-                api_hash=telegram_api_hash,
-                session_file=new_session_file,
-                channel_id=self.p.alert_channel or telegram_channel_debug
-            )
+    #         self.telegram_service = TelegramService(
+    #             api_id=telegram_api_id,
+    #             api_hash=telegram_api_hash,
+    #             session_file=new_session_file,
+    #             channel_id=self.p.alert_channel or telegram_channel_debug
+    #         )
 
-            async def init_services():
-                await self.telegram_service.initialize(loop=self.alert_loop)
-                return AlertManager(
-                    [self.telegram_service, DiscordService(discord_webhook_url)],
-                    loop=self.alert_loop
-                )
+    #         async def init_services():
+    #             await self.telegram_service.initialize(loop=self.alert_loop)
+    #             return AlertManager(
+    #                 [self.telegram_service, DiscordService(discord_webhook_url)],
+    #                 loop=self.alert_loop
+    #             )
 
-            def run_alert_loop():
-                asyncio.set_event_loop(self.alert_loop)
-                self.alert_manager = self.alert_loop.run_until_complete(init_services())
-                self.alert_loop.run_forever()
+    #         def run_alert_loop():
+    #             asyncio.set_event_loop(self.alert_loop)
+    #             self.alert_manager = self.alert_loop.run_until_complete(init_services())
+    #             self.alert_loop.run_forever()
 
-            self.alert_thread = threading.Thread(target=run_alert_loop, daemon=True)
-            self.alert_thread.start()
+    #         self.alert_thread = threading.Thread(target=run_alert_loop, daemon=True)
+    #         self.alert_thread.start()
 
-            time.sleep(2)
-            print("✅ Alert system initialized successfully")
-            return self.alert_manager
+    #         time.sleep(2)
+    #         print("✅ Alert system initialized successfully")
+    #         return self.alert_manager
 
-        except Exception as e:
-            print(f"❌ Error initializing alert system: {str(e)}")
-            return None
+    #     except Exception as e:
+    #         print(f"❌ Error initializing alert system: {str(e)}")
+    #         return None
 
-    def _init_standard_exchange(self):
-        """Initialize standard exchange trading with JackRabbitRelay"""
-        # Initialize the alert system only if alerts are enabled
-        alert_manager = self._init_alert_system()
-        time.sleep(1)
+    # def _init_standard_exchange(self):
+    #     """Initialize standard exchange trading with JackRabbitRelay"""
+    #     # Initialize the alert system only if alerts are enabled
+    #     alert_manager = self._init_alert_system()
+    #     time.sleep(1)
 
-        self.exchange = self.p.exchange
-        self.account = self.p.account
-        self.asset = self.p.asset
-        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
+    #     self.exchange = self.p.exchange
+    #     self.account = self.p.account
+    #     self.asset = self.p.asset
+    #     self.rabbit = JrrOrderBase(alert_manager=alert_manager)
 
-        self.order_queue = queue.Queue()
-        self.order_thread = threading.Thread(target=self.process_orders)
-        self.order_thread.daemon = True
-        self.order_thread.start()
+    #     self.order_queue = queue.Queue()
+    #     self.order_thread = threading.Thread(target=self.process_orders)
+    #     self.order_thread.daemon = True
+    #     self.order_thread.start()
 
-    def send_alert(self, message: str):
-        """Helper method to safely send alerts if enabled"""
-        if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
-            try:
-                self.alert_manager.send_alert(message)
-            except Exception as e:
-                print(f"Error sending alert: {str(e)}")
-        else:
-            pass
+    # def send_alert(self, message: str):
+    #     """Helper method to safely send alerts if enabled"""
+    #     if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
+    #         try:
+    #             self.alert_manager.send_alert(message)
+    #         except Exception as e:
+    #             print(f"Error sending alert: {str(e)}")
+    #     else:
+    #         pass
 
-    def _init_pancakeswap(self):
-        """Initialize PancakeSwap trading"""
-        self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
-        self.web3order_queue = queue.Queue()
-        self.web3order_thread = threading.Thread(target=self.process_web3orders)
-        self.web3order_thread.daemon = True
-        self.web3order_thread.start()
+    # def _init_pancakeswap(self):
+    #     """Initialize PancakeSwap trading"""
+    #     self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
+    #     self.web3order_queue = queue.Queue()
+    #     self.web3order_thread = threading.Thread(target=self.process_web3orders)
+    #     self.web3order_thread.daemon = True
+    #     self.web3order_thread.start()
 
-    def _init_raydium(self):
-        """Initialize Raydium trading"""
-        print('Raydium integration not implemented yet')
-        raise NotImplementedError("Raydium trading not yet implemented")
+    # def _init_raydium(self):
+    #     """Initialize Raydium trading"""
+    #     print('Raydium integration not implemented yet')
+    #     raise NotImplementedError("Raydium trading not yet implemented")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -209,64 +196,26 @@ class BaseStrategy(bt.Strategy):
         self.win_rate = 0
         self.final_value = 0.0
 
-        if self.params.backtest == False:
-            self.init_live_trading()
+        self.short_entry_prices = []
+        self.short_sizes = []
+        self.average_short_price = None
+        self.first_short_entry_price = None
+        self.short_take_profit_price = None
+        self.short_average_entry_price = 0
+        self.short_executed = False
+        self.short_count = 0
 
-        self.order_history = {
-            "dt": [],
-            "type": [],
-            "price": [],
-            "size": [],
-            "order_value": [],
-            "portfolio_value": [],
-            "commission": [],
-            "pnl": [],
-        }
 
-        self.periodic_history = {
-            "dt": [],
-            "portfolio_value": [],
-            "cash": [],
-            "size": [],
-        }
-        self.order_history_df = None
-        self.periodic_history_df = None
+        # if self.params.backtest == False:
+        #     self.init_live_trading()
         
-        if self.p.debug:
-            # Forensic Logging
-            self.trade_cycles = 0
-            self.total_profit_usd = 0
-            self.last_profit_usd = 0
-            self.start_time = datetime.utcnow()
-            self.position_start_time = None
-            self.max_buys_per_cycle = 0
-            self.total_buys = 0
-            self.current_cycle_buys = 0
 
-    def log(self, txt, dt=None):
-        if self.p.backtest == False:
-            if len(self.datas) == 0 or len(self.datas[0]) == 0:
-                print("No data available yet, skipping log entry.")
-                return
-        dt = dt or self.datas[0].datetime.datetime(0)
-        print("%s, %s" % (dt.isoformat(), txt))
+        # temp delete me
+        self.account = self.p.account
+        self.asset = self.p.asset
 
-    def update_order_history(self, order):
-        self.order_history["dt"].append(self.datas[0].datetime.datetime(0))
-        self.order_history["type"].append("buy" if order.isbuy() else "sell")
-        self.order_history["price"].append(order.executed.price)
-        self.order_history["size"].append(order.executed.size)
-        self.order_history["order_value"].append(order.executed.value)
-        self.order_history["portfolio_value"].append(self.broker.getvalue())
-        self.order_history["commission"].append(order.executed.comm)
-        self.order_history["pnl"].append(order.executed.pnl)
 
-    def update_periodic_history(self):
-        self.periodic_history["dt"].append(self.datas[0].datetime.datetime(0))
-        self.periodic_history["portfolio_value"].append(self.broker.getvalue())
-        self.periodic_history["cash"].append(self.broker.getcash())
-        self.periodic_history["size"].append(self.position.size)
-    
+
     def process_orders(self):
         while True:
             order = self.order_queue.get()
@@ -277,6 +226,11 @@ class BaseStrategy(bt.Strategy):
                 self.rabbit.send_jrr_buy_request(**params)
             elif action == 'sell':
                 self.rabbit.send_jrr_close_request(**params)
+                self.reset_position_state()
+            # elif action == 'short':
+            #     self.rabbit.send_jrr_short_request(**params)
+            # elif action == 'cover':
+            #     self.rabbit.send_jrr_cover_request(**params)
                 self.reset_position_state()
             self.order_queue.task_done()
 
@@ -290,34 +244,34 @@ class BaseStrategy(bt.Strategy):
         return False
 
     
-    def process_web3orders(self):
-        while True:
-            order = self.web3order_queue.get()
-            print(order)
-            if order is None:
-                break
-            action, params = order
-            if action == 'buy':
-                try:
-                    self.pcswap.send_pcs_buy_request(**params)
-                except Exception as e: 
-                    print(e)
-            elif action == 'sell':
-                try:
-                    self.pcswap.send_pcs_close_request(**params)
-                except Exception as e:
-                    print(e)
-                self.reset_position_state()
-            self.web3order_queue.task_done()
+    # def process_web3orders(self):
+    #     while True:
+    #         order = self.web3order_queue.get()
+    #         print(order)
+    #         if order is None:
+    #             break
+    #         action, params = order
+    #         if action == 'buy':
+    #             try:
+    #                 self.pcswap.send_pcs_buy_request(**params)
+    #             except Exception as e: 
+    #                 print(e)
+    #         elif action == 'sell':
+    #             try:
+    #                 self.pcswap.send_pcs_close_request(**params)
+    #             except Exception as e:
+    #                 print(e)
+    #             self.reset_position_state()
+    #         self.web3order_queue.task_done()
 
-    def enqueue_web3order(self, action, **params):
-        current_time = time.time()
-        if current_time - self.last_order_time >= self.order_cooldown:
-            self.web3order_queue.put((action, params))
-            if action == 'sell':
-                self.last_order_time = time.time()
-            else:
-                self.last_order_time = time.time()
+    # def enqueue_web3order(self, action, **params):
+    #     current_time = time.time()
+    #     if current_time - self.last_order_time >= self.order_cooldown:
+    #         self.web3order_queue.put((action, params))
+    #         if action == 'sell':
+    #             self.last_order_time = time.time()
+    #         else:
+    #             self.last_order_time = time.time()
 
     def buy_or_short_condition(self):
         return False
@@ -414,6 +368,37 @@ class BaseStrategy(bt.Strategy):
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
 
+    def calc_short_averages(self):
+        _amount = [price * size for price, size in zip(self.short_entry_prices, self.short_sizes)]
+        total_value = sum(_amount)
+        total_size = sum(self.short_sizes)
+
+        if self.p.debug:
+            print(f"Debug :: SHORT amount of price×size: {_amount}")
+            print(f"Debug :: SHORT total value: {total_value}, total size: {total_size}")
+
+        if total_size:
+            self.average_short_price = total_value / total_size
+
+            if not self.first_short_entry_price:
+                self.first_short_entry_price = self.short_entry_prices[0] if self.short_entry_prices else None
+
+            if self.first_short_entry_price:
+                self.short_take_profit_price = self.first_short_entry_price * (1 - self.params.take_profit / 100)
+            else:
+                self.short_take_profit_price = self.average_short_price * (1 - self.params.take_profit / 100)
+
+            if self.p.backtest == False and self.p.debug:
+                print(f"SHORT average entry: {self.average_short_price:.9f}")
+                print(f"SHORT first entry: {self.first_short_entry_price:.9f}")
+                print(f"SHORT take profit: {self.short_take_profit_price:.9f}")
+            self.short_executed = True
+        else:
+            self.average_short_price = None
+            self.short_take_profit_price = None
+            self.first_short_entry_price = None
+            print("No short positions exist. Entry and TP prices reset.")
+
     def load_trade_data(self):
         try:
             file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
@@ -507,7 +492,8 @@ class BaseStrategy(bt.Strategy):
         elif self.params.backtest == False:
             ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
-    
+
+
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
@@ -587,6 +573,13 @@ class BaseStrategy(bt.Strategy):
             self.total_profit_usd = 0
             self.last_profit_usd = 0
 
+    def reset_short_position_state(self):
+        self.short_executed = False
+        self.short_entry_prices.clear()
+        self.short_sizes.clear()
+        self.first_short_entry_price = None
+        self.short_average_entry_price = 0
+
     def notify_order(self, order):
         if self.p.backtest:
             if order.status in [order.Submitted, order.Accepted]:
@@ -605,26 +598,14 @@ class BaseStrategy(bt.Strategy):
 
                     self.bar_executed = len(self)
 
-                    if self.transaction_logging:
-                        self.log(
-                            "%s EXECUTED, Price: %.2f, Cost: %.2f, Comm: %.2f, Size: %.2f"
-                            % (
-                                self.action.upper(),
-                                order.executed.price,
-                                order.executed.value,
-                                order.executed.comm,
-                                order.executed.size,
-                            )
-                        )
-
             elif order.status in [order.Canceled, order.Margin, order.Rejected]:
                 if self.transaction_logging:
                     if not self.periodic_logging:
-                        self.log("Cash %s Value %s" % (self.cash, self.value))
-                    self.log("Order Canceled/Margin/Rejected")
-                    self.log("Canceled: {}".format(order.status == order.Canceled))
-                    self.log("Margin: {}".format(order.status == order.Margin))
-                    self.log("Rejected: {}".format(order.status == order.Rejected))
+                        print("Cash %s Value %s" % (self.cash, self.value))
+                    print("Order Canceled/Margin/Rejected")
+                    print("Canceled: {}".format(order.status == order.Canceled))
+                    print("Margin: {}".format(order.status == order.Margin))
+                    print("Rejected: {}".format(order.status == order.Rejected))
             self.order = None
 
     def notify_trade(self, trade):
@@ -686,51 +667,51 @@ class BaseStrategy(bt.Strategy):
             
             super().stop()
 
-    def log_entry(self):
-        trade_logger.info("-" * 100)
-        self.total_buys += 1
-        self.current_cycle_buys += 1
-        self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+    # def log_entry(self):
+    #     trade_logger.info("-" * 100)
+    #     self.total_buys += 1
+    #     self.current_cycle_buys += 1
+    #     self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
 
-        trade_logger.info(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
-        trade_logger.info(f"Entry price: {self.entry_prices[-1]:.12f}")
-        trade_logger.info(f"Position size: {self.sizes[-1]}")
-        trade_logger.info(f"Current cash: {self.broker.getcash():.2f}")
-        trade_logger.info(f"Current portfolio value: {self.broker.getvalue():.2f}")
-        trade_logger.info("*" * 100)
+    #     trade_logger.info(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
+    #     trade_logger.info(f"Entry price: {self.entry_prices[-1]:.12f}")
+    #     trade_logger.info(f"Position size: {self.sizes[-1]}")
+    #     trade_logger.info(f"Current cash: {self.broker.getcash():.2f}")
+    #     trade_logger.info(f"Current portfolio value: {self.broker.getvalue():.2f}")
+    #     trade_logger.info("*" * 100)
 
-    def log_exit(self, exit_type):
-        trade_logger.info("-" * 100)
-        trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
+    # def log_exit(self, exit_type):
+    #     trade_logger.info("-" * 100)
+    #     trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
         
-        position_size = sum(self.sizes)
-        exit_price = self.data.close[0]
-        profit_usd = (exit_price - self.first_entry_price) * position_size
-        self.last_profit_usd = profit_usd
-        self.total_profit_usd += profit_usd
-        self.trade_cycles += 1
+    #     position_size = sum(self.sizes)
+    #     exit_price = self.data.close[0]
+    #     profit_usd = (exit_price - self.first_entry_price) * position_size
+    #     self.last_profit_usd = profit_usd
+    #     self.total_profit_usd += profit_usd
+    #     self.trade_cycles += 1
         
-        trade_logger.info(f"Exit price: {exit_price:.12f}")
-        trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
-        trade_logger.info(f"Position size: {position_size}")
-        trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
-        trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
-        trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
-        trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
-        trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
-        if self.position_start_time:
-            trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
-        trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
-        trade_logger.info(f"Total buys: {self.total_buys}")
-        trade_logger.info("*" * 100)
+    #     trade_logger.info(f"Exit price: {exit_price:.12f}")
+    #     trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
+    #     trade_logger.info(f"Position size: {position_size}")
+    #     trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
+    #     trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
+    #     trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
+    #     trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
+    #     trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
+    #     if self.position_start_time:
+    #         trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
+    #     trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
+    #     trade_logger.info(f"Total buys: {self.total_buys}")
+    #     trade_logger.info("*" * 100)
 
-        self.current_cycle_buys = 0
-        self.position_start_time = None
-        self.total_buys = 0
-        self.max_buys_per_cycle = 0
-        self.trade_cycles = 0
-        self.total_profit_usd = 0
-        self.last_profit_usd = 0
+    #     self.current_cycle_buys = 0
+    #     self.position_start_time = None
+    #     self.total_buys = 0
+    #     self.max_buys_per_cycle = 0
+    #     self.trade_cycles = 0
+    #     self.total_profit_usd = 0
+    #     self.last_profit_usd = 0
 
 class CustomPandasData(bt.feeds.PandasData):
     params = (

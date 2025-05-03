@@ -11,3 +11,8 @@ testing*.py
 QuantStat_*.html
 
 .*.session-journal
+*.cpython-313.pyc
+bt
+binance.log
+memory_debug.py
+memory_profile_summary.png

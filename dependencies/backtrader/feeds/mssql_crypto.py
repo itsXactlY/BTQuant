@@ -5,7 +5,6 @@ from backtrader.dontcommit import connection_string, fast_mssql, bt
 
 import pyodbc
 import pandas as pd
-from datetime import datetime
 
 class MSSQLData(bt.feeds.PandasData):
     @classmethod
@@ -190,7 +189,7 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
         
         df = df_resampled
 
-    print('Data extraction & manipulation took:', time.time() - start_time, 'seconds')
+    print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
     
     # Convert back to pandas for compatibility with BTQuant
     return df.to_pandas().set_index("TimestampStart")

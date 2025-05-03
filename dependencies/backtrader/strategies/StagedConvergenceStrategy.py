@@ -2,19 +2,6 @@ from .base import BaseStrategy, bt
 import backtrader as bt
 from datetime import datetime
 
-import logging
-
-def setup_logger(logger_name, log_file, level=logging.INFO):
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(level)
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    return logger
-trade_logger = setup_logger('TradeLogger', 'StagedConvergenceStrategy_Trade_Monitor.log', level=logging.DEBUG)
-
 class StagedConvergenceStrategy(BaseStrategy):
     params = (
         ('fast1', 5),
@@ -187,43 +174,43 @@ class StagedConvergenceStrategy(BaseStrategy):
         # Reset conditions_checked flag for the new candle
         self.conditions_checked = False
 
-    def log_entry(self):
-        trade_logger.debug("-" * 100)
-        self.total_buys += 1
-        self.current_cycle_buys += 1
-        self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
+    # def log_entry(self):
+    #     trade_logger.debug("-" * 100)
+    #     self.total_buys += 1
+    #     self.current_cycle_buys += 1
+    #     self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
 
-        trade_logger.debug(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
-        trade_logger.debug(f"Entry price: {self.entry_prices[-1]:.12f}")
-        trade_logger.debug(f"Position size: {self.sizes[-1]}")
-        trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-        trade_logger.debug(f"Current portfolio value: {self.broker.getvalue():.2f}")
-        trade_logger.debug("*" * 100)
+    #     trade_logger.debug(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
+    #     trade_logger.debug(f"Entry price: {self.entry_prices[-1]:.12f}")
+    #     trade_logger.debug(f"Position size: {self.sizes[-1]}")
+    #     trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
+    #     trade_logger.debug(f"Current portfolio value: {self.broker.getvalue():.2f}")
+    #     trade_logger.debug("*" * 100)
 
-    def log_exit(self, exit_type):
-        trade_logger.info("-" * 100)
-        trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
+    # def log_exit(self, exit_type):
+    #     trade_logger.info("-" * 100)
+    #     trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
         
-        position_size = sum(self.sizes)
-        exit_price = self.data.close[0]
-        profit_usd = (exit_price - self.average_entry_price) * position_size
-        self.last_profit_usd = profit_usd
-        self.total_profit_usd += profit_usd
-        self.trade_cycles += 1
+    #     position_size = sum(self.sizes)
+    #     exit_price = self.data.close[0]
+    #     profit_usd = (exit_price - self.average_entry_price) * position_size
+    #     self.last_profit_usd = profit_usd
+    #     self.total_profit_usd += profit_usd
+    #     self.trade_cycles += 1
         
-        trade_logger.info(f"Exit price: {exit_price:.12f}")
-        trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
-        trade_logger.info(f"Position size: {position_size}")
-        trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
-        trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
-        trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
-        trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
-        trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
-        if self.position_start_time:
-            trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
-        trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
-        trade_logger.info(f"Total buys: {self.total_buys}")
-        trade_logger.info("*" * 100)
+    #     trade_logger.info(f"Exit price: {exit_price:.12f}")
+    #     trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
+    #     trade_logger.info(f"Position size: {position_size}")
+    #     trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
+    #     trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
+    #     trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
+    #     trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
+    #     trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
+    #     if self.position_start_time:
+    #         trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
+    #     trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
+    #     trade_logger.info(f"Total buys: {self.total_buys}")
+    #     trade_logger.info("*" * 100)
         
-        self.current_cycle_buys = 0
-        self.position_start_time = None
+    #     self.current_cycle_buys = 0
+    #     self.position_start_time = None

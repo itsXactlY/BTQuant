@@ -274,10 +274,10 @@ class Cerebro(with_metaclass(MetaParams, object)):
         ('oldbuysell', False),
         ('oldtrades', False),
         ('lookahead', 0),
-        ('exactbars', False),
+        ('exactbars', False), # Dont fuck with, or it breaks backtest, trallala...
         ('optdatas', True),
         ('optreturn', True),
-        ('objcache', False),
+        ('objcache', True), # False by default
         ('live', False),
         ('writer', False),
         ('tradehistory', False),

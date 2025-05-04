@@ -14,6 +14,7 @@ import os
 import uuid
 import sys
 
+
 # TODO fix order pickup & calculations once again on restart
 
 order_lock = threading.Lock()
@@ -61,100 +62,100 @@ class BaseStrategy(bt.Strategy):
         ("alert_channel", None)
     )
 
-    # def init_live_trading(self):
-    #     """Initialize live trading components based on exchange type"""
-    #     if self.p.exchange.lower() == "pancakeswap":
-    #         self._init_pancakeswap()
-    #     elif self.p.exchange.lower() == "raydium":
-    #         self._init_raydium()
-    #     else:
-    #         self._init_standard_exchange()
+    def init_live_trading(self):
+        """Initialize live trading components based on exchange type"""
+        if self.p.exchange.lower() == "pancakeswap":
+            self._init_pancakeswap()
+        elif self.p.exchange.lower() == "raydium":
+            self._init_raydium()
+        else:
+            self._init_standard_exchange()
 
-    # def _init_alert_system(self, coin_name=".__!_"):
-    #     """Initialize alert system with Telegram and Discord services if enabled"""
-    #     if not self.p.enable_alerts:
-    #         print("Alert system disabled (not enabled via configuration)")
-    #         return None
+    def _init_alert_system(self, coin_name=".__!_"):
+        """Initialize alert system with Telegram and Discord services if enabled"""
+        if not self.p.enable_alerts:
+            print("Alert system disabled (not enabled via configuration)")
+            return None
 
-    #     try:
-    #         base_session_file = ".base.session"
-    #         new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
+        try:
+            base_session_file = ".base.session"
+            new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
 
-    #         if not os.path.exists(base_session_file):
-    #             raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
-    #         shutil.copy(base_session_file, new_session_file)
-    #         print(f"✅ Copied base session to {new_session_file}")
+            if not os.path.exists(base_session_file):
+                raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
+            shutil.copy(base_session_file, new_session_file)
+            print(f"✅ Copied base session to {new_session_file}")
 
-    #         self.alert_loop = asyncio.new_event_loop()
+            self.alert_loop = asyncio.new_event_loop()
 
-    #         self.telegram_service = TelegramService(
-    #             api_id=telegram_api_id,
-    #             api_hash=telegram_api_hash,
-    #             session_file=new_session_file,
-    #             channel_id=self.p.alert_channel or telegram_channel_debug
-    #         )
+            self.telegram_service = TelegramService(
+                api_id=telegram_api_id,
+                api_hash=telegram_api_hash,
+                session_file=new_session_file,
+                channel_id=self.p.alert_channel or telegram_channel_debug
+            )
 
-    #         async def init_services():
-    #             await self.telegram_service.initialize(loop=self.alert_loop)
-    #             return AlertManager(
-    #                 [self.telegram_service, DiscordService(discord_webhook_url)],
-    #                 loop=self.alert_loop
-    #             )
+            async def init_services():
+                await self.telegram_service.initialize(loop=self.alert_loop)
+                return AlertManager(
+                    [self.telegram_service, DiscordService(discord_webhook_url)],
+                    loop=self.alert_loop
+                )
 
-    #         def run_alert_loop():
-    #             asyncio.set_event_loop(self.alert_loop)
-    #             self.alert_manager = self.alert_loop.run_until_complete(init_services())
-    #             self.alert_loop.run_forever()
+            def run_alert_loop():
+                asyncio.set_event_loop(self.alert_loop)
+                self.alert_manager = self.alert_loop.run_until_complete(init_services())
+                self.alert_loop.run_forever()
 
-    #         self.alert_thread = threading.Thread(target=run_alert_loop, daemon=True)
-    #         self.alert_thread.start()
+            self.alert_thread = threading.Thread(target=run_alert_loop, daemon=True)
+            self.alert_thread.start()
 
-    #         time.sleep(2)
-    #         print("✅ Alert system initialized successfully")
-    #         return self.alert_manager
+            time.sleep(2)
+            print("✅ Alert system initialized successfully")
+            return self.alert_manager
 
-    #     except Exception as e:
-    #         print(f"❌ Error initializing alert system: {str(e)}")
-    #         return None
+        except Exception as e:
+            print(f"❌ Error initializing alert system: {str(e)}")
+            return None
 
-    # def _init_standard_exchange(self):
-    #     """Initialize standard exchange trading with JackRabbitRelay"""
-    #     # Initialize the alert system only if alerts are enabled
-    #     alert_manager = self._init_alert_system()
-    #     time.sleep(1)
+    def _init_standard_exchange(self):
+        """Initialize standard exchange trading with JackRabbitRelay"""
+        # Initialize the alert system only if alerts are enabled
+        alert_manager = self._init_alert_system()
+        time.sleep(1)
 
-    #     self.exchange = self.p.exchange
-    #     self.account = self.p.account
-    #     self.asset = self.p.asset
-    #     self.rabbit = JrrOrderBase(alert_manager=alert_manager)
+        self.exchange = self.p.exchange
+        self.account = self.p.account
+        self.asset = self.p.asset
+        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
 
-    #     self.order_queue = queue.Queue()
-    #     self.order_thread = threading.Thread(target=self.process_orders)
-    #     self.order_thread.daemon = True
-    #     self.order_thread.start()
+        self.order_queue = queue.Queue()
+        self.order_thread = threading.Thread(target=self.process_orders)
+        self.order_thread.daemon = True
+        self.order_thread.start()
 
-    # def send_alert(self, message: str):
-    #     """Helper method to safely send alerts if enabled"""
-    #     if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
-    #         try:
-    #             self.alert_manager.send_alert(message)
-    #         except Exception as e:
-    #             print(f"Error sending alert: {str(e)}")
-    #     else:
-    #         pass
+    def send_alert(self, message: str):
+        """Helper method to safely send alerts if enabled"""
+        if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
+            try:
+                self.alert_manager.send_alert(message)
+            except Exception as e:
+                print(f"Error sending alert: {str(e)}")
+        else:
+            pass
 
-    # def _init_pancakeswap(self):
-    #     """Initialize PancakeSwap trading"""
-    #     self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
-    #     self.web3order_queue = queue.Queue()
-    #     self.web3order_thread = threading.Thread(target=self.process_web3orders)
-    #     self.web3order_thread.daemon = True
-    #     self.web3order_thread.start()
+    def _init_pancakeswap(self):
+        """Initialize PancakeSwap trading"""
+        self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
+        self.web3order_queue = queue.Queue()
+        self.web3order_thread = threading.Thread(target=self.process_web3orders)
+        self.web3order_thread.daemon = True
+        self.web3order_thread.start()
 
-    # def _init_raydium(self):
-    #     """Initialize Raydium trading"""
-    #     print('Raydium integration not implemented yet')
-    #     raise NotImplementedError("Raydium trading not yet implemented")
+    def _init_raydium(self):
+        """Initialize Raydium trading"""
+        print('Raydium integration not implemented yet')
+        raise NotImplementedError("Raydium trading not yet implemented")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -206,8 +207,8 @@ class BaseStrategy(bt.Strategy):
         self.short_count = 0
 
 
-        # if self.params.backtest == False:
-        #     self.init_live_trading()
+        if self.params.backtest == False:
+            self.init_live_trading()
         
 
         # temp delete me
@@ -244,34 +245,34 @@ class BaseStrategy(bt.Strategy):
         return False
 
     
-    # def process_web3orders(self):
-    #     while True:
-    #         order = self.web3order_queue.get()
-    #         print(order)
-    #         if order is None:
-    #             break
-    #         action, params = order
-    #         if action == 'buy':
-    #             try:
-    #                 self.pcswap.send_pcs_buy_request(**params)
-    #             except Exception as e: 
-    #                 print(e)
-    #         elif action == 'sell':
-    #             try:
-    #                 self.pcswap.send_pcs_close_request(**params)
-    #             except Exception as e:
-    #                 print(e)
-    #             self.reset_position_state()
-    #         self.web3order_queue.task_done()
+    def process_web3orders(self):
+        while True:
+            order = self.web3order_queue.get()
+            print(order)
+            if order is None:
+                break
+            action, params = order
+            if action == 'buy':
+                try:
+                    self.pcswap.send_pcs_buy_request(**params)
+                except Exception as e: 
+                    print(e)
+            elif action == 'sell':
+                try:
+                    self.pcswap.send_pcs_close_request(**params)
+                except Exception as e:
+                    print(e)
+                self.reset_position_state()
+            self.web3order_queue.task_done()
 
-    # def enqueue_web3order(self, action, **params):
-    #     current_time = time.time()
-    #     if current_time - self.last_order_time >= self.order_cooldown:
-    #         self.web3order_queue.put((action, params))
-    #         if action == 'sell':
-    #             self.last_order_time = time.time()
-    #         else:
-    #             self.last_order_time = time.time()
+    def enqueue_web3order(self, action, **params):
+        current_time = time.time()
+        if current_time - self.last_order_time >= self.order_cooldown:
+            self.web3order_queue.put((action, params))
+            if action == 'sell':
+                self.last_order_time = time.time()
+            else:
+                self.last_order_time = time.time()
 
     def buy_or_short_condition(self):
         return False
@@ -485,12 +486,14 @@ class BaseStrategy(bt.Strategy):
             self.stake_to_use = 1000.0
     
     def start(self):
+        # from backtrader.dontcommit import ptu
+        # from backtrader.brokers.jrrbroker import 
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
-            ptu()
+            # ptu()
             print(f"BTQuant initialized for {self.p.exchange}")
             self.load_trade_data()
         elif self.params.backtest == False:
-            ptu()
+            # ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
 
 

@@ -8,7 +8,7 @@ from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 from backtrader.utils.backtest import backtest
 from backtrader.feeds.mssql_crypto import get_database_data
 
-data = get_database_data("BTC", "2024-01-01", "2024-04-08", "1m")
+data = get_database_data("BTC", "2024-01-01", "2024-01-08", "1m")
 
 def run_backtest():
     backtest(NRK, data, init_cash=1000, backtest=True, plot=True)

@@ -1,6 +1,6 @@
 import backtrader as bt
 from collections.abc import Iterable
-
+from datetime import datetime
 
 INIT_CASH = 100_000.0
 COMMISSION_PER_TRANSACTION = 0.00075
@@ -15,7 +15,11 @@ def backtest(
     **kwargs,
 ):
     # TODO :: aLca :: Quick 'n Dirty circular import workaround
-    from backtrader.imports import CustomPandasData, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
+    # from backtrader.imports import CustomPandasData, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
+    from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
+    from backtrader.strategies.base import CustomSQN, CustomPandasData, pd
+    import quantstats_lumi as quantstats
+    from pprint import pprint
     
     kwargs = {
         k: v if isinstance(v, Iterable) and not isinstance(v, str) else [v]
@@ -67,8 +71,8 @@ def backtest(
     returns = pd.Series(returns)
     returns = returns.dropna()
     
-    current_date = dt.datetime.now().strftime("%Y-%m-%d")
-    filename = f"QuantStat_generated_on_{current_date}_{dt.datetime.now()}.html"
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    filename = f"QuantStat_generated_on_{current_date}_{datetime.now()}.html"
 
     quantstats.reports.html(returns, output=filename, title=f'QuantStats_{current_date}')
     
@@ -79,6 +83,7 @@ def backtest(
             else:
                 print("  " * indent + f"{key}: {value}")
 
+    # Print all analyzer results
     print_trade_analyzer_results(trade_analyzer)
     pprint(f"Max Drawdown: {max_drawdown}")
     portvalue = cerebro.broker.getvalue()

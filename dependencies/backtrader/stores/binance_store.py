@@ -30,21 +30,19 @@ class BinanceStore(object):
         (TimeFrame.Months, 1): '1M',
     }
 
-    def __init__(self, coin_refer, coin_target, queue_maxsize=1000):
+    def __init__(self, coin_refer, coin_target):
         self.coin_refer = coin_refer
         self.coin_target = coin_target
         self.symbol = f"{coin_refer}{coin_target}".upper()
         self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{self.get_interval(TimeFrame.Seconds, 1)}"
-        print(f"WebSocket URL: {self.ws_url}")
         self._data = None
         self.broker = None
         self._running = False
         self.websocket = None
         self.websocket_thread = None
-        self._ST_OVER = 'OVER'  # For clean shutdown
+        self._ST_OVER = 'OVER'
         self._state = None
         
-        # Initialize separate queues for different purposes
         self.q_streaming = queue.Queue()
         self.q_store = queue.Queue()
         self.q_notifications = queue.Queue()
@@ -83,14 +81,13 @@ class BinanceStore(object):
         self.ws_url = f"wss://stream.binance.com:9443/ws/{self.symbol.lower()}@kline_{interval}"
         print(f"WebSocket URL: {self.ws_url}")
         
-        # Start the websocket thread
         self._running = True
         t = threading.Thread(target=self._t_streaming_listener)
         t.daemon = True
         t.start()
         self.websocket_thread = t
         
-        # Start the processing thread that moves data from streaming queue to store queue
+        # processing thread that moves data from streaming queue to store queue
         t = threading.Thread(target=self._t_data_processor)
         t.daemon = True
         t.start()
@@ -153,15 +150,13 @@ class BinanceStore(object):
                             float(data['k']['c']),  # close
                             float(data['k']['v'])   # volume
                         )
-                        
+
                         try:
                             self.q_store.put(kline_data, block=False)
                         except queue.Full:
-                            # If store queue is full, remove oldest item
                             _ = self.q_store.get(block=False)
                             self.q_store.put(kline_data, block=False)
-                            
-                    # Explicitly delete references to help with memory management
+
                     del data
                     
                 except json.JSONDecodeError:
@@ -184,7 +179,6 @@ class BinanceStore(object):
         try:
             self.q_streaming.put(message, block=False)
         except queue.Full:
-            # If queue is full, remove oldest item and add new one
             _ = self.q_streaming.get(block=False)
             self.q_streaming.put(message, block=False)
 
@@ -202,26 +196,21 @@ class BinanceStore(object):
         self._running = False
         self._state = self._ST_OVER
         
-        # Signal threads to exit
         try:
-            self.q_streaming.put(None, block=False)  # sentinel value
+            self.q_streaming.put(None, block=False)
         except queue.Full:
             _ = self.q_streaming.get(block=False)
             self.q_streaming.put(None, block=False)
             
-        # Close the websocket
         if self.websocket:
             self.websocket.close()
-            
-        # Wait for processing thread to terminate
+
         if hasattr(self, '_processing_thread') and self._processing_thread.is_alive():
             self._processing_thread.join(timeout=2)
-            
-        # Clear data structures
+
         if self._data:
             self._data.clear()
-            
-        # Clear queues
+
         self._clear_queue(self.q_streaming)
         self._clear_queue(self.q_store)
         
@@ -289,9 +278,10 @@ class BinanceStore(object):
 
         return data
 
-    def start_memory_monitor(self, interval_seconds=900):
+    def start_memory_monitor(self, interval_seconds=60):
         """Start a thread to monitor memory usage at regular intervals"""
         def _monitor_memory():
+            print('start _monitoring')
             while getattr(self, '_running', True):
                 try:
                     import psutil

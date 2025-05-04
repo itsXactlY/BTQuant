@@ -134,6 +134,7 @@ class BinanceData(DataBase):
     def _start_live(self):
         print("Starting live data...")
         self._store.start_socket()
+        self._store.start_memory_monitor()
         self._state = self._ST_LIVE
         self.put_notification(self.LIVE)
         print("Starting live data and purging historical data...")
@@ -149,13 +150,16 @@ class BinanceData(DataBase):
     # 
     def start(self):
         DataBase.start(self)
+
         if self.start_date:
             self._state = self._ST_HISTORBACK
             self.put_notification(self.DELAYED)
+
             klines = self._store.fetch_ohlcv(
                 self._store.symbol,
                 self.interval,
                 since=int(self.start_date.timestamp() * 1000))
+            
             if klines:
                 if self.p.drop_newest and klines:
                     klines.pop()
@@ -167,6 +171,7 @@ class BinanceData(DataBase):
                 self._data.extend(df.values.tolist())
         
         self.data_queue = self._store.start_socket()
+        
         if not hasattr(self, '_processing_thread') or not self._processing_thread.is_alive():
             self._processing_thread = threading.Thread(
                 target=self._process_queue, 
@@ -174,7 +179,7 @@ class BinanceData(DataBase):
                 name="BinanceDataProcessor"
             )
             self._processing_thread.start()
-        
+
         if self._state == self._ST_HISTORBACK:
             self._start_live()
         else:
@@ -187,7 +192,6 @@ class BinanceData(DataBase):
         while self._state != self._ST_OVER:
             try:
                 kline_data = self.data_queue.get(timeout=1)
-
                 timestamp = pd.to_datetime(kline_data[0], unit='ms')
                 processed_data = [
                     timestamp,
@@ -197,22 +201,20 @@ class BinanceData(DataBase):
                     kline_data[4],  # close
                     kline_data[5]   # volume
                 ]
-                
+
                 while len(self._data) >= self.p.max_buffer:
                     self._data.popleft()
                     
                 self._data.append(processed_data)
-                
-                # Clean up
                 del kline_data
                 del processed_data
-                
+
                 cleanup_counter += 1
                 if cleanup_counter >= 100:
                     import gc
                     gc.collect()
                     cleanup_counter = 0
-                    
+
             except queue.Empty:
                 time.sleep(0.01)
             except Exception as e:
@@ -227,3 +229,4 @@ class BinanceData(DataBase):
                 del message
             except queue.Empty:
                 time.sleep(0.1)
+

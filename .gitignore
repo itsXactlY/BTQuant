@@ -13,6 +13,11 @@ QuantStat_*.html
 .*.session-journal
 *.cpython-313.pyc
 bt
-binance.log
+*.log
+*.pkl
+*.txt
+*.csv
 memory_debug.py
 memory_profile_summary.png
+Example_Backtest.py
+market_scanner.log

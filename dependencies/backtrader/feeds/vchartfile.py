@@ -51,6 +51,7 @@ class VChartFile(bt.with_metaclass(MetaVChartFile, bt.DataBase)):
     '''
 
     def start(self):
+        print('HELP HELP HELP')
         super(VChartFile, self).start()
         if self._store is None:
             self._store = bt.stores.VChartFile()

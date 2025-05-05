@@ -4,7 +4,7 @@ import pytz
 import requests
 import queue
 from backtrader.dataseries import TimeFrame
-from .binance_feed import BinanceData
+from backtrader.feeds.binance_feed import BinanceData
 import websocket
 import json
 import time

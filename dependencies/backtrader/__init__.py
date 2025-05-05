@@ -47,7 +47,7 @@ from .dataseries import *
 from .feed import *
 from .resamplerfilter import *
 
-from .livetrading import livetrade_crypto_binance, livetrade_crypto_binance_ML, livetrade_crypto_bitget, livetrade_crypto_mexc, livetrade_multiple_pairs, livetrade_web3
+# from .livetrading import livetrade_crypto_binance, livetrade_crypto_binance_ML, livetrade_crypto_bitget, livetrade_crypto_mexc, livetrade_multiple_pairs, livetrade_web3
 
 from .lineiterator import *
 from .indicator import *

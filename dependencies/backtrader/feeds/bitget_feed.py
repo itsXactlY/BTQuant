@@ -8,7 +8,6 @@ from backtrader.dataseries import TimeFrame
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 import threading
-# from fastquant.strategys.base import function_trapper
 
 def identify_gaps(df, expected_interval):
     df['timestamp'] = pd.to_datetime(df.index)

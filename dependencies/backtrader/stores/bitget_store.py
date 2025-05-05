@@ -6,7 +6,7 @@ from backtrader.dataseries import TimeFrame
 
 import websocket
 import json
-from .bitget_feed import BitgetData
+from backtrader.feeds.bitget_feed import BitgetData
 
 class BitgetStore(object):
     _GRANULARITIES = {

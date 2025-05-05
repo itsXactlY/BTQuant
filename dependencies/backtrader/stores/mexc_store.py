@@ -6,7 +6,7 @@ import time
 import json
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from .mexc_feed import MexcData
+from backtrader.feeds.mexc_feed import MexcData
 import websocket
 
 

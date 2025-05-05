@@ -35,6 +35,7 @@ class CCXTOrder(OrderBase):
         self.owner = owner
         self.data = data
         self.ccxt_order = ccxt_order
+        self.symbol = data.symbol
         self.ordtype = self.Buy if ccxt_order['side'] == 'buy' else self.Sell
         amount = ccxt_order.get('amount')
         if amount:
@@ -82,7 +83,8 @@ class CCXTStore(object):
         if store:
             store_conf = cls.configs[exchange]
             if store_conf:
-                if not set(config.items()).issubset(set(store_conf.items())):
+                # if not set(config.items()).issubset(set(store_conf.items())):
+                if not all(k in store_conf and store_conf[k] == config[k] for k in config):
                     raise ValueError("%s exchange is already configured: %s" % \
                                      (exchange, store_conf))
             return store
@@ -144,12 +146,17 @@ class CCXTStore(object):
                                            amount=amount, price=price, params=params)
         return self.exchange.parse_order(order['info'])
 
+    # @retry
+    # def cancel_order(self, order):
+    #     return self.exchange.cancel_order(order.ccxt_order['id'])
+
     @retry
     def cancel_order(self, order):
-        return self.exchange.cancel_order(order.ccxt_order['id'])
+        return self.exchange.cancel_order(id=order.ccxt_order['id'], symbol=order.symbol)
 
     @retry
     def fetch_trades(self, symbol):
+        print(f'fetching trades for {symbol}')
         return self.exchange.fetch_trades(symbol)
 
     @retry

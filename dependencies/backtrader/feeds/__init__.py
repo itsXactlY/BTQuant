@@ -50,6 +50,10 @@ try:
 except ImportError:
     pass  # The user may not have something installed
 
+try:
+    from .ccxt import CCXT
+except ImportError:
+    pass # The user may not have something installed
 
 from .vchartfile import VChartFile
 

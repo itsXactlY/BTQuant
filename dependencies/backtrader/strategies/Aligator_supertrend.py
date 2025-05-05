@@ -4,9 +4,9 @@ from backtrader.indicators.WilliamsAligator import WilliamsAlligator
 
 class AliG_STrend(BaseStrategy):
     params = (
-        ('dca_threshold', 20.5),
-        ('take_profit', 5),
-        ('percent_sizer', 0.045),
+        ('dca_threshold', 0.1),
+        ('take_profit', 0.2),
+        ('percent_sizer', 0.99),
         ('premium', 0.003),
         )
 
@@ -15,7 +15,7 @@ class AliG_STrend(BaseStrategy):
         print('INIT AliG_STrend')
         self.supertrend = SuperTrend(plotname='Supertrend: ')
         self.alligator = WilliamsAlligator(plotname='WilliamsAlligator: ')
-        self.DCA = True
+        self.DCA = False
         self.buy_executed = False
         self.conditions_checked = False
 
@@ -47,8 +47,6 @@ class AliG_STrend(BaseStrategy):
 
                     self.calc_averages()
                     self.buy_executed = True
-                    if self.p.debug:
-                        self.log_entry()
         self.conditions_checked = True
 
     def dca_or_short_condition(self):

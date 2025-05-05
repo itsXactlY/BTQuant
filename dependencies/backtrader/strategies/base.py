@@ -57,7 +57,7 @@ class BaseStrategy(bt.Strategy):
         ("stop_trail", 0),
         ("take_profit", 0),
         ("percent_sizer", 0),
-        ("order_cooldown", 15),
+        ("order_cooldown", 0),
         ("enable_alerts", False),
         ("alert_channel", None)
     )
@@ -214,8 +214,6 @@ class BaseStrategy(bt.Strategy):
         # temp delete me
         self.account = self.p.account
         self.asset = self.p.asset
-
-
 
     def process_orders(self):
         while True:

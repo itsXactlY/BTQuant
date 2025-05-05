@@ -56,7 +56,6 @@ class CCXTBroker(BrokerBase):
         _order = self.store.create_order(symbol=data.symbol, order_type=order_type, side=side,
                                          amount=amount, price=price, params=params)
         order = CCXTOrder(owner, data, amount, _order)
-        self.notify(order)
         return order
 
     def buy(self, owner, data, size, price=None, plimit=None,

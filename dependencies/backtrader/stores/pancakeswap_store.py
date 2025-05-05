@@ -1,9 +1,8 @@
-from .pancakeswap_feed import Web3, FACTORY_ABI, PAIR_ABI, Queue, threading, time, TimeFrame, PancakeSwapData
+from backtrader.feeds.pancakeswap_feed import Web3, FACTORY_ABI, PAIR_ABI, Queue, threading, time, TimeFrame, PancakeSwapData
 import threading
 import requests
 from queue import Queue
 from backtrader.dataseries import TimeFrame
-from .pancakeswap_feed import PancakeSwapData
 
 class PancakeSwapStore(object):
     _GRANULARITIES = {

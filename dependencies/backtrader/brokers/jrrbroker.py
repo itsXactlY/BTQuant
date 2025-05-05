@@ -209,7 +209,7 @@ class JrrOrderBase:
 
     def send_jrr_buy_request(self, exchange: str, account: str, asset: str, amount: float) -> str:
         payload = {
-            "Exchange": "mimic",
+            "Exchange": exchange, #"mimic",
             "Market": "spot",
             "Account": account,
             "Action": "Buy",
@@ -217,17 +217,17 @@ class JrrOrderBase:
             "USD": str(amount),
             "Identity": identify
         }
-        # print(f"payload: {payload}")
+        print(f"payload: {payload}")
         return self._send_jrr_request(payload)
 
     def send_jrr_close_request(self, exchange: str, account: str, asset: str) -> str:
         payload = {
-            "Exchange": "mimic",
+            "Exchange": exchange, #"mimic",
             "Market": "spot",
             "Account": account,
             "Action": "Close",
             "Asset": asset,
             "Identity": identify
         }
-        # print(f"payload: {payload}")
+        print(f"payload: {payload}")
         return self._send_jrr_request(payload)

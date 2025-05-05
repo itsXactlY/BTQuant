@@ -42,6 +42,6 @@ except ImportError:
 
 from .vchartfile import VChartFile
 
-from .binance_store import BinanceStore
-from .bitget_store import BitgetStore
-from .mexc_store import MexcStore
+# from .binance_store import BinanceStore
+# from .bitget_store import BitgetStore
+# from .mexc_store import MexcStore

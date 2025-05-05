@@ -17,6 +17,7 @@ bt
 *.pkl
 *.txt
 *.csv
+*.json
 memory_debug.py
 memory_profile_summary.png
 Example_Backtest.py

@@ -116,7 +116,10 @@ class CCXT(DataBase):
 
     def _load_ticks(self):
         if self._last_id:
-            trades = self.store.fetch_trades(self.symbol)
+            try:
+                trades = self.store.fetch_trades(self.symbol)
+            except KeyError:
+                print('ERROR FETCHING TRADES')
         else:
             # first time get the latest trade only
             trades = [self.store.fetch_trades(self.symbol)[-1]]

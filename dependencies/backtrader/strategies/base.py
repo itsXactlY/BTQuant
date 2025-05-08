@@ -62,14 +62,74 @@ class BaseStrategy(bt.Strategy):
         ("alert_channel", None)
     )
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.p.backtest == True:
+            BuySellArrows(self.data0, barplot=True)
+        self.dataclose = self.datas[0].close
+        self.order = None
+        self.DCA = False
+        self.entry_price = None
+        self.take_profit_price = None
+        self.first_entry_price = None
+        self.stop_loss_price = None
+        self.buy_executed = None
+        self.average_entry_price = None
+        self.entry_prices = []
+        self.sizes = []
+        self.stake_to_use = None
+        self.stake_to_sell = None
+        self.stake = None
+        self.amount = self.p.amount
+        self.conditions_checked = None
+        self.print_counter = 0
+                
+        self.last_order_time = 0
+        self.order_cooldown = self.p.order_cooldown
+        self.position_count = 0
+        self.position_history = []
+        # Variables to track DCA and positions
+        self.initial_buy_price = None
+        self.buy_count = 0
+        self.average_buy_price = 0
+
+        self.init_cash = self.params.init_cash
+        self.total_cash_added = 0
+        self.total_pnl = 0.0
+        self.total_wins = 0
+        self.total_losses = 0
+        self.total_trades = 0
+        self.win_rate = 0
+        self.final_value = 0.0
+
+        self.short_entry_prices = []
+        self.short_sizes = []
+        self.average_short_price = None
+        self.first_short_entry_price = None
+        self.short_take_profit_price = None
+        self.short_average_entry_price = 0
+        self.short_executed = False
+        self.short_count = 0
+
+
+        if self.params.backtest == False:
+            self.init_live_trading()
+        
+
+        # temp delete me
+        self.account = self.p.account
+        self.asset = self.p.asset
+
     def init_live_trading(self):
         """Initialize live trading components based on exchange type"""
         if self.p.exchange.lower() == "pancakeswap":
             self._init_pancakeswap()
         elif self.p.exchange.lower() == "raydium":
             self._init_raydium()
-        else:
+        elif self.p.exchange.lower() == "mimic":
             self._init_standard_exchange()
+        else:
+            print('Using CCXT Exchange - nothing todo here')
 
     def _init_alert_system(self, coin_name=".__!_"):
         """Initialize alert system with Telegram and Discord services if enabled"""
@@ -157,63 +217,6 @@ class BaseStrategy(bt.Strategy):
         print('Raydium integration not implemented yet')
         raise NotImplementedError("Raydium trading not yet implemented")
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if self.p.backtest == True:
-            BuySellArrows(self.data0, barplot=True)
-        self.dataclose = self.datas[0].close
-        self.order = None
-        self.DCA = False
-        self.entry_price = None
-        self.take_profit_price = None
-        self.first_entry_price = None
-        self.stop_loss_price = None
-        self.buy_executed = None
-        self.average_entry_price = None
-        self.entry_prices = []
-        self.sizes = []
-        self.stake_to_use = None
-        self.stake_to_sell = None
-        self.stake = None
-        self.amount = self.p.amount
-        self.conditions_checked = None
-        self.print_counter = 0
-                
-        self.last_order_time = 0
-        self.order_cooldown = self.p.order_cooldown
-        self.position_count = 0
-        self.position_history = []
-        # Variables to track DCA and positions
-        self.initial_buy_price = None
-        self.buy_count = 0
-        self.average_buy_price = 0
-
-        self.init_cash = self.params.init_cash
-        self.total_cash_added = 0
-        self.total_pnl = 0.0
-        self.total_wins = 0
-        self.total_losses = 0
-        self.total_trades = 0
-        self.win_rate = 0
-        self.final_value = 0.0
-
-        self.short_entry_prices = []
-        self.short_sizes = []
-        self.average_short_price = None
-        self.first_short_entry_price = None
-        self.short_take_profit_price = None
-        self.short_average_entry_price = 0
-        self.short_executed = False
-        self.short_count = 0
-
-
-        if self.params.backtest == False:
-            self.init_live_trading()
-        
-
-        # temp delete me
-        self.account = self.p.account
-        self.asset = self.p.asset
 
     def process_orders(self):
         while True:
@@ -286,7 +289,13 @@ class BaseStrategy(bt.Strategy):
 
     def calculate_position_size(self):
         """Calculate the position size based on available USDT and current price"""
-        min_order_value = 5.50
+        if self.p.exchange.lower() == 'binance':
+            min_order_value = 5.50
+        elif self.p.exchange.lower() == 'mexc':
+            min_order_value = 1.10
+        else:
+            min_order_value = 10
+
         usdt_to_use = self.stake_to_use * self.p.percent_sizer
 
         if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
@@ -400,86 +409,107 @@ class BaseStrategy(bt.Strategy):
 
     def load_trade_data(self):
         try:
-            file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
-            if sys.platform != "win32":
-                os.sync()
-            with open(file_path, 'r') as file:
-                orders = [line for line in file.read().strip().split('\n') if line.strip()]
-            
-            self.entry_prices = []
-            self.sizes = []
-            
-            if self.p.debug:
-                print("Debug :: Processing order history")
-            
-            for order_str in reversed(orders):
-                try:
-                    order_data = json.loads(order_str)
-                    if self.p.debug:
-                        print(f"Debug :: Order data: {order_data}")
-                except json.JSONDecodeError:
-                    print(f"Skipping invalid JSON: {order_str}")
-                    continue
-                    
-                action = order_data.get('Action')
-                asset = order_data.get('Asset')
+            if self.p.exchange.lower() == 'mimic':
+                file_path = f"/home/JackrabbitRelay2/Data/Mimic/{self.account}.history"
+                if sys.platform != "win32":
+                    os.sync()
+                with open(file_path, 'r') as file:
+                    orders = [line for line in file.read().strip().split('\n') if line.strip()]
                 
                 if self.p.debug:
-                    print(f"Debug :: Checking order - Action: {action}, Asset: {asset}")
+                    print("Debug :: Processing order history")
                 
-                if action == 'sell' and asset == self.asset:
+                for order_str in reversed(orders):
+                    try:
+                        order_data = json.loads(order_str)
+                        if self.p.debug:
+                            print(f"Debug :: Order data: {order_data}")
+                    except json.JSONDecodeError:
+                        print(f"Skipping invalid JSON: {order_str}")
+                        continue
+                        
+                    action = order_data.get('Action')
+                    asset = order_data.get('Asset')
+                    
                     if self.p.debug:
-                        print("Debug :: Found sell order - breaking")
-                    break
+                        print(f"Debug :: Checking order - Action: {action}, Asset: {asset}")
                     
-                if action == 'buy' and asset == self.asset:
-                    entry_price = order_data.get('Price', 0.0)
-                    amount = order_data.get('Amount', 0.0)
-                    
-                    if self.p.debug:
-                        print(f"Debug :: Adding buy order - Price: {entry_price}, Amount: {amount}")
-                    
-                    self.entry_prices.append(entry_price)
-                    self.sizes.append(amount)
+                    if action == 'sell' and asset == self.asset:
+                        if self.p.debug:
+                            print("Debug :: Found sell order - breaking")
+                        break
+                        
+                    if action == 'buy' and asset == self.asset:
+                        entry_price = order_data.get('Price', 0.0)
+                        amount = order_data.get('Amount', 0.0)
+                        
+                        if self.p.debug:
+                            print(f"Debug :: Adding buy order - Price: {entry_price}, Amount: {amount}")
+                        
+                        self.entry_prices.append(entry_price)
+                        self.sizes.append(amount)
+                        self.buy_executed = True
+                        self.DCA = True
+                        print(f"STATE AFTER LOAD: buy_executed={self.buy_executed}, DCA={self.DCA}")
+                
+                if self.p.debug:
+                    print(f"Debug :: Loaded entries - Prices: {self.entry_prices}, Sizes: {self.sizes}")
+                
+                '''
+                Keep in place for FUTURES trading rework
+                if self.entry_prices and self.sizes:
+                    print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
+                    self.calc_averages()
+                    self.entry_price = self.average_entry_price
+                    self.buy_executed = True'''
+                if self.entry_prices and self.sizes:
+                    print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
+                    self.first_entry_price = self.entry_prices[0]
+                    self.calc_averages()
+                    self.entry_price = self.average_entry_price
+                    self.buy_executed = True
+                else:
+                    print("No buy orders found after the last sell")
+                if orders and orders[-1].strip():
+                    try:
+                        last_order_data = json.loads(orders[-1])
+                        usdt_value = last_order_data.get('USDT', 0.0)
+                        print(f"Free USDT: {usdt_value:.9f}")
+                        self.stake_to_use = usdt_value
+                        print(f"Last modified: {os.path.getmtime(file_path)}")
+                    except json.JSONDecodeError:
+                        print("Error parsing the last order, resetting position state")
+                        self.stake_to_use = 1000.0
+                        self.reset_position_state()
+                else:
+                    self.reset_position_state()
+                    self.stake_to_use = 1000.0
+            elif self.p.exchange.lower() != 'mimic':
+                cash = self.broker.getcash()
+                self.stake_to_use = cash
+                print(f"Available USDT: {self.stake_to_use}")
+                
+                for data in self.datas:
+                    position_info = self.broker.get_position_info(data)
+
+                    print("No entry trades found, using current position as reference")
+                    self.entry_price = position_info['price']
+                    self.entry_prices = [position_info['price']]
+                    self.sizes = [position_info['size']]
+                    self.first_entry_price = position_info['price']
+                    self.calc_averages()
                     self.buy_executed = True
                     self.DCA = True
-                    print(f"STATE AFTER LOAD: buy_executed={self.buy_executed}, DCA={self.DCA}")
-            
-            if self.p.debug:
-                print(f"Debug :: Loaded entries - Prices: {self.entry_prices}, Sizes: {self.sizes}")
-            
-            '''
-            Keep in place for FUTURES trading rework
-            if self.entry_prices and self.sizes:
-                print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
-                self.calc_averages()
-                self.entry_price = self.average_entry_price
-                self.buy_executed = True'''
-            if self.entry_prices and self.sizes:
-                print(f"Loaded {len(self.entry_prices)} buy orders after the last sell")
-                self.first_entry_price = self.entry_prices[0]
-                self.calc_averages()
-                self.entry_price = self.average_entry_price
-                self.buy_executed = True
-            else:
-                print("No buy orders found after the last sell")
-            if orders and orders[-1].strip():
-                try:
-                    last_order_data = json.loads(orders[-1])
-                    usdt_value = last_order_data.get('USDT', 0.0)
-                    print(f"Free USDT: {usdt_value:.9f}")
-                    self.stake_to_use = usdt_value
-                    print(f"Last modified: {os.path.getmtime(file_path)}")
-                except json.JSONDecodeError:
-                    print("Error parsing the last order, resetting position state")
-                    self.stake_to_use = 1000.0
-                    self.reset_position_state()
-            else:
-                self.reset_position_state()
-                self.stake_to_use = 1000.0
-                
+                        
+                    # Initialize with a manual order if needed
+                    manual_orders = self.broker.load_initial_positions(data)
+                    if manual_orders:
+                        self.entry_order = manual_orders[0]
+                        print(f"Created entry order reference: {self.entry_order}")
+                            
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
+            traceback.print_exc()  # Print the full error traceback for debugging
             self.reset_position_state()
             self.stake_to_use = 1000.0
     

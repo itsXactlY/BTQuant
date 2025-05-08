@@ -349,6 +349,34 @@ class CCXTBroker(BrokerBase):
             print(f"Error fetching ticker: {e}")
             return None
 
+    def get_all_entry_trades(self, symbol):
+        """Get all entry trades for a specific symbol"""
+        entry_trades = []
+        
+        try:
+            # Get the exchange's closed orders/trades for this symbol
+            if hasattr(self, 'exchange') and hasattr(self.exchange, 'fetch_my_trades'):
+                trades = self.exchange.fetch_my_trades(symbol=symbol, limit=50)
+                
+                # Filter for buy trades that are still relevant to current position
+                for trade in trades:
+                    if trade['side'].lower() == 'buy':
+                        # Create a simplified trade object
+                        entry_trade = type('EntryTrade', (), {
+                            'price': float(trade['price']),
+                            'size': float(trade['amount']),
+                            'timestamp': trade['timestamp'],
+                            'id': trade['id'],
+                            'side': trade['side']
+                        })
+                        entry_trades.append(entry_trade)
+            
+            return entry_trades
+        except Exception as e:
+            print(f"Error fetching trade history: {str(e)}")
+            return []
+
+
 # Custom order class to handle manual positions
 class ManualPositionOrder(CCXTOrder):
     def __init__(self, owner, data, size, ccxt_order):

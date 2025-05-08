@@ -9,6 +9,8 @@ from ccxt.base.errors import NetworkError, ExchangeError
 
 import backtrader as bt
 from backtrader import OrderBase
+import datetime
+
 
 class CCXTOrder(OrderBase):
     def __init__(self, owner, data, size, ccxt_order):
@@ -24,6 +26,14 @@ class CCXTOrder(OrderBase):
             self.size = size
 
         super(CCXTOrder, self).__init__()
+    
+    def completed(self):
+        """Mark the order as completed"""
+        self.status = self.Completed
+        self.completed_at = datetime.datetime.now()
+        self.ccxt_order['status'] = 'closed'
+        return self
+
 
 class CCXTStore(object):
     '''API provider for CCXT feed and broker classes.'''

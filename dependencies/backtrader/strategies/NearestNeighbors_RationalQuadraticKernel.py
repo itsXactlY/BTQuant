@@ -49,8 +49,8 @@ class NRK(BaseStrategy):
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
-        ('dca_deviation', 1.5),
-        ('take_profit', 2.5),
+        ('dca_deviation', 0.5),
+        ('take_profit', 0.5),
         ('percent_sizer', 0.05),
         ('debug', True),
         ('backtest', None),
@@ -83,7 +83,10 @@ class NRK(BaseStrategy):
         self.buy_executed = False
         self.conditions_checked = False
         self.DCA = True
-    
+        # delete me
+        size = self.broker.get_position_info(self.data)['size']
+        print(f'Found {size} to sell.')
+
     def compute_ml_signal(self):
         """
         Computes the ML signal based on the historical feature data and applies
@@ -184,7 +187,7 @@ class NRK(BaseStrategy):
                         self.first_entry_price = self.data.close[0]
                     self.calc_averages()
                     self.buy_executed = True
-                    alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    alert_message = f"""\nBuy Alert arrived!\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
                     self.send_alert(alert_message)
                 elif self.p.backtest == True:
                     self.buy(self.data, size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
@@ -211,7 +214,7 @@ class NRK(BaseStrategy):
                     self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
-                    alert_message = f"""\nDCA Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
+                    alert_message = f"""\nDCA Alert arrived!\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
                     self.send_alert(alert_message)
                 elif self.p.backtest is True:
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
@@ -224,7 +227,7 @@ class NRK(BaseStrategy):
     def sell_or_cover_condition(self):
         if self.buy_executed:
             current_price = round(self.data.close[0], 9)
-            avg_price = round(self.average_entry_price, 9)
+            # avg_price = round(self.average_entry_price, 9)
             tp_price = round(self.take_profit_price, 9)
 
             if current_price >= tp_price:
@@ -237,7 +240,9 @@ class NRK(BaseStrategy):
                         self.log_exit("Sell Signal - Take Profit")
                     self.reset_position_state()
                 else:
-                    self.order = self.close()
+                    _size = self.broker.get_position_info(self.data)['size']
+                    print('sellsize: ', _size)
+                    self.order = self.close(self.data, size=_size, exectype=Order.Market)
                     print(self.order)
                     # self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
                     alert_message = f"""Close {self.asset}"""

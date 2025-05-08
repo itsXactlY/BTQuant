@@ -1,23 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8; py-indent-offset:4 -*-
-###############################################################################
-#
-# Copyright (C) 2017 Ed Bartosh <bartosh@gmail.com>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-###############################################################################
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
@@ -50,6 +30,7 @@ class CCXTStore(object):
 
     # Supported granularities
     _GRANULARITIES = {
+        (bt.TimeFrame.Seconds, 1): '1s',
         (bt.TimeFrame.Minutes, 1): '1m',
         (bt.TimeFrame.Minutes, 3): '3m',
         (bt.TimeFrame.Minutes, 5): '5m',
@@ -156,7 +137,6 @@ class CCXTStore(object):
 
     @retry
     def fetch_trades(self, symbol):
-        print(f'fetching trades for {symbol}')
         return self.exchange.fetch_trades(symbol)
 
     @retry
@@ -164,5 +144,39 @@ class CCXTStore(object):
         return self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
 
     @retry
-    def fetch_open_orders(self):
-        return self.exchange.fetchOpenOrders()
+    def fetch_open_orders(self, symbol):
+        return self.exchange.fetchOpenOrders(symbol)
+
+    @retry
+    def fetch_closed_orders(self, symbol):
+        """Fetch closed orders for the given symbol"""
+        if not hasattr(self.exchange, 'fetchClosedOrders'):
+            raise NotImplementedError(f"Exchange {self.exchange.name} doesn't support fetchClosedOrders")
+        
+        try:
+            return self.exchange.fetch_closed_orders(symbol=symbol)
+        except Exception as e:
+            print(f"Error fetching closed orders: {e}")
+            return []
+
+    @retry
+    def fetch_my_trades(self, symbol):
+        """Fetch historical trades for the given symbol"""
+        if not hasattr(self.exchange, 'fetchMyTrades'):
+            raise NotImplementedError(f"Exchange {self.exchange.name} doesn't support fetchMyTrades")
+        
+        try:
+            return self.exchange.fetch_my_trades(symbol=symbol)
+        except Exception as e:
+            print(f"Error fetching my trades: {e}")
+            return []
+
+    @retry
+    def fetch_order_status(self, order_id, symbol):
+        """Fetch the status of an order"""
+        try:
+            order = self.exchange.fetch_order(order_id, symbol)
+            return order['status']
+        except Exception as e:
+            print(f"Error fetching order {order_id}: {e}")
+            return None

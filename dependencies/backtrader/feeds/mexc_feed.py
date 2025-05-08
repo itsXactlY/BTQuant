@@ -20,7 +20,7 @@ class MexcData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', True)
+        ('debug', False)
     )
 
     _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(3)
@@ -203,4 +203,4 @@ class MexcData(DataBase):
                 self.handle_websocket_message(message)
                 del message
             except Empty:
-                time.sleep(0.1)
+                time.sleep(0.01)

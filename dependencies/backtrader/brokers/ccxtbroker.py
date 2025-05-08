@@ -96,10 +96,19 @@ class CCXTBroker(BrokerBase):
     def notify(self, order):
         self.notifs.put(order)
         
+    # def getposition(self, data):
+    #     currency = data.symbol.split('/')[0]
+    #     return self.store.getposition(currency)
+
     def getposition(self, data):
         currency = data.symbol.split('/')[0]
-        return self.store.getposition(currency)
+        position_size = self.store.getposition(currency)
+        class Position:
+            def __init__(self, size):
+                self.size = size
         
+        return Position(position_size)
+
     def get_value(self, datas=None, mkt=False, lever=False):
         return self.store.getvalue(self.currency)
         
@@ -159,8 +168,6 @@ class CCXTBroker(BrokerBase):
                     self.notify(order)
             except Exception as e:
                 print(f"Error checking order {order_id}: {e}")
-    
-
         
     def set_initial_position(self, data, size):
         """Create a manual order to represent our current position"""
@@ -190,7 +197,7 @@ class CCXTBroker(BrokerBase):
         
         print(f"Manually initialized position: {size} units at reference price {current_price}")
         return order
-    
+
     def load_initial_positions(self, data):
         """Load initial positions from exchange for startup"""
         symbol = data.symbol
@@ -208,6 +215,7 @@ class CCXTBroker(BrokerBase):
                 ticker = self.store.exchange.fetch_ticker(symbol)
                 current_price = ticker['last']
                 
+                # Create a proper order object that we can track
                 manual_order = SimpleOrder(
                     symbol=symbol, 
                     side='buy', 
@@ -215,7 +223,7 @@ class CCXTBroker(BrokerBase):
                     price=current_price
                 )
                 
-                # Store for reference
+                # Store the order for reference
                 self.executed_orders.append(manual_order)
                 
                 print(f"Manually initialized position: {position} {currency} at reference price {current_price}")
@@ -227,6 +235,29 @@ class CCXTBroker(BrokerBase):
                 traceback.print_exc()
         
         return []
+
+    def _add_position(self, data, size, order):
+        """Update internal position tracking with existing position"""
+        if not hasattr(self, 'positions'):
+            self.positions = {}
+        
+        # Create or update the position for this data
+        if data not in self.positions:
+            self.positions[data] = size
+        else:
+            self.positions[data] += size
+        
+        # If using position tracking in BrokerBase, update it there too
+        if hasattr(self, '_positions'):
+            self._positions[data] = size
+            
+        # Instead of notify_store, use the existing notification system
+        if hasattr(self, 'notify'):
+            self.notify(order)
+        
+        # Add the order to executed_orders if not already there
+        if order not in self.executed_orders:
+            self.executed_orders.append(order)
 
     def get_position_info(self, data):
         """Get current position info for a symbol"""
@@ -279,20 +310,6 @@ class CCXTBroker(BrokerBase):
         except Exception as e:
             print(f"Error fetching trade history: {e}")
             return []
-
-    def find_last_sell_trade(self, symbol, limit=100):
-        """Find the last sell trade for a symbol"""
-        trades = self.fetch_trades_history(symbol, limit=limit)
-        
-        # Sort by timestamp (newest first)
-        trades.sort(key=lambda t: t['timestamp'], reverse=True)
-        
-        # Find the most recent sell
-        for trade in trades:
-            if trade['side'] == 'sell':
-                return SimpleTrade.from_exchange_trade(trade)
-        
-        return None
 
     def find_first_buy_after_last_sell(self, symbol, limit=100):
         """Find the first buy trade after the last sell"""
@@ -348,33 +365,6 @@ class CCXTBroker(BrokerBase):
         except Exception as e:
             print(f"Error fetching ticker: {e}")
             return None
-
-    def get_all_entry_trades(self, symbol):
-        """Get all entry trades for a specific symbol"""
-        entry_trades = []
-        
-        try:
-            # Get the exchange's closed orders/trades for this symbol
-            if hasattr(self, 'exchange') and hasattr(self.exchange, 'fetch_my_trades'):
-                trades = self.exchange.fetch_my_trades(symbol=symbol, limit=50)
-                
-                # Filter for buy trades that are still relevant to current position
-                for trade in trades:
-                    if trade['side'].lower() == 'buy':
-                        # Create a simplified trade object
-                        entry_trade = type('EntryTrade', (), {
-                            'price': float(trade['price']),
-                            'size': float(trade['amount']),
-                            'timestamp': trade['timestamp'],
-                            'id': trade['id'],
-                            'side': trade['side']
-                        })
-                        entry_trades.append(entry_trade)
-            
-            return entry_trades
-        except Exception as e:
-            print(f"Error fetching trade history: {str(e)}")
-            return []
 
 # Custom order class to handle manual positions
 class ManualPositionOrder(CCXTOrder):

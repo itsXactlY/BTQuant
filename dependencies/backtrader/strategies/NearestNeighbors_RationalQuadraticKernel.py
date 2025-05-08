@@ -206,6 +206,7 @@ class NRK(BaseStrategy):
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
                     self.order = self.buy(self.data, size=4.2, exectype=Order.Market)
+                    print(self.order)
                     # self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
                     self.calc_averages()
                     self.buy_executed = True
@@ -228,7 +229,8 @@ class NRK(BaseStrategy):
 
             if current_price >= tp_price:
                 if self.params.backtest:
-                    self.close()
+                    self.order = self.close()
+                    print(self.order)
                     self.buy_executed = False
                     if self.p.debug:
                         print(f"Position closed at {current_price:.9f}, profit taken")

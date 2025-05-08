@@ -1,7 +1,7 @@
 import backtrader as bt
 from sklearn.neighbors import NearestNeighbors
 from backtrader.strategies.base import BaseStrategy, np
-
+from backtrader import Order
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
 But anyway, I can pull more rabbits out of my hat - so I've decided to make this available to everyone. 
@@ -35,6 +35,7 @@ class RationalQuadraticKernel(bt.indicators.PeriodN):
 class NRK(BaseStrategy):
     params = (
         # ML Parameters
+        ('symbol', 'XRP/USDT'),
         ('source', 'close'),
         ('neighbors_count', 8),
         ('max_bars_back', 100), # Standard: 2000 what is slow on HFT, better suited for higher TF than 5m+
@@ -48,14 +49,15 @@ class NRK(BaseStrategy):
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
-        ('dca_deviation', 0.1),
-        ('take_profit', 0.2),
-        ('percent_sizer', 0.99),
-        ('debug', False),
+        ('dca_deviation', 1.5),
+        ('take_profit', 2.5),
+        ('percent_sizer', 0.05),
+        ('debug', True),
         ('backtest', None),
     )
 
     def __init__(self, **kwargs):
+        self.symbol = self.p.symbol
         super().__init__(**kwargs)
         self.addminperiod(self.p.max_bars_back)
         self.source = getattr(self.data, self.p.source)
@@ -80,7 +82,7 @@ class NRK(BaseStrategy):
         ####
         self.buy_executed = False
         self.conditions_checked = False
-        self.DCA = False
+        self.DCA = True
     
     def compute_ml_signal(self):
         """
@@ -175,7 +177,9 @@ class NRK(BaseStrategy):
                     self.entry_prices.append(self.data.close[0])
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
                     self.sizes.append(self.usdt_amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.p.account, asset=self.asset, amount=self.usdt_amount)
+                    self.order = self.buy(size=4.2, exectype=Order.Market)
+                    print(self.order)
+                    # self.enqueue_order('buy', exchange=self.exchange, account=self.p.account, asset=self.asset, amount=self.usdt_amount)
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                         self.first_entry_price = self.data.close[0]
                     self.calc_averages()
@@ -183,7 +187,7 @@ class NRK(BaseStrategy):
                     alert_message = f"""\nBuy Alert arrived!\nExchange: {self.exchange}\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
                     self.send_alert(alert_message)
                 elif self.p.backtest == True:
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.buy(self.data, size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
@@ -201,7 +205,8 @@ class NRK(BaseStrategy):
                     self.calculate_position_size()
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
+                    self.order = self.buy(self.data, size=4.2, exectype=Order.Market)
+                    # self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
                     self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
@@ -230,7 +235,9 @@ class NRK(BaseStrategy):
                         self.log_exit("Sell Signal - Take Profit")
                     self.reset_position_state()
                 else:
-                    self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    self.order = self.close()
+                    print(self.order)
+                    # self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
                     alert_message = f"""Close {self.asset}"""
                     self.send_alert(alert_message)
                     self.reset_position_state()

@@ -490,26 +490,34 @@ class BaseStrategy(bt.Strategy):
                 print(f"Available USDT: {self.stake_to_use}")
                 
                 for data in self.datas:
+                    symbol = data.symbol
                     position_info = self.broker.get_position_info(data)
-
-                    print("No entry trades found, using current position as reference")
-                    self.entry_price = position_info['price']
-                    self.entry_prices = [position_info['price']]
-                    self.sizes = [position_info['size']]
-                    self.first_entry_price = position_info['price']
-                    self.calc_averages()
-                    self.buy_executed = True
-                    self.DCA = True
+                    
+                    if position_info['size'] > 0:
+                        # We have a position, log it
+                        print(f"Found existing position: {position_info['size']} units at reference price {position_info['price']}")
                         
-                    # Initialize with a manual order if needed
-                    manual_orders = self.broker.load_initial_positions(data)
-                    if manual_orders:
-                        self.entry_order = manual_orders[0]
-                        print(f"Created entry order reference: {self.entry_order}")
+                        # Get the actual entry price from trade history
+                        entry_info = self.broker.get_entry_price(symbol)
+                        
+                        if entry_info and entry_info['trade']:
+                            entry_trade = entry_info['trade']
+                            self.entry_price = entry_trade.price
+                            self.entry_size = entry_trade.size
+                            self.entry_time = datetime.fromtimestamp(entry_trade.timestamp / 1000)
+                            
+                            print(f"Found entry trade: {entry_trade}")
+                            print(f"Entry price: {self.entry_price}")
+                            self.average_entry_price = entry_trade.price
+                            self.take_profit_price = entry_trade.price * (1 + self.params.take_profit / 100)
+                            print(f"Takeprofit price: {self.take_profit_price}")
+                            # self.calc_averages()
+                            self.buy_executed = True
+                            self.DCA = True
                             
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
-            traceback.print_exc()  # Print the full error traceback for debugging
+            traceback.print_exc()
             self.reset_position_state()
             self.stake_to_use = 1000.0
     

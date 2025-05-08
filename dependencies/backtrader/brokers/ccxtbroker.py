@@ -159,7 +159,38 @@ class CCXTBroker(BrokerBase):
                     self.notify(order)
             except Exception as e:
                 print(f"Error checking order {order_id}: {e}")
+    
 
+        
+    def set_initial_position(self, data, size):
+        """Create a manual order to represent our current position"""
+        # Get current price as reference
+        ticker = self.store.exchange.fetch_ticker(data.symbol)
+        current_price = ticker['last']
+        
+        # Create a synthetic order representing our position
+        order_data = {
+            'id': f'manual-{int(time.time())}',
+            'symbol': data.symbol,
+            'side': 'buy',
+            'amount': size,
+            'price': current_price,  # Use current price as reference
+            'cost': size * current_price,
+            'timestamp': int(time.time() * 1000),
+            'datetime': datetime.datetime.now().isoformat(),
+            'status': 'closed',
+            'type': 'manual',
+            'info': {'manual_entry': True}
+        }
+        
+        # Create a manual order object that won't try to access data.close[0]
+        # We'll create a custom order class instead of using CCXTOrder
+        order = ManualPositionOrder(None, data, size, order_data)
+        self.executed_orders.append(order)
+        
+        print(f"Manually initialized position: {size} units at reference price {current_price}")
+        return order
+    
     def load_initial_positions(self, data):
         """Load initial positions from exchange for startup"""
         symbol = data.symbol
@@ -228,6 +259,122 @@ class CCXTBroker(BrokerBase):
             'price': 0,
             'value': 0
         }
+
+    def fetch_trades_history(self, symbol, since=None, limit=100):
+        """Fetch trade history from exchange"""
+        try:
+            # Try fetchMyTrades first (most exchanges support this)
+            if hasattr(self.store.exchange, 'fetchMyTrades'):
+                params = {}
+                if since is not None:
+                    params['since'] = since
+                if limit is not None:
+                    params['limit'] = limit
+                    
+                trades = self.store.exchange.fetchMyTrades(symbol, params=params)
+                return trades
+            else:
+                print(f"Exchange doesn't support fetchMyTrades")
+                return []
+        except Exception as e:
+            print(f"Error fetching trade history: {e}")
+            return []
+
+    def find_last_sell_trade(self, symbol, limit=100):
+        """Find the last sell trade for a symbol"""
+        trades = self.fetch_trades_history(symbol, limit=limit)
+        
+        # Sort by timestamp (newest first)
+        trades.sort(key=lambda t: t['timestamp'], reverse=True)
+        
+        # Find the most recent sell
+        for trade in trades:
+            if trade['side'] == 'sell':
+                return SimpleTrade.from_exchange_trade(trade)
+        
+        return None
+
+    def find_first_buy_after_last_sell(self, symbol, limit=100):
+        """Find the first buy trade after the last sell"""
+        trades = self.fetch_trades_history(symbol, limit=limit)
+        
+        # Sort by timestamp (oldest first)
+        trades.sort(key=lambda t: t['timestamp'])
+        
+        # Find the timestamp of the last sell
+        last_sell_time = 0
+        for trade in trades:
+            if trade['side'] == 'sell':
+                last_sell_time = trade['timestamp']
+        
+        # Find the first buy after the last sell
+        for trade in trades:
+            if trade['side'] == 'buy' and trade['timestamp'] > last_sell_time:
+                return SimpleTrade.from_exchange_trade(trade)
+        
+        # If no last sell or no buys after last sell, return the most recent buy
+        if last_sell_time == 0:
+            buys = [t for t in trades if t['side'] == 'buy']
+            if buys:
+                buys.sort(key=lambda t: t['timestamp'])
+                return SimpleTrade.from_exchange_trade(buys[0])
+        
+        return None
+
+    def get_entry_price(self, symbol):
+        """Get the entry price for the current position"""
+        # Try to get the actual entry price from trade history
+        first_buy = self.find_first_buy_after_last_sell(symbol)
+        
+        if first_buy:
+            return {
+                'price': first_buy.price,
+                'size': first_buy.size,
+                'timestamp': first_buy.timestamp,
+                'trade': first_buy
+            }
+        
+        # Fallback to current price if no trade history available
+        try:
+            ticker = self.store.exchange.fetch_ticker(symbol)
+            current_price = ticker['last']
+            
+            return {
+                'price': current_price,
+                'size': self.store.getposition(symbol.split('/')[0]),
+                'timestamp': int(time.time() * 1000),
+                'trade': None
+            }
+        except Exception as e:
+            print(f"Error fetching ticker: {e}")
+            return None
+
+    def get_all_entry_trades(self, symbol):
+        """Get all entry trades for a specific symbol"""
+        entry_trades = []
+        
+        try:
+            # Get the exchange's closed orders/trades for this symbol
+            if hasattr(self, 'exchange') and hasattr(self.exchange, 'fetch_my_trades'):
+                trades = self.exchange.fetch_my_trades(symbol=symbol, limit=50)
+                
+                # Filter for buy trades that are still relevant to current position
+                for trade in trades:
+                    if trade['side'].lower() == 'buy':
+                        # Create a simplified trade object
+                        entry_trade = type('EntryTrade', (), {
+                            'price': float(trade['price']),
+                            'size': float(trade['amount']),
+                            'timestamp': trade['timestamp'],
+                            'id': trade['id'],
+                            'side': trade['side']
+                        })
+                        entry_trades.append(entry_trade)
+            
+            return entry_trades
+        except Exception as e:
+            print(f"Error fetching trade history: {str(e)}")
+            return []
 
 # Custom order class to handle manual positions
 class ManualPositionOrder(CCXTOrder):

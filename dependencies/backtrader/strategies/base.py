@@ -484,6 +484,7 @@ class BaseStrategy(bt.Strategy):
                 else:
                     self.reset_position_state()
                     self.stake_to_use = 1000.0
+                pass
             elif self.p.exchange.lower() != 'mimic':
                 cash = self.broker.getcash()
                 self.stake_to_use = cash
@@ -499,7 +500,7 @@ class BaseStrategy(bt.Strategy):
                         
                         # Get the actual entry price from trade history
                         entry_info = self.broker.get_entry_price(symbol)
-                        
+
                         if entry_info and entry_info['trade']:
                             entry_trade = entry_info['trade']
                             self.entry_price = entry_trade.price
@@ -511,16 +512,44 @@ class BaseStrategy(bt.Strategy):
                             self.average_entry_price = entry_trade.price
                             self.take_profit_price = entry_trade.price * (1 + self.params.take_profit / 100)
                             print(f"Takeprofit price: {self.take_profit_price}")
-                            # self.calc_averages()
+                            
+                            # Create entries for position tracking
+                            self.entry_prices = [self.entry_price]
+                            self.sizes = [position_info['size']]
+                            self.first_entry_price = self.entry_price
+                            
+                            # Initialize strategy state
                             self.buy_executed = True
                             self.DCA = True
                             
+                            # Initialize with a manual order if needed
+                            manual_orders = self.broker.load_initial_positions(data)
+                            if manual_orders:
+                                self.entry_order = manual_orders[0]
+                                # Update the manual order with actual entry price if available
+                                if entry_info and entry_info['trade']:
+                                    self.entry_order.price = self.entry_price
+                                    self.entry_order.ccxt_order['price'] = self.entry_price
+                                
+                                print(f"Created entry order reference: {self.entry_order}")
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
             traceback.print_exc()
             self.reset_position_state()
             self.stake_to_use = 1000.0
     
+    # def start(self):
+    #     # from backtrader.dontcommit import ptu
+    #     # from backtrader.brokers.jrrbroker import 
+    #     if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
+    #         # ptu()
+    #         print(f"BTQuant initialized for {self.p.exchange}")
+    #         self.load_trade_data()
+    #     elif self.params.backtest == False:
+    #         # ptu()
+    #         print('DEX Exchange Detected - Dont chase the Rabbit.')
+
+
     def start(self):
         # from backtrader.dontcommit import ptu
         # from backtrader.brokers.jrrbroker import 
@@ -528,12 +557,116 @@ class BaseStrategy(bt.Strategy):
             # ptu()
             print(f"BTQuant initialized for {self.p.exchange}")
             self.load_trade_data()
+            
+            # Add position validation at startup
+            try:
+                for data in self.datas:
+                    symbol = data.symbol
+                    currency = symbol.split('/')[0]
+                    
+                    # Get position size safely
+                    try:
+                        pos_obj = self.broker.getposition(data)
+                        # Check if it's a Position object or float
+                        if hasattr(pos_obj, 'size'):
+                            actual_position = pos_obj.size
+                        else:
+                            # It's directly returning the size as a float
+                            actual_position = float(pos_obj)  # Ensure it's a float
+                    except (AttributeError, TypeError):
+                        # Try alternative method
+                        try:
+                            actual_position = float(self.broker.store.getposition(currency))
+                        except:
+                            actual_position = 0.0
+                    
+                    print(f"Validated position for {currency}: {actual_position}")
+                    
+                    # If position exists, ensure our tracking is correct
+                    if actual_position > 0 and (not self.buy_executed or not self.entry_prices):
+                        print(f"Ensuring position tracking is initialized for {actual_position} {currency}")
+                        # Get position info if available
+                        try:
+                            position_info = self.broker.get_position_info(data)
+                            if position_info['size'] > 0:
+                                self.entry_price = position_info['price']
+                                self.entry_prices = [self.entry_price]
+                                self.sizes = [actual_position]
+                                self.first_entry_price = self.entry_price
+                                self.buy_executed = True
+                                self.DCA = True
+                                self.calc_averages()
+                        except Exception as inner_e:
+                            print(f"Error initializing position tracking: {inner_e}")
+            
+            except Exception as e:
+                print(f"Error during position validation: {e}")
+                import traceback
+                traceback.print_exc()
+            
         elif self.params.backtest == False:
             # ptu()
             print('DEX Exchange Detected - Dont chase the Rabbit.')
 
-
     def next(self):
+        if self.params.backtest == False and getattr(self, 'live_data', False):
+            # For each data feed
+            for data in self.datas:
+                symbol = data.symbol
+                currency = symbol.split('/')[0]
+                
+                try:
+                    # Get actual position from broker/exchange - handle both styles
+                    try:
+                        pos_obj = self.broker.getposition(data)
+                        # Check if it's a Position object or float
+                        if hasattr(pos_obj, 'size'):
+                            actual_position = pos_obj.size
+                        else:
+                            # It's directly returning the size as a float
+                            actual_position = pos_obj
+                    except AttributeError:
+                        # Alternative method for CCXT broker
+                        actual_position = self.broker.store.getposition(currency)
+                    
+                    # If our tracking doesn't match reality, fix it
+                    should_have_position = self.buy_executed and len(self.entry_prices) > 0
+                    
+                    # Case 1: We think we have a position but don't
+                    if should_have_position and actual_position <= 0:
+                        print(f"⚠️ Position tracking mismatch: Strategy thinks we have a position, but exchange says no")
+                        self.reset_position_state()
+                        
+                    # Case 2: We think we don't have a position but do
+                    elif not should_have_position and actual_position > 0:
+                        print(f"⚠️ Position tracking mismatch: Exchange has position, but strategy doesn't track it")
+                        # Reinitialize from exchange data
+                        position_info = self.broker.get_position_info(data)
+                        entry_info = self.broker.get_entry_price(symbol)
+                        
+                        if entry_info:
+                            self.entry_price = entry_info['price']
+                            self.entry_prices = [self.entry_price]
+                            self.sizes = [actual_position]
+                            self.first_entry_price = self.entry_price
+                            self.buy_executed = True
+                            self.DCA = True
+                            self.calc_averages()
+                            print(f"Restored position tracking with entry price {self.entry_price}")
+                    
+                    # Case 3: Position sizes don't match
+                    elif should_have_position and actual_position > 0:
+                        total_size = sum(self.sizes)
+                        if abs(total_size - actual_position) > 0.001:  # Small tolerance for floating point
+                            print(f"⚠️ Position size mismatch: Strategy tracks {total_size}, exchange has {actual_position}")
+                            # Adjust our tracking
+                            self.sizes = [actual_position]
+                            self.calc_averages()
+                except Exception as e:
+                    print(f"Error checking position state: {e}")
+                    import traceback
+                    traceback.print_exc()
+
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
 

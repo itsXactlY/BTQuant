@@ -28,6 +28,8 @@ class CCXT(DataBase):
         will be fetched in a single request.
     """
 
+    lines = ('bid', 'ask',)
+
     params = (
         ('historical', False),  # only historical download
         ('backfill_start', False),  # do backfilling at the start
@@ -135,9 +137,14 @@ class CCXT(DataBase):
         try:
             trade = self._data.popleft()
         except IndexError:
-            return None # no data in the queue
+            return None  # no data in the queue
 
         trade_time, price, size = trade
+
+        # Fetch current ticker for bid/ask
+        ticker = self.store.exchange.fetch_ticker(self.symbol)
+        bid = ticker.get('bid', price)
+        ask = ticker.get('ask', price)
 
         self.lines.datetime[0] = bt.date2num(trade_time)
         self.lines.open[0] = price
@@ -145,6 +152,8 @@ class CCXT(DataBase):
         self.lines.low[0] = price
         self.lines.close[0] = price
         self.lines.volume[0] = size
+        self.lines.bid[0] = bid
+        self.lines.ask[0] = ask
 
         return True
 

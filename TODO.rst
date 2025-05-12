@@ -1,3 +1,41 @@
+^CTraceback (most recent call last):
+  File "/home/alca/projects/BTQuant/testing_ccxt.py", line 111, in <module>
+    run()
+    ~~~^^
+  File "/home/alca/projects/BTQuant/testing_ccxt.py", line 106, in run
+    cerebro.run(live=True, runonce=False)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1127, in run
+    runstrat = self.runstrategies(iterstrat)
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1298, in runstrategies
+    self._runnext(runstrats)
+    ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1630, in _runnext
+    strat._next()
+    ~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/strategy.py", line 351, in _next
+    self._next_observers(minperstatus)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/strategy.py", line 379, in _next_observers
+    observer._next()
+    ~~~~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/lineiterator.py", line 280, in _next
+    self.next()
+    ~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/observers/broker.py", line 110, in next
+    self.lines.value[0] = value = self._owner.broker.getvalue()
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/brokers/ccxtbroker.py", line 89, in getvalue
+    return self.store.getvalue(self.currency)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/stores/ccxtstore.py", line 113, in retry_method
+    time.sleep(self.exchange.rateLimit / 1000)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+## rework getvalue to use with websocket 
+
+
 =========================
 BTQuant TODO List
 =========================

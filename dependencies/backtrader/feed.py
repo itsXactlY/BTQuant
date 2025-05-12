@@ -468,7 +468,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
             ff.check(self, _forcedata=forcedata, *fargs, **fkwargs)
 
     def load(self):
-        sleep_time = getattr(self, 'sleep_time', 0.1)
+        sleep_time = getattr(self, 'sleep_time', 0.01)
         while True:
             # move data pointer forward for new bar
             self.forward()
@@ -484,7 +484,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                     # and a backwards would ruin pointer accounting in the
                     # "stop" method of the strategy
                     self.backwards(force=True)  # undo data pointer
-                    # sleep(sleep_time)
+                    sleep(sleep_time)
 
                     # return the actual returned value which may be None to
                     # signal no bar is available, but the data feed is not

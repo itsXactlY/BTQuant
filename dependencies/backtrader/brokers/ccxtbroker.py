@@ -7,7 +7,7 @@ from backtrader.utils.py3 import queue
 from backtrader.stores.ccxtstore import CCXTStore, CCXTOrder
 
 class SimpleOrder:
-    """A simplified order class that doesn't rely on BackTrader internals"""
+    """Simplified order class that does not rely on BackTrader internals for Startup/Reboot to inform the broker"""
     
     def __init__(self, symbol, side, size, price, order_id=None):
         self.symbol = symbol
@@ -21,7 +21,6 @@ class SimpleOrder:
         self.executed_value = self.executed * self.executed_price
         self.created = datetime.datetime.now()
         
-        # Create a simplified ccxt_order structure for compatibility
         self.ccxt_order = {
             'id': self.id,
             'symbol': self.symbol,
@@ -77,9 +76,10 @@ class CCXTBroker(BrokerBase):
         super(CCXTBroker, self).__init__()
         self.store = CCXTStore.get_store(exchange, config, retries)
         self.currency = currency
-        self.notifs = queue.Queue()  # holds orders which are notified
-        self.orders = {}  # maps order_id to order objects
-        self.executed_orders = []  # list of executed orders
+        self.notifs = queue.Queue()
+        self.orders = {}
+        self.executed_orders = []
+        self.startingcash = self.store.getcash(self.currency)
         
     def getcash(self):
         return self.store.getcash(self.currency)
@@ -103,6 +103,7 @@ class CCXTBroker(BrokerBase):
     def getposition(self, data):
         currency = data.symbol.split('/')[0]
         position_size = self.store.getposition(currency)
+        
         class Position:
             def __init__(self, size):
                 self.size = size
@@ -175,13 +176,12 @@ class CCXTBroker(BrokerBase):
         ticker = self.store.exchange.fetch_ticker(data.symbol)
         current_price = ticker['last']
         
-        # Create a synthetic order representing our position
         order_data = {
             'id': f'manual-{int(time.time())}',
             'symbol': data.symbol,
             'side': 'buy',
             'amount': size,
-            'price': current_price,  # Use current price as reference
+            'price': current_price,  # Using current price for simplicity - doesnt matter internally, all calculations are done somewhere else.
             'cost': size * current_price,
             'timestamp': int(time.time() * 1000),
             'datetime': datetime.datetime.now().isoformat(),
@@ -190,8 +190,6 @@ class CCXTBroker(BrokerBase):
             'info': {'manual_entry': True}
         }
         
-        # Create a manual order object that won't try to access data.close[0]
-        # We'll create a custom order class instead of using CCXTOrder
         order = ManualPositionOrder(None, data, size, order_data)
         self.executed_orders.append(order)
         
@@ -203,19 +201,15 @@ class CCXTBroker(BrokerBase):
         symbol = data.symbol
         currency = symbol.split('/')[0]
         
-        # Get current position
         position = self.store.getposition(currency)
         
-        # If we have a position, create a manual entry
         if position > 0:
             print(f"Found position of {position} {currency}")
             
             try:
-                # Create a simplified manual order to represent our position
                 ticker = self.store.exchange.fetch_ticker(symbol)
                 current_price = ticker['last']
                 
-                # Create a proper order object that we can track
                 manual_order = SimpleOrder(
                     symbol=symbol, 
                     side='buy', 
@@ -223,7 +217,6 @@ class CCXTBroker(BrokerBase):
                     price=current_price
                 )
                 
-                # Store the order for reference
                 self.executed_orders.append(manual_order)
                 
                 print(f"Manually initialized position: {position} {currency} at reference price {current_price}")
@@ -240,8 +233,7 @@ class CCXTBroker(BrokerBase):
         """Update internal position tracking with existing position"""
         if not hasattr(self, 'positions'):
             self.positions = {}
-        
-        # Create or update the position for this data
+
         if data not in self.positions:
             self.positions[data] = size
         else:
@@ -267,7 +259,6 @@ class CCXTBroker(BrokerBase):
         position_size = self.store.getposition(currency)
         
         if position_size > 0:
-            # For a current position, use current price as reference
             try:
                 ticker = self.store.exchange.fetch_ticker(symbol)
                 current_price = ticker['last']
@@ -315,21 +306,21 @@ class CCXTBroker(BrokerBase):
         """Find the first buy trade after the last sell"""
         trades = self.fetch_trades_history(symbol, limit=limit)
         
-        # Sort by timestamp (oldest first)
+        # oldest first
         trades.sort(key=lambda t: t['timestamp'])
         
-        # Find the timestamp of the last sell
+        # timestamp of the last sell
         last_sell_time = 0
         for trade in trades:
             if trade['side'] == 'sell':
                 last_sell_time = trade['timestamp']
         
-        # Find the first buy after the last sell
+        # first buy after the last sell
         for trade in trades:
             if trade['side'] == 'buy' and trade['timestamp'] > last_sell_time:
                 return SimpleTrade.from_exchange_trade(trade)
         
-        # If no last sell or no buys after last sell, return the most recent buy
+        # if no last sell or no buys after last sell, return the most recent buy
         if last_sell_time == 0:
             buys = [t for t in trades if t['side'] == 'buy']
             if buys:
@@ -340,7 +331,7 @@ class CCXTBroker(BrokerBase):
 
     def get_entry_price(self, symbol):
         """Get the entry price for the current position"""
-        # Try to get the actual entry price from trade history
+        # get the actual entry price from trade history
         first_buy = self.find_first_buy_after_last_sell(symbol)
         
         if first_buy:
@@ -351,7 +342,7 @@ class CCXTBroker(BrokerBase):
                 'trade': first_buy
             }
         
-        # Fallback to current price if no trade history available
+        # fallback to current price if no trade history available
         try:
             ticker = self.store.exchange.fetch_ticker(symbol)
             current_price = ticker['last']
@@ -366,7 +357,6 @@ class CCXTBroker(BrokerBase):
             print(f"Error fetching ticker: {e}")
             return None
 
-# Custom order class to handle manual positions
 class ManualPositionOrder(CCXTOrder):
     def __init__(self, owner, data, size, ccxt_order):
         self.owner = owner
@@ -381,5 +371,6 @@ class ManualPositionOrder(CCXTOrder):
         self.executed_value = self.executed * self.executed_price
         self.created = datetime.datetime.now()
         
-        # Skip the original __init__ which tries to access data.close[0]
+        # important to skip here the original __init__ which tries to access data.close[0]
+        # wish i would have known this 3 years ago, was already so close on it to resolve :<
         Order.__init__(self)

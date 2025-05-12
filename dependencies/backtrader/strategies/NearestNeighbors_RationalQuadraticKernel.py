@@ -2,6 +2,7 @@ import backtrader as bt
 from sklearn.neighbors import NearestNeighbors
 from backtrader.strategies.base import BaseStrategy, np
 from backtrader import Order
+from datetime import datetime
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 
 But anyway, I can pull more rabbits out of my hat - so I've decided to make this available to everyone. 
@@ -49,14 +50,15 @@ class NRK(BaseStrategy):
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
-        ('dca_deviation', 0.5),
-        ('take_profit', 0.5),
+        ('dca_deviation', 0.2),
+        ('take_profit', 0.2),
         ('percent_sizer', 0.05),
         ('debug', True),
-        ('backtest', None),
+        ('backtest', True),
     )
 
     def __init__(self, **kwargs):
+        print("Initializing strategy")
         self.symbol = self.p.symbol
         super().__init__(**kwargs)
         self.addminperiod(self.p.max_bars_back)
@@ -83,9 +85,6 @@ class NRK(BaseStrategy):
         self.buy_executed = False
         self.conditions_checked = False
         self.DCA = True
-        # delete me
-        size = self.broker.get_position_info(self.data)['size']
-        print(f'Found {size} to sell.')
 
     def compute_ml_signal(self):
         """
@@ -93,7 +92,7 @@ class NRK(BaseStrategy):
         additional filters (volatility, regime, ADX, and kernel smoothing).
         """
 
-        current_features = []
+        current_features = [] # TODO dequeue
         for f in self.features:
             try:
                 current_features.append(f[0])
@@ -176,17 +175,19 @@ class NRK(BaseStrategy):
         if not self.buy_executed:
             if signal > 0:
                 if self.p.backtest == False:
-                    self.calculate_position_size()
                     self.entry_prices.append(self.data.close[0])
+                    self.calculate_position_size()
                     print(f'\n\nBUY EXECUTED AT {self.data.close[0]:.9f}\n')
                     self.sizes.append(self.usdt_amount)
-                    self.order = self.buy(size=4.2, exectype=Order.Market)
+                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
                     print(self.order)
                     # self.enqueue_order('buy', exchange=self.exchange, account=self.p.account, asset=self.asset, amount=self.usdt_amount)
+                    
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                         self.first_entry_price = self.data.close[0]
-                    self.calc_averages()
                     self.buy_executed = True
+                    
+                    self.calc_averages()
                     alert_message = f"""\nBuy Alert arrived!\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
                     self.send_alert(alert_message)
                 elif self.p.backtest == True:
@@ -195,7 +196,6 @@ class NRK(BaseStrategy):
                     self.sizes.append(self.stake)
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                         self.first_entry_price = self.data.close[0]
-
                     self.calc_averages()
                     self.buy_executed = True
         self.conditions_checked = True
@@ -206,12 +206,12 @@ class NRK(BaseStrategy):
             if signal > 0:
                 if self.p.backtest is False:
                     self.calculate_position_size()
+                    self.calc_averages()
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    self.order = self.buy(self.data, size=4.2, exectype=Order.Market)
+                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
                     print(self.order)
                     # self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.usdt_amount)
-                    self.calc_averages()
                     self.buy_executed = True
                     self.conditions_checked = True
                     alert_message = f"""\nDCA Alert arrived!\nAction: buy {self.asset}\nEntry Price: {self.data.close[0]:.9f}\nTake Profit: {self.take_profit_price:.9f}"""
@@ -249,27 +249,19 @@ class NRK(BaseStrategy):
                     self.send_alert(alert_message)
                     self.reset_position_state()
                     self.buy_executed = False
-            else:
-                if self.p.debug == True:
-                    print(
-                        f"| - Awaiting take profit target.\n"
-                        f"| - Current close price: {self.data.close[0]:.12f},\n"
-                        f"| - Average entry price: {self.average_entry_price:.12f},\n"
-                        f"| - Take profit price: {self.take_profit_price:.12f}")
+            # else:
+                # if self.p.debug == True:
+                #     print(
+                #         f"| - Awaiting take profit target.\n"
+                #         f"| - Current close price: {self.data.close[0]:.12f},\n"
+                #         f"| - Average entry price: {self.average_entry_price:.12f},\n"
+                #         f"| - Take profit price: {self.take_profit_price:.12f}")
         self.conditions_checked = True
-    
-    # def next(self):
-    #     super().next()
-    #     # Memory management for machine learning data
-    #     if len(self.feature_data) > self.p.max_bars_back:
-    #         # More efficient than pop(0) in a loop
-    #         excess = len(self.feature_data) - self.p.max_bars_back
-    #         if excess > 0:
-    #             self.feature_data = self.feature_data[excess:]
-        
-        # Force garbage collection periodically (every 100 bars)
-        # if len(self) % 100 == 0: #and self.p.debug:
-        #     import gc
-        #     collected = gc.collect()
-        #     # if self.p.debug:
-        #     print(f"GC collected {collected} objects")
+
+    def next(self):
+        # print(f"Close price: {self.data.close[0]:.9f}")
+        super().next()
+        dt = self.datas[0].datetime.datetime(0)  # Or self.data.datetime.datetime(0)
+        print(f'Realtime: {datetime.now()} processing candle date: {dt}, with {self.data.close[0]}')
+
+        # print(datetime.now(), self.data.close[0])

@@ -28,7 +28,7 @@ class CCXT(DataBase):
         will be fetched in a single request.
     """
 
-    lines = ('bid', 'ask',)
+    # lines = ('bid', 'ask',)
 
     params = (
         ('historical', False),  # only historical download
@@ -133,7 +133,6 @@ class CCXT(DataBase):
                 trade_time = datetime.strptime(trade['datetime'], '%Y-%m-%dT%H:%M:%S.%fZ')
                 self._data.append((trade_time, float(trade['price']), float(trade['amount'])))
                 self._last_id = trade_id
-
         try:
             trade = self._data.popleft()
         except IndexError:
@@ -142,9 +141,9 @@ class CCXT(DataBase):
         trade_time, price, size = trade
 
         # Fetch current ticker for bid/ask
-        ticker = self.store.exchange.fetch_ticker(self.symbol)
-        bid = ticker.get('bid', price)
-        ask = ticker.get('ask', price)
+        # ticker = self.store.exchange.fetch_ticker(self.symbol)
+        # bid = ticker.get('bid', price)
+        # ask = ticker.get('ask', price)
 
         self.lines.datetime[0] = bt.date2num(trade_time)
         self.lines.open[0] = price
@@ -152,8 +151,8 @@ class CCXT(DataBase):
         self.lines.low[0] = price
         self.lines.close[0] = price
         self.lines.volume[0] = size
-        self.lines.bid[0] = bid
-        self.lines.ask[0] = ask
+        # self.lines.bid[0] = bid
+        # self.lines.ask[0] = ask
 
         return True
 

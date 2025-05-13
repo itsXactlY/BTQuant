@@ -156,14 +156,11 @@ class CCXTBroker(BrokerBase):
             try:
                 status = self.get_order_status(order)
                 if status == 'closed' or status == 'filled':
-                    # Order is filled
                     self.executed_orders.append(order)
                     del self.orders[order_id]
-                    # Update the order with filled information and notify
                     order.ccxt_order['status'] = status
                     self.notify(order)
                 elif status == 'canceled' or status == 'expired' or status == 'rejected':
-                    # Order is no longer active
                     del self.orders[order_id]
                     order.ccxt_order['status'] = status
                     self.notify(order)
@@ -172,7 +169,6 @@ class CCXTBroker(BrokerBase):
         
     def set_initial_position(self, data, size):
         """Create a manual order to represent our current position"""
-        # Get current price as reference
         ticker = self.store.exchange.fetch_ticker(data.symbol)
         current_price = ticker['last']
         
@@ -239,15 +235,12 @@ class CCXTBroker(BrokerBase):
         else:
             self.positions[data] += size
         
-        # If using position tracking in BrokerBase, update it there too
         if hasattr(self, '_positions'):
             self._positions[data] = size
             
-        # Instead of notify_store, use the existing notification system
         if hasattr(self, 'notify'):
             self.notify(order)
         
-        # Add the order to executed_orders if not already there
         if order not in self.executed_orders:
             self.executed_orders.append(order)
 
@@ -285,7 +278,6 @@ class CCXTBroker(BrokerBase):
     def fetch_trades_history(self, symbol, since=None, limit=100):
         """Fetch trade history from exchange"""
         try:
-            # Try fetchMyTrades first (most exchanges support this)
             if hasattr(self.store.exchange, 'fetchMyTrades'):
                 params = {}
                 if since is not None:
@@ -306,21 +298,17 @@ class CCXTBroker(BrokerBase):
         """Find the first buy trade after the last sell"""
         trades = self.fetch_trades_history(symbol, limit=limit)
         
-        # oldest first
         trades.sort(key=lambda t: t['timestamp'])
         
-        # timestamp of the last sell
         last_sell_time = 0
         for trade in trades:
             if trade['side'] == 'sell':
                 last_sell_time = trade['timestamp']
         
-        # first buy after the last sell
         for trade in trades:
             if trade['side'] == 'buy' and trade['timestamp'] > last_sell_time:
                 return SimpleTrade.from_exchange_trade(trade)
         
-        # if no last sell or no buys after last sell, return the most recent buy
         if last_sell_time == 0:
             buys = [t for t in trades if t['side'] == 'buy']
             if buys:
@@ -329,33 +317,98 @@ class CCXTBroker(BrokerBase):
         
         return None
 
-    def get_entry_price(self, symbol):
-        """Get the entry price for the current position"""
-        # get the actual entry price from trade history
-        first_buy = self.find_first_buy_after_last_sell(symbol)
+    def get_all_positions(self, data):
+        """Get all open positions for the given data/symbol"""
+        symbol = data.symbol if hasattr(data, 'symbol') else data
+        currency = symbol.split('/')[0]
         
-        if first_buy:
-            return {
-                'price': first_buy.price,
-                'size': first_buy.size,
-                'timestamp': first_buy.timestamp,
-                'trade': first_buy
-            }
+        total_position_size = self.store.getposition(currency)
         
-        # fallback to current price if no trade history available
-        try:
-            ticker = self.store.exchange.fetch_ticker(symbol)
-            current_price = ticker['last']
-            
-            return {
-                'price': current_price,
-                'size': self.store.getposition(symbol.split('/')[0]),
-                'timestamp': int(time.time() * 1000),
-                'trade': None
-            }
-        except Exception as e:
-            print(f"Error fetching ticker: {e}")
+        if total_position_size <= 0:
+            return []
+        
+        trades = self.fetch_trades_history(symbol, limit=100)
+        
+        trades.sort(key=lambda t: t['timestamp'])
+        
+        last_sell_time = 0
+        for trade in trades:
+            if trade['side'] == 'sell':
+                last_sell_time = trade['timestamp']
+        
+        active_buys = []
+        for trade in trades:
+            if trade['side'] == 'buy' and trade['timestamp'] > last_sell_time:
+                simple_trade = SimpleTrade.from_exchange_trade(trade)
+                active_buys.append({
+                    'id': simple_trade.id,
+                    'size': simple_trade.size,
+                    'price': simple_trade.price,
+                    'symbol': symbol,
+                    'timestamp': simple_trade.timestamp
+                })
+        
+        remaining_size = total_position_size - sum(pos['size'] for pos in active_buys)
+        
+        if remaining_size > 0.0001:
+            print(f"Found {len(active_buys)} buy trades but still have {remaining_size} {currency} unaccounted for")
+            try:
+                ticker = self.store.exchange.fetch_ticker(symbol)
+                current_price = ticker['last']
+                
+                active_buys.append({
+                    'id': f'unknown-{int(time.time())}',
+                    'size': remaining_size,
+                    'price': current_price,
+                    'symbol': symbol,
+                    'timestamp': int(time.time() * 1000)
+                })
+            except Exception as e:
+                print(f"Error fetching ticker for placeholder position: {e}")
+        
+        return active_buys
+
+    def get_entry_price(self, symbol, position_id=None):
+        """Get the entry price for a specific position or the first position"""
+        positions = self.get_all_positions(symbol)
+        
+        if not positions:
             return None
+        
+        if position_id:
+            for pos in positions:
+                if pos['id'] == position_id:
+                    return {
+                        'price': pos['price'],
+                        'size': pos['size'],
+                        'timestamp': pos['timestamp'],
+                        'trade': SimpleTrade(
+                            symbol=pos['symbol'],
+                            side='buy',
+                            size=pos['size'],
+                            price=pos['price'],
+                            order_id=pos['id'],
+                            timestamp=pos['timestamp']
+                        )
+                    }
+            return None  # position ID not found
+        
+        # otherwise return the first position (oldest buy)
+        pos = positions[0]
+        return {
+            'price': pos['price'],
+            'size': pos['size'],
+            'timestamp': pos['timestamp'],
+            'trade': SimpleTrade(
+                symbol=pos['symbol'],
+                side='buy',
+                size=pos['size'],
+                price=pos['price'],
+                order_id=pos['id'],
+                timestamp=pos['timestamp']
+            )
+        }
+
 
 class ManualPositionOrder(CCXTOrder):
     def __init__(self, owner, data, size, ccxt_order):

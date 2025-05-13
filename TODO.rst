@@ -33,6 +33,49 @@
     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 KeyboardInterrupt
 
+
+
+========================================
+
+cache USD/ASSET until an order happend to avoid rate limit
+
+^CTraceback (most recent call last):
+  File "/home/alca/projects/BTQuant/testing_ccxt.py", line 120, in <module>
+    run()
+    ~~~^^
+  File "/home/alca/projects/BTQuant/testing_ccxt.py", line 115, in run
+    cerebro.run(live=True, runonce=False, exactbars=False, stdstats=False)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1127, in run
+    runstrat = self.runstrategies(iterstrat)
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1298, in runstrategies
+    self._runnext(runstrats)
+    ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/cerebro.py", line 1630, in _runnext
+    strat._next()
+    ~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/strategy.py", line 347, in _next
+    super(Strategy, self)._next()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/lineiterator.py", line 265, in _next
+    self._notify()
+    ~~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/strategy.py", line 606, in _notify
+    fundvalue = self.broker.fundvalue
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/broker.py", line 125, in get_fundvalue
+    return self.getvalue()
+           ~~~~~~~~~~~~~^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/brokers/ccxtbroker.py", line 88, in getvalue
+    return self.store.getvalue(self.currency)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/home/alca/projects/BTQuant/.btq/lib/python3.13/site-packages/backtrader/stores/ccxtstore.py", line 113, in retry_method
+    time.sleep(self.exchange.rateLimit / 1000)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+========================================
+
 ## rework getvalue to use with websocket 
 
 

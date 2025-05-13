@@ -17,13 +17,14 @@ class TickSampler:
     """
     
     def __init__(self, timeframe_seconds=1):
-        self.timeframe_ms = timeframe_seconds * 100
+        self.timeframe_ms = timeframe_seconds * 1000
         self.current_candle = None
         self.current_period = None
         self.tick_buffer = []
-        self.max_buffer_size = 1000
+        self.max_buffer_size = 100
         self.batch_process_size = 10
-        
+        self.processed_periods = set()
+
         # for performance tracking - as for now
         self.total_ticks_received = 0
         self.ticks_processed = 0
@@ -36,20 +37,17 @@ class TickSampler:
         
         if len(self.tick_buffer) >= self.max_buffer_size:
             self.process_tick_buffer()
+        
         self.tick_buffer.append((timestamp_ms, price, volume))
         
-        if len(self.tick_buffer) >= self.batch_process_size:
+        if (len(self.tick_buffer) >= self.batch_process_size or 
+            (self.tick_buffer and 
+            self.tick_buffer[-1][0] - self.tick_buffer[0][0] > self.timeframe_ms)):
             return self.process_tick_buffer()
         
         return None
     
     def process_tick_buffer(self):
-        """
-        Process accumulated ticks efficiently by:
-        1. Grouping ticks by time periods
-        2. Creating OHLCV candles for each period
-        3. Only returning the most recent completed candle
-        """
         if not self.tick_buffer:
             return None
         
@@ -69,19 +67,20 @@ class TickSampler:
                     'timestamp': period_start
                 }
             else:
-
                 data = period_ticks[period_start]
                 data['high'] = max(data['high'], price)
                 data['low'] = min(data['low'], price)
-                data['close'] = price  # last price becomes close
+                data['close'] = price
                 data['volume'] += volume
                 data['ticks'] += 1
         
-        # clear the buffer
         self.tick_buffer = []
         
-        # find most recent completed candle and any current developing candle
-        current_time = int(time.time() * 1000)
+        if self.tick_buffer:
+            current_time = self.tick_buffer[-1][0]
+        else:
+            current_time = int(time.time() * 1000)
+        
         current_period = current_time - (current_time % self.timeframe_ms)
         
         completed_candles = []
@@ -92,33 +91,17 @@ class TickSampler:
             if period == current_period:
                 self.current_period = period
                 self.current_candle = candle_data
-            else:
-                completed_candles.append(candle_data)
-                self.candles_generated += 1
+            elif period < current_period:
+                if period not in self.processed_periods:
+                    completed_candles.append(candle_data)
+                    self.candles_generated += 1
+                    self.processed_periods.add(period)
         
-        # log statistics periodically for debugging purposes
-        now = time.time()
-        if now - self.last_stat_time > 1.0:
-            elapsed = now - self.last_stat_time
-            tick_rate = self.total_ticks_received / elapsed
-            process_rate = self.ticks_processed / elapsed
-            processing_ratio = (self.ticks_processed / self.total_ticks_received) * 100 if self.total_ticks_received > 0 else 0
-            
-            print(f"Sampler stats: Received {tick_rate:.1f} ticks/sec, Processed {process_rate:.1f}/sec")
-            print(f"Processing ratio: {processing_ratio:.1f}%, Generated {self.candles_generated} candles")
-            
-            # reset counters
-            self.last_stat_time = now
-            self.total_ticks_received = 0
-            self.ticks_processed = 0
-            self.candles_generated = 0
+        if len(self.processed_periods) > 1000:
+            oldest_period = min(self.processed_periods)
+            self.processed_periods.remove(oldest_period)
         
-        # return the newest completed candle if available
         return completed_candles[-1] if completed_candles else None
-    
-    def get_current_candle(self):
-        """Get the currently developing (incomplete) candle"""
-        return self.current_candle
 
 class MexcData(DataBase):
     """

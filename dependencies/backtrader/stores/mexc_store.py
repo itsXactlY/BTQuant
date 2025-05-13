@@ -38,7 +38,7 @@ class MexcStore(object):
         self.ws_url = "wss://wbs.mexc.com/ws"
         self.websocket = None
         self.websocket_thread = None
-        self.message_queue = Queue(maxsize=100000)
+        self.message_queue = Queue(maxsize=1000)
         self._ping_thread = None
         
         self._ws_options = {
@@ -91,13 +91,13 @@ class MexcStore(object):
             self._message_count += 1
             self.message_queue.put_nowait(message)
         except:
-            # Queue full, log but dont block
+            # Queue full, log but don't block
             if self._message_count % 1000 == 0:  # Log every 1000th overflow
                 print(f"Warning: Message queue full, dropping messages")
         
         # stats reporting - as for now
         # now = time.time()
-        # if now - self._last_stats_time > 15:
+        # if now - self._last_stats_time > 1:
         #     elapsed = now - self._last_stats_time
         #     rate = self._message_count / elapsed if elapsed > 0 else 0
         #     print(f"WebSocket stats: Received {self._message_count} messages ({rate:.1f}/sec)")
@@ -119,7 +119,7 @@ class MexcStore(object):
                         on_error=self.on_error,
                         on_close=self.on_close
                     )
-                    
+
                     if self._connection_count > 1:
                         while not self.message_queue.empty():
                             try:

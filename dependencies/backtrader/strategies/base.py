@@ -1,10 +1,6 @@
 from datetime import datetime
 import backtrader as bt
 import traceback
-from backtrader.brokers.jrrbroker import *
-from backtrader.brokers.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
-from backtrader.dontcommit import *
-import json
 import threading
 import queue
 import time
@@ -12,35 +8,9 @@ import numpy as np
 import shutil
 import os
 import uuid
-import sys
 
 order_lock = threading.Lock()
-
-class BuySellArrows(bt.observers.BuySell):
-    def next(self):
-        super().next()
-        
-        if self.lines.buy[0]:
-            self.lines.buy[0] -= self.data.low[0] * 0.02
-            
-        if self.lines.sell[0]:
-            self.lines.sell[0] += self.data.high[0] * 0.02
-            
-    plotlines = dict(
-        buy=dict(marker='$\u21E7$', markersize=8.0),
-        sell=dict(marker='$\u21E9$', markersize=8.0)
-    )
-
 INIT_CASH = 100_000.0
-
-class OrderTracker:
-    def __init__(self, entry_price, size, take_profit_pct):
-        self.entry_price = entry_price
-        self.size = size
-        self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
-        self.executed = True
-        self.order_id = None  # To link with broker orders if needed
-        self.timestamp = datetime.now()
 
 class BaseStrategy(bt.Strategy):
     params = (
@@ -53,7 +23,6 @@ class BaseStrategy(bt.Strategy):
         ('collateral', None),
         ('debug', False),
         ('backtest', None),
-        ('is_training', None),
         ('use_stoploss', None),
         ("pnl", None),
         ("final_value", None),
@@ -73,31 +42,33 @@ class BaseStrategy(bt.Strategy):
         if self.p.backtest == True:
             BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
-        self.order = None
-        self.DCA = False
+
         self.entry_price = None
         self.take_profit_price = None
         self.first_entry_price = None
         self.stop_loss_price = None
         self.buy_executed = None
         self.average_entry_price = None
-        self.entry_prices = []
-        self.sizes = []
         self.stake_to_use = None
         self.stake_to_sell = None
         self.stake = None
+        self.order = None
+        self.DCA = False
+
+        self.entry_prices = []
+        self.sizes = []
+        self.short_entry_prices = []
+        self.short_sizes = []
+        self.active_orders = []
+
         self.amount = self.p.amount
         self.conditions_checked = None
         self.print_counter = 0
-                
+ 
         self.last_order_time = 0
         self.order_cooldown = self.p.order_cooldown
         self.position_count = 0
         self.position_history = []
-        # Variables to track DCA and positions
-        self.initial_buy_price = None
-        self.buy_count = 0
-        self.average_buy_price = 0
 
         self.init_cash = self.params.init_cash
         self.total_cash_added = 0
@@ -108,8 +79,6 @@ class BaseStrategy(bt.Strategy):
         self.win_rate = 0
         self.final_value = 0.0
 
-        self.short_entry_prices = []
-        self.short_sizes = []
         self.average_short_price = None
         self.first_short_entry_price = None
         self.short_take_profit_price = None
@@ -117,28 +86,16 @@ class BaseStrategy(bt.Strategy):
         self.short_executed = False
         self.short_count = 0
 
-
         if self.params.backtest == False:
             self.init_live_trading()
 
-        self.active_orders = []
 
         # temp delete me
         self.account = self.p.account
         self.asset = self.p.asset
 
-    def init_live_trading(self):
-        """Initialize live trading components based on exchange type"""
-        if self.p.exchange.lower() == "pancakeswap":
-            self._init_pancakeswap()
-        elif self.p.exchange.lower() == "raydium":
-            self._init_raydium()
-        elif self.p.exchange.lower() == "mimic":
-            self._init_standard_exchange()
-        else:
-            print('Using CCXT Exchange - nothing todo here')
 
-    def _init_alert_system(self, coin_name=".__!_"):
+    def _init_alert_system(self, session=".__!_"):
         """Initialize alert system with Telegram and Discord services if enabled"""
         if not self.p.enable_alerts:
             print("Alert system disabled (not enabled via configuration)")
@@ -146,7 +103,7 @@ class BaseStrategy(bt.Strategy):
 
         try:
             base_session_file = ".base.session"
-            new_session_file = f"{coin_name}_{uuid.uuid4().hex}.session"
+            new_session_file = f"{session}_{uuid.uuid4().hex}.session"
 
             if not os.path.exists(base_session_file):
                 raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
@@ -185,7 +142,27 @@ class BaseStrategy(bt.Strategy):
             print(f"❌ Error initializing alert system: {str(e)}")
             return None
 
-    def _init_standard_exchange(self):
+    def send_alert(self, message: str):
+        """Helper method to safely send alerts if enabled"""
+        if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
+            try:
+                self.alert_manager.send_alert(message)
+            except Exception as e:
+                print(f"Error sending alert: {str(e)}")
+        else:
+            pass
+
+    def init_live_trading(self):
+        """Initialize live trading components based on exchange type"""
+        if self.p.exchange.lower() == "pancakeswap":
+            self._init_pancakeswap()
+        elif self.p.exchange.lower() == "mimic":
+            self._init_jrr_exchange()
+        else:
+            print('No JackRabbitRelay / Web3 exchange detected - no trading will be done on them.')
+
+    def _init_jrr_exchange(self):
+        from backtrader.brokers.jrrbroker import JrrOrderBase
         """Initialize standard exchange trading with JackRabbitRelay"""
         # Initialize the alert system only if alerts are enabled
         alert_manager = self._init_alert_system()
@@ -201,30 +178,16 @@ class BaseStrategy(bt.Strategy):
         self.order_thread.daemon = True
         self.order_thread.start()
 
-    def send_alert(self, message: str):
-        """Helper method to safely send alerts if enabled"""
-        if self.p.enable_alerts and hasattr(self, 'alert_manager') and self.alert_manager is not None:
-            try:
-                self.alert_manager.send_alert(message)
-            except Exception as e:
-                print(f"Error sending alert: {str(e)}")
-        else:
-            pass
-
     def _init_pancakeswap(self):
         """Initialize PancakeSwap trading"""
+        from backtrader.brokers.pancakeswap_orders import PancakeSwapV2DirectOrderBase as _web3order
         self.pcswap = _web3order(coin=self.p.coin, collateral=self.p.collateral)
         self.web3order_queue = queue.Queue()
         self.web3order_thread = threading.Thread(target=self.process_web3orders)
         self.web3order_thread.daemon = True
         self.web3order_thread.start()
 
-    def _init_raydium(self):
-        """Initialize Raydium trading"""
-        print('Raydium integration not implemented yet')
-        raise NotImplementedError("Raydium trading not yet implemented")
-
-    def process_orders(self):
+    def process_jrr_orders(self):
         while True:
             order = self.order_queue.get()
             if order is None:
@@ -251,7 +214,6 @@ class BaseStrategy(bt.Strategy):
                 return True
         return False
 
-    
     def process_web3orders(self):
         while True:
             order = self.web3order_queue.get()
@@ -416,7 +378,7 @@ class BaseStrategy(bt.Strategy):
     def load_trade_data(self):
         try:
             if self.p.exchange.lower() == 'mimic':
-                # Reimplement later
+                # reimplementing later
                 pass
             elif self.p.exchange.lower() != 'mimic':
                 cash = self.broker.getcash()
@@ -483,7 +445,6 @@ class BaseStrategy(bt.Strategy):
             traceback.print_exc()
             self.reset_position_state()
             self.stake_to_use = 1000.0
-
 
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
@@ -628,7 +589,6 @@ class BaseStrategy(bt.Strategy):
 
         print(sep + "\n")
 
-
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
         dt = datetime.now()
@@ -669,35 +629,34 @@ class BaseStrategy(bt.Strategy):
         self.short_average_entry_price = 0
 
     def notify_order(self, order):
-
         if order.status in [order.Completed]:
             if order.isbuy():
                 if hasattr(self, 'active_orders') and self.active_orders:
                     self.active_orders[-1].order_id = order.ref
 
-            if order.status in [order.Submitted, order.Accepted]:
-                # return
-                if order.status in [order.Completed]:
-                    self.update_order_history(order)
-                    if order.isbuy():
-                        self.action = "buy"
-                        self.buyprice = order.executed.price
-                        self.buycomm = order.executed.comm
+        if order.status in [order.Submitted, order.Accepted]:
+            # return
+            if order.status in [order.Completed]:
+                self.update_order_history(order)
+                if order.isbuy():
+                    self.action = "buy"
+                    self.buyprice = order.executed.price
+                    self.buycomm = order.executed.comm
 
-                    else:  # Sell
-                        self.action = "sell"
+                else:  # Sell
+                    self.action = "sell"
 
-                    self.bar_executed = len(self)
+                self.bar_executed = len(self)
 
-            elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-                if self.transaction_logging:
-                    if not self.periodic_logging:
-                        print("Cash %s Value %s" % (self.cash, self.value))
-                    print("Order Canceled/Margin/Rejected")
-                    print("Canceled: {}".format(order.status == order.Canceled))
-                    print("Margin: {}".format(order.status == order.Margin))
-                    print("Rejected: {}".format(order.status == order.Rejected))
-            self.order = None
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            if self.transaction_logging:
+                if not self.periodic_logging:
+                    print("Cash %s Value %s" % (self.cash, self.value))
+                print("Order Canceled/Margin/Rejected")
+                print("Canceled: {}".format(order.status == order.Canceled))
+                print("Margin: {}".format(order.status == order.Margin))
+                print("Rejected: {}".format(order.status == order.Rejected))
+        self.order = None
 
     def notify_trade(self, trade):
         # Only process closed trades
@@ -837,3 +796,27 @@ class CustomSQN(bt.Analyzer):
         else:
             self.rets['sqn'] = 0.0
             self.rets['trades'] = self.count
+
+class BuySellArrows(bt.observers.BuySell):
+    def next(self):
+        super().next()
+        
+        if self.lines.buy[0]:
+            self.lines.buy[0] -= self.data.low[0] * 0.02
+            
+        if self.lines.sell[0]:
+            self.lines.sell[0] += self.data.high[0] * 0.02
+            
+    plotlines = dict(
+        buy=dict(marker='$\u21E7$', markersize=8.0),
+        sell=dict(marker='$\u21E9$', markersize=8.0)
+    )
+
+class OrderTracker:
+    def __init__(self, entry_price, size, take_profit_pct):
+        self.entry_price = entry_price
+        self.size = size
+        self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
+        self.executed = True
+        self.order_id = None
+        self.timestamp = datetime.now()

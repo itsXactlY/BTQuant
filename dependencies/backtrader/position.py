@@ -22,9 +22,8 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 
+
 from copy import copy
-
-
 class Position(object):
     '''
     Keeps and updates the size and price of a position. The object has no

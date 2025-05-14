@@ -16,7 +16,7 @@ def backtest(
 ):
 
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
-    from backtrader.strategies.base import CustomSQN, CustomPandasData, pd
+    from backtrader.strategies.base import CustomSQN, CustomPandasData
     import quantstats_lumi as quantstats
     from pprint import pprint
     
@@ -67,6 +67,7 @@ def backtest(
     pyfolio_analyzer = strategy.analyzers.getbyname('pyfolio')
     returns, positions, transactions, gross_lev = pyfolio_analyzer.get_pf_items()
     
+    import pandas as pd
     returns = pd.Series(returns)
     returns = returns.dropna()
     

@@ -70,7 +70,7 @@ class QQE_Example(BaseStrategy):
         ('hull_length', 53),
         ('take_profit_percent', 4),
         ('dca_deviation', 4),
-        ('percent_sizer', 1),
+        ('percent_sizer', 0.01),
         ('debug', False),
     )
 
@@ -83,14 +83,6 @@ class QQE_Example(BaseStrategy):
         self.volosc = VolumeOscillator(self.data)
         self.DCA = True
         self.conditions_checked = False
-
-        if self.strategy_logging:
-            print("===Strategy level arguments===")
-            print("ema_length :", self.p.ema_length)
-            print("hull_length :", self.p.hull_length)
-            print("takeprofit :", self.p.take_profit_percent)
-            print("dca_deviation :", self.p.dca_deviation)
-            print("percent_sizer :", self.p.percent_sizer)
 
     def buy_or_short_condition(self):
         if not self.buy_executed and not self.conditions_checked:

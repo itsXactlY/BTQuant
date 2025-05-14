@@ -14,8 +14,7 @@ def backtest(
     fig=None,
     **kwargs,
 ):
-    # TODO :: aLca :: Quick 'n Dirty circular import workaround
-    # from backtrader.imports import CustomPandasData, pd, TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer, CustomSQN, dt, quantstats, pprint
+
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
     from backtrader.strategies.base import CustomSQN, CustomPandasData, pd
     import quantstats_lumi as quantstats

@@ -649,9 +649,6 @@ class BaseStrategy(bt.Strategy):
                 self.bar_executed = len(self)
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            if self.transaction_logging:
-                if not self.periodic_logging:
-                    print("Cash %s Value %s" % (self.cash, self.value))
                 print("Order Canceled/Margin/Rejected")
                 print("Canceled: {}".format(order.status == order.Canceled))
                 print("Margin: {}".format(order.status == order.Margin))

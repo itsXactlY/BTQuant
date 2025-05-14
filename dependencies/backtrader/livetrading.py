@@ -22,6 +22,7 @@ def livetrade(
 
     cerebro = bt.Cerebro()
     
+    # Create broker with patched class
     broker = CCXTBroker(
         exchange,
         currency='USDT',
@@ -437,7 +438,7 @@ def livetrade_multiple_pairs(
         raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
     else:
         strategy_class = strategy
-
+    
     from backtrader.stores import bitget_store
 
     asset_mapping = {}

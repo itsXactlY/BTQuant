@@ -4,14 +4,15 @@
 ############## CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!) ##############
 '''
 
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+# from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex
 from backtrader.utils.backtest import backtest
 from backtrader.feeds.mssql_crypto import get_database_data
 
-data = get_database_data("BTC", "2024-01-01", "2024-01-08", "1m")
+data = get_database_data("XRP", "2024-06-01", "2025-01-08", "1m")
 
 def run_backtest():
-    backtest(NRK, data, init_cash=1000, backtest=True, plot=True)
+    backtest(STrend_RSX_AccumulativeSwingIndex, data, init_cash=1000, backtest=True, plot=True)
 
 if __name__ == '__main__':
     try:

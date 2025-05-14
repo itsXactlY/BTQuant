@@ -39,8 +39,7 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 - **Linux VPS** for **JackRabbitRelay** (Tested on: **Arch (Garuda Linux)**, **Debian 12.5 (Bookworm)**)
 - **Python 3.12+**
 - **Custom-Backtrader** (found in the `dependencies` folder)
-- [**JackRabbitRelay**](https://github.com/rapmd73/JackrabbitRelay) for live trading
-- [**JackRabbitRelay Mimic**](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) for forward trading
+- [**JackRabbitRelay Mimic**](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) for forward trading / simultate real markets
 - Large datasets in CSV format—**[Binance.com 1minute Candle Stash at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m)**
 
 ### **🔧 Optional**
@@ -55,6 +54,8 @@ To install **JackRabbitRelay**, follow the detailed guides:
 - [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
 - [Installation Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
 - [Mimic "Brokerage" Setup](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic)
+
+If planed to straight livetrading - skip this step.
 
 ### **⚡ Quick Setup for BTQuant**
 

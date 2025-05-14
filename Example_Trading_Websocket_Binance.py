@@ -3,22 +3,22 @@ IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT 
 BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE!
 CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!)
 '''
-from backtrader.stores.mexc_store import MexcStore
+from backtrader.stores.binance_store import BinanceStore
 from backtrader.imports import dt, bt
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
 # JackRabbitRelay
-_coin = 'FLOKI'
+_coin = 'GAS'
 _collateral = 'USDT'
-_exchange = 'Mexc'
-_account = 'binance_sub1' #_account = '<JackRabbit_SubaccountName>'
+_exchange = 'Binance'
+_account = '' # Used for JackRabbitRelay
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)
-    store = MexcStore(
+    store = BinanceStore(
         coin_refer=_coin,
         coin_target=_collateral
         )

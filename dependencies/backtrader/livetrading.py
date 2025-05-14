@@ -1,9 +1,63 @@
 import backtrader as bt
-from backtrader.stores import pancakeswap_store, binance_store, mexc_store, bitget_store
 from datetime import datetime, timedelta
 import pytz
+from typing import Type
 
-# 
+
+def livetrade(
+    coin: str,
+    collateral: str,
+    exchange: str,
+    account: str,
+    asset: str,
+    strategy: Type[bt.Strategy],
+    config: str,
+) -> None:
+    
+    if strategy is None:
+        raise ValueError("No strategy class provided.")
+
+    from backtrader.feeds.ccxt import CCXT
+    from backtrader.brokers.ccxtbroker import CCXTBroker
+
+    cerebro = bt.Cerebro()
+    
+    broker = CCXTBroker(
+        exchange,
+        currency='USDT',
+        config=config
+    )
+
+    broker = CCXTBroker(exchange, collateral, config)
+    cerebro.setbroker(broker)    
+    data = CCXT(
+        exchange=exchange,
+        symbol=asset,
+        ohlcv_limit=500,
+        config=config,
+        retries=5
+    )
+
+    cerebro.setbroker(broker)
+    cerebro.adddata(data, name=data._dataname)
+    cerebro.addstrategy(
+                        strategy,
+                        exchange=exchange,
+                        account=account,
+                        asset=asset,
+                        coin=coin,
+                        collateral=collateral,
+                        enable_alerts=False,
+                        backtest=False)
+
+    try:
+        cerebro.run(live=True, runonce=False, exactbars=False, stdstats=False)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()
+
 def livetrade_web3(
     coin: str,
     collateral: str,
@@ -38,6 +92,8 @@ def livetrade_web3(
     else:
         strategy_class = strategy
 
+    from backtrader.stores import pancakeswap_store
+
     cerebro = bt.Cerebro(quicknotify=True)
     store = pancakeswap_store.PancakeSwapStore(
         coin_refer=coin,
@@ -64,9 +120,15 @@ def livetrade_web3(
     )
     
     cerebro.adddata(data=data, name=data._dataname)
-    cerebro.run(live=True)
-
-# 
+    
+    try:
+        cerebro.run(live=True)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()
+    
 def livetrade_crypto_binance(
     coin: str,
     collateral: str,
@@ -99,6 +161,8 @@ def livetrade_crypto_binance(
         raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
     else:
         strategy_class = strategy
+
+    from backtrader.stores import binance_store
 
     cerebro = bt.Cerebro(quicknotify=True)
     store = binance_store.BinanceStore(
@@ -135,8 +199,6 @@ def livetrade_crypto_binance(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
-
-# 
 def livetrade_crypto_binance_ML(
     coin: str,
     collateral: str,
@@ -172,6 +234,8 @@ def livetrade_crypto_binance_ML(
         raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
     else:
         strategy_class = strategy
+    
+    from backtrader.stores import binance_store
     
     # Initialize Binance store
     store = binance_store.BinanceStore(
@@ -214,8 +278,6 @@ def livetrade_crypto_binance_ML(
     # Apply memory saving settings
     cerebro.run(live=True, exactbars=100)
 
-
-# 
 def livetrade_crypto_mexc(
     coin: str,
     collateral: str,
@@ -248,6 +310,8 @@ def livetrade_crypto_mexc(
         raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
     else:
         strategy_class = strategy
+
+    from backtrader.stores import mexc_store
 
     cerebro = bt.Cerebro(quicknotify=True)
     store = mexc_store.MexcStore(
@@ -319,6 +383,8 @@ def livetrade_crypto_bitget(
     else:
         strategy_class = strategy
 
+    from backtrader.stores import bitget_store
+
     cerebro = bt.Cerebro(quicknotify=True)
     store = bitget_store.BitgetStore(
         coin_refer=coin,
@@ -371,6 +437,8 @@ def livetrade_multiple_pairs(
         raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
     else:
         strategy_class = strategy
+
+    from backtrader.stores import bitget_store
 
     asset_mapping = {}
     

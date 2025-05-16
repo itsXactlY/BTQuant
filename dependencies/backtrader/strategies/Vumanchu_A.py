@@ -14,7 +14,7 @@ class VuManchCipher_A(BaseStrategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cipher = VuManchCipherA(subplot=False)
+        self.cipher = VuManchCipherA(subplot=True)
         self.DCA = True
 
     def buy_or_short_condition(self):

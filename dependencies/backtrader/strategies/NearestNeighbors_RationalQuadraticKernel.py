@@ -52,7 +52,7 @@ class NRK(BaseStrategy):
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
         ('dca_deviation', 1.5),
-        ('take_profit', 2),
+        ('take_profit', 4),
         ('percent_sizer', 0.05),
         ('debug', False),
         ('backtest', None),
@@ -189,7 +189,7 @@ class NRK(BaseStrategy):
                     self.sizes.append(self.usdt_amount)
                     
                     self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
-                    print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}")
+                    print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
                     
                     if not self.buy_executed:
                         if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
@@ -216,7 +216,7 @@ class NRK(BaseStrategy):
                     self.sizes.append(self.usdt_amount)
                     
                     self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
-                    print(f"DCA order placed: {self.usdt_amount} at {self.data.close[0]}")
+                    print(f"DCA order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
                     
                     self.calc_averages()
 
@@ -257,6 +257,7 @@ class NRK(BaseStrategy):
 
     def next(self):
         super().next()
-        self.report_positions()
-        dt = self.datas[0].datetime.datetime(0)
-        print(f'Realtime: {datetime.now()} processing candle date: {dt}, with {self.data.close[0]}')
+        if self.p.backtest == False:
+            self.report_positions()
+            dt = self.datas[0].datetime.datetime(0)
+            print(f'Realtime: {datetime.now()} processing candle date: {dt}, with {self.data.close[0]}')

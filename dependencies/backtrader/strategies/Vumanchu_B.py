@@ -12,7 +12,7 @@ class VuManchCipher_B(BaseStrategy):
         ('smoothing', 0.5),
         ('sensitivity', 0.3),
         ##
-        ('debug', True),
+        ('debug', False),
         ('backtest', None),
     )
     
@@ -45,8 +45,6 @@ class VuManchCipher_B(BaseStrategy):
 
                     self.calc_averages()
                     self.buy_executed = True
-                    if self.p.debug:
-                        self.log_entry()
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
@@ -68,8 +66,6 @@ class VuManchCipher_B(BaseStrategy):
                     self.sizes.append(self.stake)
                     self.calc_averages()
                     self.buy_executed = True
-                    if self.p.debug:
-                        self.log_entry()
         self.conditions_checked = True
 
     def sell_or_cover_condition(self):
@@ -84,7 +80,6 @@ class VuManchCipher_B(BaseStrategy):
                     self.buy_executed = False
                     if self.p.debug:
                         print(f"Position closed at {current_price:.9f}, profit taken")
-                        self.log_exit("Sell Signal - Take Profit")
                     self.reset_position_state()
                 else:
                     self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)

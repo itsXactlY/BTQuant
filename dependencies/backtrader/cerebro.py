@@ -277,7 +277,7 @@ class Cerebro(with_metaclass(MetaParams, object)):
         ('exactbars', False), # Dont fuck with, or it breaks backtest, trallala...
         ('optdatas', True),
         ('optreturn', True),
-        ('objcache', True), # False by default
+        ('objcache', False), # False by default
         ('live', False),
         ('writer', False),
         ('tradehistory', False),

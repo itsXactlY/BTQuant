@@ -1,5 +1,5 @@
 from backtrader import backtest
-from backtrader.strategies.QQE_Hullband_VolumeOsc import QQE_Example
+from backtrader.strategies.QQE_Hullband_VolumeOsc import QQE_Example as _strategy
 from backtrader.strategies.base import CustomPandasData
 
 import pandas as pd
@@ -13,9 +13,16 @@ end = "2025-01-08"
 df = my_data_frame.loc[start:end]
 data = CustomPandasData(dataname=df)
 
+if __name__ == '__main__':
+    try:
+        backtest(_strategy, 
+                data,
+                init_cash=1000, 
+                backtest=True, 
+                plot=True)
 
-backtest(QQE_Example, 
-        data,
-        init_cash=1000, 
-        backtest=True, 
-        plot=True)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()

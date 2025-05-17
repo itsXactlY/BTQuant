@@ -7,14 +7,14 @@ from backtrader.stores.binance_store import BinanceStore
 from backtrader.imports import dt, bt
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
-# JackRabbitRelay
-_coin = 'GAS'
+# Setup your parameters here
+_coin = 'BTC'
 _collateral = 'USDT'
 _exchange = 'Binance'
-_account = '' # Used for JackRabbitRelay
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)
+_account = '' # Used for JackRabbitRelay
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)

@@ -1,3 +1,6 @@
+# This setup uses TickSampler to turn raw ticks into 1-second candles efficiently,
+# instead of relying on a fixed 1s WebSocket feed. Less CPU, better accuracy, cleaner OHLCV.
+
 '''
 IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE!
 BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE!
@@ -5,16 +8,16 @@ CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYO
 '''
 from backtrader.stores.mexc_store import MexcStore
 from backtrader.imports import dt, bt
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK as _strategy
 
-# JackRabbitRelay
-_coin = 'FLOKI'
+# Setup your parameters here
+_coin = 'BTC'
 _collateral = 'USDT'
 _exchange = 'Mexc'
-_account = 'binance_sub1' # Used for JackRabbitRelay
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)
+_account = '' # Used for JackRabbitRelay
 
 def run():
     cerebro = bt.Cerebro(quicknotify=True)
@@ -26,7 +29,7 @@ def run():
     from_date = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=6*15)
     data = store.getdata(start_date=from_date)
     data._dataname = f"{_coin}{_collateral}"
-    cerebro.addstrategy(NRK,
+    cerebro.addstrategy(_strategy,
                         exchange=_exchange,
                         account=_account,
                         asset=_asset,

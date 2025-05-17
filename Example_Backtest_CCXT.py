@@ -11,8 +11,17 @@ from backtrader.strategies.Vumanchu_A import VuManchCipher_A
 from backtrader.strategies.Vumanchu_B import VuManchCipher_B
 
 data = get_crypto_data("XRP/USDT", "2025-01-01", "2025-05-15", "1m", "binance")
-backtest(VuManchCipher_A, 
-        data,
-        init_cash=1000, 
-        backtest=True, 
-        plot=True)
+
+if __name__ == '__main__':
+    try:
+        backtest(VuManchCipher_A, # Choose your strategy(s) here
+                data,
+                init_cash=1000, 
+                backtest=True, # Needs always set to "False" for live trading
+                plot=True)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()

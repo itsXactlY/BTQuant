@@ -37,19 +37,29 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 
 ### **🖥️ Pre-requisites**
 - **Linux VPS** for **JackRabbitRelay** (Tested on: **Arch (Garuda Linux)**, **Debian 12.5 (Bookworm)**)
-- **Python 3.12+**
+- **Python 3.13+**
 - **Custom-Backtrader** (found in the `dependencies` folder)
-- [**JackRabbitRelay Mimic**](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) for forward trading / simultate real markets
-- Large datasets in CSV format—**[Binance.com 1minute Candle Stash at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m)**
+- Large datasets in CSV format—**[Binance.com 1minute Candle Stash at Protondrive](https://drive.proton.me/urls/K19ADZ4DZM#D9s3zyRrZH1m) for quickstarting**
 
 ### **🔧 Optional**
+- [**JackRabbitRelay Mimic (Optional)**](https://github.com/rapmd73/JackrabbitRelay/wiki/Jackrabbit-Mimic) for forward trading / simultate real markets
 - **Microsoft SQL Server** for advanced data handling and backtesting capabilities
 
 ---
 
 ## **Installation**
 
-To install **JackRabbitRelay**, follow the detailed guides:
+### **⚡ Quick Setup for BTQuant**
+
+Run this command in your terminal (Make sure to have build-essential, unixodbc-dev, and Python3-dev packages installed):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/Release-1.4.0/install.sh | bash
+```
+
+This script will handle the setup of the virtual environment, installation of dependencies, and configuration of the framework for Linux systems.
+
+To install the optional **JackRabbitRelay**, follow the detailed guides:
 
 - [JackRabbitRelay GitHub](https://github.com/rapmd73/JackrabbitRelay)
 - [Installation Guide](https://github.com/rapmd73/JackrabbitRelay/wiki/Installation-and-Setup#installing-and-setting-up-version-2)
@@ -57,35 +67,24 @@ To install **JackRabbitRelay**, follow the detailed guides:
 
 If planed to straight livetrading - skip this step.
 
-### **⚡ Quick Setup for BTQuant**
-
-Run this command in your terminal (Make sure to have build-essential, unixodbc-dev, and Python3-dev packages installed):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/mainv2/install.sh | bash
-```
-
-This script will handle the setup of the virtual environment, installation of dependencies, and configuration of the framework for Linux systems.
-
-
 ---
 
 ## **💻 Running the Framework**
 
 ### **For Backtesting:**
 ```bash
-python3 Crypto_CCXT_BollingerBands.py
+python3 Example_Backtest_CCXT.py
 ```
 
 ### **For Forward/Live Trading:**
-- **Setup**: Copy `dontcommit.py.template` to `dontcommit.py` and fill in the identification strings from your JackRabbitRelay setup, or Privatekey for Web3 Access.
+- **Setup**: Edit `dontcommit.py` and fill in the identification strings from your JackRabbitRelay setup, or Privatekey for Web3 Access.
 - **Run Forward/Live Trading on Binance:**
 ```bash
-python3 __LIVE__Binance.py
+python3 Example_Trading_Websocket_Binance.py
 ```
 - **Run Forward/Live Trading on PancakeSwap:**
 ```bash
-python3 __LIVE__PancakeSwap.py
+<missing> as of now. Will come back soon.
 ```
 
 ---
@@ -95,31 +94,12 @@ python3 __LIVE__PancakeSwap.py
 BTQuant provides a wide variety of **pre-built trading strategies** that you can quickly plug into your trading environment. Whether you're backtesting, forward trading, or live trading, you can choose from the following strategies:
 
 ### **Available Strategies:**
-
->- **RSI Strategy** (`"rsi"`) - Relative Strength Index-based strategy for identifying overbought/oversold conditions.
->- **SMAC Strategy** (`"smac"`) - Simple Moving Average Crossover strategy for trend-following trades.
->- **MACD Strategy** (`"macd"`) - Moving Average Convergence Divergence strategy for momentum and trend following.
->- **EMAC Strategy** (`"emac"`) - Exponential Moving Average Crossover strategy for more reactive trend trading.
->- **BBands Strategy** (`"bbands"`) - Bollinger Bands-based strategy for volatility and mean reversion trades.
->- **Buy And Hold Strategy** (`"buynhold"`) - A simple buy-and-hold strategy.
->- **Ternary Strategy** (`"ternary"`) - A custom ternary decision-based strategy.
+Small overview of existing Ready to go Strategies:
 >- **QQE Example Strategy** (`"qqe"`) - A Quantitative Qualitative Estimation (QQE) trading strategy for smoother signals.
 >- **Order Chain by KioseffTrading** (`"OrChainKioseff"`) - Advanced order chaining strategy for complex execution.
 >- **SMACross with MESAdaptivePrime Strategy** (`"msa"`) - Enhanced moving average cross strategy with adaptive prime filters.
 >- **SuperSTrend Scalping Strategy** (`"STScalp"`) - A scalping strategy designed around SuperSTrend indicators for quick entries and exits.
 >- **Nearest Neighbors + Rational Quadratic Kernel** (`"NNRQK"`) - NearestNeighbors Rational Quadratic Kernel Machine Learning Strategy with alot magic inside. Simple, yet effective.
-
-### **How to Choose a Strategy**
-
-You can specify the strategy when configuring your backtest, forward trading, or live trading setup by using the corresponding string:
-
-```bash
-strategy_name = "rsi"  # Replace with your desired strategy
-```
-
-Simply replace `"rsi"` with any of the above strategy codes to select the one that fits your needs!
-
----
 
 > **Note**: These strategies can be customized or extended to fit your unique trading style.
 
@@ -129,7 +109,7 @@ Simply replace `"rsi"` with any of the above strategy codes to select the one th
 ### **What We Offer That Others Don’t**
 >- **Mimic 400+ exchanges** for forward testing with unrivaled accuracy.
 >- **Live 1-second WebSocket data feeds** for real-time trading, **bypassing common data delays**.
->- **Act as your own broker**, giving you total control and independence.
+>- **Act as your own broker via JackRabbitRelay**, giving you total control and independence.
 >- Built-in **DCA logic**, reducing your entry risks.
 >- Plug-and-play **50-line code** setup for strategy deployment.
 >- **MS SQL Integration** for traders handling large datasets, ensuring security and efficiency.

@@ -12,6 +12,8 @@ import uuid
 order_lock = threading.Lock()
 INIT_CASH = 100_000.0
 
+## HUGE TODO :: Cleanup
+
 class BaseStrategy(bt.Strategy):
     params = (
         ('init_cash', INIT_CASH),
@@ -388,21 +390,35 @@ class BaseStrategy(bt.Strategy):
                 
                 if not hasattr(self, 'active_orders') or self.active_orders is None:
                     self.active_orders = []
-                    
+
                 for data in self.datas:
                     symbol = data.symbol
-                    
+                    try:
+                        loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
+                        
+                        if loaded_orders:
+                            print(f"Loaded {len(loaded_orders)} active orders for {symbol} from CSV")
+                            self.active_orders = loaded_orders
+                            self.buy_executed = True
+                            self.entry_prices = [order.entry_price for order in self.active_orders]
+                            self.sizes = [order.size for order in self.active_orders]
+                            self.calc_averages()
+                            
+                            # if we successfully loaded orders from CSV, we skip the API check
+                            # TODO :: add an cross check on exchange to validate the loaded orders
+                            continue
+                        else:
+                            print(f"No active orders found in CSV for {symbol}, falling back to API")
+                    except Exception as e:
+                        print(f"Error loading active orders from CSV: {e} \nFalling back to API")
+                
                     position_infos = self.broker.get_all_positions(data)
                     
                     if not position_infos or len(position_infos) == 0:
-                        print(f"No positions found for {symbol}")
+                        print(f"No positions found for {symbol} via API")
                         continue
-                        
-                    print(f"Found {len(position_infos)} open positions for {symbol}")
                     
-                    self.entry_prices = []
-                    self.sizes = []
-                    self.buy_executed = False
+                    print(f"Found {len(position_infos)} open positions for {symbol} via API")
                     
                     for position_info in position_infos:
                         if position_info['size'] > 0:
@@ -428,7 +444,9 @@ class BaseStrategy(bt.Strategy):
                                 order_tracker = OrderTracker(
                                     entry_price=entry_price,
                                     size=entry_size,
-                                    take_profit_pct=self.params.take_profit
+                                    take_profit_pct=self.params.take_profit,
+                                    symbol=symbol,
+                                    order_type="BUY"
                                 )
                                 order_tracker.timestamp = entry_time
                                 order_tracker.order_id = position_info['id']
@@ -439,7 +457,7 @@ class BaseStrategy(bt.Strategy):
                         self.buy_executed = True
                         self.DCA = True
                         self.calc_averages()
-                        print(f"Loaded {len(self.active_orders)} positions into active_orders tracking")
+                        print(f"Loaded {len(self.active_orders)} positions into active_orders tracking from API")
                         
         except Exception as e:
             print(f"Unexpected error occurred while loading trade data: {e}")
@@ -810,11 +828,150 @@ class BuySellArrows(bt.observers.BuySell):
         sell=dict(marker='$\u21E9$', markersize=8.0)
     )
 
+
+import csv
 class OrderTracker:
-    def __init__(self, entry_price, size, take_profit_pct):
+    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY"):
         self.entry_price = entry_price
         self.size = size
         self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
         self.executed = True
         self.order_id = None
         self.timestamp = datetime.now()
+        self.symbol = symbol
+        self.order_type = order_type # BUY or SELL
+        self.closed = False
+        self.exit_price = None
+        self.exit_timestamp = None
+        self.profit_pct = None
+
+        self.save_to_csv()
+    
+    def close_order(self, exit_price):
+        self.closed = True
+        self.exit_price = exit_price
+        self.exit_timestamp = datetime.now()
+        self.profit_pct = ((exit_price / self.entry_price) - 1) * 100 if self.order_type == "BUY" else ((self.entry_price / exit_price) - 1) * 100
+
+        self.update_csv()
+        self.remove_from_csv()
+    
+    def save_to_csv(self):
+        csv_file = "order_tracker.csv"
+        file_exists = os.path.isfile(csv_file)
+        
+        with open(csv_file, 'a', newline='') as f:
+            fieldnames = ['order_id', 'symbol', 'order_type', 'entry_price', 'size', 
+                         'take_profit_price', 'timestamp', 'closed', 'exit_price', 
+                         'exit_timestamp', 'profit_pct']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+            
+            writer.writerow({
+                'order_id': self.order_id,
+                'symbol': self.symbol,
+                'order_type': self.order_type,
+                'entry_price': self.entry_price,
+                'size': self.size,
+                'take_profit_price': self.take_profit_price,
+                'timestamp': self.timestamp,
+                'closed': self.closed,
+                'exit_price': self.exit_price,
+                'exit_timestamp': self.exit_timestamp,
+                'profit_pct': self.profit_pct
+            })
+    
+    def update_csv(self):
+        try:
+            temp_file = "order_tracker_temp.csv"
+            modified = False
+            
+            with open("order_tracker.csv", 'r', newline='') as infile, open(temp_file, 'w', newline='') as outfile:
+                reader = csv.DictReader(infile)
+                fieldnames = reader.fieldnames
+                writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for row in reader:
+                    if (abs(float(row['entry_price']) - self.entry_price) < 0.0001 and 
+                        abs(float(row['size']) - self.size) < 0.0001 and
+                        row['closed'].lower() == 'false'):
+                        row['closed'] = 'True'
+                        row['exit_price'] = str(self.exit_price)
+                        row['exit_timestamp'] = str(self.exit_timestamp)
+                        row['profit_pct'] = str(self.profit_pct)
+                        modified = True
+                        print(f"Updated order in CSV: entry={row['entry_price']}, size={row['size']}")
+                    writer.writerow(row)
+            
+            os.replace(temp_file, "order_tracker.csv")
+            
+            if not modified:
+                print(f"Warning: Could not find order to update in CSV: entry={self.entry_price}, size={self.size}")
+        except Exception as e:
+            print(f"Error updating CSV: {e}")
+    
+    def remove_from_csv(self):
+        try:
+            temp_file = "order_tracker_temp.csv"
+            order_removed = False
+
+            with open("order_tracker.csv", 'r', newline='') as infile, open(temp_file, 'w', newline='') as outfile:
+                reader = csv.DictReader(infile)
+                fieldnames = reader.fieldnames
+                writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                for row in reader:
+                    if (abs(float(row['entry_price']) - self.entry_price) < 0.0001 and 
+                        abs(float(row['size']) - self.size) < 0.0001 and
+                        row['closed'].lower() == 'true'):
+                        order_removed = True
+                        print(f"Removed closed order from CSV: entry={row['entry_price']}, size={row['size']}")
+                        continue
+                    writer.writerow(row)
+            
+            os.replace(temp_file, "order_tracker.csv")
+            
+            if not order_removed:
+                print(f"Warning: Could not find closed order to remove in CSV: entry={self.entry_price}, size={self.size}")
+        except Exception as e:
+            print(f"Error removing closed order from CSV: {e}")
+
+    @classmethod
+    def load_active_orders_from_csv(cls, symbol=None):
+        active_orders = []
+        try:
+            if not os.path.isfile("order_tracker.csv"):
+                return active_orders
+                
+            with open("order_tracker.csv", 'r', newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['closed'].lower() == 'false':
+                        if symbol and row['symbol'] and row['symbol'] != symbol:
+                            continue
+
+                        order = cls.__new__(cls)
+
+                        order.entry_price = float(row['entry_price'])
+                        order.size = float(row['size'])
+                        order.take_profit_price = float(row['take_profit_price'])
+                        order.executed = True
+                        order.order_id = row['order_id'] if row['order_id'] else None
+                        order.timestamp = datetime.fromisoformat(row['timestamp']) if row['timestamp'] else datetime.now()
+                        order.symbol = row['symbol']
+                        order.order_type = row['order_type']
+                        order.closed = False
+                        order.exit_price = None
+                        order.exit_timestamp = None
+                        order.profit_pct = None
+                        
+                        active_orders.append(order)
+            
+            return active_orders
+        except Exception as e:
+            print(f"Error loading orders from CSV: {e}")
+            return []

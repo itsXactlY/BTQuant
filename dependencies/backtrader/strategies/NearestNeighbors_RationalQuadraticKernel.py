@@ -37,7 +37,6 @@ class RationalQuadraticKernel(bt.indicators.PeriodN):
 class NRK(BaseStrategy):
     params = (
         # ML Parameters
-        ('symbol', 'XRP/USDT'),
         ('source', 'close'),
         ('neighbors_count', 8),
         ('max_bars_back', 100), # Standard: 2000 what is slow on HFT, better suited for higher TF than 5m+
@@ -51,8 +50,8 @@ class NRK(BaseStrategy):
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
-        ('dca_deviation', 1.5),
-        ('take_profit', 4),
+        ('dca_deviation', 0.2),
+        ('take_profit', 0.1),
         ('percent_sizer', 0.05),
         ('debug', False),
         ('backtest', None),
@@ -60,7 +59,6 @@ class NRK(BaseStrategy):
 
     def __init__(self, **kwargs):
         print("Initializing strategy")
-        self.symbol = self.p.symbol
         super().__init__(**kwargs)
         self.addminperiod(self.p.max_bars_back)
         self.source = getattr(self.data, self.p.source)
@@ -177,20 +175,20 @@ class NRK(BaseStrategy):
             if signal > 0:
                 if self.p.backtest == False:
                     self.calculate_position_size()
-
                     order_tracker = OrderTracker(
                         entry_price=self.data.close[0],
                         size=self.usdt_amount,
-                        take_profit_pct=self.params.take_profit
+                        take_profit_pct=self.params.take_profit,
+                        symbol=self.data._name if hasattr(self.data, '_name') else self.data._dataname,
+                        order_type="BUY"
                     )
+
+                    order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                     self.active_orders.append(order_tracker)
-                    
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    
-                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
+                    # self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
                     print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
-                    
                     if not self.buy_executed:
                         if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                             self.first_entry_price = self.data.close[0]
@@ -204,40 +202,44 @@ class NRK(BaseStrategy):
             if signal > 0:
                 if self.p.backtest == False:
                     self.calculate_position_size()
-
                     order_tracker = OrderTracker(
                         entry_price=self.data.close[0],
                         size=self.usdt_amount,
-                        take_profit_pct=self.params.take_profit
+                        take_profit_pct=self.params.take_profit,
+                        symbol=self.data._name if hasattr(self.data, '_name') else self.data._dataname,
+                        order_type="BUY"
                     )
+
+                    order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                     self.active_orders.append(order_tracker)
-                    
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    
-                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
-                    print(f"DCA order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
-                    
+                    # self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
+                    print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
+                    if not self.buy_executed:
+                        if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                            self.first_entry_price = self.data.close[0]
+                        self.buy_executed = True
                     self.calc_averages()
-
         self.conditions_checked = True
 
     def sell_or_cover_condition(self):
         if self.active_orders:
             current_price = self.data.close[0]
             orders_to_remove = []
-            
             for idx, order in enumerate(self.active_orders):
                 if current_price >= order.take_profit_price:
                     if self.params.backtest:
                         self.order = self.sell(size=order.size, exectype=Order.Market)
-                        print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
                     else:
-                        self.order = self.sell(self.data, size=order.size, exectype=Order.Market)
-                        print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
+                        # self.order = self.sell(self.data, size=order.size, exectype=Order.Market)
+                        pass
+
+                    print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
                     
+                    order.close_order(current_price)
                     orders_to_remove.append(idx)
-                    
+            
             for idx in sorted(orders_to_remove, reverse=True):
                 removed_order = self.active_orders.pop(idx)
                 profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
@@ -246,13 +248,12 @@ class NRK(BaseStrategy):
             if orders_to_remove:
                 self.entry_prices = [order.entry_price for order in self.active_orders]
                 self.sizes = [order.size for order in self.active_orders]
-                
                 if not self.active_orders:
                     self.reset_position_state()
                     self.buy_executed = False
                 else:
                     self.calc_averages()
-                    
+        
         self.conditions_checked = True
 
     def next(self):

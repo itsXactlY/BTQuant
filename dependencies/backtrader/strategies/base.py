@@ -264,7 +264,8 @@ class BaseStrategy(bt.Strategy):
         else:
             min_order_value = 10
 
-        usdt_to_use = self.stake_to_use * self.p.percent_sizer
+        # usdt_to_use = self.stake_to_use * self.p.percent_sizer
+        usdt_to_use = self.broker.get_cash() * self.p.percent_sizer # fetch the available cash from the broker directly
 
         if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
             self.amount = usdt_to_use / self.dataclose[0]

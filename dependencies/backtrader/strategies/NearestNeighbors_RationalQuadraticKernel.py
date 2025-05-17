@@ -50,8 +50,8 @@ class NRK(BaseStrategy):
         ('use_kernel_smoothing', True),
         ('kernel_smoothing_lag', 2),
         # DCA Parameters
-        ('dca_deviation', 0.2),
-        ('take_profit', 0.1),
+        ('dca_deviation', 2),
+        ('take_profit', 4),
         ('percent_sizer', 0.05),
         ('debug', False),
         ('backtest', None),
@@ -187,7 +187,7 @@ class NRK(BaseStrategy):
                     self.active_orders.append(order_tracker)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    # self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
+                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
                     print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
                     if not self.buy_executed:
                         if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
@@ -214,7 +214,7 @@ class NRK(BaseStrategy):
                     self.active_orders.append(order_tracker)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
-                    # self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
+                    self.order = self.buy(size=self.usdt_amount, exectype=Order.Market)
                     print(f"Buy order placed: {self.usdt_amount} at {self.data.close[0]}\n{self.order}")
                     if not self.buy_executed:
                         if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
@@ -232,8 +232,7 @@ class NRK(BaseStrategy):
                     if self.params.backtest:
                         self.order = self.sell(size=order.size, exectype=Order.Market)
                     else:
-                        # self.order = self.sell(self.data, size=order.size, exectype=Order.Market)
-                        pass
+                        self.order = self.sell(self.data, size=order.size, exectype=Order.Market)
 
                     print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
                     

@@ -44,6 +44,7 @@ class BaseStrategy(bt.Strategy):
         if self.p.backtest == True:
             BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
+        self.symbol = self.p.asset
 
         self.entry_price = None
         self.take_profit_price = None
@@ -51,6 +52,7 @@ class BaseStrategy(bt.Strategy):
         self.stop_loss_price = None
         self.buy_executed = None
         self.average_entry_price = None
+        self.usdt_amount = None
         self.stake_to_use = None
         self.stake_to_sell = None
         self.stake = None
@@ -62,6 +64,7 @@ class BaseStrategy(bt.Strategy):
         self.short_entry_prices = []
         self.short_sizes = []
         self.active_orders = []
+        
 
         self.amount = self.p.amount
         self.conditions_checked = None
@@ -267,7 +270,7 @@ class BaseStrategy(bt.Strategy):
             min_order_value = 10
 
         # usdt_to_use = self.stake_to_use * self.p.percent_sizer
-        usdt_to_use = self.broker.get_cash() * self.p.percent_sizer # fetch the available cash from the broker directly
+        usdt_to_use = self.broker.getcash() * self.p.percent_sizer / self.dataclose # * self.p.percent_sizer # fetch the available cash from the broker directly
 
         if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
             self.amount = usdt_to_use / self.dataclose[0]
@@ -279,9 +282,9 @@ class BaseStrategy(bt.Strategy):
                 print(f"Adjusted to minimum order value: ${min_order_value}")
             
             self.amount = round(self.amount, 8)
-            self.usdt_amount = round(self.amount * self.dataclose[0], 2)
+            self.usdt_amount = round(self.amount * self.dataclose[0], 8)
             
-            print(f"Calculated position size: {self.amount} units worth {self.usdt_amount:.2f} USDT")
+            print(f"Calculated position size: {self.amount} units worth {self.usdt_amount:.8f} USDT")
         else:
             self.amount = min_order_value / 1000
             self.usdt_amount = min_order_value
@@ -392,8 +395,10 @@ class BaseStrategy(bt.Strategy):
                     self.active_orders = []
 
                 for data in self.datas:
-                    symbol = data.symbol
+                    symbol = self.symbol
+                    print(f"Loading trade data for symbol: {symbol}")
                     try:
+
                         loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
                         
                         if loaded_orders:
@@ -523,6 +528,7 @@ class BaseStrategy(bt.Strategy):
     def next(self):
         self.conditions_checked = False
         if self.params.backtest == False and self.live_data == True:
+            self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
 
             if self.p.debug:
                 print(f"Debug :: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
@@ -838,8 +844,17 @@ class OrderTracker:
         self.executed = True
         self.order_id = None
         self.timestamp = datetime.now()
+        
+        # Fix for empty symbol
+        if symbol is None or symbol == "":
+            print("WARNING: Creating order tracker with empty symbol - this will cause tracking issues")
+            # Try to get a default symbol if available
+            if hasattr(self, 'datas') and self.datas and hasattr(self.datas[0], '_dataname'):
+                symbol = self.datas[0]._dataname
+                print(f"Automatically using symbol: {symbol}")
+        
         self.symbol = symbol
-        self.order_type = order_type # BUY or SELL
+        self.order_type = order_type  # BUY or SELL
         self.closed = False
         self.exit_price = None
         self.exit_timestamp = None
@@ -855,19 +870,22 @@ class OrderTracker:
 
         self.update_csv()
         self.remove_from_csv()
-    
+
     def save_to_csv(self):
         csv_file = "order_tracker.csv"
         file_exists = os.path.isfile(csv_file)
         
         with open(csv_file, 'a', newline='') as f:
             fieldnames = ['order_id', 'symbol', 'order_type', 'entry_price', 'size', 
-                         'take_profit_price', 'timestamp', 'closed', 'exit_price', 
-                         'exit_timestamp', 'profit_pct']
+                        'take_profit_price', 'timestamp', 'closed', 'exit_price', 
+                        'exit_timestamp', 'profit_pct']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             
             if not file_exists:
                 writer.writeheader()
+            
+            if self.symbol is None:
+                print("WARNING: Saving order without a symbol. This will cause tracking issues.")
             
             writer.writerow({
                 'order_id': self.order_id,
@@ -882,6 +900,7 @@ class OrderTracker:
                 'exit_timestamp': self.exit_timestamp,
                 'profit_pct': self.profit_pct
             })
+            print(f"Saved order to CSV for {self.symbol}: {self.size} @ {self.entry_price}")
     
     def update_csv(self):
         try:
@@ -951,7 +970,9 @@ class OrderTracker:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row['closed'].lower() == 'false':
+                        # Only include orders that match the provided symbol
                         if symbol and row['symbol'] and row['symbol'] != symbol:
+                            print(f"Skipping order for {row['symbol']} (looking for {symbol})")
                             continue
 
                         order = cls.__new__(cls)
@@ -969,8 +990,10 @@ class OrderTracker:
                         order.exit_timestamp = None
                         order.profit_pct = None
                         
+                        print(f"Loading order for {order.symbol}: {order.size} @ {order.entry_price}")
                         active_orders.append(order)
             
+            print(f"Loaded {len(active_orders)} active orders for {symbol}")
             return active_orders
         except Exception as e:
             print(f"Error loading orders from CSV: {e}")

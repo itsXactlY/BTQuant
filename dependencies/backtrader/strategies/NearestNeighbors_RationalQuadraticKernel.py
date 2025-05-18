@@ -194,6 +194,17 @@ class NRK(BaseStrategy):
                             self.first_entry_price = self.data.close[0]
                         self.buy_executed = True
                     self.calc_averages()
+        
+                elif self.p.backtest == True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+
+                    self.calc_averages()
+                    self.buy_executed = True
+
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
@@ -221,10 +232,17 @@ class NRK(BaseStrategy):
                             self.first_entry_price = self.data.close[0]
                         self.buy_executed = True
                     self.calc_averages()
+
+                elif self.p.backtest is True:
+                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+                    self.entry_prices.append(self.data.close[0])
+                    self.sizes.append(self.stake)
+                    self.calc_averages()
+                    self.buy_executed = True
         self.conditions_checked = True
 
     def sell_or_cover_condition(self):
-        if self.active_orders:
+        if self.active_orders and self.p.backtest == False:
             current_price = self.data.close[0]
             orders_to_remove = []
             for idx, order in enumerate(self.active_orders):
@@ -252,7 +270,15 @@ class NRK(BaseStrategy):
                     self.buy_executed = False
                 else:
                     self.calc_averages()
-        
+        elif self.p.backtest == True:
+            self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
+            self.entry_prices.append(self.data.close[0])
+            self.sizes.append(self.stake)
+            if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                self.first_entry_price = self.data.close[0]
+
+            self.calc_averages()
+
         self.conditions_checked = True
 
     def next(self):

@@ -58,7 +58,7 @@ class NRK(BaseStrategy):
     )
 
     def __init__(self, **kwargs):
-        print("Initializing strategy")
+        print("Initializing strategy for", self.p.asset)
         super().__init__(**kwargs)
         self.addminperiod(self.p.max_bars_back)
         self.source = getattr(self.data, self.p.source)
@@ -179,7 +179,7 @@ class NRK(BaseStrategy):
                         entry_price=self.data.close[0],
                         size=self.usdt_amount,
                         take_profit_pct=self.params.take_profit,
-                        symbol=self.data._name if hasattr(self.data, '_name') else self.data._dataname,
+                        symbol=self.symbol,
                         order_type="BUY"
                     )
 
@@ -218,7 +218,7 @@ class NRK(BaseStrategy):
                         entry_price=self.data.close[0],
                         size=self.usdt_amount,
                         take_profit_pct=self.params.take_profit,
-                        symbol=self.data._name if hasattr(self.data, '_name') else self.data._dataname,
+                        symbol=self.symbol,
                         order_type="BUY"
                     )
 
@@ -284,14 +284,7 @@ class NRK(BaseStrategy):
                         self.buy_executed = False
                         if self.p.debug:
                             print(f"Position closed at {current_price:.9f}, profit taken")
-                            self.log_exit("Sell Signal - Take Profit")
                         self.reset_position_state()
-                    else:
-                        self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-                        alert_message = f"""Close {self.asset}"""
-                        self.send_alert(alert_message)
-                        self.reset_position_state()
-                        self.buy_executed = False
 
         self.conditions_checked = True
 

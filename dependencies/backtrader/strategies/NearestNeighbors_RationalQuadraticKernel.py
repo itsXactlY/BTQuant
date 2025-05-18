@@ -53,7 +53,7 @@ class NRK(BaseStrategy):
         ('dca_deviation', 2),
         ('take_profit', 4),
         ('percent_sizer', 0.05),
-        ('debug', False),
+        ('debug', True),
         ('backtest', None),
     )
 
@@ -171,7 +171,7 @@ class NRK(BaseStrategy):
 
     def buy_or_short_condition(self):
         signal = self.compute_ml_signal()
-        if not self.buy_executed or (self.buy_executed and self.DCA):
+        if not self.buy_executed:
             if signal > 0:
                 if self.p.backtest == False:
                     self.calculate_position_size()
@@ -196,6 +196,7 @@ class NRK(BaseStrategy):
                     self.calc_averages()
         
                 elif self.p.backtest == True:
+                    print(self.stake)
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
@@ -234,6 +235,7 @@ class NRK(BaseStrategy):
                     self.calc_averages()
 
                 elif self.p.backtest is True:
+                    print(self.stake)
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
@@ -271,13 +273,25 @@ class NRK(BaseStrategy):
                 else:
                     self.calc_averages()
         elif self.p.backtest == True:
-            self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-            self.entry_prices.append(self.data.close[0])
-            self.sizes.append(self.stake)
-            if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
-                self.first_entry_price = self.data.close[0]
+            if self.buy_executed:
+                current_price = round(self.data.close[0], 9)
+                avg_price = round(self.average_entry_price, 9)
+                tp_price = round(self.take_profit_price, 9)
 
-            self.calc_averages()
+                if current_price >= tp_price:
+                    if self.params.backtest:
+                        self.close()
+                        self.buy_executed = False
+                        if self.p.debug:
+                            print(f"Position closed at {current_price:.9f}, profit taken")
+                            self.log_exit("Sell Signal - Take Profit")
+                        self.reset_position_state()
+                    else:
+                        self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                        alert_message = f"""Close {self.asset}"""
+                        self.send_alert(alert_message)
+                        self.reset_position_state()
+                        self.buy_executed = False
 
         self.conditions_checked = True
 

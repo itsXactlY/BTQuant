@@ -6,7 +6,7 @@ from backtrader.dontcommit import connection_string, fast_mssql, bt
 import pyodbc
 import pandas as pd
 
-class MSSQLData(bt.feeds.PandasData):
+class MSSQLData(bt.feeds.PolarsData):
     @classmethod
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
         start_timestamp = int(start_date.timestamp() * 1000)
@@ -42,7 +42,7 @@ class MSSQLData(bt.feeds.PandasData):
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         return [row[0] for row in data]
 
-class MSSQLData_Stocks(bt.feeds.PandasData):
+class MSSQLData_Stocks(bt.feeds.PolarsData):
     @classmethod
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
         # Convert datetime objects to string format
@@ -191,5 +191,4 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
 
     print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
     
-    # Convert back to pandas for compatibility with BTQuant
-    return df.to_pandas().set_index("TimestampStart")
+    return df

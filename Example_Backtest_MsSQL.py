@@ -13,7 +13,7 @@ data = get_database_data("XRP", "2024-06-01", "2025-01-08", "1m")
 
 if __name__ == '__main__':
     try:
-        backtest(STrend_RSX_AccumulativeSwingIndex, data, init_cash=1000, backtest=True, plot=True)
+        backtest(STrend_RSX_AccumulativeSwingIndex, data, init_cash=1000, backtest=True, quantstats=True, plot=True)
     except Exception as e:
         print(f"An error occurred: {e}")
         import traceback

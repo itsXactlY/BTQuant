@@ -24,25 +24,8 @@ from __future__ import (absolute_import, division, print_function,
 # The modules below should/must define __all__ with the objects wishes
 # or prepend an "_" (underscore) to private classes/variables
 
-from .bbroker import BackBroker, BrokerBack
+
 from .jrrbroker import *
 from .pancakeswap_orders import *
-try:
-    from .ibbroker import IBBroker
-except ImportError:
-    pass  # The user may not have ibpy installed
+from .bbroker import BackBroker, BrokerBack
 
-try:
-    from .vcbroker import VCBroker
-except ImportError:
-    pass  # The user may not have something installed
-
-try:
-    from .oandabroker import OandaBroker
-except ImportError as e:
-    pass  # The user may not have something installed
-
-try:
-    from .ccxtbroker import CCXTBroker
-except ImportError as e:
-    pass  # The user may not have something installed

@@ -18,7 +18,8 @@ if __name__ == '__main__':
         backtest(_strategy, 
                 data,
                 init_cash=1000, 
-                backtest=True, 
+                backtest=True,
+                quantstats=True,
                 plot=True)
 
     except Exception as e:

@@ -10,13 +10,13 @@ class PolarsData(bt.feed.DataBase):
 
     params = (
         ('nocase', True),
-        ('datetime', 0),
-        ('open', 1),
+        ('datetime', 0),  # Default: first column is datetime
+        ('open', 1),      
         ('high', 2),
         ('low', 3),
         ('close', 4),
         ('volume', 5),
-        ('openinterest', -1), # -1 means not present
+        ('openinterest', -1),  # -1 means not present
     )
 
     datafields = [
@@ -25,21 +25,19 @@ class PolarsData(bt.feed.DataBase):
 
     def __init__(self):
         super(PolarsData, self).__init__()
-        
-        if not isinstance(self.p.dataname, pl.DataFrame):
-            if hasattr(self.p.dataname, '__iter__'):
-                try:
-                    self.p.dataname = pl.DataFrame(self.p.dataname)
-                except Exception as e:
-                    raise ValueError(f"Could not convert data to Polars DataFrame: {e}")
-        
+
+        if isinstance(self.p.dataname, pl.DataFrame):
+            datetime_col = self.p.dataname.columns[0]
+            self.p.dataname = self.p.dataname.sort(datetime_col)
+    
         self.colnames = self.p.dataname.columns
+
         self._colmapping = {}
         
         for datafield in self.getlinealiases():
             param_value = getattr(self.params, datafield)
             
-            if isinstance(param_value, integer_types):
+            if isinstance(param_value, int):
                 if param_value >= 0:
                     if param_value < len(self.colnames):
                         self._colmapping[datafield] = param_value
@@ -62,7 +60,7 @@ class PolarsData(bt.feed.DataBase):
                 else:
                     self._colmapping[datafield] = None
             
-            elif isinstance(param_value, string_types):
+            elif isinstance(param_value, str):
                 try:
                     col_idx = self.colnames.index(param_value)
                     self._colmapping[datafield] = col_idx
@@ -100,23 +98,33 @@ class PolarsData(bt.feed.DataBase):
                 continue
                 
             line = getattr(self.lines, datafield)
-            line[0] = self.p.dataname.row(self._idx)[col_idx]
+            try:
+                line[0] = self.p.dataname.row(self._idx)[col_idx]
+            except Exception as e:
+                print(f"Error getting value for {datafield} at index {self._idx}, col_idx {col_idx}: {e}")
+                line[0] = float('nan')
             
         dt_idx = self._colmapping['datetime']
         if dt_idx is not None:
-            dt_value = self.p.dataname.row(self._idx)[dt_idx]
-            
-            if isinstance(dt_value, (str, int, float)):
-                if isinstance(dt_value, str):
-                    from datetime import datetime
-                    dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+            try:
+                dt_value = self.p.dataname.row(self._idx)[dt_idx]
+                
+                # Convert to datetime if needed
+                if isinstance(dt_value, (str, int, float)):
+                    if isinstance(dt_value, str):
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                    else:
+                        from datetime import datetime
+                        dt = datetime.fromtimestamp(float(dt_value)/1000 if dt_value > 1e10 else float(dt_value))
                 else:
-                    from datetime import datetime
-                    dt = datetime.fromtimestamp(dt_value)
-            else:
-                dt = dt_value
-
-            dtnum = date2num(dt)
-            self.lines.datetime[0] = dtnum
+                    dt = dt_value
+                    
+                from backtrader import date2num
+                dtnum = date2num(dt)
+                self.lines.datetime[0] = dtnum
+            except Exception as e:
+                print(f"Error processing datetime at index {self._idx}, col_idx {dt_idx}: {e}")
+                self.lines.datetime[0] = float('nan')
             
         return True

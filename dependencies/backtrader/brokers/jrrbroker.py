@@ -4,7 +4,7 @@ import logging
 from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel_debug
+from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file
 from typing import Optional
 
 class MessagingService(ABC):

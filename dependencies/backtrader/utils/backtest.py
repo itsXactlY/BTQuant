@@ -11,13 +11,12 @@ def backtest(
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
     plot=True,
-    fig=None,
+    quantstats=False,
     **kwargs,
 ):
 
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
     from backtrader.strategies.base import CustomSQN, CustomPandasData
-    import quantstats_lumi as quantstats
     from pprint import pprint
     
     kwargs = {
@@ -52,10 +51,6 @@ def backtest(
     cerebro.addanalyzer(CustomSQN, _name='customsqn')
     cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     
-    # cerebro.addobserver(bt.observers.Value)
-    # cerebro.addobserver(bt.observers.DrawDown)
-    # cerebro.addobserver(bt.observers.Cash)
-    
     cerebro.broker.setcommission(commission=commission)
 
     start = cerebro.broker.getvalue()
@@ -71,11 +66,12 @@ def backtest(
     returns = pd.Series(returns)
     returns = returns.dropna()
     
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    filename = f"QuantStat_generated_on_{current_date}_{datetime.now()}.html"
+    if quantstats:
+        import quantstats_lumi as quantstats
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        filename = f"QuantStat_generated_on_{current_date}_{datetime.now()}.html"
+        quantstats.reports.html(returns, output=filename, title=f'QuantStats_{current_date}')
 
-    quantstats.reports.html(returns, output=filename, title=f'QuantStats_{current_date}')
-    
     def print_trade_analyzer_results(trade_analyzer, indent=0):
         for key, value in trade_analyzer.items():
             if isinstance(value, dict):
@@ -94,4 +90,4 @@ def backtest(
     if plot:
         cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
     
-    return start - cerebro.broker.getvalue(), fig
+    return start - cerebro.broker.getvalue()

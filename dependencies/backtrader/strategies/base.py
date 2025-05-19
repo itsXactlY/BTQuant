@@ -783,7 +783,7 @@ class BaseStrategy(bt.Strategy):
     #     self.total_profit_usd = 0
     #     self.last_profit_usd = 0
 
-class CustomPandasData(bt.feeds.PandasData):
+class CustomPandasData(bt.feeds.PolarsData):
     params = (
         ('Datetime', 'datetime'),
         ('open', 'open'),

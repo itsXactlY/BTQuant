@@ -196,7 +196,6 @@ class NRK(BaseStrategy):
                     self.calc_averages()
         
                 elif self.p.backtest == True:
-                    print(self.stake)
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)
@@ -235,7 +234,6 @@ class NRK(BaseStrategy):
                     self.calc_averages()
 
                 elif self.p.backtest is True:
-                    print(self.stake)
                     self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.stake)

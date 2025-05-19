@@ -185,7 +185,8 @@ class NRK(BaseStrategy):
                     size=size,
                     take_profit_pct=self.params.take_profit,
                     symbol=getattr(self, 'symbol', self.p.asset),
-                    order_type="BUY"
+                    order_type="BUY",
+                    backtest=self.params.backtest
                 )
                 
                 order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -227,7 +228,8 @@ class NRK(BaseStrategy):
                     size=size,
                     take_profit_pct=self.params.take_profit,
                     symbol=getattr(self, 'symbol', self.p.asset),
-                    order_type="BUY"
+                    order_type="BUY",
+                    backtest=self.params.backtest
                 )
                 
                 order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"

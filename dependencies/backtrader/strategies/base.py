@@ -451,7 +451,8 @@ class BaseStrategy(bt.Strategy):
                                     size=entry_size,
                                     take_profit_pct=self.params.take_profit,
                                     symbol=symbol,
-                                    order_type="BUY"
+                                    order_type="BUY",
+                                    backtest=self.params.backtest
                                 )
                                 order_tracker.timestamp = entry_time
                                 order_tracker.order_id = position_info['id']
@@ -836,21 +837,20 @@ class BuySellArrows(bt.observers.BuySell):
 
 
 import csv
+import csv
 class OrderTracker:
-    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY"):
+    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", backtest=False):
         self.entry_price = entry_price
         self.size = size
         self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
         self.executed = True
         self.order_id = None
         self.timestamp = datetime.now()
+        self.backtest = backtest  # Add backtest flag
         
         if symbol is None or symbol == "":
-            # print("WARNING: Creating order tracker with empty symbol - this will cause tracking issues")
-            # Try to get a default symbol if available
             if hasattr(self, 'datas') and self.datas and hasattr(self.datas[0], '_dataname'):
                 symbol = self.datas[0]._dataname
-                # print(f"Automatically using symbol: {symbol}")
         
         self.symbol = symbol
         self.order_type = order_type  # BUY or SELL
@@ -859,7 +859,8 @@ class OrderTracker:
         self.exit_timestamp = None
         self.profit_pct = None
 
-        self.save_to_csv()
+        if not self.backtest:
+            self.save_to_csv()
     
     def close_order(self, exit_price):
         self.closed = True
@@ -867,10 +868,14 @@ class OrderTracker:
         self.exit_timestamp = datetime.now()
         self.profit_pct = ((exit_price / self.entry_price) - 1) * 100 if self.order_type == "BUY" else ((self.entry_price / exit_price) - 1) * 100
 
-        self.update_csv()
-        self.remove_from_csv()
+        if not self.backtest:
+            self.update_csv()
+            self.remove_from_csv()
 
     def save_to_csv(self):
+        if self.backtest:
+            return
+            
         csv_file = "order_tracker.csv"
         file_exists = os.path.isfile(csv_file)
         
@@ -882,9 +887,6 @@ class OrderTracker:
             
             if not file_exists:
                 writer.writeheader()
-            
-            # if self.symbol is None:
-            #     print("WARNING: Saving order without a symbol. This will cause tracking issues for Livetracking.")
             
             writer.writerow({
                 'order_id': self.order_id,
@@ -899,9 +901,11 @@ class OrderTracker:
                 'exit_timestamp': self.exit_timestamp,
                 'profit_pct': self.profit_pct
             })
-            # print(f"Saved order to CSV for {self.symbol}: {self.size} @ {self.entry_price}")
     
     def update_csv(self):
+        if self.backtest:
+            return
+            
         try:
             temp_file = "order_tracker_temp.csv"
             modified = False
@@ -921,7 +925,6 @@ class OrderTracker:
                         row['exit_timestamp'] = str(self.exit_timestamp)
                         row['profit_pct'] = str(self.profit_pct)
                         modified = True
-                        # print(f"Updated order in CSV: entry={row['entry_price']}, size={row['size']}")
                     writer.writerow(row)
             
             os.replace(temp_file, "order_tracker.csv")
@@ -932,6 +935,9 @@ class OrderTracker:
             print(f"Error updating CSV: {e}")
     
     def remove_from_csv(self):
+        if self.backtest:
+            return
+            
         try:
             temp_file = "order_tracker_temp.csv"
             order_removed = False
@@ -947,7 +953,6 @@ class OrderTracker:
                         abs(float(row['size']) - self.size) < 0.0001 and
                         row['closed'].lower() == 'true'):
                         order_removed = True
-                        # print(f"Removed closed order from CSV: entry={row['entry_price']}, size={row['size']}")
                         continue
                     writer.writerow(row)
             
@@ -959,7 +964,10 @@ class OrderTracker:
             print(f"Error removing closed order from CSV: {e}")
 
     @classmethod
-    def load_active_orders_from_csv(cls, symbol=None):
+    def load_active_orders_from_csv(cls, symbol=None, backtest=False):
+        if backtest:
+            return []
+            
         active_orders = []
         try:
             if not os.path.isfile("order_tracker.csv"):
@@ -969,7 +977,6 @@ class OrderTracker:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row['closed'].lower() == 'false':
-                        # Only include orders that match the provided symbol
                         if symbol and row['symbol'] and row['symbol'] != symbol:
                             print(f"Skipping order for {row['symbol']} (looking for {symbol})")
                             continue
@@ -988,6 +995,7 @@ class OrderTracker:
                         order.exit_price = None
                         order.exit_timestamp = None
                         order.profit_pct = None
+                        order.backtest = backtest
                         
                         print(f"Loading order for {order.symbol}: {order.size} @ {order.entry_price}")
                         active_orders.append(order)

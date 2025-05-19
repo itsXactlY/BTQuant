@@ -157,7 +157,8 @@ class MSSQLData(bt.feeds.PolarsData):
 
         df = df.with_columns([
             pl.col("TimestampStart").cast(pl.Int64).map_elements(
-                lambda x: dt.datetime.fromtimestamp(x/1000)
+                lambda x: dt.datetime.fromtimestamp(x/1000),
+                return_dtype=pl.Datetime
             ).alias("TimestampStart")
         ])
 

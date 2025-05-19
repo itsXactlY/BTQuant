@@ -151,7 +151,8 @@ class MSSQLData(bt.feeds.PolarsData):
         
         df = pl.DataFrame(
             data, 
-            schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"]
+            schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"],
+            orient="row"
         )
 
         df = df.with_columns([
@@ -242,7 +243,7 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
             duration = pl.duration(seconds=int(expected_interval[:-1]))
         else:
             duration = pl.duration(days=1)
-            
+
         return (df
             .with_columns([
                 pl.col("TimestampStart").diff().alias("time_diff")

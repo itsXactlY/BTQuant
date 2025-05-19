@@ -3,8 +3,128 @@ import datetime as dt
 import polars as pl
 from backtrader.dontcommit import connection_string, fast_mssql, bt
 
-import pyodbc
-import pandas as pd
+class PolarsData(bt.feed.DataBase):
+    '''
+    Uses a Polars DataFrame as the feed source
+    '''
+
+    params = (
+        ('nocase', True),
+        ('datetime', 0),  # Default: first column is datetime
+        ('open', 1),      
+        ('high', 2),
+        ('low', 3),
+        ('close', 4),
+        ('volume', 5),
+        ('openinterest', -1),  # -1 means not present
+    )
+
+    datafields = [
+        'datetime', 'open', 'high', 'low', 'close', 'volume', 'openinterest'
+    ]
+
+    def __init__(self):
+        super(PolarsData, self).__init__()
+        self.colnames = self.p.dataname.columns
+        self._colmapping = {}
+
+        for datafield in self.getlinealiases():
+            param_value = getattr(self.params, datafield)
+            
+            if isinstance(param_value, int):
+                if param_value >= 0:
+                    if param_value < len(self.colnames):
+                        self._colmapping[datafield] = param_value
+                    else:
+                        self._colmapping[datafield] = None
+                elif param_value == -1:
+                    found = False
+                    for i, colname in enumerate(self.colnames):
+                        if self.p.nocase:
+                            found = datafield.lower() == colname.lower()
+                        else:
+                            found = datafield == colname
+                            
+                        if found:
+                            self._colmapping[datafield] = i
+                            break
+                    
+                    if not found:
+                        self._colmapping[datafield] = None
+                else:
+                    self._colmapping[datafield] = None
+            
+            elif isinstance(param_value, str):
+                try:
+                    col_idx = self.colnames.index(param_value)
+                    self._colmapping[datafield] = col_idx
+                except ValueError:
+                    if self.p.nocase:
+                        found = False
+                        for i, colname in enumerate(self.colnames):
+                            if param_value.lower() == colname.lower():
+                                self._colmapping[datafield] = i
+                                found = True
+                                break
+                        if not found:
+                            self._colmapping[datafield] = None
+                    else:
+                        self._colmapping[datafield] = None
+            else:
+                self._colmapping[datafield] = None
+
+    def start(self):
+        super(PolarsData, self).start()
+        self._idx = -1
+
+    def _load(self):
+        self._idx += 1
+        
+        if self._idx >= len(self.p.dataname):
+            return False
+
+        for datafield in self.getlinealiases():
+            if datafield == 'datetime':
+                continue
+                
+            col_idx = self._colmapping[datafield]
+            if col_idx is None:
+                continue
+                
+            line = getattr(self.lines, datafield)
+            try:
+                line[0] = self.p.dataname.row(self._idx)[col_idx]
+            except Exception as e:
+                print(f"Error getting value for {datafield} at index {self._idx}, col_idx {col_idx}: {e}")
+                line[0] = float('nan')
+
+        dt_idx = self._colmapping['datetime']
+        if dt_idx is not None:
+            try:
+                dt_value = self.p.dataname.row(self._idx)[dt_idx]
+
+                if isinstance(dt_value, (str, int, float)):
+                    if isinstance(dt_value, str):
+                        # If string, parse as ISO format
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                    else:
+                        # If number, assume timestamp
+                        from datetime import datetime
+                        dt = datetime.fromtimestamp(float(dt_value)/1000 if dt_value > 1e10 else float(dt_value))
+                else:
+                    dt = dt_value
+                    
+                from backtrader import date2num
+                dtnum = date2num(dt)
+                self.lines.datetime[0] = dtnum
+            except Exception as e:
+                print(f"Error processing datetime at index {self._idx}, col_idx {dt_idx}: {e}")
+                self.lines.datetime[0] = float('nan')
+            
+        return True
+
+bt.feeds.PolarsData = PolarsData
 
 class MSSQLData(bt.feeds.PolarsData):
     @classmethod
@@ -29,11 +149,22 @@ class MSSQLData(bt.feeds.PolarsData):
         
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         
-        df = pd.DataFrame(data, columns=['TimestampStart', 'Open', 'High', 'Low', 'Close', 'Volume'])
-        df['TimestampStart'] = pd.to_datetime(df['TimestampStart'].astype(int), unit='ms')
-        numeric_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-        df[numeric_columns] = df[numeric_columns].astype(float)
-        df.set_index('TimestampStart', inplace=True)
+        df = pl.DataFrame(
+            data, 
+            schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"]
+        )
+
+        df = df.with_columns([
+            pl.col("TimestampStart").cast(pl.Int64).map_elements(
+                lambda x: dt.datetime.fromtimestamp(x/1000)
+            ).alias("TimestampStart")
+        ])
+
+        numeric_cols = ["Open", "High", "Low", "Close", "Volume"]
+        df = df.with_columns([
+            pl.col(col).cast(pl.Float64) for col in numeric_cols
+        ])
+        
         return df
 
     @classmethod
@@ -45,7 +176,7 @@ class MSSQLData(bt.feeds.PolarsData):
 class MSSQLData_Stocks(bt.feeds.PolarsData):
     @classmethod
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
-        # Convert datetime objects to string format
+
         start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -66,33 +197,40 @@ class MSSQLData_Stocks(bt.feeds.PolarsData):
         
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         
-        df = pd.DataFrame(data, columns=['TimestampStart', 'Open', 'High', 'Low', 'Close', 'Volume'])
-        df['TimestampStart'] = pd.to_datetime(df['TimestampStart'])
-        numeric_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-        df[numeric_columns] = df[numeric_columns].astype(float)
-        df.set_index('TimestampStart', inplace=True)
+        df = pl.DataFrame(
+            data, 
+            schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"]
+        )
+        
+        if df["TimestampStart"].dtype != pl.Datetime:
+            df = df.with_columns([
+                pl.col("TimestampStart").cast(pl.Datetime)
+            ])
+        
+        numeric_cols = ["Open", "High", "Low", "Close", "Volume"]
+        df = df.with_columns([
+            pl.col(col).cast(pl.Float64) for col in numeric_cols
+        ])
+        
         return df
 
     @classmethod
     def get_all_pairs(cls, connection_string):
         query = "SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
-        data = fast_mssql.fetch_data_from_db(connection_string, query)
-        return [row[0] for row in data]
-
-
-    @classmethod
-    def get_all_pairs(cls, connection_string):
-        query = "SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
+        conn = None
         try:
+            import pyodbc
             with pyodbc.connect(connection_string) as conn:
-                data = pd.read_sql(query, conn)
-            return data['TABLE_NAME'].tolist()
-        except pyodbc.Error as e:
-            print(f"Database error occurred: {str(e)}")
-            return []
+                cursor = conn.cursor()
+                cursor.execute(query)
+                data = [row[0] for row in cursor.fetchall()]
+                return data
         except Exception as e:
-            print(f"An unexpected error occurred: {str(e)}")
+            print(f"Error retrieving pairs: {e}")
             return []
+        finally:
+            if conn:
+                conn.close()
 
 def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="USDT"):
     def identify_gaps(df, expected_interval):
@@ -128,14 +266,13 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
     start_time = time.time()
 
     db_resolution = "1s" if "_1s" in ticker else "1m"
-    pdf = MSSQLData.get_data_from_db(connection_string, coin_name, db_resolution, start, end)
-    df = pl.from_pandas(pdf.reset_index())
+    df = MSSQLData.get_data_from_db(connection_string, coin_name, db_resolution, start, end)
 
     elapsed_time = time.time() - start_time
 
     if df.is_empty():
         print("No data returned from the database - Please check your query and date range")
-        return
+        return None
 
     print(f"Data extraction completed in {elapsed_time:.20f} seconds")
     print(f"Number of rows retrieved: {len(df)}")
@@ -162,6 +299,8 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
 
     if resample:
         print(f'Resampling data into {time_resolution} Candle data')
+
+        df = df.sort("TimestampStart")
         
         df_resampled = (df
             .group_by_dynamic("TimestampStart", every=time_resolution)

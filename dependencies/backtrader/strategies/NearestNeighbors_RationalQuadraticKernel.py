@@ -53,7 +53,7 @@ class NRK(BaseStrategy):
         ('dca_deviation', 2),
         ('take_profit', 4),
         ('percent_sizer', 0.05),
-        ('debug', True),
+        ('debug', False),
         ('backtest', None),
     )
 

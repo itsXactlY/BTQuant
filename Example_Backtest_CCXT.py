@@ -23,6 +23,7 @@ if __name__ == '__main__':
                 data,
                 init_cash=1000, 
                 backtest=True, # Important hint :: Needs always set to "False" for live trading
+                quantstats=True,
                 plot=True)
 
     except Exception as e:

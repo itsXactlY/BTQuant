@@ -6,7 +6,7 @@ in combination with scikit-learn for predictive modeling and Polars instead of s
 
 Objectives:
 
-By the end of this walkthrough, you might get an understanding how to:
+In the end, you might get an understanding how to:
 
     Retrieve and prepare cryptocurrency OHLCV data from a SQL database.
 

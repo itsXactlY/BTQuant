@@ -24,7 +24,14 @@ def backtest(
         for k, v in kwargs.items()
     }
 
-    data = CustomPandasData(dataname=data)
+
+    from backtrader.feed import DataBase
+    if isinstance(data, DataBase):
+        data = data
+    else:
+        data = CustomPandasData(dataname=data)
+
+    
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data)
@@ -90,4 +97,4 @@ def backtest(
     if plot:
         cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
     
-    return start - cerebro.broker.getvalue()
+    return cerebro.broker.getvalue() - start    

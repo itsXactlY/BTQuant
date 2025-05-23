@@ -29,78 +29,120 @@ class STrend_RSX_AccumulativeSwingIndex(BaseStrategy):
         if not self.buy_executed and not self.conditions_checked:
             if self.stLong and self.asi_short[0] > self.asi_short[-1] and self.asi_short[0] > 5 and self.asi_long[0] > self.asi_long[-1] and self.rsx[0] < 30:
 
-                if self.params.backtest == False:
-                    self.entry_prices.append(self.data.close[0])
-                    print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
-                    self.sizes.append(self.amount)
-                    # self.load_trade_data()
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.calc_averages()
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
+                    
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
                     self.buy_executed = True
-                    self.conditions_checked = True
-                    alert_message = f"""\nBuy Alert arrived!
-Strategy: Supertrend, RSX, AccumulativeSwingIndex + Trailing Exit
-Action: long {self.asset}
-Entry Price: {self.data.close[0]:.9f}
-Take Profit: {self.take_profit_price:.9f} - Hard exit at temporary 99% - Algo using an Trailing Stop approach."""
-
-                    self.send_alert(alert_message)
-                elif self.params.backtest == True:
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.stake)
-                    self.calc_averages()
-                    self.conditions_checked = True
+                self.calc_averages()
+        self.conditions_checked = True
 
     def dca_or_short_condition(self):
         if self.buy_executed and not self.conditions_checked:
             if self.buy_executed:
                 self.peak = max(self.peak, self.data.close[0])
             if self.stLong and self.asi_short[0] > self.asi_short[-1] and self.asi_short[0] > 5 and self.asi_long[0] > self.asi_long[-1] and self.rsx[0] < 30:
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
 
-                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):    
-                    if self.params.backtest == False:
-                        self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.amount)
-                        # self.load_trade_data()
-                        print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
-                        self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                        self.calc_averages()
-                        self.buy_executed = True
-                        self.conditions_checked = True
-                        alert_message = f"""\nDCA Buy Alert arrived!
-Strategy: Supertrend RSX AccumulativeSwingIndex + Trailing Exit
-Action: long {self.asset}
-Entry Price: {self.data.close[0]:.9f}
-Take Profit: {self.take_profit_price:.9f} - Hard exit at temporary 99% - Algo using an Trailing Stop approach."""
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
 
-                        self.send_alert(alert_message)
-                    elif self.params.backtest == True:
-                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                        self.buy_executed = True
-                        self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.stake)
-                        self.calc_averages()
-                        self.conditions_checked = True
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
 
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+                    self.buy_executed = True
+                self.calc_averages()
+        self.conditions_checked = True
+
+    '''This function here is an "one of its kind", with including trailing stop mechanism.'''
     def sell_or_cover_condition(self):
-        if self.buy_executed and self.data.close[0] >= self.take_profit_price and self.rsx[0] > 70: # use RSX as extra trailing option
-                trailing_trigger = self.peak * (1 - self.p.trailing_stop_pct / 100)
-                if self.data.close[0] < trailing_trigger:
-                    if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                        self.conditions_checked = True
-                        return
+        if hasattr(self, 'active_orders') and self.active_orders and self.buy_executed:
+            current_price = self.data.close[0]
+            orders_to_remove = []
 
-                    if self.params.backtest == False:
-                        self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-                        alert_message = f"""Close {self.asset} - Trailing Takeprofit reached"""
-                        self.send_alert(alert_message)
-                    elif self.params.backtest == True:
-                        self.close()
+            for idx, order in enumerate(self.active_orders):
+                # Regular take profit condition
+                if current_price >= order.take_profit_price:
+                    # Check for trailing stop condition if RSX is available and > 70
+                    if hasattr(self, 'rsx') and self.rsx[0] > 70:
+                        # Update peak price for this order
+                        if not hasattr(order, 'peak'):
+                            order.peak = current_price
+                        else:
+                            order.peak = max(order.peak, current_price)
+                        
+                        # Calculate trailing trigger
+                        trailing_trigger = order.peak * (1 - self.p.trailing_stop_pct / 100)
+                        
+                        # Only sell if trailing stop is triggered
+                        if current_price < trailing_trigger:
+                            # Additional safety check - we dont want to sell below entry or take profit
+                            if (round(current_price, 9) < round(order.entry_price, 9) or 
+                                round(current_price, 9) < round(order.take_profit_price, 9)):
+                                continue
+                            
+                            # Execute the trailing stop sell
+                            self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+                            if self.p.debug:
+                                print(f"Trailing Stop: Selling {order.size} at {current_price} (entry: {order.entry_price}, peak: {order.peak})")
 
-                    print(f"Exiting trade at {self.data.close[0]:.12f} after trailing stop triggered.")
-                    self.peak = 0
+                            order.close_order(current_price)
+                            orders_to_remove.append(idx)
+                            
+                            # Reset peak for this specific order
+                            order.peak = 0
+                    else:
+                        # Doing regular take profit without trailing
+                        self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+                        if self.p.debug:
+                            print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
+                        order.close_order(current_price)
+                        orders_to_remove.append(idx)
+            for idx in sorted(orders_to_remove, reverse=True):
+                removed_order = self.active_orders.pop(idx)
+                profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
+                if self.p.debug:
+                    print(f"Order removed: {profit_pct:.2f}% profit")
+            if orders_to_remove:
+                self.entry_prices = [order.entry_price for order in self.active_orders]
+                self.sizes = [order.size for order in self.active_orders]
+                if not self.active_orders:
                     self.reset_position_state()
                     self.buy_executed = False
-                    self.conditions_checked = True
+                else:
+                    self.calc_averages()
+            self.conditions_checked = True

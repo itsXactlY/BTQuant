@@ -1,22 +1,7 @@
 # This was an "Proof of Concept" and mutated into something more solid than i personally expected, when fed with one-second-data or an one-second-live-feed.
 # Originally inspired by: https://www.tradingview.com/script/JNCGeDj7-Order-Chain-Kioseff-Trading/
 
-import backtrader as bt
-from .base import BaseStrategy, np, datetime
-# import logging
-# from logging.handlers import RotatingFileHandler
-
-# def setup_logger(name, log_file, level=logging.INFO):
-#     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#     handler = RotatingFileHandler(log_file)
-#     handler.setFormatter(formatter)
-#     logger = logging.getLogger(name)
-#     logger.setLevel(level)
-#     logger.addHandler(handler)
-#     return logger
-
-# trade_logger = setup_logger('TradeLogger', 'BaseStrategy_Trade_Monitor.log', level=logging.DEBUG)
-
+from .base import BaseStrategy, np, datetime, bt, OrderTracker
 
 class OrderChainIndicator(bt.Indicator):
     lines = ('order_chain',)
@@ -128,158 +113,90 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
         self.buy_executed = False
         self.conditions_checked = False 
         self.DCA = True
-        
-        ### FORENSIC LOGGING
-        self.trade_cycles = 0
-        self.total_profit_usd = 0
-        self.last_profit_usd = 0
-        self.start_time = datetime.utcnow()
-        self.position_start_time = None
-        self.max_buys_per_cycle = 0
-        self.total_buys = 0
-        self.current_cycle_buys = 0
+
 
 
     def buy_or_short_condition(self):
         if self.order_chain.lines.order_chain[0] > self.p.signal_threshold:
-            if self.p.debug == True:
-                print(f'| {datetime.utcnow()} - buy_or_short_condition {self.data._name}')
             if not self.buy_executed and not self.conditions_checked:
-                if self.params.backtest == False:
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.amount)
-                    self.load_trade_data()
-                    self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.calc_averages()
-                    self.buy_executed = True
-                    self.conditions_checked = True
-                elif self.params.backtest == True:
-                    if self.broker.getcash() <5.0:
-                        if self.p.debug:
-                            print('EMERGENCY: OUT OF CASH. ACCOUNT LIQUIDATED')
-                        return
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market) 
-                    self.buy_executed = True
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.stake)
-                    self.calc_averages()
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
                     
-                    # ### FORENSIC LOGGING
-                    # trade_logger.debug("-" * 100)
-                    # self.total_buys += 1
-                    # self.current_cycle_buys += 1
-                    # self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
-                    # if self.position_start_time is None:
-                    #     self.position_start_time = datetime.utcnow()
-
-                    # trade_logger.debug(f"{datetime.utcnow()} - buy_or_short_condition triggered: {self.data._name}")
-                    # trade_logger.debug(f"Current close price: {self.data.close[0]:.12f}")
-                    # trade_logger.debug(f"Position size: {self.position.size}")
-                    # trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-                    # trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
-                    # trade_logger.debug(f"Entry prices: {self.entry_prices}")
-                    # trade_logger.debug(f"Sizes: {self.sizes}")
-                    # trade_logger.debug("*" * 100)
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+                    self.buy_executed = True
+                self.calc_averages()
+        self.conditions_checked = True
 
     def dca_or_short_condition(self):
-        if self.order_chain.lines.order_chain[0] > self.p.signal_threshold:
-            if self.p.debug and self.buy_executed:
-                print(f'| {datetime.utcnow()} - dca_or_short_condition {self.data._name} Entry:{self.average_entry_price:.12f} TakeProfit: {self.take_profit_price:.12f}')
-            if self.buy_executed and not self.conditions_checked:
-                if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):
-                    if self.params.backtest == False:
-                        self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.amount)
-                        self.load_trade_data()
-                        self.rabbit.send_jrr_buy_request(exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                        self.calc_averages()
-                        self.buy_executed = True
-                        self.conditions_checked = True
-                    elif self.params.backtest == True:
-                        if self.broker.getcash() <5.0:
-                            if self.p.debug:
-                                print('EMERGENCY: OUT OF CASH. ACCOUNT LIQUIDATED')
-                            return
-                        self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                        self.buy_executed = True
-                        self.entry_prices.append(self.data.close[0])
-                        self.sizes.append(self.stake)
-                        self.calc_averages()
-                        
-                        # ### FORENSIC LOGGING
-                        # trade_logger.debug("-" * 100)
-                        # self.total_buys += 1
-                        # self.current_cycle_buys += 1
-                        # self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
-                        # if self.buy_executed:
-                        #     trade_logger.debug(
-                        #         f"{datetime.utcnow()} - dca_or_short_condition triggered: {self.data._name} "
-                        #         f"Entry price: {self.average_entry_price:.12f} "
-                        #         f"Take profit price: {self.take_profit_price:.12f}"
-                        #     )
-
-                        #     trade_logger.debug(f"Position size: {self.position.size}")
-                        #     trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-                        #     trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
-                        #     trade_logger.debug(f"Entry prices: {self.entry_prices}")
-                        #     trade_logger.debug(f"Sizes: {self.sizes}")
-                        #     trade_logger.debug("*" * 100)
+        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):
+            if self.order_chain.lines.order_chain[0] > self.p.signal_threshold and self.buy_executed and not self.conditions_checked:
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
+                    
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+                    self.buy_executed = True
+                self.calc_averages()
+        self.conditions_checked = True
 
     def sell_or_cover_condition(self):
-        # if self.p.debug:
-        #     trade_logger.debug(
-        #         f"{datetime.utcnow()} - sell_or_cover_condition triggered: {self.data._name} "
-        #         f"Entry price: {self.average_entry_price:.12f} "
-        #         f"Take profit price: {self.take_profit_price:.12f}"
-        #     )
+        if hasattr(self, 'active_orders') and self.active_orders and self.buy_executed:
+            current_price = self.data.close[0]
+            orders_to_remove = []
 
-        if self.buy_executed and self.data.close[0] >= self.take_profit_price or self.order_chain.lines.order_chain[0] < -self.p.signal_threshold:
-
-            # Avoid selling at a loss or below the take profit price
-            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                if self.p.debug == True: 
-                    print(
-                    f"| - Avoiding sell at a loss or below take profit. "
-                    f"| - Current close price: {self.data.close[0]:.12f}, "
-                    f"| - Average entry price: {self.average_entry_price:.12f}, "
-                    f"| - Take profit price: {self.take_profit_price:.12f}"
-                )
-                return
-            # trade_logger.info("-" * 100)
-            # trade_logger.info(f"{datetime.utcnow()} - Sell operation executed: {self.data._name}")
-            # trade_logger.debug(f"Current cash: {self.broker.getcash():.2f}")
-            # trade_logger.debug(f"Current COIN value in USD: {self.broker.getvalue():.2f}")
-            
-            if self.params.backtest == False:
-                self.rabbit.send_jrr_close_request(exchange=self.exchange, account=self.account, asset=self.asset)
-            elif self.params.backtest == True:
-                self.close()
-                
-            ### FORENSIC LOGGING
-            # Calculate profit for this trade cycle
-            position_size = sum(self.sizes)
-            profit_usd = (self.data.close[0] - self.average_entry_price) * position_size
-            self.last_profit_usd = profit_usd
-            self.total_profit_usd += profit_usd
-            self.trade_cycles += 1
-            
-            # Log the sell operation and metrics
-            # trade_logger.info(f"Sell price: {self.data.close[0]:.12f}")
-            # trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
-            # trade_logger.info(f"Take profit price: {self.take_profit_price:.12f}")
-            # trade_logger.info(f"Position size: {position_size}")
-            # trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
-            # trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
-            # trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
-            # trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
-            # trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
-            # if self.position_start_time:
-            #     trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
-            # trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
-            # trade_logger.info(f"Total buys: {self.total_buys}")
-            # trade_logger.info("*" * 100)
-            
-            self.reset_position_state()
-            self.conditions_checked = True
-            self.current_cycle_buys = 0
-            self.position_start_time = None
+            for idx, order in enumerate(self.active_orders):
+                if current_price >= order.take_profit_price:
+                    self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+                    if self.p.debug:
+                        print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
+                    order.close_order(current_price)
+                    orders_to_remove.append(idx)
+            for idx in sorted(orders_to_remove, reverse=True):
+                removed_order = self.active_orders.pop(idx)
+                profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
+                if self.p.debug:
+                    print(f"Order removed: {profit_pct:.2f}% profit")
+            if orders_to_remove:
+                self.entry_prices = [order.entry_price for order in self.active_orders]
+                self.sizes = [order.size for order in self.active_orders]
+                if not self.active_orders:
+                    self.reset_position_state()
+                    self.buy_executed = False
+                else:
+                    self.calc_averages()
+        self.conditions_checked = True

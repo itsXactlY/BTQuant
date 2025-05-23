@@ -41,8 +41,8 @@ class BaseStrategy(bt.Strategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if self.p.backtest == True:
-            BuySellArrows(self.data0, barplot=True)
+        # if self.p.backtest == True:
+        #     BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
         self.symbol = self.p.asset
 
@@ -292,6 +292,13 @@ class BaseStrategy(bt.Strategy):
         
         return self.amount
 
+    def _determine_size(self):
+        if self.p.backtest:
+            return self.stake
+        else:
+            self.calculate_position_size()
+            return self.usdt_amount
+
     '''
     Keep the Average Entry price(s) for later FUTURES trading usage - reworked version below for SPOT market
     def calc_averages(self):
@@ -349,37 +356,6 @@ class BaseStrategy(bt.Strategy):
             self.buy_executed = True
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")
-
-    def calc_short_averages(self):
-        _amount = [price * size for price, size in zip(self.short_entry_prices, self.short_sizes)]
-        total_value = sum(_amount)
-        total_size = sum(self.short_sizes)
-
-        if self.p.debug:
-            print(f"Debug :: SHORT amount of price×size: {_amount}")
-            print(f"Debug :: SHORT total value: {total_value}, total size: {total_size}")
-
-        if total_size:
-            self.average_short_price = total_value / total_size
-
-            if not self.first_short_entry_price:
-                self.first_short_entry_price = self.short_entry_prices[0] if self.short_entry_prices else None
-
-            if self.first_short_entry_price:
-                self.short_take_profit_price = self.first_short_entry_price * (1 - self.params.take_profit / 100)
-            else:
-                self.short_take_profit_price = self.average_short_price * (1 - self.params.take_profit / 100)
-
-            if self.p.backtest == False and self.p.debug:
-                print(f"SHORT average entry: {self.average_short_price:.9f}")
-                print(f"SHORT first entry: {self.first_short_entry_price:.9f}")
-                print(f"SHORT take profit: {self.short_take_profit_price:.9f}")
-            self.short_executed = True
-        else:
-            self.average_short_price = None
-            self.short_take_profit_price = None
-            self.first_short_entry_price = None
-            print("No short positions exist. Entry and TP prices reset.")
 
     def load_trade_data(self):
         try:
@@ -836,7 +812,6 @@ class BuySellArrows(bt.observers.BuySell):
     )
 
 
-import csv
 import csv
 class OrderTracker:
     def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", backtest=False):

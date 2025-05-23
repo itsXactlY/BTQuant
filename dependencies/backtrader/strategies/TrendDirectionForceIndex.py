@@ -1,5 +1,5 @@
 from backtrader.indicators.TrendDirectionForceIndex import TrendDirectionForceIndex
-from .base import BaseStrategy, bt
+from .base import BaseStrategy, bt, OrderTracker, datetime
 
 class TDFStrategy(BaseStrategy):
     params = \
@@ -23,65 +23,86 @@ class TDFStrategy(BaseStrategy):
 
     def buy_or_short_condition(self):
         if self.tdf.lines.ntdf[0] > self.params.buy_threshold:
-            if self.params.backtest == False:
-                self.entry_prices.append(self.data.close[0])
-                print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
-                self.sizes.append(self.amount)
-                # self.load_trade_data()
-                self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                self.calc_averages()
+            size = self._determine_size()
+            order_tracker = OrderTracker(
+                entry_price=self.data.close[0],
+                size=size,
+                take_profit_pct=self.params.take_profit,
+                symbol=getattr(self, 'symbol', self.p.asset),
+                order_type="BUY",
+                backtest=self.params.backtest
+            )
+            order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            if not hasattr(self, 'active_orders'):
+                self.active_orders = []
+                
+            self.active_orders.append(order_tracker)
+            self.entry_prices.append(self.data.close[0])
+            self.sizes.append(size)
+            self.order = self.buy(size=size, exectype=bt.Order.Market)
+            if self.p.debug:
+                print(f"Buy order placed: {size} at {self.data.close[0]}")
+            if not self.buy_executed:
+                if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                    self.first_entry_price = self.data.close[0]
                 self.buy_executed = True
-                self.conditions_checked = True
-            elif self.params.backtest == True:
-                self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                self.buy_executed = True
-                self.entry_prices.append(self.data.close[0])
-                self.sizes.append(self.stake)
-                self.calc_averages()
+            self.calc_averages()
+        self.conditions_checked = True
 
     def dca_or_short_condition(self):
         if self.buy_executed and self.tdf.lines.ntdf[0] > self.params.buy_threshold:
             if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_threshold / 100):    
-                if self.params.backtest == False:
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.amount)
-                    # self.load_trade_data()
-                    print(f'\n\n\nBUY EXECUTED AT {self.data.close[0]}\n\n\n')
-                    self.enqueue_order('buy', exchange=self.exchange, account=self.account, asset=self.asset, amount=self.amount)
-                    self.calc_averages()
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
+
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
+
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
+
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
                     self.buy_executed = True
-                    self.conditions_checked = True
-                elif self.params.backtest == True:
-                    self.buy(size=self.stake, price=self.data.close[0], exectype=bt.Order.Market)
-                    self.buy_executed = True
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(self.stake)
-                    self.calc_averages()
+                self.calc_averages()
+        self.conditions_checked = True
 
     def sell_or_cover_condition(self):
-        if self.buy_executed and self.data.close[0] >= self.take_profit_price:
-            average_entry_price = sum(self.entry_prices) / len(self.entry_prices) if self.entry_prices else 0
+        if hasattr(self, 'active_orders') and self.active_orders and self.buy_executed:
+            current_price = self.data.close[0]
+            orders_to_remove = []
 
-            # Avoid selling at a loss or below the take profit price
-            if round(self.data.close[0], 9) < round(self.average_entry_price, 9) or round(self.data.close[0], 9) < round(self.take_profit_price, 9):
-                self.log(
-                    f"| - Avoiding sell at a loss or below take profit. "
-                    f"| - Current close price: {self.data.close[0]:.12f}, "
-                    f"| - Average entry price: {average_entry_price:.12f}, "
-                    f"| - Take profit price: {self.take_profit_price:.12f}"
-                )
-                return
-
-            if self.params.backtest == False:
-                print(f'\n\n\nSELL EXECUTED AT {self.data.close[0]}\n\n\n')
-                self.enqueue_order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
-            elif self.params.backtest == True:
-                self.close()
-
-            self.reset_position_state()
-            self.buy_executed = False
-            self.conditions_checked = True
-
-    def stop(self):
-        self.order_queue.put(None)  # Signal the order thread to stop
-        self.order_thread.join()  # Wait for the order thread to finish
+            for idx, order in enumerate(self.active_orders):
+                if current_price >= order.take_profit_price:
+                    self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+                    if self.p.debug:
+                        print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
+                    order.close_order(current_price)
+                    orders_to_remove.append(idx)
+            for idx in sorted(orders_to_remove, reverse=True):
+                removed_order = self.active_orders.pop(idx)
+                profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
+                if self.p.debug:
+                    print(f"Order removed: {profit_pct:.2f}% profit")
+            if orders_to_remove:
+                self.entry_prices = [order.entry_price for order in self.active_orders]
+                self.sizes = [order.size for order in self.active_orders]
+                if not self.active_orders:
+                    self.reset_position_state()
+                    self.buy_executed = False
+                else:
+                    self.calc_averages()
+        self.conditions_checked = True

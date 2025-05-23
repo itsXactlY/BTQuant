@@ -1,7 +1,5 @@
-from datetime import datetime
-import backtrader as bt
 from sklearn.neighbors import NearestNeighbors
-from backtrader.strategies.base import BaseStrategy, np, OrderTracker
+from backtrader.strategies.base import BaseStrategy, np, OrderTracker, datetime, bt
 
 '''
 It was actually planned as a “keep it simple stupid” proof of concept. but as things happen, it totally escalated once again. 

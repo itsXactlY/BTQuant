@@ -2,7 +2,7 @@ import os
 import pyodbc
 import time
 import csv
-from fastquant.dontcommit import driver, server, database, username, password
+from backtrader.dontcommit import driver, server, database, username, password
 
 def table_exists(cursor, table_name):
     cursor.execute(f"""
@@ -79,7 +79,7 @@ try:
             with open(file_path, 'r') as file:
                 csv_reader = csv.reader(file)
 
-                sql = f"INSERT INTO [{table_name}] (Timeframe, 
+                sql = f"""INSERT INTO [{table_name}] (Timeframe,
                 TimestampStart, 
                 [Open], 
                 [High], 
@@ -90,8 +90,8 @@ try:
                 QuoteVolume, 
                 Trades, 
                 TakerBaseVolume, 
-                TakerQuoteVolume) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                TakerQuoteVolume)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
                 batch = []
                 for row in csv_reader:

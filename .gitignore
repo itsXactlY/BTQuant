@@ -26,3 +26,4 @@ dependencies/JackRabbit
 dependencies/backtrader/dontcommit.py
 dependencies/backtrader/strategies/Adaptive_NearestNeighbors_RationalQuadraticKernel.py
 *.joblib
+candles/

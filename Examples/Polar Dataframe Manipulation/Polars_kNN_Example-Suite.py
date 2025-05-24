@@ -53,9 +53,9 @@ from joblib import dump, load
 from sklearn.neighbors import KNeighborsClassifier
 
 
-_coin = 'DOGE'
-start_date = '2024-01-01'
-end_date   = '2025-01-11'
+_coin = 'BTC'
+start_date = '2017-01-01'
+end_date   = '2022-01-11'
 
 data = get_database_data(_coin, start_date, end_date, '1m')
 

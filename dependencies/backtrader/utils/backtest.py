@@ -58,6 +58,10 @@ def backtest(
     cerebro.addanalyzer(CustomSQN, _name='customsqn')
     cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     
+    cerebro.addobserver(bt.observers.Value)
+    cerebro.addobserver(bt.observers.DrawDown)
+    cerebro.addobserver(bt.observers.Cash)
+    
     cerebro.broker.setcommission(commission=commission)
 
     start = cerebro.broker.getvalue()
@@ -95,6 +99,6 @@ def backtest(
     pprint('P/L: ${}'.format(pnl))
     
     if plot:
-        cerebro.plot(style='candles', numfigs=1, volume=False, barup='lightgreen', bardown='red')
+        cerebro.plot(style='candles', numfigs=1, volume=False, barup='black', bardown='grey')
     
-    return cerebro.broker.getvalue() - start    
+    return cerebro.broker.getvalue() - start

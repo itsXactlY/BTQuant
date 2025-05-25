@@ -5,10 +5,9 @@ from datetime import datetime
 
 class SuperSTrend_Scalp(BaseStrategy):
     params = (
-        ("dca_deviation", 0.2),
-        ("take_profit", 0.2),
-        ("signal_tp", 99),
-        ('percent_sizer', 0.05),
+        ("dca_deviation", 1.5),
+        ("take_profit", 2),
+        ('percent_sizer', 0.25),
         ('trailing_stop_pct', 0.4),
         # Trend Strenght
         ("adx_period", 13),

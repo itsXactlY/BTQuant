@@ -2,7 +2,7 @@ import polars as pl
 import connectorx as cx # pip install connectorx
 import time
 from datetime import datetime, timedelta
-from backtrader.dontcommit import MSSQLData, connection_string
+from fastquant.dontcommit import MSSQLData, connection_string
 
 def benchmark_mssql_fastquant(connection_string, start_date, end_date):
     start_time = time.time()

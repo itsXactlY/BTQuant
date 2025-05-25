@@ -102,7 +102,7 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
         ('debug', False),
         ('backtest', None),
         ("dca_deviation", 2.5),
-        ("take_profit_percent", 2),
+        ("take_profit", 2),
         ('percent_sizer', 0.001), # 0.01 -> 1%
     )
 

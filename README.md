@@ -1,5 +1,5 @@
 ># **BTQuant Framework** - Unleashing the Power of Quantitative Trading
-![BTQuant](https://raw.githubusercontent.com/itsXactlY/BTQuant/refs/heads/mainv2/Example%20imgs/BTQuant_logo.png)
+![BTQuant](https://raw.githubusercontent.com/itsXactlY/BTQuant/7fd75a3e128aceca6f9f7616f9632fe522a92108/Example%20imgs/BTQuant_logo.png)
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!
 > 

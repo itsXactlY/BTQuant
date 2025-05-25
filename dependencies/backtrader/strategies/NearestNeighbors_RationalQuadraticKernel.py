@@ -54,7 +54,6 @@ class NRK(BaseStrategy):
         ('backtest', None),
     )
 
-
     def __init__(self, **kwargs):
         print("Initializing strategy", self.p.asset)
         super().__init__(**kwargs)
@@ -71,7 +70,7 @@ class NRK(BaseStrategy):
                                                        x=self.p.kernel_x)
         if self.p.use_kernel_smoothing:
             self.kernel_smooth = bt.indicators.SMA(self.kernel_estimate, period=self.p.kernel_smoothing_lag, plot=False)
-        
+
         self.features = [self.rsi,
                          self.wt,
                          self.cci,

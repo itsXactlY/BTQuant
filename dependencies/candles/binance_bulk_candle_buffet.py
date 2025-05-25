@@ -22,7 +22,7 @@ data_dumper.dump_data(
     tickers=None,
     date_start=datetime.date(2016, 1, 1),
     date_end=datetime.date(2026, 1, 1),
-    is_to_update_existing=True,
+    is_to_update_existing=False,
     tickers_to_exclude=["TUSD", "TRY", "RUB", "PAX", "JPY", "GBG", "FDUSD", "EUR", "ETH", "DOWNUSDT", "BUSD", "BRL", "BNB", "BKWR", "BIDR", "AUD", "BULL", "BEAR", "UP", "DOWN"]
 )
 
@@ -41,6 +41,36 @@ delete_folders_with_keywords("candles/", ["BULL", "BEAR", "UP", "DOWN"])
 BATCH_SIZE = 100000
 MAX_WORKERS = 8
 BASE_DIRS = ["candles/spot/monthly/klines/", "candles/spot/daily/klines/"]
+
+# === TIMESTAMP CONVERSION UTILITIES ===
+def ensure_microseconds(timestamp_value):
+    timestamp = int(timestamp_value)
+
+    if timestamp >= 1000000000000000:
+        return timestamp
+    elif timestamp >= 1000000000000:
+        return timestamp * 1000
+    elif timestamp >= 1000000000:
+        return timestamp * 1000000
+    else:
+        print(f"Warning: Unexpected timestamp format: {timestamp}")
+        return timestamp
+
+def validate_timestamp_format(timestamp_str, source_info=""):
+    """
+    Validate and convert timestamp to microseconds with logging
+    """
+    try:
+        original = int(timestamp_str)
+        converted = ensure_microseconds(original)
+        
+        if original != converted:
+            print(f"Timestamp conversion: {original} -> {converted} {source_info}")
+        
+        return converted
+    except ValueError as e:
+        print(f"Error converting timestamp '{timestamp_str}' {source_info}: {e}")
+        raise
 
 # === DATABASE UTILS ===
 import pyodbc
@@ -76,7 +106,6 @@ def table_exists(cursor, table_name):
     cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?", (table_name,))
     return cursor.fetchone()[0] > 0
 
-
 def create_table(cursor, table_name):
     cursor.execute(f"""
     CREATE TABLE [{table_name}] (
@@ -92,21 +121,25 @@ def create_table(cursor, table_name):
         QuoteVolume DECIMAL(28, 8) NOT NULL,
         Trades INT NOT NULL,
         TakerBaseVolume DECIMAL(28, 8) NOT NULL,
-        TakerQuoteVolume DECIMAL(28, 8) NOT NULL
+        TakerQuoteVolume DECIMAL(28, 8) NOT NULL,
+        
+        -- Add indexes for better query performance
+        INDEX IX_{table_name}_TimestampStart (TimestampStart),
+        INDEX IX_{table_name}_Timeframe_Timestamp (Timeframe, TimestampStart)
     )
     """)
-
+    print(f"Created table {table_name} with microsecond timestamp support and indexes")
 
 def get_latest_timestamp(cursor, table_name):
     cursor.execute(f"SELECT MAX(TimestampEnd) FROM [{table_name}]")
     result = cursor.fetchone()[0]
     return result if result else 0
 
-
-# === CSV PROCESSING ===
+# === CSV PROCESSING WITH TIMESTAMP CONVERSION ===
 def process_files_for_table(args):
     table_name, files_info, latest_timestamp = args
     total_inserted_rows = 0
+    conversion_count = 0
 
     try:
         with get_db_connection() as conn:
@@ -119,33 +152,84 @@ def process_files_for_table(args):
 
                 for file_path, timeframe in files_info:
                     inserted_rows = 0
+                    file_conversion_count = 0
+                    
                     with open(file_path, 'r') as file:
                         csv_reader = csv.reader(file)
                         batch = []
-                        for row in csv_reader:
-                            if int(row[0]) > latest_timestamp:
-                                batch.append([timeframe] + row[:11])
-                                if len(batch) >= BATCH_SIZE:
-                                    cursor.executemany(sql, batch)
-                                    conn.commit()
-                                    inserted_rows += len(batch)
-                                    batch.clear()
+                        
+                        for row_num, row in enumerate(csv_reader, 1):
+                            try:
+                                timestamp_start_original = row[0]
+                                timestamp_end_original = row[6]
+                                
+                                timestamp_start = validate_timestamp_format(
+                                    timestamp_start_original, 
+                                    f"in {file_path}:row{row_num}:start"
+                                )
+                                timestamp_end = validate_timestamp_format(
+                                    timestamp_end_original,
+                                    f"in {file_path}:row{row_num}:end"
+                                )
+                                
+                                if int(timestamp_start_original) != timestamp_start:
+                                    file_conversion_count += 1
+                                
+                                if timestamp_end > latest_timestamp:
+                                    processed_row = [
+                                        timeframe,
+                                        timestamp_start,  # Converted to microseconds
+                                        row[1],  # Open
+                                        row[2],  # High
+                                        row[3],  # Low
+                                        row[4],  # Close
+                                        row[5],  # Volume
+                                        timestamp_end,  # Converted to microseconds
+                                        row[7],  # Quote volume
+                                        row[8],  # Trades
+                                        row[9],  # Taker base volume
+                                        row[10] # Taker quote volume
+                                    ]
+                                    
+                                    batch.append(processed_row)
+                                    
+                                    if len(batch) >= BATCH_SIZE:
+                                        cursor.executemany(sql, batch)
+                                        conn.commit()
+                                        inserted_rows += len(batch)
+                                        batch.clear()
+                                        
+                            except Exception as e:
+                                print(f"[{table_name}] Error processing row {row_num} in {file_path}: {e}")
+                                print(f"Row data: {row}")
+                                continue
+                        
                         if batch:
                             cursor.executemany(sql, batch)
                             conn.commit()
                             inserted_rows += len(batch)
 
                     total_inserted_rows += inserted_rows
-                    print(f"[{table_name}] Processed {file_path} - Inserted {inserted_rows} rows.")
+                    conversion_count += file_conversion_count
+                    
+                    print(f"[{table_name}] Processed {file_path}")
+                    print(f"  - Inserted: {inserted_rows} rows")
+                    print(f"  - Timestamp conversions: {file_conversion_count}")
 
     except Exception as e:
         print(f"[{table_name}] Error processing files: {e}")
+        import traceback
+        traceback.print_exc()
 
-    print(f"[{table_name}] Finished processing all files. Total rows inserted: {total_inserted_rows}")
-
+    print(f"[{table_name}] SUMMARY:")
+    print(f"  - Total rows inserted: {total_inserted_rows}")
+    print(f"  - Total timestamp conversions: {conversion_count}")
+    print(f"  - All timestamps stored as microseconds")
 
 # === MAIN LOGIC ===
 def main():
+    print("=== CRYPTO DATA IMPORT WITH MICROSECOND TIMESTAMP STANDARDIZATION ===")
+    
     if not database_exists():
         print(f"Database '{database}' not found. Creating...")
         create_database()
@@ -182,12 +266,13 @@ def main():
                             else:
                                 latest_ts = get_latest_timestamp(cursor, table_name)
                                 table_timestamps[table_name] = latest_ts
-                                print(f"{table_name} latest ts: {latest_ts}")
+                                print(f"{table_name} latest timestamp: {latest_ts} (microseconds)")
 
     except Exception as e:
         print(f"Database preparation error: {e}")
         return
 
+    # Build file processing map
     table_files_map = {}
     for data_directory in BASE_DIRS:
         if not os.path.exists(data_directory):
@@ -212,17 +297,19 @@ def main():
                         file_path = os.path.join(tf_path, file)
                         table_files_map.setdefault(table_name, []).append((file_path, timeframe))
 
+    # Process all tables
     tasks = []
     for table_name, files_info in table_files_map.items():
         tasks.append((table_name, files_info, table_timestamps.get(table_name, 0)))
 
     print(f"Processing {len(tasks)} tables using up to {MAX_WORKERS} threads...")
+    print("All new data will be stored with microsecond timestamps")
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         executor.map(process_files_for_table, tasks)
 
-    print("All tables processed.")
-
+    print("=== IMPORT COMPLETED ===")
+    print("All timestamps have been standardized to microseconds")
 
 if __name__ == "__main__":
     main()

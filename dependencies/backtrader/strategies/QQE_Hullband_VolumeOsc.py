@@ -67,7 +67,7 @@ class QQE_Example(BaseStrategy):
     params = (
         ("ema_length", 20),
         ('hull_length', 53),
-        ('take_profit_percent', 4),
+        ('take_profit', 4),
         ('dca_deviation', 4),
         ('percent_sizer', 0.01),
         ('debug', False),

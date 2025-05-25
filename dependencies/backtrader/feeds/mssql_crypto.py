@@ -124,23 +124,22 @@ class PolarsData(bt.feed.DataBase):
             
         return True
 
-bt.feeds.PolarsData = PolarsData
-
 class MSSQLData(bt.feeds.PolarsData):
     @classmethod
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
-        start_timestamp = int(start_date.timestamp() * 1000)
-        end_timestamp = int(end_date.timestamp() * 1000)
+        start_timestamp = int(start_date.timestamp() * 1_000_000)
+        end_timestamp = int(end_date.timestamp() * 1_000_000)
+        print(start_timestamp, end_timestamp)
 
         query = f"""
-        SELECT 
+        SELECT
             TimestampStart, 
             [Open], 
             [High], 
             [Low], 
             [Close], 
             Volume
-        FROM {coin}
+        FROM [{coin}]
         WHERE Timeframe = '{timeframe}'
         AND TimestampStart BETWEEN {start_timestamp} AND {end_timestamp}
         ORDER BY TimestampStart
@@ -150,14 +149,14 @@ class MSSQLData(bt.feeds.PolarsData):
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         
         df = pl.DataFrame(
-            data, 
+            data,
             schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"],
             orient="row"
         )
 
         df = df.with_columns([
             pl.col("TimestampStart").cast(pl.Int64).map_elements(
-                lambda x: dt.datetime.fromtimestamp(x/1000),
+                lambda x: dt.datetime.fromtimestamp(x/1_000_000),
                 return_dtype=pl.Datetime
             ).alias("TimestampStart")
         ])
@@ -166,6 +165,9 @@ class MSSQLData(bt.feeds.PolarsData):
         df = df.with_columns([
             pl.col(col).cast(pl.Float64) for col in numeric_cols
         ])
+
+        print("First timestamp in data:", df["TimestampStart"].min())
+        print("Last timestamp in data:", df["TimestampStart"].max())
         
         return df
 
@@ -175,83 +177,8 @@ class MSSQLData(bt.feeds.PolarsData):
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         return [row[0] for row in data]
 
-class MSSQLData_Stocks(bt.feeds.PolarsData):
-    @classmethod
-    def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
-
-        start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
-        end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
-
-        query = f"""
-        SELECT 
-            TimestampStart, 
-            [Open], 
-            [High], 
-            [Low], 
-            [Close], 
-            Volume
-        FROM {coin}
-        WHERE Timeframe = '{timeframe}'
-        AND TimestampStart BETWEEN '{start_str}' AND '{end_str}'
-        ORDER BY TimestampStart
-        OPTION(USE HINT('ENABLE_PARALLEL_PLAN_PREFERENCE'))
-        """
-        
-        data = fast_mssql.fetch_data_from_db(connection_string, query)
-        
-        df = pl.DataFrame(
-            data, 
-            schema=["TimestampStart", "Open", "High", "Low", "Close", "Volume"]
-        )
-        
-        if df["TimestampStart"].dtype != pl.Datetime:
-            df = df.with_columns([
-                pl.col("TimestampStart").cast(pl.Datetime)
-            ])
-        
-        numeric_cols = ["Open", "High", "Low", "Close", "Volume"]
-        df = df.with_columns([
-            pl.col(col).cast(pl.Float64) for col in numeric_cols
-        ])
-        
-        return df
-
-    @classmethod
-    def get_all_pairs(cls, connection_string):
-        query = "SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'"
-        conn = None
-        try:
-            import pyodbc
-            with pyodbc.connect(connection_string) as conn:
-                cursor = conn.cursor()
-                cursor.execute(query)
-                data = [row[0] for row in cursor.fetchall()]
-                return data
-        except Exception as e:
-            print(f"Error retrieving pairs: {e}")
-            return []
-        finally:
-            if conn:
-                conn.close()
 
 def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="USDT"):
-    def identify_gaps(df, expected_interval):
-        if expected_interval.endswith('h'):
-            duration = pl.duration(hours=int(expected_interval[:-1]))
-        elif expected_interval.endswith('m'):
-            duration = pl.duration(minutes=int(expected_interval[:-1]))
-        elif expected_interval.endswith('s'):
-            duration = pl.duration(seconds=int(expected_interval[:-1]))
-        else:
-            duration = pl.duration(days=1)
-
-        return (df
-            .with_columns([
-                pl.col("TimestampStart").diff().alias("time_diff")
-            ])
-            .filter(pl.col("time_diff") > duration)
-        )
-    
     resample = True
 
     if "_1s" in ticker:
@@ -276,7 +203,7 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
         print("No data returned from the database - Please check your query and date range")
         return None
 
-    print(f"Data extraction completed in {elapsed_time:.20f} seconds")
+    print(f"Data extraction completed in {elapsed_time:.4f} seconds")
     print(f"Number of rows retrieved: {len(df)}")
 
     def convert_time_resolution(time_resolution):
@@ -300,35 +227,19 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
     time_resolution = convert_time_resolution(time_resolution)
 
     if resample:
-        print(f'Resampling data into {time_resolution} Candle data')
-
+        print(f'Resampling microseconds from DB into {time_resolution} Candle data')
         df = df.sort("TimestampStart")
         
-        df_resampled = (df
+        df = (df
             .group_by_dynamic("TimestampStart", every=time_resolution)
             .agg([
-                pl.col("Open").first(),
-                pl.col("High").max(),
-                pl.col("Low").min(),
-                pl.col("Close").last(),
-                pl.col("Volume").sum()
+                pl.col("Open").first().alias("Open"),
+                pl.col("High").max().alias("High"),
+                pl.col("Low").min().alias("Low"),
+                pl.col("Close").last().alias("Close"),
+                pl.col("Volume").sum().alias("Volume"),
             ])
         )
-        
-        df_resampled = df_resampled.with_columns([
-            pl.col("Close").forward_fill(),
-            pl.col("Open").forward_fill().fill_null(pl.col("Close")),
-            pl.col("High").forward_fill().fill_null(pl.col("Close")),
-            pl.col("Low").forward_fill().fill_null(pl.col("Close")),
-            pl.col("Volume").fill_null(0)
-        ])
-
-        gaps = identify_gaps(df_resampled, time_resolution)
-        if not gaps.is_empty():
-            print("Gaps found in the data:")
-            print(gaps)
-        
-        df = df_resampled
 
     print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
     

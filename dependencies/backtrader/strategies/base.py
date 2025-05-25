@@ -821,7 +821,7 @@ class OrderTracker:
         self.executed = True
         self.order_id = None
         self.timestamp = datetime.now()
-        self.backtest = backtest  # Add backtest flag
+        self.backtest = backtest
         
         if symbol is None or symbol == "":
             if hasattr(self, 'datas') and self.datas and hasattr(self.datas[0], '_dataname'):

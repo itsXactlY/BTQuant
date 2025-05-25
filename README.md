@@ -1,4 +1,4 @@
-># **BTQuant Framework** - The Powerhouse of Quantitative Trading
+># **BTQuant** - Powerhouse of Quantitative HFT Trading
 ![BTQuant](https://raw.githubusercontent.com/itsXactlY/BTQuant/7fd75a3e128aceca6f9f7616f9632fe522a92108/Example%20imgs/BTQuant_logo.png)
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!

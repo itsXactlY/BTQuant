@@ -1,13 +1,13 @@
 from .base import BaseStrategy, bt, OrderTracker, datetime
 from backtrader.indicators.MesaAdaptiveMovingAverage import MAMA
 
-class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
+class SMA_Cross_MESAdaptivePrime(BaseStrategy):
     params = (
         ('fast', 13),
         ('slow', 37),
         ('dca_deviation', 1.5),
-        ('take_profit_percent', 1),
-        ('percent_sizer', 0.045), # 4.5%
+        ('take_profit', 5),
+        ('percent_sizer', 0.01),
         ('debug', False),
         ("backtest", None)
         )
@@ -24,9 +24,10 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
         # Momentum
         self.momentum = bt.ind.Momentum(period=42)
         self.DCA = True
+        self.conditions_checked = False
 
     def buy_or_short_condition(self):
-        if not self.buy_executed and not self.conditions_checked:
+        if not self.buy_executed:
             if self.crossover > 0 and self.momentum > 0 and self.mama.lines.MAMA > self.mama.lines.FAMA:
                 size = self._determine_size()
                 order_tracker = OrderTracker(
@@ -56,32 +57,34 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
 
     def dca_or_short_condition(self):
         if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
-            if self.buy_executed and not self.conditions_checked:
-                if self.crossover > 0 and self.momentum > 0 and self.mama.lines.MAMA > self.mama.lines.FAMA:  
-                    size = self._determine_size()
-                    order_tracker = OrderTracker(
-                        entry_price=self.data.close[0],
-                        size=size,
-                        take_profit_pct=self.params.take_profit,
-                        symbol=getattr(self, 'symbol', self.p.asset),
-                        order_type="BUY",
-                        backtest=self.params.backtest
-                    )
-                    order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                    if not hasattr(self, 'active_orders'):
-                        self.active_orders = []
-                        
-                    self.active_orders.append(order_tracker)
-                    self.entry_prices.append(self.data.close[0])
-                    self.sizes.append(size)
-                    self.order = self.buy(size=size, exectype=bt.Order.Market)
-                    if self.p.debug:
-                        print(f"Buy order placed: {size} at {self.data.close[0]}")
-                    if not self.buy_executed:
-                        if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
-                            self.first_entry_price = self.data.close[0]
-                        self.buy_executed = True
-                    self.calc_averages()
+            # if self.buy_executed and not self.conditions_checked:
+            if self.crossover > 0 and self.momentum > 0 and self.mama.lines.MAMA > self.mama.lines.FAMA:  
+                size = self._determine_size()
+                order_tracker = OrderTracker(
+                    entry_price=self.data.close[0],
+                    size=size,
+                    take_profit_pct=self.params.take_profit,
+                    symbol=getattr(self, 'symbol', self.p.asset),
+                    order_type="BUY",
+                    backtest=self.params.backtest
+                )
+                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                if not hasattr(self, 'active_orders'):
+                    self.active_orders = []
+
+                self.active_orders.append(order_tracker)
+                self.entry_prices.append(self.data.close[0])
+                self.sizes.append(size)
+                self.order = self.buy(size=size, exectype=bt.Order.Market)
+
+                if self.p.debug:
+                    print(f"Buy order placed: {size} at {self.data.close[0]}")
+
+                if not self.buy_executed:
+                    if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+                        self.first_entry_price = self.data.close[0]
+                    self.buy_executed = True
+                self.calc_averages()
         self.conditions_checked = True
 
     def sell_or_cover_condition(self):
@@ -111,3 +114,6 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy, bt.SignalStrategy):
                     self.calc_averages()
         self.conditions_checked = True
 
+
+    # def next(self):
+    #     super().next()

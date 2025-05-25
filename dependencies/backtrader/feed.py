@@ -484,7 +484,7 @@ class AbstractDataBase(with_metaclass(MetaAbstractDataBase,
                     # and a backwards would ruin pointer accounting in the
                     # "stop" method of the strategy
                     self.backwards(force=True)  # undo data pointer
-                    sleep(sleep_time)
+                    # sleep(sleep_time)
 
                     # return the actual returned value which may be None to
                     # signal no bar is available, but the data feed is not

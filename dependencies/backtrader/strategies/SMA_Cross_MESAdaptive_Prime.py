@@ -6,7 +6,7 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy):
         ('fast', 13),
         ('slow', 37),
         ('dca_deviation', 1.5),
-        ('take_profit', 5),
+        ('take_profit', 2),
         ('percent_sizer', 0.01),
         ('debug', False),
         ("backtest", None)
@@ -113,7 +113,3 @@ class SMA_Cross_MESAdaptivePrime(BaseStrategy):
                 else:
                     self.calc_averages()
         self.conditions_checked = True
-
-
-    # def next(self):
-    #     super().next()

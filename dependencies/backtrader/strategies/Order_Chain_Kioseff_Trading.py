@@ -103,7 +103,7 @@ class Order_Chain_Kioseff_Trading(BaseStrategy):
         ('backtest', None),
         ("dca_deviation", 2.5),
         ("take_profit", 2),
-        ('percent_sizer', 0.001), # 0.01 -> 1%
+        ('percent_sizer', 0.25), # 0.01 -> 1%
     )
 
     def __init__(self, **kwargs):

@@ -26,3 +26,4 @@ dependencies/backtrader/strategies/Adaptive_NearestNeighbors_RationalQuadraticKe
 *.joblib
 candles/
 dependencies/backtrader/dontcommit.py
+QuantStats

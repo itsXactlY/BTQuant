@@ -1,3 +1,4 @@
+import os
 import backtrader as bt
 from collections.abc import Iterable
 from datetime import datetime
@@ -12,6 +13,7 @@ def backtest(
     init_cash=INIT_CASH,
     plot=True,
     quantstats=False,
+    asset_name=None,
     **kwargs,
 ):
 
@@ -31,7 +33,6 @@ def backtest(
     else:
         data = CustomPandasData(dataname=data)
 
-    
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data)
@@ -80,25 +81,45 @@ def backtest(
     if quantstats:
         import quantstats_lumi as quantstats
         current_date = datetime.now().strftime("%Y-%m-%d")
-        filename = f"QuantStat_generated_on_{current_date}_{datetime.now()}.html"
-        quantstats.reports.html(returns, output=filename, title=f'QuantStats_{current_date}')
+        current_time = datetime.now().strftime("%H-%M-%S")
+        
+        if asset_name:
+            coin_name = asset_name.replace('/', '_')
+        elif hasattr(data, '_dataname'):
+            coin_name = data._dataname
+        else:
+            coin_name = "Unknown_Asset"
 
-    def print_trade_analyzer_results(trade_analyzer, indent=0):
-        for key, value in trade_analyzer.items():
-            if isinstance(value, dict):
-                print_trade_analyzer_results(value, indent + 1)
-            else:
-                print("  " * indent + f"{key}: {value}")
+        folder = os.path.join("QuantStats")
+        os.makedirs(folder, exist_ok=True)
 
-    # Print all analyzer results
-    print_trade_analyzer_results(trade_analyzer)
-    pprint(f"Max Drawdown: {max_drawdown}")
-    portvalue = cerebro.broker.getvalue()
-    pnl = portvalue - init_cash
-    pprint('Final Portfolio Value: ${}'.format(portvalue))
-    pprint('P/L: ${}'.format(pnl))
+        filename = os.path.join(folder, f"{coin_name}_{current_date}_{current_time}.html")
+        quantstats.reports.html(
+            returns, 
+            output=filename, 
+            title=f'QuantStats_{coin_name}_{current_date}'
+        )
+        print(f"QuantStats report saved as: {filename}")
+
+    elif not quantstats:
+
+        def print_trade_analyzer_results(trade_analyzer, indent=0):
+            for key, value in trade_analyzer.items():
+                if isinstance(value, dict):
+                    print_trade_analyzer_results(value, indent + 1)
+                else:
+                    print("  " * indent + f"{key}: {value}")
+
+        # Print all analyzer results
+        print_trade_analyzer_results(trade_analyzer)
+        pprint(f"Max Drawdown: {max_drawdown}")
+        portvalue = cerebro.broker.getvalue()
+        pnl = portvalue - init_cash
+        pprint('Final Portfolio Value: ${}'.format(portvalue))
+        pprint('P/L: ${}'.format(pnl))
     
     if plot:
         cerebro.plot(style='candles', numfigs=1, volume=False, barup='black', bardown='grey')
     
-    return cerebro.broker.getvalue() - start
+    # return cerebro.broker.getvalue() - start
+    return cerebro.broker.getvalue()

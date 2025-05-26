@@ -25,6 +25,7 @@ class BaseStrategy(bt.Strategy):
         ('collateral', None),
         ('debug', False),
         ('backtest', None),
+        ('quantstats', None),
         ('use_stoploss', None),
         ("pnl", None),
         ("final_value", None),
@@ -46,6 +47,7 @@ class BaseStrategy(bt.Strategy):
         self.dataclose = self.datas[0].close
         self.symbol = self.p.asset
 
+        self.conditions_checked = False
         self.entry_price = None
         self.take_profit_price = None
         self.first_entry_price = None
@@ -676,7 +678,7 @@ class BaseStrategy(bt.Strategy):
         self.value = value
 
     def stop(self):
-        if self.p.backtest:
+        if self.p.backtest and self.p.quantstats == False:
             self.final_value = self.broker.getvalue()
             print("\n=== STRATEGY BACKTEST RESULTS ===")
             print("+-------------------------------------+-----------------+-------------+-----------+------------+----------------+--------------+---------------+")

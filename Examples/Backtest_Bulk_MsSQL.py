@@ -13,6 +13,9 @@ if __name__ == '__main__':
             start_date="2025-01-01",
             end_date="2025-02-01",
             interval="1m",
+            init_cash=1000,
+            max_workers=8,
+            save_results=True,
         )
         print("Bulk backtest completed successfully.")
         print(f"Results: {results}")

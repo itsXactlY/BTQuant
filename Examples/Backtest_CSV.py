@@ -13,6 +13,10 @@ end = "2025-01-08"
 df = my_data_frame.loc[start:end]
 data = CustomPandasData(dataname=df)
 
+_coin = "BTC"
+_collateral = 'USDT'
+_asset = f'{_coin}/{_collateral}'
+
 if __name__ == '__main__':
     try:
         backtest(_strategy, 
@@ -20,7 +24,8 @@ if __name__ == '__main__':
                 init_cash=1000, 
                 backtest=True,
                 quantstats=True,
-                plot=True)
+                plot=True,
+                asset_name=_asset)
 
     except Exception as e:
         print(f"An error occurred: {e}")

@@ -10,7 +10,11 @@ from backtrader.strategies.Order_Chain_Kioseff_Trading import Order_Chain_Kiosef
 from backtrader.strategies.Vumanchu_A import VuManchCipher_A
 from backtrader.strategies.Vumanchu_B import VuManchCipher_B
 
-data = get_crypto_data("XRP/USDT",   # Pair
+_coin = "BTC"
+_collateral = 'USDT'
+_asset = f'{_coin}/{_collateral}'
+
+data = get_crypto_data(_asset,   # Pair
                        "2025-01-01", # Start date
                        "2025-05-15", # End date
                         "1m",        # Timeframe
@@ -24,7 +28,8 @@ if __name__ == '__main__':
                 init_cash=1000, 
                 backtest=True, # Important hint :: Needs always set to "False" for live trading
                 quantstats=True,
-                plot=True)
+                plot=True,
+                asset_name=_asset)
 
     except Exception as e:
         print(f"An error occurred: {e}")

@@ -280,4 +280,4 @@ class ML_Suite(BaseStrategy):
 
 
 from backtrader.utils.backtest import backtest
-backtest(ML_Suite, data, init_cash=1000, backtest=True, plot=True, quantstats=True)
+backtest(ML_Suite, data, init_cash=1000, backtest=True, plot=True, quantstats=True, asset_name=f"{_coin}/USDT")

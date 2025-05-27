@@ -44,8 +44,8 @@ class MSSQLData(bt.feeds.PolarsData):
             pl.col(col).cast(pl.Float64) for col in numeric_cols
         ])
 
-        print("First timestamp in data:", df["TimestampStart"].min())
-        print("Last timestamp in data:", df["TimestampStart"].max())
+        # print("First timestamp in data:", df["TimestampStart"].min())
+        # print("Last timestamp in data:", df["TimestampStart"].max())
         
         return df
 
@@ -70,19 +70,19 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
         
     start = dt.datetime.strptime(start_date, "%Y-%m-%d")
     end = dt.datetime.strptime(end_date, "%Y-%m-%d")
-    start_time = time.time()
+    # start_time = time.time()
 
     db_resolution = "1s" if "_1s" in ticker else "1m"
     df = MSSQLData.get_data_from_db(connection_string, coin_name, db_resolution, start, end)
 
-    elapsed_time = time.time() - start_time
+    # elapsed_time = time.time() - start_time
 
     if df.is_empty():
         print("No data returned from the database - Please check your query and date range")
         return None
 
-    print(f"Data extraction completed in {elapsed_time:.4f} seconds")
-    print(f"Number of rows retrieved: {len(df)}")
+    # print(f"Data extraction completed in {elapsed_time:.4f} seconds")
+    # print(f"Number of rows retrieved: {len(df)}")
 
     def convert_time_resolution(time_resolution):
         if time_resolution.endswith('s'):  # seconds
@@ -105,7 +105,7 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
     time_resolution = convert_time_resolution(time_resolution)
 
     if resample:
-        print(f'Resampling microseconds from DB into {time_resolution} Candle data')
+        # print(f'Resampling microseconds from DB into {time_resolution} Candle data')
         df = df.sort("TimestampStart")
         
         df = (df
@@ -119,6 +119,6 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
             ])
         )
 
-    print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
+    # print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
     
     return df

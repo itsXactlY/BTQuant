@@ -122,7 +122,7 @@ feature_cols = [c for c in data.columns if c.startswith('X_')]
 X = data.select(feature_cols).to_numpy()
 y = data.select('y').to_numpy().flatten()
 
-n_train = int(len(X) * 0.4)
+n_train = int(len(X) * 0.8)
 X_train, X_test = X[:n_train], X[n_train:]
 y_train, y_test = y[:n_train], y[n_train:]
 

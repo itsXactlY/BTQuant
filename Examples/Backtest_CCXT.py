@@ -14,17 +14,17 @@ _coin = "BTC"
 _collateral = 'USDT'
 _asset = f'{_coin}/{_collateral}'
 
-data = get_crypto_data(_asset,   # Pair
-                       "2025-01-01", # Start date
-                       "2025-05-15", # End date
-                        "1m",        # Timeframe
-                       "binance"     # Exchange
+data = get_crypto_data(_asset,          # Pair
+                       "2024-01-01",    # Start date
+                       "2024-01-08",    # End date
+                        "15m",          # Timeframe
+                       "binance"        # Exchange
                        )
 
 if __name__ == '__main__':
     try:
         backtest(VuManchCipher_A, # Choose your strategy(s) here
-                data,
+                data=data,
                 init_cash=1000, 
                 backtest=True, # Important hint :: Needs always set to "False" for live trading
                 quantstats=True,

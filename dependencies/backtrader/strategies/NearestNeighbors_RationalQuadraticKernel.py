@@ -55,7 +55,6 @@ class NRK(BaseStrategy):
     )
 
     def __init__(self, **kwargs):
-        print("Initializing strategy", self.p.asset)
         super().__init__(**kwargs)
         self.addminperiod(self.p.max_bars_back)
         self.source = getattr(self.data, self.p.source)

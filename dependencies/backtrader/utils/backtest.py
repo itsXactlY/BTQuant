@@ -1,12 +1,54 @@
 import backtrader as bt
 from collections.abc import Iterable
+import concurrent.futures
+import matplotlib
+matplotlib.use('Agg')
+import gc
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+from rich.console import Console
 
 INIT_CASH = 100_000.0
 COMMISSION_PER_TRANSACTION = 0.00075
 
+console = Console()
+
+def fetch_all_data_sequential(coins, start_date, end_date, interval, progress_callback=None):
+    from backtrader.feeds.mssql_crypto import get_database_data
+    
+    data_cache = {}
+    for i, coin in enumerate(coins):
+        try:
+            data = get_database_data(coin, start_date, end_date, interval)
+            data_cache[coin] = data
+            if progress_callback:
+                progress_callback(i + 1, len(coins), coin, "success")
+        except Exception as e:
+            data_cache[coin] = None
+            if progress_callback:
+                progress_callback(i + 1, len(coins), coin, "failed")
+    
+    return data_cache
+
+def fetch_single_data(coin, start_date, end_date, interval, collateral="USDT"):
+    """Fetch data for a single coin"""
+    from backtrader.feeds.mssql_crypto import get_database_data
+    
+    try:
+        data = get_database_data(coin, start_date, end_date, interval)
+        data._dataname = f"{coin}{collateral}"
+        return data
+    except Exception as e:
+        console.print(f"[red]Error fetching data for {coin}: {str(e)}[/red]")
+        return None
+
 def backtest(
     strategy,
-    data,
+    data=None,
+    coin=None,
+    start_date=None,
+    end_date=None,
+    interval=None,
+    collateral="USDT",
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
     plot=True,
@@ -16,13 +58,25 @@ def backtest(
     show_progress=True,
     **kwargs,
 ):
+
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
     from backtrader.strategies.base import CustomSQN, CustomPandasData
     from pprint import pprint
-    from rich.console import Console
     import pandas as pd
     
-    console = Console()
+    if data is None:
+        if not all([coin, start_date, end_date, interval]):
+            raise ValueError("If data is not provided, coin, start_date, end_date, and interval are required")
+        
+        if show_progress and not bulk:
+            console.print(f"🔄 [bold blue]Fetching data for {coin}...[/bold blue]")
+        
+        data = fetch_single_data(coin, start_date, end_date, interval, collateral)
+        if data is None:
+            raise ValueError(f"Failed to fetch data for {coin}")
+        
+        if show_progress and not bulk:
+            console.print(f"✅ [bold green]Data fetched for {coin}[/bold green]")
     
     kwargs = {
         k: v if isinstance(v, Iterable) and not isinstance(v, str) else [v]
@@ -52,7 +106,12 @@ def backtest(
     cerebro.addobserver(bt.observers.Cash)
     cerebro.broker.setcommission(commission=commission)
     
-    display_name = asset_name or "Asset"
+    if asset_name:
+        display_name = asset_name
+    elif coin:
+        display_name = f"{coin}/{collateral}"
+    else:
+        display_name = "Asset"
     
     if show_progress and not bulk:
         console.print(f"🔄 [bold blue]Starting backtest for {display_name}...[/bold blue]")
@@ -82,6 +141,8 @@ def backtest(
         
         if asset_name:
             coin_name = asset_name.replace('/', '_')
+        elif coin:
+            coin_name = f"{coin}_{collateral}"
         elif hasattr(data_feed, '_dataname'):
             coin_name = str(data_feed._dataname)
         else:
@@ -118,51 +179,23 @@ def backtest(
     
     return cerebro.broker.getvalue()
 
-import concurrent.futures
-import matplotlib
-matplotlib.use('Agg') # Workaround for Quantstats matplotlib errors when multiprocessing
-import gc
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-from rich.console import Console
-
-console = Console()
-
-def fetch_all_data_sequential(coins, start_date, end_date, interval, progress_callback=None):
-    from backtrader.feeds.mssql_crypto import get_database_data
-    
-    data_cache = {}
-
-    for i, coin in enumerate(coins):
-        try:
-            data = get_database_data(coin, start_date, end_date, interval)
-            data_cache[coin] = data
-
-            if progress_callback:
-                progress_callback(i + 1, len(coins), coin, "success")
-                
-        except Exception as e:
-            data_cache[coin] = None
-            if progress_callback:
-                progress_callback(i + 1, len(coins), coin, "failed")
-    
-    return data_cache
-
 def run_backtest_with_data(args):
-    coin, data, strategy_class, init_cash, backtest_params = args
+    """Helper function for parallel execution in bulk_backtest"""
+    coin, data, strategy_class, init_cash, backtest_params, collateral = args
 
     if data is None:
-        return {"coin": coin, "asset": f"{coin}", "error": "No data available", "status": "skipped"}
+        return {"coin": coin, "asset": f"{coin}/{collateral}", "error": "No data available", "status": "skipped"}
 
     try:
-        asset = f'{coin}'
+        asset = f'{coin}/{collateral}'
         
         result = backtest(
             strategy_class,
-            data,
+            data=data,
             init_cash=init_cash,
-            **backtest_params,
             asset_name=asset,
-            bulk=True
+            bulk=True,
+            **backtest_params
         )
 
         del data
@@ -180,14 +213,18 @@ def run_backtest_with_data(args):
 
     except Exception as e:
         console.print(f"[red]Error in {coin}: {str(e)}[/red]")
-        return {"coin": coin, "asset": f"{coin}", "error": str(e), "status": "failed"}
+        return {"coin": coin, "asset": f"{coin}/{collateral}", "error": str(e), "status": "failed"}
 
 def bulk_backtest(strategy, coins, start_date, end_date, interval, 
-                 init_cash=1000, max_workers=8, save_results=True, 
+                 collateral="USDT", init_cash=1000, max_workers=8, save_results=True, 
                  output_file='backtest_results.json', **backtest_kwargs):
+    """
+    Enhanced bulk backtest with unified progress tracking
+    """
+    import warnings
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
 
     default_backtest_params = {
-        'backtest': True,
         'plot': False,
         'quantstats': True
     }
@@ -219,6 +256,10 @@ def bulk_backtest(strategy, coins, start_date, end_date, interval,
             progress_callback=update_fetch_progress
         )
         
+        for coin, data in data_cache.items():
+            if data is not None:
+                data._dataname = f"{coin}{collateral}"
+        
         progress.update(fetch_task, completed=len(coins), description="📊 Data fetching complete")
         
         valid_pairs = [(coin, data) for coin, data in data_cache.items() if data is not None]
@@ -231,7 +272,7 @@ def bulk_backtest(strategy, coins, start_date, end_date, interval,
         results = []
         
         for coin in skipped_coins:
-            results.append({"coin": coin, "asset": f"{coin}", "error": "No data available", "status": "skipped"})
+            results.append({"coin": coin, "asset": f"{coin}/{collateral}", "error": "No data available", "status": "skipped"})
         
         if valid_pairs:
             backtest_task = progress.add_task("🚀 Running backtests...", total=len(valid_pairs))
@@ -240,7 +281,7 @@ def bulk_backtest(strategy, coins, start_date, end_date, interval,
             failed_count = 0
             
             backtest_args = [
-                (coin, data, strategy, init_cash, default_backtest_params)
+                (coin, data, strategy, init_cash, default_backtest_params, collateral)
                 for coin, data in valid_pairs
             ]
             
@@ -275,7 +316,7 @@ def bulk_backtest(strategy, coins, start_date, end_date, interval,
                         completed = successful_count + failed_count
                         
                         progress.console.print(f"[red]Exception for {coin}: {exc}[/red]")
-                        results.append({"coin": coin, "asset": f"{coin}", "error": str(exc), "status": "failed"})
+                        results.append({"coin": coin, "asset": f"{coin}/{collateral}", "error": str(exc), "status": "failed"})
                         
                         progress.update(
                             backtest_task, 
@@ -295,7 +336,7 @@ def bulk_backtest(strategy, coins, start_date, end_date, interval,
     return print_detailed_results(results)
 
 def print_detailed_results(results):
-    """Print detailed backtest results using only actual tracked values (portvalue and pnl)."""
+    """Print detailed backtest results"""
     successful = [r for r in results if r["status"] == "success"]
     failed = [r for r in results if r["status"] == "failed"]
     skipped = [r for r in results if r["status"] == "skipped"]
@@ -334,3 +375,5 @@ def print_detailed_results(results):
     print(f"Successful: {len(successful)}")
     print(f"Failed: {len(failed)}")
     print(f"Skipped (no data): {len(skipped)}")
+    
+    return results

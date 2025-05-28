@@ -55,7 +55,6 @@ class MSSQLData(bt.feeds.PolarsData):
         data = fast_mssql.fetch_data_from_db(connection_string, query)
         return [row[0] for row in data]
 
-
 def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="USDT"):
     resample = True
 
@@ -70,19 +69,19 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
         
     start = dt.datetime.strptime(start_date, "%Y-%m-%d")
     end = dt.datetime.strptime(end_date, "%Y-%m-%d")
-    # start_time = time.time()
+    start_time = time.time()
 
     db_resolution = "1s" if "_1s" in ticker else "1m"
     df = MSSQLData.get_data_from_db(connection_string, coin_name, db_resolution, start, end)
 
-    # elapsed_time = time.time() - start_time
+    elapsed_time = time.time() - start_time
 
     if df.is_empty():
         print("No data returned from the database - Please check your query and date range")
         return None
 
-    # print(f"Data extraction completed in {elapsed_time:.4f} seconds")
-    # print(f"Number of rows retrieved: {len(df)}")
+    print(f"Data extraction completed in {elapsed_time:.4f} seconds")
+    print(f"Number of rows retrieved: {len(df)}")
 
     def convert_time_resolution(time_resolution):
         if time_resolution.endswith('s'):  # seconds

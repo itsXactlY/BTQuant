@@ -46,7 +46,7 @@ def backtest(
     data=None,
     coin=None,
     start_date=None,
-    end_date=None,
+    end_date="2030-12-31",
     interval=None,
     collateral="USDT",
     commission=COMMISSION_PER_TRANSACTION,
@@ -159,20 +159,29 @@ def backtest(
         )
     
     if not bulk:
-        def print_trade_analyzer_results(trade_analyzer, indent=0):
-            for key, value in trade_analyzer.items():
-                if isinstance(value, dict):
-                    print_trade_analyzer_results(value, indent + 1)
-                else:
-                    print(" " * indent + f"{key}: {value}")
+        total_trades = trade_analyzer.get('total', {}).get('total', 0)
+        won_trades = trade_analyzer.get('won', {}).get('total', 0)
+        lost_trades = trade_analyzer.get('lost', {}).get('total', 0)
         
-        print_trade_analyzer_results(trade_analyzer)
-        pprint(f"Max Drawdown: {max_drawdown}")
+        pnl_net = trade_analyzer.get('pnl', {}).get('net', {}).get('total', 0)
+        win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        print(f"\n{'='*50}")
+        print(f"BACKTEST RESULTS - {display_name}")
+        print(f"{'='*50}")
+        print(f"Total Trades: {total_trades}")
+        print(f"Winning Trades: {won_trades}")
+        print(f"Losing Trades: {lost_trades}")
+        print(f"Win Rate: {win_rate:.1f}%")
+        print(f"Net P&L: ${pnl_net:.2f}")
+        print(f"Max Drawdown: {max_drawdown:.2f}%")
         
         portvalue = cerebro.broker.getvalue()
         pnl = portvalue - init_cash
-        pprint('Final Portfolio Value: ${}'.format(portvalue))
-        pprint('P/L: ${}'.format(pnl))
+        print(f"Final Portfolio Value: ${portvalue:.2f}")
+        print(f"Total P/L: ${pnl:.2f}")
+        print(f"Return: {(pnl / init_cash * 100):.2f}%")
+        print(f"{'='*50}")
     
     if plot:
         cerebro.plot(style='candles', numfigs=1, volume=False, barup='black', bardown='grey')

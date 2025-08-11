@@ -1,4 +1,4 @@
-''' VERSION 1
+# VERSION 1
 
 from sklearn.neighbors import NearestNeighbors
 from backtrader.strategies.base import BaseStrategy, np, OrderTracker, datetime, bt
@@ -10,7 +10,7 @@ But anyway, I can pull more rabbits out of my hat - so I've decided to make this
 Sharing is caring.
 
 © by aLca (itsXactlY) // BTQuant
-'''
+
 
 class RationalQuadraticKernel(bt.indicators.PeriodN):
     lines = ('yhat',)

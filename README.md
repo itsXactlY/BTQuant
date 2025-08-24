@@ -2,8 +2,7 @@
 ![BTQuant](https://raw.githubusercontent.com/itsXactlY/BTQuant/7fd75a3e128aceca6f9f7616f9632fe522a92108/Example%20imgs/BTQuant_logo.png)
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!
-> 
-> **Curious what 100 lines of code for an Machine Learning Algo can do?** — [Find out here!](https://t.me/BTQuant) it wont bite, i promise!
+> **Only unleashes full potential with an historical candle database - over fetching exchanges for historical data**
 
 ---
 
@@ -35,14 +34,15 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 
 ## **Why BTQuant?**
 
-### **What We Offer That Others Don’t**
->- **Mimic 400+ exchanges** for forward testing with unrivaled accuracy.
->- **Live 1-second WebSocket ohclv/tick feeds** for real-time trading, **bypassing common data delays**.
->- **PancakeSwap integration** for decentralized trading experience.
->- **Act as your own broker**, giving you total control and independence.
->- **DCA logic** built-in, reducing your entry risks.
->- **Plug-and-play** setup for strategy deployment, with <50 lines of code if u wish.
->- **MS SQL Integration** for traders handling large datasets, ensuring security and efficiency.
+### **What We Offer out of the Box what others don’t or can't properly provide** ###
+>- **Mimic every CCXT supported exchange to its bare bone** for forward testing with unrivaled accuracy.
+>- **Live 1-second WebSocket ohclv/tick feeds** for real-time trading.
+>- **Tick data feeds** for real-time trading, **bypassing common HFT data delays**.
+>- **PancakeSwap/Web3 integration** for decentralized trading experience.
+>- **Precise DCA logic** built-in, reducing your entry risks.
+>- **Experimental Trailing logic** built-in, reducing too early exits.
+>- **Plug-and-play** setup for strategy deployment, with as less as <50 lines to begin.
+>- **MS-SQL Integration** for quantitative engineers handling large datasets, ensuring security and efficiency.
 
 ---
 

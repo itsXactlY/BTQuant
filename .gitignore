@@ -27,3 +27,5 @@ dependencies/backtrader/strategies/Adaptive_NearestNeighbors_RationalQuadraticKe
 candles/
 dependencies/backtrader/dontcommit.py
 QuantStats
+dependencies/MsSQL/build/
+dependencies/MsSQL/*.egg*

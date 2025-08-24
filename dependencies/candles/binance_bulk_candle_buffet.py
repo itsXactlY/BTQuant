@@ -8,106 +8,96 @@ import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
 from binance_historical_data import BinanceDataDumper
-from backtrader.dontcommit import database, connection_string
+from backtrader.dontcommit import database, connection_string, fast_mssql
 
 # === SETUP BINANCE DATA DUMP ===
-data_dumper = BinanceDataDumper(
-    path_dir_where_to_dump="candles/",
-    asset_class="spot",
-    data_type="klines",
-    data_frequency="1m"
-)
+# data_dumper = BinanceDataDumper(
+#     path_dir_where_to_dump="candles/",
+#     asset_class="spot",
+#     data_type="klines",
+#     data_frequency="1m"
+# )
 
-data_dumper.dump_data(
-    tickers=None,
-    date_start=datetime.date(2016, 1, 1),
-    date_end=datetime.date(2026, 1, 1),
-    is_to_update_existing=False,
-    tickers_to_exclude=["TUSD", "TRY", "RUB", "PAX", "JPY", "GBG", "FDUSD", "EUR", "ETH", "DOWNUSDT", "BUSD", "BRL", "BNB", "BKWR", "BIDR", "AUD", "BULL", "BEAR", "UP", "DOWN"]
-)
+# # --- Patch to skip SSL country lookup ---
+# from binance_historical_data import data_dumper as bd
+# bd.BinanceDataDumper._get_user_country_from_ip = lambda self: "US"
 
-data_dumper.delete_outdated_daily_results()
+# data_dumper.dump_data(
+#     tickers=None,
+#     date_start=datetime.date(2016, 1, 1),
+#     date_end=datetime.date(2026, 1, 1),
+#     is_to_update_existing=False,
+#     tickers_to_exclude=[
+#         "TUSD", "TRY", "RUB", "PAX", "JPY", "GBG", "FDUSD", "EUR", "ETH",
+#         "DOWNUSDT", "BUSD", "BRL", "BNB", "BKWR", "BIDR", "AUD", "BULL",
+#         "BEAR", "UP", "DOWN"
+#     ]
+# )
 
-# === DELETE BULL/BEAR DIRS ===
-def delete_folders_with_keywords(root_folder, keywords):
-    for root, dirs, _ in os.walk(root_folder, topdown=False):
-        for d in dirs:
-            if any(k in d for k in keywords):
-                shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+# data_dumper.delete_outdated_daily_results()
 
-delete_folders_with_keywords("candles/", ["BULL", "BEAR", "UP", "DOWN"])
+# # === DELETE BULL/BEAR DIRS ===
+# def delete_folders_with_keywords(root_folder, keywords):
+#     for root, dirs, _ in os.walk(root_folder, topdown=False):
+#         for d in dirs:
+#             if any(k in d for k in keywords):
+#                 shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+
+# delete_folders_with_keywords("candles/", ["BULL", "BEAR", "UP", "DOWN"])
 
 # === CONFIGURATION ===
-BATCH_SIZE = 100000
+BATCH_SIZE = 100_000
 MAX_WORKERS = 8
 BASE_DIRS = ["candles/spot/monthly/klines/", "candles/spot/daily/klines/"]
 
 # === TIMESTAMP CONVERSION UTILITIES ===
 def ensure_microseconds(timestamp_value):
     timestamp = int(timestamp_value)
-
-    if timestamp >= 1000000000000000:
+    if timestamp >= 1_000_000_000_000_000:  # already µs
         return timestamp
-    elif timestamp >= 1000000000000:
+    elif timestamp >= 1_000_000_000_000:   # ms → µs
         return timestamp * 1000
-    elif timestamp >= 1000000000:
-        return timestamp * 1000000
+    elif timestamp >= 1_000_000_000:       # s → µs
+        return timestamp * 1_000_000
     else:
         print(f"Warning: Unexpected timestamp format: {timestamp}")
         return timestamp
 
 def validate_timestamp_format(timestamp_str, source_info=""):
-    """
-    Validate and convert timestamp to microseconds with logging
-    """
     try:
         original = int(timestamp_str)
         converted = ensure_microseconds(original)
-        
-        if original != converted:
-            print(f"Timestamp conversion: {original} -> {converted} {source_info}")
-        
         return converted
     except ValueError as e:
         print(f"Error converting timestamp '{timestamp_str}' {source_info}: {e}")
         raise
 
-# === DATABASE UTILS ===
-import pyodbc
-def get_db_connection():
-    return pyodbc.connect(connection_string)
-
-def get_master_db_connection():
-    master_conn_str = connection_string.replace(f'DATABASE={database}', 'DATABASE=master')
-    return pyodbc.connect(master_conn_str)
-
+# === DATABASE UTILS (via fast_mssql) ===
 def database_exists():
     try:
-        with get_master_db_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM sys.databases WHERE name = ?", (database,))
-                return cursor.fetchone()[0] > 0
+        query = f"SELECT COUNT(*) FROM sys.databases WHERE name = '{database}'"
+        result = fast_mssql.fetch_data_from_db(connection_string, query)
+        return int(result[0][0]) > 0
     except Exception as e:
         print(f"Error checking if database exists: {e}")
         return False
 
 def create_database():
     try:
-        with get_master_db_connection() as conn:
-            conn.autocommit = True
-            with conn.cursor() as cursor:
-                cursor.execute(f"CREATE DATABASE [{database}]")
+        query = f"CREATE DATABASE [{database}]"
+        fast_mssql.execute_non_query(connection_string.replace(f"DATABASE={database}", "DATABASE=master"), query)
         print(f"Database '{database}' created successfully.")
     except Exception as e:
         print(f"Error creating database: {e}")
         raise
 
-def table_exists(cursor, table_name):
-    cursor.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?", (table_name,))
-    return cursor.fetchone()[0] > 0
+def table_exists(table_name):
+    query = f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{table_name}'"
+    result = fast_mssql.fetch_data_from_db(connection_string, query)
+    return int(result[0][0]) > 0
 
-def create_table(cursor, table_name):
-    cursor.execute(f"""
+def create_table(table_name):
+    create_sql = f"""
     CREATE TABLE [{table_name}] (
         CandleID INT PRIMARY KEY IDENTITY(1,1),
         Timeframe VARCHAR(10) NOT NULL,
@@ -122,18 +112,17 @@ def create_table(cursor, table_name):
         Trades INT NOT NULL,
         TakerBaseVolume DECIMAL(28, 8) NOT NULL,
         TakerQuoteVolume DECIMAL(28, 8) NOT NULL,
-        
-        -- Add indexes for better query performance
         INDEX IX_{table_name}_TimestampStart (TimestampStart),
         INDEX IX_{table_name}_Timeframe_Timestamp (Timeframe, TimestampStart)
     )
-    """)
+    """
+    fast_mssql.execute_non_query(connection_string, create_sql)
     print(f"Created table {table_name} with microsecond timestamp support and indexes")
 
-def get_latest_timestamp(cursor, table_name):
-    cursor.execute(f"SELECT MAX(TimestampEnd) FROM [{table_name}]")
-    result = cursor.fetchone()[0]
-    return result if result else 0
+def get_latest_timestamp(table_name):
+    query = f"SELECT MAX(TimestampEnd) FROM [{table_name}]"
+    result = fast_mssql.fetch_data_from_db(connection_string, query)
+    return int(result[0][0]) if result and result[0][0] is not None else 0
 
 # === CSV PROCESSING WITH TIMESTAMP CONVERSION ===
 def process_files_for_table(args):
@@ -142,79 +131,74 @@ def process_files_for_table(args):
     conversion_count = 0
 
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                sql = f"""INSERT INTO [{table_name}] (
-                    Timeframe, TimestampStart, [Open], [High], [Low], [Close],
-                    Volume, TimestampEnd, QuoteVolume, Trades,
-                    TakerBaseVolume, TakerQuoteVolume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        insert_sql = f"""INSERT INTO [{table_name}] (
+            Timeframe, TimestampStart, [Open], [High], [Low], [Close],
+            Volume, TimestampEnd, QuoteVolume, Trades,
+            TakerBaseVolume, TakerQuoteVolume
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
-                for file_path, timeframe in files_info:
-                    inserted_rows = 0
-                    file_conversion_count = 0
-                    
-                    with open(file_path, 'r') as file:
-                        csv_reader = csv.reader(file)
-                        batch = []
-                        
-                        for row_num, row in enumerate(csv_reader, 1):
-                            try:
-                                timestamp_start_original = row[0]
-                                timestamp_end_original = row[6]
-                                
-                                timestamp_start = validate_timestamp_format(
-                                    timestamp_start_original, 
-                                    f"in {file_path}:row{row_num}:start"
-                                )
-                                timestamp_end = validate_timestamp_format(
-                                    timestamp_end_original,
-                                    f"in {file_path}:row{row_num}:end"
-                                )
-                                
-                                if int(timestamp_start_original) != timestamp_start:
-                                    file_conversion_count += 1
-                                
-                                if timestamp_end > latest_timestamp:
-                                    processed_row = [
-                                        timeframe,
-                                        timestamp_start,  # Converted to microseconds
-                                        row[1],  # Open
-                                        row[2],  # High
-                                        row[3],  # Low
-                                        row[4],  # Close
-                                        row[5],  # Volume
-                                        timestamp_end,  # Converted to microseconds
-                                        row[7],  # Quote volume
-                                        row[8],  # Trades
-                                        row[9],  # Taker base volume
-                                        row[10] # Taker quote volume
-                                    ]
-                                    
-                                    batch.append(processed_row)
-                                    
-                                    if len(batch) >= BATCH_SIZE:
-                                        cursor.executemany(sql, batch)
-                                        conn.commit()
-                                        inserted_rows += len(batch)
-                                        batch.clear()
-                                        
-                            except Exception as e:
-                                print(f"[{table_name}] Error processing row {row_num} in {file_path}: {e}")
-                                print(f"Row data: {row}")
-                                continue
-                        
-                        if batch:
-                            cursor.executemany(sql, batch)
-                            conn.commit()
-                            inserted_rows += len(batch)
+        for file_path, timeframe in files_info:
+            inserted_rows = 0
+            file_conversion_count = 0
+            batch = []
 
-                    total_inserted_rows += inserted_rows
-                    conversion_count += file_conversion_count
+            with open(file_path, 'r') as file:
+                csv_reader = csv.reader(file)
+
+                for row_num, row in enumerate(csv_reader, 1):
+                    try:
+                        timestamp_start_original = row[0]
+                        timestamp_end_original = row[6]
+
+                        timestamp_start = validate_timestamp_format(
+                            timestamp_start_original, 
+                            f"in {file_path}:row{row_num}:start"
+                        )
+                        timestamp_end = validate_timestamp_format(
+                            timestamp_end_original,
+                            f"in {file_path}:row{row_num}:end"
+                        )
+
+                        if int(timestamp_start_original) != timestamp_start:
+                            file_conversion_count += 1
+
+                        if timestamp_end > latest_timestamp:
+                            processed_row = [
+                                timeframe,
+                                str(timestamp_start),  # must be strings for fast_mssql v1
+                                row[1],  # Open
+                                row[2],  # High
+                                row[3],  # Low
+                                row[4],  # Close
+                                row[5],  # Volume
+                                str(timestamp_end),
+                                row[7],  # Quote volume
+                                row[8],  # Trades
+                                row[9],  # Taker base volume
+                                row[10]  # Taker quote volume
+                            ]
+                            batch.append(processed_row)
+
+                            if len(batch) >= BATCH_SIZE:
+                                fast_mssql.bulk_insert(connection_string, insert_sql, batch)
+                                inserted_rows += len(batch)
+                                batch.clear()
                     
-                    print(f"[{table_name}] Processed {file_path}")
-                    print(f"  - Inserted: {inserted_rows} rows")
-                    print(f"  - Timestamp conversions: {file_conversion_count}")
+                    except Exception as e:
+                        print(f"[{table_name}] Error processing row {row_num} in {file_path}: {e}")
+                        print(f"Row data: {row}")
+                        continue
+
+                if batch:
+                    fast_mssql.bulk_insert(connection_string, insert_sql, batch)
+                    inserted_rows += len(batch)
+
+            total_inserted_rows += inserted_rows
+            conversion_count += file_conversion_count
+
+            print(f"[{table_name}] Processed {file_path}")
+            print(f"  - Inserted: {inserted_rows} rows")
+            print(f"  - Timestamp conversions: {file_conversion_count}")
 
     except Exception as e:
         print(f"[{table_name}] Error processing files: {e}")
@@ -242,35 +226,26 @@ def main():
         print(f"Database '{database}' already exists.")
 
     table_timestamps = {}
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cursor:
-                for data_directory in BASE_DIRS:
-                    if not os.path.exists(data_directory):
-                        continue
+    for data_directory in BASE_DIRS:
+        if not os.path.exists(data_directory):
+            continue
 
-                    for folder in os.listdir(data_directory):
-                        full_folder_path = os.path.join(data_directory, folder)
-                        if not os.path.isdir(full_folder_path):
-                            continue
+        for folder in os.listdir(data_directory):
+            full_folder_path = os.path.join(data_directory, folder)
+            if not os.path.isdir(full_folder_path):
+                continue
 
-                        pair_name = folder.replace('_', '')
-                        table_name = f'{pair_name}_klines'
+            pair_name = folder.replace('_', '')
+            table_name = f'{pair_name}_klines'
 
-                        if table_name not in table_timestamps:
-                            if not table_exists(cursor, table_name):
-                                create_table(cursor, table_name)
-                                conn.commit()
-                                print(f"Created table {table_name}")
-                                table_timestamps[table_name] = 0
-                            else:
-                                latest_ts = get_latest_timestamp(cursor, table_name)
-                                table_timestamps[table_name] = latest_ts
-                                print(f"{table_name} latest timestamp: {latest_ts} (microseconds)")
-
-    except Exception as e:
-        print(f"Database preparation error: {e}")
-        return
+            if table_name not in table_timestamps:
+                if not table_exists(table_name):
+                    create_table(table_name)
+                    table_timestamps[table_name] = 0
+                else:
+                    latest_ts = get_latest_timestamp(table_name)
+                    table_timestamps[table_name] = latest_ts
+                    print(f"{table_name} latest timestamp: {latest_ts} (µs)")
 
     # Build file processing map
     table_files_map = {}

@@ -48,7 +48,7 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - ❌ *Not reliant on slow CCXT tick approximations*
 
 #### **WebSocket Superiority**
-- ✅ **Custom WebSocket implementations** for **each major exchange**
+- ✅ **Custom WebSocket implementations** for **major exchanges**
 - ✅ **Sub-millisecond latency** through **optimized connection pools**
 - ❌ *CCXT fallback available only as backup*
 

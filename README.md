@@ -2,6 +2,7 @@
 ![BTQuant](https://raw.githubusercontent.com/itsXactlY/BTQuant/7fd75a3e128aceca6f9f7616f9632fe522a92108/Example%20imgs/BTQuant_logo.png)
 
 > **Work in Progress**: If you came this far, don't miss out — [Join our Discord](https://discord.gg/Y7uBxmRg3Z) to stay updated!
+>
 > **Only unleashes full potential with an historical candle database - over fetching exchanges for historical data**
 
 ---
@@ -35,13 +36,20 @@ BTQuant is a groundbreaking framework crafted for **Backtesting**, **Forward Tra
 ## **Why BTQuant?**
 
 ### **What We Offer out of the Box what others don’t or can't properly provide** ###
->- **Mimic every CCXT supported exchange to its bare bone** for forward testing with unrivaled accuracy.
+>- **Mimic every CCXT supported exchange to its bare bone** for forward testing with unrivaled accuracy via **JackrabbitRelay**.
+>
 >- **Live 1-second WebSocket ohclv/tick feeds** for real-time trading.
+>
 >- **Tick data feeds** for real-time trading, **bypassing common HFT data delays**.
+>
 >- **PancakeSwap/Web3 integration** for decentralized trading experience.
+>
 >- **Precise DCA logic** built-in, reducing your entry risks.
+>
 >- **Experimental Trailing logic** built-in, reducing too early exits.
+>
 >- **Plug-and-play** setup for strategy deployment, with as less as <50 lines to begin.
+>
 >- **MS-SQL Integration** for quantitative engineers handling large datasets, ensuring security and efficiency.
 
 ---

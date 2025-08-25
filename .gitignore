@@ -29,3 +29,5 @@ dependencies/backtrader/dontcommit.py
 QuantStats
 dependencies/MsSQL/build/
 dependencies/MsSQL/*.egg*
+out
+trashpad

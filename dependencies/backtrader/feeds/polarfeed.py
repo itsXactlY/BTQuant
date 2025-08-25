@@ -1,6 +1,5 @@
 import backtrader as bt
 from backtrader import date2num
-from backtrader.utils.py3 import string_types, integer_types
 import polars as pl
 
 class PolarsData(bt.feed.DataBase):
@@ -85,46 +84,43 @@ class PolarsData(bt.feed.DataBase):
 
     def _load(self):
         self._idx += 1
-        
         if self._idx >= len(self.p.dataname):
             return False
 
         for datafield in self.getlinealiases():
             if datafield == 'datetime':
                 continue
-                
             col_idx = self._colmapping[datafield]
             if col_idx is None:
                 continue
-                
+
             line = getattr(self.lines, datafield)
             try:
-                line[0] = self.p.dataname.row(self._idx)[col_idx]
+                val = self.p.dataname[self.colnames[col_idx]][self._idx]
+                if hasattr(val, "item"):
+                    val = val.item()
+                line[0] = float(val)
             except Exception as e:
                 print(f"Error getting value for {datafield} at index {self._idx}, col_idx {col_idx}: {e}")
                 line[0] = float('nan')
-            
+
         dt_idx = self._colmapping['datetime']
         if dt_idx is not None:
             try:
-                dt_value = self.p.dataname.row(self._idx)[dt_idx]
-                
-                # Convert to datetime if needed
-                if isinstance(dt_value, (str, int, float)):
-                    if isinstance(dt_value, str):
-                        from datetime import datetime
-                        dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
-                    else:
-                        from datetime import datetime
-                        dt = datetime.fromtimestamp(float(dt_value)/1000 if dt_value > 1e10 else float(dt_value))
+                dt_value = self.p.dataname[self.colnames[dt_idx]][self._idx]
+                if hasattr(dt_value, "item"):
+                    dt_value = dt_value.item()
+                # convert
+                from datetime import datetime
+                if isinstance(dt_value, str):
+                    dt = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                elif isinstance(dt_value, (int, float)):
+                    dt = datetime.fromtimestamp(float(dt_value)/1000 if dt_value > 1e10 else float(dt_value))
                 else:
                     dt = dt_value
-                    
-                from backtrader import date2num
-                dtnum = date2num(dt)
-                self.lines.datetime[0] = dtnum
+                self.lines.datetime[0] = date2num(dt)
             except Exception as e:
                 print(f"Error processing datetime at index {self._idx}, col_idx {dt_idx}: {e}")
                 self.lines.datetime[0] = float('nan')
-            
+
         return True

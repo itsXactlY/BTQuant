@@ -1,4 +1,4 @@
-# from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
+from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex
 from backtrader.utils.backtest import backtest
 
@@ -9,7 +9,7 @@ if __name__ == '__main__':
             coin='PENDLE',
             collateral='USDT',
             start_date="2024-01-01", 
-            end_date="2024-01-08", 
+            end_date="2025-01-08", 
             interval="1m",
             init_cash=1000, 
             plot=True, 

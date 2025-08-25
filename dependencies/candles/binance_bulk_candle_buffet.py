@@ -1,11 +1,11 @@
 # https://pypi.org/project/binance-historical-data/
 # pip install binance-historical-data
 
+import gc
 import os
 import csv
 import shutil
 import datetime
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from binance_historical_data import BinanceDataDumper
 from backtrader.dontcommit import database, connection_string
@@ -20,7 +20,7 @@ data_dumper = BinanceDataDumper(
 
 # --- Patch to skip SSL country lookup ---
 from binance_historical_data import data_dumper as bd
-bd.BinanceDataDumper._get_user_country_from_ip = lambda self: "US"
+bd.BinanceDataDumper._get_user_country_from_ip = lambda self: "EU"
 
 data_dumper.dump_data(
     tickers=None,
@@ -200,7 +200,11 @@ def process_files_for_table(args):
                             cursor.executemany(sql, batch)
                             conn.commit()
                             inserted_rows += len(batch)
-
+                    # ✅ free memory after each CSV
+                    del csv_reader
+                    del batch
+                    gc.collect()
+                    
                     total_inserted_rows += inserted_rows
                     conversion_count += file_conversion_count
                     print(f"[{table_name}] Processed {file_path} - Inserted: {inserted_rows}, Converted: {file_conversion_count}")

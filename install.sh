@@ -22,10 +22,10 @@ install_dependencies() {
                 sudo yum groupinstall -y 'Development Tools'
                 sudo yum install -y python3-devel unixODBC-devel git
                 ;;
-            arch|garuda|cachyos)
+            arch|garuda|cachyos|manjaro|endeavouros)
                 echo "Detected Arch Linux. Installing base-devel and other dependencies..."
                 sudo pacman -Syu --noconfirm
-                sudo pacman -S --noconfirm base-devel pybind11 unixodbc git
+                sudo pacman -S --noconfirm base-devel pybind11 unixodbc git tk
                 ;;
             *)
                 echo "Unsupported distribution: $DISTRO. Please install build-essential or equivalent manually."

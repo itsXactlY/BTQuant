@@ -109,8 +109,7 @@ setuptools.setup(
         'telethon',
         'scikit-learn',
         'keras',
-        'pytz',
-        'quantstats_lumi',
+        'pytz'
     ],
 
     extras_require={

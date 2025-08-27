@@ -78,6 +78,11 @@ pip install . || {
     echo "Warning: Failed to install dependencies package"
 }
 
-cd ..
+cd quantstats_lumi_btquant
+pip install . || {
+    echo "Warning: Failed to install dependencies package"
+}
+
+cd ../..
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

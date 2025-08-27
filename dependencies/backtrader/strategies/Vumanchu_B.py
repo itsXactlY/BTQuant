@@ -3,8 +3,8 @@ from backtrader.indicators.VumanchuMarketCipher_B import VuManchCipherB
 
 class VuManchCipher_B(BaseStrategy):
     params = (
-        ('take_profit', 2),
-        ('percent_sizer', 0.01),
+        ('take_profit', 7),
+        ('percent_sizer', 0.025),
         ('dca_deviation', 1.5),
         ## SMAA
         ('ssma_period', 17), # 20
@@ -21,7 +21,7 @@ class VuManchCipher_B(BaseStrategy):
         self.DCA = True
 
     def buy_or_short_condition(self):
-        if not self.buy_executed:
+        if not getattr(self, 'buy_executed', False):
             if self.market_cipher.lines.wtCrossUp[0] and self.market_cipher.lines.wtOversold[0]:
                 size = self._determine_size()
                 order_tracker = OrderTracker(
@@ -50,7 +50,7 @@ class VuManchCipher_B(BaseStrategy):
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
-        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
+        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100.0):
             if self.market_cipher.lines.wtCrossUp[0] and self.market_cipher.lines.wtOversold[0]:
                 size = self._determine_size()
                 order_tracker = OrderTracker(
@@ -106,3 +106,4 @@ class VuManchCipher_B(BaseStrategy):
                 else:
                     self.calc_averages()
         self.conditions_checked = True
+

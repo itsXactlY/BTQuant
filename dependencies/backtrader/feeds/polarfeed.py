@@ -1,5 +1,6 @@
 import backtrader as bt
 from backtrader import date2num
+from backtrader.utils.py3 import string_types, integer_types
 import polars as pl
 
 class PolarsData(bt.feed.DataBase):

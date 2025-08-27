@@ -60,11 +60,11 @@ def backtest(
 ):
 
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
-    from backtrader.strategies.base import CustomSQN, CustomPandasData
-    from pprint import pprint
+    from backtrader.strategies.base import CustomSQN, CustomData
     import pandas as pd
     
     if data is None:
+        print(interval, coin)
         if not all([coin, start_date, end_date, interval]):
             raise ValueError("If data is not provided, coin, start_date, end_date, and interval are required")
         
@@ -87,7 +87,7 @@ def backtest(
     if isinstance(data, DataBase):
         data_feed = data
     else:
-        data_feed = CustomPandasData(dataname=data)
+        data_feed = CustomData(dataname=data)
     
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data_feed)
@@ -184,7 +184,7 @@ def backtest(
         print(f"{'='*50}")
     
     if plot:
-        cerebro.plot(style='candles', numfigs=1, volume=False, barup='black', bardown='grey')
+        cerebro.plot(style='candles', numfigs=1, volume=True, barup='black', bardown='grey')
     
     return cerebro.broker.getvalue()
 

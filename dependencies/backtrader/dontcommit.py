@@ -24,17 +24,13 @@ import importlib
 import sys
 import os
 import pandas as pd
-module_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'feeds/mssql/fast_mssql.cpython-313-x86_64-linux-gnu.so')) # For Python 3.12 change to cpython-312
-spec = importlib.util.spec_from_file_location("fast_mssql", module_path)
-fast_mssql = importlib.util.module_from_spec(spec)
-sys.modules["fast_mssql"] = fast_mssql
-spec.loader.exec_module(fast_mssql)
+import fast_mssql
 
 # SQL Server connection details
 server = 'localhost'
-database = 'Backtrader'
-username = 'username'
-password = 'password'
+database = 'BinanceData'
+username = 'SA'
+password = 'YourStrong!Passw0rd'
 driver = '{ODBC Driver 18 for SQL Server}'  # Adjust the driver version if necessary
 
 connection_string = (f'DRIVER={driver};'

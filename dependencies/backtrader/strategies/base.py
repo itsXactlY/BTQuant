@@ -8,6 +8,7 @@ import numpy as np
 import shutil
 import os
 import uuid
+import asyncio
 
 order_lock = threading.Lock()
 INIT_CASH = 100_000.0
@@ -570,7 +571,10 @@ class BaseStrategy(bt.Strategy):
         header = "| " + " | ".join(header_labels) + " |"
         sep = "+-" + "-+-".join("-" * width for _, width in cols) + "-+"
 
-        print("\n=== ACTIVE POSITIONS ===")
+        if self.p.backtest == False: 
+            print("\n=== ACTIVE POSITIONS ===") 
+        else: 
+            print("\n=== ACTIVE BACKTEST POSITIONS ===")
         print(sep)
         print(header)
         print(sep)
@@ -762,7 +766,7 @@ class BaseStrategy(bt.Strategy):
     #     self.total_profit_usd = 0
     #     self.last_profit_usd = 0
 
-class CustomPandasData(bt.feeds.PolarsData):
+class CustomData(bt.feeds.PolarsData):
     params = (
         ('Datetime', 'datetime'),
         ('open', 'open'),

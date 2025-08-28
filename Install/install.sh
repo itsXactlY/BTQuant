@@ -83,6 +83,11 @@ pip install . || {
     echo "Warning: Failed to install dependencies package"
 }
 
+cd ../MsSQL
+pip install . || {
+    echo "Warning: Failed to install dependencies package"
+}
+
 cd ../..
 echo "Installation complete. Activate the virtual environment with:"
 echo "source .btq/bin/activate"

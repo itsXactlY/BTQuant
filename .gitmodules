@@ -1,0 +1,3 @@
+[submodule "dependencies/quantstats_lumi_btquant"]
+	path = dependencies/quantstats_lumi_btquant
+	url = https://github.com/ItsXactlY/quantstats_lumi_btquant

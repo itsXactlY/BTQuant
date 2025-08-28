@@ -31,3 +31,4 @@ dependencies/MsSQL/build/
 dependencies/MsSQL/*.egg*
 out
 trashpad
+TODO.rst

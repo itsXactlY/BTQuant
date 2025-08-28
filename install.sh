@@ -50,7 +50,7 @@ if ! command_exists python3 || ! command_exists pip; then
 fi
 
 # Clone the repository
-git clone https://github.com/itsXactlY/BTQuant/ BTQuant || {
+git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant BTQuant || {
     echo "Failed to clone repository"
     exit 1
 }

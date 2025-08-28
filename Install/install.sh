@@ -83,7 +83,7 @@ pip install . || {
     echo "Warning: Failed to install dependencies package"
 }
 
-cd ../MsSQL
+cd MsSQL
 pip install . || {
     echo "Warning: Failed to install dependencies package"
 }

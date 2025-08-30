@@ -26,12 +26,11 @@ DEFAULT_COLLATERAL = "USDT"
 @dataclass(frozen=True)
 class DataSpec:
     symbol: str
-    start_date: str
-    end_date: str
     interval: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    ranges: Optional[List[Tuple[str, str]]] = None
     collateral: str = DEFAULT_COLLATERAL
-
-
 # --------------- Storage helpers ---------------
 def mssql_url_from_odbc(odbc_connection_string: str, database_override: Optional[str] = None) -> str:
     parts = {}
@@ -57,7 +56,6 @@ def mssql_url_from_odbc(odbc_connection_string: str, database_override: Optional
 
     return f"mssql+pyodbc://{uid}:{encoded_pwd}@{server}/{database}?{query}"
 
-
 def build_optuna_storage(storage_string: Optional[str]) -> Optional[optuna.storages.RDBStorage]:
     if storage_string is None:
         console.print("[yellow]Using in-memory Optuna storage[/yellow]")
@@ -80,7 +78,6 @@ def build_optuna_storage(storage_string: Optional[str]) -> Optional[optuna.stora
     console.print("✓ RDBStorage ready")
     return storage
 
-
 # --------------- Data preload + feed factory ---------------
 def preload_polars(
     specs: List[DataSpec],
@@ -96,13 +93,28 @@ def preload_polars(
         if spec.symbol in seen:
             continue
 
-        df = get_database_data(
-            ticker=spec.symbol,
-            start_date=spec.start_date,
-            end_date=spec.end_date,
-            time_resolution=spec.interval,
-            pair=spec.collateral,
-        )
+        if spec.ranges:
+            dfs = []
+            for s, e in spec.ranges:
+                part = get_database_data(
+                    ticker=spec.symbol,
+                    start_date=s,
+                    end_date=e,
+                    time_resolution=spec.interval,
+                    pair=spec.collateral,
+                )
+                if part is None or part.is_empty():
+                    raise ValueError(f"No data for {spec.symbol} {spec.interval} {s}->{e}")
+                dfs.append(part)
+            df = pl.concat(dfs).sort("TimestampStart")
+        else:
+            df = get_database_data(
+                ticker=spec.symbol,
+                start_date=spec.start_date,
+                end_date=spec.end_date,
+                time_resolution=spec.interval,
+                pair=spec.collateral,
+            )
         if df is None or df.is_empty():
             raise ValueError(f"No data for {spec.symbol} {spec.interval} {spec.start_date}->{spec.end_date}")
 
@@ -140,7 +152,6 @@ def make_feed_from_df(df: pl.DataFrame, spec: DataSpec) -> MSSQLData:
     except Exception:
         pass
     return feed
-
 
 # --------------- Search space ---------------
 def suggest_params(trial: optuna.Trial) -> Dict[str, Any]:
@@ -236,7 +247,6 @@ def score_from_analyzers(
     metrics = dict(mdd=mdd, sharpe=sharpe, calmar=calmar, cagr=cagr_dec, trades=total_trades, win_rate=win_rate)
     return score, metrics
 
-
 # --------------- Single backtest ---------------
 def run_single_backtest_eval(
     strategy_class,
@@ -283,7 +293,6 @@ def run_single_backtest_eval(
     gc.collect()
 
     return score, metrics, final_value
-
 
 # --------------- Objective ---------------
 def make_objective(
@@ -336,7 +345,6 @@ def make_objective(
         return total_score / max(wsum, 1e-9)
 
     return objective
-
 
 # --------------- Optimize ---------------
 def make_pruner(num_steps: int, pruner: Optional[str], n_jobs: int):
@@ -415,8 +423,17 @@ def optimize(
 
     return study, study.best_params
 
-
 # --------------- Script entry ---------------
+bull_start = "2020-09-28"
+bull_end = "2021-05-31"
+bear_start = "2022-05-28"
+bear_end = "2023-06-23"
+# Optional holdout test period
+test_bull_start="2023-06-12"
+test_bull_end="2025-05-31"
+tf = "1m"
+
+
 if __name__ == "__main__":
     # Get ODBC string
     try:
@@ -426,23 +443,23 @@ if __name__ == "__main__":
 
     # Define training universe
     specs = [
-        DataSpec("BTC", "2025-01-01", "2026-01-31", "1m"),
-        # DataSpec("ETH", "2022-01-01", "2024-01-31", "1m"),
-        # DataSpec("LTC", "2022-01-01", "2024-01-31", "1m"),
-        # DataSpec("XRP", "2022-01-01", "2024-01-31", "1m"),
-        # DataSpec("BCH", "2022-01-01", "2024-01-31", "1m"),
+        DataSpec("BTC", interval=tf, ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+        DataSpec("ETH", interval=tf, ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+        DataSpec("LTC", interval=tf, ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+        DataSpec("XRP", interval=tf, ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+        DataSpec("BCH", interval=tf, ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
     ]
 
     study, best_params = optimize(
         strategy_class=StrategyClass,
         specs=specs,
-        n_trials=30,
-        n_jobs=1,
+        n_trials=150,
+        n_jobs=12,
         init_cash=INIT_CASH,
         commission=COMMISSION_PER_TRANSACTION,
         pruner="hyperband",
         storage_string=MSSQL_ODBC,  # None => in-memory
-        study_name="junky_1m_jan2025",
+        study_name="BullBearMarketBTC-ETH-LTC-XRP-BCH_1m_MACD_ADXV3",
         seed=42,
     )
 
@@ -451,9 +468,9 @@ if __name__ == "__main__":
     backtest(
         StrategyClass,
         coin="BTC",
-        start_date="2025-01-01",
-        end_date="2026-01-31",
-        interval="1m",
+        start_date=test_bull_start,
+        end_date=test_bull_end,
+        interval=tf,
         init_cash=1000,
         plot=True,
         quantstats=False,

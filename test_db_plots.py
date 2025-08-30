@@ -6,7 +6,7 @@ from backtrader.dontcommit import connection_string as MSSQL_ODBC
 storage = build_optuna_storage(MSSQL_ODBC)
 study = optuna.load_study(study_name="junky_1m_jan2025", storage=storage)
 
-trial_num = None # or None for best
+trial_num = 24 # or None for best
 trial = (study.best_trial if trial_num is None
          else next(t for t in study.get_trials(deepcopy=False) if t.number == trial_num))
 
@@ -34,11 +34,11 @@ if __name__ == '__main__':
         backtest(
         # optimize_backtest(
             strategy,
-            coin='BNB',
+            coin='BTC',
             collateral='USDT',
             start_date="2025-01-01", 
             end_date="2027-04-03",
-            interval="1m",
+            interval="1d",
             init_cash=1000,
             plot=True,
             quantstats=False,

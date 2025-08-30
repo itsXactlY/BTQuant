@@ -41,6 +41,152 @@ def fetch_single_data(coin, start_date, end_date, interval, collateral="USDT"):
         console.print(f"[red]Error fetching data for {coin}: {str(e)}[/red]")
         return None
 
+def optimize_backtest(strategy, data=None, coin=None, 
+    start_date=None,
+    end_date="2030-12-31",
+    interval=None,    
+    collateral="USDT",
+    commission=COMMISSION_PER_TRANSACTION,
+    init_cash=INIT_CASH,
+    asset_name=None,
+    bulk=False,
+    show_progress=True, **kwargs):
+    from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
+    from backtrader.strategies.base import CustomSQN, CustomData
+    import pandas as pd
+    
+    if data is None:
+        print(interval, coin)
+        if not all([coin, start_date, end_date, interval]):
+            raise ValueError("If data is not provided, coin, start_date, end_date, and interval are required")
+        
+        if show_progress and not bulk:
+            console.print(f"🔄 [bold blue]Fetching data for {coin}...[/bold blue]")
+        
+        data = fetch_single_data(coin, start_date, end_date, interval, collateral)
+        if data is None:
+            raise ValueError(f"Failed to fetch data for {coin}")
+        
+        if show_progress and not bulk:
+            console.print(f"✅ [bold green]Data fetched for {coin}[/bold green]")
+    
+    kwargs = {
+        k: v if isinstance(v, Iterable) and not isinstance(v, str) else [v]
+        for k, v in kwargs.items()
+    }
+    
+    from backtrader.feed import DataBase
+    if isinstance(data, DataBase):
+        data_feed = data
+    else:
+        data_feed = CustomData(dataname=data)
+    
+    cerebro = bt.Cerebro(oldbuysell=True)
+    cerebro.adddata(data_feed)
+    # cerebro.addstrategy(strategy, backtest=True)
+    cerebro.optstrategy(
+    strategy,
+    breakout_period=[20, 40, 55],
+    adxth=[20, 25, 30],
+    vol_mult=[1.3, 1.6, 2.0],
+    init_sl_atr_mult=[1.0, 1.25, 1.5],
+    trail_atr_mult=[2.5, 3.0, 3.5],
+    dca_atr_mult=[0.8, 1.0, 1.2],
+    max_adds=[2, 3, 4],
+)
+    
+    cerebro.broker.setcash(init_cash)
+    cerebro.addanalyzer(TimeReturn, _name='time_return')
+    cerebro.addanalyzer(SharpeRatio, _name='sharpe_ratio')
+    cerebro.addanalyzer(DrawDown, _name='drawdown')
+    cerebro.addanalyzer(TradeAnalyzer, _name='trade_analyzer')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+    cerebro.addanalyzer(CustomSQN, _name='customsqn')
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
+    cerebro.addobserver(bt.observers.Value)
+    cerebro.addobserver(bt.observers.DrawDown)
+    cerebro.addobserver(bt.observers.Cash)
+    cerebro.broker.setcommission(commission=commission)
+    
+    if asset_name:
+        display_name = asset_name
+    elif coin:
+        display_name = f"{coin}/{collateral}"
+    else:
+        display_name = "Asset"
+    
+    if show_progress and not bulk:
+        console.print(f"🔄 [bold blue]Starting backtest for {display_name}...[/bold blue]")
+        
+        with console.status(f"[bold green]Running backtest for {display_name}...") as status:
+            strategy_result = cerebro.run()[0]
+            
+        console.print(f"✅ [bold green]Completed backtest for {display_name}[/bold green]")
+    else:
+        strategy_result = cerebro.run()[0]
+    
+    max_drawdown = strategy_result.analyzers.drawdown.get_analysis()['max']['drawdown']
+    trade_analyzer = strategy_result.analyzers.trade_analyzer.get_analysis()
+    pyfolio_analyzer = strategy_result.analyzers.getbyname('pyfolio')
+    returns, positions, transactions, gross_lev = pyfolio_analyzer.get_pf_items()
+    
+    returns = pd.Series(returns)
+    returns = returns.dropna()
+    
+    if quantstats:
+        import quantstats_lumi as quantstats
+        from datetime import datetime
+        import os
+        
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_time = datetime.now().strftime("%H-%M-%S")
+        
+        if asset_name:
+            coin_name = asset_name.replace('/', '_')
+        elif coin:
+            coin_name = f"{coin}_{collateral}"
+        elif hasattr(data_feed, '_dataname'):
+            coin_name = str(data_feed._dataname)
+        else:
+            coin_name = "Unknown_Asset"
+            
+        folder = os.path.join("QuantStats")
+        os.makedirs(folder, exist_ok=True)
+        filename = os.path.join(folder, f"{coin_name}_{current_date}_{current_time}.html")
+        
+        quantstats.reports.html(
+            returns,
+            output=filename,
+            title=f'QuantStats_{coin_name}_{current_date}'
+        )
+    
+    if not bulk:
+        total_trades = trade_analyzer.get('total', {}).get('total', 0)
+        won_trades = trade_analyzer.get('won', {}).get('total', 0)
+        lost_trades = trade_analyzer.get('lost', {}).get('total', 0)
+        
+        pnl_net = trade_analyzer.get('pnl', {}).get('net', {}).get('total', 0)
+        win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
+        
+        print(f"\n{'='*50}")
+        print(f"BACKTEST RESULTS - {display_name}")
+        print(f"{'='*50}")
+        print(f"Total Trades: {total_trades}")
+        print(f"Winning Trades: {won_trades}")
+        print(f"Losing Trades: {lost_trades}")
+        print(f"Win Rate: {win_rate:.1f}%")
+        print(f"Net P&L: ${pnl_net:.2f}")
+        print(f"Max Drawdown: {max_drawdown:.2f}%")
+        
+        portvalue = cerebro.broker.getvalue()
+        pnl = portvalue - init_cash
+        print(f"Final Portfolio Value: ${portvalue:.2f}")
+        print(f"Total P/L: ${pnl:.2f}")
+        print(f"Return: {(pnl / init_cash * 100):.2f}%")
+        print(f"{'='*50}")
+    
+    return cerebro.broker.getvalue()
+
 def backtest(
     strategy,
     data=None,

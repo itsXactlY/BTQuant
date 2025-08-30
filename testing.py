@@ -1,20 +1,10 @@
-from backtrader.utils.backtest import backtest, optimize_backtest
-
-# from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK as strategy
-# from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex as strategy
-# from backtrader.strategies.Order_Chain_Kioseff_Trading import Order_Chain_Kioseff_Trading
-# from backtrader.strategies.Vumanchu_A import VuManchCipher_A
-# from backtrader.strategies.Vumanchu_B import VuManchCipher_B as strategy
-# from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX as strategy
-# from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX2 as strategy
+from backtrader.utils.backtest import backtest
 from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX3 as strategy
-
-
 import optuna
 from testing_optuna_newmacd import build_optuna_storage
 from backtrader.dontcommit import connection_string as MSSQL_ODBC
 storage = build_optuna_storage(MSSQL_ODBC)
-study = optuna.load_study(study_name="junky_1m_jan2025", storage=storage)
+study = optuna.load_study(study_name="junk_1d", storage=storage)
 
 trial_num = None # or None for best
 trial = (study.best_trial if trial_num is None
@@ -39,16 +29,35 @@ param_names = get_param_names(strategy)
 params = {k: v for k, v in raw_params.items() if k in param_names}
 
 
+# --------------- Data spec ---------------
+start="2025-01-01"
+end="2026-01-31"
+tf = "1m"
+'''
+specs = [
+    DataSpec("BTC", start_date=start, end_date=end, interval=tf),
+    DataSpec("ETH", start_date=start, end_date=end, interval=tf),
+    DataSpec("LTC", start_date=start, end_date=end, interval=tf),
+    DataSpec("XRP", start_date=start, end_date=end, interval=tf),
+    DataSpec("BCH", start_date=start, end_date=end, interval=tf),
+]
+'''
 if __name__ == '__main__':
+    print(f"Using params: {params}")
+    print(f"Param names: {param_names}")
+    print(f"All raw params: {raw_params}")
+    print(f"Trial number: {trial.number}")
+    print(f"Trial value: {trial.value}")
+    print(f"Trial state: {trial.state}")
     try:
         backtest(
         # optimize_backtest(
             strategy,
-            coin='BNB',
+            coin='BTC',
             collateral='USDT',
-            start_date="2025-01-01", 
-            end_date="2027-04-03",
-            interval="1m",
+            start_date=start, 
+            end_date=end,
+            interval=tf,
             init_cash=1000,
             plot=True,
             quantstats=False,

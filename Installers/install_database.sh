@@ -661,9 +661,9 @@ main() {
     configure_sqlserver
     install_sqlcmd
     setup_database
-    create_bulk_import_script
-    install_custom_driver
     create_credentials_file
+    create_bulk_import_script
+    # install_custom_driver
     run_data_import
     
     show_connection_info

@@ -32,3 +32,4 @@ dependencies/MsSQL/*.egg*
 out
 trashpad
 TODO.rst
+*.db

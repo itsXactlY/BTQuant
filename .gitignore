@@ -6,7 +6,6 @@ dependencies/backtrader.egg-info
 dependencies/build
 dependencies/TradeLog.log
 TradeLog.log
-testing*.py
 QuantStat_*.html
 .*.session-journal
 *.cpython-313.pyc

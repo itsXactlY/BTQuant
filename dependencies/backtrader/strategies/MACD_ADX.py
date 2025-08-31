@@ -86,10 +86,10 @@ class Stochastic_Generic(bt.Indicator):
 
 class Enhanced_MACD_ADX(BaseStrategy):
     params = (
-        ("dca_threshold", 3.5),
-        ("take_profit", 7),
+        ("dca_threshold", 1.5),
+        ("take_profit", 4),
         ('stop_loss', 20),
-        ('percent_sizer', 0.05),
+        ('percent_sizer', 0.01),
         ("macd_period_me1", 11),
         ("macd_period_me2", 23),
         ("macd_period_signal", 7),
@@ -544,6 +544,418 @@ class Enhanced_MACD_ADX2(BaseStrategy):
                 self.calc_averages()
 
 
+# class Enhanced_MACD_ADX3(BaseStrategy):
+#     params = (
+#         # Positioning
+#         ('percent_sizer', 0.05),
+
+#         # Core trend indicators
+#         ("macd_period_me1", 11),
+#         ("macd_period_me2", 23),
+#         ("macd_period_signal", 7),
+#         ("adx_period", 13),
+#         ("di_period", 14),
+#         ("adxth", 25),
+
+#         # Breakout and volatility
+#         ("breakout_period", 20),     # Donchian breakout window
+#         ("atr_period", 14),
+#         ("ema_fast", 20),
+#         ("ema_slow", 50),
+#         ("ema_trend", 200),
+#         ("vol_window", 20),
+#         ("vol_mult", 1.3),           # breakout volume confirmation
+#         ("stretch_atr_mult", 1.0),   # max close above breakout <= this * ATR
+
+#         # Oscillators (filters)
+#         ("momentum_period", 14),
+#         ("rsi_period", 14),
+#         ("stoch_period", 14),
+#         ("cci_period", 20),
+#         ("trix_period", 15),
+
+#         # NEW: Signal quality filters
+#         ("min_signal_strength", 0.7),
+#         ("volume_filter_mult", 1.5),
+#         ("trend_filter_strength", 0.7),
+
+#         # DCA / pyramiding - MODIFIED for better control
+#         ("use_dca", True),
+#         ("max_adds", 3),  # Much more conservative default
+#         ("add_cooldown", 20),
+#         ("dca_atr_mult", 1.2),  # Higher threshold
+#         ("add_on_ema_touch", False),
+
+#         # Exits - MODIFIED
+#         ("take_profit", 4.0),  # Higher default TP
+#         ('use_stoploss', False),
+#         ("use_trailing_stop", True),
+        
+#         # NEW: Partial exits
+#         ("use_partial_exits", False),
+#         ("partial_exit_1_pct", 0.4),
+#         ("partial_exit_1_target", 2.5),
+
+#         # Trailing stop defaults
+#         ("trail_mode", "ema_band"),
+#         ("trail_atr_mult", 4.5),
+#         ("ema_band_mult", 2.25),
+#         ("donchian_trail_period", 55),
+#         ("pivot_left", 2),
+#         ("pivot_right", 2),
+#         ("init_sl_atr_mult", 1.25),
+#         ("trail_arm_R", 2.0),
+#         ("trail_arm_bars", 10),
+#         ("trail_update_every", 3),
+#         ("move_to_breakeven_R", 1.5),
+
+#         # Runtime
+#         ("backtest", False),
+#         ('debug', False),
+#     )
+
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+
+#         # Trend + vol
+#         self.ema_fast = bt.ind.EMA(self.data.close, period=self.p.ema_fast)
+#         self.ema_slow = bt.ind.EMA(self.data.close, period=self.p.ema_slow)
+#         self.ema_trend = bt.ind.EMA(self.data.close, period=self.p.ema_trend)
+#         self.atr = bt.ind.ATR(self.data, period=self.p.atr_period)
+#         self.vol_sma = bt.ind.SMA(self.data.volume, period=self.p.vol_window)
+
+#         # Donchian breakout and slow exit
+#         self.dc_high = bt.ind.Highest(self.data.high, period=self.p.breakout_period)
+#         self.dc_low = bt.ind.Lowest(self.data.low, period=self.p.breakout_period)
+#         self.dc_exit = bt.ind.Lowest(self.data.low, period=self.p.donchian_trail_period)
+
+#         # ADX/DI + momentum filters
+#         self.adx = bt.ind.ADX(self.data, period=self.p.adx_period, plot=True)
+#         self.plusDI = bt.ind.PlusDI(self.data, period=self.p.di_period, plot=True)
+#         self.minusDI = bt.ind.MinusDI(self.data, period=self.p.di_period, plot=True)
+
+#         self.macd = bt.ind.MACD(self.data.close,
+#                                 period_me1=self.p.macd_period_me1,
+#                                 period_me2=self.p.macd_period_me2,
+#                                 period_signal=self.p.macd_period_signal,
+#                                 plot=True)
+#         self.momentum = bt.ind.Momentum(self.data, period=self.p.momentum_period, plot=True)
+#         self.rsi = bt.ind.RSI(self.data, period=self.p.rsi_period, plot=True)
+#         self.stoch = bt.ind.Stochastic(self.data, period=self.p.stoch_period)
+#         self.cci = bt.ind.CCI(self.data, period=self.p.cci_period, plot=True)
+#         self.trix = bt.ind.Trix(self.data, period=self.p.trix_period, plot=True)
+
+#         # State
+#         self.DCA = self.p.use_dca
+#         self.n_adds = 0
+#         self.last_add_bar = -10**9
+#         self.breakout_low = None
+
+#         self.trail_stop = None
+#         self.init_stop = None
+#         self.run_high = None
+#         self.entry_bar = None
+#         self.trail_armed = False
+#         self.last_trail_update = -10**9
+#         self.initial_risk = None
+#         self.last_pivot_low = None
+
+#         # Ensure lists exist
+#         if not hasattr(self, 'active_orders'):
+#             self.active_orders = []
+#         if not hasattr(self, 'entry_prices'):
+#             self.entry_prices = []
+#         if not hasattr(self, 'sizes'):
+#             self.sizes = []
+#         if not hasattr(self, 'buy_executed'):
+#             self.buy_executed = False
+
+#     # ----------------------- Helpers -----------------------
+#     def _compute_avg_entry(self):
+#         # Average price weighted by size from active orders or local lists
+#         try:
+#             if self.active_orders:
+#                 tot = sum(o.size for o in self.active_orders)
+#                 return sum(o.entry_price * o.size for o in self.active_orders) / tot if tot else None
+#         except Exception:
+#             pass
+#         if self.entry_prices and self.sizes:
+#             tot = sum(self.sizes)
+#             return sum(p * s for p, s in zip(self.entry_prices, self.sizes)) / tot if tot else None
+#         return None
+
+#     def trend_ok(self):
+#         ema_stack = self.ema_fast[0] > self.ema_slow[0] > self.ema_trend[0]
+#         di_ok = self.plusDI[0] > self.minusDI[0]
+#         adx_ok = self.adx[0] >= self.p.adxth and self.adx[0] >= self.adx[-1]
+#         return ema_stack and di_ok and adx_ok
+
+#     def breakout_up(self):
+#         # cross above prior Donchian high with vol confirmation and limited ATR stretch
+#         if len(self.data) < self.p.breakout_period + 2:
+#             return False
+#         prior_upper = self.dc_high[-1]
+#         crossed = self.data.close[-1] <= prior_upper and self.data.close[0] > prior_upper
+#         vol_ok = self.data.volume[0] > self.p.vol_mult * max(self.vol_sma[0], 1e-8)
+#         not_stretched = (self.data.close[0] - prior_upper) <= self.p.stretch_atr_mult * self.atr[0]
+#         return crossed and vol_ok and not_stretched
+
+#     def momentum_ok(self):
+#         return (self.macd.macd[0] > self.macd.signal[0] and self.macd.macd[0] > 0 and
+#                 self.momentum[0] > 0 and self.rsi[0] < 70 and
+#                 self.stoch.percK[0] < 80 and self.cci[0] > -100 and self.trix[0] > 0)
+
+#     def can_add(self):
+#         return (self.DCA and self.position and
+#                 self.n_adds < self.p.max_adds and
+#                 (len(self) - self.last_add_bar) >= self.p.add_cooldown and
+#                 self.trend_ok())
+
+#     def _maybe_arm_trail(self):
+#         if self.trail_armed or self.entry_bar is None:
+#             return
+#         bars_in_trade = len(self) - self.entry_bar
+#         R = 0.0
+#         avg_entry = self._compute_avg_entry()
+#         if avg_entry and self.initial_risk and self.initial_risk > 0:
+#             R = (self.data.close[0] - avg_entry) / self.initial_risk
+#         if (bars_in_trade >= self.p.trail_arm_bars) or (R >= self.p.trail_arm_R):
+#             self.trail_armed = True
+
+#     def _update_pivot_low(self):
+#         # Simple 5-bar pivot low: 2 left, pivot at -2, 2 right
+#         if len(self.data) < 5:
+#             return
+#         c = self.data.low[-2]
+#         if (c < self.data.low[-3] and c < self.data.low[-4] and
+#             c < self.data.low[-1] and c < self.data.low[0]):
+#             self.last_pivot_low = c
+
+#     def update_trailing_stop(self):
+#         if not self.position:
+#             self.trail_stop = None
+#             return
+
+#         # Keep run_high for chandelier
+#         self.run_high = max(self.run_high or self.data.high[0], self.data.high[0])
+
+#         # Arm trailing later
+#         self._maybe_arm_trail()
+
+#         # Before armed: keep initial stop, nudge to BE at later R if desired
+#         if not self.trail_armed:
+#             avg_entry = self._compute_avg_entry()
+#             if (avg_entry and self.initial_risk and
+#                 (self.data.close[0] - avg_entry) / self.initial_risk >= self.p.move_to_breakeven_R):
+#                 self.trail_stop = max(self.trail_stop or -1e18, avg_entry)
+#             return
+
+#         # Throttle trail updates
+#         if (len(self) - self.last_trail_update) < self.p.trail_update_every:
+#             return
+
+#         candidate = None
+#         if self.p.trail_mode == "ema_band":
+#             candidate = float(self.ema_fast[0] - self.p.ema_band_mult * self.atr[0])
+
+#         elif self.p.trail_mode == "chandelier":
+#             candidate = float(self.run_high - self.p.trail_atr_mult * self.atr[0])
+
+#         elif self.p.trail_mode == "donchian":
+#             candidate = float(self.dc_exit[0])
+
+#         elif self.p.trail_mode == "pivot":
+#             self._update_pivot_low()
+#             if self.last_pivot_low is not None:
+#                 candidate = float(self.last_pivot_low - 0.5 * self.atr[0])
+
+#         if candidate is not None:
+#             new_stop = max(self.trail_stop or -1e18, candidate, self.init_stop or -1e18)
+#             avg_entry = self._compute_avg_entry()
+#             if (avg_entry and self.initial_risk and
+#                 (self.data.close[0] - avg_entry) / self.initial_risk >= self.p.move_to_breakeven_R):
+#                 new_stop = max(new_stop, avg_entry)
+#             self.trail_stop = new_stop
+#             self.last_trail_update = len(self)
+
+#     # ----------------------- Entry / DCA / Exit -----------------------
+#     def buy_or_short_condition(self):
+#         self.conditions_checked = True
+#         if self.position:
+#             return
+
+#         if self.trend_ok() and self.breakout_up() and self.momentum_ok():
+#             size = self._determine_size()
+#             order_tracker = OrderTracker(
+#                 entry_price=self.data.close[0],
+#                 size=size,
+#                 take_profit_pct=self.p.take_profit,
+#                 symbol=getattr(self, 'symbol', getattr(self.p, 'asset', None)),
+#                 order_type="BUY",
+#                 backtest=self.p.backtest
+#             )
+#             order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+#             if not hasattr(self, 'active_orders'):
+#                 self.active_orders = []
+#             if not hasattr(self, 'entry_prices'):
+#                 self.entry_prices = []
+#             if not hasattr(self, 'sizes'):
+#                 self.sizes = []
+
+#             self.active_orders.append(order_tracker)
+#             self.entry_prices.append(self.data.close[0])
+#             self.sizes.append(size)
+#             self.order = self.buy(size=size, exectype=bt.Order.Market)
+
+#             if self.p.debug:
+#                 print(f"Buy (breakout) {size} @ {self.data.close[0]}")
+
+#             if not self.buy_executed:
+#                 if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
+#                     self.first_entry_price = self.data.close[0]
+#                 self.buy_executed = True
+
+#             # Initial risk references
+#             self.breakout_low = self.dc_low[-1]
+#             self.init_stop = float(self.breakout_low - self.p.init_sl_atr_mult * self.atr[0])
+#             self.trail_stop = self.init_stop
+#             self.run_high = self.data.high[0]
+#             self.entry_bar = len(self)
+#             self.trail_armed = False
+#             self.n_adds = 0
+#             self.last_add_bar = len(self)
+
+#             # Update averages/risk
+#             if hasattr(self, 'calc_averages'):
+#                 self.calc_averages()
+#             avg_entry = self._compute_avg_entry()
+#             self.initial_risk = max(1e-8, (avg_entry - self.init_stop)) if avg_entry else None
+
+#     def dca_or_short_condition(self):
+#         self.conditions_checked = True
+#         if not self.can_add():
+#             return
+
+#         avg_entry = self._compute_avg_entry()
+#         touch_ema = self.p.add_on_ema_touch and (self.data.low[0] <= self.ema_fast[0])
+#         atr_pullback = False
+#         if avg_entry:
+#             atr_pullback = (avg_entry - self.data.close[0]) >= (self.p.dca_atr_mult * self.atr[0])
+
+#         if (touch_ema or atr_pullback) and self.momentum_ok():
+#             size = self._determine_size()
+#             order_tracker = OrderTracker(
+#                 entry_price=self.data.close[0],
+#                 size=size,
+#                 take_profit_pct=self.p.take_profit,
+#                 symbol=getattr(self, 'symbol', getattr(self.p, 'asset', None)),
+#                 order_type="BUY",
+#                 backtest=self.p.backtest
+#             )
+#             order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+#             self.active_orders.append(order_tracker)
+#             self.entry_prices.append(self.data.close[0])
+#             self.sizes.append(size)
+#             self.order = self.buy(size=size, exectype=bt.Order.Market)
+
+#             if self.p.debug:
+#                 print(f"DCA add {self.n_adds+1}/{self.p.max_adds}: {size} @ {self.data.close[0]}")
+
+#             self.n_adds += 1
+#             self.last_add_bar = len(self)
+
+#             if hasattr(self, 'calc_averages'):
+#                 self.calc_averages()
+#             # Keep initial stop as is; trailing logic will manage ratchet
+#             avg_entry = self._compute_avg_entry()
+#             # Recompute initial risk only if init_stop changed; otherwise keep
+
+#     def sell_or_cover_condition(self):
+#         self.conditions_checked = True
+
+#         if not hasattr(self, 'active_orders'):
+#             self.active_orders = []
+
+#         if not self.position:
+#             # Clean state if needed
+#             self.active_orders = []
+#             self.trail_stop = None
+#             self.init_stop = None
+#             self.run_high = None
+#             self.entry_bar = None
+#             self.trail_armed = False
+#             self.n_adds = 0
+#             return
+
+#         current_price = self.data.close[0]
+
+#         # Update trailing stop first
+#         if self.p.use_trailing_stop:
+#             self.update_trailing_stop()
+
+#         # Hard/Trailing stop hit? (use low to catch intrabar/gaps)
+#         if self.p.use_trailing_stop and self.trail_stop is not None and self.data.low[0] <= self.trail_stop:
+#             total_size = sum(o.size for o in self.active_orders) if self.active_orders else self.position.size
+#             self.order = self.sell(size=total_size, exectype=bt.Order.Market)
+#             if self.p.debug:
+#                 print(f"Trailing stop hit @ {self.data.low[0]} <= {self.trail_stop} (close {current_price}) - closing {total_size}")
+
+#             # Close and clear all tracked orders
+#             for o in self.active_orders:
+#                 o.close_order(self.data.low[0])
+#             self.active_orders = []
+#             if hasattr(self, 'reset_position_state'):
+#                 self.reset_position_state()
+#             self.buy_executed = False
+
+#             # Reset trail state
+#             self.trail_stop = None
+#             self.init_stop = None
+#             self.run_high = None
+#             self.entry_bar = None
+#             self.trail_armed = False
+#             self.n_adds = 0
+#             return
+
+#         # Per-suborder take-profits (optional; keep if you like partials)
+#         orders_to_remove = []
+#         for idx, order in enumerate(self.active_orders):
+#             if current_price >= order.take_profit_price:
+#                 self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+#                 if self.p.debug:
+#                     print(f"TP hit: Selling {order.size} @ {current_price} (entry {order.entry_price}, TP {order.take_profit_price})")
+#                 order.close_order(current_price)
+#                 orders_to_remove.append(idx)
+
+#         # Remove closed orders and recalc averages
+#         for idx in sorted(orders_to_remove, reverse=True):
+#             removed_order = self.active_orders.pop(idx)
+#             if self.p.debug:
+#                 profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
+#                 print(f"Order removed: {profit_pct:.2f}% profit")
+
+#         if orders_to_remove:
+#             self.entry_prices = [o.entry_price for o in self.active_orders]
+#             self.sizes = [o.size for o in self.active_orders]
+#             if not self.active_orders:
+#                 if hasattr(self, 'reset_position_state'):
+#                     self.reset_position_state()
+#                 self.buy_executed = False
+#                 # Reset trail state
+#                 self.trail_stop = None
+#                 self.init_stop = None
+#                 self.run_high = None
+#                 self.entry_bar = None
+#                 self.trail_armed = False
+#                 self.n_adds = 0
+#             else:
+#                 if hasattr(self, 'calc_averages'):
+#                     self.calc_averages()
+
+
+
 class Enhanced_MACD_ADX3(BaseStrategy):
     params = (
         # Positioning
@@ -558,14 +970,14 @@ class Enhanced_MACD_ADX3(BaseStrategy):
         ("adxth", 25),
 
         # Breakout and volatility
-        ("breakout_period", 20),     # Donchian breakout window
+        ("breakout_period", 20),
         ("atr_period", 14),
         ("ema_fast", 20),
         ("ema_slow", 50),
         ("ema_trend", 200),
         ("vol_window", 20),
-        ("vol_mult", 1.3),           # breakout volume confirmation
-        ("stretch_atr_mult", 1.0),   # max close above breakout <= this * ATR
+        ("vol_mult", 1.3),
+        ("stretch_atr_mult", 1.0),
 
         # Oscillators (filters)
         ("momentum_period", 14),
@@ -574,33 +986,42 @@ class Enhanced_MACD_ADX3(BaseStrategy):
         ("cci_period", 20),
         ("trix_period", 15),
 
+        # Signal quality filters
+        ("min_signal_strength", 0.7),
+        ("volume_filter_mult", 1.5),
+        ("trend_filter_strength", 0.7),
+
         # DCA / pyramiding
         ("use_dca", True),
-        ("max_adds", 7),
-        ("add_cooldown", 50),         # bars between adds
-        ("dca_atr_mult", 1.0),       # add if pullback >= this * ATR from avg entry
-        ("add_on_ema_touch", True),  # add on EMA20 touch during trend
+        ("max_adds", 3),
+        ("add_cooldown", 20),
+        ("dca_atr_mult", 1.2),
+        ("add_on_ema_touch", False),
 
         # Exits
-        ("take_profit", 0.5),          # per-suborder TP (still supported)
+        ("take_profit", 4.0),
         ('use_stoploss', False),
-        ("use_trailing_stop", False),
+        ("use_trailing_stop", True),
+        
+        # Partial exits
+        ("use_partial_exits", False),
+        ("partial_exit_1_pct", 0.4),
+        ("partial_exit_1_target", 2.5),
 
-        # Gentler trailing stop defaults
-        ("trail_mode", "ema_band"),  # 'ema_band' | 'chandelier' | 'donchian' | 'pivot'
-        ("trail_atr_mult", 4.5),     # chandelier multiple (if used)
-        ("ema_band_mult", 2.25),     # EMA20 - k*ATR
+        # Trailing stop defaults
+        ("trail_mode", "ema_band"),
+        ("trail_atr_mult", 4.5),
+        ("ema_band_mult", 2.25),
         ("donchian_trail_period", 55),
-        ("pivot_left", 2),           # pivot low confirmation (L/R bars)
+        ("pivot_left", 2),
         ("pivot_right", 2),
-
-        ("init_sl_atr_mult", 1.25),  # initial stop below structure
-        ("trail_arm_R", 2.0),        # arm trailing after >= R
-        ("trail_arm_bars", 10),      # or after N bars
-        ("trail_update_every", 3),   # recalc trail every N bars
+        ("init_sl_atr_mult", 1.25),
+        ("trail_arm_R", 2.0),
+        ("trail_arm_bars", 10),
+        ("trail_update_every", 3),
         ("move_to_breakeven_R", 1.5),
 
-        # Runtime
+        # BTQ Runtime
         ("backtest", False),
         ('debug', False),
     )
@@ -608,7 +1029,7 @@ class Enhanced_MACD_ADX3(BaseStrategy):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        # Trend + vol
+        # Trend + vol indicators
         self.ema_fast = bt.ind.EMA(self.data.close, period=self.p.ema_fast)
         self.ema_slow = bt.ind.EMA(self.data.close, period=self.p.ema_slow)
         self.ema_trend = bt.ind.EMA(self.data.close, period=self.p.ema_trend)
@@ -636,7 +1057,7 @@ class Enhanced_MACD_ADX3(BaseStrategy):
         self.cci = bt.ind.CCI(self.data, period=self.p.cci_period, plot=True)
         self.trix = bt.ind.Trix(self.data, period=self.p.trix_period, plot=True)
 
-        # State
+        # State variables
         self.DCA = self.p.use_dca
         self.n_adds = 0
         self.last_add_bar = -10**9
@@ -651,7 +1072,10 @@ class Enhanced_MACD_ADX3(BaseStrategy):
         self.initial_risk = None
         self.last_pivot_low = None
 
-        # Ensure lists exist
+        # Partial exit tracking
+        self.partial_1_done = False
+
+        # Initialize lists
         if not hasattr(self, 'active_orders'):
             self.active_orders = []
         if not hasattr(self, 'entry_prices'):
@@ -660,10 +1084,159 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.sizes = []
         if not hasattr(self, 'buy_executed'):
             self.buy_executed = False
+    
+    def calculate_signal_strength(self):
+        """Calculate overall signal strength (0-1 scale)"""
+        signals = []
+        
+        try:
+            macd_diff = abs(self.macd.macd[0] - self.macd.signal[0])
+            macd_strength = min(macd_diff / (self.data.close[0] * 0.002), 1.0)
+            signals.append(macd_strength)
+        except:
+            signals.append(0.5)
+        
+        adx_strength = min(self.adx[0] / 50.0, 1.0)
+        signals.append(adx_strength)
+        
+        try:
+            vol_strength = min(self.data.volume[0] / (self.vol_sma[0] * 2.0), 1.0)
+            signals.append(vol_strength)
+        except:
+            signals.append(0.5)
+        
+        momentum_strength = 0.5
+        try:
+            if (self.momentum[0] > 0 and self.macd.macd[0] > self.macd.signal[0] and 
+                self.rsi[0] > 50 and self.cci[0] > 0):
+                momentum_strength = 1.0
+            elif (self.momentum[0] > 0 and self.macd.macd[0] > self.macd.signal[0]):
+                momentum_strength = 0.7
+            else:
+                momentum_strength = 0.2
+        except:
+            pass
+        signals.append(momentum_strength)
+        
+        try:
+            if (self.ema_fast[0] > self.ema_slow[0] > self.ema_trend[0]):
+                fast_slow_gap = (self.ema_fast[0] - self.ema_slow[0]) / self.ema_slow[0]
+                slow_trend_gap = (self.ema_slow[0] - self.ema_trend[0]) / self.ema_trend[0]
+                trend_strength = min((fast_slow_gap + slow_trend_gap) * 200, 1.0)
+            else:
+                trend_strength = 0.3
+        except:
+            trend_strength = 0.3
+        signals.append(trend_strength)
+        
+        return sum(signals) / len(signals)
 
-    # ----------------------- Helpers -----------------------
+    def calculate_trend_strength(self):
+        """Calculate trend strength for filtering"""
+        try:
+            if self.ema_fast[0] > self.ema_slow[0] > self.ema_trend[0]:
+                fast_slow_gap = (self.ema_fast[0] - self.ema_slow[0]) / self.ema_slow[0]
+                slow_trend_gap = (self.ema_slow[0] - self.ema_trend[0]) / self.ema_trend[0]
+                return min((fast_slow_gap + slow_trend_gap) * 100, 1.0)
+            else:
+                return 0.3
+        except:
+            return 0.3
+
+    def volume_filter_ok(self):
+        """Enhanced volume filter"""
+        try:
+            return self.data.volume[0] > self.vol_sma[0] * self.p.volume_filter_mult
+        except:
+            return True
+
+    def should_enter_long(self):
+        """Enhanced entry logic with all quality filters"""
+        if not (self.trend_ok() and self.breakout_up() and self.momentum_ok()):
+            return False
+        
+        signal_strength = self.calculate_signal_strength()
+        if signal_strength < self.p.min_signal_strength:
+            if self.p.debug:
+                print(f"Signal strength too weak: {signal_strength:.2f} < {self.p.min_signal_strength}")
+            return False
+
+        if not self.volume_filter_ok():
+            if self.p.debug:
+                print(f"Volume filter failed: {self.data.volume[0]} vs {self.vol_sma[0] * self.p.volume_filter_mult}")
+            return False
+        
+        trend_score = self.calculate_trend_strength()
+        if trend_score < self.p.trend_filter_strength:
+            if self.p.debug:
+                print(f"Trend strength too weak: {trend_score:.2f} < {self.p.trend_filter_strength}")
+            return False
+        
+        return True
+
+    def should_add_dca(self):
+        """More conservative DCA logic with quality filters"""
+        if not self.can_add():
+            return False
+            
+        avg_entry = self._compute_avg_entry()
+        touch_ema = self.p.add_on_ema_touch and (self.data.low[0] <= self.ema_fast[0])
+        atr_pullback = False
+        if avg_entry:
+            atr_pullback = (avg_entry - self.data.close[0]) >= (self.p.dca_atr_mult * self.atr[0])
+
+        if not (touch_ema or atr_pullback):
+            return False
+
+        if not self.momentum_ok():
+            return False
+        
+        # Only add if signal strength is still decent (lower threshold for DCA)
+        signal_strength = self.calculate_signal_strength()
+        if signal_strength < 0.5:  # Lower bar for DCA
+            if self.p.debug:
+                print(f"DCA rejected - weak signal: {signal_strength:.2f}")
+            return False
+        
+        # Dont add if too far underwater (new risk management technique)
+        if self.position.size > 0 and avg_entry:
+            unrealized_pct = ((self.data.close[0] - avg_entry) / avg_entry) * 100
+            if unrealized_pct < -10.0:  # Dont add if more than 10% underwater
+                if self.p.debug:
+                    print(f"DCA rejected - too underwater: {unrealized_pct:.1f}%")
+                return False
+        
+        return True
+
+    def handle_partial_exits(self):
+        """Implement partial exit logic"""
+        if not (self.p.use_partial_exits and self.position and self.active_orders):
+            return
+            
+        if self.position.size > 0 and not self.partial_1_done:
+            avg_entry = self._compute_avg_entry()
+            if not avg_entry:
+                return
+                
+            current_price = self.data.close[0]
+            profit_pct = ((current_price - avg_entry) / avg_entry) * 100
+            
+            # First partial exit
+            if profit_pct >= self.p.partial_exit_1_target:
+                exit_size = int(self.position.size * self.p.partial_exit_1_pct)
+                if exit_size > 0:
+                    self.sell(size=exit_size, exectype=bt.Order.Market)
+                    self.partial_1_done = True
+                    if self.p.debug:
+                        print(f'PARTIAL EXIT 1: {exit_size} units at {profit_pct:.1f}% profit')
+                    
+                    # Update tracking (simplified wip, redo later - remove proportional amount)
+                    if self.active_orders:
+                        remaining_ratio = (self.position.size - exit_size) / self.position.size
+                        for order in self.active_orders:
+                            order.size = int(order.size * remaining_ratio)
+    
     def _compute_avg_entry(self):
-        # Average price weighted by size from active orders or local lists
         try:
             if self.active_orders:
                 tot = sum(o.size for o in self.active_orders)
@@ -682,7 +1255,6 @@ class Enhanced_MACD_ADX3(BaseStrategy):
         return ema_stack and di_ok and adx_ok
 
     def breakout_up(self):
-        # cross above prior Donchian high with vol confirmation and limited ATR stretch
         if len(self.data) < self.p.breakout_period + 2:
             return False
         prior_upper = self.dc_high[-1]
@@ -714,7 +1286,6 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.trail_armed = True
 
     def _update_pivot_low(self):
-        # Simple 5-bar pivot low: 2 left, pivot at -2, 2 right
         if len(self.data) < 5:
             return
         c = self.data.low[-2]
@@ -727,7 +1298,6 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.trail_stop = None
             return
 
-        # Keep run_high for chandelier
         self.run_high = max(self.run_high or self.data.high[0], self.data.high[0])
 
         # Arm trailing later
@@ -769,13 +1339,16 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.trail_stop = new_stop
             self.last_trail_update = len(self)
 
-    # ----------------------- Entry / DCA / Exit -----------------------
+    # ============ MAIN TRADING LOGIC ============
+
     def buy_or_short_condition(self):
+        """Enhanced entry with quality filters"""
         self.conditions_checked = True
         if self.position:
             return
 
-        if self.trend_ok() and self.breakout_up() and self.momentum_ok():
+        # Use enhanced entry logic
+        if self.should_enter_long():
             size = self._determine_size()
             order_tracker = OrderTracker(
                 entry_price=self.data.close[0],
@@ -800,14 +1373,19 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.order = self.buy(size=size, exectype=bt.Order.Market)
 
             if self.p.debug:
-                print(f"Buy (breakout) {size} @ {self.data.close[0]}")
+                signal_str = self.calculate_signal_strength()
+                trend_str = self.calculate_trend_strength()
+                print(f"Buy (breakout) {size} @ {self.data.close[0]}, Signal: {signal_str:.2f}, Trend: {trend_str:.2f}")
 
             if not self.buy_executed:
                 if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                     self.first_entry_price = self.data.close[0]
                 self.buy_executed = True
 
-            # Initial risk references
+            # Reset partial exit tracking
+            self.partial_1_done = False
+
+            # Initialize position tracking
             self.breakout_low = self.dc_low[-1]
             self.init_stop = float(self.breakout_low - self.p.init_sl_atr_mult * self.atr[0])
             self.trail_stop = self.init_stop
@@ -817,24 +1395,16 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.n_adds = 0
             self.last_add_bar = len(self)
 
-            # Update averages/risk
             if hasattr(self, 'calc_averages'):
                 self.calc_averages()
             avg_entry = self._compute_avg_entry()
             self.initial_risk = max(1e-8, (avg_entry - self.init_stop)) if avg_entry else None
 
     def dca_or_short_condition(self):
+        """Enhanced DCA with quality filters"""
         self.conditions_checked = True
-        if not self.can_add():
-            return
-
-        avg_entry = self._compute_avg_entry()
-        touch_ema = self.p.add_on_ema_touch and (self.data.low[0] <= self.ema_fast[0])
-        atr_pullback = False
-        if avg_entry:
-            atr_pullback = (avg_entry - self.data.close[0]) >= (self.p.dca_atr_mult * self.atr[0])
-
-        if (touch_ema or atr_pullback) and self.momentum_ok():
+        
+        if self.should_add_dca():
             size = self._determine_size()
             order_tracker = OrderTracker(
                 entry_price=self.data.close[0],
@@ -852,25 +1422,24 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.order = self.buy(size=size, exectype=bt.Order.Market)
 
             if self.p.debug:
-                print(f"DCA add {self.n_adds+1}/{self.p.max_adds}: {size} @ {self.data.close[0]}")
+                signal_str = self.calculate_signal_strength()
+                print(f"DCA add {self.n_adds+1}/{self.p.max_adds}: {size} @ {self.data.close[0]}, Signal: {signal_str:.2f}")
 
             self.n_adds += 1
             self.last_add_bar = len(self)
 
             if hasattr(self, 'calc_averages'):
                 self.calc_averages()
-            # Keep initial stop as is; trailing logic will manage ratchet
-            avg_entry = self._compute_avg_entry()
-            # Recompute initial risk only if init_stop changed; otherwise keep
 
     def sell_or_cover_condition(self):
+        """Enhanced exits with partial exits and trailing stop"""
         self.conditions_checked = True
 
         if not hasattr(self, 'active_orders'):
             self.active_orders = []
 
         if not self.position:
-            # Clean state if needed
+            # Clean state
             self.active_orders = []
             self.trail_stop = None
             self.init_stop = None
@@ -878,30 +1447,39 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.entry_bar = None
             self.trail_armed = False
             self.n_adds = 0
+            self.partial_1_done = False
             return
 
         current_price = self.data.close[0]
 
-        # Update trailing stop first
+        # Handle partial exits first
+        self.handle_partial_exits()
+
+        # Update trailing stop
         if self.p.use_trailing_stop:
             self.update_trailing_stop()
 
-        # Hard/Trailing stop hit? (use low to catch intrabar/gaps)
-        if self.p.use_trailing_stop and self.trail_stop is not None and self.data.low[0] <= self.trail_stop:
+        # Check trailing stop hit
+        if (self.p.use_trailing_stop and self.trail_stop is not None and 
+            self.data.low[0] <= self.trail_stop):
+            
             total_size = sum(o.size for o in self.active_orders) if self.active_orders else self.position.size
             self.order = self.sell(size=total_size, exectype=bt.Order.Market)
+            
             if self.p.debug:
-                print(f"Trailing stop hit @ {self.data.low[0]} <= {self.trail_stop} (close {current_price}) - closing {total_size}")
+                print(f"Trailing stop hit @ {self.data.low[0]} <= {self.trail_stop} - closing {total_size}")
 
-            # Close and clear all tracked orders
+            # Clear all tracking
             for o in self.active_orders:
                 o.close_order(self.data.low[0])
             self.active_orders = []
+            
             if hasattr(self, 'reset_position_state'):
                 self.reset_position_state()
             self.buy_executed = False
+            self.partial_1_done = False
 
-            # Reset trail state
+            # Reset all state
             self.trail_stop = None
             self.init_stop = None
             self.run_high = None
@@ -910,7 +1488,7 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             self.n_adds = 0
             return
 
-        # Per-suborder take-profits (optional; keep if you like partials)
+        # Check individual take profits
         orders_to_remove = []
         for idx, order in enumerate(self.active_orders):
             if current_price >= order.take_profit_price:
@@ -920,7 +1498,7 @@ class Enhanced_MACD_ADX3(BaseStrategy):
                 order.close_order(current_price)
                 orders_to_remove.append(idx)
 
-        # Remove closed orders and recalc averages
+        # Remove closed orders
         for idx in sorted(orders_to_remove, reverse=True):
             removed_order = self.active_orders.pop(idx)
             if self.p.debug:
@@ -934,7 +1512,8 @@ class Enhanced_MACD_ADX3(BaseStrategy):
                 if hasattr(self, 'reset_position_state'):
                     self.reset_position_state()
                 self.buy_executed = False
-                # Reset trail state
+                self.partial_1_done = False
+                # Reset all state
                 self.trail_stop = None
                 self.init_stop = None
                 self.run_high = None
@@ -944,3 +1523,7 @@ class Enhanced_MACD_ADX3(BaseStrategy):
             else:
                 if hasattr(self, 'calc_averages'):
                     self.calc_averages()
+
+# ============ END OF STRATEGY ============
+
+

@@ -4,7 +4,7 @@ import optuna
 from testing_optuna_newmacd import build_optuna_storage
 from backtrader.dontcommit import connection_string as MSSQL_ODBC
 storage = build_optuna_storage(MSSQL_ODBC)
-study = optuna.load_study(study_name="junk_1d", storage=storage)
+study = optuna.load_study(study_name="BullBearMarketBTC-ETH-LTC-XRP-BCH_1m_MACD_ADXV3", storage=storage)
 
 trial_num = None # or None for best
 trial = (study.best_trial if trial_num is None
@@ -30,33 +30,28 @@ params = {k: v for k, v in raw_params.items() if k in param_names}
 
 
 # --------------- Data spec ---------------
-start="2025-01-01"
-end="2026-01-31"
+bull_start = "2020-09-28"
+bull_end = "2021-05-31"
+bear_start = "2022-05-28"
+bear_end = "2023-06-23"
+# Optional holdout test period
+test_bull_start="2023-06-12"
+test_bull_end="2025-05-31"
 tf = "1m"
-'''
-specs = [
-    DataSpec("BTC", start_date=start, end_date=end, interval=tf),
-    DataSpec("ETH", start_date=start, end_date=end, interval=tf),
-    DataSpec("LTC", start_date=start, end_date=end, interval=tf),
-    DataSpec("XRP", start_date=start, end_date=end, interval=tf),
-    DataSpec("BCH", start_date=start, end_date=end, interval=tf),
-]
-'''
+
 if __name__ == '__main__':
     print(f"Using params: {params}")
-    print(f"Param names: {param_names}")
     print(f"All raw params: {raw_params}")
     print(f"Trial number: {trial.number}")
     print(f"Trial value: {trial.value}")
     print(f"Trial state: {trial.state}")
     try:
         backtest(
-        # optimize_backtest(
             strategy,
             coin='BTC',
             collateral='USDT',
-            start_date=start, 
-            end_date=end,
+            start_date=test_bull_start, 
+            end_date=test_bull_end,
             interval=tf,
             init_cash=1000,
             plot=True,

@@ -1013,7 +1013,7 @@ if __name__ == "__main__":
     )
 
     # 5) Holdout with best params
-    storage = ensure_storage_or_sqlite(None, study_name)
+    storage = ensure_storage_or_sqlite(MSSQL_ODBC, study_name)
     study = optuna.load_study(study_name=study_name, storage=storage)
     best_params = study.best_params
     holdout_spec = DataSpec("BTC", interval="1m", ranges=[("2023-06-12", "2025-05-31")])

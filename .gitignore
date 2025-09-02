@@ -33,3 +33,6 @@ trashpad
 TODO.rst
 *.db
 dependencies/quantstats_lumi_btquant/quantstats_lumi.egg-info
+testing_optuna_newmacd.py
+testing_optuna_newmacd_v1.py
+testing_optuna_newmacd.py

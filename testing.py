@@ -40,11 +40,11 @@ test_bull_end="2025-05-31"
 tf = "1m"
 
 if __name__ == '__main__':
-    print(f"Using params: {params}")
-    print(f"All raw params: {raw_params}")
-    print(f"Trial number: {trial.number}")
-    print(f"Trial value: {trial.value}")
-    print(f"Trial state: {trial.state}")
+    # print(f"Using params: {params}")
+    # print(f"All raw params: {raw_params}")
+    # print(f"Trial number: {trial.number}")
+    # print(f"Trial value: {trial.value}")
+    # print(f"Trial state: {trial.state}")
     try:
         backtest(
             strategy,
@@ -56,8 +56,7 @@ if __name__ == '__main__':
             init_cash=1000,
             plot=True,
             quantstats=False,
-            param_names=param_names,
-            params=params,
+            # params=params,
         )
 
     except Exception as e:

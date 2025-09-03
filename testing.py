@@ -1,12 +1,15 @@
 from backtrader.utils.backtest import backtest
-from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX3 as strategy
+from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX4 as strategy
+# from backtrader.strategies.MACD_ADX import VectorMACD_ADX as strategy
 import optuna
 from testing_optuna_newmacd import build_optuna_storage
 from backtrader.dontcommit import connection_string as MSSQL_ODBC
 storage = build_optuna_storage(MSSQL_ODBC)
-# study = optuna.load_study(study_name="BullBearMarketBTC-ETH-LTC-XRP-BCH_1m_MACD_ADXV3", storage=storage)
-study = optuna.load_study(study_name="Optimized_1m_MTF_MACD_ADX", storage=storage)
+study = optuna.load_study(study_name="BullBearMarketBTC-ETH-LTC-XRP-BCH_1m_MACD_ADXV3", storage=storage)
+# study = optuna.load_study(study_name="Optimized_1m_MTF_MACD_ADX_VEC_V2", storage=storage)
 
+from rich.console import Console
+console = Console()
 
 trial_num = None # or None for best
 trial = (study.best_trial if trial_num is None
@@ -39,31 +42,35 @@ bear_end = "2023-06-23"
 # Optional holdout test period
 test_bull_start="2023-06-12"
 test_bull_end="2025-05-31"
-tf = "1m"
+tf = "15m"
 
 if __name__ == '__main__':
-    print(f"Using params: {params}")
-    print(f"All raw params: {raw_params}")
-    print(f"Trial number: {trial.number}")
-    print(f"Trial value: {trial.value}")
-    print(f"Trial state: {trial.state}")
+    console.print(f"Using params: {params}")
+    # print(f"All raw params: {raw_params}")
+    console.print(f"Trial number: {trial.number}")
+    # print(f"Trial value: {trial.value}")
+    # print(f"Trial state: {trial.state}")
     try:
         backtest(
             strategy,
             coin='BTC',
             collateral='USDT',
-            start_date=test_bull_start, 
-            end_date=test_bull_end,
+            start_date=bear_end,
+            # end_date=test_bull_end,
             interval=tf,
-            init_cash=1000,
             plot=True,
-            quantstats=False,
-            params=params,
+            quantstats=True,
+            exchange='MEXC', # enables can_short if strategy has it
+            add_mtf_resamples=True,       # 5m/15m/60m-Guards
+            params={**params,        # Optuna-Params
+                    'qty_step': 0.00001,    # BTC
+                    'price_tick': 0.1},
+            debug=True
         )
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        console.print(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()
     except KeyboardInterrupt:
-        print("Process interrupted by user.")
+        console.print("Process interrupted by user.")

@@ -13,7 +13,7 @@ from rich.table import Table
 
 console = Console()
 from backtrader.feeds.mssql_crypto import get_database_data, MSSQLData
-from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX3 as StrategyClass
+from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX4 as StrategyClass
 
 # Defaults
 INIT_CASH = 1000.0
@@ -927,7 +927,7 @@ tf = "1m"
 if __name__ == "__main__":
     # Get ODBC string
     try:
-        from backtrader.dontcommit import connection_string as MSSQL_ODBC
+        from backtrader.dontcommit import optuna_connection_string as MSSQL_ODBC
     except Exception:
         MSSQL_ODBC = os.getenv("MSSQL_ODBC", None)
 

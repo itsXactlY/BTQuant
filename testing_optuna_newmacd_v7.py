@@ -29,6 +29,7 @@ from backtrader.dontcommit import optuna_connection_string as MSSQL_ODBC
 INIT_CASH = 1000.0
 COMMISSION_PER_TRANSACTION = 0.00075
 DEFAULT_COLLATERAL = "USDT"
+STUDYNAME = "Optimized_1m_MTF_VEC_V7"
 
 # Parquet cache dir (override with env BTQ_CACHE_DIR)
 CACHE_DIR = Path(os.getenv("BTQ_CACHE_DIR", ".btq_cache"))
@@ -890,6 +891,8 @@ def run_backtest(strategy_class, df, spec: DataSpec, params: Dict[str, Any], ini
     # exactbars=1 ensures runonce-style performance
     results = cerebro.run(maxcpus=1, exactbars=1)
     strat = results[0]
+    if plot:
+        cerebro.plot(style='candles', numfigs=1, volume=True, barup='black', bardown='grey')
     
     final_value = cerebro.broker.getvalue()
     metrics = score_metrics_from_strat(strat, df_slice, init_cash, final_value)
@@ -902,11 +905,6 @@ def run_backtest(strategy_class, df, spec: DataSpec, params: Dict[str, Any], ini
     console.print(f"\n--- Backtest Results for {spec.symbol} ---")
     console.print(f"Trades: {trades}, Wins: {wins}, Win Rate: {(wins/trades*100 if trades>0 else 0):.1f}%")
     console.print(f"Sharpe: {sharpe:.3f}, MaxDD: {mdd:.2f}%, Final Value: ${final_value:,.2f}")
-    if plot:
-        try:
-            cerebro.plot(style='candles', numfigs=1, volume=True, barup='black', bardown='grey')
-        except Exception:
-            pass
     # cleanup
     try:
         del cerebro, feed, results, strat
@@ -1171,7 +1169,7 @@ def _worker_optimize(
             init_cash=init_cash,
             commission=comm,
             pruner="hyperband",
-            storage_string=storage_string,
+            storage_string=storage,
             study_name=study_name,
             seed=seed,
             exchange=exch,
@@ -1227,89 +1225,214 @@ def launch_multiprocess_optimize(
 
 # --- Main execution block ---
 
+storage = ensure_storage_or_sqlite(MSSQL_ODBC, STUDYNAME)
+study = optuna.load_study(study_name=STUDYNAME, storage=storage)
+console.print(f"[green]Multiprocess optimize done. Best value: {study.best_value:.4f}[/green]")
+console.print(study.best_params)
+
 if __name__ == "__main__":
-    try:
-        bull_start, bull_end = "2020-09-28", "2021-05-31"
-        bear_start, bear_end = "2022-05-28", "2023-06-23"
-        holdout_start, holdout_end = "2023-06-12", "2025-05-31"
-        train_specs = expand_specs_by_ranges([
-            DataSpec("BTC", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
-            DataSpec("ETH", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
-        ])
-        build_cache(train_specs, force_refresh=False)
+    bull_start, bull_end = "2020-09-28", "2021-05-31"
+    bear_start, bear_end = "2022-05-28", "2023-06-23"
+    holdout_start, holdout_end = "2023-06-12", "2025-05-31"
 
-        sanity_spec = DataSpec("BTC", "15m", start_date="2024-01-01", end_date="2024-01-31")
-        df_map_sanity = preload_polars([sanity_spec])
-        sanity_params = {
-            'breakout_period': 40,
-            'adxth': 20,
-            'confirm_bars': 1,
-            'atr_stop_mult': 2.5,
-            'trail_mode': 'chandelier',
-            'trail_atr_mult': 4.0,
-            'move_to_breakeven_R': 0.75,
-            'risk_per_trade_pct': 0.003,
-            'rsi_overheat': 80,
-            'rsi_oversold': 25,
-            'use_pyramiding': False,
-            'use_volume_filter': False,
-            'volume_filter_mult': 1.2,
-            'ema_fast': 20,
-            'ema_slow': 60,
-            'atr_period': 14,
-            'donchian_trail_period': 55,
-            'trail_update_every': 2,
-            'max_adds': 0,
-            'add_cooldown': 20,
-            'add_atr_mult': 1.0,
-            'add_min_R': 1.0,
-            'close_based_stop': True,
-            'use_htf': True,
-            'regime_mode_long': 'price_vs_slow',
-            'regime_mode_short': 'neutral',
-            'use_dynamic_exits': True,
-            'tp_r_multiple': 2.0,
-            'use_partial_exits': True,
-            'partial_exit_r': 1.5,
-            'partial_exit_pct': 0.5,
-            'time_limit_bars': 120,
-            'htf1_ema_fast': 40, 'htf1_ema_slow': 120, 'htf1_adx_period': 14,
-            'htf2_ema_fast': 80, 'htf2_ema_slow': 200,
-            'max_stretch_atr_mult': 1.0,
-            'exposure_pct_cap': 0.9,
-            'reserve_cash_pct': 0.02,
-            'slip_fee_buffer_bps': 10.0,
-        }
+    train_specs = expand_specs_by_ranges([
+        DataSpec("BTC", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+        DataSpec("ETH", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+    ])
+    build_cache(train_specs, force_refresh=False)
 
-        console.print("[yellow]Sanity backtest (BTC 15m Jan 2024) with vector features...[/yellow]")
-        run_backtest(VectorMACD_ADX, df_map_sanity["BTC"], sanity_spec, sanity_params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=True)
+    # Use the same dataset as optimization (or swap for holdout / sanity check)
+    df_map_full = preload_polars(train_specs)
 
-        study_name = "Optimized_1m_MTF_VEC_V7"
-        launch_multiprocess_optimize(
-            strategy_class=VectorMACD_ADX,
-            specs=train_specs,
-            storage_string=MSSQL_ODBC,
-            study_name=study_name,
-            total_trials=200,
-            workers=min(8, max(1, mp.cpu_count()-1)),
+    best_params = study.best_params  # <-- directly from Optuna
+
+    console.print("[yellow]Final backtest on full dataset with best Optuna params...[/yellow]")
+    for spec in train_specs:   # backtest BTC and ETH separately
+        run_backtest(
+            VectorMACD_ADX,
+            df_map_full[spec.symbol],
+            spec,                  # single DataSpec
+            best_params,           # <-- best params here
             init_cash=INIT_CASH,
-            comm=COMMISSION_PER_TRANSACTION,
-            exch="MEXC",
-            seed_base=42,
+            exchange="MEXC",
+            plot=False,
+            debug=False
         )
 
-        storage = ensure_storage_or_sqlite(MSSQL_ODBC, study_name)
-        study = optuna.load_study(study_name=study_name, storage=storage)
-        best_params = study.best_params
-        console.print("[green]Optuna best params:[/green]")
-        console.print(best_params)
 
-        holdout_spec = DataSpec("BNB", "15m", start_date=holdout_start, end_date=holdout_end)
-        df_hold = preload_polars([holdout_spec])["BNB"]
-        console.print("[magenta]Holdout backtest with best params on BNB (15m)...[/magenta]")
-        run_backtest(VectorMACD_ADX, df_hold, holdout_spec, best_params, init_cash=INIT_CASH, exchange="MEXC", plot=False, debug=False)
-    except KeyboardInterrupt:
-        console.print("Process interrupted by user.")
-    except Exception as e:
-        console.print(f"An error occurred: {e}")
-        traceback.print_exc()
+# storage = ensure_storage_or_sqlite(MSSQL_ODBC, STUDYNAME)
+# study = optuna.load_study(study_name=STUDYNAME, storage=storage)
+# console.print(f"[green]Multiprocess optimize done. Best value: {study.best_value:.4f}[/green]")
+# console.print(study.best_params)
+
+# if __name__ == "__main__":
+#     try:
+#         bull_start, bull_end = "2020-09-28", "2021-05-31"
+#         bear_start, bear_end = "2022-05-28", "2023-06-23"
+#         holdout_start, holdout_end = "2023-06-12", "2025-05-31"
+#         train_specs = expand_specs_by_ranges([
+#             DataSpec("BTC", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+#             DataSpec("ETH", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+#         ])
+#         build_cache(train_specs, force_refresh=False)
+
+#         sanity_spec = DataSpec("BTC", "15m", start_date="2024-01-01", end_date="2024-01-31")
+#         # df_map_sanity = preload_polars([train_specs])
+#         df_map_sanity = preload_polars(train_specs)
+        
+        
+#         sanity_params = {
+#             'breakout_period': 40,
+#             'adxth': 20,
+#             'confirm_bars': 1,
+#             'atr_stop_mult': 2.5,
+#             'trail_mode': 'chandelier',
+#             'trail_atr_mult': 4.0,
+#             'move_to_breakeven_R': 0.75,
+#             'risk_per_trade_pct': 0.003,
+#             'rsi_overheat': 80,
+#             'rsi_oversold': 25,
+#             'use_pyramiding': False,
+#             'use_volume_filter': False,
+#             'volume_filter_mult': 1.2,
+#             'ema_fast': 20,
+#             'ema_slow': 60,
+#             'atr_period': 14,
+#             'donchian_trail_period': 55,
+#             'trail_update_every': 2,
+#             'max_adds': 0,
+#             'add_cooldown': 20,
+#             'add_atr_mult': 1.0,
+#             'add_min_R': 1.0,
+#             'close_based_stop': True,
+#             'use_htf': True,
+#             'regime_mode_long': 'price_vs_slow',
+#             'regime_mode_short': 'neutral',
+#             'use_dynamic_exits': True,
+#             'tp_r_multiple': 2.0,
+#             'use_partial_exits': True,
+#             'partial_exit_r': 1.5,
+#             'partial_exit_pct': 0.5,
+#             'time_limit_bars': 120,
+#             'htf1_ema_fast': 40, 'htf1_ema_slow': 120, 'htf1_adx_period': 14,
+#             'htf2_ema_fast': 80, 'htf2_ema_slow': 200,
+#             'max_stretch_atr_mult': 1.0,
+#             'exposure_pct_cap': 0.9,
+#             'reserve_cash_pct': 0.02,
+#             'slip_fee_buffer_bps': 10.0,
+#         }
+
+#         console.print("[yellow]Sanity backtest (BTC 15m Jan 2024) with vector features...[/yellow]")
+#         run_backtest(
+#             VectorMACD_ADX,
+#             df_map_sanity["BTC"],
+#             sanity_spec,              # pass the single spec, not the whole train_specs list
+#             sanity_params,
+#             init_cash=INIT_CASH,
+#             exchange="MEXC",
+#             plot=True,
+#             debug=True
+#         )
+
+#         study_name = STUDYNAME
+#         launch_multiprocess_optimize(
+#             strategy_class=VectorMACD_ADX,
+#             specs=train_specs,
+#             storage_string=MSSQL_ODBC,
+#             study_name=study_name,
+#             total_trials=200,
+#             workers=min(8, max(1, mp.cpu_count()-1)),
+#             init_cash=INIT_CASH,
+#             comm=COMMISSION_PER_TRANSACTION,
+#             exch="MEXC",
+#             seed_base=42,
+#         )
+
+#         storage = ensure_storage_or_sqlite(MSSQL_ODBC, study_name)
+#         study = optuna.load_study(study_name=study_name, storage=storage)
+#         best_params = study.best_params
+#         console.print("[green]Optuna best params:[/green]")
+#         console.print(best_params)
+
+#         holdout_spec = DataSpec("BNB", "15m", start_date=holdout_start, end_date=holdout_end)
+#         df_hold = preload_polars([holdout_spec])["BNB"]
+#         console.print("[magenta]Holdout backtest with best params on BNB (15m)...[/magenta]")
+#         run_backtest(VectorMACD_ADX, df_hold, holdout_spec, best_params, init_cash=INIT_CASH, exchange="MEXC", plot=False, debug=False)
+#     except KeyboardInterrupt:
+#         console.print("Process interrupted by user.")
+#     except Exception as e:
+#         console.print(f"An error occurred: {e}")
+#         traceback.print_exc()
+
+
+
+
+
+# # from backtrader.utils.backtest import backtest
+# # from testing_optuna_newmacd import build_optuna_storage
+# # storage = build_optuna_storage(MSSQL_ODBC)
+# # study = optuna.load_study(study_name=STUDYNAME, storage=storage)
+# # strategy = VectorMACD_ADX
+
+# # trial_num = None # or None for best
+# # trial = (study.best_trial if trial_num is None
+# #          else next(t for t in study.get_trials(deepcopy=False) if t.number == trial_num))
+
+# # raw_params = trial.params
+
+# # def get_param_names(cls) -> set:
+# #     names = set()
+# #     try:
+# #         names = set(cls.params._getkeys())  # type: ignore[attr-defined]
+# #     except Exception:
+# #         try:
+# #             # legacy tuple-of-tuples style
+# #             names = set(k for k, _ in cls.params)  # type: ignore[assignment]
+# #         except Exception:
+# #             # fallback: just trust trial params
+# #             names = set(raw_params.keys())
+# #     return names
+
+# # param_names = get_param_names(strategy)
+# # params = {k: v for k, v in raw_params.items() if k in param_names}
+
+
+# # # --------------- Data spec ---------------
+# # bull_start = "2020-09-28"
+# # bull_end = "2021-05-31"
+# # bear_start = "2022-05-28"
+# # bear_end = "2023-06-23"
+# # # Optional holdout test period
+# # test_bull_start="2023-06-12"
+# # test_bull_end="2025-05-31"
+# # tf = "1m"
+
+# # if __name__ == '__main__':
+# #     console.print(f"Using params: {params}")
+# #     # print(f"All raw params: {raw_params}")
+# #     console.print(f"Trial number: {trial.number}")
+# #     # print(f"Trial value: {trial.value}")
+# #     # print(f"Trial state: {trial.state}")
+
+
+# #     bull_start, bull_end = "2020-09-28", "2021-05-31"
+# #     bear_start, bear_end = "2022-05-28", "2023-06-23"
+# #     holdout_start, holdout_end = "2023-06-12", "2025-05-31"
+# #     train_specs = expand_specs_by_ranges([
+# #         DataSpec("BTC", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+# #         # DataSpec("ETH", "1m", ranges=[(bull_start, bull_end), (bear_start, bear_end)]),
+# #     ])
+# #     build_cache(train_specs, force_refresh=True)
+
+# #     sanity_spec = DataSpec("BTC", "1m", start_date="2024-01-01", end_date="2024-01-31")
+# #     df_map_sanity = preload_polars([sanity_spec])
+
+# #     try:
+# #         run_backtest(VectorMACD_ADX, df_map_sanity["BTC"], sanity_spec, params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=True)
+
+# #     except Exception as e:
+# #         console.print(f"An error occurred: {e}")
+# #         import traceback
+# #         traceback.print_exc()
+# #     except KeyboardInterrupt:
+# #         console.print("Process interrupted by user.")

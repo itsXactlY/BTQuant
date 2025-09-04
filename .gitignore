@@ -59,8 +59,7 @@ debug_codon.py
 testing_optuna_newmacd_v2.py
 testing_optuna_newmacd_v4.py
 testing_optuna_newmacd_v5.py
-testing_optuna_newmacd_v6_backup_after_vectorizedcaching.py
-testing_optuna_newmacd_v6_backup.py
-testing_optuna_newmacd_v6.py
 testing_optuna_newmacd.py
 testing_optuna_newmacd_v2.py
+.btq_cache/BTC_1m_USDT_dac9fdc499b5.parquet
+testing_optuna_newmacd_v8_still_v6prototype.py

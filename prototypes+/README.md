@@ -1,4 +1,6 @@
-# BTQuant v2025: Next-Generation Quantitative Trading System
+# WORK IN PROGRESS - VERY FIRST CRUDE PROTOTYPE
+
+# BTQuant: Next-Generation Quantitative Trading System
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-red.svg)](https://pytorch.org/)
@@ -7,7 +9,7 @@
 
 ## 🚀 Revolutionary Quantitative Trading with Cutting-Edge AI
 
-BTQuant v2025 represents the pinnacle of quantitative trading technology, integrating the latest breakthroughs in artificial intelligence, deep learning, and financial engineering. This system combines **Transformer-GNN hybrid architectures**, **Deep Reinforcement Learning**, **Quantum-Inspired Algorithms**, and **Multi-Modal Data Fusion** to create a truly next-generation trading platform.
+BTQuant  represents the pinnacle of quantitative trading technology, integrating the latest breakthroughs in artificial intelligence, deep learning, and financial engineering. This system combines **Transformer-GNN hybrid architectures**, **Deep Reinforcement Learning**, **Quantum-Inspired Algorithms**, and **Multi-Modal Data Fusion** to create a truly next-generation trading platform.
 
 ### 🏆 Key Innovations
 
@@ -116,8 +118,8 @@ git clone https://github.com/itsXactlY/BTQuant.git
 cd BTQuant
 
 # Create conda environment
-conda create -n btquant_v2025 python=3.9
-conda activate btquant_v2025
+conda create -n btquant_ python=3.9
+conda activate btquant_
 
 # Install PyTorch with CUDA support
 conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
@@ -126,17 +128,17 @@ conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvi
 conda install pyg -c pyg
 
 # Install remaining dependencies
-pip install -r requirements_v2025.txt
+pip install -r requirements_.txt
 ```
 
 ### Method 2: Docker (Production)
 
 ```bash
 # Build the Docker image
-docker build -t btquant:v2025 .
+docker build -t btquant: .
 
 # Run with GPU support
-docker run --gpus all -v $(pwd)/data:/app/data btquant:v2025
+docker run --gpus all -v $(pwd)/data:/app/data btquant:
 ```
 
 ### Method 3: Development Installation
@@ -153,7 +155,7 @@ pip install -e .
 ### 1. Basic Configuration
 
 ```python
-from btquant_v2025 import TradingConfig, QuantumTransformerStrategy
+from btquant_ import TradingConfig, QuantumTransformerStrategy
 
 # Initialize configuration
 config = TradingConfig(
@@ -168,7 +170,7 @@ config = TradingConfig(
 ### 2. Data Preparation
 
 ```python
-from btquant_v2025 import QuantumFeatureEngine
+from btquant_ import QuantumFeatureEngine
 
 # Initialize feature engine
 feature_engine = QuantumFeatureEngine(config)
@@ -185,7 +187,7 @@ print(f"Generated {len(enhanced_data.columns)} features")
 ### 3. Model Training
 
 ```python
-from btquant_v2025 import ModelTrainer
+from btquant_ import ModelTrainer
 
 # Initialize trainer
 trainer = ModelTrainer(config)
@@ -229,7 +231,7 @@ results = cerebro.run()
 ### 5. Live Trading (Paper Trading)
 
 ```python
-from btquant_v2025 import LiveTradingEngine
+from btquant_ import LiveTradingEngine
 
 # Initialize live trading
 engine = LiveTradingEngine(
@@ -244,7 +246,7 @@ engine.start()
 
 ## ⚙️ Configuration
 
-The system uses a comprehensive YAML configuration file (`config_v2025.yaml`):
+The system uses a comprehensive YAML configuration file (`config_.yaml`):
 
 ### Key Configuration Sections
 
@@ -328,7 +330,7 @@ class CustomTradingEnv(AdvancedTradingEnv):
 ### Model Ensemble
 
 ```python
-from btquant_v2025 import ModelEnsemble
+from btquant_ import ModelEnsemble
 
 # Create ensemble of multiple models
 ensemble = ModelEnsemble([
@@ -368,7 +370,7 @@ study.optimize(objective, n_trials=100)
 ### Walk-Forward Optimization
 
 ```python
-from btquant_v2025 import WalkForwardOptimizer
+from btquant_ import WalkForwardOptimizer
 
 optimizer = WalkForwardOptimizer(
     data=historical_data,
@@ -405,7 +407,7 @@ models = ray.get(futures)
 ### Comprehensive Backtesting
 
 ```python
-from btquant_v2025 import AdvancedBacktester
+from btquant_ import AdvancedBacktester
 
 backtester = AdvancedBacktester(
     strategy=QuantumTransformerStrategy,
@@ -445,7 +447,7 @@ metrics = {
 ### Risk Analysis
 
 ```python
-from btquant_v2025 import RiskAnalyzer
+from btquant_ import RiskAnalyzer
 
 risk_analyzer = RiskAnalyzer(portfolio_returns)
 
@@ -473,7 +475,7 @@ mc_results = risk_analyzer.monte_carlo_simulation(
 
 Based on backtesting from 2020-2025 across multiple asset classes:
 
-| Metric | BTQuant v2025 | S&P 500 | Traditional Quant |
+| Metric | BTQuant  | S&P 500 | Traditional Quant |
 |--------|---------------|---------|-------------------|
 | Annual Return | 28.4% | 12.1% | 15.7% |
 | Sharpe Ratio | 2.31 | 0.84 | 1.12 |
@@ -572,40 +574,40 @@ pytest tests/integration/
 pytest tests/performance/
 
 # Generate coverage report
-pytest --cov=btquant_v2025 --cov-report=html
+pytest --cov=btquant_ --cov-report=html
 ```
 
 ### Code Quality
 
 ```bash
 # Format code
-black btquant_v2025/
+black btquant_/
 
 # Check linting
-flake8 btquant_v2025/
+flake8 btquant_/
 
 # Type checking
-mypy btquant_v2025/
+mypy btquant_/
 ```
 
 ## 🚀 Future Roadmap
 
-### Q1 2025
-- [ ] **Quantum Computing Integration**: Real quantum hardware support
+### Q1 2026
+- [ ] **Quantum Computing Integration**: Real quantum hardware support - LF Engineers to jump on
 - [ ] **Federated Learning**: Multi-institutional model training
 - [ ] **Real-Time Streaming**: Apache Kafka integration
 
-### Q2 2025
+### Q2 2026
 - [ ] **Large Language Models**: GPT-X/Perplexity integration for news analysis
 - [ ] **DeFi Integration**: Decentralized finance protocols
 - [ ] **ESG Scoring**: Sustainability-aware trading
 
-### Q3 2025
+### Q3 2026
 - [ ] **Edge Computing**: IoT device deployment
 - [ ] **Explainable AI**: Model interpretation tools
 - [ ] **Cross-Asset Arbitrage**: Multi-market opportunities
 
-### Q4 2025
+### Q4 2026
 - [ ] **Neuromorphic Computing**: Brain-inspired processors
 - [ ] **Metaverse Integration**: Virtual trading environments
 - [ ] **AGI Collaboration**: Artificial General Intelligence partnerships
@@ -618,7 +620,7 @@ We welcome contributions from the community! Please see our [Contributing Guide]
 
 ```bash
 # Fork the repository
-git clone https://github.com/your-username/BTQuant.git
+git clone https://github.com/itsXactlY/BTQuant.git
 
 # Create feature branch
 git checkout -b feature/amazing-feature

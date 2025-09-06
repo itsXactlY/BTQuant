@@ -83,7 +83,7 @@ class DataSpec:
 
 @dataclass(frozen=True)
 class TradingConfig:
-    init_cash: float = 10_000.0
+    init_cash: float = 100_000.0
     commission: float = 0.00075
     slippage_bps: float = 5.0
     cache_dir: Path = field(default_factory=lambda: Path(".btq_cache_v2025"))
@@ -107,7 +107,7 @@ class TradingConfig:
     
     # Data configuration
     symbols: List[str] = field(default_factory=lambda: ["BTC", "ETH"])
-    timeframe: str = "15m"
+    timeframe: str = "1m"
     bull_start: str = "2020-09-28"
     bull_end: str = "2021-05-31"
     bear_start: str = "2022-05-28"
@@ -686,7 +686,7 @@ class AdvancedTradingEnv(gym.Env):
     def __init__(self,
                  df: Union[pd.DataFrame, np.ndarray],
                  feature_columns: List[str],
-                 initial_balance: float = 10000,
+                 initial_balance: float = 100_000,
                  transaction_cost: float = 0.001,
                  max_position: float = 1.0):
         super().__init__()
@@ -1802,7 +1802,7 @@ def main():
             train_data=train_subset,
             val_data=val_subset,
             feature_columns=feature_columns[:15],  # Use top 15 features
-            epochs=5  # Reduced for demo
+            epochs=250  # Reduced for demo
         )
         
         # Train RL agent - convert to clean pandas DataFrame (only for RL training)
@@ -1812,7 +1812,7 @@ def main():
         rl_agent = trainer.train_rl_agent(
             env_data=train_pandas,
             feature_columns=feature_columns[:15],
-            total_timesteps=2000  # Reduced for demo
+            total_timesteps=200000  # Reduced for demo
         )
         
         # 5. Backtesting with real data (using Polars)

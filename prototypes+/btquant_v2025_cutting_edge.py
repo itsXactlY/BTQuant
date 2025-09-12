@@ -2889,7 +2889,7 @@ def main():
                 DataSpec(
                     symbol="BTC",
                     interval=CONFIG.timeframe,
-                    ranges=[(CONFIG.bear_start, CONFIG.bear_end)],
+                    ranges=[(CONFIG.bull_start, CONFIG.bull_end)],
                     collateral=DEFAULT_COLLATERAL
                 ),
             ]
@@ -2930,7 +2930,7 @@ def main():
                 DataSpec(
                     symbol="BTC",
                     interval=CONFIG.timeframe,
-                    ranges=[(CONFIG.bear_start, CONFIG.bear_end)],
+                    ranges=[(CONFIG.test_start, CONFIG.test_end)],
                     collateral=DEFAULT_COLLATERAL
                 ),
             ]

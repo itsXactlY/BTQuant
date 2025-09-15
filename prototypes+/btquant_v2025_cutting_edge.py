@@ -150,7 +150,7 @@ class TradingConfig:
     regime_lookback: int = 252
     
     # Data configuration
-    symbols: List[str] = field(default_factory=lambda: ["BTC", "ETH"])
+    symbols: List[str] = field(default_factory=lambda: "BTC")
     timeframe: str = "1m"
     bull_start: str = "2020-09-28"
     bull_end: str = "2021-05-31"
@@ -3327,7 +3327,7 @@ def run_backtest_with_models(config: TradingConfig,
         # Load data
         data_specs = [
             DataSpec(
-                symbol=[("BTC", "ETH")],
+                symbol="BTC",
                 interval=config.timeframe,
                 ranges=[(config.bear_start, config.bear_end)],
                 collateral=DEFAULT_COLLATERAL
@@ -3474,7 +3474,7 @@ def main():
                 DataSpec(
                     symbol="BTC",
                     interval=CONFIG.timeframe,
-                    ranges=[(CONFIG.bull_start, CONFIG.bull_end)],
+                    ranges=[(CONFIG.test_start, CONFIG.test_end)],
                     collateral=DEFAULT_COLLATERAL
                 ),
             ]
@@ -3497,7 +3497,7 @@ def main():
                 
                 # Run optimization
                 optimizer = OptimizationEngine(cache)
-                optimized_config = optimizer.optimize_parameters(n_trials=30)
+                optimized_config = optimizer.optimize_parameters(n_trials=300) # 30
                 
                 # Save models and parameters
                 params_dict = {
@@ -3526,7 +3526,7 @@ def main():
                 model_persistence.save_all_models(trained_models, params_dict)
         
         # Run backtest with models
-        results = run_backtest_with_models(optimized_config, cache, trained_models)[0]
+        results = run_backtest_with_models(optimized_config, cache, trained_models)
         
         if results:
             # Display results

@@ -1,4 +1,4 @@
-# BTQuant - Advanced Quantitative Trading Framework
+# BTQuant - Advanced Quantitative High-Frequency Trading Framework
 
 ## Overview
 

@@ -1,6 +1,7 @@
 # Enhanced Multi-Modal Transformer-GNN Trading Strategy with Deep Reinforcement Learning
 # BTQuant v2025 - COMPLETE SYSTEM: Auto-Optimization + Full ML Pipeline + Multithreading
 
+import datetime
 import hashlib
 import json
 import math
@@ -57,8 +58,6 @@ import backtrader as bt
 
 # Technical analysis and financial metrics
 import talib
-import pandas_ta as ta
-from arch import arch_model  # GARCH models
 
 # Visualization and monitoring
 import plotly.graph_objects as go
@@ -151,7 +150,9 @@ class TradingConfig:
     
     # Data configuration
     symbols: List[str] = field(default_factory=lambda: "BTC")
-    timeframe: str = "1m"
+    timeframe: str = "15m"
+    test1: str = "2020-09-28"
+    test2: str = "2020-10-10"
     bull_start: str = "2020-09-28"
     bull_end: str = "2021-05-31"
     bear_start: str = "2022-05-28"
@@ -1223,47 +1224,57 @@ class CryptoRiskManager:
 
 class CryptoQuantumStrategy(bt.Strategy):
     """COMPLETE AUTO-OPTIMIZED Advanced crypto strategy with ALL ML models"""
-    
+
     params = (
-        # Dynamic configuration - passed from optimizer
-        ('config', None),  # TradingConfig object
-        ('silent', True), # Reduce output during optimization
+        ('config', None),   # TradingConfig object
+        ('silent', True),   # Reduce output during optimization
+        ('models', None),   # ✅ Allow pre-trained models to be injected
     )
 
     def __init__(self):
         self.data_close = self.datas[0].close
         self.data_volume = self.datas[0].volume
 
-        # Use passed config or default
+        # Use passed config or fallback
         self.config = self.p.config if self.p.config else CONFIG
 
-        # Initialize risk manager with current config
+        # ✅ Use passed models if available
+        self.models = self.p.models if self.p.models else {}
+
+        # Initialize risk manager
         self.risk_manager = CryptoRiskManager(self.config)
-        
-        # Strategy state
+
+        # Strategy state + tracking
         self.current_regime = "normal"
         self.confidence_scores = deque(maxlen=50)
         self.active_positions = {}
         self.portfolio_history = []
-        
+
         # Performance tracking
         self.total_trades = 0
         self.winning_trades = 0
         self.total_pnl_usdt = 0.0
         self.max_portfolio_value = self.broker.getvalue()
-        
-        # Counters for debugging
+
+        # Counters
         self.bar_count = 0
         self.signal_count = 0
-        
-        # Initialize ML models
-        self.ml_ensemble = MLEnsemble(self.config)
-        self.tensorflow_model = TensorFlowPredictor(self.config)
-        
+
+        # ✅ Use loaded models or fallbacks
+        if "ensemble" in self.models:
+            self.ml_ensemble = self.models["ensemble"]
+        else:
+            self.ml_ensemble = MLEnsemble(self.config)
+
+        if "tensorflow" in self.models:
+            self.tensorflow_model = self.models["tensorflow"]
+        else:
+            self.tensorflow_model = TensorFlowPredictor(self.config)
+
         if not self.p.silent:
             console.print(f"[cyan]🚀 COMPLETE Strategy initialized with ${self.broker.getcash():.2f} USDT[/cyan]")
             console.print(f"[cyan]📊 Risk: {self.config.risk_per_trade:.1%} | R:R: {self.config.reward_risk_ratio}:1[/cyan]")
-            console.print(f"[cyan]🤖 ML Models: Ensemble + TensorFlow + PyTorch Transformer[/cyan]")
+            console.print(f"[cyan]🤖 ML Models: {list(self.models.keys()) if self.models else 'Fallback only'}[/cyan]")
 
     def next(self):
         """Main strategy logic executed on each bar"""
@@ -1833,105 +1844,108 @@ import torch
 
 class ModelPersistence:
     """Handles saving and loading of all trained models"""
-    
+
     def __init__(self, config: TradingConfig):
         self.config = config
         self.models_dir = config.cache_dir / "trained_models"
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        
-    def save_all_models(self, trained_models: dict, optimized_params: dict = None):
+
+    def save_all_models(self, trained_models: dict, optimized_params: Optional[TradingConfig] = None):
         """Save all trained models and parameters"""
-        
         console.print("[cyan]💾 Saving trained models...[/cyan]")
-        
         saved_models = {}
-        
-        # Save PyTorch Transformer model
-        if 'transformer' in trained_models and trained_models['transformer'] is not None:
-            model_path = self.models_dir / "transformer_model.pth"
+
+        # Save PyTorch Transformer model (if present)
+        if trained_models.get('transformer') is not None:
             try:
+                model = trained_models['transformer']
+                model_path = self.models_dir / "transformer_model.pth"
                 torch.save({
-                    'model_state_dict': trained_models['transformer'].state_dict(),
+                    'model_state_dict': model.state_dict(),
                     'config': self.config.__dict__,
-                    'input_dim': trained_models['transformer'].input_dim,
-                    'transformer_dim': trained_models['transformer'].transformer_dim,
-                    'gnn_hidden_dim': trained_models['transformer'].gnn_hidden_dim,
+                    'input_dim': getattr(model, 'input_dim', None),
+                    'transformer_dim': getattr(model, 'transformer_dim', None),
+                    'gnn_hidden_dim': getattr(model, 'gnn_hidden_dim', None),
                 }, model_path)
                 saved_models['transformer'] = str(model_path)
                 console.print(f"[green]✅ Transformer model saved to {model_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to save transformer: {e}[/red]")
-        
-        # Save RL Agent
-        if 'rl_agent' in trained_models and trained_models['rl_agent'] is not None:
-            model_path = self.models_dir / "rl_agent"
+
+        # Save RL Agent (stable-baselines3 writes .zip)
+        if trained_models.get('rl_agent') is not None:
             try:
-                trained_models['rl_agent'].save(str(model_path))
-                saved_models['rl_agent'] = str(model_path)
-                console.print(f"[green]✅ RL agent saved to {model_path}[/green]")
+                rl_base = self.models_dir / "rl_agent"
+                trained_models['rl_agent'].save(str(rl_base))
+                rl_zip = rl_base.with_suffix(".zip")
+                saved_models['rl_agent'] = str(rl_zip if rl_zip.exists() else rl_base)
+                console.print(f"[green]✅ RL agent saved to {saved_models['rl_agent']}[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to save RL agent: {e}[/red]")
-        
+
         # Save ML Ensemble
-        if 'ml_ensemble' in trained_models and trained_models['ml_ensemble'] is not None:
-            model_path = self.models_dir / "ml_ensemble.pkl"
+        if trained_models.get('ml_ensemble') is not None:
             try:
-                joblib.dump(trained_models['ml_ensemble'], model_path)
-                saved_models['ml_ensemble'] = str(model_path)
-                console.print(f"[green]✅ ML ensemble saved to {model_path}[/green]")
+                ensemble_path = self.models_dir / "ml_ensemble.pkl"
+                joblib.dump(trained_models['ml_ensemble'], ensemble_path)
+                saved_models['ml_ensemble'] = str(ensemble_path)
+                console.print(f"[green]✅ ML ensemble saved to {ensemble_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to save ML ensemble: {e}[/red]")
-        
+
         # Save TensorFlow model
-        if 'tensorflow' in trained_models and trained_models['tensorflow'] is not None:
-            if trained_models['tensorflow'].model is not None:
-                model_path = self.models_dir / "tensorflow_model"
-                try:
-                    trained_models['tensorflow'].model.save(str(model_path))
-                    saved_models['tensorflow'] = str(model_path)
-                    console.print(f"[green]✅ TensorFlow model saved to {model_path}[/green]")
-                except Exception as e:
-                    console.print(f"[red]Failed to save TensorFlow model: {e}[/red]")
-        
-        # Save optimized parameters
-        if optimized_params:
-            params_path = self.models_dir / "optimized_params.json"
+        if trained_models.get('tensorflow') is not None and getattr(trained_models['tensorflow'], 'model', None) is not None:
             try:
+                tf_path = self.models_dir / "tensorflow_model.keras"
+                trained_models['tensorflow'].model.save(str(tf_path))
+                saved_models['tensorflow'] = str(tf_path)
+                console.print(f"[green]✅ TensorFlow model saved to {tf_path}[/green]")
+            except Exception as e:
+                console.print(f"[red]Failed to save TensorFlow model: {e}[/red]")
+
+        # Save optimized parameters ONCE with JSON-safe conversion
+        if optimized_params is not None:
+            try:
+                params_path = self.models_dir / "optimized_params.json"
+                # Convert dataclass -> JSON-safe dict (Path -> str)
+                params_dict = {
+                    k: (str(v) if isinstance(v, Path) else v)
+                    for k, v in getattr(optimized_params, "__dict__", optimized_params).items()
+                }
                 with open(params_path, 'w') as f:
-                    json.dump(optimized_params, f, indent=2)
+                    json.dump(params_dict, f, indent=2)
                 saved_models['params'] = str(params_path)
                 console.print(f"[green]✅ Optimized parameters saved to {params_path}[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to save parameters: {e}[/red]")
-        
-        # Save metadata
-        metadata_path = self.models_dir / "models_metadata.json"
-        metadata = {
-            'saved_at': pl.datetime.now().isoformat(),
-            'config_hash': hashlib.md5(str(self.config.__dict__).encode()).hexdigest(),
-            'models': saved_models
-        }
-        
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
-        
-        console.print(f"[bold green]✅ All models saved successfully![/bold green]")
+
+        # Save metadata last
+        try:
+            metadata_path = self.models_dir / "models_metadata.json"
+            metadata = {
+                'saved_at': datetime.datetime.now().isoformat(),
+                'config_hash': hashlib.md5(str(self.config.__dict__).encode()).hexdigest(),
+                'models': saved_models
+            }
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            console.print(f"[bold green]✅ All models saved successfully![/bold green]")
+        except Exception as e:
+            console.print(f"[red]Failed to write models metadata: {e}[/red]")
+
         return saved_models
-    
+
     def load_all_models(self) -> tuple:
         """Load all previously trained models"""
-        
         console.print("[cyan]📂 Loading trained models...[/cyan]")
         
         loaded_models = {}
         loaded_params = None
         
-        # Check if models directory exists
         if not self.models_dir.exists():
             console.print("[yellow]No saved models found[/yellow]")
             return {}, None
         
-        # Load metadata
         metadata_path = self.models_dir / "models_metadata.json"
         if not metadata_path.exists():
             console.print("[yellow]No models metadata found[/yellow]")
@@ -1939,7 +1953,6 @@ class ModelPersistence:
         
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
-        
         console.print(f"[cyan]Found models saved at: {metadata['saved_at']}[/cyan]")
         
         # Load PyTorch Transformer model
@@ -1947,7 +1960,6 @@ class ModelPersistence:
         if transformer_path.exists():
             try:
                 checkpoint = torch.load(transformer_path, map_location=DEVICE)
-                
                 # Recreate model with saved dimensions
                 model = MultiModalTransformerGNN(
                     input_dim=checkpoint['input_dim'],
@@ -1956,17 +1968,17 @@ class ModelPersistence:
                     num_heads=self.config.num_attention_heads,
                     num_layers=self.config.num_transformer_layers
                 ).to(DEVICE)
-                
                 model.load_state_dict(checkpoint['model_state_dict'])
                 model.eval()
-                
                 loaded_models['transformer'] = model
                 console.print("[green]✅ Transformer model loaded[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to load transformer: {e}[/red]")
         
         # Load RL Agent
-        rl_path = self.models_dir / "rl_agent"
+        rl_path = self.models_dir / "rl_agent.zip"  # stable-baselines3 adds .zip extension
+        if not rl_path.exists():
+            rl_path = self.models_dir / "rl_agent"
         if rl_path.exists():
             try:
                 if self.config.rl_algorithm == "PPO":
@@ -1975,7 +1987,6 @@ class ModelPersistence:
                     model = SAC.load(str(rl_path), device=DEVICE)
                 elif self.config.rl_algorithm == "TD3":
                     model = TD3.load(str(rl_path), device=DEVICE)
-                
                 loaded_models['rl_agent'] = model
                 console.print("[green]✅ RL agent loaded[/green]")
             except Exception as e:
@@ -1992,7 +2003,9 @@ class ModelPersistence:
                 console.print(f"[red]Failed to load ML ensemble: {e}[/red]")
         
         # Load TensorFlow model
-        tf_path = self.models_dir / "tensorflow_model"
+        tf_path = self.models_dir / "tensorflow_model.keras"
+        if not tf_path.exists():
+            tf_path = self.models_dir / "tensorflow_model"  # Fallback for old saves
         if tf_path.exists() and tf is not None:
             try:
                 tf_predictor = TensorFlowPredictor(self.config)
@@ -2003,23 +2016,24 @@ class ModelPersistence:
             except Exception as e:
                 console.print(f"[red]Failed to load TensorFlow model: {e}[/red]")
         
-        # Load optimized parameters
+        # Load optimized parameters and rebuild TradingConfig
         params_path = self.models_dir / "optimized_params.json"
         if params_path.exists():
             try:
                 with open(params_path, 'r') as f:
-                    loaded_params = json.load(f)
+                    params_dict = json.load(f)
+                try:
+                    # Try to reconstruct as TradingConfig
+                    loaded_params = TradingConfig(**params_dict)
+                except TypeError:
+                    # Fallback: return dict if schema has changed
+                    loaded_params = params_dict
                 console.print("[green]✅ Optimized parameters loaded[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to load parameters: {e}[/red]")
         
         console.print(f"[bold green]✅ Loaded {len(loaded_models)} models successfully![/bold green]")
         return loaded_models, loaded_params
-
-    def check_models_exist(self) -> bool:
-        """Check if saved models exist"""
-        metadata_path = self.models_dir / "models_metadata.json"
-        return metadata_path.exists()
 
 # ==================== ENHANCED STRATEGY WITH MODEL LOADING ====================
 
@@ -2974,580 +2988,184 @@ class OptimizationEngine:
 
 # ==================== MAIN EXECUTION PIPELINE ====================
 
-# def run_backtest_with_config(config: TradingConfig, cache: DataCache) -> dict:
-#     """Run a single backtest with given configuration"""
-    
-#     try:
-#         # Load data using parallel loading
-#         data_specs = [
-#             DataSpec(
-#                 symbol="BTC",
-#                 interval=config.timeframe,
-#                 ranges=[(config.bear_start, config.bear_end)],
-#                 collateral=DEFAULT_COLLATERAL
-#             ),
-#         ]
-        
-#         df_map = preload_polars_parallel(data_specs, cache)
-#         if not df_map:
-#             console.print("[red]No data loaded! Check your database connection.[/red]")
-#             return {}
-        
-#         # Get the BTC data
-#         btc_data = list(df_map.values())[0]
-#         console.print(f"[green]Loaded {len(btc_data)} BTC data points[/green]")
-        
-#         # Split data for backtesting (use last 20% for testing)
-#         split_idx = int(len(btc_data) * 0.8)
-#         test_data = btc_data.slice(split_idx, len(btc_data) - split_idx)
-        
-#         console.print(f"[cyan]Backtest data: {test_data.shape}[/cyan]")
-#         console.print(f"[cyan]Date range: {test_data['TimestampStart'].min()} to {test_data['TimestampStart'].max()}[/cyan]")
-        
-#         # Create Backtrader cerebro
-#         cerebro = bt.Cerebro()
-        
-#         # Add crypto data feed
-#         backtest_data = test_data.select([
-#             "TimestampStart", "Open", "High", "Low", "Close", "Volume"
-#         ]).drop_nulls().sort("TimestampStart")
-        
-#         data_feed = PolarsData(
-#             dataname=backtest_data,
-#             datetime="TimestampStart",
-#             open="Open",
-#             high="High", 
-#             low="Low",
-#             close="Close",
-#             volume="Volume",
-#             openinterest=-1
-#         )
-#         cerebro.adddata(data_feed)
-        
-#         # Add our COMPLETE strategy
-#         cerebro.addstrategy(CryptoQuantumStrategy, config=config, silent=False)
-        
-#         # Set initial cash and commission for crypto trading
-#         cerebro.broker.setcash(config.init_cash)
-#         cerebro.broker.setcommission(commission=config.commission)
-        
-#         # Add analyzers
-#         cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-#         cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-#         cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
-#         cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-        
-#         # Run backtest
-#         console.print("[cyan]🚀 Running COMPLETE AUTO-OPTIMIZED crypto backtest...[/cyan]") 
-#         results = cerebro.run()
-#         strat = results[0]
-        
-#         # Performance analysis
-#         console.print("[cyan]📊 Analyzing crypto trading performance...[/cyan]")
-        
-#         final_value = cerebro.broker.getvalue()
-#         total_return = (final_value - config.init_cash) / config.init_cash
-        
-#         # Safe metric extraction
-#         sharpe_analysis = strat.analyzers.sharpe.get_analysis()
-#         sharpe_ratio = sharpe_analysis.get('sharperatio', 0.0) if sharpe_analysis else 0.0
-#         if sharpe_ratio is None:
-#             sharpe_ratio = 0.0
-        
-#         drawdown_analysis = strat.analyzers.drawdown.get_analysis()
-#         max_drawdown = drawdown_analysis.get('max', {}).get('drawdown', 0.0) if drawdown_analysis else 0.0
-#         if max_drawdown is None:
-#             max_drawdown = 0.0
-        
-#         trade_analysis = strat.analyzers.trades.get_analysis()
-#         total_trades = trade_analysis.get('total', {}).get('total', 0) if trade_analysis else 0
-#         if total_trades is None:
-#             total_trades = 0
-        
-#         if total_trades > 0:
-#             won_trades = trade_analysis.get('won', {}).get('total', 0) or 0
-#             win_rate = (won_trades / total_trades * 100)
-#         else:
-#             win_rate = 0.0
-        
-#         return {
-#             'final_value': final_value,
-#             'total_return': total_return,
-#             'sharpe_ratio': sharpe_ratio,
-#             'max_drawdown': max_drawdown,
-#             'total_trades': total_trades,
-#             'win_rate': win_rate,
-#             'strat': strat,
-#             'backtest_data': backtest_data
-#         }
-        
-#     except Exception as e:
-#         console.print(f"[bold red]Error in backtest: {e}[/bold red]")
-#         traceback.print_exc()
-#         return {}
+def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, train_models=False) -> dict:
+    """Run backtest with optional ML model loading or training"""
 
-# def main():
-#     """Main execution pipeline with COMPLETE SYSTEM - All ML models + Auto-optimization"""
-#     console.print("[bold green]🚀 BTQuant v2025 - COMPLETE SYSTEM: All ML Models + Auto-Optimization[/bold green]")
-#     console.print("[bold green]🤖 Multithreading + PyTorch + TensorFlow + sklearn + Optuna + wandb[/bold green]")
-    
-#     try:
-#         # 1. Initialize data cache with multithreading
-#         console.print("[cyan]Step 1: Initializing multithreaded data cache...[/cyan]")
-#         cache = DataCache(CONFIG.cache_dir)
-        
-#         # 2. Ask user for optimization preference
-#         console.print("\n[bold yellow]🔧 Configuration Options:[/bold yellow]")
-#         console.print("[yellow]1. 🎯 Auto-optimize parameters + Train ALL ML models (recommended, takes 30-45 minutes)[/yellow]")
-#         console.print("[yellow]2. 🚀 Use default optimized settings + Skip ML training (fast)[/yellow]")
-#         console.print("[yellow]3. 🧠 Train ML models only (no optimization)[/yellow]")
-        
-#         choice = input("\nEnter your choice (1, 2, or 3, default=2): ").strip() or "2"
-        
-#         if choice == "1":
-#             # Full system: optimization + ML training
-#             console.print("[bold cyan]🚀 Running COMPLETE system with optimization and ML training...[/bold cyan]")
-            
-#             # Load data for training
-#             data_specs = [
-#                 DataSpec(
-#                     symbol="BTC",
-#                     interval=CONFIG.timeframe,
-#                     ranges=[(CONFIG.bull_start, CONFIG.bull_end)],
-#                     collateral=DEFAULT_COLLATERAL
-#                 ),
-#             ]
-            
-#             df_map = preload_polars_parallel(data_specs, cache)
-#             if not df_map:
-#                 console.print("[red]No data loaded![/red]")
-#                 return
-            
-#             btc_data = list(df_map.values())[0]
-            
-#             # Split for training
-#             split_idx = int(len(btc_data) * 0.6)  # 60% for training
-#             val_split = int(len(btc_data) * 0.8)  # 20% for validation
-            
-#             train_data = btc_data.slice(0, split_idx)
-#             val_data = btc_data.slice(split_idx, val_split - split_idx)
-            
-#             # Train all models
-#             trainer = ModelTrainer(CONFIG)
-#             feature_columns = ['Close', 'Volume', 'High', 'Low', 'Open']  # Basic features
-#             trained_models = trainer.train_all_models(train_data, val_data, feature_columns)
-            
-#             console.print(f"[green]✅ Trained {len(trained_models)} models successfully[/green]")
-            
-#             # Run optimization
-#             optimizer = OptimizationEngine(cache)
-#             optimized_config = optimizer.optimize_parameters(n_trials=30)
-            
-#             console.print(f"[bold green]✅ Using fully optimized parameters with trained ML models![/bold green]")
-            
-#         elif choice == "3":
-#             # ML training only
-#             console.print("[bold cyan]🧠 Training ML models only...[/bold cyan]")
-            
-#             # Load data for training
-#             data_specs = [
-#                 DataSpec(
-#                     symbol="BTC",
-#                     interval=CONFIG.timeframe,
-#                     ranges=[(CONFIG.test_start, CONFIG.test_end)],
-#                     collateral=DEFAULT_COLLATERAL
-#                 ),
-#             ]
-            
-#             df_map = preload_polars_parallel(data_specs, cache)
-#             if not df_map:
-#                 console.print("[red]No data loaded![/red]")
-#                 return
-            
-#             btc_data = list(df_map.values())[0]
-            
-#             # Split for training
-#             split_idx = int(len(btc_data) * 0.6)
-#             val_split = int(len(btc_data) * 0.8)
-            
-#             train_data = btc_data.slice(0, split_idx)
-#             val_data = btc_data.slice(split_idx, val_split - split_idx)
-            
-#             # Train all models
-#             trainer = ModelTrainer(CONFIG)
-#             feature_columns = ['Close', 'Volume', 'High', 'Low', 'Open']
-#             trained_models = trainer.train_all_models(train_data, val_data, feature_columns)
-            
-#             # Use enhanced default settings
-#             optimized_config = TradingConfig()
-#             optimized_config.risk_per_trade = 0.015
-#             optimized_config.max_trade_amount = 3000.0
-#             optimized_config.stop_loss_pct = 0.015
-#             optimized_config.take_profit_pct = 0.03
-#             optimized_config.short_ma_period = 5
-#             optimized_config.long_ma_period = 15
-#             optimized_config.rsi_oversold = 40.0
-#             optimized_config.rsi_overbought = 60.0
-#             optimized_config.volume_threshold = 1.2
-#             optimized_config.conf_bull = 0.4
-#             optimized_config.conf_bear = 0.5
-#             optimized_config.conf_sideways = 0.45
-#             optimized_config.conf_volatile = 0.6
-#             optimized_config.trend_weight = 0.4
-#             optimized_config.rsi_weight = 0.3
-#             optimized_config.macd_weight = 0.25
-#             optimized_config.volume_weight = 0.2
-#             optimized_config.momentum_weight = 0.15
-            
-#             console.print(f"[bold green]✅ Trained models with enhanced default parameters![/bold green]")
-            
-#         else:
-#             # Fast mode - default settings
-#             optimized_config = TradingConfig()
-#             optimized_config.risk_per_trade = 0.015
-#             optimized_config.max_trade_amount = 3000.0
-#             optimized_config.stop_loss_pct = 0.015
-#             optimized_config.take_profit_pct = 0.03
-#             optimized_config.short_ma_period = 5
-#             optimized_config.long_ma_period = 15
-#             optimized_config.rsi_oversold = 40.0
-#             optimized_config.rsi_overbought = 60.0
-#             optimized_config.volume_threshold = 1.2
-#             optimized_config.conf_bull = 0.4
-#             optimized_config.conf_bear = 0.5
-#             optimized_config.conf_sideways = 0.45
-#             optimized_config.conf_volatile = 0.6
-#             optimized_config.trend_weight = 0.4
-#             optimized_config.rsi_weight = 0.3
-#             optimized_config.macd_weight = 0.25
-#             optimized_config.volume_weight = 0.2
-#             optimized_config.momentum_weight = 0.15
-            
-#             console.print(f"[bold green]✅ Using enhanced default parameters (fast mode)![/bold green]")
-        
-#         # 3. Run backtest with optimized configuration
-#         console.print("[cyan]Step 3: Running backtest with COMPLETE system...[/cyan]")
-#         results = run_backtest_with_config(optimized_config, cache)
-        
-#         if not results:
-#             console.print("[red]Backtest failed![/red]")
-#             return
-        
-#         # 4. Display comprehensive results
-#         table = Table(title="🚀 BTQuant v2025 - COMPLETE SYSTEM RESULTS ✅")
-#         table.add_column("Metric", style="cyan")
-#         table.add_column("Value", style="green")
-        
-#         table.add_row("🔧 Status", "COMPLETE SYSTEM ACTIVE!")
-#         table.add_row("🤖 ML Models", "✅ PyTorch Transformer + TensorFlow LSTM + sklearn Ensemble + RL")
-#         table.add_row("🧵 Multithreading", f"✅ {CONFIG.max_workers} Workers")
-#         table.add_row("💰 Trading Mode", "✅ USDT-Based Fractional Trading")
-#         table.add_row("🎯 Auto-Optimization", "✅ Optuna Parameter Search")
-#         table.add_row("📊 Experiment Tracking", "✅ Weights & Biases Integration")
-#         table.add_row("⚖️ Risk Management", f"✅ {optimized_config.risk_per_trade:.1%} Risk per Trade")
-#         table.add_row("📈 Risk:Reward Ratio", f"✅ {optimized_config.reward_risk_ratio}:1")
-#         table.add_row("🛡️ Stop Loss", f"✅ {optimized_config.stop_loss_pct:.1%}")
-#         table.add_row("🎯 Take Profit", f"✅ {optimized_config.take_profit_pct:.1%}")
-#         table.add_row("💵 Min Trade Size", f"✅ ${optimized_config.min_trade_amount} USDT")
-#         table.add_row("🏦 Max Trade Size", f"✅ ${optimized_config.max_trade_amount} USDT")
-#         table.add_row("📈 Asset", "BTC/USDT")
-#         table.add_row("🔧 Device", f"{DEVICE} (CUDA: {CUDA_AVAILABLE})")
-#         table.add_row("📅 Test Period", f"{results['backtest_data']['TimestampStart'].min()} to {results['backtest_data']['TimestampStart'].max()}")
-#         table.add_row("💰 Initial Capital", f"${optimized_config.init_cash:,.2f} USDT")
-#         table.add_row("🏆 Final Value", f"${results['final_value']:,.2f} USDT")
-#         table.add_row("📊 Total Return", f"{results['total_return']:.2%}")
-#         table.add_row("📈 Sharpe Ratio", f"{results['sharpe_ratio']:.3f}")
-#         table.add_row("📉 Max Drawdown", f"{results['max_drawdown']:.2%}")
-#         table.add_row("🔄 Total Trades", f"{results['total_trades']}")
-#         table.add_row("🎯 Win Rate", f"{results['win_rate']:.1f}%")
-        
-#         console.print(table)
-        
-#         console.print("\n[bold green]🎉 COMPLETE CRYPTO TRADING SYSTEM SUCCESSFULLY IMPLEMENTED! 🎉[/bold green]")
-#         console.print("[bold green]✅ ALL ADVANCED FEATURES:")
-#         console.print("[bold green]  🧵 Multithreaded data loading and model training")
-#         console.print("[bold green]  🤖 Multiple ML models: PyTorch + TensorFlow + sklearn + RL")
-#         console.print("[bold green]  🎯 Automatic parameter optimization with Optuna")
-#         console.print("[bold green]  📊 Experiment tracking with Weights & Biases")
-#         console.print("[bold green]  💰 USDT-based fractional crypto trading")
-#         console.print("[bold green]  ⚖️ Advanced risk management with R:R ratios")
-#         console.print("[bold green]  🛡️ Multiple concurrent position management")
-#         console.print("[bold green]  📈 Market regime-aware signal generation")
-#         console.print("[bold green]  🔧 ALL PREVIOUS FIXES: Unpacking, thresholds, signals")
-#         console.print("[bold green]  🔧 FIXED ML PREDICTIONS: Enhanced fallback system with variation")
-        
-#         # Additional statistics from strategy
-#         strat = results['strat']
-#         if hasattr(strat, 'total_trades') and strat.total_trades > 0:
-#             console.print(f"\n[cyan]📊 Additional Strategy Stats:[/cyan]")
-#             console.print(f"[cyan]💵 Strategy Total Trades: {strat.total_trades}[/cyan]")
-#             console.print(f"[cyan]✅ Strategy Winning Trades: {strat.winning_trades}[/cyan]")
-#             console.print(f"[cyan]📈 Strategy P&L: ${strat.total_pnl_usdt:.2f} USDT[/cyan]")
-#             console.print(f"[cyan]📊 Bars Processed: {strat.bar_count:,}[/cyan]")
-#             console.print(f"[cyan]🎯 Signals Generated: {strat.signal_count:,}[/cyan]")
-        
-#         # Show optimized parameters
-#         console.print(f"\n[bold cyan]🔧 Final Optimized Parameters:[/bold cyan]")
-#         console.print(f"[cyan]📊 Technical: MA({optimized_config.short_ma_period}/{optimized_config.long_ma_period}), RSI({optimized_config.rsi_period})[/cyan]")
-#         console.print(f"[cyan]🎯 Thresholds: Bull({optimized_config.conf_bull:.2f}), Bear({optimized_config.conf_bear:.2f}), Sideways({optimized_config.conf_sideways:.2f})[/cyan]")
-#         console.print(f"[cyan]⚖️ Weights: Trend({optimized_config.trend_weight:.2f}), RSI({optimized_config.rsi_weight:.2f}), MACD({optimized_config.macd_weight:.2f})[/cyan]")
-        
-#         # Final wandb summary
-#         try:
-#             wandb.log({
-#                 'final_system_status': 'complete_success',
-#                 'ml_models_trained': choice in ['1', '3'],
-#                 'parameters_optimized': choice == '1',
-#                 'final_return': results['total_return'],
-#                 'total_trades': results['total_trades'],
-#                 'win_rate': results['win_rate'],
-#                 'sharpe_ratio': results['sharpe_ratio'],
-#                 'max_drawdown': results['max_drawdown']
-#             })
-#             wandb.finish()
-#         except:
-#             pass
-        
-#     except Exception as e:
-#         console.print(f"[bold red]Error in main execution: {e}[/bold red]")
-#         traceback.print_exc()
-
-# if __name__ == "__main__":
-#     main()
-
-# ==============================================================================================
-
-def run_backtest_with_models(config: TradingConfig, 
-                            cache: DataCache,
-                            trained_models: dict = None,
-                            save_models: bool = False) -> dict:
-    """Run backtest with optional pre-trained models"""
-    
-    try:
-        # Load data
-        data_specs = [
-            DataSpec(
-                symbol="BTC",
-                interval=config.timeframe,
-                ranges=[(config.bear_start, config.bear_end)],
-                collateral=DEFAULT_COLLATERAL
-            ),
-        ]
-        
-        df_map = preload_polars_parallel(data_specs, cache)
-        if not df_map:
-            console.print("[red]No data loaded![/red]")
-            return {}
-        
-        btc_data = list(df_map.values())[0]
-        
-        # Split data
-        split_idx = int(len(btc_data) * 0.8)
-        test_data = btc_data.slice(split_idx, len(btc_data) - split_idx)
-        
-        # Create cerebro
-        cerebro = bt.Cerebro()
-        
-        # Prepare data feed
-        backtest_data = test_data.select([
-            "TimestampStart", "Open", "High", "Low", "Close", "Volume"
-        ]).drop_nulls().sort("TimestampStart")
-        
-        data_feed = PolarsData(
-            dataname=backtest_data,
-            datetime="TimestampStart",
-            open="Open",
-            high="High",
-            low="Low",
-            close="Close",
-            volume="Volume",
-            openinterest=-1
-        )
-        cerebro.adddata(data_feed)
-        
-        # Add strategy with trained models
-        if trained_models:
-            cerebro.addstrategy(
-                CryptoQuantumStrategyWithModels, 
-                config=config, 
-                silent=False,
-                trained_models=trained_models
-            )
-        else:
-            cerebro.addstrategy(
-                CryptoQuantumStrategy,
-                config=config,
-                silent=False
-            )
-        
-        # Broker settings
-        cerebro.broker.setcash(config.init_cash)
-        cerebro.broker.setcommission(commission=config.commission)
-        
-        # Add analyzers
-        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-        cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
-        cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-        
-        # Run backtest
-        console.print("[cyan]🚀 Running backtest with trained models...[/cyan]")
-        results = cerebro.run()
-        strat = results[0]
-        
-        # Calculate metrics
-        final_value = cerebro.broker.getvalue()
-        total_return = (final_value - config.init_cash) / config.init_cash
-        
-        sharpe_analysis = strat.analyzers.sharpe.get_analysis()
-        sharpe_ratio = sharpe_analysis.get('sharperatio', 0.0) if sharpe_analysis else 0.0
-        
-        drawdown_analysis = strat.analyzers.drawdown.get_analysis()
-        max_drawdown = drawdown_analysis.get('max', {}).get('drawdown', 0.0) if drawdown_analysis else 0.0
-        
-        trade_analysis = strat.analyzers.trades.get_analysis()
-        total_trades = trade_analysis.get('total', {}).get('total', 0) if trade_analysis else 0
-        
-        if total_trades > 0:
-            won_trades = trade_analysis.get('won', {}).get('total', 0) or 0
-            win_rate = (won_trades / total_trades * 100)
-        else:
-            win_rate = 0.0
-        
-        return {
-            'final_value': final_value,
-            'total_return': total_return,
-            'sharpe_ratio': sharpe_ratio,
-            'max_drawdown': max_drawdown,
-            'total_trades': total_trades,
-            'win_rate': win_rate,
-            'strat': strat
-        }
-        
-    except Exception as e:
-        console.print(f"[red]Error in backtest: {e}[/red]")
+    # --- Load Data ---
+    data_specs = [
+        DataSpec(
+            symbol="BTC",
+            interval=config.timeframe,
+            ranges=[(config.test1, config.test2)], # changeme back
+            collateral=DEFAULT_COLLATERAL
+        ),
+    ]
+    df_map = preload_polars_parallel(data_specs, cache)
+    if not df_map:
+        console.print("[red]No data loaded![/red]")
         return {}
+    btc_data = list(df_map.values())[0]
 
-# ==================== UPDATED MAIN FUNCTION ====================
+    # --- Models ---
+    trained_models = {}
+    if use_models:
+        model_persistence = ModelPersistence(config)
+
+        if train_models:
+            # Train all models from scratch
+            trainer = ModelTrainer(config)
+            split_idx = int(len(btc_data) * 0.6)
+            val_split = int(len(btc_data) * 0.8)
+            train_data = btc_data.slice(0, split_idx)
+            val_data = btc_data.slice(split_idx, val_split - split_idx)
+            feature_columns = ['Close', 'Volume', 'High', 'Low', 'Open']
+            trained_models = trainer.train_all_models(train_data, val_data, feature_columns)
+            console.print(f"[green]✅ Trained {len(trained_models)} models successfully[/green]")
+
+            # Save models + optimized params
+            optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3) # set back to X, its 3 for debugging purposes
+            model_persistence.save_all_models(trained_models, optimized_config)
+            config = optimized_config
+            console.print(f"[green]✅ Saved trained models + optimized parameters[/green]")
+
+        else:
+            # Load best pre-trained models + params
+            trained_models, saved_params = model_persistence.load_all_models()
+            console.print(f"[green]✅ Loaded {len(trained_models)} pre-trained models[/green]")
+
+            # If params exist in save, update config
+            if saved_params:
+                # Ensure config stays as TradingConfig
+                if isinstance(saved_params, dict):
+                    config = TradingConfig(**saved_params)
+                else:
+                    print(f'Falling back to to {saved_params}')
+                    config = saved_params
+
+
+    # --- Backtrader Setup ---
+    cerebro = bt.Cerebro()
+    backtest_data = btc_data.select([
+        "TimestampStart", "Open", "High", "Low", "Close", "Volume"
+    ]).drop_nulls().sort("TimestampStart")
+
+    data_feed = PolarsData(
+        dataname=backtest_data,
+        datetime="TimestampStart",
+        open="Open",
+        high="High",
+        low="Low",
+        close="Close",
+        volume="Volume",
+        openinterest=-1
+    )
+    cerebro.adddata(data_feed)
+
+    # Add strategy with or without ML models
+    cerebro.addstrategy(CryptoQuantumStrategy, config=config, models=trained_models if use_models else None)
+
+    cerebro.broker.setcash(config.init_cash)
+    cerebro.broker.setcommission(commission=config.commission)
+
+    # Add analyzers
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+
+    # --- Run Backtest ---
+    console.print("[cyan]🚀 Running backtest...[/cyan]")
+    results = cerebro.run()
+    strat = results[0]
+
+    # --- Metrics ---
+    final_value = cerebro.broker.getvalue()
+    total_return = (final_value - config.init_cash) / config.init_cash
+
+    sharpe_analysis = strat.analyzers.sharpe.get_analysis()
+    sharpe_ratio = sharpe_analysis.get('sharperatio') if sharpe_analysis else 0.0
+    sharpe_ratio = float(sharpe_ratio) if sharpe_ratio else 0.0
+
+    drawdown_analysis = strat.analyzers.drawdown.get_analysis()
+    max_drawdown = drawdown_analysis.get('max', {}).get('drawdown', 0.0)
+    max_drawdown = float(max_drawdown) if max_drawdown else 0.0
+
+    trade_analysis = strat.analyzers.trades.get_analysis()
+    total_trades = trade_analysis.get('total', {}).get('total', 0)
+    won_trades = trade_analysis.get('won', {}).get('total', 0)
+    win_rate = (won_trades / total_trades * 100.0) if total_trades > 0 else 0.0
+
+    return {
+        'final_value': final_value,
+        'total_return': total_return,
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown': max_drawdown,
+        'total_trades': total_trades,
+        'win_rate': win_rate,
+        'strat': strat,
+        'backtest_data': backtest_data
+    }
+
 
 def main():
-    """Enhanced main with model persistence"""
-    console.print("[bold green]🚀 BTQuant v2025 - With Model Persistence[/bold green]")
-    
+    """Main entrypoint for BTQuant v2025 with 3 execution modes"""
+    console.print("[bold green]🚀 BTQuant v2025 - COMPLETE CRYPTO TRADING SYSTEM[/bold green]")
+    console.print("[bold green]🤖 ML Models + Auto-Optimization + Backtesting[/bold green]\n")
+
     try:
-        # Initialize components
+        # 1. Init cache
+        console.print("[cyan]Step 1: Initializing data cache...[/cyan]")
         cache = DataCache(CONFIG.cache_dir)
-        model_persistence = ModelPersistence(CONFIG)
-        
-        # Check for existing models
-        has_saved_models = model_persistence.check_models_exist()
-        
-        # Menu options
-        console.print("\n[bold yellow]📋 Options:[/bold yellow]")
-        if has_saved_models:
-            console.print("[yellow]1. 📂 Load existing models and run backtest[/yellow]")
-            console.print("[yellow]2. 🎯 Train new models with optimization[/yellow]")
-            console.print("[yellow]3. 🚀 Quick backtest (no models)[/yellow]")
+
+        # 2. User choice
+        console.print("\n[bold yellow]🔧 Execution Modes:[/bold yellow]")
+        console.print("[yellow]1. 🚀 Train + optimize all ML models, save config + models[/yellow]")
+        console.print("[yellow]2. ✅ Load pre-trained models + best JSON config[/yellow]")
+        console.print("[yellow]3. 📊 Run plain backtest without ML models[/yellow]")
+
+        choice = input("\nEnter your choice (1, 2, or 3, default=2): ").strip() or "2"
+
+        # 3. Run according to mode
+        if choice == "1":
+            console.print("[cyan]🚀 Mode 1: Full system (train + optimize)[/cyan]")
+            results = run_backtest(CONFIG, cache, use_models=True, train_models=True)
+
+        elif choice == "2":
+            console.print("[cyan]✅ Mode 2: Using pre-trained models + JSON config[/cyan]")
+            results = run_backtest(CONFIG, cache, use_models=True, train_models=False)
+
         else:
-            console.print("[yellow]1. 🎯 Train new models with optimization[/yellow]")
-            console.print("[yellow]2. 🚀 Quick backtest (no models)[/yellow]")
-        
-        choice = input("\nEnter your choice: ").strip()
-        
-        trained_models = {}
-        optimized_config = CONFIG
-        
-        if has_saved_models and choice == "1":
-            # Load existing models
-            trained_models, saved_params = model_persistence.load_all_models()
-            
-            if saved_params:
-                # Apply saved parameters to config
-                for key, value in saved_params.items():
-                    if hasattr(optimized_config, key):
-                        setattr(optimized_config, key, value)
-                console.print("[green]✅ Loaded saved parameters[/green]")
-        
-        elif (has_saved_models and choice == "2") or (not has_saved_models and choice == "1"):
-            # Train new models
-            data_specs = [
-                DataSpec(
-                    symbol="BTC",
-                    interval=CONFIG.timeframe,
-                    ranges=[(CONFIG.test_start, CONFIG.test_end)],
-                    collateral=DEFAULT_COLLATERAL
-                ),
-            ]
-            
-            df_map = preload_polars_parallel(data_specs, cache)
-            if df_map:
-                btc_data = list(df_map.values())[0]
-                
-                # Split data
-                split_idx = int(len(btc_data) * 0.6)
-                val_split = int(len(btc_data) * 0.8)
-                
-                train_data = btc_data.slice(0, split_idx)
-                val_data = btc_data.slice(split_idx, val_split - split_idx)
-                
-                # Train models
-                trainer = ModelTrainer(CONFIG)
-                feature_columns = ['Close', 'Volume', 'High', 'Low', 'Open']
-                trained_models = trainer.train_all_models(train_data, val_data, feature_columns)
-                
-                # Run optimization
-                optimizer = OptimizationEngine(cache)
-                optimized_config = optimizer.optimize_parameters(n_trials=300) # 30
-                
-                # Save models and parameters
-                params_dict = {
-                    'risk_per_trade': optimized_config.risk_per_trade,
-                    'reward_risk_ratio': optimized_config.reward_risk_ratio,
-                    'stop_loss_pct': optimized_config.stop_loss_pct,
-                    'take_profit_pct': optimized_config.take_profit_pct,
-                    'max_trade_amount': optimized_config.max_trade_amount,
-                    'short_ma_period': optimized_config.short_ma_period,
-                    'long_ma_period': optimized_config.long_ma_period,
-                    'rsi_period': optimized_config.rsi_period,
-                    'rsi_oversold': optimized_config.rsi_oversold,
-                    'rsi_overbought': optimized_config.rsi_overbought,
-                    'volume_threshold': optimized_config.volume_threshold,
-                    'conf_bull': optimized_config.conf_bull,
-                    'conf_bear': optimized_config.conf_bear,
-                    'conf_sideways': optimized_config.conf_sideways,
-                    'conf_volatile': optimized_config.conf_volatile,
-                    'trend_weight': optimized_config.trend_weight,
-                    'rsi_weight': optimized_config.rsi_weight,
-                    'macd_weight': optimized_config.macd_weight,
-                    'volume_weight': optimized_config.volume_weight,
-                    'momentum_weight': optimized_config.momentum_weight,
-                }
-                
-                model_persistence.save_all_models(trained_models, params_dict)
-        
-        # Run backtest with models
-        results = run_backtest_with_models(optimized_config, cache, trained_models)
-        
-        if results:
-            # Display results
-            table = Table(title="🚀 Backtest Results")
-            table.add_column("Metric", style="cyan")
-            table.add_column("Value", style="green")
-            
-            table.add_row("💰 Initial Capital", f"${optimized_config.init_cash:,.2f}")
-            table.add_row("🏆 Final Value", f"${results['final_value']:,.2f}")
-            table.add_row("📊 Total Return", f"{results['total_return']:.2%}")
-            table.add_row("📈 Sharpe Ratio", f"{results['sharpe_ratio']:.3f}")
-            table.add_row("📉 Max Drawdown", f"{results['max_drawdown']:.2%}")
-            table.add_row("🔄 Total Trades", f"{results['total_trades']}")
-            table.add_row("🎯 Win Rate", f"{results['win_rate']:.1f}%")
-            table.add_row("🤖 Models Used", f"{len(trained_models)}")
-            
-            console.print(table)
-        
+            console.print("[cyan]📊 Mode 3: Plain backtest (no ML models)[/cyan]")
+            results = run_backtest(CONFIG, cache, use_models=False)
+
+        if not results:
+            console.print("[red]❌ Backtest failed![/red]")
+            return
+
+        # 4. Show results table
+        table = Table(title="🚀 BTQuant v2025 - RESULTS ✅")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("💰 Initial Capital", f"${CONFIG.init_cash:,.2f} USDT")
+        table.add_row("🏆 Final Value", f"${results['final_value']:,.2f} USDT")
+        table.add_row("📊 Total Return", f"{results['total_return']:.2%}")
+        table.add_row("📈 Sharpe Ratio", f"{results['sharpe_ratio']:.3f}")
+        table.add_row("📉 Max Drawdown", f"{results['max_drawdown']:.2f}%")
+        table.add_row("🔄 Total Trades", f"{results['total_trades']}")
+        table.add_row("🎯 Win Rate", f"{results['win_rate']:.1f}%")
+
+        if choice in ["1", "2"]:
+            table.add_row("🤖 Models Used", "✅ Enabled")
+        else:
+            table.add_row("🤖 Models Used", "❌ None")
+
+        console.print(table)
+
     except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+        console.print(f"[bold red]Error in main execution: {e}[/bold red]")
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()

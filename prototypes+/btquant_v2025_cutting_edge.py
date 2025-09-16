@@ -150,7 +150,7 @@ class TradingConfig:
     
     # Data configuration
     symbols: List[str] = field(default_factory=lambda: "BTC")
-    timeframe: str = "15m"
+    timeframe: str = "1m"
     test1: str = "2020-09-28"
     test2: str = "2020-10-10"
     bull_start: str = "2020-09-28"
@@ -1959,7 +1959,8 @@ class ModelPersistence:
         transformer_path = self.models_dir / "transformer_model.pth"
         if transformer_path.exists():
             try:
-                checkpoint = torch.load(transformer_path, map_location=DEVICE)
+                # Fix: Add weights_only=False for PyTorch 2.6 compatibility
+                checkpoint = torch.load(transformer_path, map_location=DEVICE, weights_only=False)
                 # Recreate model with saved dimensions
                 model = MultiModalTransformerGNN(
                     input_dim=checkpoint['input_dim'],
@@ -2023,9 +2024,14 @@ class ModelPersistence:
                 with open(params_path, 'r') as f:
                     params_dict = json.load(f)
                 try:
+                    # Fix: Convert string paths back to Path objects
+                    if 'cache_dir' in params_dict and isinstance(params_dict['cache_dir'], str):
+                        params_dict['cache_dir'] = Path(params_dict['cache_dir'])
+                    
                     # Try to reconstruct as TradingConfig
                     loaded_params = TradingConfig(**params_dict)
-                except TypeError:
+                except TypeError as e:
+                    console.print(f"[yellow]TradingConfig reconstruction failed: {e}[/yellow]")
                     # Fallback: return dict if schema has changed
                     loaded_params = params_dict
                 console.print("[green]✅ Optimized parameters loaded[/green]")
@@ -2960,7 +2966,7 @@ class OptimizationEngine:
             self.objective, 
             n_trials=n_trials,
             callbacks=[progress_callback],
-            show_progress_bar=False,
+            show_progress_bar=True,
             n_jobs=1  # Keep single threaded to avoid conflicts with internal threading
         )
         
@@ -2996,7 +3002,7 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
         DataSpec(
             symbol="BTC",
             interval=config.timeframe,
-            ranges=[(config.test1, config.test2)], # changeme back
+            ranges=[(config.bull_start, config.bear_end)], # changeme back
             collateral=DEFAULT_COLLATERAL
         ),
     ]
@@ -3023,7 +3029,7 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
             console.print(f"[green]✅ Trained {len(trained_models)} models successfully[/green]")
 
             # Save models + optimized params
-            optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3) # set back to X, its 3 for debugging purposes
+            optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3000) # set back to X, its 3 for debugging purposes
             model_persistence.save_all_models(trained_models, optimized_config)
             config = optimized_config
             console.print(f"[green]✅ Saved trained models + optimized parameters[/green]")
@@ -3039,7 +3045,8 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
                 if isinstance(saved_params, dict):
                     config = TradingConfig(**saved_params)
                 else:
-                    print(f'Falling back to to {saved_params}')
+                    from pprint import pprint
+                    pprint(f'Falling back to to {saved_params}')
                     config = saved_params
 
 

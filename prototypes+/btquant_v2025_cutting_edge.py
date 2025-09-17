@@ -68,8 +68,8 @@ from rich.progress import Progress
 import wandb  # Weights & Biases for experiment tracking
 
 # Custom imports for data loading
-from backtrader.feeds.mssql_crypto import get_database_data, MSSQLData
-from backtrader.dontcommit import optuna_connection_string as MSSQL_ODBC
+from backtrader.feeds.mssql_crypto import get_database_data # , MSSQLData
+# from backtrader.dontcommit import optuna_connection_string as MSSQL_ODBC
 
 warnings.filterwarnings('ignore')
 console = Console()
@@ -108,6 +108,8 @@ class TradingConfig:
     max_position_size: float = 0.15
     max_drawdown_threshold: float = 0.10
     var_confidence: float = 0.05
+
+    dropout: float = 0.1
     
     # CRYPTO TRADING SPECIFIC CONFIGS - AUTO-OPTIMIZABLE
     min_trade_amount: float = 50.0
@@ -1420,8 +1422,8 @@ class CryptoQuantumStrategy(bt.Strategy):
             regime_probs = np.array([[0.25, 0.25, 0.25, 0.25]])
 
             # Log signal details (only if not silent)
-            # if confidence > 0.3 and not self.p.silent:
-            #     console.print(f"[cyan]🎯 COMBINED SIGNAL: {combined_confidence:.3f} confidence | Tech: {signal_strength:.3f} | ML: {ml_confidence:.3f}[/cyan]")
+            if confidence > 0.3 and not self.p.silent:
+                console.print(f"[cyan]🎯 COMBINED SIGNAL: {combined_confidence:.3f} confidence | Tech: {signal_strength:.3f} | ML: {ml_confidence:.3f}[/cyan]")
 
             # Return 3 values consistently
             return action_probs, regime_probs, confidence
@@ -1752,6 +1754,7 @@ class CryptoQuantumStrategy(bt.Strategy):
                                 console.print(f"[green]🎯 Confidence: {confidence:.2f} | Regime: {self.current_regime}[/green]")
 
         except Exception as e:
+            print('cant process further', e)
             pass
 
     def _risk_check(self):
@@ -2825,6 +2828,8 @@ class OptimizationEngine:
         config.macd_weight = trial.suggest_float('macd_weight', 0.1, 0.4, step=0.05)
         config.volume_weight = trial.suggest_float('volume_weight', 0.05, 0.3, step=0.05)
         config.momentum_weight = trial.suggest_float('momentum_weight', 0.05, 0.25, step=0.05)
+
+        config.dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.05)
         
         return config
         
@@ -2840,7 +2845,7 @@ class OptimizationEngine:
                 DataSpec(
                     symbol="BTC",
                     interval=config.timeframe,
-                    ranges=[(config.bear_start, config.bear_end)],
+                    ranges=[(config.bull_start, config.bear_end)],
                     collateral=DEFAULT_COLLATERAL
                 ),
             ]
@@ -2909,18 +2914,54 @@ class OptimizationEngine:
             return objective_score
             
         except Exception as e:
+            print('Something happend what never should happen - debug me!', e)
             return -1.0
     
     def optimize_parameters(self, n_trials: int = 100) -> TradingConfig:
         """Run Optuna optimization to find best parameters"""
-        
+    
+        # Track improvement for early stopping
+        best_scores_history = []
+        no_improvement_count = 0
+        patience = 5  # Stop after 50 trials without improvement
+        min_improvement = 0.001  # Minimum improvement threshold
+
+        def progress_callback(study, trial):
+            nonlocal no_improvement_count, best_scores_history
+            
+            if trial.number % 10 == 0:
+                console.print(f"[cyan]Trial {trial.number}/{n_trials} | Best Score: {study.best_value:.4f}[/cyan]")
+            
+            # Early stopping logic based on improvement
+            best_scores_history.append(study.best_value)
+            
+            # Check for improvement over the last 'patience' trials
+            if len(best_scores_history) >= patience:
+                recent_best = max(best_scores_history[-patience:])
+                older_best = max(best_scores_history[:-patience]) if len(best_scores_history) > patience else -float('inf')
+                
+                improvement = recent_best - older_best
+                
+                if improvement < min_improvement:
+                    no_improvement_count += 1
+                    if no_improvement_count >= 3:  # 3 consecutive checks without improvement
+                        console.print(f"[yellow]Early stopping: No significant improvement in {patience * 3} trials[/yellow]")
+                        study.stop()
+                else:
+                    no_improvement_count = 0
+            
+            # Also stop if we reach a very good score
+            if study.best_value > 0.20:  # Adjust this threshold
+                console.print(f"[green]Early stopping: Excellent score achieved ({study.best_value:.4f})[/green]")
+                study.stop()
+
         console.print(f"[bold yellow]🔍 Starting parameter optimization with {n_trials} trials...[/bold yellow]")
         
         # Create study
         study = optuna.create_study(
             direction='maximize',
             sampler=optuna.samplers.TPESampler(seed=42),
-            pruner=optuna.pruners.MedianPruner(n_startup_trials=10, n_warmup_steps=5)
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=5, interval_steps=1)
         )
         
         # Progress callback
@@ -3002,7 +3043,7 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
         DataSpec(
             symbol="BTC",
             interval=config.timeframe,
-            ranges=[(config.bull_start, config.bear_end)], # changeme back
+            ranges=[(config.test_start, config.test_end)], # changeme back
             collateral=DEFAULT_COLLATERAL
         ),
     ]
@@ -3018,6 +3059,8 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
         model_persistence = ModelPersistence(config)
 
         if train_models:
+
+            
             # Train all models from scratch
             trainer = ModelTrainer(config)
             split_idx = int(len(btc_data) * 0.6)
@@ -3026,11 +3069,21 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
             val_data = btc_data.slice(split_idx, val_split - split_idx)
             feature_columns = ['Close', 'Volume', 'High', 'Low', 'Open']
             trained_models = trainer.train_all_models(train_data, val_data, feature_columns)
+            
             console.print(f"[green]✅ Trained {len(trained_models)} models successfully[/green]")
+            
+            # SAVE MODELS IMMEDIATELY after training !!!
+            model_persistence.save_all_models(trained_models, config)
+            console.print("[green]✅ Models saved successfully before optimization[/green]")
+            
+            # THEN do optimization (optional/separate step)
+            try:
+                optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3000)
+                # Save optimized config separately
+                model_persistence.save_all_models(trained_models, optimized_config)
+            except KeyboardInterrupt:
+                console.print("[yellow]Optimization interrupted, but models are already saved[/yellow]")
 
-            # Save models + optimized params
-            optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3000) # set back to X, its 3 for debugging purposes
-            model_persistence.save_all_models(trained_models, optimized_config)
             config = optimized_config
             console.print(f"[green]✅ Saved trained models + optimized parameters[/green]")
 

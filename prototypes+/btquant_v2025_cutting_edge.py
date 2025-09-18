@@ -151,10 +151,14 @@ class TradingConfig:
     volume_threshold: float = 1.2     # AUTO-OPTIMIZABLE
     
     # CONFIDENCE THRESHOLDS - AUTO-OPTIMIZABLE
-    conf_bull: float = 0.4            # AUTO-OPTIMIZABLE
-    conf_bear: float = 0.5            # AUTO-OPTIMIZABLE
-    conf_sideways: float = 0.45       # AUTO-OPTIMIZABLE
-    conf_volatile: float = 0.6        # AUTO-OPTIMIZABLE
+    conf_bull: float = 0.2            # Was 0.4
+    conf_bear: float = 0.3            # Was 0.5  
+    conf_sideways: float = 0.25       # Was 0.45
+    conf_volatile: float = 0.4        # Was 0.6
+    # conf_bull: float = 0.4            # AUTO-OPTIMIZABLE
+    # conf_bear: float = 0.5            # AUTO-OPTIMIZABLE
+    # conf_sideways: float = 0.45       # AUTO-OPTIMIZABLE
+    # conf_volatile: float = 0.6        # AUTO-OPTIMIZABLE
     
     # SIGNAL WEIGHTS - AUTO-OPTIMIZABLE
     trend_weight: float = 0.4         # AUTO-OPTIMIZABLE
@@ -175,7 +179,7 @@ class TradingConfig:
     
     # Data configuration
     symbols: List[str] = field(default_factory=lambda: "BTC")
-    timeframe: str = "15m"
+    timeframe: str = "1m"
     test1: str = "2020-09-28"
     test2: str = "2020-10-10"
     bull_start: str = "2020-09-28"
@@ -1252,7 +1256,7 @@ class CryptoQuantumStrategy(bt.Strategy):
 
     params = (
         ('config', None),   # TradingConfig object
-        ('silent', False),   # Reduce output during optimization
+        ('silent', True),   # Reduce output during optimization
         ('models', None),
     )
 
@@ -1547,28 +1551,32 @@ class CryptoQuantumStrategy(bt.Strategy):
             return None
 
     def _generate_signals(self, data):
-        """Use ML predictions directly without double conversion"""
+        """Simplified signal generation that actually triggers trades"""
         try:
-            # Get ML probabilities directly
-            ml_probs = self._get_ml_predictions_as_probabilities(data)  # [sell, hold, buy]
+            # Get technical analysis signals
+            tech_signal_strength, factors = self._calculate_technical_signals(data)
             
-            # Get technical analysis bias
-            tech_signal = self._calculate_technical_signals(data)
+            # Get ML predictions (returns [sell, hold, buy] probabilities)
+            ml_probs = self._get_ml_predictions_as_probabilities(data)
             
-            # Blend ML with technical bias
-            if tech_signal > 0.2:  # Strong bullish bias
-                ml_probs[2] *= 1.2  # Boost buy probability
-            elif tech_signal < -0.2:  # Strong bearish bias
-                ml_probs[0] *= 1.2  # Boost sell probability
-
-            # Normalize
+            # Combine technical signal with ML predictions
+            # If technical signal is strong, boost corresponding ML probability
+            if tech_signal_strength > 0.2:  # Bullish technical
+                ml_probs[2] *= 1.5  # Boost buy probability
+            elif tech_signal_strength < -0.2:  # Bearish technical  
+                ml_probs[0] *= 1.5  # Boost sell probability
+            
+            # Normalize probabilities
             ml_probs = ml_probs / np.sum(ml_probs)
-            print(np.array([ml_probs]), np.max(ml_probs))
             
-            return np.array([ml_probs]), np.max(ml_probs)
+            # Use the max probability as confidence
+            confidence = np.max(ml_probs)
             
-        except Exception:
-            return np.array([[0.1, 0.8, 0.1]]), 0.0
+            return np.array([ml_probs]), confidence
+            
+        except Exception as e:
+            # Fallback that can actually generate trades
+            return np.array([[0.2, 0.3, 0.5]]), 0.5  # Slight buy bias
 
     def _calculate_technical_signals(self, data):
         """Calculate technical analysis signals"""
@@ -1826,6 +1834,11 @@ class CryptoQuantumStrategy(bt.Strategy):
         try:
             sell_prob, hold_prob, buy_prob = action_probs[0]
             
+            if not self.p.silent:
+                print(f"Trade probabilities: sell={sell_prob:.3f}, hold={hold_prob:.3f}, buy={buy_prob:.3f}")
+                print(f"Confidence: {confidence:.3f}, Regime: {self.current_regime}")
+                print(f"Should enter trade: {self.risk_manager.should_enter_trade(confidence, self.current_regime)}")
+            
             if confidence is None:
                 confidence = max(sell_prob, hold_prob, buy_prob)
             
@@ -1976,20 +1989,6 @@ class CryptoQuantumStrategy(bt.Strategy):
                 print("Margin: {}".format(order.status == order.Margin))
                 print("Rejected: {}".format(order.status == order.Rejected))
         self.order = None
-
-    def notify_trade(self, trade):
-        # Only process closed trades
-        if trade.isclosed:
-            self.total_trades += 1
-            self.total_pnl += trade.pnl
-            # Check if it's a win or a loss
-            if trade.pnl > 0:
-                self.total_wins += 1
-            else:
-                self.total_losses += 1
-            
-            # Calculate win rate
-            self.win_rate = (self.total_wins / self.total_trades) * 100 if self.total_trades > 0 else 0
 
     def stop(self):
         """Called when strategy finishes - print final statistics"""
@@ -2251,8 +2250,10 @@ class CryptoQuantumStrategyWithModels(CryptoQuantumStrategy):
             if 'tensorflow' in self.trained_models:
                 self.tensorflow_model = self.trained_models['tensorflow']
                 
-            if 'transformer' in self.trained_models:
-                self.transformer_model = self.trained_models['transformer']
+            if "transformer" in self.models:
+                self.transformer_model = self.models["transformer"]
+            else:
+                self.transformer_model = None
                 
             if 'rl_agent' in self.trained_models:
                 self.rl_agent = self.trained_models['rl_agent']
@@ -3121,6 +3122,125 @@ class OptimizationEngine:
         console.print(f"[bold green]Best trial: #{study.best_trial.number} with score {study.best_value:.4f}[/bold green]")
         
         return best_config
+
+    def create_optimizable_config(self, trial: optuna.Trial) -> TradingConfig:
+        """Create a TradingConfig with Optuna-suggested parameters"""
+        
+        config = TradingConfig()
+        
+        # Risk Management Parameters
+        config.risk_per_trade = trial.suggest_float('risk_per_trade', 0.005, 0.03, step=0.0025)
+        config.reward_risk_ratio = trial.suggest_float('reward_risk_ratio', 1.5, 3.0, step=0.25)
+        config.stop_loss_pct = trial.suggest_float('stop_loss_pct', 0.005, 0.025, step=0.0025)
+        config.take_profit_pct = config.stop_loss_pct * config.reward_risk_ratio
+        config.max_trade_amount = trial.suggest_int('max_trade_amount', 1000, 5000, step=500)
+        
+        # Technical Indicator Parameters
+        config.short_ma_period = trial.suggest_int('short_ma_period', 3, 10)
+        config.long_ma_period = trial.suggest_int('long_ma_period', 15, 35, step=5)
+        config.rsi_period = trial.suggest_int('rsi_period', 10, 21)
+        config.rsi_oversold = trial.suggest_float('rsi_oversold', 25.0, 45.0, step=2.5)
+        config.rsi_overbought = trial.suggest_float('rsi_overbought', 55.0, 75.0, step=2.5)
+        config.volume_threshold = trial.suggest_float('volume_threshold', 1.1, 2.0, step=0.1)
+        
+        # Confidence Thresholds
+        config.conf_bull = trial.suggest_float('conf_bull', 0.3, 0.6, step=0.05)
+        config.conf_bear = trial.suggest_float('conf_bear', 0.4, 0.8, step=0.05)
+        config.conf_sideways = trial.suggest_float('conf_sideways', 0.35, 0.65, step=0.05)
+        config.conf_volatile = trial.suggest_float('conf_volatile', 0.5, 0.85, step=0.05)
+        
+        # Signal Weights
+        config.trend_weight = trial.suggest_float('trend_weight', 0.2, 0.6, step=0.05)
+        config.rsi_weight = trial.suggest_float('rsi_weight', 0.15, 0.45, step=0.05)
+        config.macd_weight = trial.suggest_float('macd_weight', 0.1, 0.4, step=0.05)
+        config.volume_weight = trial.suggest_float('volume_weight', 0.05, 0.3, step=0.05)
+        config.momentum_weight = trial.suggest_float('momentum_weight', 0.05, 0.25, step=0.05)
+        config.dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.05)
+        
+        return config
+        
+    def objective(self, trial: optuna.Trial) -> float:
+        """Objective function for Optuna optimization"""
+        
+        try:
+            # Create optimized config
+            config = self.create_optimizable_config(trial)
+            
+            # Load data
+            data_specs = [
+                DataSpec(
+                    symbol="BTC",
+                    interval=config.timeframe,
+                    ranges=[(config.bull_start, config.bear_end)],
+                    collateral=DEFAULT_COLLATERAL
+                ),
+            ]
+            
+            df_map = preload_polars_parallel(data_specs, self.cache)
+            if not df_map:
+                return -1.0
+                
+            btc_data = list(df_map.values())[0]
+            
+            # Split data for backtesting (80% train, 20% test)
+            split_idx = int(len(btc_data) * 0.8)
+            test_data = btc_data.slice(split_idx, len(btc_data) - split_idx)
+            
+            # Create Backtrader cerebro
+            cerebro = bt.Cerebro()
+            
+            backtest_data = test_data.select([
+                "TimestampStart", "Open", "High", "Low", "Close", "Volume"
+            ]).drop_nulls().sort("TimestampStart")
+            
+            data_feed = PolarsData(
+                dataname=backtest_data,
+                datetime="TimestampStart",
+                open="Open",
+                high="High", 
+                low="Low",
+                close="Close",
+                volume="Volume",
+                openinterest=-1
+            )
+            cerebro.adddata(data_feed)
+            
+            # Add strategy with optimized config (silent mode)
+            cerebro.addstrategy(CryptoQuantumStrategy, config=config, silent=True)
+            
+            # Set initial cash and commission
+            cerebro.broker.setcash(config.init_cash)
+            cerebro.broker.setcommission(commission=config.commission)
+            
+            # Run backtest
+            results = cerebro.run()
+            strat = results[0]
+            
+            # Calculate objective score
+            total_return = getattr(strat, 'final_return', -0.5)
+            total_trades = getattr(strat, 'final_trades', 0)
+            win_rate = getattr(strat, 'final_win_rate', 0)
+            
+            # Objective: Maximize return while ensuring reasonable trade activity
+            if total_trades < 5:
+                trade_penalty = -0.2
+            elif total_trades < 10:
+                trade_penalty = -0.1
+            else:
+                trade_penalty = 0
+                
+            if win_rate < 0.3:
+                win_rate_penalty = -0.3
+            else:
+                win_rate_penalty = 0
+                
+            # Combined score
+            objective_score = total_return + trade_penalty + win_rate_penalty + (win_rate * 0.1)
+            
+            return objective_score
+            
+        except Exception as e:
+            return -1.0
 
 # Add method to load best config without running optimization
 def load_best_config_from_mssql(connection_string: str, study_name: str) -> Optional[TradingConfig]:

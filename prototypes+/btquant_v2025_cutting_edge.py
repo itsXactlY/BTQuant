@@ -1,6 +1,29 @@
 # Enhanced Multi-Modal Transformer-GNN Trading Strategy with Deep Reinforcement Learning
 # BTQuant v2025 - COMPLETE SYSTEM: Auto-Optimization + Full ML Pipeline + Multithreading
 
+'''
+
+Feedback from cryptoquant ::
+
+Your current environment only processes single-timeframe data, so the RL agent can't learn the multi-timeframe patterns you want it to discover.
+The bigger issue remains training efficiency. Even with proper multi-timeframe data, you're still asking the RL agent to:
+
+Learn timeframe relationships
+Learn market regime detection
+Learn optimal position sizing
+Learn entry/exit timing
+Learn risk management
+
+All simultaneously from sparse trading rewards. This is why your policy gradients are near zero - the learning signal is too weak and diffuse.
+A more practical approach might be:
+
+Use your technical analysis system to identify the multi-timeframe patterns
+Train RL only on position sizing given those pre-identified patterns
+This gives the RL agent a much clearer, focused learning objective
+
+The multi-timeframe concept is sound, but implementing it effectively in RL requires careful environment design that matches your intended strategy architecture.
+'''
+
 import datetime
 import hashlib
 import json
@@ -69,7 +92,7 @@ import wandb  # Weights & Biases for experiment tracking
 
 # Custom imports for data loading
 from backtrader.feeds.mssql_crypto import get_database_data # , MSSQLData
-# from backtrader.dontcommit import optuna_connection_string as MSSQL_ODBC
+from backtrader.dontcommit import optuna_connection_string as CONNECTION
 
 warnings.filterwarnings('ignore')
 console = Console()
@@ -152,7 +175,7 @@ class TradingConfig:
     
     # Data configuration
     symbols: List[str] = field(default_factory=lambda: "BTC")
-    timeframe: str = "1m"
+    timeframe: str = "15m"
     test1: str = "2020-09-28"
     test2: str = "2020-10-10"
     bull_start: str = "2020-09-28"
@@ -670,7 +693,7 @@ class MultiModalTransformerGNN(nn.Module):
 class PositionalEncoding(nn.Module):
     """Positional encoding for transformer"""
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 500_000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -810,7 +833,7 @@ class AdvancedTradingEnv(gym.Env):
                  df: Union[pd.DataFrame, np.ndarray],
                  feature_columns: List[str],
                  initial_balance: float = 10000,
-                 transaction_cost: float = 0.001,
+                 transaction_cost: float = 0.0001,
                  max_position: float = 1.0):
         super().__init__()
 
@@ -1229,8 +1252,8 @@ class CryptoQuantumStrategy(bt.Strategy):
 
     params = (
         ('config', None),   # TradingConfig object
-        ('silent', True),   # Reduce output during optimization
-        ('models', None),   # ✅ Allow pre-trained models to be injected
+        ('silent', False),   # Reduce output during optimization
+        ('models', None),
     )
 
     def __init__(self):
@@ -1320,116 +1343,232 @@ class CryptoQuantumStrategy(bt.Strategy):
         self._update_portfolio_tracking()
 
     def _prepare_current_data(self):
-        """Prepare current market data for model input"""
+        """Get real OHLCV data from the backtrader feed"""
         try:
             history_length = 100
             current_idx = len(self.data_close)
             
             if current_idx < history_length:
                 return None
-
-            start_idx = max(0, current_idx - history_length)
-            end_idx = min(current_idx, len(self.data_close))
-            
-            # Create DataFrame from recent data
-            closes = []
-            volumes = []
-            
-            for i in range(start_idx, end_idx):
-                try:
-                    close_val = float(self.data_close[i])
-                    volume_val = float(self.data_volume[i]) if self.data_volume and i < len(self.data_volume) else 1000.0
-                    
-                    closes.append(close_val if not np.isnan(close_val) else 50000.0)
-                    volumes.append(volume_val if not np.isnan(volume_val) else 1000.0)
-                except (IndexError, ValueError, TypeError):
-                    closes.append(50000.0)
-                    volumes.append(1000.0)
-            
-            if len(closes) < 10:
-                return None
-
-            # Create realistic OHLC from close prices
-            opens = [c + np.random.uniform(-10, 10) for c in closes]
-            highs = [max(o, c) + abs(np.random.uniform(0, 20)) for o, c in zip(opens, closes)]
-            lows = [min(o, c) - abs(np.random.uniform(0, 20)) for o, c in zip(opens, closes)]
-
+                
+            # Get REAL data from backtrader lines
             data_dict = {
-                'Open': opens,
-                'High': highs, 
-                'Low': lows,
-                'Close': closes,
-                'Volume': volumes
+                'Open': [float(self.datas[0].open[i]) for i in range(-history_length, 0)],
+                'High': [float(self.datas[0].high[i]) for i in range(-history_length, 0)], 
+                'Low': [float(self.datas[0].low[i]) for i in range(-history_length, 0)],
+                'Close': [float(self.datas[0].close[i]) for i in range(-history_length, 0)],
+                'Volume': [float(self.datas[0].volume[i]) for i in range(-history_length, 0)]
             }
-
-            df = pl.DataFrame(data_dict)
-            return df
-
+            
+            return pl.DataFrame(data_dict)
         except Exception as e:
             if not self.p.silent:
                 console.print(f"[red]Error preparing data: {e}[/red]")
             return None
 
     def _detect_regime(self, data):
-        """Detect current market regime"""
+        """Improved regime detection with consistent lookbacks"""
         try:
             close_arr = data["Close"].to_numpy()
-            returns = np.diff(close_arr) / close_arr[:-1]
-            volatility = np.std(returns[-20:]) if len(returns) >= 20 else 0
-            trend = (close_arr[-1] / close_arr[-20] - 1) if len(close_arr) >= 20 else 0
-
-            vol_threshold = np.std(returns) * 1.5
-
-            if volatility > vol_threshold:
+            if len(close_arr) < 50:  # Need sufficient data
+                return "normal"
+                
+            # Use consistent lookback periods
+            short_window = 20
+            long_window = 50
+            
+            # Calculate metrics
+            short_returns = np.diff(close_arr[-short_window:]) / close_arr[-short_window:-1]
+            long_returns = np.diff(close_arr[-long_window:]) / close_arr[-long_window:-1]
+            
+            # Trend: compare short vs long MA
+            short_ma = np.mean(close_arr[-short_window:])
+            long_ma = np.mean(close_arr[-long_window:])
+            trend_strength = (short_ma / long_ma - 1)
+            
+            # Volatility: use rolling window
+            volatility = np.std(short_returns) * np.sqrt(1440)  # Annualized for 1min data
+            vol_ma = np.std(long_returns) * np.sqrt(1440)
+            
+            # More nuanced classification
+            if volatility > vol_ma * 2.0:
                 return "volatile"
-            elif trend > 0.05:
+            elif trend_strength > 0.02:  # 2% for shorter timeframes
                 return "bull"
-            elif trend < -0.05:
-                return "bear"
+            elif trend_strength < -0.02:
+                return "bear" 
             else:
                 return "sideways"
-
-        except Exception as e:
+                
+        except Exception:
             return "normal"
 
-    def _generate_signals(self, data):
-        """COMPLETE AUTO-OPTIMIZED signal generation using ALL ML models"""
+    def _rule_based_probabilities(self, ret_1, ret_5, cv, ma_ratio):
+        """Convert rule-based logic to probabilities [sell, hold, buy]"""
+        
+        # Start with neutral
+        sell_prob = 0.1
+        hold_prob = 0.8 
+        buy_prob = 0.1
+        
+        # Adjust based on momentum
+        if ret_1 > 0.008 and ret_5 > 0.025:  # Strong bullish
+            buy_prob = 0.7
+            hold_prob = 0.25
+            sell_prob = 0.05
+        elif ret_1 < -0.008 and ret_5 < -0.025:  # Strong bearish
+            sell_prob = 0.7
+            hold_prob = 0.25
+            buy_prob = 0.05
+        elif ret_5 > 0.01:  # Moderate bullish
+            buy_prob = 0.5
+            hold_prob = 0.4
+            sell_prob = 0.1
+        elif ret_5 < -0.01:  # Moderate bearish
+            sell_prob = 0.5
+            hold_prob = 0.4
+            buy_prob = 0.1
+        
+        # Volatility adjustment
+        if cv > 0.08:  # High volatility - reduce conviction
+            hold_prob += 0.2
+            buy_prob *= 0.8
+            sell_prob *= 0.8
+        
+        # MA trend adjustment
+        if ma_ratio > 0.02:  # Strong uptrend
+            buy_prob *= 1.3
+            sell_prob *= 0.7
+        elif ma_ratio < -0.02:  # Strong downtrend
+            sell_prob *= 1.3
+            buy_prob *= 0.7
+        
+        # Normalize to ensure sum = 1
+        total = sell_prob + hold_prob + buy_prob
+        return np.array([sell_prob/total, hold_prob/total, buy_prob/total])
+
+    def _get_ml_predictions_as_probabilities(self, data):
+        """Get ML predictions as [sell, hold, buy] probabilities from all models except RL"""
         try:
-            close_arr = to_talib_array(data["Close"].to_numpy())
-
-            # Traditional technical analysis
-            signal_strength, factors = self._calculate_technical_signals(data)
+            # Prepare feature vector
+            close_arr = data["Close"].to_numpy()
+            if len(close_arr) < 10:
+                return np.array([0.1, 0.8, 0.1])
             
-            # ML ensemble predictions (if trained) - FIXED
-            ml_confidence = self._get_ml_predictions(data)
+            # Create features
+            ret_1 = close_arr[-1] / close_arr[-2] - 1 if len(close_arr) >= 2 else 0
+            ret_5 = close_arr[-1] / close_arr[-5] - 1 if len(close_arr) >= 5 else 0
+            cv = np.std(close_arr[-10:]) / np.mean(close_arr[-10:]) if len(close_arr) >= 10 else 0.01
+            ma_ratio = np.mean(close_arr[-3:]) / np.mean(close_arr[-10:]) - 1 if len(close_arr) >= 10 else 0
             
-            # Combine traditional and ML signals
-            combined_confidence = (signal_strength + ml_confidence) / 2
-            confidence = abs(combined_confidence)
+            features = np.array([ret_1, ret_5, cv, ma_ratio]).reshape(1, -1)
+            probabilities = []
             
-            # Convert to probabilities
-            if combined_confidence > 0.3:
-                action_probs = np.array([[0.1, 0.1, 0.8]])  # Strong buy
-            elif combined_confidence < -0.3:
-                action_probs = np.array([[0.8, 0.1, 0.1]])  # Strong sell
-            elif combined_confidence > 0.15:
-                action_probs = np.array([[0.2, 0.2, 0.6]])  # Moderate buy
-            elif combined_confidence < -0.15:
-                action_probs = np.array([[0.6, 0.2, 0.2]])  # Moderate sell
-            else:
-                action_probs = np.array([[0.1, 0.8, 0.1]])  # Hold
+            # 1. ML Ensemble predictions
+            if hasattr(self.ml_ensemble, 'is_trained') and self.ml_ensemble.is_trained:
+                try:
+                    ml_pred = self.ml_ensemble.predict(features)[0]
+                    probabilities.append(ml_pred)
+                except Exception:
+                    pass
+            
+            # 2. TensorFlow predictions  
+            if hasattr(self.tensorflow_model, 'is_trained') and self.tensorflow_model.is_trained:
+                try:
+                    tf_pred = self.tensorflow_model.predict(features.reshape(1, 1, -1))[0]
+                    probabilities.append(tf_pred)
+                except Exception:
+                    pass
+            
+            # 3. Transformer predictions
+            if hasattr(self, 'transformer_model') and self.transformer_model is not None:
+                try:
+                    transformer_pred = self._get_transformer_predictions(features, data)
+                    probabilities.append(transformer_pred)
+                except Exception:
+                    pass
+            
+            if probabilities:
+                # Average all model predictions
+                ensemble_pred = np.mean(probabilities, axis=0)
+                
+                # Ensure proper format [sell, hold, buy]
+                if len(ensemble_pred) == 3:
+                    ensemble_pred = np.abs(ensemble_pred)
+                    ensemble_pred = ensemble_pred / np.sum(ensemble_pred)
+                    return ensemble_pred
+            
+            # Fallback to rule-based
+            return self._rule_based_probabilities(ret_1, ret_5, cv, ma_ratio)
+            
+        except Exception:
+            return np.array([0.1, 0.8, 0.1])
 
-            regime_probs = np.array([[0.25, 0.25, 0.25, 0.25]])
-
-            # Log signal details (only if not silent)
-            if confidence > 0.3 and not self.p.silent:
-                console.print(f"[cyan]🎯 COMBINED SIGNAL: {combined_confidence:.3f} confidence | Tech: {signal_strength:.3f} | ML: {ml_confidence:.3f}[/cyan]")
-
-            # Return 3 values consistently
-            return action_probs, regime_probs, confidence
-
+    def _get_transformer_predictions(self, features, data):
+        """Get predictions from transformer model"""
+        try:
+            # Prepare data for transformer (needs sequence)
+            close_arr = data["Close"].to_numpy()
+            if len(close_arr) < 30:  # Transformer needs sequence
+                return None
+                
+            # Create feature sequence for transformer
+            feature_engine = QuantumFeatureEngine(self.config)
+            enhanced_data = feature_engine.engineer_features(data)
+            
+            # Get available features that exist in the dataframe
+            available_features = [col for col in ['Close', 'Volume', 'rsi', 'macd'] 
+                                if col in enhanced_data.columns]
+            
+            if not available_features:
+                return None
+                
+            # Extract last 30 timesteps as sequence
+            sequence = enhanced_data.select(available_features).tail(30).to_numpy()
+            
+            if sequence.shape[0] != 30:
+                return None
+                
+            # Convert to tensor
+            sequence_tensor = torch.tensor(sequence, dtype=torch.float32).unsqueeze(0)
+            
+            # Create dummy edge index for GNN component
+            edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
+            
+            # Get predictions
+            self.transformer_model.eval()
+            with torch.no_grad():
+                action_logits, _ = self.transformer_model(sequence_tensor, edge_index)
+                probabilities = torch.softmax(action_logits, dim=1).cpu().numpy()[0]
+                
+            return probabilities
+            
         except Exception as e:
             return None
+
+    def _generate_signals(self, data):
+        """Use ML predictions directly without double conversion"""
+        try:
+            # Get ML probabilities directly
+            ml_probs = self._get_ml_predictions_as_probabilities(data)  # [sell, hold, buy]
+            
+            # Get technical analysis bias
+            tech_signal = self._calculate_technical_signals(data)
+            
+            # Blend ML with technical bias
+            if tech_signal > 0.2:  # Strong bullish bias
+                ml_probs[2] *= 1.2  # Boost buy probability
+            elif tech_signal < -0.2:  # Strong bearish bias
+                ml_probs[0] *= 1.2  # Boost sell probability
+
+            # Normalize
+            ml_probs = ml_probs / np.sum(ml_probs)
+            print(np.array([ml_probs]), np.max(ml_probs))
+            
+            return np.array([ml_probs]), np.max(ml_probs)
+            
+        except Exception:
+            return np.array([[0.1, 0.8, 0.1]]), 0.0
 
     def _calculate_technical_signals(self, data):
         """Calculate technical analysis signals"""
@@ -1675,6 +1814,7 @@ class CryptoQuantumStrategy(bt.Strategy):
                                 
                             positions_to_close.append(pos_id)
                 except Exception as e:
+                    print(e)
                     pass
         
         # Remove closed positions
@@ -1807,7 +1947,49 @@ class CryptoQuantumStrategy(bt.Strategy):
             self.portfolio_history.append(portfolio_info)
 
         except Exception as e:
+            print(e)
             pass
+
+    def notify_order(self, order):
+        if order.status in [order.Completed]:
+            if order.isbuy():
+                if hasattr(self, 'active_orders') and self.active_orders:
+                    self.active_orders[-1].order_id = order.ref
+
+        if order.status in [order.Submitted, order.Accepted]:
+            # return
+            if order.status in [order.Completed]:
+                self.update_order_history(order)
+                if order.isbuy():
+                    self.action = "buy"
+                    self.buyprice = order.executed.price
+                    self.buycomm = order.executed.comm
+
+                else:  # Sell
+                    self.action = "sell"
+
+                self.bar_executed = len(self)
+
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+                print("Order Canceled/Margin/Rejected")
+                print("Canceled: {}".format(order.status == order.Canceled))
+                print("Margin: {}".format(order.status == order.Margin))
+                print("Rejected: {}".format(order.status == order.Rejected))
+        self.order = None
+
+    def notify_trade(self, trade):
+        # Only process closed trades
+        if trade.isclosed:
+            self.total_trades += 1
+            self.total_pnl += trade.pnl
+            # Check if it's a win or a loss
+            if trade.pnl > 0:
+                self.total_wins += 1
+            else:
+                self.total_losses += 1
+            
+            # Calculate win rate
+            self.win_rate = (self.total_wins / self.total_trades) * 100 if self.total_trades > 0 else 0
 
     def stop(self):
         """Called when strategy finishes - print final statistics"""
@@ -2322,9 +2504,9 @@ class ModelTrainer:
                 epochs=20
             )
 
-        def train_rl():
-            train_pandas = train_data_clone.clone().to_pandas()
-            return self.train_rl_agent(train_pandas, feature_columns, total_timesteps=5000)
+        # def train_rl():
+        #     train_pandas = train_data_clone.clone().to_pandas()
+        #     return self.train_rl_agent(train_pandas, feature_columns, total_timesteps=500_000)
 
         def train_ml_ensemble():
             return self.train_ml_ensemble(train_data_clone.clone(), feature_columns)
@@ -2333,10 +2515,10 @@ class ModelTrainer:
             return self.train_tensorflow_model(train_data_clone.clone(), feature_columns)
 
         # Execute training in parallel
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 'transformer': executor.submit(train_transformer),
-                'rl_agent': executor.submit(train_rl),
+                # 'rl_agent': executor.submit(train_rl),
                 'ml_ensemble': executor.submit(train_ml_ensemble),
                 'tensorflow': executor.submit(train_tensorflow)
             }
@@ -2788,262 +2970,192 @@ class ModelTrainer:
 
 # ==================== AUTO-OPTIMIZATION SYSTEM ====================
 
-class OptimizationEngine:
-    """Handles automatic parameter optimization using Optuna with multithreading"""
-    
-    def __init__(self, cache: DataCache):
-        self.cache = cache
-        self.best_params = None
-        self.best_score = -float('inf')
-        
-    def create_optimizable_config(self, trial: optuna.Trial) -> TradingConfig:
-        """Create a TradingConfig with Optuna-suggested parameters"""
-        
-        config = TradingConfig()
-        
-        # Risk Management Parameters
-        config.risk_per_trade = trial.suggest_float('risk_per_trade', 0.005, 0.03, step=0.0025)
-        config.reward_risk_ratio = trial.suggest_float('reward_risk_ratio', 1.5, 3.0, step=0.25)
-        config.stop_loss_pct = trial.suggest_float('stop_loss_pct', 0.005, 0.025, step=0.0025)
-        config.take_profit_pct = config.stop_loss_pct * config.reward_risk_ratio
-        config.max_trade_amount = trial.suggest_int('max_trade_amount', 1000, 5000, step=500)
-        
-        # Technical Indicator Parameters
-        config.short_ma_period = trial.suggest_int('short_ma_period', 3, 10)
-        config.long_ma_period = trial.suggest_int('long_ma_period', 15, 35, step=5)
-        config.rsi_period = trial.suggest_int('rsi_period', 10, 21)
-        config.rsi_oversold = trial.suggest_float('rsi_oversold', 25.0, 45.0, step=2.5)
-        config.rsi_overbought = trial.suggest_float('rsi_overbought', 55.0, 75.0, step=2.5)
-        config.volume_threshold = trial.suggest_float('volume_threshold', 1.1, 2.0, step=0.1)
-        
-        # Confidence Thresholds
-        config.conf_bull = trial.suggest_float('conf_bull', 0.3, 0.6, step=0.05)
-        config.conf_bear = trial.suggest_float('conf_bear', 0.4, 0.8, step=0.05)
-        config.conf_sideways = trial.suggest_float('conf_sideways', 0.35, 0.65, step=0.05)
-        config.conf_volatile = trial.suggest_float('conf_volatile', 0.5, 0.85, step=0.05)
-        
-        # Signal Weights
-        config.trend_weight = trial.suggest_float('trend_weight', 0.2, 0.6, step=0.05)
-        config.rsi_weight = trial.suggest_float('rsi_weight', 0.15, 0.45, step=0.05)
-        config.macd_weight = trial.suggest_float('macd_weight', 0.1, 0.4, step=0.05)
-        config.volume_weight = trial.suggest_float('volume_weight', 0.05, 0.3, step=0.05)
-        config.momentum_weight = trial.suggest_float('momentum_weight', 0.05, 0.25, step=0.05)
+def build_optuna_storage(connection_string: str):
+    """Build Optuna storage from connection string"""
+    try:
+        import optuna
+        return optuna.storages.RDBStorage(
+            url=connection_string,
+            engine_kwargs={'pool_pre_ping': True, 'pool_recycle': 300}
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to build Optuna storage: {e}[/red]")
+        return None
 
-        config.dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.05)
+class OptimizationEngine:
+    """Enhanced with MSSQL persistence and resume capability"""
+    
+    def __init__(self, cache: DataCache, connection_string: str = None, study_name: str = "BTQuant_v2025_Optimization"):
+        self.cache = cache
+        self.connection_string = connection_string
+        self.study_name = study_name
+        self.storage = None
         
-        return config
+        # Setup storage if provided
+        if connection_string:
+            self.storage = build_optuna_storage(connection_string)
+            if self.storage:
+                console.print(f"[green]Connected to MSSQL Optuna storage[/green]")
+    
+    def create_or_load_study(self) -> optuna.Study:
+        """Create new study or load existing one from MSSQL"""
         
-    def objective(self, trial: optuna.Trial) -> float:
-        """Objective function for Optuna optimization"""
-        
-        try:
-            # Create optimized config
-            config = self.create_optimizable_config(trial)
-            
-            # Load data
-            data_specs = [
-                DataSpec(
-                    symbol="BTC",
-                    interval=config.timeframe,
-                    ranges=[(config.bull_start, config.bear_end)],
-                    collateral=DEFAULT_COLLATERAL
-                ),
-            ]
-            
-            df_map = preload_polars_parallel(data_specs, self.cache)
-            if not df_map:
-                return -1.0
+        if self.storage:
+            try:
+                # Try to load existing study
+                study = optuna.load_study(
+                    study_name=self.study_name, 
+                    storage=self.storage
+                )
+                console.print(f"[cyan]Loaded existing study '{self.study_name}' with {len(study.trials)} trials[/cyan]")
                 
-            btc_data = list(df_map.values())[0]
-            
-            # Split data for backtesting (80% train, 20% test)
-            split_idx = int(len(btc_data) * 0.8)
-            test_data = btc_data.slice(split_idx, len(btc_data) - split_idx)
-            
-            # Create Backtrader cerebro
-            cerebro = bt.Cerebro()
-            
-            backtest_data = test_data.select([
-                "TimestampStart", "Open", "High", "Low", "Close", "Volume"
-            ]).drop_nulls().sort("TimestampStart")
-            
-            data_feed = PolarsData(
-                dataname=backtest_data,
-                datetime="TimestampStart",
-                open="Open",
-                high="High", 
-                low="Low",
-                close="Close",
-                volume="Volume",
-                openinterest=-1
+                if len(study.trials) > 0:
+                    best_trial = study.best_trial
+                    console.print(f"[cyan]Best trial so far: #{best_trial.number} with score {study.best_value:.4f}[/cyan]")
+                    
+                return study
+                
+            except Exception as e:
+                console.print(f"[yellow]Study not found, creating new: {e}[/yellow]")
+                
+                # Create new study
+                study = optuna.create_study(
+                    study_name=self.study_name,
+                    storage=self.storage,
+                    direction='maximize',
+                    sampler=optuna.samplers.TPESampler(seed=42),
+                    pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=5)
+                )
+                console.print(f"[green]Created new study '{self.study_name}'[/green]")
+                return study
+        else:
+            # In-memory study as fallback
+            return optuna.create_study(
+                direction='maximize',
+                sampler=optuna.samplers.TPESampler(seed=42),
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=5)
             )
-            cerebro.adddata(data_feed)
+    
+    def get_best_config_from_study(self) -> Optional[TradingConfig]:
+        """Load best configuration from existing study"""
+        if not self.storage:
+            return None
             
-            # Add strategy with optimized config (silent mode)
-            cerebro.addstrategy(CryptoQuantumStrategy, config=config, silent=True)
-            
-            # Set initial cash and commission
-            cerebro.broker.setcash(config.init_cash)
-            cerebro.broker.setcommission(commission=config.commission)
-            
-            # Run backtest
-            results = cerebro.run()
-            strat = results[0]
-            
-            # Calculate objective score
-            total_return = getattr(strat, 'final_return', -0.5)
-            total_trades = getattr(strat, 'final_trades', 0)
-            win_rate = getattr(strat, 'final_win_rate', 0)
-            
-            # Objective: Maximize return while ensuring reasonable trade activity
-            if total_trades < 5:
-                trade_penalty = -0.2
-            elif total_trades < 10:
-                trade_penalty = -0.1
-            else:
-                trade_penalty = 0
+        try:
+            study = optuna.load_study(study_name=self.study_name, storage=self.storage)
+            if len(study.trials) == 0:
+                console.print("[yellow]No trials found in study[/yellow]")
+                return None
                 
-            if win_rate < 0.3:
-                win_rate_penalty = -0.3
-            else:
-                win_rate_penalty = 0
-                
-            # Combined score
-            objective_score = total_return + trade_penalty + win_rate_penalty + (win_rate * 0.1)
+            best_trial = study.best_trial
+            best_config = self.create_optimizable_config(best_trial)
             
-            return objective_score
+            console.print(f"[green]Loaded best config from trial #{best_trial.number} (score: {study.best_value:.4f})[/green]")
+            return best_config
             
         except Exception as e:
-            print('Something happend what never should happen - debug me!', e)
-            return -1.0
+            console.print(f"[red]Failed to load best config: {e}[/red]")
+            return None
     
-    def optimize_parameters(self, n_trials: int = 100) -> TradingConfig:
-        """Run Optuna optimization to find best parameters"""
-    
-        # Track improvement for early stopping
+    def optimize_parameters(self, n_trials: int = 100, resume: bool = True) -> TradingConfig:
+        """Run optimization with MSSQL persistence and resume capability"""
+        
+        # Create or load study
+        study = self.create_or_load_study()
+        
+        if resume and len(study.trials) > 0:
+            console.print(f"[cyan]Resuming optimization from {len(study.trials)} existing trials[/cyan]")
+            remaining_trials = max(0, n_trials - len(study.trials))
+            if remaining_trials == 0:
+                console.print("[yellow]Already completed requested number of trials[/yellow]")
+                return self.create_optimizable_config(study.best_trial)
+            console.print(f"[cyan]Running {remaining_trials} additional trials[/cyan]")
+            n_trials = remaining_trials
+        
+        # Early stopping tracker
         best_scores_history = []
         no_improvement_count = 0
-        patience = 5  # Stop after 50 trials without improvement
-        min_improvement = 0.001  # Minimum improvement threshold
-
+        patience = 30
+        min_improvement = 0.001
+        
         def progress_callback(study, trial):
             nonlocal no_improvement_count, best_scores_history
             
-            if trial.number % 10 == 0:
-                console.print(f"[cyan]Trial {trial.number}/{n_trials} | Best Score: {study.best_value:.4f}[/cyan]")
+            if trial.number % 5 == 0:
+                console.print(f"[cyan]Trial {trial.number} | Best: {study.best_value:.4f} | Current: {trial.value:.4f} | No improve: {no_improvement_count}[/cyan]")
             
-            # Early stopping logic based on improvement
+            # Early stopping logic
             best_scores_history.append(study.best_value)
             
-            # Check for improvement over the last 'patience' trials
             if len(best_scores_history) >= patience:
                 recent_best = max(best_scores_history[-patience:])
                 older_best = max(best_scores_history[:-patience]) if len(best_scores_history) > patience else -float('inf')
-                
                 improvement = recent_best - older_best
                 
                 if improvement < min_improvement:
                     no_improvement_count += 1
-                    if no_improvement_count >= 3:  # 3 consecutive checks without improvement
-                        console.print(f"[yellow]Early stopping: No significant improvement in {patience * 3} trials[/yellow]")
+                    if no_improvement_count >= 3:
+                        console.print(f"[yellow]Early stopping: No improvement in {patience * 3} trials[/yellow]")
                         study.stop()
                 else:
                     no_improvement_count = 0
             
-            # Also stop if we reach a very good score
-            if study.best_value > 0.20:  # Adjust this threshold
+            if study.best_value > 0.25:
                 console.print(f"[green]Early stopping: Excellent score achieved ({study.best_value:.4f})[/green]")
                 study.stop()
-
-        console.print(f"[bold yellow]🔍 Starting parameter optimization with {n_trials} trials...[/bold yellow]")
-        
-        # Create study
-        study = optuna.create_study(
-            direction='maximize',
-            sampler=optuna.samplers.TPESampler(seed=42),
-            pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=5, interval_steps=1)
-        )
-        
-        # Progress callback
-        def progress_callback(study, trial):
-            if trial.number % 10 == 0:
-                console.print(f"[cyan]📊 Trial {trial.number}/{n_trials} | Best Score: {study.best_value:.4f}[/cyan]")
-                
-                # Log to wandb
-                try:
-                    wandb.log({
-                        'optimization_trial': trial.number,
-                        'best_score': study.best_value,
-                        'current_score': trial.value
-                    })
-                except:
-                    pass
-        
-        # Start with a good baseline
-        study.enqueue_trial({
-            'risk_per_trade': 0.015,
-            'reward_risk_ratio': 2.0,
-            'stop_loss_pct': 0.015,
-            'max_trade_amount': 3000,
-            'short_ma_period': 5,
-            'long_ma_period': 15,
-            'rsi_period': 14,
-            'rsi_oversold': 40.0,
-            'rsi_overbought': 60.0,
-            'volume_threshold': 1.2,
-            'conf_bull': 0.4,
-            'conf_bear': 0.5,
-            'conf_sideways': 0.45,
-            'conf_volatile': 0.6,
-            'trend_weight': 0.4,
-            'rsi_weight': 0.3,
-            'macd_weight': 0.25,
-            'volume_weight': 0.2,
-            'momentum_weight': 0.15
-        })
         
         # Run optimization
-        study.optimize(
-            self.objective, 
-            n_trials=n_trials,
-            callbacks=[progress_callback],
-            show_progress_bar=True,
-            n_jobs=1  # Keep single threaded to avoid conflicts with internal threading
-        )
+        try:
+            study.optimize(
+                self.objective,
+                n_trials=n_trials,
+                callbacks=[progress_callback],
+                show_progress_bar=True,
+                n_jobs=1
+            )
+        except KeyboardInterrupt:
+            console.print("[yellow]Optimization interrupted by user[/yellow]")
         
-        # Create optimized config
-        optimized_config = self.create_optimizable_config(study.best_trial)
+        # Return best config
+        best_config = self.create_optimizable_config(study.best_trial)
+        console.print(f"[bold green]Best trial: #{study.best_trial.number} with score {study.best_value:.4f}[/bold green]")
         
-        console.print(f"[bold green]✅ Optimization completed![/bold green]")
-        console.print(f"[bold green]🏆 Best Score: {study.best_value:.4f}[/bold green]")
-        console.print(f"[bold green]🔧 Best Parameters Found:[/bold green]")
+        return best_config
+
+# Add method to load best config without running optimization
+def load_best_config_from_mssql(connection_string: str, study_name: str) -> Optional[TradingConfig]:
+    """Standalone function to load best config from MSSQL"""
+    try:
+        storage = build_optuna_storage(connection_string)
+        study = optuna.load_study(study_name=study_name, storage=storage)
         
-        # Display best parameters
-        params_table = Table(title="🎯 Optimized Parameters")
-        params_table.add_column("Parameter", style="cyan")
-        params_table.add_column("Value", style="green")
+        if len(study.trials) == 0:
+            return None
+            
+        # Create a dummy optimization engine to use the config creation method
+        dummy_cache = None  # Not needed for config creation
+        engine = OptimizationEngine(dummy_cache)
+        best_config = engine.create_optimizable_config(study.best_trial)
         
-        for key, value in study.best_params.items():
-            if isinstance(value, float):
-                params_table.add_row(key, f"{value:.4f}")
-            else:
-                params_table.add_row(key, str(value))
+        console.print(f"[green]Loaded best config from MSSQL: trial #{study.best_trial.number}[/green]")
+        return best_config
         
-        console.print(params_table)
-        
-        return optimized_config
+    except Exception as e:
+        console.print(f"[red]Failed to load from MSSQL: {e}[/red]")
+        return None
 
 # ==================== MAIN EXECUTION PIPELINE ====================
 
-def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, train_models=False) -> dict:
-    """Run backtest with optional ML model loading or training"""
+def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, train_models=False, 
+                 mssql_connection: str = None, study_name: str = None) -> dict:
+    """Run backtest with optional ML model loading or training and MSSQL optimization"""
 
     # --- Load Data ---
     data_specs = [
         DataSpec(
             symbol="BTC",
             interval=config.timeframe,
-            ranges=[(config.test_start, config.test_end)], # changeme back
+            ranges=[(config.test_start, config.test_end)],
             collateral=DEFAULT_COLLATERAL
         ),
     ]
@@ -3059,8 +3171,6 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
         model_persistence = ModelPersistence(config)
 
         if train_models:
-
-            
             # Train all models from scratch
             trainer = ModelTrainer(config)
             split_idx = int(len(btc_data) * 0.6)
@@ -3072,20 +3182,27 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
             
             console.print(f"[green]✅ Trained {len(trained_models)} models successfully[/green]")
             
-            # SAVE MODELS IMMEDIATELY after training !!!
+            # SAVE MODELS IMMEDIATELY after training
             model_persistence.save_all_models(trained_models, config)
             console.print("[green]✅ Models saved successfully before optimization[/green]")
             
-            # THEN do optimization (optional/separate step)
+            # THEN do optimization with MSSQL storage
             try:
-                optimized_config = OptimizationEngine(cache).optimize_parameters(n_trials=3000)
-                # Save optimized config separately
+                if mssql_connection and study_name:
+                    # Use MSSQL-backed optimization
+                    engine = OptimizationEngine(cache, mssql_connection, study_name)
+                    optimized_config = engine.optimize_parameters(n_trials=1000, resume=True)
+                else:
+                    # Fallback to in-memory optimization
+                    engine = OptimizationEngine(cache)
+                    optimized_config = engine.optimize_parameters(n_trials=100)
+                
+                # Save optimized config
                 model_persistence.save_all_models(trained_models, optimized_config)
+                config = optimized_config
+                
             except KeyboardInterrupt:
                 console.print("[yellow]Optimization interrupted, but models are already saved[/yellow]")
-
-            config = optimized_config
-            console.print(f"[green]✅ Saved trained models + optimized parameters[/green]")
 
         else:
             # Load best pre-trained models + params
@@ -3094,16 +3211,13 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
 
             # If params exist in save, update config
             if saved_params:
-                # Ensure config stays as TradingConfig
                 if isinstance(saved_params, dict):
                     config = TradingConfig(**saved_params)
+                    print(config)
                 else:
-                    from pprint import pprint
-                    pprint(f'Falling back to to {saved_params}')
                     config = saved_params
 
-
-    # --- Backtrader Setup ---
+    # --- Rest of backtest code remains the same ---
     cerebro = bt.Cerebro()
     backtest_data = btc_data.select([
         "TimestampStart", "Open", "High", "Low", "Close", "Volume"
@@ -3121,9 +3235,7 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
     )
     cerebro.adddata(data_feed)
 
-    # Add strategy with or without ML models
     cerebro.addstrategy(CryptoQuantumStrategy, config=config, models=trained_models if use_models else None)
-
     cerebro.broker.setcash(config.init_cash)
     cerebro.broker.setcommission(commission=config.commission)
 
@@ -3133,12 +3245,11 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
     cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
 
-    # --- Run Backtest ---
     console.print("[cyan]🚀 Running backtest...[/cyan]")
     results = cerebro.run()
     strat = results[0]
 
-    # --- Metrics ---
+    # --- Calculate metrics ---
     final_value = cerebro.broker.getvalue()
     total_return = (final_value - config.init_cash) / config.init_cash
 
@@ -3166,38 +3277,59 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
         'backtest_data': backtest_data
     }
 
-
 def main():
-    """Main entrypoint for BTQuant v2025 with 3 execution modes"""
-    console.print("[bold green]🚀 BTQuant v2025 - COMPLETE CRYPTO TRADING SYSTEM[/bold green]")
-    console.print("[bold green]🤖 ML Models + Auto-Optimization + Backtesting[/bold green]\n")
-
+    """Enhanced main with MSSQL Optuna storage"""
+    console.print("[bold green]BTQuant prototyping slaughterhouse...[/bold green]")
+    
     try:
-        # 1. Init cache
-        console.print("[cyan]Step 1: Initializing data cache...[/cyan]")
         cache = DataCache(CONFIG.cache_dir)
-
-        # 2. User choice
-        console.print("\n[bold yellow]🔧 Execution Modes:[/bold yellow]")
-        console.print("[yellow]1. 🚀 Train + optimize all ML models, save config + models[/yellow]")
-        console.print("[yellow]2. ✅ Load pre-trained models + best JSON config[/yellow]")
-        console.print("[yellow]3. 📊 Run plain backtest without ML models[/yellow]")
-
-        choice = input("\nEnter your choice (1, 2, or 3, default=2): ").strip() or "2"
-
-        # 3. Run according to mode
+        
+        # MSSQL connection for Optuna (optional)
+        MSSQL_CONNECTION = CONNECTION
+        STUDY_NAME = "cuttingedgeprototyping"
+        
+        console.print("\n[bold yellow]Execution Modes:[/bold yellow]")
+        console.print("[yellow]1. Train + optimize (with MSSQL storage)[/yellow]")
+        console.print("[yellow]2. Load pre-trained models + best config[/yellow]")
+        console.print("[yellow]3. Resume optimization from MSSQL[/yellow]")
+        console.print("[yellow]4. Load best config from MSSQL only[/yellow]")
+        console.print("[yellow]5. Plain backtest (no ML)[/yellow]")
+        
+        choice = input("\nEnter choice (1-5, default=2): ").strip() or "2"
+        
         if choice == "1":
-            console.print("[cyan]🚀 Mode 1: Full system (train + optimize)[/cyan]")
-            results = run_backtest(CONFIG, cache, use_models=True, train_models=True)
-
+            console.print("[cyan]Mode 1: Full training + optimization with MSSQL[/cyan]")
+            results = run_backtest(CONFIG, cache, use_models=True, train_models=True, 
+                                 mssql_connection=MSSQL_CONNECTION, study_name=STUDY_NAME)
+                                 
         elif choice == "2":
-            console.print("[cyan]✅ Mode 2: Using pre-trained models + JSON config[/cyan]")
+            console.print("[cyan]Mode 2: Load pre-trained models + config[/cyan]")
             results = run_backtest(CONFIG, cache, use_models=True, train_models=False)
-
+            
+        elif choice == "3":
+            console.print("[cyan]Mode 3: Resume optimization from MSSQL[/cyan]")
+            if not MSSQL_CONNECTION:
+                console.print("[red]MSSQL connection required for this mode[/red]")
+                return
+            engine = OptimizationEngine(cache, MSSQL_CONNECTION, STUDY_NAME)
+            optimized_config = engine.optimize_parameters(n_trials=1000, resume=True)
+            results = run_backtest(optimized_config, cache, use_models=False)
+            
+        elif choice == "4":
+            console.print("[cyan]Mode 4: Load best config from MSSQL only[/cyan]")
+            if not MSSQL_CONNECTION:
+                console.print("[red]MSSQL connection required[/red]")
+                return
+            best_config = load_best_config_from_mssql(MSSQL_CONNECTION, STUDY_NAME)
+            if best_config:
+                results = run_backtest(best_config, cache, use_models=False)
+            else:
+                console.print("[red]No best config found in MSSQL[/red]")
+                return
         else:
-            console.print("[cyan]📊 Mode 3: Plain backtest (no ML models)[/cyan]")
+            console.print("[cyan]Mode 5: Plain backtest[/cyan]")
             results = run_backtest(CONFIG, cache, use_models=False)
-
+        
         if not results:
             console.print("[red]❌ Backtest failed![/red]")
             return
@@ -3221,10 +3353,9 @@ def main():
             table.add_row("🤖 Models Used", "❌ None")
 
         console.print(table)
-
+        
     except Exception as e:
-        console.print(f"[bold red]Error in main execution: {e}[/bold red]")
-        traceback.print_exc()
+        console.print(f"[bold red]Error: {e}[/bold red]")
 
 
 if __name__ == "__main__":

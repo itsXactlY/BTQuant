@@ -1,5 +1,5 @@
 from backtrader.utils.backtest import backtest
-# from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX4 as strategy
+from backtrader.strategies.MACD_ADX import Enhanced_MACD_ADX4 as strategy
 # from backtrader.strategies.MACD_ADX import VectorMACD_ADX as strategy
 import optuna
 from testing_optuna_newmacd import build_optuna_storage

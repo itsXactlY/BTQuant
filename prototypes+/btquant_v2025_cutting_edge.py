@@ -31,7 +31,7 @@ import math
 import traceback
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Tuple, Optional, Callable, Union
+from typing import Dict, List, Tuple, Optional, Union
 from pathlib import Path
 import multiprocessing as mp
 from collections import deque
@@ -40,17 +40,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Core scientific computing and data handling
 import numpy as np
-import pandas as pd  # For Backtrader compatibility at the boundary
 import polars as pl
 from numba import jit
 
 # Deep learning and neural networks
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
-from torch_geometric.nn import GCNConv, GATConv, TransformerConv
-from torch_geometric.data import Data, Batch
 
 # TensorFlow integration
 try:
@@ -62,7 +58,7 @@ except:
 # Reinforcement learning
 import gymnasium as gym
 from stable_baselines3 import PPO, SAC, TD3
-from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
 # Traditional ML and optimization
@@ -80,14 +76,10 @@ from sklearn.svm import SVC
 import backtrader as bt
 
 # Technical analysis and financial metrics
-import talib
+import talib # For Multithreaded vectorized booster
 
-# Visualization and monitoring
-import plotly.graph_objects as go
-import plotly.express as px
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress
 import wandb  # Weights & Biases for experiment tracking
 
 # Custom imports for data loading
@@ -131,7 +123,6 @@ class TradingConfig:
     max_position_size: float = 0.15
     max_drawdown_threshold: float = 0.10
     var_confidence: float = 0.05
-
     dropout: float = 0.1
     
     # CRYPTO TRADING SPECIFIC CONFIGS - AUTO-OPTIMIZABLE
@@ -198,13 +189,14 @@ def check_cuda_compatibility():
     """Check CUDA compatibility and return best available device"""
     try:
         if not torch.cuda.is_available():
-            console.print("[yellow]CUDA not available. Using CPU.[/yellow]")
+            console.print("[yellow]CUDA not available. Using CPU. :([/yellow]")
             return torch.device('cpu'), False
             
         # Test CUDA functionality
         device = torch.device('cuda')
         test_tensor = torch.randn(10, 10, device=device)
         test_result = test_tensor @ test_tensor.T
+        test_result # TODO :: attach an debugger an look at me
         
         gpu_name = torch.cuda.get_device_name(0)
         console.print(f"[green]CUDA compatible! Using GPU: {gpu_name}[/green]")
@@ -830,222 +822,222 @@ class TensorFlowPredictor:
 
 # ==================== DEEP REINFORCEMENT LEARNING ENVIRONMENT ====================
 
-class AdvancedTradingEnv(gym.Env):
-    """FIXED Advanced trading environment with multi-modal inputs"""
+# class AdvancedTradingEnv(gym.Env):
+#     """FIXED Advanced trading environment with multi-modal inputs"""
 
-    def __init__(self,
-                 df: Union[pd.DataFrame, np.ndarray],
-                 feature_columns: List[str],
-                 initial_balance: float = 10000,
-                 transaction_cost: float = 0.0001,
-                 max_position: float = 1.0):
-        super().__init__()
+#     def __init__(self,
+#                  df: Union[pd.DataFrame, np.ndarray],
+#                  feature_columns: List[str],
+#                  initial_balance: float = 10000,
+#                  transaction_cost: float = 0.0001,
+#                  max_position: float = 1.0):
+#         super().__init__()
 
-        # Handle different input types and clean data
-        if isinstance(df, pd.DataFrame):
-            df_clean = df.copy()
+#         # Handle different input types and clean data
+#         if isinstance(df, pd.DataFrame):
+#             df_clean = df.copy()
             
-            # Remove datetime columns that cause issues
-            datetime_cols = df_clean.select_dtypes(include=['datetime64']).columns
-            if len(datetime_cols) > 0:
-                df_clean = df_clean.drop(columns=datetime_cols)
+#             # Remove datetime columns that cause issues
+#             datetime_cols = df_clean.select_dtypes(include=['datetime64']).columns
+#             if len(datetime_cols) > 0:
+#                 df_clean = df_clean.drop(columns=datetime_cols)
             
-            # Convert any remaining object/string columns to numeric
-            for col in df_clean.columns:
-                if df_clean[col].dtype == 'object':
-                    try:
-                        df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
-                    except:
-                        df_clean = df_clean.drop(columns=[col])
+#             # Convert any remaining object/string columns to numeric
+#             for col in df_clean.columns:
+#                 if df_clean[col].dtype == 'object':
+#                     try:
+#                         df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+#                     except:
+#                         df_clean = df_clean.drop(columns=[col])
             
-            # Convert to numpy and clean NaNs
-            self.data = df_clean.fillna(0).to_numpy()
+#             # Convert to numpy and clean NaNs
+#             self.data = df_clean.fillna(0).to_numpy()
             
-        elif isinstance(df, np.ndarray):
-            self.data = np.nan_to_num(df, nan=0.0)
-        else:
-            raise ValueError("df must be pandas DataFrame or numpy array")
+#         elif isinstance(df, np.ndarray):
+#             self.data = np.nan_to_num(df, nan=0.0)
+#         else:
+#             raise ValueError("df must be pandas DataFrame or numpy array")
 
-        self.feature_columns = feature_columns
-        self.initial_balance = initial_balance
-        self.transaction_cost = transaction_cost
-        self.max_position = max_position
+#         self.feature_columns = feature_columns
+#         self.initial_balance = initial_balance
+#         self.transaction_cost = transaction_cost
+#         self.max_position = max_position
 
-        # Ensure data is clean
-        self.data = np.nan_to_num(self.data, nan=0.0, posinf=1e6, neginf=-1e6)
+#         # Ensure data is clean
+#         self.data = np.nan_to_num(self.data, nan=0.0, posinf=1e6, neginf=-1e6)
 
-        # Environment state
-        self.current_step = 0
-        self.balance = initial_balance
-        self.position = 0.0
-        self.portfolio_value = initial_balance
-        self.trade_history = []
+#         # Environment state
+#         self.current_step = 0
+#         self.balance = initial_balance
+#         self.position = 0.0
+#         self.portfolio_value = initial_balance
+#         self.trade_history = []
 
-        # Action and observation spaces
-        self.action_space = gym.spaces.Box(
-            low=-1.0, high=1.0, shape=(1,), dtype=np.float32
-        )
+#         # Action and observation spaces
+#         self.action_space = gym.spaces.Box(
+#             low=-1.0, high=1.0, shape=(1,), dtype=np.float32
+#         )
 
-        self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf,
-            shape=(min(len(feature_columns), self.data.shape[1]) + 3,), dtype=np.float32
-        )
+#         self.observation_space = gym.spaces.Box(
+#             low=-np.inf, high=np.inf,
+#             shape=(min(len(feature_columns), self.data.shape[1]) + 3,), dtype=np.float32
+#         )
 
-        # Performance tracking
-        self.max_portfolio_value = initial_balance
-        self.drawdown = 0.0
-        self.returns = []
+#         # Performance tracking
+#         self.max_portfolio_value = initial_balance
+#         self.drawdown = 0.0
+#         self.returns = []
 
-    def reset(self, seed=None):
-        super().reset(seed=seed)
-        self.current_step = 50
-        self.balance = self.initial_balance
-        self.position = 0.0
-        self.portfolio_value = self.initial_balance
-        self.trade_history = []
-        self.max_portfolio_value = self.initial_balance
-        self.drawdown = 0.0
-        self.returns = []
-        return self._get_observation(), {}
+#     def reset(self, seed=None):
+#         super().reset(seed=seed)
+#         self.current_step = 50
+#         self.balance = self.initial_balance
+#         self.position = 0.0
+#         self.portfolio_value = self.initial_balance
+#         self.trade_history = []
+#         self.max_portfolio_value = self.initial_balance
+#         self.drawdown = 0.0
+#         self.returns = []
+#         return self._get_observation(), {}
 
-    def step(self, action):
-        # Use a price from the available data
-        if self.data.shape[1] > 4:
-            current_price = float(self.data[self.current_step, 4])  # Assume close price
-        else:
-            current_price = float(self.data[self.current_step, -1])
+#     def step(self, action):
+#         # Use a price from the available data
+#         if self.data.shape[1] > 4:
+#             current_price = float(self.data[self.current_step, 4])  # Assume close price
+#         else:
+#             current_price = float(self.data[self.current_step, -1])
 
-        # Ensure price is valid
-        current_price = max(current_price, 1.0)
+#         # Ensure price is valid
+#         current_price = max(current_price, 1.0)
 
-        # Execute action (position change)
-        target_position = np.clip(action[0], -self.max_position, self.max_position)
-        position_change = target_position - self.position
+#         # Execute action (position change)
+#         target_position = np.clip(action[0], -self.max_position, self.max_position)
+#         position_change = target_position - self.position
 
-        # Calculate transaction cost
-        cost = abs(position_change) * current_price * self.transaction_cost
+#         # Calculate transaction cost
+#         cost = abs(position_change) * current_price * self.transaction_cost
 
-        # Update position and balance
-        if abs(position_change) > 1e-6:
-            self.balance -= cost
-            self.position = target_position
-            self.trade_history.append({
-                'step': self.current_step,
-                'price': current_price,
-                'position_change': position_change,
-                'cost': cost
-            })
+#         # Update position and balance
+#         if abs(position_change) > 1e-6:
+#             self.balance -= cost
+#             self.position = target_position
+#             self.trade_history.append({
+#                 'step': self.current_step,
+#                 'price': current_price,
+#                 'position_change': position_change,
+#                 'cost': cost
+#             })
 
-        # Calculate portfolio value
-        position_value = self.position * current_price
-        self.portfolio_value = self.balance + position_value
+#         # Calculate portfolio value
+#         position_value = self.position * current_price
+#         self.portfolio_value = self.balance + position_value
 
-        # Calculate return
-        if self.current_step > 50:
-            prev_portfolio = self.returns[-1] if self.returns else self.initial_balance
-            ret = (self.portfolio_value - prev_portfolio) / prev_portfolio
-            self.returns.append(self.portfolio_value)
-        else:
-            ret = 0.0
-            self.returns.append(self.portfolio_value)
+#         # Calculate return
+#         if self.current_step > 50:
+#             prev_portfolio = self.returns[-1] if self.returns else self.initial_balance
+#             ret = (self.portfolio_value - prev_portfolio) / prev_portfolio
+#             self.returns.append(self.portfolio_value)
+#         else:
+#             ret = 0.0
+#             self.returns.append(self.portfolio_value)
 
-        # Update drawdown
-        if self.portfolio_value > self.max_portfolio_value:
-            self.max_portfolio_value = self.portfolio_value
-            self.drawdown = 0.0
-        else:
-            self.drawdown = (self.max_portfolio_value - self.portfolio_value) / self.max_portfolio_value
+#         # Update drawdown
+#         if self.portfolio_value > self.max_portfolio_value:
+#             self.max_portfolio_value = self.portfolio_value
+#             self.drawdown = 0.0
+#         else:
+#             self.drawdown = (self.max_portfolio_value - self.portfolio_value) / self.max_portfolio_value
 
-        # Calculate reward
-        reward = self._calculate_reward(ret, cost)
+#         # Calculate reward
+#         reward = self._calculate_reward(ret, cost)
 
-        # Check if episode is done
-        self.current_step += 1
-        done = (self.current_step >= len(self.data) - 1 or
-                self.portfolio_value <= self.initial_balance * 0.5)
+#         # Check if episode is done
+#         self.current_step += 1
+#         done = (self.current_step >= len(self.data) - 1 or
+#                 self.portfolio_value <= self.initial_balance * 0.5)
 
-        if done:
-            reward += self._terminal_reward()
+#         if done:
+#             reward += self._terminal_reward()
 
-        return self._get_observation(), reward, done, False, {}
+#         return self._get_observation(), reward, done, False, {}
 
-    def _get_observation(self):
-        # Get current features (limit to available data)
-        max_features = min(len(self.feature_columns), self.data.shape[1])
-        features = self.data[self.current_step, :max_features]
+#     def _get_observation(self):
+#         # Get current features (limit to available data)
+#         max_features = min(len(self.feature_columns), self.data.shape[1])
+#         features = self.data[self.current_step, :max_features]
 
-        # Add portfolio state
-        portfolio_state = np.array([
-            self.balance / self.initial_balance,
-            self.position,
-            self.portfolio_value / self.initial_balance
-        ])
+#         # Add portfolio state
+#         portfolio_state = np.array([
+#             self.balance / self.initial_balance,
+#             self.position,
+#             self.portfolio_value / self.initial_balance
+#         ])
 
-        # Ensure all values are float32 and clean
-        obs = np.concatenate([features, portfolio_state]).astype(np.float32)
-        obs = np.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
-        return obs
+#         # Ensure all values are float32 and clean
+#         obs = np.concatenate([features, portfolio_state]).astype(np.float32)
+#         obs = np.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
+#         return obs
 
-    def _calculate_reward(self, return_rate, transaction_cost):
-        # Multi-objective reward function
-        return_reward = return_rate * 100
+#     def _calculate_reward(self, return_rate, transaction_cost):
+#         # Multi-objective reward function
+#         return_reward = return_rate * 100
 
-        # Risk-adjusted reward
-        if len(self.returns) > 20:
-            recent_returns = np.array(self.returns[-20:])
-            volatility = np.std(np.diff(recent_returns) / recent_returns[:-1])
-            if volatility > 0:
-                risk_adjusted_reward = return_rate / volatility
-            else:
-                risk_adjusted_reward = return_rate
-        else:
-            risk_adjusted_reward = 0
+#         # Risk-adjusted reward
+#         if len(self.returns) > 20:
+#             recent_returns = np.array(self.returns[-20:])
+#             volatility = np.std(np.diff(recent_returns) / recent_returns[:-1])
+#             if volatility > 0:
+#                 risk_adjusted_reward = return_rate / volatility
+#             else:
+#                 risk_adjusted_reward = return_rate
+#         else:
+#             risk_adjusted_reward = 0
 
-        # Drawdown penalty
-        drawdown_penalty = -self.drawdown * 10
+#         # Drawdown penalty
+#         drawdown_penalty = -self.drawdown * 10
 
-        # Transaction cost penalty
-        cost_penalty = -transaction_cost / self.initial_balance * 1000
+#         # Transaction cost penalty
+#         cost_penalty = -transaction_cost / self.initial_balance * 1000
 
-        # Position holding reward
-        if len(self.trade_history) > 1:
-            time_since_last_trade = self.current_step - self.trade_history[-2]['step']
-            holding_reward = min(time_since_last_trade / 100, 0.1)
-        else:
-            holding_reward = 0
+#         # Position holding reward
+#         if len(self.trade_history) > 1:
+#             time_since_last_trade = self.current_step - self.trade_history[-2]['step']
+#             holding_reward = min(time_since_last_trade / 100, 0.1)
+#         else:
+#             holding_reward = 0
 
-        total_reward = (return_reward +
-                       risk_adjusted_reward * 0.5 +
-                       drawdown_penalty +
-                       cost_penalty +
-                       holding_reward)
+#         total_reward = (return_reward +
+#                        risk_adjusted_reward * 0.5 +
+#                        drawdown_penalty +
+#                        cost_penalty +
+#                        holding_reward)
 
-        return float(np.nan_to_num(total_reward, nan=0.0))
+#         return float(np.nan_to_num(total_reward, nan=0.0))
 
-    def _terminal_reward(self):
-        # Final reward based on overall performance
-        total_return = (self.portfolio_value - self.initial_balance) / self.initial_balance
+#     def _terminal_reward(self):
+#         # Final reward based on overall performance
+#         total_return = (self.portfolio_value - self.initial_balance) / self.initial_balance
 
-        # Sharpe ratio calculation
-        if len(self.returns) > 1:
-            returns_array = np.array(self.returns)
-            pct_returns = np.diff(returns_array) / returns_array[:-1]
-            if np.std(pct_returns) > 0:
-                sharpe = np.mean(pct_returns) / np.std(pct_returns) * np.sqrt(252)
-            else:
-                sharpe = 0
-        else:
-            sharpe = 0
+#         # Sharpe ratio calculation
+#         if len(self.returns) > 1:
+#             returns_array = np.array(self.returns)
+#             pct_returns = np.diff(returns_array) / returns_array[:-1]
+#             if np.std(pct_returns) > 0:
+#                 sharpe = np.mean(pct_returns) / np.std(pct_returns) * np.sqrt(252)
+#             else:
+#                 sharpe = 0
+#         else:
+#             sharpe = 0
 
-        # Number of trades (encourage efficiency)
-        num_trades = len(self.trade_history)
-        trade_efficiency = max(0, 1 - num_trades / 1000)
+#         # Number of trades (encourage efficiency)
+#         num_trades = len(self.trade_history)
+#         trade_efficiency = max(0, 1 - num_trades / 1000)
 
-        terminal_reward = (total_return * 100 +
-                          sharpe * 10 +
-                          trade_efficiency * 5)
+#         terminal_reward = (total_return * 100 +
+#                           sharpe * 10 +
+#                           trade_efficiency * 5)
 
-        return float(np.nan_to_num(terminal_reward, nan=0.0))
+#         return float(np.nan_to_num(terminal_reward, nan=0.0))
 
 # ==================== ENSEMBLE ML MODELS ====================
 
@@ -2154,7 +2146,7 @@ class ModelPersistence:
                     num_layers=self.config.num_transformer_layers
                 ).to(DEVICE)
                 model.load_state_dict(checkpoint['model_state_dict'])
-                model.eval()
+                model.eval() # TUrn off training 
                 loaded_models['transformer'] = model
                 console.print("[green]✅ Transformer model loaded[/green]")
             except Exception as e:
@@ -2214,53 +2206,19 @@ class ModelPersistence:
                     
                     # Try to reconstruct as TradingConfig
                     loaded_params = TradingConfig(**params_dict)
+                    console.print(loaded_params)
                 except TypeError as e:
                     console.print(f"[yellow]TradingConfig reconstruction failed: {e}[/yellow]")
                     # Fallback: return dict if schema has changed
                     loaded_params = params_dict
+                    console.print(loaded_params)
+                    console.print(params_dict)
                 console.print("[green]✅ Optimized parameters loaded[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to load parameters: {e}[/red]")
         
         console.print(f"[bold green]✅ Loaded {len(loaded_models)} models successfully![/bold green]")
         return loaded_models, loaded_params
-
-# ==================== ENHANCED STRATEGY WITH MODEL LOADING ====================
-
-class CryptoQuantumStrategyWithModels(CryptoQuantumStrategy):
-    """Enhanced strategy that can use pre-trained models"""
-    
-    params = (
-        ('config', None),
-        ('silent', True),
-        ('trained_models', None),  # NEW: Pass trained models
-    )
-    
-    def __init__(self):
-        super().__init__()
-        
-        # Use provided trained models if available
-        if self.p.trained_models:
-            self.trained_models = self.p.trained_models
-            
-            # Update ML models in strategy
-            if 'ml_ensemble' in self.trained_models:
-                self.ml_ensemble = self.trained_models['ml_ensemble']
-                
-            if 'tensorflow' in self.trained_models:
-                self.tensorflow_model = self.trained_models['tensorflow']
-                
-            if "transformer" in self.models:
-                self.transformer_model = self.models["transformer"]
-            else:
-                self.transformer_model = None
-                
-            if 'rl_agent' in self.trained_models:
-                self.rl_agent = self.trained_models['rl_agent']
-                
-            if not self.p.silent:
-                console.print(f"[green]🤖 Strategy using {len(self.trained_models)} pre-trained models[/green]")
-
 
 # ==================== POLARS DATA FEED CLASS ====================
 
@@ -2614,6 +2572,7 @@ class ModelTrainer:
                         train_batches += 1
 
                     except RuntimeError as e:
+                        console.print("[red]Error in model training at cuda gpu kernel level - Fallback to CPU initiated... :-([/red]")
                         if "CUDA" in str(e):
                             # Move everything to CPU
                             model = model.cpu()
@@ -2726,107 +2685,107 @@ class ModelTrainer:
             console.print(f"[red]Error in transformer training: {e}[/red]")
             return None
 
-    def train_rl_agent(self,
-                      env_data: pd.DataFrame,
-                      feature_columns: List[str],
-                      total_timesteps: int = 100000):
-        """Train the Deep RL agent with proper environment"""
+    # def train_rl_agent(self,
+    #                   env_data: pd.DataFrame,
+    #                   feature_columns: List[str],
+    #                   total_timesteps: int = 100000):
+    #     """Train the Deep RL agent with proper environment"""
         
-        console.print("[bold blue]Training Deep RL Agent...[/bold blue]")
+    #     console.print("[bold blue]Training Deep RL Agent...[/bold blue]")
         
-        try:
-            # Clean the data for RL environment
-            env_data_clean = env_data.copy()
+    #     try:
+    #         # Clean the data for RL environment
+    #         env_data_clean = env_data.copy()
             
-            # Remove datetime columns
-            datetime_cols = env_data_clean.select_dtypes(include=['datetime64']).columns
-            if len(datetime_cols) > 0:
-                env_data_clean = env_data_clean.drop(columns=datetime_cols)
+    #         # Remove datetime columns
+    #         datetime_cols = env_data_clean.select_dtypes(include=['datetime64']).columns
+    #         if len(datetime_cols) > 0:
+    #             env_data_clean = env_data_clean.drop(columns=datetime_cols)
             
-            # Convert any object columns to numeric
-            for col in env_data_clean.columns:
-                if env_data_clean[col].dtype == 'object':
-                    try:
-                        env_data_clean[col] = pd.to_numeric(env_data_clean[col], errors='coerce')
-                    except:
-                        env_data_clean = env_data_clean.drop(columns=[col])
+    #         # Convert any object columns to numeric
+    #         for col in env_data_clean.columns:
+    #             if env_data_clean[col].dtype == 'object':
+    #                 try:
+    #                     env_data_clean[col] = pd.to_numeric(env_data_clean[col], errors='coerce')
+    #                 except:
+    #                     env_data_clean = env_data_clean.drop(columns=[col])
             
-            # Fill NaNs
-            env_data_clean = env_data_clean.fillna(0)
+    #         # Fill NaNs
+    #         env_data_clean = env_data_clean.fillna(0)
             
-            # Create training environment
-            env = AdvancedTradingEnv(
-                df=env_data_clean,
-                feature_columns=feature_columns,
-                initial_balance=self.config.init_cash,
-                transaction_cost=self.config.commission
-            )
+    #         # Create training environment
+    #         env = AdvancedTradingEnv(
+    #             df=env_data_clean,
+    #             feature_columns=feature_columns,
+    #             initial_balance=self.config.init_cash,
+    #             transaction_cost=self.config.commission
+    #         )
             
-            # Wrap in DummyVecEnv for stable-baselines3
-            env = DummyVecEnv([lambda: env])
+    #         # Wrap in DummyVecEnv for stable-baselines3
+    #         env = DummyVecEnv([lambda: env])
             
-            # Force CPU for RL to avoid CUDA issues
-            # device_str = 'cpu'
-            device_str = 'cuda'
+    #         # Force CPU for RL to avoid CUDA issues
+    #         # device_str = 'cpu'
+    #         device_str = 'cuda'
             
-            # Initialize RL agent
-            if self.config.rl_algorithm == "PPO":
-                model = PPO(
-                    'MlpPolicy', 
-                    env, 
-                    learning_rate=self.config.learning_rate,
-                    gamma=self.config.gamma,
-                    verbose=1,
-                    device=device_str
-                )
-            elif self.config.rl_algorithm == "SAC":
-                model = SAC(
-                    'MlpPolicy', 
-                    env, 
-                    learning_rate=self.config.learning_rate,
-                    gamma=self.config.gamma,
-                    verbose=1,
-                    device=device_str
-                )
-            elif self.config.rl_algorithm == "TD3":
-                model = TD3(
-                    'MlpPolicy', 
-                    env, 
-                    learning_rate=self.config.learning_rate,
-                    gamma=self.config.gamma,
-                    verbose=1,
-                    device=device_str
-                )
+    #         # Initialize RL agent
+    #         if self.config.rl_algorithm == "PPO":
+    #             model = PPO(
+    #                 'MlpPolicy', 
+    #                 env, 
+    #                 learning_rate=self.config.learning_rate,
+    #                 gamma=self.config.gamma,
+    #                 verbose=1,
+    #                 device=device_str
+    #             )
+    #         elif self.config.rl_algorithm == "SAC":
+    #             model = SAC(
+    #                 'MlpPolicy', 
+    #                 env, 
+    #                 learning_rate=self.config.learning_rate,
+    #                 gamma=self.config.gamma,
+    #                 verbose=1,
+    #                 device=device_str
+    #             )
+    #         elif self.config.rl_algorithm == "TD3":
+    #             model = TD3(
+    #                 'MlpPolicy', 
+    #                 env, 
+    #                 learning_rate=self.config.learning_rate,
+    #                 gamma=self.config.gamma,
+    #                 verbose=1,
+    #                 device=device_str
+    #             )
             
-            # Training callback for logging
-            class WandbCallback(BaseCallback):
-                def __init__(self, verbose=0):
-                    super().__init__(verbose)
+    #         # Training callback for logging
+    #         class WandbCallback(BaseCallback):
+    #             def __init__(self, verbose=0):
+    #                 super().__init__(verbose)
                     
-                def _on_step(self) -> bool:
-                    if self.n_calls % 1000 == 0:
-                        try:
-                            wandb.log({
-                                'rl_timestep': self.n_calls,
-                                'episode_reward': self.locals.get('episode_reward', 0)
-                            })
-                        except:
-                            pass
-                    return True
+    #             def _on_step(self) -> bool:
+    #                 if self.n_calls % 1000 == 0:
+    #                     try:
+    #                         wandb.log({
+    #                             'rl_timestep': self.n_calls,
+    #                             'episode_reward': self.locals.get('episode_reward', 0)
+    #                         })
+    #                     except:
+    #                         pass
+    #                 return True
             
-            # Train the agent
-            callback = WandbCallback()
-            model.learn(total_timesteps=total_timesteps, callback=callback)
+    #         # Train the agent
+    #         callback = WandbCallback()
+    #         model.learn(total_timesteps=total_timesteps, callback=callback)
             
-            # Save the trained agent
-            model.save(self.config.cache_dir / "rl_agent")
+    #         # Save the trained agent
+    #         model.save(self.config.cache_dir / "rl_agent")
             
-            console.print("[green]RL agent training completed![/green]")
-            return model
+    #         console.print("[green]RL agent training completed![/green]")
+    #         return model
             
-        except Exception as e:
-            console.print(f"[red]Error in RL training: {e}[/red]")
-            return None
+    #     except Exception as e:
+    #         console.print(f"[red]Error in RL training: {e}[/red]")
+    #         return None
 
     def train_ml_ensemble(self, data: pl.DataFrame, feature_columns: List[str]):
         """Train ML ensemble with feature engineering - FIXED borrowing issue"""
@@ -2940,7 +2899,8 @@ class ModelTrainer:
             y = y[:min_len]
             
             # Create sequences for LSTM
-            sequence_length = 30
+            sequence_length = 30    # NOTE :: oh dead - this needs to be bruteforced with optuna too - might fall back to more simple LTSM
+            #                              :: github.com/itsXactlY/2-algos-1-cup
             X_seq = []
             y_seq = []
             
@@ -3311,7 +3271,7 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
                 if mssql_connection and study_name:
                     # Use MSSQL-backed optimization
                     engine = OptimizationEngine(cache, mssql_connection, study_name)
-                    optimized_config = engine.optimize_parameters(n_trials=1000, resume=True)
+                    optimized_config = engine.optimize_parameters(n_trials=100, resume=True)
                 else:
                     # Fallback to in-memory optimization
                     engine = OptimizationEngine(cache)
@@ -3337,7 +3297,6 @@ def run_backtest(config: TradingConfig, cache: DataCache, use_models=False, trai
                 else:
                     config = saved_params
 
-    # --- Rest of backtest code remains the same ---
     cerebro = bt.Cerebro()
     backtest_data = btc_data.select([
         "TimestampStart", "Open", "High", "Low", "Close", "Volume"

@@ -17,27 +17,6 @@ from pathlib import Path
 import multiprocessing as mp
 import hashlib
 
-# optuna_hyperopt_polars_vec.py
-import os
-import gc
-import math
-import time
-import urllib.parse
-from dataclasses import dataclass
-from typing import Dict, Any, List, Tuple, Optional, Callable
-
-import backtrader as bt
-import optuna
-import polars as pl
-from rich.console import Console
-from rich.table import Table
-from pathlib import Path
-import multiprocessing as mp
-import hashlib
-
-# Allow plotting in interactive environments
-import matplotlib
-
 from dependencies.backtrader import order
 
 console = Console()
@@ -341,7 +320,7 @@ def make_feature_feed(df_feat: pl.DataFrame, name: str) -> FeatureData:
 
 class VectorMACD_ADX(bt.Strategy):
     params = (
-        ('risk_per_trade_pct', 0.005),
+        ('risk_per_trade_pct', 0.0001),
         ('max_leverage', 2.0),
         ('use_dynamic_exits', True),
         ('tp_r_multiple', 2.0),
@@ -410,12 +389,36 @@ class VectorMACD_ADX(bt.Strategy):
     def _round_price(self, p):
         return round(p / self.p.price_tick) * self.p.price_tick if self.p.round_prices and self.p.price_tick > 0 else p
 
-    def _risk_based_size(self, e, s):
-        eq = self.broker.getvalue()
-        risk = eq * self.p.risk_per_trade_pct
-        dist = max(1e-8, abs(e - s))
-        s_raw = min(risk / dist if dist > 0 else 0.0, (eq * self.p.max_leverage) / max(e, 1e-8))
-        return self._round_qty(s_raw)
+    def _risk_based_size(self, entry_price, stop_price):
+        available_cash = self.broker.getcash()
+        portfolio_value = self.broker.getvalue()
+        
+        # Risk-based sizing
+        risk_amount = portfolio_value * self.p.risk_per_trade_pct
+        stop_distance = abs(entry_price - stop_price)
+        
+        if stop_distance <= 1e-8:
+            return 0.0
+        
+        # Calculate size based on risk
+        risk_based_size = risk_amount / stop_distance
+        
+        # Calculate maximum size based on available cash and leverage
+        max_notional = available_cash * self.p.max_leverage
+        max_size_by_cash = max_notional / entry_price
+        
+        # Take the smaller of the two
+        raw_size = min(risk_based_size, max_size_by_cash)
+        
+        # Apply exchange constraints
+        final_size = self._round_qty(raw_size)
+        
+        # Final safety check
+        required_cash = (final_size * entry_price) / self.p.max_leverage
+        if required_cash > available_cash * 0.95:  # Leave 5% buffer
+            final_size = self._round_qty((available_cash * 0.95 * self.p.max_leverage) / entry_price)
+        
+        return final_size
 
     def _reset_position_state(self):
         self.entry_bar = None
@@ -462,12 +465,12 @@ class VectorMACD_ADX(bt.Strategy):
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
             return
-        if order.status == order.Completed:
-            if order.isbuy():
-                console.print(f'BUY EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
-            elif order.issell():
-                console.print(f'SELL EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
-        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+        # if order.status == order.Completed:
+            # if order.isbuy():
+            #     console.print(f'BUY EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+            # elif order.issell():
+            #     console.print(f'SELL EXECUTED, Price: {order.executed.price:.2f}, Cost: {order.executed.value:.2f}, Comm: {order.executed.comm:.2f}')
+        if order.status in [order.Canceled, order.Margin, order.Rejected]:
             console.print(f'Order {order.Status[order.status]}')
         if order in self.active_orders:
             self.active_orders.remove(order)
@@ -657,7 +660,7 @@ def make_objective(strategy_class,specs,df_map,init_cash,commission,exchange=Non
             "tf5m_breakout_period": trial.suggest_int("tf5m_breakout_period", 20, 80, step=5),
             "adxth": trial.suggest_int("adxth", 20, 30),
             "confirm_bars": trial.suggest_int("confirm_bars", 1, 3),
-            "risk_per_trade_pct": trial.suggest_float("risk_per_trade_pct", 0.002, 0.01),
+            "risk_per_trade_pct": trial.suggest_float("risk_per_trade_pct", 0.0001, 0.0005),
             "atr_stop_mult": trial.suggest_float("atr_stop_mult", 1.5, 4.0, step=0.25),
             "tp_r_multiple": trial.suggest_float("tp_r_multiple", 1.5, 5.0, step=0.5),
             "use_partial_exits": trial.suggest_categorical("use_partial_exits", [True, False]),
@@ -817,7 +820,7 @@ if __name__ == "__main__":
             'trail_mode': 'chandelier',
             'trail_atr_mult': 4.0,
             'move_to_breakeven_R': 0.5,
-            'risk_per_trade_pct': 0.002,
+            'risk_per_trade_pct': 0.001,
             'rsi_overheat': 80,
             'use_pyramiding': False,
             'use_volume_filter': False,
@@ -852,31 +855,36 @@ if __name__ == "__main__":
             'max_stretch_atr_mult': 1.0,
         }
 
-        console.print("[yellow]Sanity backtest (BTC 2024-01-01..15) with vector features...[/yellow]")
-        run_backtest(VectorMACD_ADX, df_map_sanity["BTC"], sanity_spec, sanity_params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=False)
+        # console.print("[yellow]Sanity backtest (BTC 2024-01-01..15) with vector features...[/yellow]")
+        # run_backtest(VectorMACD_ADX, df_map_sanity["BTC"], sanity_spec, sanity_params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=False)
 
         study_name = "Optimized_1m_MTF_VEC_V3"
         storage = ensure_storage_or_sqlite(MSSQL_ODBC, study_name)
-        launch_multiprocess_optimize(
-            strategy_class=VectorMACD_ADX,
-            specs=train_specs,
-            storage_string=MSSQL_ODBC,  # <-- Pass the storage object
-            study_name=study_name, # <-- Pass the study name
-            total_trials=200,       # <-- Use `trials` instead of `total_trials`
-            workers=8,
-            init_cash=INIT_CASH,
-            comm=COMMISSION_PER_TRANSACTION,
-            exch="MEXC",
-            seed_base=42,          # <-- Use `seed` instead of `seed_base`
-        )
+        # launch_multiprocess_optimize(
+        #     strategy_class=VectorMACD_ADX,
+        #     specs=train_specs,
+        #     storage_string=MSSQL_ODBC,
+        #     study_name=study_name,
+        #     total_trials=200,
+        #     workers=8,
+        #     init_cash=INIT_CASH,
+        #     comm=COMMISSION_PER_TRANSACTION,
+        #     exch="MEXC",
+        #     seed_base=42,
+        # )
 
         storage = ensure_storage_or_sqlite(MSSQL_ODBC, study_name)
         study = optuna.load_study(study_name=study_name, storage=storage)
         best_params = study.best_params
-        holdout_spec = DataSpec("BNB", interval="1m", start_date=holdout_start, end_date=holdout_end)
-        df_hold = preload_polars([holdout_spec])["BNB"]
-        console.print("[magenta]Holdout backtest with best params on BNB...[/magenta]")
-        run_backtest(VectorMACD_ADX, df_hold, holdout_spec, best_params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=False)
+        
+        
+        holdout_spec = DataSpec("BTC", interval="1m", start_date=holdout_start, end_date=holdout_end)
+        df_hold = preload_polars([holdout_spec])["BTC"]
+        console.print("[magenta]Holdout backtest with best params on BTC...[/magenta]")
+        default_params = dict(VectorMACD_ADX.params._getitems())
+        final_params = {**default_params, **best_params}
+
+        run_backtest(VectorMACD_ADX, df_hold, holdout_spec, final_params, init_cash=INIT_CASH, exchange="MEXC", plot=True, debug=False)
     except Exception as e:
         console.print(f"An error occurred: {e}")
         traceback.print_exc()

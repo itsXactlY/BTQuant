@@ -116,6 +116,7 @@ class VectorMACD_ADX(bt.Strategy):
         self.run_low = None
         self.partial_exit_done = False
         self.trail_stop_active = False
+        self.last_exit_bar = None
 
     def _round_qty(self, s):
         step = self.p.qty_step if self.p.qty_step > 0 else 0.001
@@ -148,21 +149,52 @@ class VectorMACD_ADX(bt.Strategy):
         size = min(raw_units, cash_cap_units)
         return self._round_qty(size)
 
-    def _enter(self, direction: int):
-        entry = self._round_price(self.d.close[0])
-
-        # defensive ATR read (prefer atr_brk then atr_base)
+    def _get_atr_value(self):
+        """Safely get ATR value with fallback options"""
         atr_value = None
+        
+        # Try atr_brk first
         try:
-            atr_value = float(getattr(self.d, 'atr_brk', [None])[0])
-        except Exception:
-            atr_value = None
+            atr_attr = getattr(self.d, 'atr_brk', None)
+            if atr_attr is not None:
+                atr_val = atr_attr[0] if hasattr(atr_attr, '__getitem__') else atr_attr
+                if atr_val is not None and not math.isnan(float(atr_val)):
+                    atr_value = float(atr_val)
+        except (AttributeError, IndexError, ValueError, TypeError):
+            pass
+        
+        # Try atr_base as fallback
         if atr_value is None:
             try:
-                atr_value = float(getattr(self.d, 'atr_base', [None])[0])
-            except Exception:
-                atr_value = None
+                atr_attr = getattr(self.d, 'atr_base', None)
+                if atr_attr is not None:
+                    atr_val = atr_attr[0] if hasattr(atr_attr, '__getitem__') else atr_attr
+                    if atr_val is not None and not math.isnan(float(atr_val)):
+                        atr_value = float(atr_val)
+            except (AttributeError, IndexError, ValueError, TypeError):
+                pass
+        
+        # Final fallback - estimate from price data
         if atr_value is None:
+            try:
+                if hasattr(self.d, 'high') and hasattr(self.d, 'low'):
+                    high_val = self.d.high[0]
+                    low_val = self.d.low[0]
+                    if high_val is not None and low_val is not None:
+                        atr_value = abs(float(high_val) - float(low_val))
+            except (IndexError, ValueError, TypeError):
+                pass
+        
+        return atr_value
+
+    def _enter(self, direction: int):
+        try:
+            entry = self._round_price(float(self.d.close[0]))
+        except (ValueError, TypeError):
+            return
+
+        atr_value = self._get_atr_value()
+        if atr_value is None or atr_value <= 0:
             return
 
         stop_dist = self.p.atr_stop_mult * atr_value
@@ -183,10 +215,16 @@ class VectorMACD_ADX(bt.Strategy):
 
         if direction > 0:
             o = self.buy(size=size)
-            self.run_high = self.d.high[0]
+            try:
+                self.run_high = float(self.d.high[0])
+            except (ValueError, TypeError):
+                self.run_high = entry
         else:
             o = self.sell(size=size)
-            self.run_low = self.d.low[0]
+            try:
+                self.run_low = float(self.d.low[0])
+            except (ValueError, TypeError):
+                self.run_low = entry
 
         self.init_stop = init_stop
         self.trail_stop = init_stop
@@ -198,28 +236,34 @@ class VectorMACD_ADX(bt.Strategy):
             return
 
         if o.status == bt.Order.Completed:
-            # Mark entry bar and run_high/run_low on execution confirmation
-            # so entry_bar is always defined when we actually have a position.
             try:
-                # len(self) returns current bar index
                 self.entry_bar = len(self)
             except Exception:
-                self.entry_bar = None
+                self.entry_bar = 0
 
             if o.isbuy():
-                # initialize run_high on confirmed buy
                 try:
-                    self.run_high = float(self.d.high[0])
-                except Exception:
-                    self.run_high = None
+                    high_val = self.d.high[0]
+                    self.run_high = float(high_val) if high_val is not None else float(self.d.close[0])
+                except (ValueError, TypeError, IndexError):
+                    try:
+                        self.run_high = float(self.d.close[0])
+                    except (ValueError, TypeError):
+                        self.run_high = o.executed.price
+                        
                 if self.p.debug:
                     console.log(f'BUY EXECUTED, Price: {o.executed.price:.2f}, Cost: {o.executed.value:.2f}, Comm: {o.executed.comm:.2f}')
+                    
             elif o.issell():
-                # initialize run_low on confirmed sell
                 try:
-                    self.run_low = float(self.d.low[0])
-                except Exception:
-                    self.run_low = None
+                    low_val = self.d.low[0]
+                    self.run_low = float(low_val) if low_val is not None else float(self.d.close[0])
+                except (ValueError, TypeError, IndexError):
+                    try:
+                        self.run_low = float(self.d.close[0])
+                    except (ValueError, TypeError):
+                        self.run_low = o.executed.price
+                        
                 if self.p.debug:
                     console.log(f'SELL EXECUTED, Price: {o.executed.price:.2f}, Cost: {o.executed.value:.2f}, Comm: {o.executed.comm:.2f}')
 
@@ -228,106 +272,180 @@ class VectorMACD_ADX(bt.Strategy):
                 status_name = bt.Order.Status[o.status]
             except Exception:
                 status_name = str(o.status)
-            console.print(f'Order {status_name}')
+            if self.p.debug:
+                console.print(f'Order {status_name}')
 
         if o in self.active_orders:
             self.active_orders.remove(o)
 
-
     def _R(self):
         if not self.position:
             return 0.0
-        current_price = self.d.close[0]
-        direction = 1 if self.position.size > 0 else -1
-        return (current_price - self.init_stop) * direction / (self.initial_risk if self.initial_risk else 1e-9)
+        try:
+            current_price = float(self.d.close[0])
+            direction = 1 if self.position.size > 0 else -1
+            return (current_price - self.init_stop) * direction / (self.initial_risk if self.initial_risk else 1e-9)
+        except (ValueError, TypeError):
+            return 0.0
 
     def _update_trailing_stop(self):
         if not self.position:
             self.trail_stop = None
             return
-        if self.position.size > 0:
-            self.run_high = max(self.run_high or self.d.high[0], self.d.high[0])
-        else:
-            self.run_low = min(self.run_low or self.d.low[0], self.d.low[0])
 
-        # defensive ATR read
-        atr_value = None
+        # Safety checks for data availability
         try:
-            atr_value = float(getattr(self.d, 'atr_brk', [None])[0])
-        except Exception:
-            atr_value = None
-        if atr_value is None:
-            try:
-                atr_value = float(getattr(self.d, 'atr_base', [None])[0])
-            except Exception:
-                atr_value = None
-        if atr_value is None:
+            current_high = self.d.high[0]
+            current_low = self.d.low[0]
+            if current_high is None or current_low is None:
+                return
+            current_high = float(current_high)
+            current_low = float(current_low)
+        except (ValueError, TypeError, IndexError):
+            return
+
+        # Update run_high/run_low safely
+        if self.position.size > 0:
+            if self.run_high is None:
+                self.run_high = current_high
+            else:
+                self.run_high = max(self.run_high, current_high)
+        else:
+            if self.run_low is None:
+                self.run_low = current_low
+            else:
+                self.run_low = min(self.run_low, current_low)
+
+        # Get ATR value
+        atr_value = self._get_atr_value()
+        if atr_value is None or atr_value <= 0:
             return
 
         cand = None
         if self.p.trail_mode == "chandelier":
-            cand = (self.run_high - self.p.trail_atr_mult * atr_value) if self.position.size > 0 else (self.run_low + self.p.trail_atr_mult * atr_value)
+            if self.position.size > 0 and self.run_high is not None:
+                cand = self.run_high - self.p.trail_atr_mult * atr_value
+            elif self.position.size < 0 and self.run_low is not None:
+                cand = self.run_low + self.p.trail_atr_mult * atr_value
         elif self.p.trail_mode == "donchian":
-            cand = getattr(self.d, 'dc_exit_low', [None])[0] if self.position.size > 0 else getattr(self.d, 'dc_exit_high', [None])[0]
+            try:
+                if self.position.size > 0:
+                    dc_attr = getattr(self.d, 'dc_exit_low', None)
+                    if dc_attr is not None:
+                        cand = dc_attr[0] if hasattr(dc_attr, '__getitem__') else dc_attr
+                else:
+                    dc_attr = getattr(self.d, 'dc_exit_high', None)
+                    if dc_attr is not None:
+                        cand = dc_attr[0] if hasattr(dc_attr, '__getitem__') else dc_attr
+                
+                if cand is not None:
+                    cand = float(cand)
+            except (AttributeError, IndexError, ValueError, TypeError):
+                cand = None
 
         if cand is not None:
+            # Apply safety bounds
             if self.position.size > 0:
-                cand = max(cand, self.init_stop or -1e18)
+                cand = max(cand, self.init_stop if self.init_stop is not None else -1e18)
             else:
-                cand = min(cand, self.init_stop or 1e18)
-            self.trail_stop = cand if self.trail_stop is None else (max(self.trail_stop, cand) if self.position.size > 0 else min(self.trail_stop, cand))
+                cand = min(cand, self.init_stop if self.init_stop is not None else 1e18)
+            
+            # Update trailing stop
+            if self.trail_stop is None:
+                self.trail_stop = cand
+            else:
+                if self.position.size > 0:
+                    self.trail_stop = max(self.trail_stop, cand)
+                else:
+                    self.trail_stop = min(self.trail_stop, cand)
 
     def _stop_hit(self):
         if self.trail_stop is None:
             return False
-        if self.position.size > 0:
-            return self.d.close[0] <= self.trail_stop if self.p.close_based_stop else self.d.low[0] <= self.trail_stop
-        else:
-            return self.d.close[0] >= self.trail_stop if self.p.close_based_stop else self.d.high[0] >= self.trail_stop
+        
+        try:
+            if self.position.size > 0:
+                if self.p.close_based_stop:
+                    return float(self.d.close[0]) <= self.trail_stop
+                else:
+                    return float(self.d.low[0]) <= self.trail_stop
+            else:
+                if self.p.close_based_stop:
+                    return float(self.d.close[0]) >= self.trail_stop
+                else:
+                    return float(self.d.high[0]) >= self.trail_stop
+        except (ValueError, TypeError, IndexError):
+            return False
 
     def next(self):
         if not self.position:
-            if (len(self) - getattr(self, 'last_exit_bar', -1e9)) < self.p.reentry_cooldown_bars:
-                return
-            long_sig = getattr(self.d, 'long_entry_signal', None)
-            short_sig = getattr(self.d, 'short_entry_signal', None)
-            if long_sig is not None and self.d.long_entry_signal[0]:
-                self._enter(1)
-            elif self.p.can_short and short_sig is not None and self.d.short_entry_signal[0]:
-                self._enter(-1)
+            # Check reentry cooldown
+            if hasattr(self, 'last_exit_bar') and self.last_exit_bar is not None:
+                if (len(self) - self.last_exit_bar) < self.p.reentry_cooldown_bars:
+                    return
+            
+            # Check for entry signals
+            try:
+                long_sig = getattr(self.d, 'long_entry_signal', None)
+                short_sig = getattr(self.d, 'short_entry_signal', None)
+                
+                if long_sig is not None and hasattr(long_sig, '__getitem__'):
+                    if long_sig[0]:
+                        self._enter(1)
+                elif self.p.can_short and short_sig is not None and hasattr(short_sig, '__getitem__'):
+                    if short_sig[0]:
+                        self._enter(-1)
+            except (IndexError, AttributeError):
+                pass
+                
         else:
-            current_price = self.d.close[0]
-            direction = 1 if self.position.size > 0 else -1
+            try:
+                current_price = float(self.d.close[0])
+                direction = 1 if self.position.size > 0 else -1
 
-            if self.p.use_partial_exits and not self.partial_exit_done and getattr(self, 'partial_tp_price', None) and (
-                (direction > 0 and current_price >= self.partial_tp_price) or (direction < 0 and current_price <= self.partial_tp_price)
-            ):
-                partial_size = self._round_qty(abs(self.position.size) * self.p.partial_exit_pct)
-                if partial_size > 0:
-                    if direction > 0:
-                        self.sell(size=partial_size)
-                    else:
-                        self.buy(size=partial_size)
-                    self.partial_exit_done = True
-                    self.trail_stop_active = True
+                # Partial exits
+                if (self.p.use_partial_exits and not self.partial_exit_done and 
+                    hasattr(self, 'partial_tp_price') and self.partial_tp_price is not None):
+                    
+                    if ((direction > 0 and current_price >= self.partial_tp_price) or 
+                        (direction < 0 and current_price <= self.partial_tp_price)):
+                        
+                        partial_size = self._round_qty(abs(self.position.size) * self.p.partial_exit_pct)
+                        if partial_size > 0:
+                            if direction > 0:
+                                self.sell(size=partial_size)
+                            else:
+                                self.buy(size=partial_size)
+                            self.partial_exit_done = True
+                            self.trail_stop_active = True
 
-            if (direction > 0 and current_price >= getattr(self, 'take_profit_price', 1e18)) or (direction < 0 and current_price <= getattr(self, 'take_profit_price', -1e18)):
-                self.close()
-                return
+                # Take profit
+                if hasattr(self, 'take_profit_price') and self.take_profit_price is not None:
+                    if ((direction > 0 and current_price >= self.take_profit_price) or 
+                        (direction < 0 and current_price <= self.take_profit_price)):
+                        self.close()
+                        return
 
-            if self.p.time_limit_bars > 0 and (self.entry_bar is not None) and ((len(self) - self.entry_bar) > self.p.time_limit_bars) and not self.partial_exit_done:
-                self.close()
-                return
-
-            if self.p.use_trailing_stop and (not self.p.use_partial_exits or self.partial_exit_done):
-                self._update_trailing_stop()
-                if self._stop_hit():
+                # Time limit
+                if (self.p.time_limit_bars > 0 and self.entry_bar is not None and 
+                    (len(self) - self.entry_bar) > self.p.time_limit_bars and not self.partial_exit_done):
                     self.close()
                     return
 
+                # Trailing stop
+                if (self.p.use_trailing_stop and 
+                    (not self.p.use_partial_exits or self.partial_exit_done)):
+                    self._update_trailing_stop()
+                    if self._stop_hit():
+                        self.close()
+                        return
+                        
+            except (ValueError, TypeError, IndexError):
+                pass
+
     def notify_trade(self, trade):
         if trade.isclosed:
-            setattr(self, 'last_exit_bar', len(self))
+            self.last_exit_bar = len(self)
             self._reset_position_state()
 
 
@@ -513,6 +631,32 @@ def preload_polars(
         # Sort by time
         df = df.sort("TimestampStart")
 
+        # Data validation - check for null/invalid values
+        for col in ["Open", "High", "Low", "Close"]:
+            if col in df.columns:
+                # Replace null values with forward fill or drop rows
+                if df[col].null_count() > 0:
+                    console.print(f"[yellow]Warning: {spec.symbol} has {df[col].null_count()} null values in {col}[/yellow]")
+                    df = df.with_columns(pl.col(col).fill_null(strategy="forward"))
+                
+                # Check for invalid values (negative prices, etc.)
+                invalid_count = df.filter(pl.col(col) <= 0).height
+                if invalid_count > 0:
+                    console.print(f"[yellow]Warning: {spec.symbol} has {invalid_count} invalid values in {col}[/yellow]")
+                    df = df.filter(pl.col(col) > 0)
+
+        # Ensure High >= Low, Close/Open within range
+        df = df.filter(
+            (pl.col("High") >= pl.col("Low")) &
+            (pl.col("Close") <= pl.col("High")) &
+            (pl.col("Close") >= pl.col("Low")) &
+            (pl.col("Open") <= pl.col("High")) &
+            (pl.col("Open") >= pl.col("Low"))
+        )
+
+        if df.is_empty():
+            raise ValueError(f"No valid data remaining for {spec.symbol} after cleaning")
+
         df_map[spec.symbol] = df
         seen.add(spec.symbol)
 
@@ -556,15 +700,32 @@ def run_single_backtest_eval(
     params_mode: str = "compat",       # "compat" (map altes Set) oder "mtf"
     score_fn: Callable = score_sharpe_dd,  # NEW
 ) -> Tuple[float, Dict[str, float], float]:
+    
+    # Data validation
+    # if df.is_empty():
+    #     return -999.0, {"error": 1.0}, 0.0
+    
+    # Check for required columns and valid data
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    for col in required_cols:
+        if col not in df.columns:
+            return -999.0, {"error": 1.0}, 0.0
+        if df[col].null_count() == len(df):
+            return -999.0, {"error": 1.0}, 0.0
+    
     cerebro = bt.Cerebro(oldbuysell=True)
 
     # Feed
     feed = make_feed_from_df(df, spec)
     cerebro.adddata(feed)
+    
     # MTF Resamples
-    cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=5)
-    cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=15)
-    cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=60)
+    try:
+        cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=5)
+        cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=15)
+        cerebro.resampledata(feed, timeframe=bt.TimeFrame.Minutes, compression=60)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not create resampled data: {e}[/yellow]")
 
     # Params vorbereiten
     if params_mode == "compat":
@@ -578,10 +739,15 @@ def run_single_backtest_eval(
         can_short=can_short,
         min_qty=min_qty,
         qty_step=qty_step,
-        price_tick=price_tick
+        price_tick=price_tick,
+        debug=False  # Disable debug in batch runs
     ))
 
-    cerebro.addstrategy(strategy_class, backtest=True, **strat_params)
+    try:
+        cerebro.addstrategy(strategy_class, backtest=True, **strat_params)
+    except Exception as e:
+        console.print(f"[red]Failed to add strategy: {e}[/red]")
+        return -999.0, {"error": 1.0}, 0.0
 
     # Analyzers (gleich wie vorher, Namen wichtig)
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", timeframe=bt.TimeFrame.Days, annualize=True)
@@ -602,42 +768,70 @@ def run_single_backtest_eval(
 
     try:
         strats = cerebro.run()
+        if not strats:
+            return -999.0, {"error": 1.0}, 0.0
         strat = strats[0]
     except Exception as e:
         console.print(f"[red]Backtest failed for {spec.symbol}: {e}[/red]")
+        import traceback
+        traceback.print_exc()
         return -999.0, {"error": 1.0}, 0.0
 
-    score, metrics = score_fn(strat)
-    final_value = cerebro.broker.getvalue()
+    try:
+        score, metrics = score_fn(strat)
+        final_value = cerebro.broker.getvalue()
+    except Exception as e:
+        console.print(f"[red]Failed to calculate metrics for {spec.symbol}: {e}[/red]")
+        score, metrics, final_value = -999.0, {"error": 1.0}, init_cash
 
     # Cleanup
-    del cerebro, feed, strats, strat
-    gc.collect()
+    try:
+        del cerebro, feed, strats, strat
+        gc.collect()
+    except Exception:
+        pass
 
     return score, metrics, final_value
 
 if __name__ == '__main__':
     console.print(f"Using params: {params}")
-    # print(f"All raw params: {raw_params}")
     console.print(f"Trial number: {trial.number}")
-    # print(f"Trial value: {trial.value}")
-    # print(f"Trial state: {trial.state}")
+    
+    # Create data specs
     specs = [DataSpec("BTC", interval="1m", ranges=[("2020-09-28", "2021-05-31")])]
-    df_map = preload_polars(specs)
-
+    
     try:
-        run_single_backtest_eval(
-        strategy_class=strategy,
-                df=df_map["BTC"],
-                spec=specs[0],
-                init_cash=1000,
-                commission=0.00075,
-                params=params,
-                )
+        # Load data
+        console.print("[cyan]Loading data...[/cyan]")
+        df_map = preload_polars(specs)
+        console.print(f"[green]Data loaded successfully. BTC shape: {df_map['BTC'].shape}[/green]")
+        
+        # Run backtest
+        console.print("[cyan]Running backtest...[/cyan]")
+        score, metrics, final_value = run_single_backtest_eval(
+            strategy_class=strategy,
+            df=df_map["BTC"],
+            spec=specs[0],
+            init_cash=1000,
+            commission=0.00075,
+            params=params,
+            params_mode="compat",  # Use compatibility mode
+        )
+        
+        # Print results
+        console.print(f"[green]Backtest completed![/green]")
+        console.print(f"Score: {score:.4f}")
+        console.print(f"Final Value: ${final_value:.2f}")
+        console.print(f"Metrics: {metrics}")
+        
+        # Calculate additional metrics
+        if final_value > 0:
+            total_return = (final_value / 1000.0 - 1.0) * 100
+            console.print(f"Total Return: {total_return:.2f}%")
 
     except Exception as e:
-        console.print(f"An error occurred: {e}")
+        console.print(f"[red]An error occurred: {e}[/red]")
         import traceback
         traceback.print_exc()
     except KeyboardInterrupt:
-        console.print("Process interrupted by user.")
+        console.print("[yellow]Process interrupted by user.[/yellow]")

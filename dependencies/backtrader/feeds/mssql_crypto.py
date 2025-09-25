@@ -104,7 +104,7 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
     time_resolution = convert_time_resolution(time_resolution)
 
     if resample:
-        # print(f'Resampling microseconds from DB into {time_resolution} Candle data')
+        print(f'Resampling microseconds from DB into {time_resolution} Candle data')
         df = df.sort("TimestampStart")
         
         df = (df
@@ -118,6 +118,6 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
             ])
         )
 
-    # print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
+    # print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', coin_name, pair)
     
     return df

@@ -1,7 +1,7 @@
 from backtrader.utils.backtest import bulk_backtest
 from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
 
-coinlist = ['1000CAT', '1000CHEEMS', '1000SATS', '1INCH', '1MBABYDOGE', 'AAVE', 'ACA', 'ACE', 'ACH', 'ACM', 'ACT', 'ACX', 'ADA', 'ADX', 'AERGO', 'AEUR', 'AEVO', 'AGIX', 'AGLD', 'AION', 'AI', 'AIXBT', 'AKRO', 'ALCX', 'ALGO', 'ALICE', 'ALPACA', 'ALPHA', 'ALPINE', 'ALT', 'AMB', 'AMP', 'ANC', 'ANIME', 'ANKR', 'ANT', 'ANY', 'APE', 'API3', 'APT', 'ARB', 'ARDR', 'ARKM', 'ARK', 'ARPA', 'AR', 'ASR', 'ASTR', 'AST', 'ATA', 'ATM', 'ATOM', 'AUCTION', 'AUDIO', 'AUD', 'AUTO', 'AVA', 'AVAX', 'AWE', 'AXL', 'AXS', 'BABY', 'BADGER', 'BAKE', 'BAL', 'BANANAS31', 'BANANA', 'BAND', 'BAR', 'BAT', 'BB', 'BCC', 'BCHABC', 'BCHSV', 'BCH', 'BEAM', 'BEAMX', 'BEL', 'BERA', 'BETA', 'BETH', 'BICO', 'BIFI', 'BIGTIME', 'BIO', 'BKRW', 'BLUR', 'BLZ', 'BMT', 'BNB', 'BNSOL', 'BNT', 'BNX', 'BOME', 'BOND', 'BONK', 'BROCCOLI714', 'BSW', 'BTCST', 'BTC', 'BTG', 'BTS', 'BTTC', 'BTT', 'BURGER', 'BUSD', 'BZRX', 'C98', 'CAKE', 'CATI', 'CELO', 'CELR', 'CETUS', 'CFX', 'CGPT', 'CHESS', 'CHR', 'CHZ', 'CITY', 'CKB', 'CLV', 'COCOS', 'COMBO', 'COMP', 'COOKIE', 'COS', 'COTI', 'COW', 'CREAM', 'CRV', 'CTK', 'CTSI', 'CTXC', 'CVC', 'CVP', 'CVX', 'CYBER', 'DAI', 'DAR', 'DASH', 'DATA', 'DCR', 'DEGO', 'DENT', 'DEXE', 'DF', 'DGB', 'DIA', 'DNT', 'DOCK', 'DODO', 'DOGE', 'DOGS', 'DOT', 'DREP', 'D', 'DUSK', 'DYDX', 'DYM', 'EDU', 'EGLD', 'EIGEN', 'ELF', 'ENA', 'ENJ', 'ENS', 'EOS', 'EPIC', 'EPS', 'EPX', 'ERD', 'ERN', 'ETC', 'ETHFI', 'ETH', 'EURI', 'EUR', 'FARM', 'FDUSD', 'FET', 'FIDA', 'FIL', 'FIO', 'FIRO', 'FIS', 'FLM', 'FLOKI', 'FLOW', 'FLUX', 'FORM', 'FORTH', 'FOR', 'FRONT', 'FTM', 'FTT', 'FUN', 'FXS', 'GALA', 'GAL', 'GAS', 'GBP', 'GFT', 'GHST', 'GLMR', 'GLM', 'GMT', 'GMX', 'GNO', 'GNS', 'GPS', 'GRT', 'GTC', 'GTO', 'GUN', 'G', 'GXS', 'HAEDAL', 'HARD', 'HBAR', 'HC', 'HEI', 'HFT', 'HIFI', 'HIGH', 'HIVE', 'HMSTR', 'HNT', 'HOOK', 'HOT', 'HYPER', 'ICP', 'ICX', 'IDEX', 'ID', 'ILV', 'IMX', 'INIT', 'INJ', 'IOST', 'IOTA', 'IOTX', 'IO', 'IQ', 'IRIS', 'JASMY', 'JOE', 'JST', 'JTO', 'JUV', 'KAIA', 'KAITO', 'KAVA', 'KDA', 'KEEP', 'KERNEL', 'KEY', 'KLAY', 'KMD', 'KMNO', 'KNC', 'KP3R', 'KSM', 'LAYER', 'LAZIO', 'LDO', 'LEND', 'LEVER', 'LINA', 'LINK', 'LISTA', 'LIT', 'LOKA', 'LOOM', 'LPT', 'LQTY', 'LRC', 'LSK', 'LTC', 'LTO', 'LUMIA', 'LUNA', 'LUNC', 'MAGIC', 'MANA', 'MANTA', 'MASK', 'MATIC', 'MAV', 'MBL', 'MBOX', 'MCO', 'MC', 'MDT', 'MDX', 'MEME', 'METIS', 'ME', 'MFT', 'MINA', 'MIR', 'MITH', 'MKR', 'MLN', 'MOB', 'MOVE', 'MOVR', 'MTL', 'MUBARAK', 'MULTI', 'NANO', 'NBS', 'NEAR', 'NEBL', 'NEIRO', 'NEO', 'NEXO', 'NFP', 'NIL', 'NKN', 'NMR', 'NOT', 'NPXS', 'NTRN', 'NULS', 'NU', 'NXPC', 'OAX', 'OCEAN', 'OGN', 'OG', 'OMG', 'OMNI', 'OM', 'ONDO', 'ONE', 'ONG', 'ONT', 'OOKI', 'OP', 'ORCA', 'ORDI', 'ORN', 'OSMO', 'OXT', 'PARTI', 'PAXG', 'PAX', 'PDA', 'PENDLE', 'PENGU', 'PEOPLE', 'PEPE', 'PERL', 'PERP', 'PHA', 'PHB', 'PIVX', 'PIXEL', 'PLA', 'PNT', 'PNUT', 'POLS', 'POL', 'POLY', 'POLYX', 'POND', 'PORTAL', 'PORTO', 'POWR', 'PROM', 'PROS', 'PSG', 'PUNDIX', 'PYR', 'PYTH', 'QI', 'QKC', 'QNT', 'QTUM', 'QUICK', 'RAD', 'RAMP', 'RARE', 'RAY', 'RDNT', 'RED', 'REEF', 'REI', 'RENDER', 'REN', 'REP', 'REQ', 'REZ', 'RGT', 'RIF', 'RLC', 'RNDR', 'RONIN', 'ROSE', 'RPL', 'RSR', 'RUNE', 'RVN', 'SAGA', 'SAND', 'SANTOS', 'SCRT', 'SCR', 'SC', 'SEI', 'SFP', 'SHELL', 'SHIB', 'SIGN', 'SKL', 'SLF', 'SLP', 'SNT', 'SNX', 'SOL', 'SOLV', 'SPELL', 'SRM', 'SSV', 'STEEM', 'STG', 'STMX', 'STORJ', 'STORM', 'STO', 'STPT', 'STRAT', 'STRAX', 'STRK', 'STX', 'SUI', 'SUN', 'S', 'SUSD', 'SUSHI', 'SXP', 'SXT', 'SYN', 'SYS', 'TAO', 'TCT', 'TFUEL', 'THETA', 'THE', 'TIA', 'TKO', 'TLM', 'TNSR', 'TOMO', 'TON', 'TORN', 'TRB', 'TRIBE', 'TROY', 'TRUMP', 'TRU', 'TRX', 'TST', 'TURBO', 'T', 'TUSD', 'TUT', 'TVK', 'TWT', 'UFT', 'UMA', 'UNFI', 'UNI', 'USD1', 'USDC', 'USDP', 'USDSB', 'USDS', 'USTC', 'UST', 'USUAL', 'UTK', 'VANA', 'VANRY', 'VELODROME', 'VEN', 'VET', 'VGX', 'VIB', 'VIC', 'VIDT', 'VIRTUAL', 'VITE', 'VOXEL', 'VTHO', 'WAN', 'WAVES', 'WAXP', 'WBETH', 'WBTC', 'WCT', 'WIF', 'WING', 'WIN', 'WLD', 'WNXM', 'WOO', 'WRX', 'WTC', 'W', 'XAI', 'XEC', 'XEM', 'XLM', 'XMR', 'XNO', 'XRP', 'XTZ', 'XUSD', 'XVG', 'XVS', 'XZC', 'YFII', 'YFI', 'YGG', 'ZEC', 'ZEN', 'ZIL', 'ZK', 'ZRO', 'ZRX']
+coinlist = ['1000CAT','AAVE', 'ACA', 'ACE', 'ACH', 'ACM', 'ACT', 'ACX']
 
 if __name__ == '__main__':
     import multiprocessing
@@ -9,13 +9,14 @@ if __name__ == '__main__':
     try:
         results = bulk_backtest(
             strategy=NRK,
-            coins=coinlist,
-            start_date="2025-01-01",
-            end_date="2026-01-01",
-            interval="1m",
-            init_cash=1000,
-            max_workers=8,
-            save_results=True,
+            # coins=coinlist, # OPTIONAL :: use no Coin argument to use the whole available Database
+            collateral='USDT',
+            start_date="2017-01-01",
+            end_date="2026-01-08",
+            interval="4h",
+            init_cash=100,
+            plot=False,
+            quantstats=True
         )
         print("Bulk backtest completed successfully.")
         print(f"Results: {results}")

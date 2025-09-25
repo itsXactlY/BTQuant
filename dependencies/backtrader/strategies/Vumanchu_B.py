@@ -3,9 +3,9 @@ from backtrader.indicators.VumanchuMarketCipher_B import VuManchCipherB
 
 class VuManchCipher_B(BaseStrategy):
     params = (
-        ('take_profit', 7),
-        ('percent_sizer', 0.025),
-        ('dca_deviation', 1.5),
+        ('take_profit', 3),
+        ('percent_sizer', 0.075),  # 7.5% of available cash per trade
+        ('dca_deviation', 4),
         ## SMAA
         ('ssma_period', 17), # 20
         ('smoothing', 0.5),
@@ -50,6 +50,7 @@ class VuManchCipher_B(BaseStrategy):
         self.conditions_checked = True
 
     def dca_or_short_condition(self):
+        # DCA: only when price dropped enough relative to last entry
         if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100.0):
             if self.market_cipher.lines.wtCrossUp[0] and self.market_cipher.lines.wtOversold[0]:
                 size = self._determine_size()
@@ -107,3 +108,20 @@ class VuManchCipher_B(BaseStrategy):
                     self.calc_averages()
         self.conditions_checked = True
 
+
+    def next(self):
+        super().next()
+        if self.p.backtest == False:
+            self.report_positions()
+            dt = self.datas[0].datetime.datetime(0)
+            print(f'Realtime: {datetime.now()} processing candle date: {dt}, with {self.data.close[0]}')
+
+    def stop(self):
+        super().stop()
+        # if self.p.backtest == False:
+        if hasattr(self, 'active_orders'):
+            # for order in self.active_orders:
+            #     print(f"Open Order - Entry: {order.entry_price}, Size: {order.size}, TP: {order.take_profit_price}")
+            self.report_positions()
+        else:
+            print("No active orders at the end of the backtest.")

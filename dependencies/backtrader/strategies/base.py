@@ -43,8 +43,8 @@ class BaseStrategy(bt.Strategy):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # if self.p.backtest == True:
-        #     BuySellArrows(self.data0, barplot=True)
+        if self.p.backtest == True:
+            BuySellArrows(self.data0, barplot=True)
         self.dataclose = self.datas[0].close
         self.symbol = self.p.asset
 

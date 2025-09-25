@@ -1,8 +1,5 @@
 import backtrader as bt
 import joblib
-import fast_mssql
-
-### Live trading / paper trading settings
 
 # JackRabbit Relay
 identify = "" # Fill Identify string from JRR Setup
@@ -13,8 +10,6 @@ jrr_order_history = "/home/JackrabbitRelay2/Data/Mimic/"
 bsc_privaccount1 = ""
 bsc_privaccountaddress = ""
 
-### Alerts
-
 # Discord
 discord_webhook_url = '' #'https://discord.com/api/webhooks/...'
 
@@ -24,7 +19,8 @@ telegram_api_hash = ""
 telegram_session_file = ".base.session"
 telegram_channel = -100
 
-### Backtesting settings
+import fast_mssql
+
 # SQL Server connection details
 server = 'localhost'
 candle_database = 'BinanceData'

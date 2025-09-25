@@ -793,6 +793,7 @@ def run_single_backtest_eval(
 
     return score, metrics, final_value
 
+
 if __name__ == '__main__':
     console.print(f"Using params: {params}")
     console.print(f"Trial number: {trial.number}")
@@ -835,3 +836,5 @@ if __name__ == '__main__':
         traceback.print_exc()
     except KeyboardInterrupt:
         console.print("[yellow]Process interrupted by user.[/yellow]")
+
+

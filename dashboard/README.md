@@ -8,7 +8,7 @@
 pip install -r requirements.txt
 ```
 
-1.1 Install pyker (PM2 Monitor replacement)
+1.1 Optionally install pyker (PM2 Monitor replacement)
 ```bash
 git clone https://github.com/mrvi0/pyker.git
 cd pyker

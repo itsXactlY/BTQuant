@@ -91,6 +91,7 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 💬 **[Join Our HFT Community](https://discord.gg/Y7uBxmRg3Z)** - Connect with quantitative traders using **real tick data**
 
 📊 **[Ckeck out your own Results](https://btquant.streamlit.app/)** - Easily overview - **no installation required**
+
 ---
 
 *BTQuant: Where **custom infrastructure** meets **institutional performance***

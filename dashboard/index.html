@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTQuant QuantStats Trading Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="dashboard-header">
+        <div class="container">
+            <h1>BTQuant QuantStats Trading Dashboard</h1>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="totalPairs">523</div>
+                    <div class="kpi-label">Total Pairs</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="profitablePairs">68.4%</div>
+                    <div class="kpi-label">Profitable Pairs</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="avgSharpe">1.23</div>
+                    <div class="kpi-label">Avg Sharpe</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="excellentPairs">127</div>
+                    <div class="kpi-label">Excellent Pairs</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="outliers">15</div>
+                    <div class="kpi-label">Outliers</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="avgVolatility">24.7%</div>
+                    <div class="kpi-label">Avg Volatility</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h3>Data Input</h3>
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" multiple accept=".html" style="display: none;">
+                    <div class="upload-text">
+                        <strong>Upload BTQuant compatible HTML Files</strong>
+                        <p>Drag & drop files or click to browse</p>
+                    </div>
+                </div>
+                <div class="progress-section" id="progressSection" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">0 / 0 files processed</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Analysis Settings</h3>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="enableClustering" checked>
+                    Enable ML Clustering
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="enableOutlierDetection" checked>
+                    Outlier Detection
+                </label>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Display Settings</h3>
+                <div class="slider-control">
+                    <label>Top N Pairs: <span id="topNValue">50</span></label>
+                    <input type="range" id="topNSlider" min="10" max="200" value="50" class="slider">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Filters</h3>
+                <div class="slider-control">
+                    <label>Min Sharpe: <span id="minSharpeValue">0.0</span></label>
+                    <input type="range" id="minSharpeSlider" min="0" max="3" step="0.1" value="0" class="slider">
+                </div>
+                <div class="slider-control">
+                    <label>Max Drawdown: <span id="maxDrawdownValue">100%</span></label>
+                    <input type="range" id="maxDrawdownSlider" min="0" max="100" value="100" class="slider">
+                </div>
+                <div class="slider-control">
+                    <label>Min Return: <span id="minReturnValue">-100%</span></label>
+                    <input type="range" id="minReturnSlider" min="-100" max="500" value="-100" class="slider">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Search</h3>
+                <input type="text" id="pairSearch" class="form-control" placeholder="Search trading pairs...">
+                <div id="searchResults" class="search-results"></div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Export</h3>
+                <button class="btn btn--primary btn--sm" id="exportAll">Export All Data</button>
+                <button class="btn btn--outline btn--sm" id="exportTop">Export Top Performers</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" data-tab="overview">Overview</button>
+                    <button class="tab" data-tab="rankings">Rankings</button>
+                    <button class="tab" data-tab="clustering">Clustering</button>
+                    <button class="tab" data-tab="timeseries">Time Series</button>
+                    <button class="tab" data-tab="heatmap">Heatmap</button>
+                </div>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- Overview Tab -->
+                <div class="tab-panel active" id="overview">
+                    <div class="chart-grid">
+                        <div class="chart-container" style="position: relative; height: 300px;">
+                            <h4>Return Distribution</h4>
+                            <canvas id="returnChart"></canvas>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px;">
+                            <h4>Sharpe Ratio Distribution</h4>
+                            <canvas id="sharpeChart"></canvas>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px;">
+                            <h4>Risk-Return Analysis</h4>
+                            <canvas id="riskReturnChart"></canvas>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px;">
+                            <h4>Performance Categories</h4>
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rankings Tab -->
+                <div class="tab-panel" id="rankings">
+                    <div class="rankings-grid">
+                        <div class="ranking-table">
+                            <h4>Top by Sharpe Ratio</h4>
+                            <div class="table-container">
+                                <table id="sharpeTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Pair</th>
+                                            <th>Sharpe</th>
+                                            <th>Return %</th>
+                                            <th>Drawdown %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="ranking-table">
+                            <h4>Top by Return</h4>
+                            <div class="table-container">
+                                <table id="returnTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Pair</th>
+                                            <th>Return %</th>
+                                            <th>Sharpe</th>
+                                            <th>Volatility %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="ranking-table">
+                            <h4>Risk-Adjusted Performance</h4>
+                            <div class="table-container">
+                                <table id="riskAdjustedTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Pair</th>
+                                            <th>Score</th>
+                                            <th>Sharpe</th>
+                                            <th>Category</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="ranking-table">
+                            <h4>Outliers</h4>
+                            <div class="table-container">
+                                <table id="outliersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Pair</th>
+                                            <th>Return %</th>
+                                            <th>Sharpe</th>
+                                            <th>Volatility %</th>
+                                            <th>Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clustering Tab -->
+                <div class="tab-panel" id="clustering">
+                    <div class="clustering-content">
+                        <div class="chart-container" style="position: relative; height: 500px;">
+                            <h4>ML Clustering Analysis</h4>
+                            <canvas id="clusteringChart"></canvas>
+                        </div>
+                        <div class="cluster-summary">
+                            <h4>Cluster Summary</h4>
+                            <div class="table-container">
+                                <table id="clusterTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Cluster</th>
+                                            <th>Count</th>
+                                            <th>Avg Return</th>
+                                            <th>Avg Sharpe</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time Series Tab -->
+                <div class="tab-panel" id="timeseries">
+                    <div class="chart-container" style="position: relative; height: 500px;">
+                        <h4>Yearly Performance - Top 20 Pairs</h4>
+                        <canvas id="timeseriesChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Heatmap Tab -->
+                <div class="tab-panel" id="heatmap">
+                    <div class="heatmap-controls">
+                        <label>
+                            Number of pairs to display:
+                            <select id="heatmapPairs" class="form-control">
+                                <option value="25">Top 25</option>
+                                <option value="50" selected>Top 50</option>
+                                <option value="100">Top 100</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="heatmap-container">
+                        <canvas id="heatmapChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

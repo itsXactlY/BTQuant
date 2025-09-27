@@ -8,6 +8,15 @@
 pip install -r requirements.txt
 ```
 
+1.1 Install pyker (PM2 Monitor replacement)
+```bash
+git clone https://github.com/mrvi0/pyker.git
+cd pyker
+
+# Run installer (no sudo required!)
+python3 install.py
+```
+
 ### Running the Dashboard
 ```bash
 streamlit run quantstats_dashboard.py

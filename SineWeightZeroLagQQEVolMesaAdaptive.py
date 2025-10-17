@@ -134,9 +134,9 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
         vol_signal=10,           # Was 14 - faster signal line
         
         # Risk management
-        take_profit=0.7,          # 2% 
+        take_profit=1,          # 2% 
         dca_deviation=4.5,
-        percent_sizer=0.0125,     # 0.01 -> 1%
+        percent_sizer=0.0225,     # 0.01 -> 1%
         
         # Signal filtering
         use_volatility_filter=False,
@@ -184,11 +184,10 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
             long_period=self.p.vol_long,
             smooth_period=self.p.vol_smooth,
             signal_period=self.p.vol_signal,
-            subplot=False
+            subplot=True
         )
         
         self.atr = bt.indicators.ATR(self.data, period=14, plot=False)
-        self.adx = bt.indicators.ADX(self.data, period=14, plot=False)
         
         self.active_orders = []
         self.entry_prices = []
@@ -249,19 +248,19 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
             signal = self.get_signal()
             if not self.buy_executed and signal > 0 and self.crossover > 0 and self.fmomentum > self.smomentum and self.mama.lines.MAMA > self.mama.lines.FAMA:
                 size = self._determine_size()
+                current_dt = self.data.datetime.datetime(0)
+                
                 order_tracker = OrderTracker(
                     entry_price=self.data.close[0],
                     size=size,
                     take_profit_pct=self.params.take_profit,
                     symbol=getattr(self, 'symbol', self.p.asset),
                     order_type="BUY",
-                    backtest=self.params.backtest
+                    backtest=self.params.backtest,
+                    data_datetime=current_dt
                 )
-                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                if not hasattr(self, 'active_orders'):
-                    self.active_orders = []
-                    
                 self.active_orders.append(order_tracker)
+
                 self.entry_prices.append(self.data.close[0])
                 self.sizes.append(size)
                 self.order = self.buy(size=size, exectype=bt.Order.Market)
@@ -279,18 +278,17 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
         if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
             if signal > 0 and self.crossover > 0 and self.fmomentum > self.smomentum and self.mama.lines.MAMA > self.mama.lines.FAMA: #  and signal > 0:
                 size = self._determine_size()
+                current_dt = self.data.datetime.datetime(0)
+                
                 order_tracker = OrderTracker(
                     entry_price=self.data.close[0],
                     size=size,
                     take_profit_pct=self.params.take_profit,
                     symbol=getattr(self, 'symbol', self.p.asset),
                     order_type="BUY",
-                    backtest=self.params.backtest
+                    backtest=self.params.backtest,
+                    data_datetime=current_dt
                 )
-                order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                if not hasattr(self, 'active_orders'):
-                    self.active_orders = []
-
                 self.active_orders.append(order_tracker)
                 self.entry_prices.append(self.data.close[0])
                 self.sizes.append(size)
@@ -311,39 +309,61 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
             current_price = self.data.close[0]
             orders_to_remove = []
 
-            for idx, order in enumerate(self.active_orders):
-                if current_price >= order.take_profit_price:
-                    self.order = self.sell(size=order.size, exectype=bt.Order.Market)
+            for idx, order_tracker in enumerate(self.active_orders):  # ← Changed from 'order' to 'order_tracker'
+                if current_price >= order_tracker.take_profit_price:
+                    # Execute the sell order
+                    self.order = self.sell(size=order_tracker.size, exectype=bt.Order.Market)
+                    
                     if self.p.debug:
-                        print(f"TP hit: Selling {order.size} at {current_price} (entry: {order.entry_price})")
-                    order.close_order(current_price)
+                        print(f"TP hit: Selling {order_tracker.size} at {current_price} (entry: {order_tracker.entry_price})")
+                        print(f"Closing order with ID: {order_tracker.order_id}")  # ← Add this debug line
+                    
+                    # Close the order tracker - this handles CSV updates automatically
+                    current_dt = self.data.datetime.datetime(0)
+                    order_tracker.close_order(current_price, exit_datetime=current_dt)
+                    
+                    # Calculate profit for logging
+                    profit_pct = ((current_price / order_tracker.entry_price) - 1) * 100
+                    
+                    if self.p.debug:
+                        print(f"Order closed: {profit_pct:.2f}% profit")
+                    
                     orders_to_remove.append(idx)
+            
+            # Remove closed orders from active list
             for idx in sorted(orders_to_remove, reverse=True):
-                removed_order = self.active_orders.pop(idx)
-                profit_pct = ((current_price / removed_order.entry_price) - 1) * 100
-                if self.p.debug:
-                    print(f"Order removed: {profit_pct:.2f}% profit")
+                self.active_orders.pop(idx)
+            
+            # Update position state if orders were closed
             if orders_to_remove:
-                self.entry_prices = [order.entry_price for order in self.active_orders]
-                self.sizes = [order.size for order in self.active_orders]
+                self.entry_prices = [o.entry_price for o in self.active_orders]
+                self.sizes = [o.size for o in self.active_orders]
+                
                 if not self.active_orders:
                     self.reset_position_state()
                     self.buy_executed = False
                 else:
                     self.calc_averages()
+        
         self.conditions_checked = True
 
 if __name__ == '__main__':
+    import os
+    # Clean up CSV before backtest to avoid conflicts
+    if os.path.exists("order_tracker.csv"):
+        os.remove("order_tracker.csv")
+
     try:
         backtest(
             SineWeightZeroLagQQEVolMesaAdaptive,
             coin='BTC',
             collateral='USDT',
-            start_date="2025-01-01",
-            interval="5m",
+            start_date="2017-12-01",
+            end_date="2024-09-01",
+            interval="15m",
             init_cash=1000,
             plot=True,
-            quantstats=False,
+            quantstats=True,
             debug=False,
         )
         
@@ -351,3 +371,26 @@ if __name__ == '__main__':
         print(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()
+
+# coinlist = ['1000CAT','AAVE', 'ACA', 'ACE', 'ACH', 'ACM', 'ACT', 'ACX']
+
+# if __name__ == '__main__':
+#     import multiprocessing
+#     multiprocessing.set_start_method('spawn', force=True)
+#     try:
+#         results = bulk_backtest(
+#             strategy=SineWeightZeroLagQQEVolMesaAdaptive,
+#             # coins=coinlist, # OPTIONAL :: use no Coin argument to use the whole available Database
+#             collateral='USDT',
+#             start_date="2025-01-01",
+#             # end_date="2026-01-08",
+#             interval="15m",
+#             init_cash=1000,
+#             plot=False,
+#             quantstats=True,
+#             debug=False
+#         )
+#         print("Bulk backtest completed successfully.")
+#         print(f"Results: {results}")
+#     except Exception as e:
+#         print(f"An error occurred during the bulk backtest: {e}")

@@ -10,7 +10,7 @@ from backtrader.utils.backtest import backtest
 if __name__ == '__main__':
     try:
         backtest(
-            NRK,
+            STrend_RSX_AccumulativeSwingIndex,
             coin='BTC',
             collateral='USDT',
             start_date="2024-01-01",

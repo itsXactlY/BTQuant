@@ -247,28 +247,3 @@ class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
         return False
 
 
-if __name__ == '__main__':
-    import os
-    
-    # Clean up CSV before backtest
-    if os.path.exists("order_tracker.csv"):
-        os.remove("order_tracker.csv")
-
-    try:
-        backtest(
-            SineWeightZeroLagQQEVolMesaAdaptive,
-            coin='BTC',
-            collateral='USDT',
-            start_date="2020-01-01",
-            # end_date="2024-09-01",
-            interval="1h",
-            init_cash=1000,
-            plot=True,
-            quantstats=False,
-            debug=True,
-        )
-        
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()

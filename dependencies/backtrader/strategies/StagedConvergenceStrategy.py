@@ -14,9 +14,9 @@ class StagedConvergenceStrategy(BaseStrategy):
         ('hold3', 0),
         ('dca_threshold', 3),
         ('take_profit', 4),  # 2% take profi
-        ('percent_sizer', 0.15), # 0.01 -> 1%
+        ('percent_sizer', 0.0015), # 0.01 -> 1%
         ('stop_loss', 20),   # 20% stop loss
-        ('debug', False),
+        ('debug', True),
         ('backtest', None),
         ('use_stoploss', False),
     )

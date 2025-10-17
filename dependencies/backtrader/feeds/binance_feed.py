@@ -192,7 +192,7 @@ class BinanceData(DataBase):
         while self._state != self._ST_OVER:
             try:
                 kline_data = self.data_queue.get(timeout=1)
-                timestamp = pd.to_datetime(kline_data[0], unit='ms')
+                timestamp = pd.to_datetime(kline_data[0], unit='ms', utc=True)
                 processed_data = [
                     timestamp,
                     kline_data[1],  # open

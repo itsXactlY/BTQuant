@@ -12,6 +12,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.DCA = True
+        self.usdt_amount = 10
 
         self.stake = 1 # temporary for the BaseStrategy, not used here on WEB3.
         self.stake_to_use = self.stake
@@ -23,7 +24,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
                 self.entry_prices.append(self.data.close[0])
                 print(f'\nBUY EXECUTED AT {self.data.close[0]:.12f}\n')
                 self.sizes.append(self.usdt_amount)
-                self.enqueue_web3order('buy', amount=self.usdt_amount)
+                # self.enqueue_web3order('buy', amount=self.usdt_amount)
                 self.calc_averages()
                 self.buy_executed = True
         self.conditions_checked = True
@@ -34,7 +35,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
             if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):  
                 print(f'DCA Buy Condition Met: {self.data.close[0]:.12f} < {self.entry_prices[-1] * (1 - self.params.dca_deviation):.12f}')
                 if self.params.backtest == False:
-                    self.enqueue_web3order('buy', amount=self.usdt_amount)
+                    # self.enqueue_web3order('buy', amount=self.usdt_amount)
                     self.entry_prices.append(self.data.close[0])
                     self.sizes.append(self.usdt_amount)
                     print(f'\nDCA-BUY EXECUTED AT {self.data.close[0]:.12f}\n')
@@ -57,7 +58,7 @@ class Pancakeswap_dca_mm(BaseStrategy):
                     if self.p.debug:
                         print(f"Position closed at {current_price:.9f}, profit taken")
                 else:
-                    self.enqueue_web3order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
+                    # self.enqueue_web3order('sell', exchange=self.exchange, account=self.account, asset=self.asset)
                     alert_message = f"""Close {self.asset}"""
                     self.send_alert(alert_message)
                     self.reset_position_state()

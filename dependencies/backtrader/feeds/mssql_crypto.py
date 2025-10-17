@@ -5,6 +5,14 @@ from backtrader.dontcommit import connection_string, fast_mssql, bt
 
 class MSSQLData(bt.feeds.PolarsData):
     @classmethod
+    def create_data_feed(cls, ticker, start_date, end_date, time_resolution="1d", pair="USDT", **kwargs):
+        """Factory method to create a properly configured MSSQLData instance"""
+        df = get_database_data(ticker, start_date, end_date, time_resolution, pair)
+        if df is None or df.is_empty():
+            raise ValueError(f"No data available for {ticker}{pair}")
+        return cls(dataname=df, **kwargs)
+
+    @classmethod
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
         start_timestamp = int(start_date.timestamp() * 1_000_000)
         end_timestamp = int(end_date.timestamp() * 1_000_000)

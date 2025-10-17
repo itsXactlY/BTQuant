@@ -1,24 +1,25 @@
 from backtrader.indicators.RSX import RSX
 from backtrader.indicators.AccumulativeSwingIndex import AccumulativeSwingIndex
 from backtrader.indicators.SuperTrend import SuperTrend
-from .base import BaseStrategy, bt, OrderTracker, datetime
+from backtrader.strategies.base import BaseStrategy, bt, OrderTracker, datetime
 
 class STrend_RSX_AccumulativeSwingIndex(BaseStrategy):
     params = (
         ('stlen', 7),
         ('stmult', 7.0),
         ('rsxlen', 14),
-        ("dca_deviation", 2),
-        ("take_profit", 8),
-        ('percent_sizer', 0.1), # 0.1 - 10%
-        ('trailing_stop_pct', 1.5),
+        ("dca_deviation", 1.5),
+        ("take_profit", 2),
+        ('percent_sizer', 0.01), # 0.1 - 10%
+        ('trailing_stop_pct', 0.2),
+        ('debug', False),
         ('backtest', None)
     )
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.DCA = True
         self.peak = 0
-        
+
         self.asi_short = AccumulativeSwingIndex(period=7, plot=True)
         self.asi_long = AccumulativeSwingIndex(period=14, plot=True)
         self.rsx = RSX(self.data, length=self.p.rsxlen, plot=False)
@@ -26,9 +27,10 @@ class STrend_RSX_AccumulativeSwingIndex(BaseStrategy):
         self.stLong = bt.ind.CrossOver(self.data.close, self.sttrend, plot=True)
 
     def buy_or_short_condition(self):
+        # print('Buy condition check')
+        # print(f'ASI Short: {self.asi_short[0]}, ASI Long: {self.asi_long[0]}, RSX: {self.rsx[0]}, ST Long: {self.stLong[0]}')
         if not self.buy_executed and not self.conditions_checked:
             if self.stLong and self.asi_short[0] > self.asi_short[-1] and self.asi_short[0] > 5 and self.asi_long[0] > self.asi_long[-1] and self.rsx[0] < 30:
-
                 size = self._determine_size()
                 order_tracker = OrderTracker(
                     entry_price=self.data.close[0],
@@ -57,9 +59,11 @@ class STrend_RSX_AccumulativeSwingIndex(BaseStrategy):
 
     def dca_or_short_condition(self):
         if self.buy_executed and not self.conditions_checked:
-            if self.buy_executed:
-                self.peak = max(self.peak, self.data.close[0])
+            self.peak = max(self.peak, self.data.close[0])
+        if self.entry_prices and self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100):
             if self.stLong and self.asi_short[0] > self.asi_short[-1] and self.asi_short[0] > 5 and self.asi_long[0] > self.asi_long[-1] and self.rsx[0] < 30:
+                
+                
                 size = self._determine_size()
                 order_tracker = OrderTracker(
                     entry_price=self.data.close[0],
@@ -72,15 +76,13 @@ class STrend_RSX_AccumulativeSwingIndex(BaseStrategy):
                 order_tracker.order_id = f"order_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 if not hasattr(self, 'active_orders'):
                     self.active_orders = []
-
+                    
                 self.active_orders.append(order_tracker)
                 self.entry_prices.append(self.data.close[0])
                 self.sizes.append(size)
                 self.order = self.buy(size=size, exectype=bt.Order.Market)
-
                 if self.p.debug:
                     print(f"Buy order placed: {size} at {self.data.close[0]}")
-
                 if not self.buy_executed:
                     if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
                         self.first_entry_price = self.data.close[0]

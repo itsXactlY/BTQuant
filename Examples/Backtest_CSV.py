@@ -1,11 +1,14 @@
 from backtrader import backtest
 from backtrader.strategies.QQE_Hullband_VolumeOsc import QQE_Example as _strategy
 from backtrader.strategies.base import CustomData as PolarsData
+import polars as pl
 
-import pandas as pd
-data = '../candles/BTCUSDT_1min.csv' # Example CSV file path
+data = '../candles/BTCUSDT_1min.csv'  # Example CSV file path
+my_data_frame = pl.read_csv(
+    data,
+    parse_dates=True
+)
 
-my_data_frame = pd.read_csv(data, index_col=0, parse_dates=True)
 my_data_frame = my_data_frame.sort_index()
 
 start = "2024-06-01"

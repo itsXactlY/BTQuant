@@ -55,6 +55,10 @@ class MAMA(bt.Indicator):
         self.l.p = (self.data.high + self.data.low)/2
 
     def prenext(self):
+        if len(self.l.p) < 4:
+            self.l.S[0] = self.l.p[0]
+            self.l.D[0] = 0.0
+            return
         # Variable Initialization
         self.l.Q1[0] = 0.0
         self.l.Q2[0] = 0.0

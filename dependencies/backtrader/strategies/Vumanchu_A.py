@@ -4,7 +4,7 @@ from backtrader.indicators.VumanchuMarketCipher_A import VuManchCipherA
 class VuManchCipher_A(BaseStrategy):
     params = (
         ('take_profit', 2),
-        ('percent_sizer', 0.15),
+        ('percent_sizer', 0.02),
         ('dca_deviation', 1.5),
         ('debug', False),
         ('backtest', None),

@@ -23,7 +23,7 @@ from __future__ import (absolute_import, division, print_function,
 
 import backtrader as bt
 from . import PeriodN
-import pandas as pd
+
 
 __all__ = ['OLS_Slope_InterceptN', 'OLS_TransformationN', 'OLS_BetaN',
            'CointN']

@@ -183,7 +183,7 @@ def backtest(
     collateral="USDT",
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
-    plot=True,
+    plot=False,
     quantstats=False,
     asset_name=None,
     bulk=False,
@@ -200,7 +200,9 @@ def backtest(
 ):
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
     from backtrader.strategies.base import CustomSQN, CustomData
-    
+
+    print("strategy:", strategy)
+
     # ---------- Data ----------
     if data is None:
         if not all([coin, start_date, end_date, interval]):
@@ -282,6 +284,9 @@ def backtest(
         if k not in strat_kwargs:
             strat_kwargs[k] = v
 
+    if 'backtest' not in valid_keys and 'backtest' in strat_kwargs:
+        del strat_kwargs['backtest']
+
     cerebro.addstrategy(strategy, **strat_kwargs)
 
     # ---------- Broker & analyzers ----------
@@ -312,7 +317,7 @@ def backtest(
     if show_progress and not bulk:
         console.print(f"🔄 [bold green]Running backtest for {display_name}...")
 
-    strategy_result = cerebro.run(maxcpus=1)[0]
+    strategy_result = cerebro.run()[0]
 
     # ---------- Metrics ----------
     dd_info = strategy_result.analyzers.drawdown.get_analysis()
@@ -412,6 +417,344 @@ def backtest(
 
     return final_value
 
+def backtest_with_leverage(
+    strategy,
+    data=None,
+    coin=None,
+    start_date=None,
+    end_date="2030-12-31",
+    interval=None,
+    collateral="USDT",
+    commission=0.00075,
+    init_cash=100000.0,
+    leverage=1,                    # NEW: Leverage parameter
+    max_leverage=100,              # NEW: Max leverage limit
+    margin_mode='isolated',        # NEW: Margin mode
+    plot=False,
+    quantstats=False,
+    asset_name=None,
+    bulk=False,
+    show_progress=True,
+    exchange=None,
+    slippage_bps=5,
+    min_qty=0.0,
+    qty_step=1.0,
+    price_tick=None,
+    params=None,
+    params_mode="mtf",
+    add_mtf_resamples=False,
+    **kwargs,
+):
+    """
+    Enhanced backtest function with leverage support
+
+    New Parameters:
+        leverage: Leverage multiplier (default: 1 = no leverage)
+        max_leverage: Maximum allowed leverage (default: 100)
+        margin_mode: 'isolated' or 'cross' (default: 'isolated')
+
+    Example:
+        backtest_with_leverage(
+            MyStrategy,
+            coin='BTC',
+            start_date='2025-01-01',
+            end_date='2025-08-28',
+            interval='1m',
+            leverage=10,  # 10x leverage
+            max_leverage=20
+        )
+    """
+    from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
+    from backtrader.strategies.base import CustomSQN, CustomData
+    from rich.console import Console
+
+    console = Console()
+
+    # [Keep all your existing data loading logic]
+    if data is None:
+        if not all([coin, start_date, end_date, interval]):
+            raise ValueError("If data is not provided, coin, start_date, end_date, and interval are required")
+
+        from backtrader.feeds.mssql_crypto import get_database_data
+
+        if show_progress and not bulk:
+            console.print(f"🔄 [bold blue]Fetching data for {coin}...[/bold blue]")
+
+        df = get_database_data(
+            ticker=coin,
+            start_date=start_date,
+            end_date=end_date,
+            time_resolution=interval,
+            pair=collateral
+        )
+
+        data_feed = CustomData(dataname=df)
+
+        if show_progress and not bulk:
+            console.print(f"✅ [bold green]Data fetched for {coin}[/bold green]")
+    else:
+        from backtrader.feed import DataBase
+        if isinstance(data, DataBase):
+            data_feed = data
+        else:
+            data_feed = CustomData(dataname=data)
+
+    # === LEVERAGE INTEGRATION POINT ===
+    cerebro = bt.Cerebro(oldbuysell=True, runonce=False, stdstats=False)
+    cerebro.adddata(data_feed)
+
+    # Replace broker with LeverageBroker if leverage > 1
+    if leverage > 1:
+        from backtrader.Leverage import LeverageBroker
+        broker = LeverageBroker(
+            leverage=leverage,
+            max_leverage=max_leverage,
+            margin_mode=margin_mode,
+        )
+        cerebro.broker.setcash(init_cash)
+        broker.setcommission(commission=commission)
+
+        # Set slippage if supported
+        try:
+            broker.set_slippage_perc(perc=slippage_bps / 10000.0)
+        except Exception:
+            pass
+
+        cerebro.broker = broker
+
+        if show_progress and not bulk:
+            console.print(f"💪 [bold yellow]Leverage enabled: {leverage}x ({margin_mode})[/bold yellow]")
+    else:
+        # Use standard broker
+        cerebro.broker.setcash(init_cash)
+        cerebro.broker.setcommission(commission=commission)
+        try:
+            cerebro.broker.set_slippage_perc(perc=slippage_bps / 10000.0)
+        except Exception:
+            pass
+
+    # [Rest of your existing backtest logic]
+    # Add multi-timeframe resamples
+    if add_mtf_resamples:
+        cerebro.resampledata(data_feed, timeframe=bt.TimeFrame.Minutes, compression=5, name='5m', boundoff=1)
+        cerebro.resampledata(data_feed, timeframe=bt.TimeFrame.Minutes, compression=15, name='15m', boundoff=1)
+        cerebro.resampledata(data_feed, timeframe=bt.TimeFrame.Minutes, compression=60, name='60m', boundoff=1)
+
+    # Strategy parameters
+    strat_kwargs = {'backtest': True}
+
+    def _strategy_param_keys(cls):
+        try:
+            return set(cls.params._getkeys())
+        except Exception:
+            try:
+                return set(k for k, _ in cls.params)
+            except Exception:
+                return set()
+
+    valid_keys = _strategy_param_keys(strategy)
+
+    # Exchange-specific settings
+    if 'can_short' in valid_keys and exchange is not None:
+        strat_kwargs['can_short'] = (str(exchange).lower() == "mexc")
+
+    # Order sizing parameters
+    if 'min_qty' in valid_keys:
+        strat_kwargs['min_qty'] = min_qty
+    if 'qty_step' in valid_keys:
+        strat_kwargs['qty_step'] = qty_step
+    if 'price_tick' in valid_keys:
+        strat_kwargs['price_tick'] = price_tick
+
+    # Handle Optuna parameters
+    if isinstance(params, dict):
+        converted_params = dict(params)
+        reserved = set(strat_kwargs.keys())
+        for k, v in converted_params.items():
+            if k in valid_keys and k not in reserved:
+                strat_kwargs[k] = v
+
+    # Allow explicit kwargs
+    for k, v in kwargs.items():
+        if k not in strat_kwargs:
+            strat_kwargs[k] = v
+
+    cerebro.addstrategy(strategy, **strat_kwargs)
+
+    # Analyzers
+    cerebro.addanalyzer(TimeReturn, _name='time_return')
+    cerebro.addanalyzer(SharpeRatio, _name='sharpe_ratio')
+    cerebro.addanalyzer(DrawDown, _name='drawdown')
+    cerebro.addanalyzer(TradeAnalyzer, _name='trade_analyzer')
+    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+    cerebro.addanalyzer(CustomSQN, _name='customsqn')
+
+    if not add_mtf_resamples:
+        cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
+
+    cerebro.addobserver(bt.observers.Value)
+    cerebro.addobserver(bt.observers.DrawDown)
+    cerebro.addobserver(bt.observers.Cash)
+
+    display_name = asset_name or (f"{coin}/{collateral}" if coin else "Asset")
+
+    if show_progress and not bulk:
+        console.print(f"🔄 [bold green]Running backtest for {display_name}...")
+
+    strategy_result = cerebro.run()[0]
+
+    # === LEVERAGE STATISTICS ===
+    leverage_stats = {}
+    if hasattr(cerebro.broker, 'get_margin_info'):
+        leverage_stats = cerebro.broker.get_margin_info()
+
+    # Metrics
+    dd_info = strategy_result.analyzers.drawdown.get_analysis()
+    max_drawdown = dd_info.get('max', {}).get('drawdown', 0.0)
+    trade_analyzer = strategy_result.analyzers.trade_analyzer.get_analysis()
+
+    if not bulk:
+        total_trades = trade_analyzer.get('total', {}).get('total', 0)
+        won_trades = trade_analyzer.get('won', {}).get('total', 0)
+        lost_trades = trade_analyzer.get('lost', {}).get('total', 0)
+        pnl_net = trade_analyzer.get('pnl', {}).get('net', {}).get('total', 0)
+        win_rate = (won_trades / total_trades * 100) if total_trades > 0 else 0
+        portvalue = cerebro.broker.getvalue()
+        pnl = portvalue - init_cash
+
+        print(f"\n{'='*50}")
+        print(f"BACKTEST RESULTS - {display_name}")
+        print(f"{'='*50}")
+        print(f"Total Trades: {total_trades}")
+        print(f"Winning Trades: {won_trades}")
+        print(f"Losing Trades: {lost_trades}")
+        print(f"Win Rate: {win_rate:.1f}%")
+        print(f"Net P&L: ${pnl_net:.2f}")
+        print(f"Max Drawdown: {max_drawdown:.2f}%")
+        print(f"Final Portfolio Value: ${portvalue:.2f}")
+        print(f"Total P/L: ${pnl:.2f}")
+        print(f"Return: {(pnl / init_cash * 100):.2f}%")
+
+        # === PRINT LEVERAGE STATS ===
+        if leverage_stats:
+            print(f"\n{'='*50}")
+            print(f"LEVERAGE STATISTICS")
+            print(f"{'='*50}")
+            print(f"Leverage: {leverage_stats.get('leverage', 1)}x")
+            print(f"Margin Mode: {leverage_stats.get('margin_mode', 'N/A')}")
+            print(f"Liquidations: {leverage_stats.get('liquidation_count', 0)}")
+            print(f"Margin Calls: {leverage_stats.get('margin_call_count', 0)}")
+            print(f"Final Margin Used: ${leverage_stats.get('total_margin_used', 0):.2f}")
+
+        print(f"{'='*50}")
+
+    if plot:
+        cerebro.plot(style='candles', numfigs=1, volume=True, barup='black', bardown='grey')
+
+    final_value = cerebro.broker.getvalue()
+
+    # Clean up
+    import gc
+    del cerebro, data_feed, strategy_result
+    gc.collect()
+
+    return final_value
+
+def run_multi_isolated_pairs(strategy, pairs_config, start_date, end_date, interval, collateral="USDT"):
+    """
+    Run multiple isolated leveraged backtests at once — each pair has its own leverage, margin, and isolation.
+    """
+    from rich.console import Console
+    from rich.table import Table
+    import concurrent.futures
+    import gc
+
+    console = Console()
+    results = []
+
+    def run_pair(pair_cfg):
+        coin = pair_cfg["symbol"]
+        lev = float(pair_cfg.get("leverage", 1))
+        cap = float(pair_cfg.get("capital", 100))
+        iso_margin = cap / lev
+
+        console.print(f"[cyan]Running {coin} with x{lev} isolated (margin {iso_margin:.2f}$)[/cyan]")
+
+        try:
+            loader = PolarsDataLoader()
+            spec = DataSpec(
+                symbol=coin,
+                interval=interval,
+                start_date=start_date,
+                end_date=end_date,
+                collateral=collateral
+            )
+            df = loader.load_data(spec, use_cache=True)
+            feed = loader.make_backtrader_feed(df, spec)
+
+            # simulate isolated margin by setting broker cash = margin * leverage
+            init_cash = iso_margin * lev
+
+            final_value = backtest(
+                strategy,
+                data=feed,
+                coin=coin,
+                init_cash=init_cash,
+                collateral=collateral,
+                bulk=True,
+                show_progress=True,
+                quantstats=False,
+            )
+
+            pnl = final_value - init_cash
+            ret_pct = (pnl / init_cash) * 100
+
+            gc.collect()
+            return {
+                "coin": coin,
+                "leverage": lev,
+                "capital": cap,
+                "iso_margin": iso_margin,
+                "final_value": final_value,
+                "pnl": pnl,
+                "return_pct": ret_pct,
+                "status": "success",
+            }
+
+        except Exception as e:
+            return {"coin": coin, "error": str(e), "status": "failed"}
+
+    # Parallel run all pairs
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(pairs_config)) as executor: # ProcessPoolExecutor
+        futures = [executor.submit(run_pair, p) for p in pairs_config]
+        for f in concurrent.futures.as_completed(futures):
+            results.append(f.result())
+
+    # Print results summary
+    table = Table(title="📊 Multi-Isolated Backtest Results")
+    table.add_column("Pair", style="cyan")
+    table.add_column("Lev", justify="right")
+    table.add_column("Margin", justify="right")
+    table.add_column("Final Value", justify="right")
+    table.add_column("PnL", justify="right")
+    table.add_column("Return %", justify="right")
+
+    for r in results:
+        if r["status"] == "success":
+            table.add_row(
+                r["coin"],
+                f"x{r['leverage']}",
+                f"${r['iso_margin']:.2f}",
+                f"${r['final_value']:.2f}",
+                f"${r['pnl']:.2f}",
+                f"{r['return_pct']:.2f}%",
+            )
+        else:
+            table.add_row(r["coin"], "-", "-", "-", "-", f"❌ {r['error']}")
+
+    console.print(table)
+    return results
+
 # Keep the rest of your functions unchanged...
 def run_backtest_with_data(args):
     """Helper function for parallel execution in bulk_backtest"""
@@ -449,7 +792,7 @@ def run_backtest_with_data(args):
         console.print(f"[red]Error in {coin}: {str(e)}[/red]")
         return {"coin": coin, "asset": f"{coin}/{collateral}", "error": str(e), "status": "failed"}
 
-def bulk_backtest(strategy, coins=None, start_date=None, end_date=None, interval=None, 
+def bulk_backtest(strategy, coins=None, start_date="2016-01-01", end_date="2026-01-08", interval=None, 
                  collateral="USDT", init_cash=1000, max_workers=8, save_results=True, 
                  output_file='backtest_results.json', params_mode="mtf", **backtest_kwargs):
     """Enhanced bulk backtest with unified progress tracking and auto-discovery"""

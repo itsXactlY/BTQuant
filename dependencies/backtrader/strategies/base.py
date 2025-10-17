@@ -9,6 +9,102 @@ import shutil
 import os
 import uuid
 import asyncio
+import csv
+
+from backtrader import transparencypatch
+optimized_patch = transparencypatch.TransparencyPatch()
+
+def activate_patch(debug: bool = False):
+    optimized_patch.debug = debug
+    optimized_patch.apply_indicator_patch()
+
+def capture_patch(strategy):
+    optimized_patch.capture_patch_fast(strategy)
+
+# === Console Formatting Utilities (non-invasive) ===
+try:
+    from colorama import init as colorama_init, Fore, Style
+    colorama_init(autoreset=True)
+    COLORAMA = True
+except Exception:
+    # Fallback if colorama not available
+    COLORAMA = False
+    class _NoColor:
+        def __getattr__(self, name): return ''
+    Fore = Style = _NoColor()
+
+def cinfo(msg):   # info
+    return f"{Fore.CYAN}ℹ {msg}{Style.RESET_ALL}" if COLORAMA else f"[i] {msg}"
+
+def cgood(msg):   # success
+    return f"{Fore.GREEN}✔ {msg}{Style.RESET_ALL}" if COLORAMA else f"[OK] {msg}"
+
+def cwarn(msg):   # warning
+    return f"{Fore.YELLOW}⚠ {msg}{Style.RESET_ALL}" if COLORAMA else f"[!] {msg}"
+
+def cerr(msg):    # error
+    return f"{Fore.RED}✘ {msg}{Style.RESET_ALL}" if COLORAMA else f"[x] {msg}"
+
+def chead(title, char='━', color=Fore.MAGENTA):
+    line = char * max(10, len(title) + 8)
+    if COLORAMA:
+        return f"{color}{line}\n  {title}\n{line}{Style.RESET_ALL}"
+    return f"{line}\n  {title}\n{line}"
+
+def csep(char='─', width=80, color=Fore.BLUE):
+    if COLORAMA:
+        return f"{color}{char*width}{Style.RESET_ALL}"
+    return char * width
+
+def fmt_num(val, prec=8, width=None, plus=False):
+    if isinstance(val, (int, float)):
+        s = f"{val:+.{prec}f}" if plus else f"{val:.{prec}f}"
+    else:
+        s = str(val)
+    if width:
+        return s.rjust(width)
+    return s
+
+def fmt_pct(p, width=None, colorize=True):
+    if p is None:
+        s = "--"
+        return s.rjust(width) if width else s
+    s = f"{p:+.2f}%"
+    if colorize and COLORAMA:
+        if p > 0:  s = f"{Fore.GREEN}{s}{Style.RESET_ALL}"
+        elif p < 0: s = f"{Fore.RED}{s}{Style.RESET_ALL}"
+        else: s = f"{Fore.YELLOW}{s}{Style.RESET_ALL}"
+    return s.rjust(width) if width else s
+
+def fmt_hh(hours, width=None):
+    s = f"{hours:.1f} h"
+    return s.rjust(width) if width else s
+
+def fmt_label(text, width, align='center', color=None):
+    t = text.center(width) if align == 'center' else (text.ljust(width) if align=='left' else text.rjust(width))
+    if color and COLORAMA:
+        return f"{color}{t}{Style.RESET_ALL}"
+    return t
+
+def table_sep(col_widths):
+    segs = []
+    for w in col_widths:
+        segs.append("-" * w)
+    line = "+-" + "-+-".join(segs) + "-+"
+    return line
+
+def table_row(values, col_widths, align='right'):
+    cells = []
+    for v, w in zip(values, col_widths):
+        s = str(v)
+        if align == 'right':
+            cells.append(s.rjust(w))
+        elif align == 'left':
+            cells.append(s.ljust(w))
+        else:
+            cells.append(s.center(w))
+    return "| " + " | ".join(cells) + " |"
+
 
 order_lock = threading.Lock()
 INIT_CASH = 100_000.0
@@ -38,6 +134,7 @@ class BaseStrategy(bt.Strategy):
         ("percent_sizer", 0),
         ("order_cooldown", 0),
         ("enable_alerts", False),
+        ("capture_data", False),
         ("alert_channel", None)
     )
 
@@ -45,6 +142,8 @@ class BaseStrategy(bt.Strategy):
         super().__init__(**kwargs)
         if self.p.backtest == True:
             BuySellArrows(self.data0, barplot=True)
+        if self.p.capture_data == True:
+            activate_patch(debug=False)
         self.dataclose = self.datas[0].close
         self.symbol = self.p.asset
 
@@ -68,7 +167,6 @@ class BaseStrategy(bt.Strategy):
         self.short_sizes = []
         self.active_orders = []
         
-
         self.amount = self.p.amount
         self.conditions_checked = None
         self.print_counter = 0
@@ -97,16 +195,14 @@ class BaseStrategy(bt.Strategy):
         if self.params.backtest == False:
             self.init_live_trading()
 
-
         # temp delete me
         self.account = self.p.account
         self.asset = self.p.asset
 
-
     def _init_alert_system(self, session=".__!_"):
         """Initialize alert system with Telegram and Discord services if enabled"""
         if not self.p.enable_alerts:
-            print("Alert system disabled (not enabled via configuration)")
+            print(cinfo("Alert system disabled (not enabled via configuration)"))
             return None
 
         try:
@@ -116,10 +212,11 @@ class BaseStrategy(bt.Strategy):
             if not os.path.exists(base_session_file):
                 raise FileNotFoundError(f"Base session file '{base_session_file}' not found.")
             shutil.copy(base_session_file, new_session_file)
-            print(f"✅ Copied base session to {new_session_file}")
+            print(cgood(f"✅ Copied base session to {new_session_file}"))
 
             self.alert_loop = asyncio.new_event_loop()
 
+            # Note: expects these names to exist in the environment/context
             self.telegram_service = TelegramService(
                 api_id=telegram_api_id,
                 api_hash=telegram_api_hash,
@@ -143,11 +240,11 @@ class BaseStrategy(bt.Strategy):
             self.alert_thread.start()
 
             time.sleep(2)
-            print("✅ Alert system initialized successfully")
+            print(cgood("✅ Alert system initialized successfully"))
             return self.alert_manager
 
         except Exception as e:
-            print(f"❌ Error initializing alert system: {str(e)}")
+            print(cerr(f"❌ Error initializing alert system: {str(e)}"))
             return None
 
     def send_alert(self, message: str):
@@ -156,7 +253,7 @@ class BaseStrategy(bt.Strategy):
             try:
                 self.alert_manager.send_alert(message)
             except Exception as e:
-                print(f"Error sending alert: {str(e)}")
+                print(cerr(f"Error sending alert: {str(e)}"))
         else:
             pass
 
@@ -167,7 +264,7 @@ class BaseStrategy(bt.Strategy):
         elif self.p.exchange.lower() == "mimic":
             self._init_jrr_exchange()
         else:
-            print('No JackRabbitRelay / Web3 exchange detected - no trading will be done on them.')
+            print(cwarn('No JackRabbitRelay / Web3 exchange detected - no trading will be done on them.'))
 
     def _init_jrr_exchange(self):
         from backtrader.brokers.jrrbroker import JrrOrderBase
@@ -194,6 +291,7 @@ class BaseStrategy(bt.Strategy):
         self.web3order_thread = threading.Thread(target=self.process_web3orders)
         self.web3order_thread.daemon = True
         self.web3order_thread.start()
+        print(cgood("PancakeSwap Web3 trading initialized"))
 
     def process_jrr_orders(self):
         while True:
@@ -226,19 +324,22 @@ class BaseStrategy(bt.Strategy):
         while True:
             order = self.web3order_queue.get()
             print(order)
+            print(cinfo(f"Web3 order received: {order}"))
             if order is None:
                 break
             action, params = order
             if action == 'buy':
                 try:
                     self.pcswap.send_pcs_buy_request(**params)
+                    print(cgood("Web3 buy request sent"))
                 except Exception as e: 
-                    print(e)
+                    print(cerr(f"Web3 buy error: {e}"))
             elif action == 'sell':
                 try:
                     self.pcswap.send_pcs_close_request(**params)
+                    print(cgood("Web3 close request sent"))
                 except Exception as e:
-                    print(e)
+                    print(cerr(f"Web3 close error: {e}"))
                 self.reset_position_state()
             self.web3order_queue.task_done()
 
@@ -246,10 +347,7 @@ class BaseStrategy(bt.Strategy):
         current_time = time.time()
         if current_time - self.last_order_time >= self.order_cooldown:
             self.web3order_queue.put((action, params))
-            if action == 'sell':
-                self.last_order_time = time.time()
-            else:
-                self.last_order_time = time.time()
+            self.last_order_time = time.time()
 
     def buy_or_short_condition(self):
         return False
@@ -269,31 +367,61 @@ class BaseStrategy(bt.Strategy):
             min_order_value = 5.50
         elif self.p.exchange.lower() == 'mexc':
             min_order_value = 1.10
+        elif self.p.exchange.lower() == 'pancakeswap':
+            min_order_value = 0.00001
         else:
             min_order_value = 10
 
-        # usdt_to_use = self.stake_to_use * self.p.percent_sizer
-        usdt_to_use = self.broker.getcash() * self.p.percent_sizer / self.dataclose # * self.p.percent_sizer # fetch the available cash from the broker directly
-
-        if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
-            self.amount = usdt_to_use / self.dataclose[0]
-            order_value = self.amount * self.dataclose[0]
-
-            if order_value < min_order_value:
-                self.amount = min_order_value / self.dataclose[0]
-                usdt_to_use = min_order_value
-                print(f"Adjusted to minimum order value: ${min_order_value}")
-            
-            self.amount = round(self.amount, 8)
-            self.usdt_amount = round(self.amount * self.dataclose[0], 8)
-            
-            print(f"Calculated position size: {self.amount} units worth {self.usdt_amount:.8f} USDT")
+        # For PancakeSwap, get actual wallet balance in BNB
+        if self.p.exchange.lower() == 'pancakeswap':
+            if hasattr(self, 'pcswap') and self.pcswap:
+                actual_bnb_balance = self.pcswap.get_collateral_balance()
+                print(f"🔍 Actual BNB balance: {actual_bnb_balance:.8f} BNB")
+                
+                # Calculate BNB to use based on percent_sizer
+                bnb_to_use = actual_bnb_balance * self.p.percent_sizer
+                
+                # Reserve some BNB for gas fees (e.g., 0.001 BNB)
+                gas_reserve = 0.001
+                if bnb_to_use > actual_bnb_balance - gas_reserve:
+                    bnb_to_use = max(actual_bnb_balance - gas_reserve, 0)
+                    print(f"⚠️ Adjusted for gas reserve: {bnb_to_use:.8f} BNB")
+                
+                if bnb_to_use < min_order_value:
+                    print(f"❌ Insufficient BNB. Need at least {min_order_value} BNB, have {bnb_to_use:.8f} BNB")
+                    return 0
+                
+                self.amount = bnb_to_use
+                self.usdt_amount = bnb_to_use  # For PancakeSwap, amount is in BNB
+                
+                print(f"✅ Using {self.amount:.8f} BNB for trade")
+                return self.amount
+            else:
+                print("❌ PancakeSwap order base not initialized")
+                return 0
         else:
-            self.amount = min_order_value / 1000
-            self.usdt_amount = min_order_value
-            print(f"No price data available. Using default amount: {self.amount}")
-        
-        return self.amount
+            # For centralized exchange trading, use broker cash
+            usdt_to_use = self.broker.getcash() * self.p.percent_sizer / self.dataclose
+
+            if hasattr(self, 'dataclose') and len(self.dataclose) > 0 and self.dataclose[0] > 0:
+                self.amount = usdt_to_use / self.dataclose[0]
+                order_value = self.amount * self.dataclose[0]
+
+                if order_value < min_order_value:
+                    self.amount = min_order_value / self.dataclose[0]
+                    usdt_to_use = min_order_value
+                    print(f"⚠️ Adjusted to minimum order value: ${min_order_value}")
+                
+                self.amount = round(self.amount, 8)
+                self.usdt_amount = round(self.amount * self.dataclose[0], 8)
+                
+                print(f"ℹ️ Calculated position size: {self.amount} units worth {self.usdt_amount:.8f} USDT")
+            else:
+                self.amount = min_order_value / 1000
+                self.usdt_amount = min_order_value
+                print(f"⚠️ No price data available. Using default amount: {self.amount}")
+            
+            return self.amount
 
     def _determine_size(self):
         if self.p.backtest:
@@ -326,62 +454,46 @@ class BaseStrategy(bt.Strategy):
             self.buy_executed = True
         else:
             print("No positions exist. Entry and Take Profit prices reset to None")'''
-
+    
     def calc_averages(self):
-        _amount = [price * size for price, size in zip(self.entry_prices, self.sizes)]
-        total_value = sum(_amount)
-        total_size = sum(self.sizes)
-
-        if self.p.debug:
-            print(f"Debug :: amount of price×size: {_amount}")
-            print(f"Debug :: Total value: {total_value}, Total size: {total_size}")
-        
-        if total_size:
-            self.average_entry_price = total_value / total_size
-            
-            if not hasattr(self, 'first_entry_price') or self.first_entry_price is None:
-                self.first_entry_price = self.entry_prices[0] if self.entry_prices else None
-        
-            if self.first_entry_price:
-                self.take_profit_price = self.first_entry_price * (1 + self.params.take_profit / 100)
-            else:
-                self.take_profit_price = self.average_entry_price * (1 + self.params.take_profit / 100)
-        else:
+        if not hasattr(self, 'active_orders') or not self.active_orders:
             self.average_entry_price = None
             self.take_profit_price = None
-            self.first_entry_price = None
+            return
         
-        if self.entry_prices:
-            if self.p.backtest == False and self.p.debug:
-                print(f"Calculated average_entry_price: {self.average_entry_price:.9f}")
-                print(f"Using first entry price for take profit: {self.first_entry_price:.9f}")
-                print(f"Take profit price: {self.take_profit_price:.9f}")
+        # Derive from active_orders
+        self.entry_prices = [order.entry_price for order in self.active_orders]
+        self.sizes = [order.size for order in self.active_orders]
+        
+        total_value = sum(p * s for p, s in zip(self.entry_prices, self.sizes))
+        total_size = sum(self.sizes)
+        
+        if total_size > 0:
+            self.average_entry_price = total_value / total_size
+            if not self.first_entry_price:
+                self.first_entry_price = self.entry_prices[0]
+            self.take_profit_price = self.first_entry_price * (1 + self.params.take_profit / 100)
             self.buy_executed = True
-        else:
-            print("No positions exist. Entry and Take Profit prices reset to None")
 
     def load_trade_data(self):
         try:
             if self.p.exchange.lower() == 'mimic':
                 # reimplementing later
                 pass
-            elif self.p.exchange.lower() != 'mimic':
+            elif self.p.exchange.lower() not in ('mimic', 'pancakeswap'):
                 cash = self.broker.getcash()
                 self.stake_to_use = cash
-                print(f"Available USDT: {self.stake_to_use}")
+                print(cinfo(f"Available USDT: {self.stake_to_use}"))
                 
                 if not hasattr(self, 'active_orders') or self.active_orders is None:
                     self.active_orders = []
 
                 for data in self.datas:
                     symbol = self.symbol
-                    print(f"Loading trade data for symbol: {symbol}")
+                    print(cinfo(f"Loading trade data for symbol: {symbol}"))
                     try:
-
                         loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
-                        
                         if loaded_orders:
-                            print(f"Loaded {len(loaded_orders)} active orders for {symbol} from CSV")
                             self.active_orders = loaded_orders
                             self.buy_executed = True
                             self.entry_prices = [order.entry_price for order in self.active_orders]
@@ -392,21 +504,21 @@ class BaseStrategy(bt.Strategy):
                             # TODO :: add an cross check on exchange to validate the loaded orders
                             continue
                         else:
-                            print(f"No active orders found in CSV for {symbol}, falling back to API")
+                            print(cwarn(f"No active orders found in CSV for {symbol}, falling back to API"))
                     except Exception as e:
-                        print(f"Error loading active orders from CSV: {e} \nFalling back to API")
+                        print(cerr(f"Error loading active orders from CSV: {e} \nFalling back to API"))
                 
                     position_infos = self.broker.get_all_positions(data)
                     
                     if not position_infos or len(position_infos) == 0:
-                        print(f"No positions found for {symbol} via API")
+                        print(cwarn(f"No positions found for {symbol} via API"))
                         continue
                     
-                    print(f"Found {len(position_infos)} open positions for {symbol} via API")
+                    print(cinfo(f"Found {len(position_infos)} open positions for {symbol} via API"))
                     
                     for position_info in position_infos:
                         if position_info['size'] > 0:
-                            print(f"Found position: {position_info['size']} units at reference price {position_info['price']}")
+                            print(cinfo(f"Found position: {position_info['size']} units at reference price {position_info['price']}"))
                             
                             entry_info = self.broker.get_entry_price(symbol, position_info['id'])
 
@@ -416,8 +528,8 @@ class BaseStrategy(bt.Strategy):
                                 entry_size = entry_trade.size
                                 entry_time = datetime.fromtimestamp(entry_trade.timestamp / 1000)
                                 
-                                print(f"Found entry trade: {entry_trade}")
-                                print(f"Entry price: {entry_price}")
+                                print(cinfo(f"Found entry trade: {entry_trade}"))
+                                print(cinfo(f"Entry price: {entry_price}"))
                                 
                                 self.entry_prices.append(entry_price)
                                 self.sizes.append(entry_size)
@@ -437,22 +549,46 @@ class BaseStrategy(bt.Strategy):
                                 order_tracker.order_id = position_info['id']
                                 
                                 self.active_orders.append(order_tracker)
-                    
+
                     if self.entry_prices:
                         self.buy_executed = True
                         self.DCA = True
                         self.calc_averages()
-                        print(f"Loaded {len(self.active_orders)} positions into active_orders tracking from API")
-                        
+                        print(cgood(f"Loaded {len(self.active_orders)} positions into active_orders tracking from API"))
+
+            elif self.p.exchange.lower() == 'pancakeswap':
+                if not hasattr(self, 'active_orders') or self.active_orders is None:
+                    self.active_orders = []
+
+                for data in self.datas:
+                    symbol = self.symbol
+                    print(cinfo(f"Loading trade data for symbol: {symbol}"))
+                    try:
+                        loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
+                        if loaded_orders:
+                            print(cgood(f"Loaded {len(loaded_orders)} active orders for {symbol} from CSV"))
+                            self.active_orders = loaded_orders
+                            self.buy_executed = True
+                            self.entry_prices = [order.entry_price for order in self.active_orders]
+                            self.sizes = [order.size for order in self.active_orders]
+                            self.calc_averages()
+                            
+                            # if we successfully loaded orders from CSV, we skip the API check
+                            # TODO :: add an cross check on exchange to validate the loaded orders
+                            continue
+                        else:
+                            print(cwarn(f"No active orders found in CSV for {symbol}, Starting from scratch"))
+                    except Exception as e:
+                        print(cerr(f"Error loading active orders from CSV: {e} \nStarting from scratch"))
         except Exception as e:
-            print(f"Unexpected error occurred while loading trade data: {e}")
+            print(cerr(f"Unexpected error occurred while loading trade data: {e}"))
             traceback.print_exc()
             self.reset_position_state()
-            self.stake_to_use = 1000.0
+            self.stake_to_use = None
 
     def start(self):
         if self.params.backtest == False and self.p.exchange.lower() != "pancakeswap":
-            print(f"BTQuant initialized for {self.p.exchange}")
+            print(chead(f"BTQuant initialized for {self.p.exchange}"))
             self.load_trade_data()
             
             try:
@@ -472,10 +608,10 @@ class BaseStrategy(bt.Strategy):
                         except:
                             actual_position = 0.0
                     
-                    print(f"Validated position for {currency}: {actual_position}")
+                    print(cinfo(f"Validated position for {currency}: {actual_position}"))
                     
                     if actual_position > 0 and (not self.buy_executed or not self.entry_prices):
-                        print(f"Ensuring position tracking is initialized for {actual_position} {currency}")
+                        print(cwarn(f"Ensuring position tracking is initialized for {actual_position} {currency}"))
                         try:
                             position_info = self.broker.get_position_info(data)
                             if position_info['size'] > 0:
@@ -493,38 +629,45 @@ class BaseStrategy(bt.Strategy):
                                     take_profit_pct=self.params.take_profit
                                 )
                                 self.active_orders.append(order_tracker)
-                                print(f"Added existing position to active_orders tracking")
+                                print(cgood("Added existing position to active_orders tracking"))
                         except Exception as inner_e:
-                            print(f"Error initializing position tracking: {inner_e}")
+                            print(cerr(f"Error initializing position tracking: {inner_e}"))
             
             except Exception as e:
-                print(f"Error during position validation: {e}")
+                print(cerr(f"Error during position validation: {e}"))
                 import traceback
                 traceback.print_exc()
-            
+        
+        if self.params.backtest == False and self.p.exchange.lower() == "pancakeswap":
+            print(chead(f"BTQuant initialized for {self.p.exchange}"))
+            self.load_trade_data()
+        
         elif self.params.backtest == False:
-            print('DEX Exchange Detected - Dont chase the Rabbit.')
+            print(cinfo('DEX Exchange Detected - Dont chase the Rabbit - PancakeSwap trading initialized - warmup and preload will take longer than usual. Sit tight.'))
 
     def next(self):
+        if self.p.capture_data:
+            capture_patch(self)
         self.conditions_checked = False
-        if self.params.backtest == False and self.live_data == True:
-            self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
-
-            if self.p.debug:
-                print(f"Debug :: live_data={getattr(self, 'live_data', False)}, buy_executed={self.buy_executed}, DCA={self.DCA}, print_counter={self.print_counter}")
-                print(f"NEXT STATE CHECK: buy_executed={self.buy_executed}, DCA={self.DCA}")
-
-            if self.buy_executed and self.p.debug:
+        
+        if self.p.debug and hasattr(self, 'live_data') and self.live_data:
+            if self.buy_executed:
                 self.print_counter += 1
-                if self.print_counter % 15 == 0:
-                    print(f'| {datetime.now()}'
-                        f'\n|{"-"*99}¬'
-                        f'\n| Position Report'
-                        f'\n| Price: {self.data.close[0]:.9f}'
-                        f'\n| Entry: {self.average_entry_price:.9f}'
-                        f'\n| TakeProfit: {self.take_profit_price:.9f}'
-                        f'\n|{"-"*99}¬')
+            if self.print_counter % 15 == 0:
+                self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
+                pos = "OPEN" if self.buy_executed else "FLAT"
+                dca = "DCA" if self.DCA else "-"
+                price = fmt_num(self.data.close[0], 6)
+                cash = fmt_num(self.broker.getcash(), 2)
+                print(f"{Fore.WHITE if COLORAMA else ''}⏱ {datetime.now().strftime('%H:%M:%S')} | {self.symbol or ''} | {pos} {dca} | Px {price} | Cash {cash}{Style.RESET_ALL if COLORAMA else ''}")
                 
+                print(chead("Position Report", char='─', color=Fore.BLUE))
+                print(f"Price:        {fmt_num(self.data.close[0], prec=9)}")
+                print(f"Entry (avg):  {fmt_num(self.average_entry_price, prec=9)}")
+                print(f"Take Profit:  {fmt_num(self.take_profit_price, prec=9)}")
+                print(csep('─', 60, color=Fore.BLUE))
+        
+        if hasattr(self, 'live_data') and self.live_data:
             if not self.buy_executed:
                 if self.buy_or_short_condition():
                     return
@@ -534,7 +677,6 @@ class BaseStrategy(bt.Strategy):
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 self.sell_or_cover_condition()
-
 
         elif self.params.backtest == True:
             self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
@@ -545,57 +687,110 @@ class BaseStrategy(bt.Strategy):
                 if self.sell_or_cover_condition():
                     return
                 if self.broker.getcash() < 10.0:
-                    print('Rejected Margin - decrease percent sizer or increase DCA deviation')
+                    print(cerr('Rejected Margin - decrease percent sizer or increase DCA deviation'))
                     return
                 self.dca_or_short_condition()
             elif self.DCA == False and self.buy_executed:
                 if self.broker.getcash() < 10.0:
-                    print('Rejected Margin - decrease percent sizer or increase DCA deviation')
+                    print(cerr('Rejected Margin - decrease percent sizer or increase DCA deviation'))
                 self.sell_or_cover_condition()
 
     def report_positions(self):
-        """Print a neatly formatted table of all active DCA slices."""
+        """Print a compact, perfectly aligned ACTIVE POSITIONS table."""
         if not self.active_orders:
-            print("No active positions\n")
+            print(f"\n{Fore.YELLOW if COLORAMA else ''}📊 No active positions to display{Style.RESET_ALL if COLORAMA else ''}\n")
             return
-
-        cols = [
-            ("Entry Price",    12),
-            ("Size",            8),
-            ("Take Profit",    12),
-            ("Current P/L",    12),
-            ("Time in Position",16),
-        ]
-
-        header_labels = [label.center(width) for label, width in cols]
-        header = "| " + " | ".join(header_labels) + " |"
-        sep = "+-" + "-+-".join("-" * width for _, width in cols) + "-+"
-
-        if self.p.backtest == False: 
-            print("\n=== ACTIVE POSITIONS ===") 
-        else: 
-            print("\n=== ACTIVE BACKTEST POSITIONS ===")
-        print(sep)
-        print(header)
-        print(sep)
-
-        current_price = self.data.close[0]
+        
+        # Pre-format all data
+        data_rows = []
         now = datetime.now()
-
-        # Print each row
-        for tracker in self.active_orders:
-            pnl_pct     = (current_price / tracker.entry_price - 1) * 100
-            hours_held  = (now - tracker.timestamp).total_seconds() / 3600
-            row = [
-                f"{tracker.entry_price:,.8f}".rjust(cols[0][1]),
-                f"{tracker.size:,.4f}".rjust(cols[1][1]),
-                f"{tracker.take_profit_price:,.8f}".rjust(cols[2][1]),
-                f"{pnl_pct:+.2f}%".rjust(cols[3][1]),
-                f"{hours_held:.1f} h".rjust(cols[4][1]),
-            ]
-            print("| " + " | ".join(row) + " |")
-
-        print(sep + "\n")
+        price = self.data.close[0]
+        
+        for t in self.active_orders:
+            pnl = (price / t.entry_price - 1) * 100
+            hours = (now - t.timestamp).total_seconds() / 3600 if t.timestamp else 0
+            
+            if hours < 1:
+                time_s = f"{hours * 60:.0f}m"
+            elif hours < 24:
+                time_s = f"{hours:.0f}h"
+            else:
+                time_s = f"{hours / 24:.1f}d"
+            
+            data_rows.append({
+                'entry': f"{t.entry_price:.8f}",
+                'size': f"{t.size:,.4f}",
+                'tp': f"{t.take_profit_price:.8f}",
+                'pnl': f"{pnl:+.2f}%",
+                'pnl_val': pnl,
+                'time': time_s
+            })
+        
+        # Calculate column widths
+        w_entry = max(12, max(len(r['entry']) for r in data_rows))
+        w_size = max(12, max(len(r['size']) for r in data_rows))
+        w_tp = max(13, max(len(r['tp']) for r in data_rows))
+        w_pnl = max(7, max(len(r['pnl']) for r in data_rows))
+        w_time = max(6, max(len(r['time']) for r in data_rows))
+        
+        # Build the table
+        total_width = w_entry + w_size + w_tp + w_pnl + w_time + 18  # +14 for borders and spacing
+        
+        # Header
+        print()
+        print(f"{Fore.CYAN if COLORAMA else ''}{'═' * total_width}{Style.RESET_ALL if COLORAMA else ''}")
+        title = "📈ACTIVE POSITIONS"
+        print(f"{Fore.CYAN if COLORAMA else ''}║{Style.RESET_ALL if COLORAMA else ''} {Fore.WHITE + Style.BRIGHT if COLORAMA else ''}{title.center(total_width - 4)}{Style.RESET_ALL if COLORAMA else ''} {Fore.CYAN if COLORAMA else ''}║{Style.RESET_ALL if COLORAMA else ''}")
+        print(f"{Fore.CYAN if COLORAMA else ''}{'═' * total_width}{Style.RESET_ALL if COLORAMA else ''}")
+        
+        # Top border
+        top = f"╭{'─' * (w_entry + 2)}┬{'─' * (w_size + 2)}┬{'─' * (w_tp + 2)}┬{'─' * (w_pnl + 2)}┬{'─' * (w_time + 2)}╮"
+        print(f"{Fore.BLUE if COLORAMA else ''}{top}{Style.RESET_ALL if COLORAMA else ''}")
+        
+        # Header row
+        h1 = "💰 Entry Price".center(w_entry)
+        h2 = "📊 Size".center(w_size + 1)
+        h3 = "🎯 Take Profit".center(w_tp + 1)
+        h4 = "📈 P/L".center(w_pnl + 1)
+        h5 = "⏱️ Time".center(w_time + 3)
+        print(f"│{h1}│{h2}│{h3}│{h4}│{h5}│")
+        
+        # Middle border
+        mid = f"├{'─' * (w_entry + 2)}┼{'─' * (w_size + 2)}┼{'─' * (w_tp + 2)}┼{'─' * (w_pnl + 2)}┼{'─' * (w_time + 2)}┤"
+        print(f"{Fore.BLUE if COLORAMA else ''}{mid}{Style.RESET_ALL if COLORAMA else ''}")
+        
+        # Data rows
+        for row in data_rows:
+            c1 = row['entry'].rjust(w_entry)
+            c2 = row['size'].rjust(w_size)
+            c3 = row['tp'].rjust(w_tp)
+            c4 = row['pnl'].rjust(w_pnl)
+            c5 = row['time'].rjust(w_time)
+            
+            # Color the P/L
+            if COLORAMA:
+                if row['pnl_val'] > 0:
+                    c4 = f"{Fore.GREEN}{c4}{Style.RESET_ALL}"
+                elif row['pnl_val'] < 0:
+                    c4 = f"{Fore.RED}{c4}{Style.RESET_ALL}"
+                else:
+                    c4 = f"{Fore.YELLOW}{c4}{Style.RESET_ALL}"
+            
+            print(f"│ {c1} │ {c2} │ {c3} │ {c4} │ {c5} │")
+        
+        # Bottom border
+        bot = f"╰{'─' * (w_entry + 2)}┴{'─' * (w_size + 2)}┴{'─' * (w_tp + 2)}┴{'─' * (w_pnl + 2)}┴{'─' * (w_time + 2)}╯"
+        print(f"{Fore.BLUE if COLORAMA else ''}{bot}{Style.RESET_ALL if COLORAMA else ''}")
+        
+        # Footer
+        total = sum(t.entry_price * t.size for t in self.active_orders)
+        avg = sum((price / t.entry_price - 1) * 100 for t in self.active_orders) / len(self.active_orders)
+        summary = f"📊 {len(self.active_orders)} positions │ Total ${total:,.2f} │ Avg P/L {avg:+.2f}%"
+        
+        if COLORAMA:
+            print(f"\n{Fore.CYAN + Style.BRIGHT}{summary}{Style.RESET_ALL}\n")
+        else:
+            print(f"\n{summary}\n")
 
     def notify_data(self, data, status, *args, **kwargs):
         dn = data._name
@@ -720,51 +915,8 @@ class BaseStrategy(bt.Strategy):
             
             super().stop()
 
-    # def log_entry(self):
-    #     trade_logger.info("-" * 100)
-    #     self.total_buys += 1
-    #     self.current_cycle_buys += 1
-    #     self.max_buys_per_cycle = max(self.max_buys_per_cycle, self.current_cycle_buys)
 
-    #     trade_logger.info(f"{datetime.utcnow()} - Buy executed: {self.data._name}")
-    #     trade_logger.info(f"Entry price: {self.entry_prices[-1]:.12f}")
-    #     trade_logger.info(f"Position size: {self.sizes[-1]}")
-    #     trade_logger.info(f"Current cash: {self.broker.getcash():.2f}")
-    #     trade_logger.info(f"Current portfolio value: {self.broker.getvalue():.2f}")
-    #     trade_logger.info("*" * 100)
 
-    # def log_exit(self, exit_type):
-    #     trade_logger.info("-" * 100)
-    #     trade_logger.info(f"{datetime.utcnow()} - {exit_type} executed: {self.data._name}")
-        
-    #     position_size = sum(self.sizes)
-    #     exit_price = self.data.close[0]
-    #     profit_usd = (exit_price - self.first_entry_price) * position_size
-    #     self.last_profit_usd = profit_usd
-    #     self.total_profit_usd += profit_usd
-    #     self.trade_cycles += 1
-        
-    #     trade_logger.info(f"Exit price: {exit_price:.12f}")
-    #     trade_logger.info(f"Average entry price: {self.average_entry_price:.12f}")
-    #     trade_logger.info(f"Position size: {position_size}")
-    #     trade_logger.info(f"Profit for this cycle (USD): {profit_usd:.2f}")
-    #     trade_logger.info(f"Total profit (USD): {self.total_profit_usd:.2f}")
-    #     trade_logger.info(f"Trade cycles completed: {self.trade_cycles}")
-    #     trade_logger.info(f"Average profit per cycle (USD): {self.total_profit_usd / self.trade_cycles:.2f}")
-    #     trade_logger.info(f"Time elapsed: {datetime.utcnow() - self.start_time}")
-    #     if self.position_start_time:
-    #         trade_logger.info(f"Position cycle time: {datetime.utcnow() - self.position_start_time}")
-    #     trade_logger.info(f"Maximum buys per cycle: {self.max_buys_per_cycle}")
-    #     trade_logger.info(f"Total buys: {self.total_buys}")
-    #     trade_logger.info("*" * 100)
-
-    #     self.current_cycle_buys = 0
-    #     self.position_start_time = None
-    #     self.total_buys = 0
-    #     self.max_buys_per_cycle = 0
-    #     self.trade_cycles = 0
-    #     self.total_profit_usd = 0
-    #     self.last_profit_usd = 0
 
 class CustomData(bt.feeds.PolarsData):
     params = (
@@ -813,12 +965,11 @@ class BuySellArrows(bt.observers.BuySell):
             self.lines.sell[0] += self.data.high[0] * 0.02
             
     plotlines = dict(
-        buy=dict(marker='$\u21E7$', markersize=8.0),
-        sell=dict(marker='$\u21E9$', markersize=8.0)
+        buy=dict(marker='$⇧$', markersize=8.0),   # Direct Unicode character
+        sell=dict(marker='$⇩$', markersize=8.0)
     )
 
 
-import csv
 class OrderTracker:
     def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", backtest=False):
         self.entry_price = entry_price
@@ -856,7 +1007,8 @@ class OrderTracker:
     def save_to_csv(self):
         if self.backtest:
             return
-            
+        
+        print(f"Current working directory: {os.getcwd()}")
         csv_file = "order_tracker.csv"
         file_exists = os.path.isfile(csv_file)
         
@@ -911,9 +1063,9 @@ class OrderTracker:
             os.replace(temp_file, "order_tracker.csv")
             
             if not modified:
-                print(f"Warning: Could not find order to update in CSV: entry={self.entry_price}, size={self.size}")
+                print(cwarn(f"Warning: Could not find order to update in CSV: entry={self.entry_price}, size={self.size}"))
         except Exception as e:
-            print(f"Error updating CSV: {e}")
+            print(cerr(f"Error updating CSV: {e}"))
     
     def remove_from_csv(self):
         if self.backtest:
@@ -940,9 +1092,9 @@ class OrderTracker:
             os.replace(temp_file, "order_tracker.csv")
             
             if not order_removed:
-                print(f"Warning: Could not find closed order to remove in CSV: entry={self.entry_price}, size={self.size}")
+                print(cwarn(f"Warning: Could not find closed order to remove in CSV: entry={self.entry_price}, size={self.size}"))
         except Exception as e:
-            print(f"Error removing closed order from CSV: {e}")
+            print(cerr(f"Error removing closed order from CSV: {e}"))
 
     @classmethod
     def load_active_orders_from_csv(cls, symbol=None, backtest=False):
@@ -959,7 +1111,7 @@ class OrderTracker:
                 for row in reader:
                     if row['closed'].lower() == 'false':
                         if symbol and row['symbol'] and row['symbol'] != symbol:
-                            print(f"Skipping order for {row['symbol']} (looking for {symbol})")
+                            print(cinfo(f"Skipping order for {row['symbol']} (looking for {symbol})"))
                             continue
 
                         order = cls.__new__(cls)
@@ -978,11 +1130,9 @@ class OrderTracker:
                         order.profit_pct = None
                         order.backtest = backtest
                         
-                        print(f"Loading order for {order.symbol}: {order.size} @ {order.entry_price}")
+                        print(cinfo(f"Loading order for {order.symbol}: {order.size} @ {order.entry_price}"))
                         active_orders.append(order)
-            
-            print(f"Loaded {len(active_orders)} active orders for {symbol}")
             return active_orders
         except Exception as e:
-            print(f"Error loading orders from CSV: {e}")
+            print(cerr(f"Error loading orders from CSV: {e}"))
             return []

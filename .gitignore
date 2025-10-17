@@ -57,3 +57,4 @@ wandb/latest-run
 testing_momentum_truezerolag.py
 testing_cooking.py
 .btq_cache/*
+exports/zerolag_sine_momentum_intermediates.parquet

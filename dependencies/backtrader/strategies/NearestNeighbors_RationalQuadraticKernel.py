@@ -38,7 +38,7 @@ class NRK(BaseStrategy):
         # ML Parameters
         ('source', 'close'),
         ('neighbors_count', 8),
-        ('max_bars_back', 100), # Standard: 2000 what is slow on HFT, better suited for higher TF than 5m+
+        ('max_bars_back', 100), # Standard: 2000 what is slow on HFT sub minute, better suited for higher TF than 5m+
         ('use_volatility_filter', True),
         ('regime_threshold', -0.1),
         ('adx_threshold', 20),
@@ -51,7 +51,7 @@ class NRK(BaseStrategy):
         # DCA Parameters
         ('dca_deviation', 1.5),
         ('take_profit', 2),
-        ('percent_sizer', 0.05),
+        ('percent_sizer', 0.01),
         ('debug', False),
         ('backtest', None),
     )

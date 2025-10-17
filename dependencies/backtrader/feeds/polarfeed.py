@@ -1,6 +1,5 @@
 import backtrader as bt
 from backtrader import date2num
-from backtrader.utils.py3 import string_types, integer_types
 import polars as pl
 
 class PolarsData(bt.feed.DataBase):
@@ -61,15 +60,9 @@ class PolarsData(bt.feed.DataBase):
                     self._colmapping[datafield] = None
             
             elif isinstance(param_value, str):
-                ## TODO: optimize this lookup
                 try:
                     col_idx = self.colnames.index(param_value)
-                    # col_idx = self.colnames.get_loc(param_value)
                     self._colmapping[datafield] = col_idx
-                except AttributeError:
-                    col_idx = self.colnames.get_loc(param_value)
-                    self._colmapping[datafield] = col_idx
-                
                 except ValueError:
                     if self.p.nocase:
                         found = False

@@ -6,11 +6,15 @@ identify = "" # Fill Identify string from JRR Setup
 jrr_webhook_url = "http://127.0.0.1:80"
 jrr_order_history = "/home/JackrabbitRelay2/Data/Mimic/"
 
-# Web3 / BSC TODO :: Move to secrets file, add full documentation
+# Web3
 bsc_privaccount1 = ""
 bsc_privaccountaddress = ""
 
-# Discord
+# solana
+solana_privkey_base58 = ""
+solana_wallet_address = ""
+
+#Discord
 discord_webhook_url = '' #'https://discord.com/api/webhooks/...'
 
 # Telegram
@@ -27,6 +31,7 @@ candle_database = 'BinanceData'
 optuna_database = 'OptunaBT'
 username = 'SA'
 password = 'YourStrong!Passw0rd'
+
 driver = '{ODBC Driver 18 for SQL Server}'  # Adjust the driver version if necessary
 
 connection_string = (f'DRIVER={driver};'

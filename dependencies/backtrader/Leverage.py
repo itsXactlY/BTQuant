@@ -4,6 +4,8 @@ from typing import Optional, Dict
 import datetime as dt
 
 class LeveragePosition:
+    """Track individual leveraged position"""
+    
     def __init__(self, size: float, price: float, leverage: float, is_long: bool = True):
         self.size = abs(size)
         self.entry_price = price
@@ -21,18 +23,21 @@ class LeveragePosition:
             self.liquidation_price = self.entry_price * (1 + (1 - maintenance_margin) * bankruptcy_price_adj)
     
     def unrealized_pnl(self, current_price: float) -> float:
+        """Unrealized P&L"""
         if self.is_long:
             return (current_price - self.entry_price) * self.size
         else:
             return (self.entry_price - current_price) * self.size
     
     def margin_ratio(self, current_price: float) -> float:
+        """Current margin ratio"""
         pnl = self.unrealized_pnl(current_price)
         equity = self.margin_required + pnl
         current_value = self.size * current_price
         return equity / current_value if current_value > 0 else 0
     
     def is_liquidated(self, current_price: float) -> bool:
+        """Check liquidation threshold"""
         if self.is_long:
             return current_price <= self.liquidation_price
         else:
@@ -81,6 +86,7 @@ class LeverageBroker(bt.BrokerBase):
             print(f"LeverageBroker initialized: {self._current_leverage}x {self.p.margin_mode}")
     
     def set_leverage(self, leverage: float):
+        """Dynamically set leverage for new positions"""
         leverage = max(1.0, min(leverage, self.p.max_leverage))
         self._current_leverage = leverage
         if self._leverage_debug:
@@ -90,21 +96,29 @@ class LeverageBroker(bt.BrokerBase):
         return self._current_leverage
     
     def setcash(self, cash: float):
+        """Set initial/final cash with safety"""
         self._cash = max(0.0, cash)
         if self._leverage_debug:
             print(f"Cash set to ${self._cash:,.2f}")
         return self._cash
     
     def getcash(self):
+        """Get available cash with safety"""
         if not hasattr(self, '_cash'):
             self._cash = 0.0
         return self._cash
     
     def getvalue(self, datas=None):
+        """
+        Portfolio value: cash + positions
+        FIXED: Full safety checks, handles startup
+        """
         if not hasattr(self, '_cash'):
             self._cash = 0.0
         
         value = self.getcash()
+        
+        # Safe datas handling
         if datas is None:
             datas = getattr(self, 'datas', [])
         
@@ -122,17 +136,29 @@ class LeverageBroker(bt.BrokerBase):
         return max(0.0, value)
     
     def get_notification(self) -> Optional[bt.Order]:
+        """
+        CRITICAL FIX: Order notification system
+        Returns next notification from queue or None
+        """
         if self._notifs:
             return self._notifs.popleft()
         return None
     
     def notify_order(self, order: bt.Order):
+        """
+        Add order notification to queue
+        Called internally when orders change status
+        """
         self._notifs.append(order)
         if self._leverage_debug:
             status = order.getstatusname()
             print(f"[ORDER NOTIFY] {status} - Ref: {order.ref}, Size: {order.size}")
     
     def _submit(self, order, excclass=bt.Order, excargs=()):
+        """
+        Submit order with leverage margin checks
+        FIXED: Proper order submission with notifications
+        """
         if order.isbuy() or order.issell():
             try:
                 size = abs(order.size)
@@ -178,6 +204,10 @@ class LeverageBroker(bt.BrokerBase):
         return result
     
     def _execinfo(self, order, execsize=None, execprice=None, execcomm=None):
+        """
+        Execute order info with leverage position tracking
+        FIXED: Track leveraged positions on execution
+        """
         result = super()._execinfo(order, execsize, execprice, execcomm)
         
         if result and order.status == bt.Order.Completed:
@@ -216,7 +246,13 @@ class LeverageBroker(bt.BrokerBase):
         return result
     
     def next(self):
+        """
+        Broker next() - Check for liquidations and margin calls
+        FIXED: Safe data access, proper notifications
+        """
         super().next()
+        
+        # Check positions only if data available
         if not hasattr(self, 'datas') or not self.datas:
             return
         
@@ -249,6 +285,7 @@ class LeverageBroker(bt.BrokerBase):
             self.notify_order(None)  # Trigger notification cycle
     
     def _liquidate_position(self, pos_key: str, position: LeveragePosition, current_price: float):
+        """Liquidate under-margined position"""
         try:
             pnl = position.unrealized_pnl(current_price)
             liq_fee = position.position_value * self.p.liquidation_fee
@@ -273,6 +310,10 @@ class LeverageBroker(bt.BrokerBase):
                 print(f"[LIQ ERROR] {e}")
     
     def getposition(self, data):
+        """
+        Get position for data with leverage adjustment
+        FIXED: Safe, handles no-position case
+        """
         pos = super().getposition(data)
         if pos.size == 0:
             return pos  # No position
@@ -290,6 +331,7 @@ class LeverageBroker(bt.BrokerBase):
         return pos
     
     def get_margin_info(self) -> Dict:
+        """Comprehensive margin statistics"""
         total_value = self.getvalue()
         available_margin = self.getcash() if self.p.margin_mode == 'isolated' else total_value
         

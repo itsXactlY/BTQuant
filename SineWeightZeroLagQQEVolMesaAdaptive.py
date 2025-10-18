@@ -1,7 +1,7 @@
 # Cheers, u lazy fucks.
 
 import math, os
-from backtrader.utils.backtest import backtest
+from backtrader.utils.backtest import backtest, bulk_backtest
 from backtrader.strategies.base import BaseStrategy, bt
 from backtrader.indicators.MesaAdaptiveMovingAverage import MAMA
 
@@ -189,7 +189,7 @@ class FastSineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
 
         price_above_sma = float(self.data.close[0]) > float(self.sma200[0])
 
-        # Count positive and negative signals (looser than original: require 3 positives instead of 4)
+        # Count positive and negative signals
         positives = sum([qqe_sig > 0, vol_sig > 0, cross_sig > 0, momentum_trending_up])
         negatives = sum([qqe_sig < 0, vol_sig < 0, cross_sig < 0])
 
@@ -236,24 +236,45 @@ class FastSineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
                 return True
         return False
 
+# if __name__ == '__main__':
+#     try:
+#         backtest(
+#             FastSineWeightZeroLagQQEVolMesaAdaptive,
+#             coin='BTC',
+#             collateral='USDT',
+#             start_date="2025-01-01",
+#             # end_date="2024-09-01",
+#             interval="15m",
+#             init_cash=1000,
+#             plot=False,
+#             quantstats=False,
+#             debug=False,
+#         )
+
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
+#         import traceback
+#         traceback.print_exc()
+
+coinlist = ['1000CAT','AAVE', 'ACA', 'ACE', 'ACH', 'ACM', 'ACT', 'ACX']
+
 if __name__ == '__main__':
-    if os.path.exists("order_tracker.csv"):
-        os.remove("order_tracker.csv")
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
     try:
-        backtest(
-            FastSineWeightZeroLagQQEVolMesaAdaptive,
-            coin='BTC',
+        results = bulk_backtest(
+            strategy=FastSineWeightZeroLagQQEVolMesaAdaptive,
+            # coins=coinlist, # OPTIONAL :: use no Coin argument to use the whole available Database
             collateral='USDT',
-            start_date="2017-01-01",
-            # end_date="2024-09-01",
+            start_date="2024-01-01",
+            end_date="2026-01-08",
             interval="1h",
             init_cash=1000,
             plot=False,
-            quantstats=False,
-            debug=False,
+            quantstats=True,
+            capture_data=False,
         )
-        
+        print("Bulk backtest completed successfully.")
+        print(f"Results: {results}")
     except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"An error occurred during the bulk backtest: {e}")

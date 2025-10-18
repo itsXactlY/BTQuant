@@ -10,6 +10,8 @@ import os
 import uuid
 import asyncio
 import csv
+import multiprocessing
+import os
 
 from backtrader import transparencypatch
 optimized_patch = transparencypatch.TransparencyPatch()
@@ -69,7 +71,7 @@ def fmt_pct(p, width=None, colorize=True):
     return s.rjust(width) if width else s
 
 order_lock = threading.Lock()
-INIT_CASH = 100_000.0
+INIT_CASH = 1000.0
 
 
 class BaseStrategy(bt.Strategy):
@@ -240,7 +242,7 @@ class BaseStrategy(bt.Strategy):
             entry_price=price,
             size=size,
             take_profit_pct=self.params.take_profit,
-            symbol=self.symbol,
+            symbol=self.data._dataname,
             order_type=action,
             backtest=self.params.backtest,
             data_datetime=current_dt
@@ -898,6 +900,16 @@ class BaseStrategy(bt.Strategy):
 
     def stop(self):
         """Called when strategy stops - print results and cleanup"""
+        # --- AUTO-DETECT BULK MODE ---
+        # Detects multiprocessing-based bulk mode (used by bulk_backtest)
+        in_bulk_mode = (
+            "FORK" in multiprocessing.current_process().name.upper() or
+            "SPAWN" in multiprocessing.current_process().name.upper() or
+            os.getenv("BTQ_BULK_MODE") == "1"
+        )
+
+        if in_bulk_mode:
+            return 
         if self.p.backtest and not self.p.quantstats:
             self.final_value = self.broker.getvalue()
             print("\n" + "=" * 120)
@@ -994,58 +1006,67 @@ class BuySellArrows(bt.observers.BuySell):
     )
 
 
+import os
+import csv
+import traceback
+from datetime import datetime
+
 class OrderTracker:
     """
-    Tracks individual orders/positions with automatic CSV persistence
-    Completely independent - strategies don't need to manage this directly
+    Tracks individual orders/positions with automatic CSV persistence.
+    Completely independent - strategies don't need to manage this directly.
+    Supports separate CSV files per symbol.
     """
     _order_counter = 0
-    
+
     def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", backtest=False, data_datetime=None):
         self.entry_price = entry_price
         self.size = size
         self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
         self.executed = True
         self.backtest = backtest
-        
+
         OrderTracker._order_counter += 1
         self.tracker_id = f"order_{OrderTracker._order_counter}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-        
-        self.timestamp = data_datetime if data_datetime is not None else datetime.now()
-        
-        if symbol is None or symbol == "":
+        self.timestamp = data_datetime if data_datetime else datetime.now()
+
+        if not symbol:
             if hasattr(self, 'datas') and self.datas and hasattr(self.datas[0], '_dataname'):
                 symbol = self.datas[0]._dataname
-        
         self.symbol = symbol
         self.order_type = order_type
         self.closed = False
         self.exit_price = None
         self.exit_timestamp = None
         self.profit_pct = None
-        
+
         self.save_to_csv()
-    
+
+    def _get_csv_file(self):
+        """Return the CSV filename for this symbol"""
+        safe_symbol = self.symbol.replace("/", "_") if self.symbol else "unknown"
+        return f"{safe_symbol}_order_tracker.csv"
+
     def close_order(self, exit_price, exit_datetime=None):
         self.closed = True
         self.exit_price = exit_price
-        self.exit_timestamp = exit_datetime if exit_datetime is not None else datetime.now()
+        self.exit_timestamp = exit_datetime if exit_datetime else datetime.now()
         self.profit_pct = ((exit_price / self.entry_price) - 1) * 100 if self.order_type == "BUY" else ((self.entry_price / exit_price) - 1) * 100
         self.update_csv()
-    
+
     def save_to_csv(self):
-        csv_file = "order_tracker.csv"
+        csv_file = self._get_csv_file()
         file_exists = os.path.isfile(csv_file)
-        
+
         with open(csv_file, 'a', newline='') as f:
-            fieldnames = ['tracker_id', 'symbol', 'order_type', 'entry_price', 'size', 
-                        'take_profit_price', 'timestamp', 'closed', 'exit_price', 
-                        'exit_timestamp', 'profit_pct']
+            fieldnames = ['tracker_id', 'symbol', 'order_type', 'entry_price', 'size',
+                          'take_profit_price', 'timestamp', 'closed', 'exit_price',
+                          'exit_timestamp', 'profit_pct']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
-            
+
             if not file_exists:
                 writer.writeheader()
-            
+
             writer.writerow({
                 'tracker_id': self.tracker_id,
                 'symbol': self.symbol,
@@ -1053,7 +1074,7 @@ class OrderTracker:
                 'entry_price': f"{self.entry_price:.8f}",
                 'size': f"{self.size:.10f}",
                 'take_profit_price': f"{self.take_profit_price:.8f}",
-                'timestamp': self.timestamp.isoformat() if self.timestamp else '',
+                'timestamp': self.timestamp.isoformat(),
                 'closed': self.closed,
                 'exit_price': f"{self.exit_price:.8f}" if self.exit_price else '',
                 'exit_timestamp': self.exit_timestamp.isoformat() if self.exit_timestamp else '',
@@ -1061,77 +1082,59 @@ class OrderTracker:
             })
             f.flush()
             os.fsync(f.fileno())
-    
+
     def update_csv(self):
         try:
-            if not os.path.isfile("order_tracker.csv"):
+            csv_file = self._get_csv_file()
+            if not os.path.isfile(csv_file):
                 self.save_to_csv()
                 return
-            
-            temp_file = "order_tracker_temp.csv"
+
+            temp_file = f"{csv_file}.tmp"
             modified = False
-            
-            with open("order_tracker.csv", 'r', newline='') as infile, \
-                 open(temp_file, 'w', newline='') as outfile:
+
+            with open(csv_file, 'r', newline='') as infile, open(temp_file, 'w', newline='') as outfile:
                 reader = csv.DictReader(infile)
                 fieldnames = reader.fieldnames
                 writer = csv.DictWriter(outfile, fieldnames=fieldnames)
                 writer.writeheader()
-                
+
                 for row in reader:
                     if row['tracker_id'] == self.tracker_id:
                         row['closed'] = 'True'
                         row['exit_price'] = f"{self.exit_price:.8f}"
-                        row['exit_timestamp'] = self.exit_timestamp.isoformat() if self.exit_timestamp else ''
+                        row['exit_timestamp'] = self.exit_timestamp.isoformat()
                         row['profit_pct'] = f"{self.profit_pct:.4f}"
                         modified = True
                     writer.writerow(row)
-            
-            os.replace(temp_file, "order_tracker.csv")
-            
+
+            os.replace(temp_file, csv_file)
+
             if not modified:
-                with open("order_tracker.csv", 'a', newline='') as f:
-                    fieldnames = ['tracker_id', 'symbol', 'order_type', 'entry_price', 'size', 
-                                'take_profit_price', 'timestamp', 'closed', 'exit_price', 
-                                'exit_timestamp', 'profit_pct']
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writerow({
-                        'tracker_id': self.tracker_id,
-                        'symbol': self.symbol,
-                        'order_type': self.order_type,
-                        'entry_price': f"{self.entry_price:.8f}",
-                        'size': f"{self.size:.10f}",
-                        'take_profit_price': f"{self.take_profit_price:.8f}",
-                        'timestamp': self.timestamp.isoformat() if self.timestamp else '',
-                        'closed': 'True',
-                        'exit_price': f"{self.exit_price:.8f}",
-                        'exit_timestamp': self.exit_timestamp.isoformat() if self.exit_timestamp else '',
-                        'profit_pct': f"{self.profit_pct:.4f}"
-                    })
-                    f.flush()
-                    os.fsync(f.fileno())
-        
+                self.save_to_csv()
+
         except Exception as e:
-            print(cerr(f"Error updating CSV: {e}"))
+            print(f"Error updating CSV: {e}")
             traceback.print_exc()
-    
+
     @classmethod
     def load_active_orders_from_csv(cls, symbol=None, backtest=False):
         if backtest:
             return []
-        
+
         active_orders = []
         try:
-            if not os.path.isfile("order_tracker.csv"):
+            if not symbol:
+                return active_orders  # need a symbol to load orders
+
+            csv_file = f"{symbol.replace('/', '_')}_order_tracker.csv"
+            if not os.path.isfile(csv_file):
                 return active_orders
-            
-            with open("order_tracker.csv", 'r', newline='') as f:
+
+            with open(csv_file, 'r', newline='') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row['closed'].lower() == 'false':
-                        if symbol and row['symbol'] and row['symbol'] != symbol:
-                            continue
-                        
                         order = cls.__new__(cls)
                         order.entry_price = float(row['entry_price'])
                         order.size = float(row['size'])
@@ -1146,9 +1149,10 @@ class OrderTracker:
                         order.exit_timestamp = None
                         order.profit_pct = None
                         order.backtest = backtest
-                        
+
                         active_orders.append(order)
             return active_orders
         except Exception as e:
-            print(cerr(f"Error loading orders from CSV: {e}"))
+            print(f"Error loading orders from CSV: {e}")
+            traceback.print_exc()
             return []

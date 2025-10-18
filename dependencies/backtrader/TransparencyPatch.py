@@ -29,7 +29,7 @@ class TransparencyPatch():
         self.captured_object_ids: Dict[int, str] = {}
         self.strategy_ref = None
         
-        print("Transparency Patch initialized")
+        # print("Transparency Patch initialized")
 
     def apply_indicator_patch(self):
         if self.patch_applied:

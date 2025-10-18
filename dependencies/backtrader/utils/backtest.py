@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from rich.console import Console
+from rich.table import Table
 
 INIT_CASH = 100_000.0
 COMMISSION_PER_TRANSACTION = 0.00075
@@ -755,7 +756,21 @@ def run_multi_isolated_pairs(strategy, pairs_config, start_date, end_date, inter
     console.print(table)
     return results
 
-# Keep the rest of your functions unchanged...
+import sys
+import io
+
+def silent_run(args):
+    """Wrapper to silence all output inside the subprocess."""
+    sys.stdout = io.StringIO()
+    sys.stderr = io.StringIO()
+    try:
+        # import traceback for error capture
+        import traceback
+        result = run_single_backtest_with_data_fetch(args)
+        return result
+    except Exception as e:
+        return {"coin": args[0], "status": "failed", "error": str(e), "traceback": traceback.format_exc()}
+
 def run_backtest_with_data(args):
     """Helper function for parallel execution in bulk_backtest"""
     coin, data, strategy_class, init_cash, backtest_params, collateral = args
@@ -772,6 +787,7 @@ def run_backtest_with_data(args):
             init_cash=init_cash,
             asset_name=asset,
             bulk=True,
+            capture_data=False, # No transparence on indicator buildup chain needed here
             **backtest_params
         )
 
@@ -826,9 +842,10 @@ def bulk_backtest(strategy, coins=None, start_date="2016-01-01", end_date="2026-
 
     default_backtest_params = {
         'plot': False,
-        'quantstats': False,
+        'debug': False,
+        'quantstats': False, # Default to False
         'params_mode': params_mode,
-        'add_mtf_resamples': False,
+        'add_mtf_resamples': False, # TODO :: Fetch timeframe(s) from startup
     }
     default_backtest_params.update(backtest_kwargs)
     
@@ -857,7 +874,7 @@ def bulk_backtest(strategy, coins=None, start_date="2016-01-01", end_date="2026-
         
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_coin = {
-                executor.submit(run_single_backtest_with_data_fetch, args): args[0] 
+                executor.submit(silent_run, args): args[0]
                 for args in backtest_args
             }
             
@@ -991,11 +1008,6 @@ def get_available_coins_from_database(collateral="USDT"):
         console.print(f"[red]❌ Error getting coins from database: {e}[/red]")
         # Fallback to common coins
         return ['BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'DOGE', 'AVAX', 'MATIC']
-
-from rich.console import Console
-from rich.table import Table
-
-console = Console()
 
 def print_detailed_results(results):
     """Print detailed backtest results in a styled Rich table format"""

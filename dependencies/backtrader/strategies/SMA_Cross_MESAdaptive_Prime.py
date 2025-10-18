@@ -1,4 +1,4 @@
-from .base import BaseStrategy, bt, OrderTracker, datetime
+from .base import BaseStrategy, bt
 from backtrader.indicators.MesaAdaptiveMovingAverage import MAMA
 
 class SMA_Cross_MESAdaptivePrime(BaseStrategy):

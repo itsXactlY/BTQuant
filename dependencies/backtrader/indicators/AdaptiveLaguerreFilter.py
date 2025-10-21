@@ -26,12 +26,21 @@ class AdaptiveLaguerreFilter(bt.Indicator):
         self.l.p = (self.data.high + self.data.low) / 2
 
     def prenext(self):
-
         self.l.filter[0] = self.l.p[0]
         self.l.L0[0] = self.l.p[0]
-        self.l.L1[0] = self.l.p[-1]
-        self.l.L2[0] = self.l.p[-2]
-        self.l.L3[0] = self.l.p[-2]
+        
+        # Only access previous bars if they exist
+        if len(self) >= 2:
+            self.l.L1[0] = self.l.p[-1]
+        else:
+            self.l.L1[0] = self.l.p[0]
+            
+        if len(self) >= 3:
+            self.l.L2[0] = self.l.p[-2]
+            self.l.L3[0] = self.l.p[-2]  # This also needs fixing
+        else:
+            self.l.L2[0] = self.l.p[0]
+            self.l.L3[0] = self.l.p[0]
 
     def next(self):
         p = self.l.p

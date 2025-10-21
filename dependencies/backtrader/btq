@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+# btq (place this in your PATH or create alias)
+
+import sys
+from .btquant import main
+
+if __name__ == "__main__":
+    main()

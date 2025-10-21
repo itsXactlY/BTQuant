@@ -29,8 +29,13 @@ class TradingDataset(Dataset):
         label_idx = end + self.prediction_horizon - 1
         future_return = self.returns[label_idx]
         # Vol window over the horizon
-        return_window = self.returns[end:end + self.prediction_horizon]
-        actual_volatility = torch.std(return_window)
+        return_window = self.returns[idx + self.seq_len: idx + self.seq_len + self.prediction_horizon]
+        if return_window.numel() == 0:
+            actual_volatility = torch.tensor(0.0, dtype=torch.float32)
+        elif return_window.numel() == 1:
+            actual_volatility = torch.abs(return_window[0])
+        else:
+            actual_volatility = torch.std(return_window, unbiased=False)
 
         entry_label = torch.tensor(1.0 if future_return > 0.01 else 0.0, dtype=torch.float32)
         exit_label = torch.tensor(1.0 if future_return < -0.005 else 0.0, dtype=torch.float32)
@@ -65,16 +70,25 @@ class MultiTaskLoss(nn.Module):
             targets: Dict with ground truth labels
         """
         # Entry classification loss
-        entry_loss = F.binary_cross_entropy_with_logits(
-            predictions['entry_prob'].squeeze(),
-            targets['entry_label']
-        )
+        logits_entry = predictions['entry_prob'].view(-1)         # logits shape [B]
+        labels_entry = targets['entry_label'].view(-1)            # [B]
+        entry_loss = F.binary_cross_entropy_with_logits(logits_entry, labels_entry)
 
-        exit_loss = F.binary_cross_entropy_with_logits(
-            predictions['exit_prob'].squeeze(),
-            targets['exit_label']
-        )
-        
+        logits_exit = predictions['exit_prob'].view(-1)           # [B]
+        labels_exit = targets['exit_label'].view(-1)              # [B]
+        exit_loss = F.binary_cross_entropy_with_logits(logits_exit, labels_exit)
+
+        ret_pred = predictions['expected_return'].view(-1)        # [B]
+        ret_true = targets['future_return'].view(-1)              # [B]
+        return_loss = F.mse_loss(ret_pred, ret_true)
+
+        vol_pred = predictions['volatility_forecast'].view(-1)    # [B]
+        vol_true = targets['actual_volatility'].view(-1)          # [B]
+        volatility_loss = F.mse_loss(vol_pred, vol_true)
+
+        if predictions['entry_prob'].ndim == 0:
+            predictions['entry_prob'] = predictions['entry_prob'].unsqueeze(0)
+
         # Return regression loss
         return_loss = F.mse_loss(
             predictions['expected_return'].squeeze(),
@@ -115,7 +129,7 @@ class MultiTaskLoss(nn.Module):
             precision_volatility * volatility_loss + self.log_vars[3] +
             precision_vae * vae_loss + self.log_vars[4]
         )
-        
+
         return {
             'total_loss': total_loss,
             'entry_loss': entry_loss.item(),
@@ -309,7 +323,7 @@ class NeuralTrainer:
                 # Calculate accuracy
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
                 exit_pred = (predictions['exit_prob'] > 0.5).float().squeeze()
-                
+
                 entry_correct += (entry_pred == entry_label).sum().item()
                 exit_correct += (exit_pred == exit_label).sum().item()
                 total_samples += len(entry_label)
@@ -322,6 +336,9 @@ class NeuralTrainer:
         entry_accuracy = entry_correct / total_samples
         exit_accuracy = exit_correct / total_samples
         
+        assert predictions['entry_prob'].shape[0] == targets['entry_label'].shape[0], "Batch size mismatch for entry head"
+        assert predictions['exit_prob'].shape[0] == targets['exit_label'].shape[0], "Batch size mismatch for exit head"
+
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
     
     def train(self, num_epochs):
@@ -337,17 +354,17 @@ class NeuralTrainer:
             self.scheduler.step()
             
             # Log to wandb
-            if self.config.get('use_wandb', True):
-                wandb.log({
-                    'epoch': epoch,
-                    'train_loss': train_loss,
-                    'val_loss': val_loss,
-                    'entry_accuracy': entry_acc,
-                    'exit_accuracy': exit_acc,
-                    'learning_rate': self.optimizer.param_groups[0]['lr'],
-                    **{f'train_{k}': v for k, v in train_components.items()},
-                    **{f'val_{k}': v for k, v in val_components.items()}
-                })
+            # if self.config.get('use_wandb', True):
+            #     wandb.log({
+            #         'epoch': epoch,
+            #         'train_loss': train_loss,
+            #         'val_loss': val_loss,
+            #         'entry_accuracy': entry_acc,
+            #         'exit_accuracy': exit_acc,
+            #         'learning_rate': self.optimizer.param_groups[0]['lr'],
+            #         **{f'train_{k}': v for k, v in train_components.items()},
+            #         **{f'val_{k}': v for k, v in val_components.items()}
+            #     })
             
             print(f"\nEpoch {epoch} Summary:")
             print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
@@ -357,8 +374,32 @@ class NeuralTrainer:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
                 self.patience_counter = 0
-                self.save_checkpoint('best_model.pt', epoch, val_loss)
+
+                # 1) Save best model checkpoint
+                best_path = self.config.get('best_model_path', 'models/best_model.pt')
+                self.save_checkpoint(best_path, epoch, val_loss)
+
+                # 2) Save the matched feature extractor
+                # Expect the pipeline passed a reference via config
+                feature_extractor = self.config.get('feature_extractor_ref', None)
+                if feature_extractor is not None:
+                    import pickle, os
+                    fe_path = os.path.splitext(best_path)[0] + '_feature_extractor.pkl'
+                    with open(fe_path, 'wb') as f:
+                        pickle.dump(feature_extractor, f)
+
+                # 3) Optional: sync to W&B
+                if self.config.get('use_wandb', True):
+                    try:
+                        import wandb
+                        wandb.save(best_path)
+                        if feature_extractor is not None:
+                            wandb.save(fe_path)
+                    except Exception:
+                        pass
+
                 print(f"💾 New best model saved! Val loss: {val_loss:.4f}")
+
             else:
                 self.patience_counter += 1
             

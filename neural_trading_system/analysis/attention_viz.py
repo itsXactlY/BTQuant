@@ -1,48 +1,159 @@
 import torch
+import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, List
 
 class AttentionAnalyzer:
-    """
-    Analyze what the neural network is paying attention to.
-    Visualize which indicators matter most for decisions.
-    """
-    
-    def __init__(self, model, feature_extractor, device='cpu'):
-        self.model = model
+    def __init__(self, model: nn.Module, feature_extractor, device='cpu'):
+        self.model = model.to(device)
         self.model.eval()
         self.feature_extractor = feature_extractor
-        self.device = device
-    
-    def extract_attention_weights(self, feature_sequence: np.ndarray) -> List[np.ndarray]:
+        self.device = torch.device(device)
+        self._hooks = []
+        self._captured_attn = []  # list of tensors per forward pass
+
+        # Try to locate attention modules inside the model to hook
+        self._register_attention_hooks()
+
+    def _register_attention_hooks(self):
+        # Clear old hooks if any
+        for h in self._hooks:
+            try:
+                h.remove()
+            except Exception:
+                pass
+        self._hooks = []
+        self._captured_attn = []
+
+        # Helper to capture attention outputs
+        def make_hook():
+            def hook(module, inputs, output):
+                # Accept attention tensor in common shapes:
+                # - [B, heads, seq, seq]
+                # - or tuple/list where first element is attention
+                attn = None
+                if isinstance(output, (tuple, list)):
+                    # Prefer the last tensor that looks like attention
+                    for out in output:
+                        if torch.is_tensor(out) and out.dim() == 4:
+                            attn = out
+                    if attn is None and len(output) > 0 and torch.is_tensor(output[0]):
+                        attn = output[0]
+                elif torch.is_tensor(output):
+                    attn = output if output.dim() == 4 else None
+
+                if attn is not None:
+                    self._captured_attn.append(attn.detach().to('cpu'))
+            return hook
+
+        # Strategy 1: Find modules named "attention" (e.g., MultiHeadSelfAttention)
+        for name, module in self.model.named_modules():
+            name_lower = name.lower()
+            if 'attention' in name_lower or 'attn' in name_lower:
+                self._hooks.append(module.register_forward_hook(make_hook()))
+
+        # If nothing was found, optionally try to find per-block attributes that store attn tensors after forward.
+        # This requires post-forward polling; you can implement a fallback if your blocks expose "last_attn" tensors.
+
+    def extract_attention_weights(self, sample_seq):
         """
-        Extract attention weights from all transformer layers.
-        
-        Returns:
-            List of attention weight matrices [num_layers]
-            Each matrix is [num_heads, seq_len, seq_len]
+        sample_seq: np.ndarray with shape [seq_len, feature_dim] OR torch.Tensor on the correct device
+        Returns: (list_of_attn_tensors_per_hook, predictions_dict)
         """
-        # Prepare input
-        feature_tensor = torch.FloatTensor(feature_sequence).unsqueeze(0)
-        feature_tensor = feature_tensor.to(self.device)
-        
-        # Forward pass
+        self._captured_attn = []
         with torch.no_grad():
-            predictions = self.model(feature_tensor)
-        
-        # Extract attention weights from all layers
-        attention_weights = predictions['attention_weights']
-        
-        # Convert to numpy
-        attention_np = [
-            attn.cpu().numpy()[0]  # [num_heads, seq_len, seq_len]
-            for attn in attention_weights
-        ]
-        
-        return attention_np, predictions
-    
+            if isinstance(sample_seq, np.ndarray):
+                x = torch.as_tensor(sample_seq, dtype=torch.float32, device=self.device)
+            else:
+                x = sample_seq.to(self.device, dtype=torch.float32)
+
+            if x.dim() == 2:
+                x = x.unsqueeze(0)  # [1, seq_len, feature_dim]
+
+            # Forward pass (no extra kwargs)
+            preds = self.model(x)
+
+            # Normalize predictions into a dict of tensors on CPU
+            predictions = {}
+            if isinstance(preds, dict):
+                for k, v in preds.items():
+                    predictions[k] = v.detach().to('cpu')
+            elif isinstance(preds, (tuple, list)):
+                for i, v in enumerate(preds):
+                    if torch.is_tensor(v):
+                        predictions[f'out_{i}'] = v.detach().to('cpu')
+            elif torch.is_tensor(preds):
+                predictions['output'] = preds.detach().to('cpu')
+
+        # Return captured attentions and predictions
+        return list(self._captured_attn), predictions
+
+    def compute_feature_importance(self, sequences, num_samples=100, method='gradient'):
+        """
+        Example importance: mean absolute gradient of entry head logit w.r.t. input features.
+        Assumes model returns a dict with key 'entry_prob' as logits or probabilities.
+        """
+        n = min(num_samples, len(sequences))
+        if n == 0:
+            return 0.0
+
+        self.model.eval()
+        # Accumulate importance per feature
+        agg = None
+        count = 0
+
+        for i in range(n):
+            seq = sequences[i]  # [seq_len, feature_dim]
+            x = torch.as_tensor(seq, dtype=torch.float32, device=self.device).unsqueeze(0)  # [1, T, F]
+            x.requires_grad_(True)
+
+            out = self.model(x)
+            # Try several common keys for the entry head
+            logit = None
+            for k in ['entry_prob', 'entry_logit', 'entry']:
+                if isinstance(out, dict) and k in out:
+                    logit = out[k]
+                    break
+            if logit is None:
+                # Fallback: if single tensor output, use it
+                if torch.is_tensor(out):
+                    logit = out
+                elif isinstance(out, (tuple, list)) and len(out) > 0 and torch.is_tensor(out[0]):
+                    logit = out[0]
+                else:
+                    continue
+
+            # Ensure scalar for backward
+            logit_scalar = logit.view(-1)[0]
+            self.model.zero_grad(set_to_none=True)
+            if x.grad is not None:
+                x.grad.zero_()
+            logit_scalar.backward()
+
+            grad = x.grad.detach()  # [1, T, F]
+            imp = grad.abs().mean(dim=1).squeeze(0)  # [F], mean over time
+
+            imp_cpu = imp.to('cpu').numpy()
+            if agg is None:
+                agg = imp_cpu.astype(np.float32)
+            else:
+                # Pad/truncate to match agg length if needed
+                if imp_cpu.shape[0] != agg.shape[0]:
+                    if imp_cpu.shape[0] < agg.shape[0]:
+                        imp_cpu = np.pad(imp_cpu, (0, agg.shape[0] - imp_cpu.shape[0]))
+                    else:
+                        agg = np.pad(agg, (0, imp_cpu.shape[0] - agg.shape[0]))
+                agg += imp_cpu
+            count += 1
+
+        if count == 0:
+            return 0.0
+
+        return agg / max(1, count)
+
+
     def plot_attention_heatmap(
         self,
         attention_weights: np.ndarray,

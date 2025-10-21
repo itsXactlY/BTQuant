@@ -84,7 +84,10 @@ class BaseStrategy(bt.Strategy):
         ('coin', None),
         ('collateral', None),
         ('debug', False),
-        ('backtest', None),
+        ('backtest', True),
+        ('bulk', False),      # NEW: Flag for bulk operations
+        ('optuna', False),    # NEW: Flag for optuna optimization
+        ("capture_data", False), # NEW: Flag for Indicator Chain Transparency Matrix
         ('quantstats', None),
         ('use_stoploss', None),
         ("pnl", None),
@@ -97,7 +100,7 @@ class BaseStrategy(bt.Strategy):
         ("percent_sizer", 0),
         ("order_cooldown", 0),
         ("enable_alerts", False),
-        ("capture_data", False),
+        
         ("alert_channel", None)
     )
 
@@ -115,6 +118,15 @@ class BaseStrategy(bt.Strategy):
         # Backtesting setup
         if self.p.backtest:
             BuySellArrows(self.data0, barplot=True)
+        
+        if hasattr(self.datas[0], '_dataname'):
+            symbol = self.datas[0]._dataname
+            self.active_orders = OrderTracker.load_active_orders_from_csv(
+                symbol=symbol,
+                backtest=self.params.backtest,
+                bulk=self.params.bulk,
+                optuna=self.params.optuna
+            )
         
         if self.p.capture_data:
             activate_patch(debug=False)
@@ -245,6 +257,8 @@ class BaseStrategy(bt.Strategy):
             symbol=self.data._dataname,
             order_type=action,
             backtest=self.params.backtest,
+            bulk=self.params.bulk,
+            optuna=self.params.optuna,
             data_datetime=current_dt
         )
         
@@ -546,7 +560,7 @@ class BaseStrategy(bt.Strategy):
                 for data in self.datas:
                     symbol = self.symbol
                     print(cinfo(f"Loading trade data for symbol: {symbol}"))
-                    
+
                     try:
                         loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
                         if loaded_orders:
@@ -900,16 +914,12 @@ class BaseStrategy(bt.Strategy):
 
     def stop(self):
         """Called when strategy stops - print results and cleanup"""
-        # --- AUTO-DETECT BULK MODE ---
-        # Detects multiprocessing-based bulk mode (used by bulk_backtest)
         in_bulk_mode = (
             "FORK" in multiprocessing.current_process().name.upper() or
-            "SPAWN" in multiprocessing.current_process().name.upper() or
-            os.getenv("BTQ_BULK_MODE") == "1"
+            "SPAWN" in multiprocessing.current_process().name.upper()
         )
-
-        if in_bulk_mode:
-            return 
+        if in_bulk_mode or self.p.optuna:
+            return
         if self.p.backtest and not self.p.quantstats:
             self.final_value = self.broker.getvalue()
             print("\n" + "=" * 120)
@@ -1016,23 +1026,35 @@ class OrderTracker:
     Tracks individual orders/positions with automatic CSV persistence.
     Completely independent - strategies don't need to manage this directly.
     Supports separate CSV files per symbol.
+    
+    CSV persistence is DISABLED during:
+    - Backtests (backtest=True)
+    - Bulk operations (bulk=True)
+    - Optuna optimizations (optuna=True)
     """
     _order_counter = 0
+    _persistence_enabled = True  # Global flag to disable CSV operations
 
-    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", backtest=False, data_datetime=None):
+    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", 
+                 backtest=False, bulk=False, optuna=False, data_datetime=None):
         self.entry_price = entry_price
         self.size = size
         self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
         self.executed = True
         self.backtest = backtest
+        self.bulk = bulk
+        self.optuna = optuna
 
         OrderTracker._order_counter += 1
         self.tracker_id = f"order_{OrderTracker._order_counter}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
         self.timestamp = data_datetime if data_datetime else datetime.now()
 
-        if not symbol:
-            if hasattr(self, 'datas') and self.datas and hasattr(self.datas[0], '_dataname'):
-                symbol = self.datas[0]._dataname
+        if symbol is None or (hasattr(symbol, 'is_empty') and symbol.is_empty()):
+            symbol = "UNKNOWN"
+        elif hasattr(symbol, '__len__') and len(symbol) == 0:
+            symbol = "UNKNOWN"
+        elif isinstance(symbol, (str, int, float)) and not symbol:
+            symbol = "UNKNOWN"
         self.symbol = symbol
         self.order_type = order_type
         self.closed = False
@@ -1040,7 +1062,24 @@ class OrderTracker:
         self.exit_timestamp = None
         self.profit_pct = None
 
-        self.save_to_csv()
+        # Only save to CSV if NOT in backtest/bulk/optuna mode
+        if self._should_persist():
+            self.save_to_csv()
+
+    def _should_persist(self):
+        """
+        Determine if CSV persistence should be enabled.
+        Returns False for backtest, bulk, optuna, or if globally disabled.
+        """
+        # Check global flag first
+        if not OrderTracker._persistence_enabled:
+            return False
+        
+        # Disable for backtest, bulk, or optuna
+        if self.backtest or self.bulk or self.optuna:
+            return False
+        
+        return True
 
     def _get_csv_file(self):
         """Return the CSV filename for this symbol"""
@@ -1052,9 +1091,13 @@ class OrderTracker:
         self.exit_price = exit_price
         self.exit_timestamp = exit_datetime if exit_datetime else datetime.now()
         self.profit_pct = ((exit_price / self.entry_price) - 1) * 100 if self.order_type == "BUY" else ((self.entry_price / exit_price) - 1) * 100
-        self.update_csv()
+        
+        # Only update CSV if persistence is enabled
+        if self._should_persist():
+            self.update_csv()
 
     def save_to_csv(self):
+        """Save order to CSV - only called if _should_persist() returns True"""
         csv_file = self._get_csv_file()
         file_exists = os.path.isfile(csv_file)
 
@@ -1084,6 +1127,7 @@ class OrderTracker:
             os.fsync(f.fileno())
 
     def update_csv(self):
+        """Update CSV - only called if _should_persist() returns True"""
         try:
             csv_file = self._get_csv_file()
             if not os.path.isfile(csv_file):
@@ -1118,14 +1162,19 @@ class OrderTracker:
             traceback.print_exc()
 
     @classmethod
-    def load_active_orders_from_csv(cls, symbol=None, backtest=False):
-        if backtest:
+    def load_active_orders_from_csv(cls, symbol=None, backtest=False, bulk=False, optuna=False):
+        """
+        Load active orders from CSV.
+        Returns empty list if in backtest/bulk/optuna mode.
+        """
+        # Never load from CSV during backtest, bulk, or optuna
+        if backtest or bulk or optuna or not cls._persistence_enabled:
             return []
 
         active_orders = []
         try:
             if not symbol:
-                return active_orders  # need a symbol to load orders
+                return active_orders
 
             csv_file = f"{symbol.replace('/', '_')}_order_tracker.csv"
             if not os.path.isfile(csv_file):
@@ -1149,6 +1198,8 @@ class OrderTracker:
                         order.exit_timestamp = None
                         order.profit_pct = None
                         order.backtest = backtest
+                        order.bulk = bulk
+                        order.optuna = optuna
 
                         active_orders.append(order)
             return active_orders
@@ -1156,3 +1207,13 @@ class OrderTracker:
             print(f"Error loading orders from CSV: {e}")
             traceback.print_exc()
             return []
+
+    @classmethod
+    def disable_persistence(cls):
+        """Globally disable CSV persistence (useful for bulk/optuna operations)"""
+        cls._persistence_enabled = False
+
+    @classmethod
+    def enable_persistence(cls):
+        """Re-enable CSV persistence"""
+        cls._persistence_enabled = True

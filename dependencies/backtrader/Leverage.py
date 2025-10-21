@@ -67,9 +67,11 @@ class LeverageBroker(bt.BrokerBase):
             self._cash = 0.0
         if not hasattr(self, 'datas'):
             self.datas = []
-        
-        # Order notification queue
-        self._notifs = deque()  # Queue for order notifications
+
+        self.startingcash = 0.0
+        self._notifs = deque()
+
+        self.positions = {}
         
         # Leverage tracking
         self.leverage_positions: Dict[str, LeveragePosition] = {}
@@ -102,39 +104,70 @@ class LeverageBroker(bt.BrokerBase):
             print(f"Cash set to ${self._cash:,.2f}")
         return self._cash
     
+    def get_cash(self):
+        """Alias for getcash() - required by some analyzers"""
+        return self.getcash()
+    
     def getcash(self):
         """Get available cash with safety"""
         if not hasattr(self, '_cash'):
             self._cash = 0.0
         return self._cash
+
+    def getvalue(self, datas=None, mkt=False, lever=False):
+        """
+        Returns the total portfolio value (cash + position values).
+        This is THE MOST IMPORTANT method for backtrader.
+        FIXED: Use inherited positions dict from bt.BrokerBase
+        """
+        # Start with cash
+        total_value = self._cash
+        
+        # Get positions from parent class (bt.BrokerBase stores them in self.positions)
+        if hasattr(self, 'positions'):
+            for data, position in self.positions.items():
+                if position.size != 0:
+                    # Get current price
+                    try:
+                        price = data.close[0]
+                    except (IndexError, AttributeError):
+                        # If no price available, skip
+                        continue
+                    
+                    # Calculate position value
+                    # For longs: (current_price - entry_price) * size
+                    # For shorts: (entry_price - current_price) * size
+                    if hasattr(position, 'price') and position.price:
+                        unrealized_pnl = (price - position.price) * position.size
+                        total_value += unrealized_pnl
+        
+        return total_value
     
-    def getvalue(self, datas=None):
+    def get_value(self, datas=None, mkt=False, lever=False):
         """
-        Portfolio value: cash + positions
-        FIXED: Full safety checks, handles startup
+        Wrapper for getvalue() - required by some analyzers.
+        FIXED: Single implementation
         """
-        if not hasattr(self, '_cash'):
-            self._cash = 0.0
-        
-        value = self.getcash()
-        
-        # Safe datas handling
         if datas is None:
-            datas = getattr(self, 'datas', [])
+            return self.getvalue()
         
-        for data in datas:
-            try:
-                if not hasattr(data, 'close') or not data.array or len(data.array) == 0:
-                    continue
-                current_price = data.close[0]
-                pos = self.getposition(data)
-                if pos and pos.size != 0:
-                    value += pos.size * current_price
-            except Exception:
-                continue  # Skip invalid data
+        # Calculate value for specific data feeds
+        total_value = 0.0
+        if hasattr(self, 'positions'):
+            for data in datas:
+                if data in self.positions:
+                    position = self.positions[data]
+                    if position.size != 0:
+                        try:
+                            price = data.close[0]
+                            if hasattr(position, 'price') and position.price:
+                                unrealized_pnl = (price - position.price) * position.size
+                                total_value += unrealized_pnl
+                        except (IndexError, AttributeError):
+                            pass
         
-        return max(0.0, value)
-    
+        return total_value
+
     def get_notification(self) -> Optional[bt.Order]:
         """
         CRITICAL FIX: Order notification system
@@ -153,11 +186,49 @@ class LeverageBroker(bt.BrokerBase):
         if self._leverage_debug:
             status = order.getstatusname()
             print(f"[ORDER NOTIFY] {status} - Ref: {order.ref}, Size: {order.size}")
-    
-    def _submit(self, order, excclass=bt.Order, excargs=()):
+
+    def buy(self, owner, data, size, price=None, plimit=None,
+            exectype=None, valid=None, tradeid=0, oco=None,
+            trailamount=None, trailpercent=None,
+            parent=None, transmit=True, **kwargs):
+        """
+        Create a buy order
+        """
+        order = bt.BuyOrder(
+            owner=owner, data=data,
+            size=size, price=price, pricelimit=plimit,
+            exectype=exectype, valid=valid, tradeid=tradeid,
+            oco=oco, parent=parent, transmit=transmit,
+            trailamount=trailamount, trailpercent=trailpercent,
+            **kwargs
+        )
+        order.submit(self)
+        self._submit(order)
+        return order
+
+    def sell(self, owner, data, size, price=None, plimit=None,
+            exectype=None, valid=None, tradeid=0, oco=None,
+            trailamount=None, trailpercent=None,
+            parent=None, transmit=True, **kwargs):
+        """
+        Create a sell order
+        """
+        order = bt.SellOrder(
+            owner=owner, data=data,
+            size=size, price=price, pricelimit=plimit,
+            exectype=exectype, valid=valid, tradeid=tradeid,
+            oco=oco, parent=parent, transmit=transmit,
+            trailamount=trailamount, trailpercent=trailpercent,
+            **kwargs
+        )
+        order.submit(self)
+        self._submit(order)
+        return order
+
+    def _submit(self, order):
         """
         Submit order with leverage margin checks
-        FIXED: Proper order submission with notifications
+        FIXED: Don't call super()._submit() - it doesn't exist!
         """
         if order.isbuy() or order.issell():
             try:
@@ -165,8 +236,12 @@ class LeverageBroker(bt.BrokerBase):
                 if size == 0:
                     return order  # No-op order
                 
-                # Estimate margin requirement
-                price = order.price if order.price > 0 else (order.data.close[0] if order.data.array else 1.0)
+                # Estimate margin requirement - Handle None price
+                if order.price is not None and order.price > 0:
+                    price = order.price
+                else:
+                    price = order.data.close[0] if (hasattr(order.data, 'array') and order.data.array) else 1.0
+                
                 position_value = size * price
                 required_margin = position_value / self._current_leverage
                 
@@ -174,43 +249,138 @@ class LeverageBroker(bt.BrokerBase):
                 if required_margin > available_cash:
                     if self._leverage_debug:
                         print(f"[MARGIN REJECT] Required: ${required_margin:.2f} > Available: ${available_cash:.2f}")
-                    # Create rejected order
-                    rejected = excclass(*excargs)
-                    rejected.reject()
-                    self.notify_order(rejected)
-                    return None
+                    order.reject()
+                    self.notify_order(order)
+                    return order
                 
                 # Check initial margin ratio
-                margin_ratio = required_margin / position_value
-                if margin_ratio < self.p.initial_margin_ratio:
-                    if self._leverage_debug:
-                        print(f"[MARGIN REJECT] Ratio {margin_ratio:.2%} < {self.p.initial_margin_ratio:.0%}")
-                    rejected = excclass(*excargs)
-                    rejected.reject()
-                    self.notify_order(rejected)
-                    return None
+                # margin_ratio = required_margin / position_value
+                # if margin_ratio < self.p.initial_margin_ratio:
+                #     if self._leverage_debug:
+                #         print(f"[MARGIN REJECT] Ratio {margin_ratio:.2%} < {self.p.initial_margin_ratio:.0%}")
+                #     order.reject()
+                #     self.notify_order(order)
+                #    return order
             except Exception as e:
                 if self._leverage_debug:
                     print(f"[SUBMIT ERROR] {e}")
-                rejected = excclass(*excargs)
-                rejected.reject()
-                self.notify_order(rejected)
-                return None
+                order.reject()
+                self.notify_order(order)
+                return order
         
-        # Submit to parent
-        result = super()._submit(order)
-        if result:
-            self.notify_order(order)  # Notify submission
-        return result
-    
+        # Mark order as submitted (don't call super - it doesn't exist)
+        order.submit(self)
+        self.notify_order(order)
+        
+        # Add to orders list for processing
+        if not hasattr(self, 'orders'):
+            self.orders = []
+        self.orders.append(order)
+        
+        return order
+
+    def _execute(self, order):
+        """
+        Execute the order - called by backtrader engine
+        """
+        try:
+            if order.status == order.Submitted:
+                # Accept the order
+                order.accept()
+                self.notify_order(order)
+            
+            if order.status == order.Accepted:
+                # Execute at market price
+                if hasattr(order.data, 'close') and len(order.data.close):
+                    price = order.data.close[0]
+                else:
+                    # Can't execute without price
+                    order.reject()
+                    self.notify_order(order)
+                    return
+                
+                # Execute the order
+                size = order.executed.remsize
+                if order.isbuy():
+                    self._execute_buy(order, size, price)
+                else:
+                    self._execute_sell(order, size, price)
+                
+                # Mark as completed
+                order.completed()
+                self.notify_order(order)
+        
+        except Exception as e:
+            # CHANGE THIS TO SHOW FULL ERROR
+            import traceback
+            if self._leverage_debug:
+                print(f"[EXECUTE ERROR] {e}")
+                traceback.print_exc()
+            order.reject()
+            self.notify_order(order)
+
+    def _execute_buy(self, order, size, price):
+        """Execute a buy order"""
+        if order.data not in self.positions:
+            self.positions[order.data] = bt.Position(size=0, price=0)
+        
+        pos = self.positions[order.data]
+        
+        # Calculate cost
+        cost = size * price
+        commission = self.getcommissioninfo(order.data).getcommission(size, price)
+        total_cost = cost + commission
+        
+        # Update cash
+        self._cash -= total_cost
+        
+        # Update position
+        if pos.size == 0:
+            pos.size = size
+            pos.price = price
+        else:
+            old_value = pos.size * pos.price
+            new_value = size * price
+            pos.size += size
+            pos.price = (old_value + new_value) / pos.size
+        
+        # Track execution info
+        order.execute(order.data.datetime[0], size, price, 0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0, 0.0)
+        
+        # REMOVED: self._execinfo() call
+
+    def _execute_sell(self, order, size, price):
+        """Execute a sell order"""
+        if order.data not in self.positions:
+            self.positions[order.data] = bt.Position(size=0, price=0)
+        
+        pos = self.positions[order.data]
+        
+        # Calculate value
+        value = size * price
+        commission = self.getcommissioninfo(order.data).getcommission(size, price)
+        net_value = value - commission
+        
+        # Update cash
+        self._cash += net_value
+        
+        # Update position
+        pos.size -= size
+        if abs(pos.size) < 0.0001:
+            pos.size = 0
+            pos.price = 0
+        
+        # Track execution info
+        order.execute(order.data.datetime[0], size, price, 0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0, 0, 0.0)
+        
+        # REMOVED: self._execinfo() call
+
     def _execinfo(self, order, execsize=None, execprice=None, execcomm=None):
         """
         Execute order info with leverage position tracking
-        FIXED: Track leveraged positions on execution
+        FIXED: Don't call super()._execinfo() - it doesn't exist
         """
-        result = super()._execinfo(order, execsize, execprice, execcomm)
-        
-        if result and order.status == bt.Order.Completed:
+        if order.status == bt.Order.Completed:
             try:
                 executed_size = abs(execsize or order.executed.size)
                 executed_price = execprice or order.executed.price
@@ -235,55 +405,59 @@ class LeverageBroker(bt.BrokerBase):
                     
                     if self._leverage_debug:
                         print(f"[EXECUTED] {pos_key} | Size: {executed_size:.6f} | "
-                              f"Price: ${executed_price:.2f} | Leverage: {self._current_leverage}x | "
-                              f"Liquidation: ${position.liquidation_price:.2f}")
+                            f"Price: ${executed_price:.2f} | Leverage: {self._current_leverage}x | "
+                            f"Liquidation: ${position.liquidation_price:.2f}")
             except Exception as e:
                 if self._leverage_debug:
                     print(f"[EXEC TRACK ERROR] {e}")
         
         # Always notify on execution update
         self.notify_order(order)
-        return result
     
     def next(self):
         """
-        Broker next() - Check for liquidations and margin calls
-        FIXED: Safe data access, proper notifications
+        Broker next() - Process orders, check liquidations
         """
-        super().next()
+        # Process pending orders
+        if hasattr(self, 'orders'):
+            for order in list(self.orders):
+                if order.status in [order.Submitted, order.Accepted]:
+                    try:
+                        self._execute(order)
+                    except Exception as e:
+                        if self._leverage_debug:
+                            print(f"[EXECUTE ERROR] {e}")
+                        order.reject()
+                        self.notify_order(order)
+                
+                # Remove completed/rejected orders
+                if order.status in [order.Completed, order.Rejected, order.Canceled]:
+                    self.orders.remove(order)
         
-        # Check positions only if data available
+        # Check liquidations (existing code)
         if not hasattr(self, 'datas') or not self.datas:
             return
         
         positions_to_close = []
         for pos_key, position in list(self.leverage_positions.items()):
             try:
-                # Get current data (use first data or specific)
-                data = self.datas[0]  # Simplified - enhance for multi-asset
+                data = self.datas[0]
                 if not hasattr(data, 'close') or not data.array or len(data.array) == 0:
                     continue
                 current_price = data.close[0]
                 
-                # Check liquidation
                 if position.is_liquidated(current_price):
                     positions_to_close.append((pos_key, position, current_price))
-                # Check margin call
                 elif position.margin_ratio(current_price) < self.p.maintenance_margin_ratio:
                     self.margin_call_count += 1
                     if self._leverage_debug:
                         print(f"[MARGIN CALL] {pos_key} | Ratio: {position.margin_ratio(current_price):.2%}")
             except Exception:
-                continue  # Skip if data not ready
+                continue
         
-        # Execute liquidations
         for pos_key, position, current_price in positions_to_close:
-            self._liquidate_position(pos_key, position, current_price)
-        
-        # Notify any changes
-        if positions_to_close:
-            self.notify_order(None)  # Trigger notification cycle
-    
+            self._liquidate_position(pos_key, position, current_price)    
+
     def _liquidate_position(self, pos_key: str, position: LeveragePosition, current_price: float):
         """Liquidate under-margined position"""
         try:
@@ -309,27 +483,36 @@ class LeverageBroker(bt.BrokerBase):
             if self._leverage_debug:
                 print(f"[LIQ ERROR] {e}")
     
-    def getposition(self, data):
+    def getposition(self, data, clone=True):
         """
         Get position for data with leverage adjustment
-        FIXED: Safe, handles no-position case
+        FIXED: Implement full position tracking
         """
-        pos = super().getposition(data)
-        if pos.size == 0:
-            return pos  # No position
+        # Get or create position
+        if data not in self.positions:
+            # Create new empty position
+            self.positions[data] = bt.Position(size=0, price=0)
+        
+        pos = self.positions[data]
+        
+        # Clone if requested (to avoid modification)
+        if clone:
+            return bt.Position(size=pos.size, price=pos.price)
         
         # Enhance with leverage info if tracked
-        pos.leverage = self._current_leverage
-        pos.liquidation_price = None  # Set from tracking if needed
+        if not hasattr(pos, 'leverage'):
+            pos.leverage = self._current_leverage
+        if not hasattr(pos, 'liquidation_price'):
+            pos.liquidation_price = None
         
         # Find matching tracked position
         for tracked_pos in self.leverage_positions.values():
-            if abs(tracked_pos.size - abs(pos.size)) < 0.0001:  # Approximate match
+            if abs(tracked_pos.size - abs(pos.size)) < 0.0001:
                 pos.liquidation_price = tracked_pos.liquidation_price
                 break
         
         return pos
-    
+
     def get_margin_info(self) -> Dict:
         """Comprehensive margin statistics"""
         total_value = self.getvalue()

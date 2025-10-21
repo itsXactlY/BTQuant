@@ -55,4 +55,4 @@ class SqueezeVolatility(bt.Indicator):
         # Perform Linear Regression
         x = np.arange(0,self.p.period_kc,1)
         slope, intercept, r_value, p_value, std_err = stats.linregress(x, self.l.y.get(size=self.p.period_kc))
-        self.l.hist[0] = intercept + slope*(self.p.period_kc - 1.0).as_integer_ratio()
+        self.l.hist[0] = intercept + slope * (self.p.period_kc - 1)

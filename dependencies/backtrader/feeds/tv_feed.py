@@ -198,7 +198,7 @@ class TradingViewData(DataBase):
     params = (
         ('drop_newest', False),
         ('update_interval_seconds', 1),
-        ('debug', False),
+        ('debug', True),
         ('max_buffer', 1000),
         ('load_timeout', 0.05),
     )
@@ -207,7 +207,10 @@ class TradingViewData(DataBase):
         super().__init__()
         self._store = store
         self._start_date = start_date
-
+        
+        self.symbol = store.symbol
+        self.params.symbol = store.symbol
+        
         self._state_manager = StateManager(DataState.LIVE)
         self._buffer = ThreadSafeDataBuffer(max_size=self.p.max_buffer)
         self._processor: Optional[DataProcessor] = None

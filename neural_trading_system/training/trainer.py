@@ -8,43 +8,33 @@ from tqdm import tqdm
 import wandb  # For experiment tracking
 
 class TradingDataset(Dataset):
-    """
-    Dataset that yields sequences of features + labels.
-    """
-    
-    def __init__(
-        self,
-        features: np.ndarray,  # [num_samples, feature_dim]
-        returns: np.ndarray,   # [num_samples] - forward returns
-        seq_len: int = 100,
-        prediction_horizon: int = 1  # Predict N bars ahead
-    ):
-        self.features = torch.FloatTensor(features)
-        self.returns = torch.FloatTensor(returns)
+    def __init__(self, features: np.ndarray, returns: np.ndarray, seq_len: int = 100, prediction_horizon: int = 1):
+        self.features = torch.as_tensor(features, dtype=torch.float32)
+        self.returns = torch.as_tensor(returns, dtype=torch.float32)
         self.seq_len = seq_len
         self.prediction_horizon = prediction_horizon
-        
-        # We need at least seq_len + prediction_horizon samples
-        self.valid_length = len(features) - seq_len - prediction_horizon
-    
+        # Ensure non-negative length
+        self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon + 1)
+
     def __len__(self):
         return self.valid_length
-    
+
     def __getitem__(self, idx):
-        # Get sequence of features
-        feature_seq = self.features[idx:idx + self.seq_len]
-        
-        # Get future return as label
-        future_return = self.returns[idx + self.seq_len + self.prediction_horizon - 1]
-        
-        # Calculate actual volatility over prediction horizon
-        return_window = self.returns[idx + self.seq_len:idx + self.seq_len + self.prediction_horizon]
+        if idx < 0 or idx >= self.valid_length:
+            raise IndexError(f"Index {idx} out of range for dataset of length {self.valid_length}")
+        start = idx
+        end = idx + self.seq_len
+        feature_seq = self.features[start:end]  # [seq_len, feat_dim]
+        # Label index is last step in horizon
+        label_idx = end + self.prediction_horizon - 1
+        future_return = self.returns[label_idx]
+        # Vol window over the horizon
+        return_window = self.returns[end:end + self.prediction_horizon]
         actual_volatility = torch.std(return_window)
-        
-        # Binary labels
-        entry_label = 1.0 if future_return > 0.01 else 0.0  # Profitable trade
-        exit_label = 1.0 if future_return < -0.005 else 0.0  # Stop loss triggered
-        
+
+        entry_label = torch.tensor(1.0 if future_return > 0.01 else 0.0, dtype=torch.float32)
+        exit_label = torch.tensor(1.0 if future_return < -0.005 else 0.0, dtype=torch.float32)
+
         return {
             'features': feature_seq,
             'future_return': future_return,
@@ -52,6 +42,7 @@ class TradingDataset(Dataset):
             'entry_label': entry_label,
             'exit_label': exit_label
         }
+
 
 
 class MultiTaskLoss(nn.Module):
@@ -74,13 +65,12 @@ class MultiTaskLoss(nn.Module):
             targets: Dict with ground truth labels
         """
         # Entry classification loss
-        entry_loss = F.binary_cross_entropy(
+        entry_loss = F.binary_cross_entropy_with_logits(
             predictions['entry_prob'].squeeze(),
             targets['entry_label']
         )
-        
-        # Exit classification loss
-        exit_loss = F.binary_cross_entropy(
+
+        exit_loss = F.binary_cross_entropy_with_logits(
             predictions['exit_prob'].squeeze(),
             targets['exit_label']
         )

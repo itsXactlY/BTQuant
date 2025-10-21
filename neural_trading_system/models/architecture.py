@@ -157,20 +157,11 @@ class MarketRegimeVAE(nn.Module):
         recon = self.decode(z)
         return recon, mu, logvar, z
 
-
 class NeuralTradingModel(nn.Module):
     """
     Main neural trading architecture.
-    
-    Input: Sequence of feature vectors [batch, seq_len, feature_dim]
-    Output: Multi-task predictions
-        - entry_prob: [batch, 1] - probability of successful entry
-        - exit_prob: [batch, 1] - probability should exit now
-        - expected_return: [batch, 1] - expected return if entered
-        - volatility_forecast: [batch, 1] - predicted volatility
-        - position_size: [batch, 1] - optimal position size (0-1)
     """
-    
+
     def __init__(
         self,
         feature_dim,
@@ -183,137 +174,96 @@ class NeuralTradingModel(nn.Module):
         seq_len=100
     ):
         super().__init__()
-        
+
         self.feature_dim = feature_dim
         self.d_model = d_model
         self.seq_len = seq_len
-        
+
         # Input projection
         self.input_projection = nn.Linear(feature_dim, d_model)
-        
+
         # Positional encoding
         self.pos_encoding = PositionalEncoding(d_model, max_len=seq_len)
-        
+
         # Transformer encoder stack
         self.transformer_blocks = nn.ModuleList([
             TransformerBlock(d_model, num_heads, d_ff, dropout)
             for _ in range(num_layers)
         ])
-        
+
         # Market regime VAE
         self.regime_vae = MarketRegimeVAE(feature_dim, latent_dim)
-        
-        # Multi-task heads
-        self.entry_head = nn.Sequential(
-            nn.Linear(d_model + latent_dim, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 1),
-            nn.Sigmoid()
-        )
-        
-        self.exit_head = nn.Sequential(
-            nn.Linear(d_model + latent_dim, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 1),
-            nn.Sigmoid()
-        )
-        
-        self.return_head = nn.Sequential(
-            nn.Linear(d_model + latent_dim, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 1),
-            nn.Tanh()  # Returns can be positive or negative
-        )
-        
-        self.volatility_head = nn.Sequential(
-            nn.Linear(d_model + latent_dim, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 1),
-            nn.Softplus()  # Volatility is always positive
-        )
-        
-        self.position_size_head = nn.Sequential(
-            nn.Linear(d_model + latent_dim, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.GELU(),
-            nn.Linear(64, 1),
-            nn.Sigmoid()  # Position size 0-1
-        )
-        
-        # Initialize weights
+
+        # --- Multi-task heads (⚠️ no activation in final layer!) ---
+        def head(output_activation=None):
+            layers = [
+                nn.Linear(d_model + latent_dim, 128),
+                nn.LayerNorm(128),
+                nn.GELU(),
+                nn.Dropout(0.3),
+                nn.Linear(128, 64),
+                nn.GELU(),
+                nn.Linear(64, 1)
+            ]
+            if output_activation is not None:
+                layers.append(output_activation)
+            return nn.Sequential(*layers)
+
+        # Heads without activation for logits
+        self.entry_head = head()          # logits output
+        self.exit_head = head()
+        self.return_head = head(nn.Tanh())          # bounded return
+        self.volatility_head = head(nn.Softplus())  # positive only
+        self.position_size_head = head(nn.Sigmoid())  # 0–1 size
+
         self._init_weights()
-    
+
     def _init_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-    
+
     def forward(self, x, mask=None):
-        """
-        Args:
-            x: [batch, seq_len, feature_dim]
-            mask: [batch, seq_len] optional attention mask
-        
-        Returns:
-            Dict with predictions and attention weights
-        """
         batch_size, seq_len, _ = x.size()
-        
+
         # Project input to model dimension
-        x = self.input_projection(x)  # [batch, seq_len, d_model]
-        
-        # Add positional encoding
+        x = self.input_projection(x)
         x = self.pos_encoding(x)
-        
-        # Pass through transformer blocks
+
+        # Transformer stack
         attn_weights_list = []
         for block in self.transformer_blocks:
             x, attn_weights = block(x, mask)
             attn_weights_list.append(attn_weights)
-        
-        # Extract representation from last position (most recent data)
-        sequence_repr = x[:, -1, :]  # [batch, d_model]
-        
-        # Get market regime embedding from VAE
-        current_features = x[:, -1, :]  # Use transformed features
-        # Project back to feature space for VAE
+
+        # Last token representation
+        sequence_repr = x[:, -1, :]
+
+        # Market regime latent
         features_for_vae = self.input_projection.weight.t() @ sequence_repr.t()
         features_for_vae = features_for_vae.t()[:, :self.feature_dim]
-        
         recon, mu, logvar, regime_z = self.regime_vae(features_for_vae)
-        
-        # Concatenate sequence representation with regime embedding
+
+        # Combine
         combined_repr = torch.cat([sequence_repr, regime_z], dim=1)
-        
-        # Multi-task predictions
-        entry_prob = self.entry_head(combined_repr)
-        exit_prob = self.exit_head(combined_repr)
+
+        # --- Raw logits (for BCEWithLogitsLoss) ---
+        entry_logits = self.entry_head(combined_repr)
+        exit_logits = self.exit_head(combined_repr)
+
+        # --- Derived activations for inference ---
+        entry_prob = torch.sigmoid(entry_logits)
+        exit_prob = torch.sigmoid(exit_logits)
+
         expected_return = self.return_head(combined_repr)
         volatility_forecast = self.volatility_head(combined_repr)
         position_size = self.position_size_head(combined_repr)
-        
+
         return {
+            'entry_logits': entry_logits,
+            'exit_logits': exit_logits,
             'entry_prob': entry_prob,
             'exit_prob': exit_prob,
             'expected_return': expected_return,
@@ -327,23 +277,47 @@ class NeuralTradingModel(nn.Module):
             'sequence_repr': sequence_repr
         }
 
-
 def create_model(feature_dim, config=None):
-    """Factory function to create model with default or custom config."""
+    """
+    Factory function to create model with default or custom config.
+    Automatically filters out training/data parameters.
+    
+    Args:
+        feature_dim: Input feature dimension
+        config: Dict with configuration (can include training params)
+    
+    Returns:
+        NeuralTradingModel instance
+    """
     if config is None:
-        config = {
-            'd_model': 256,
-            'num_heads': 8,
-            'num_layers': 6,
-            'd_ff': 1024,
-            'dropout': 0.1,
-            'latent_dim': 8,
-            'seq_len': 100
-        }
+        config = {}
+    
+    # Model architecture parameters (ONLY these are passed to model)
+    model_params = {
+        'd_model': config.get('d_model', 256),
+        'num_heads': config.get('num_heads', 8),
+        'num_layers': config.get('num_layers', 6),
+        'd_ff': config.get('d_ff', 1024),
+        'dropout': config.get('dropout', 0.1),
+        'latent_dim': config.get('latent_dim', 8),
+        'seq_len': config.get('seq_len', 100)
+    }
+    
+    # Ignored parameters (training/data related):
+    # - prediction_horizon
+    # - batch_size
+    # - num_epochs
+    # - lr, min_lr, weight_decay
+    # - grad_accum_steps
+    # - T_0, patience, save_every
+    # - use_wandb, run_name
+    # - device
+    # - feature_dim (passed separately)
+    # - lookback_windows
     
     model = NeuralTradingModel(
         feature_dim=feature_dim,
-        **config
+        **model_params
     )
     
     return model

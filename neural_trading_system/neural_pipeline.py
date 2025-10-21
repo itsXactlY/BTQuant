@@ -8,12 +8,8 @@ import torch
 import numpy as np
 from typing import Dict
 
-# Import your existing infrastructure
 from backtrader.TransparencyPatch import activate_patch, capture_patch, export_data, optimized_patch
-
-# Your existing data loader
 from backtrader.utils.backtest import PolarsDataLoader, DataSpec
-
 
 class DataCollectionStrategy(bt.Strategy):
     """
@@ -283,93 +279,157 @@ class NeuralDataPipeline:
         
         return df_collected
 
-    def prepare_training_data_optimized(
-        self,
-        pipeline,
-        df: pl.DataFrame,
-        prediction_horizon: int = 5
-    ) -> Dict:
+    def prepare_training_data_optimized(self, pipeline, df, prediction_horizon: int = 5):
         """
-        Optimized version with batch processing and progress tracking.
+        Optimized version with batch processing, progress tracking, AND CONSISTENT FEATURE SIZES.
         """
         from rich.console import Console
         from tqdm import tqdm
-        import multiprocessing as mp
         
         console = Console()
+        console.print("[cyan]Preparing training data (OPTIMIZED)...[/cyan]")
         
-        console.print("\n🔧 [cyan]Preparing training data (OPTIMIZED)...[/cyan]")
-        
-        # Convert to pandas
         df_pd = df.to_pandas()
         
-        # Calculate forward returns
         if 'close' not in df_pd.columns:
             raise ValueError("DataFrame must contain 'close' column")
         
+        # Calculate forward returns
         close_prices = df_pd['close'].values
         returns = np.zeros(len(close_prices))
-        
         for i in range(len(close_prices) - prediction_horizon):
             returns[i] = (close_prices[i + prediction_horizon] - close_prices[i]) / close_prices[i]
         
         console.print(f"   ✅ Calculated forward returns (horizon={prediction_horizon})")
         
-        # Build indicator_data dict
+        # Build indicator data dict
         ohlcv_cols = ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']
         indicator_cols = [c for c in df_pd.columns if c not in ohlcv_cols]
         
         console.print(f"   ✅ Found {len(indicator_cols)} indicator features")
         
-        # Convert to dict of arrays (faster than repeated DataFrame access)
         indicator_data_full = {}
         for col in df_pd.columns:
             if col not in ['bar', 'datetime']:
                 indicator_data_full[col] = df_pd[col].fillna(0).values
         
-        # Extract features with progress bar
-        seq_len = pipeline.config.get('seq_len', 100)
+        seq_len = pipeline.config.get('seqlen', 100)
         console.print(f"\n   Extracting features (seq_len={seq_len})...")
         
         features_list = []
+        expected_feature_dim = None  # Track expected dimension
         
-        # Batch processing for speed
-        batch_size = 100
-        total_bars = len(df_pd) - seq_len
-        
-        with tqdm(total=total_bars, desc="Extracting features") as pbar:
+        # Extract features with progress bar AND size validation
+        with tqdm(total=len(df_pd) - seq_len, desc="Extracting features") as pbar:
             for i in range(seq_len, len(df_pd)):
                 # Build current_data dict (slice up to current bar)
-                current_data = {
-                    key: values[:i+1] for key, values in indicator_data_full.items()
-                }
+                current_data = {key: values[:i] for key, values in indicator_data_full.items()}
                 
                 try:
                     features = pipeline.feature_extractor.extract_all_features(current_data)
+                    
+                    # Convert to numpy array if needed
+                    if not isinstance(features, np.ndarray):
+                        features = np.array(features, dtype=np.float32)
+                    
+                    # Flatten if multi-dimensional
+                    if features.ndim > 1:
+                        features = features.flatten()
+                    
+                    # FIRST ITERATION: Set expected dimension
+                    if expected_feature_dim is None:
+                        expected_feature_dim = len(features)
+                        console.print(f"   Expected feature dimension: {expected_feature_dim}")
+                    
+                    # VALIDATE SIZE
+                    actual_dim = len(features)
+                    if actual_dim != expected_feature_dim:
+                        console.print(f"[yellow]⚠️  Size mismatch at bar {i}: got {actual_dim}, expected {expected_feature_dim}[/yellow]")
+                        
+                        # Pad or truncate to match expected size
+                        if actual_dim < expected_feature_dim:
+                            # Pad with zeros
+                            features = np.pad(features, (0, expected_feature_dim - actual_dim), 
+                                            mode='constant', constant_values=0)
+                        else:
+                            # Truncate
+                            features = features[:expected_feature_dim]
+                    
                     features_list.append(features)
+                    
                 except Exception as e:
-                    console.print(f"[yellow]Warning at bar {i}: {e}[/yellow]")
-                    # Use zeros as fallback
+                    console.print(f"[yellow]⚠️  Warning at bar {i}: {e}[/yellow]")
+                    
+                    # Use correctly sized fallback
                     if len(features_list) > 0:
+                        # Use zeros with same shape as previous feature
                         features_list.append(np.zeros_like(features_list[-1]))
+                    elif expected_feature_dim is not None:
+                        # Use zeros with expected dimension
+                        features_list.append(np.zeros(expected_feature_dim, dtype=np.float32))
                     else:
-                        features_list.append(np.zeros(100, dtype=np.float32))
+                        # Skip this bar if we don't know the dimension yet
+                        console.print(f"[red]❌ Skipping bar {i} - no valid features yet[/red]")
+                        continue
                 
                 pbar.update(1)
         
-        features = np.array(features_list, dtype=np.float32)
-        returns = returns[seq_len:len(features) + seq_len]
+        # SAFE ARRAY CREATION with validation
+        console.print("\n   Creating feature array...")
         
-        console.print(f"\n✅ [green]Feature extraction complete![/green]")
+        if len(features_list) == 0:
+            raise ValueError("No features extracted! Check your data and feature extractor.")
+        
+        # Debug: Check shapes before creating array
+        console.print(f"   Total features extracted: {len(features_list)}")
+        if len(features_list) > 0:
+            sample_shapes = [f.shape if isinstance(f, np.ndarray) else len(f) for f in features_list[:5]]
+            console.print(f"   Sample shapes (first 5): {sample_shapes}")
+        
+        # Verify all features have consistent shape
+        inconsistent_indices = []
+        first_shape = features_list[0].shape if isinstance(features_list[0], np.ndarray) else (len(features_list[0]),)
+        
+        for idx, f in enumerate(features_list):
+            f_shape = f.shape if isinstance(f, np.ndarray) else (len(f),)
+            if f_shape != first_shape:
+                console.print(f"[red]❌ Inconsistent shape at index {idx}: {f_shape} != {first_shape}[/red]")
+                inconsistent_indices.append(idx)
+        
+        if inconsistent_indices:
+            console.print(f"[red]Found {len(inconsistent_indices)} inconsistent features. Fixing...[/red]")
+            # Fix inconsistent entries by padding/truncating
+            for idx in inconsistent_indices:
+                f = features_list[idx]
+                if len(f) < first_shape[0]:
+                    features_list[idx] = np.pad(f, (0, first_shape[0] - len(f)), mode='constant')
+                else:
+                    features_list[idx] = f[:first_shape[0]]
+        
+        # NOW create the array - should work!
+        try:
+            # Use vstack for safety (handles 1D arrays better than np.array)
+            features = np.vstack(features_list).astype(np.float32)
+        except ValueError as e:
+            console.print(f"[red]❌ Failed to create feature array: {e}[/red]")
+            console.print(f"   features_list length: {len(features_list)}")
+            if len(features_list) > 0:
+                console.print(f"   Unique shapes: {set([f.shape for f in features_list])}")
+            raise
+        
+        # Align returns with features
+        returns = returns[seq_len:seq_len + len(features)]
+        
+        console.print(f"[green]✅ Feature extraction complete![/green]")
         console.print(f"   Shape: {features.shape}")
         console.print(f"   Feature dimension: {features.shape[1]}")
         console.print(f"   NaN count: {np.isnan(features).sum()}")
         console.print(f"   Inf count: {np.isinf(features).sum()}")
         
-        # Get timestamps
+        # Get timestamps if available
         timestamps = None
         if 'datetime' in df_pd.columns:
-            timestamps = df_pd['datetime'].values[seq_len:len(features) + seq_len]
+            timestamps = df_pd['datetime'].values[seq_len:seq_len + len(features)]
         
         return {
             'features': features,
@@ -490,7 +550,9 @@ class NeuralDataPipeline:
         # Train
         console.print("\n🎯 [bold green]Starting training loop...[/bold green]")
         trainer.train(self.config.get('num_epochs', 100))
-        
+        console.print(f"[cyan]Train size: {len(train_dataset)}[/cyan]")
+        console.print(f"[cyan]Val size:   {len(val_dataset)}[/cyan]")
+
         # Save feature extractor
         import pickle
         feature_extractor_path = save_path.replace('.pt', '_feature_extractor.pkl')
@@ -635,8 +697,8 @@ if __name__ == '__main__':
     pipeline, trainer, data = train_neural_system(
         coin='BTC',
         interval='4h',
-        start_date='2020-01-01',
-        end_date='2024-12-31',
+        start_date='2017-01-01',
+        end_date='2024-01-01',
         collateral='USDT'
     )
     
@@ -653,6 +715,28 @@ if __name__ == '__main__':
         'device': 'cuda'
     }
     
+    # DEBUG_config={ # ONLY USED FOR 4h CANDLE CROSS CHECK IF CODE WORKS
+    #     'seq_len': 10,           # Very short
+    #     'prediction_horizon': 1, # Predict 1 bar ahead
+    #     'd_model': 256,  # Bigger model
+    #     'num_heads': 8,
+    #     'num_layers': 1,  # Deeper network
+    #     'batch_size': 4,         # Tiny batches
+    #     'num_epochs': 10,        # Quick test
+    #     'lookback_windows': [5, 10],  # Minimal features
+    #     'device': 'cuda'
+    # }
+
+    # pipeline, trainer, data = train_neural_system(
+    #     coin='BTC',
+    #     interval='4h',
+    #     start_date='2020-01-01',
+    #     end_date='2020-03-01',
+    #     collateral='USDT',
+    #     config=DEBUG_config
+
+    # )
+
     # pipeline, trainer, data = train_neural_system(
     #     coin='BTC',
     #     interval='4h',

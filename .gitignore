@@ -75,3 +75,11 @@ test/strategy_4_momentum_fusion.py
 test/strategy_5_hurst_adaptive.py
 test/unified_tune.py
 test/unified.py
+neural_trading_system/neural_data/*.parquet
+neural_trading_system/.btq_cache/*.parquet
+neural_data/*.parquet
+neural_trading_system/wandb/latest-run
+neural_trading_system/wandb/run-20251021_193237-bm9h49bx/run-bm9h49bx.wandb
+neural_trading_system/wandb/run-20251021_193237-bm9h49bx/files/config.yaml
+neural_trading_system/wandb/run-20251021_194038-bcx0wbyj/run-bcx0wbyj.wandb
+neural_trading_system/wandb/run-20251021_194038-bcx0wbyj/files/config.yaml

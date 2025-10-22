@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+import glob
 Analyze trained neural trading model.
 Visualize attention patterns, feature importance, and learned regimes.
 """
@@ -234,7 +235,7 @@ def main():
 
     # Configuration
     MODEL_PATH = 'models/best_model.pt'
-    FEATURE_EXTRACTOR_PATH = 'models/neural_BTC_4h_2020-01-01_2020-03-01_feature_extractor.pkl' # TODO :: remove the timeframe etc. or viceversa the loader
+    FEATURE_EXTRACTOR_PATH = glob.glob('models/*feature_extractor.pkl')[0] # TODO :: remove the timeframe etc. or viceversa the loader
     DATA_PATH = 'neural_data/BTC_4h_neural_data.parquet'
 
     # Check files

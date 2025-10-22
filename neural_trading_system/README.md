@@ -635,7 +635,7 @@ This is **not a black box**. Every stage remains inspectable:
 - ✅ Backtrader integration for backtesting
 - 🚧 Live trading integration (coming soon)
 - 🚧 Portfolio-level multi-asset extension
-- 🚧 Real-time WebSocket data ingestion
+- 🚧 Real-time WebSocket (HFT tick-)data ingestion
 
 ---
 
@@ -644,7 +644,7 @@ This is **not a black box**. Every stage remains inspectable:
 Contributions welcome! Areas of interest:
 - Additional visualization tools
 - Alternative architectures (LSTM, TCN, etc.)
-- Live trading connectors (CCXT, Interactive Brokers)
+- Live trading connectors (Bitmex, Hyperliquid, Oanda, Aster, ...)
 - Portfolio optimization extensions
 - Additional feature engineering methods
 

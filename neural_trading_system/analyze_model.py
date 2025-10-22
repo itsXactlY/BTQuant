@@ -88,75 +88,57 @@ def print_model_summary(model, config):
 
 
 def prepare_test_sequences(df, feature_extractor, config):
-    """Prepare test sequences (Polars-only) consistent with training."""
-    console.print("\n🔧 [cyan]Preparing test sequences (Polars-only)...[/cyan]")
     import polars as pl
     from tqdm import tqdm
-
-    if 'close' not in df.columns:
-        raise ValueError("DataFrame must contain 'close' column")
+    console.print("\n🔧 [cyan]Preparing test sequences (Polars-only)...[/cyan]")
 
     seq_len = int(config.get('seq_len', 100))
     horizon = int(config.get('prediction_horizon', 5))
+    feature_dim_expected = int(config.get('feature_dim'))  # enforce training width [web:94]
 
-    # Compute forward returns vectorized
+    # Vectorized forward returns
     df = df.with_columns([
-        ((pl.col('close').shift(-horizon) - pl.col('close')) / pl.col('close'))
-        .alias('forward_return')
+        ((pl.col('close').shift(-horizon) - pl.col('close')) / pl.col('close')).alias('forward_return')
     ])
 
-    ohlcv_cols = ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']
+    ohlcv_cols = ['bar','datetime','open','high','low','close','volume']
     indicator_cols = [c for c in df.columns if c not in ohlcv_cols]
 
-    # Fill nulls on numeric columns
     from polars import selectors as cs
     df = df.with_columns(cs.numeric().fill_null(0))
 
-    # Build numpy arrays per indicator
-    indicator_data_full = {c: df.get_column(c).to_numpy() for c in indicator_cols}
+    arrs = {c: df.get_column(c).to_numpy() for c in indicator_cols}
 
     features_list = []
-    expected_dim = None
-
     total_rows = df.height
-    valid_rows = total_rows - horizon  # exclude trailing horizon with null returns
+    valid_rows = total_rows - horizon
 
     for i in tqdm(range(seq_len, valid_rows), desc="Extracting features"):
-        current_data = {k: v[:i] for k, v in indicator_data_full.items()}
+        current_data = {k: arrs[k][:i] for k in indicator_cols}  # match training boundary [web:94]
         try:
             feats = feature_extractor.extract_all_features(current_data)
-            feats = np.asarray(feats, dtype=np.float32)
-            if feats.ndim > 1:
-                feats = feats.ravel()
-            if expected_dim is None:
-                expected_dim = feats.size
-            if feats.size != expected_dim:
-                if feats.size < expected_dim:
-                    feats = np.pad(feats, (0, expected_dim - feats.size))
+            f = np.asarray(feats, dtype=np.float32).ravel()
+            # Enforce the training feature width BEFORE transform
+            if f.size != feature_dim_expected:
+                if f.size < feature_dim_expected:
+                    f = np.pad(f, (0, feature_dim_expected - f.size))
                 else:
-                    feats = feats[:expected_dim]
-            # Apply same transform as training
-            feats = feature_extractor.transform(feats)
-            features_list.append(feats)
+                    f = f[:feature_dim_expected]
+            f = feature_extractor.transform(f)  # same scaler as training [web:94]
+            features_list.append(f)
         except Exception:
-            if expected_dim is not None:
-                features_list.append(np.zeros(expected_dim, dtype=np.float32))
-            else:
-                continue
+            features_list.append(np.zeros(feature_dim_expected, dtype=np.float32))
 
     if not features_list:
-        console.print("⚠️  No per-bar features extracted; returning empty sequences")
-        return np.empty((0, seq_len, 0), dtype=np.float32), np.empty((0,), dtype=np.float32)
+        return np.empty((0, seq_len, feature_dim_expected), np.float32), np.empty((0,), np.float32)
 
     features = np.vstack(features_list).astype(np.float32)
 
     if len(features) <= seq_len:
-        console.print("⚠️  Not enough features to build at least one sequence")
-        return np.empty((0, seq_len, features.shape[1]), dtype=np.float32), np.empty((0,), dtype=np.float32)
+        return np.empty((0, seq_len, feature_dim_expected), np.float32), np.empty((0,), np.float32)
 
-    sequences = np.stack([features[i:i + seq_len] for i in range(len(features) - seq_len)], axis=0)
+    sequences = np.stack([features[i:i+seq_len] for i in range(len(features) - seq_len)], axis=0)
 
-    # Align returns to sequence starts and clean NaNs
     rets = df.get_column('forward_return')[seq_len:seq_len + len(features)].to_numpy().copy()
     rets = rets[:len(sequences)]
     np.nan_to_num(rets, copy=False)
@@ -199,41 +181,27 @@ def analyze_feature_importance(analyzer, test_sequences, num_samples=100, featur
         return
 
     console.print(f"\n🔍 [yellow]Computing feature importance on {n} samples...[/yellow]")
-    importance = analyzer.compute_feature_importance(test_sequences, num_samples=n)
+    importance_vec, feature_names = analyzer.compute_feature_importance(
+        test_sequences, num_samples=n, feature_dim=feature_dim, return_names=True
+    )
 
-    # Normalize importance output to 1D vector
-    importance = np.asarray(importance)
-    if importance.ndim == 0:
-        # Scalar → broadcast
-        dim = int(feature_dim or 1)
-        importance = np.full(dim, float(importance), dtype=np.float32)
-    elif importance.ndim > 1:
-        # Reduce to per-feature vector
-        importance = importance.mean(axis=0)
-
-    if feature_dim is not None and importance.shape[0] != int(feature_dim):
-        # Pad or truncate to expected feature_dim
-        dim = int(feature_dim)
-        if importance.shape[0] < dim:
-            importance = np.pad(importance, (0, dim - importance.shape[0]))
-        else:
-            importance = importance[:dim]
-
-    feature_names = [f'feature_{i}' for i in range(int(importance.shape[0]))]
-    importance_dict = dict(zip(feature_names, importance.tolist()))
+    # Build dict for display
+    importance_dict = dict(zip(feature_names, importance_vec.tolist()))
+    # Sort for top-N display
+    sorted_items = sorted(importance_dict.items(), key=lambda x: -x[1])
 
     console.print("\n📊 [bold]Top 20 Most Important Features:[/bold]")
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Rank", justify="right", style="cyan")
     table.add_column("Feature", style="yellow")
     table.add_column("Importance", justify="right", style="green")
-
-    for rank, (feat, imp) in enumerate(sorted(importance_dict.items(), key=lambda x: -x[1])[:20], 1):
+    for rank, (feat, imp) in enumerate(sorted_items[:20], 1):
         table.add_row(str(rank), feat, f"{imp:.6f}")
-
     console.print(table)
+
     console.print("\n📊 [cyan]Generating feature importance plot...[/cyan]")
     analyzer.plot_feature_importance(importance_dict, top_n=30)
+
 
 
 def analyze_regime_space(analyzer, test_sequences, test_returns):
@@ -265,8 +233,8 @@ def main():
     ))
 
     # Configuration
-    MODEL_PATH = 'best_model.pt'
-    FEATURE_EXTRACTOR_PATH = 'best_model_feature_extractor.pkl'
+    MODEL_PATH = 'models/best_model.pt'
+    FEATURE_EXTRACTOR_PATH = 'models/neural_BTC_4h_2020-01-01_2020-03-01_feature_extractor.pkl' # TODO :: remove the timeframe etc. or viceversa the loader
     DATA_PATH = 'neural_data/BTC_4h_neural_data.parquet'
 
     # Check files

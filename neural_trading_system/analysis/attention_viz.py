@@ -74,18 +74,26 @@ class AttentionAnalyzer:
 
             # Forward pass (no extra kwargs)
             preds = self.model(x)
+        
+            def _to_cpu(obj):
+                # Return a structure where all tensors are detached and moved to CPU
+                if torch.is_tensor(obj):
+                    return obj.detach().to('cpu')  # only valid for tensors [web:249]
+                if isinstance(obj, dict):
+                    return {k: _to_cpu(v) for k, v in obj.items()}  # recurse into dicts
+                if isinstance(obj, (list, tuple)):
+                    # If list/tuple of tensors, try to stack; otherwise, map elementwise
+                    if len(obj) > 0 and all(torch.is_tensor(x) for x in obj):
+                        try:
+                            return torch.stack([x.detach().to('cpu') for x in obj])  # fast path [web:249]
+                        except Exception:
+                            return [x.detach().to('cpu') for x in obj]  # fallback [web:249]
+                    else:
+                        return [_to_cpu(x) for x in obj]  # recurse mixed/nested [web:249]
+                # If it’s a number or other type, return as-is
+                return obj  # non-tensor; detach doesn’t apply [web:238]
 
-            # Normalize predictions into a dict of tensors on CPU
-            predictions = {}
-            if isinstance(preds, dict):
-                for k, v in preds.items():
-                    predictions[k] = v.detach().to('cpu')
-            elif isinstance(preds, (tuple, list)):
-                for i, v in enumerate(preds):
-                    if torch.is_tensor(v):
-                        predictions[f'out_{i}'] = v.detach().to('cpu')
-            elif torch.is_tensor(preds):
-                predictions['output'] = preds.detach().to('cpu')
+            predictions = _to_cpu(preds)
 
         # Return captured attentions and predictions
         return list(self._captured_attn), predictions
@@ -153,38 +161,71 @@ class AttentionAnalyzer:
 
         return agg / max(1, count)
 
-
     def plot_attention_heatmap(
         self,
-        attention_weights: np.ndarray,
+        attention_weights,
         layer_idx: int = -1,
         head_idx: int = 0,
         figsize=(12, 10)
     ):
         """
-        Plot attention heatmap for a specific layer and head.
-        
-        Args:
-            attention_weights: [num_heads, seq_len, seq_len]
-            layer_idx: Which transformer layer (-1 = last)
-            head_idx: Which attention head
+        attention_weights: tensor/array with shape:
+        - [B, H, T, T] or [H, T, T] or [T, T]
         """
-        attn = attention_weights[head_idx]  # [seq_len, seq_len]
-        
+        # Normalize to torch tensor on CPU
+        if isinstance(attention_weights, np.ndarray):
+            attn = torch.from_numpy(attention_weights)
+        elif torch.is_tensor(attention_weights):
+            attn = attention_weights
+        elif isinstance(attention_weights, (list, tuple)):
+            # Convert list to tensor if possible
+            try:
+                attn = torch.as_tensor(attention_weights)
+            except Exception:
+                # Fallback: take first element if it’s a tensor/array
+                for x in attention_weights:
+                    if torch.is_tensor(x) or isinstance(x, np.ndarray):
+                        attn = torch.as_tensor(x)
+                        break
+                else:
+                    raise ValueError("No tensor-like attention in list")
+
+        attn = attn.detach().cpu()
+
+        # Remove batch dim if present: [B, H, T, T] -> [H, T, T]
+        if attn.dim() == 4 and attn.size(0) == 1:
+            attn = attn[0]
+
+        # If heads present, pick specific head or mean across heads
+        if attn.dim() == 3:
+            if head_idx is None:
+                attn2d = attn.mean(dim=0)  # [T, T] average over heads
+            else:
+                attn2d = attn[head_idx]    # [T, T] single head
+        elif attn.dim() == 2:
+            attn2d = attn
+        else:
+            raise ValueError(f"Unexpected attention shape: {tuple(attn.shape)}")
+
+        a = attn2d.numpy()  # 2-D array for seaborn
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         plt.figure(figsize=figsize)
         sns.heatmap(
-            attn,
+            a,
             cmap='viridis',
             cbar_kws={'label': 'Attention Weight'},
-            xticklabels=range(attn.shape[1]),
-            yticklabels=range(attn.shape[0])
+            xticklabels=np.arange(a.shape[1]),
+            yticklabels=np.arange(a.shape[0]),
         )
-        plt.title(f'Attention Heatmap - Layer {layer_idx}, Head {head_idx}')
+        plt.title(f'Attention Heatmap - Layer {layer_idx}, Head {0 if head_idx is None else head_idx}')
         plt.xlabel('Key Position (Historical Bars)')
         plt.ylabel('Query Position (Historical Bars)')
         plt.tight_layout()
         plt.show()
-    
+
+
     def plot_attention_timeline(
         self,
         attention_weights_list: List[np.ndarray],
@@ -215,58 +256,86 @@ class AttentionAnalyzer:
         fig.suptitle('Attention Evolution Across Layers', fontsize=14, fontweight='bold')
         plt.tight_layout()
         plt.show()
-    
+
     def compute_feature_importance(
         self,
-        test_sequences: np.ndarray,
-        num_samples: int = 100
-    ) -> Dict[str, float]:
+        sequences: np.ndarray,
+        num_samples: int = 100,
+        feature_dim: int | None = None,
+        return_names: bool = False
+    ):
         """
-        Compute feature importance using gradient-based attribution.
-        
-        Shows which indicator features matter most for predictions.
+        Gradient-based attribution over the entry head.
+        Returns a 1D numpy array of length feature_dim (or inferred), and optionally feature names.
         """
         self.model.eval()
-        importances = []
-        
-        for i in range(min(num_samples, len(test_sequences))):
-            seq = test_sequences[i]
-            
-            # Prepare input
-            feature_tensor = torch.FloatTensor(seq).unsqueeze(0).to(self.device)
-            feature_tensor.requires_grad = True
-            
-            # Forward pass
-            predictions = self.model(feature_tensor)
-            
-            # Use entry probability as the target
-            target = predictions['entry_prob']
-            
-            # Backward pass
-            target.backward()
-            
-            # Get gradients
-            gradients = feature_tensor.grad.cpu().numpy()[0]  # [seq_len, feature_dim]
-            
-            # Average gradient magnitude across sequence
-            importance = np.abs(gradients).mean(axis=0)  # [feature_dim]
-            importances.append(importance)
-        
-        # Average across samples
-        avg_importance = np.mean(importances, axis=0)
-        
-        # Create feature names (you'll need to map these to actual indicator names)
-        feature_names = [f'feature_{i}' for i in range(len(avg_importance))]
-        
-        importance_dict = dict(zip(feature_names, avg_importance))
-        
-        # Sort by importance
-        importance_dict = dict(
-            sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
-        )
-        
-        return importance_dict
-    
+        n = min(num_samples, len(sequences))
+        if n == 0:
+            vec = np.zeros(int(feature_dim or 1), dtype=np.float32)
+            return (vec, [f'feature_{i}' for i in range(vec.size)]) if return_names else vec
+
+        agg = None
+        count = 0
+        for i in range(n):
+            seq = sequences[i]  # [T, F]
+            x = torch.as_tensor(seq, dtype=torch.float32, device=self.device).unsqueeze(0)  # [1, T, F]
+            x.requires_grad_(True)
+
+            out = self.model(x)
+            # Pick a tensor to backprop
+            target = None
+            if isinstance(out, dict):
+                v = out.get('entry_prob', None)
+                if torch.is_tensor(v):
+                    target = v
+                elif isinstance(v, (list, tuple)) and len(v) > 0 and torch.is_tensor(v[0]):
+                    target = v[0]
+            if target is None:
+                if torch.is_tensor(out):
+                    target = out
+                elif isinstance(out, (list, tuple)) and len(out) > 0 and torch.is_tensor(out[0]):
+                    target = out[0]
+            if target is None:
+                continue
+
+            logit_scalar = target.view(-1)[0]
+            self.model.zero_grad(set_to_none=True)
+            if x.grad is not None:
+                x.grad.zero_()
+            logit_scalar.backward()
+
+            grad = x.grad  # [1, T, F]
+            if grad is None:
+                continue
+            imp = grad.abs().mean(dim=1).squeeze(0)  # [F]
+            imp_np = imp.detach().cpu().numpy()
+
+            if agg is None:
+                agg = imp_np.astype(np.float32)
+            else:
+                # pad/truncate to match
+                if imp_np.shape[0] != agg.shape[0]:
+                    if imp_np.shape[0] < agg.shape[0]:
+                        imp_np = np.pad(imp_np, (0, agg.shape[0] - imp_np.shape[0]))
+                    else:
+                        agg = np.pad(agg, (0, imp_np.shape[0] - agg.shape[0]))
+                agg += imp_np
+            count += 1
+
+        if count == 0:
+            vec = np.zeros(int(feature_dim or (agg.shape[0] if agg is not None else 1)), dtype=np.float32)
+        else:
+            vec = agg / float(count)
+        # Enforce expected feature length
+        if feature_dim is not None and vec.shape[0] != int(feature_dim):
+            d = int(feature_dim)
+            vec = np.pad(vec, (0, d - vec.shape[0])) if vec.shape[0] < d else vec[:d]
+        if return_names:
+            names = [f'feature_{i}' for i in range(vec.shape[0])]
+            return vec, names
+        return vec
+
+
     def plot_feature_importance(
         self,
         importance_dict: Dict[str, float],

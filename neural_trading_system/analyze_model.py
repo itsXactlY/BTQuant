@@ -5,6 +5,7 @@ Analyze trained neural trading model.
 Visualize attention patterns, feature importance, and learned regimes.
 """
 
+import glob
 import sys
 from pathlib import Path
 import pickle

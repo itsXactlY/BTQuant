@@ -84,3 +84,5 @@ neural_trading_system/wandb/run-20251021_193237-bm9h49bx/files/config.yaml
 neural_trading_system/wandb/run-20251021_194038-bcx0wbyj/run-bcx0wbyj.wandb
 neural_trading_system/wandb/run-20251021_194038-bcx0wbyj/files/config.yaml
 neural_trading_system/checkpoint_epoch_9.pt
+neural_trading_system/models/best_model.pt
+

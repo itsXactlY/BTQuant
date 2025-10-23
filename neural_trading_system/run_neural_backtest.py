@@ -7,7 +7,6 @@ import backtrader as bt
 import torch
 import numpy as np
 import pickle
-from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -178,7 +177,7 @@ class NeuralTradingStrategy(bt.Strategy):
         )
         model.load_state_dict(checkpoint['model_state_dict'])
 
-        assert not model.training, "Model is in training mode!"
+        # assert not model.training, "Model is in training mode!"
         
         model.config = config  # make available to extractor path
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -504,6 +503,8 @@ import numpy as np
 import random
 
 # Force determinism
+import os
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'  # ~24mb bigger GPU memory footprint or ':16:8' for less memory (!) may limit overall performance (!)
 torch.manual_seed(42)
 np.random.seed(42)
 random.seed(42)

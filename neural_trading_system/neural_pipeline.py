@@ -1,74 +1,30 @@
-# ==============================================================================
-# NEURAL DATA COLLECTION - INTEGRATED WITH YOUR INFRASTRUCTURE
-# ==============================================================================
-
 import backtrader as bt
 import polars as pl
 import numpy as np
 import torch
 from pathlib import Path
 from typing import Dict
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
+import time
 
 from backtrader.TransparencyPatch import activate_patch, capture_patch, export_data, optimized_patch
 from backtrader.utils.backtest import PolarsDataLoader, DataSpec
 
-# ===== Module-scope globals for workers (picklable) =====
-W_INDICATORS = None
-W_KEYS = None
-W_FE = None
-W_EXPECTED_DIM = None
-
-def fe_worker_init(indicator_arrays, indicator_cols, fe_params, expected_dim):
-    """
-    Initializer runs once per worker; stashes read-only arrays and extractor params. 
-    Using a top-level initializer avoids pickling heavy objects per task and is required for ProcessPoolExecutor. 
-    """
-    global W_INDICATORS, W_KEYS, W_FE, W_EXPECTED_DIM
-    W_INDICATORS = indicator_arrays
-    W_KEYS = indicator_cols
-    W_EXPECTED_DIM = int(expected_dim)
-    from data.feature_extractor import IndicatorFeatureExtractor
-    W_FE = IndicatorFeatureExtractor(**fe_params)
-
-def fe_worker_batch(idx_batch):
-    """
-    Top-level worker callable; must not be nested or a lambda so it can be pickled by the process pool. 
-    """
-    out = []
-    for i in idx_batch:
-        try:
-            current = {k: W_INDICATORS[k][:i] for k in W_KEYS}
-            feats = W_FE.extract_all_features(current)
-            f = np.asarray(feats, dtype=np.float32).ravel()
-            if f.size != W_EXPECTED_DIM:
-                if f.size < W_EXPECTED_DIM:
-                    f = np.pad(f, (0, W_EXPECTED_DIM - f.size))
-                else:
-                    f = f[:W_EXPECTED_DIM]
-            out.append(f)
-        except Exception:
-            out.append(np.zeros(W_EXPECTED_DIM, dtype=np.float32))
-    return out
-
-# ------------------------------------------------------------------------------
-# Backtrader strategy to collect indicators
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# DATA COLLECTION STRATEGY
+# ==============================================================================
 
 class DataCollectionStrategy(bt.Strategy):
     """
-    Strategy that runs ONLY to collect indicator data. 
-    No trading - pure data harvesting with TransparencyPatch. 
+    Runs ONLY to collect indicator data via TransparencyPatch. No trading.
     """
-
     params = dict(
-        # Enable all indicator blocks
         use_cycle_signals=True,
         use_regime_signals=True,
         use_volatility_signals=True,
         use_momentum_signals=True,
         use_trend_signals=True,
-
-        # Indicator parameters from your MegaScalpingStrategy
         cycle_period=20,
         roofing_hp_period=48,
         roofing_ss_period=10,
@@ -101,19 +57,14 @@ class DataCollectionStrategy(bt.Strategy):
         schaff_cycle=10,
         schaff_fast=23,
         schaff_slow=50,
-
-        # Control flags
         backtest=True,
         debug=False,
     )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        # Initialize ATR (base indicator)
         self.atr = bt.indicators.ATR(self.data, period=14)
 
-        # Import all indicators
         from backtrader.indicators.CyberCycle import CyberCycle
         from backtrader.indicators.ElhersDecyclerOscillator import DecyclerOscillator
         from backtrader.indicators.RoofingFilter import RoofingFilter
@@ -132,7 +83,6 @@ class DataCollectionStrategy(bt.Strategy):
         from backtrader.indicators.rmi import RelativeMomentumIndex
         from backtrader.indicators.SchaffTrendCycle import SchaffTrendCycle
 
-        # Initialize blocks
         if self.p.use_cycle_signals:
             self.cyber_cycle = CyberCycle(self.data, period=self.p.cycle_period)
             self.decycler = DecyclerOscillator(self.data)
@@ -144,21 +94,8 @@ class DataCollectionStrategy(bt.Strategy):
 
         if self.p.use_volatility_signals:
             self.laguerre = AdaptiveLaguerreFilter(self.data, length=self.p.laguerre_length)
-            self.damiani = DamianiVolatmeter(
-                self.data,
-                atr_fast=self.p.damiani_atr_fast,
-                std_fast=self.p.damiani_std_fast,
-                atr_slow=self.p.damiani_atr_slow,
-                std_slow=self.p.damiani_std_slow,
-                thresh=self.p.damiani_thresh,
-            )
-            self.squeeze = SqueezeVolatility(
-                self.data,
-                period=self.p.squeeze_period,
-                mult=self.p.squeeze_mult,
-                period_kc=self.p.squeeze_period_kc,
-                mult_kc=self.p.squeeze_mult_kc,
-            )
+            self.damiani = DamianiVolatmeter(self.data, atr_fast=self.p.damiani_atr_fast, std_fast=self.p.damiani_std_fast, atr_slow=self.p.damiani_atr_slow, std_slow=self.p.damiani_std_slow, thresh=self.p.damiani_thresh)
+            self.squeeze = SqueezeVolatility(self.data, period=self.p.squeeze_period, mult=self.p.squeeze_mult, period_kc=self.p.squeeze_period_kc, mult_kc=self.p.squeeze_mult_kc)
             self.satr = StandarizedATR(self.data, atr_period=self.p.satr_atr_period, std_period=self.p.satr_std_period)
 
         if self.p.use_momentum_signals:
@@ -184,28 +121,131 @@ class DataCollectionStrategy(bt.Strategy):
             from backtrader.TransparencyPatch import print_patch
             print_patch(auto_export=False)
 
-# ------------------------------------------------------------------------------
-# Pipeline
-# ------------------------------------------------------------------------------
+
+# ==============================================================================
+# NEURAL DATA PIPELINE
+# ==============================================================================
 
 class NeuralDataPipeline:
+    """
+    Automated pipeline: PolarsDataLoader → Backtrader → TransparencyPatch → Training
+    """
+    
     def __init__(self, config: Dict):
         self.config = config
         self.loader = PolarsDataLoader()
+        
         from data.feature_extractor import IndicatorFeatureExtractor
         self.feature_extractor = IndicatorFeatureExtractor(
             lookback_windows=config.get('lookback_windows', [5, 10, 20, 50, 100])
         )
-
-    def prepare_training_data_optimized(self, pipeline, df: pl.DataFrame, prediction_horizon: int = 5):
+    
+    def collect_data_from_backtrader(
+        self,
+        coin: str = 'BTC',
+        interval: str = '4h',
+        start_date: str = '2018-01-01',
+        end_date: str = '2024-12-31',
+        collateral: str = 'USDT',
+        force_recollect: bool = False
+    ) -> pl.DataFrame:
+        """
+        Run backtrader with DataCollectionStrategy. Uses date-scoped caching.
+        """
         from rich.console import Console
         console = Console()
-        console.print("[cyan]Preparing training data (OPTIMIZED, parallel)...[/cyan]")
+        
+        export_dir = Path('neural_data')
+        export_dir.mkdir(parents=True, exist_ok=True)
+        export_stem = f'{coin}_{interval}_{start_date}_{end_date}_neural_data'
+        export_parquet = export_dir / f'{export_stem}.parquet'
+        
+        if export_parquet.exists() and not force_recollect:
+            console.print(f"\n📥 [cyan]Loading cached export: {export_parquet}[/cyan]")
+            df_collected = pl.read_parquet(str(export_parquet))
+            df_collected = df_collected.filter(
+                (pl.col('datetime') >= pl.lit(start_date)) & 
+                (pl.col('datetime') <= pl.lit(end_date))
+            )
+            console.print(f"✅ [green]Loaded {len(df_collected):,} bars from cache[/green]")
+            console.print(f"   Features: {len(df_collected.columns)}")
+            console.print(f"   Indicator features: {len([c for c in df_collected.columns if c not in ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']])}")
+            return df_collected
+        
+        console.print("🔬 [bold cyan]Starting Neural Data Collection[/bold cyan]")
+        console.print(f"   Symbol: {coin}/{collateral}")
+        console.print(f"   Interval: {interval}")
+        console.print(f"   Period: {start_date} → {end_date}")
+        
+        console.print("\n🔧 [yellow]Activating TransparencyPatch...[/yellow]")
+        activate_patch(debug=False)
+        
+        cerebro = bt.Cerebro(oldbuysell=True, runonce=False, stdstats=False)
+        
+        console.print(f"\n📥 [cyan]Loading data for {coin}...[/cyan]")
+        spec = DataSpec(symbol=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral)
+        
+        df = self.loader.load_data(spec, use_cache=True)
+        data_feed = self.loader.make_backtrader_feed(df, spec)
+        console.print(f"✅ [green]Loaded {len(df):,} bars[/green]")
+        
+        cerebro.adddata(data_feed)
+        cerebro.addstrategy(DataCollectionStrategy, backtest=True, debug=False)
+        cerebro.broker.setcash(10000)
+        cerebro.broker.setcommission(commission=0.001)
+        
+        console.print("\n📊 [bold green]Running Backtrader to collect indicator data...[/bold green]")
+        cerebro.run()
+        
+        console.print("\n💾 [yellow]Exporting collected data...[/yellow]")
+        df_collected = export_data(filename=export_stem, export_dir=str(export_dir))
+        
+        console.print(f"\n✅ [bold green]Collection Complete![/bold green]")
+        console.print(f"   Bars: {len(df_collected):,}")
+        console.print(f"   Features: {len(df_collected.columns)}")
+        console.print(f"   Cached to: {export_parquet}")
+        
+        del cerebro, data_feed
+        import gc; gc.collect()
+        
+        return df_collected
+
+    def prepare_training_data(self, df: pl.DataFrame, prediction_horizon: int = 5) -> Dict:
+        """
+        Optimized feature extraction with disk caching. First run extracts and saves; 
+        subsequent runs load from cache in seconds.
+        """
+        from rich.console import Console
+        import pickle
+        import hashlib
+        console = Console()
+        
+        # Build cache key from data hash and config
+        cache_dir = Path('neural_data/features')
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Hash based on: df shape, seq_len, prediction_horizon, lookback_windows
+        seq_len = int(self.config.get('seq_len', self.config.get('seqlen', 100)))
+        lookback_str = str(sorted(self.config.get('lookback_windows', [5, 10, 20, 50, 100])))
+        cache_key_raw = f"{df.shape[0]}_{df.shape[1]}_{seq_len}_{prediction_horizon}_{lookback_str}"
+        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()[:16]
+        cache_file = cache_dir / f'features_{cache_key}.pkl'
+        
+        # Try to load cached features
+        if cache_file.exists():
+            console.print(f"[cyan]📥 Loading cached features from {cache_file.name}[/cyan]")
+            with open(cache_file, 'rb') as f:
+                cached = pickle.load(f)
+            console.print(f"[green]✅ Loaded cached features! Shape: {cached['features'].shape}[/green]")
+            console.print(f"   Feature dimension: {cached['feature_dim']}")
+            return cached
+        
+        console.print("[cyan]Preparing training data (will cache for next run)...[/cyan]")
 
         if 'close' not in df.columns:
             raise ValueError("DataFrame must contain 'close' column")
 
-        # 1) Vectorized forward returns in Polars
+        # 1) Vectorized forward returns
         df = df.with_columns([
             ((pl.col('close').shift(-prediction_horizon) - pl.col('close')) / pl.col('close')).alias('forward_return')
         ])
@@ -216,174 +256,157 @@ class NeuralDataPipeline:
         indicator_cols = [c for c in df.columns if c not in ohlcv_cols]
         console.print(f"   ✅ Found {len(indicator_cols)} indicator features")
 
-        # 3) Fill numeric nulls once
+        # 3) Fill nulls
         from polars import selectors as cs
         df = df.with_columns(cs.numeric().fill_null(0))
 
-        # 4) Build read-only numpy arrays
+        # 4) Build numpy arrays
         indicator_arrays = {c: df.get_column(c).to_numpy() for c in indicator_cols}
 
-        # 5) Windows range
-        seq_len = int(pipeline.config.get('seq_len', pipeline.config.get('seqlen', 100)))
         console.print(f"\n   Extracting features (seq_len={seq_len})...")
+
         total_rows = df.height
         valid_rows = total_rows - prediction_horizon
         start_idx = seq_len
         end_idx = valid_rows
         if end_idx <= start_idx:
-            raise ValueError("Not enough rows to extract features with given seq_len and horizon")
+            raise ValueError("Not enough rows")
 
         indices = list(range(start_idx, end_idx))
         N = len(indices)
 
-        # 6) Determine expected feature dimension once
+        # 5) Determine expected dim
         def compute_one(i: int):
-            current = {k: v[:i] for k, v in indicator_arrays.items()}
-            feats = pipeline.feature_extractor.extract_all_features(current)
+            current = {k: indicator_arrays[k][:i] for k in indicator_cols}
+            feats = self.feature_extractor.extract_all_features(current)
             return np.asarray(feats, dtype=np.float32).ravel()
 
         first = compute_one(indices[0])
         expected_dim = int(first.size)
         console.print(f"   Expected feature dimension: {expected_dim}")
 
-        # 7) Adaptive parallelism
-        import time
+        # 6) Feature extraction (single-thread with tqdm)
         t0 = time.perf_counter()
         features_list = []
 
-        threshold = int(self.config.get('fe_parallel_threshold', 10_000))
-        if N < threshold:
-            # Single-threaded fast path for small jobs (avoids pool overhead)
-            for i in indices:
-                current = {k: indicator_arrays[k][:i] for k in indicator_cols}
-                try:
-                    f = np.asarray(self.feature_extractor.extract_all_features(current), np.float32).ravel()
-                    if f.size != expected_dim:
-                        if f.size < expected_dim:
-                            f = np.pad(f, (0, expected_dim - f.size))
-                        else:
-                            f = f[:expected_dim]
-                    features_list.append(f)
-                except Exception:
-                    features_list.append(np.zeros(expected_dim, dtype=np.float32))
-        else:
-            # ProcessPool for large jobs
-            from concurrent.futures import ProcessPoolExecutor
-            import os
-            fe_params = dict(lookback_windows=self.config.get('lookback_windows', [5, 10, 20, 50, 100]))
-            workers = int(self.config.get('fe_workers', max(1, os.cpu_count() - 1)))
-            chunk = int(self.config.get('fe_chunk', max(512, N // (workers * 4))))
-            console.print(f"   🏎️ Parallelizing feature extraction with {workers} workers, chunk={chunk}")
-            batches = [indices[i:i + chunk] for i in range(0, N, chunk)]
-
-            with ProcessPoolExecutor(
-                max_workers=workers,
-                initializer=fe_worker_init,
-                initargs=(indicator_arrays, indicator_cols, fe_params, expected_dim),
-            ) as ex:
-                futures = [ex.submit(fe_worker_batch, b) for b in batches]
-                for fut in futures:
-                    features_list.extend(fut.result())
+        console.print(f"   Single-threaded extraction (N={N})")
+        for i in tqdm(indices, desc="Extracting", unit="bar"):
+            current = {k: indicator_arrays[k][:i] for k in indicator_cols}
+            try:
+                f = np.asarray(self.feature_extractor.extract_all_features(current), np.float32).ravel()
+                if f.size != expected_dim:
+                    f = np.pad(f, (0, expected_dim - f.size)) if f.size < expected_dim else f[:expected_dim]
+                features_list.append(f)
+            except Exception:
+                features_list.append(np.zeros(expected_dim, dtype=np.float32))
 
         dt = time.perf_counter() - t0
         rows_per_s = N / dt if dt > 0 else 0.0
-        console.print(f"⏱️ Feature extraction: {dt:.2f}s | Rows: {N:,} | {rows_per_s:,.1f} rows/s")
+        console.print(f"⏱️ {dt:.2f}s | Rows: {N:,} | {rows_per_s:,.1f} rows/s")
 
-        # 8) Stack
+        # 7) Stack
         features = np.vstack(features_list).astype(np.float32)
 
-        # 9) Align returns
+        # 8) Align returns
         returns = df.get_column('forward_return')[seq_len:seq_len + len(features)].to_numpy().copy()
         np.nan_to_num(returns, copy=False)
 
-        console.print(f"[green]✅ Feature extraction complete![/green]")
-        console.print(f"   Shape: {features.shape}")
-        console.print(f"   Feature dimension: {features.shape[1]}")
-        console.print(f"   NaN count: {np.isnan(features).sum()}")
-        console.print(f"   Inf count: {np.isinf(features).sum()}")
+        console.print(f"[green]✅ Complete! Shape: {features.shape}, NaN: {np.isnan(features).sum()}, Inf: {np.isinf(features).sum()}[/green]")
 
         timestamps = df.get_column('datetime')[seq_len:seq_len + len(features)].to_numpy() if 'datetime' in df.columns else None
 
-        return {
+        result = {
             'features': features,
             'returns': returns[:len(features)],
             'feature_dim': features.shape[1],
             'timestamps': timestamps,
             'indicator_columns': indicator_cols,
         }
+        
+        # Cache result
+        console.print(f"[yellow]💾 Caching features to {cache_file.name}[/yellow]")
+        with open(cache_file, 'wb') as f:
+            pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+        console.print(f"[green]✅ Cached! Next run will load in ~2 seconds[/green]")
+        
+        return result
 
-    def prepare_training_data(self, df: pl.DataFrame, prediction_horizon: int = 5) -> Dict:
-        return self.prepare_training_data_optimized(self, df, prediction_horizon)
-
-    def collect_data_from_backtrader(
-        self,
-        coin: str = 'BTC',
-        interval: str = '4h',
-        start_date: str = '2018-01-01',
-        end_date: str = '2024-12-31',
-        collateral: str = 'USDT',
-        force_recollect: bool = False,
-    ) -> pl.DataFrame:
+    def train_neural_model(self, training_data: Dict, save_path: str = 'best_model.pt'):
+        """
+        Train the neural network on collected data.
+        """
         from rich.console import Console
+        from torch.utils.data import DataLoader
+        from training.trainer import NeuralTrainer, TradingDataset
+        from models.architecture import create_model
+        
         console = Console()
+        console.print("\n🧠 [bold magenta]Starting Neural Network Training[/bold magenta]")
+        
+        features = training_data['features']
+        returns = training_data['returns']
+        feature_dim = training_data['feature_dim']
+        
+        self.config['feature_dim'] = feature_dim
+        
+        train_end = int(len(features) * 0.7)
+        console.print(f"\n   Fitting scaler on {train_end:,} training samples...")
+        self.feature_extractor.fit_scaler(features[:train_end])
+        
+        console.print("   Normalizing features...")
+        features_normalized = np.array([self.feature_extractor.transform(f) for f in features])
+        
+        val_start = int(len(features) * 0.7)
+        test_start = int(len(features) * 0.85)
+        
+        train_features = features_normalized[:val_start]
+        train_returns = returns[:val_start]
+        val_features = features_normalized[val_start:test_start]
+        val_returns = returns[val_start:test_start]
+        test_features = features_normalized[test_start:]
+        test_returns = returns[test_start:]
+        
+        console.print(f"\n   📊 Data Split:")
+        console.print(f"      Train: {len(train_features):>8,} bars ({len(train_features)/len(features)*100:>5.1f}%)")
+        console.print(f"      Val:   {len(val_features):>8,} bars ({len(val_features)/len(features)*100:>5.1f}%)")
+        console.print(f"      Test:  {len(test_features):>8,} bars ({len(test_features)/len(features)*100:>5.1f}%)")
+        
+        train_dataset = TradingDataset(train_features, train_returns, seq_len=self.config['seq_len'], prediction_horizon=self.config.get('prediction_horizon', 5))
+        val_dataset = TradingDataset(val_features, val_returns, seq_len=self.config['seq_len'], prediction_horizon=self.config.get('prediction_horizon', 5))
+        
+        train_loader = DataLoader(train_dataset, batch_size=self.config.get('batch_size', 32), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
+        val_loader = DataLoader(val_dataset, batch_size=self.config.get('batch_size', 32), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
+        
+        console.print("\n🏗️  [cyan]Building neural architecture...[/cyan]")
+        model = create_model(feature_dim, self.config)
+        
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        console.print(f"   Total parameters:     {total_params:>12,}")
+        console.print(f"   Trainable parameters: {trainable_params:>12,}")
+        
+        trainer = NeuralTrainer(model=model, train_loader=train_loader, val_loader=val_loader, config=self.config, device=self.config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu'))
+        
+        console.print("\n🎯 [bold green]Starting training loop...[/bold green]")
+        trainer.train(self.config.get('num_epochs', 100))
+        console.print(f"[cyan]Train size: {len(train_dataset)}[/cyan]")
+        console.print(f"[cyan]Val size:   {len(val_dataset)}[/cyan]")
 
-        # Date-scoped export name to avoid collisions and overprocessing
-        export_dir = Path('neural_data')
-        export_dir.mkdir(parents=True, exist_ok=True)
-        export_stem = f'{coin}_{interval}_{start_date}_{end_date}_neural_data'
-        export_parquet = export_dir / f'{export_stem}.parquet'
+        import pickle
+        feature_extractor_path = save_path.replace('.pt', '_feature_extractor.pkl')
+        with open(feature_extractor_path, 'wb') as f:
+            pickle.dump(self.feature_extractor, f)
+        
+        console.print(f"\n✅ [bold green]Training complete![/bold green]")
+        console.print(f"   Model saved to: {save_path}")
+        console.print(f"   Feature extractor saved to: {feature_extractor_path}")
+        
+        return trainer, test_features, test_returns
 
-        # Cache hit: fast parquet load plus date filter
-        if export_parquet.exists() and not force_recollect:
-            console.print(f"\n📥 [cyan]Loading cached export: {export_parquet}[/cyan]")
-            df_collected = pl.read_parquet(str(export_parquet))
-            df_collected = df_collected.filter(
-                (pl.col('datetime') >= pl.lit(start_date)) & (pl.col('datetime') <= pl.lit(end_date))
-            )
-            console.print(f"✅ [green]Loaded {len(df_collected):,} bars from cache[/green]")
-            return df_collected
 
-        # Otherwise, run collection once
-        console.print("🔬 [bold cyan]Starting Neural Data Collection[/bold cyan]")
-        console.print(f"   Symbol: {coin}/{collateral}")
-        console.print(f"   Interval: {interval}")
-        console.print(f"   Period: {start_date} → {end_date}")
-
-        console.print("\n🔧 [yellow]Activating TransparencyPatch...[/yellow]")
-        activate_patch(debug=False)
-
-        cerebro = bt.Cerebro(oldbuysell=True, runonce=False, stdstats=False)
-
-        console.print(f"\n📥 [cyan]Loading data for {coin}...[/cyan]")
-        spec = DataSpec(symbol=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral)
-
-        df = self.loader.load_data(spec, use_cache=True)
-        data_feed = self.loader.make_backtrader_feed(df, spec)
-        console.print(f"✅ [green]Loaded {len(df):,} bars[/green]")
-
-        cerebro.adddata(data_feed)
-        cerebro.addstrategy(DataCollectionStrategy, backtest=True, debug=False)
-        cerebro.broker.setcash(10000)
-        cerebro.broker.setcommission(commission=0.001)
-
-        console.print("\n📊 [bold green]Running Backtrader to collect indicator data...[/bold green]")
-        cerebro.run()
-
-        console.print("\n💾 [yellow]Exporting collected data...[/yellow]")
-        df_collected = export_data(filename=export_stem, export_dir=str(export_dir))
-
-        console.print(f"\n✅ [bold green]Collection Complete![/bold green]")
-        console.print(f"   Bars: {len(df_collected):,}")
-        console.print(f"   Features: {len(df_collected.columns)}")
-
-        del cerebro, data_feed
-        import gc; gc.collect()
-
-        return df_collected
-
-# ------------------------------------------------------------------------------
-# Training orchestration
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# TRAINING ORCHESTRATION
+# ==============================================================================
 
 def train_neural_system(
     coin: str = 'BTC',
@@ -394,7 +417,7 @@ def train_neural_system(
     config: Dict = None,
 ):
     """
-    One-command training pipeline using PolarsDataLoader → TransparencyPatch → feature extraction → training. 
+    One-command training pipeline.
     """
     from rich.console import Console
     from rich.panel import Panel
@@ -424,10 +447,9 @@ def train_neural_system(
             'use_wandb': True,
             'run_name': f'neural_{coin}_{interval}',
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-            # Parallel extraction tuning
-            'fe_workers': max(1, (torch.get_num_threads() or 8) - 1),
+            'fe_workers': 4,
             'fe_chunk': 1024,
-            'fe_parallel_threshold': 10_000,
+            'fe_parallel_threshold': 100_000,
         }
 
     console.print(Panel.fit(
@@ -441,16 +463,11 @@ def train_neural_system(
         border_style="cyan",
     ))
 
-    # 1) Collect data (uses cache when available)
     pipeline = NeuralDataPipeline(config)
-    df = pipeline.collect_data_from_backtrader(
-        coin=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral
-    )
+    df = pipeline.collect_data_from_backtrader(coin=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral)
 
-    # 2) Prepare training data (optimized path)
     training_data = pipeline.prepare_training_data(df, prediction_horizon=config['prediction_horizon'])
 
-    # 3) Train model
     model_path = f'models/neural_{coin}_{interval}_{start_date}_{end_date}.pt'
     trainer, test_features, test_returns = pipeline.train_neural_model(training_data, save_path=model_path)
 
@@ -473,397 +490,7 @@ def train_neural_system(
     return pipeline, trainer, training_data
 
 
-# ------------------------------------------------------------------------------
-# Train model (existing implementation, unchanged except for consistent seq_len key)
-# ------------------------------------------------------------------------------
-class NeuralDataPipeline:
-    """
-    Automated pipeline using YOUR existing infrastructure:
-    PolarsDataLoader → Backtrader → TransparencyPatch → Neural Training
-    """
-    
-    def __init__(self, config: Dict):
-        self.config = config
-        self.loader = PolarsDataLoader()
-        
-        from data.feature_extractor import IndicatorFeatureExtractor
-        self.feature_extractor = IndicatorFeatureExtractor(
-            lookback_windows=config.get('lookback_windows', [5, 10, 20, 50, 100])
-        )
-    
-    def collect_data_from_backtrader(
-        self,
-        coin: str = 'BTC',
-        interval: str = '4h',
-        start_date: str = '2018-01-01',
-        end_date: str = '2024-12-31',
-        collateral: str = 'USDT'
-    ) -> pl.DataFrame:
-        """
-        Run backtrader with DataCollectionStrategy to harvest indicator data.
-        Uses YOUR existing PolarsDataLoader infrastructure.
-        """
-        from rich.console import Console
-        console = Console()
-        
-        console.print("🔬 [bold cyan]Starting Neural Data Collection[/bold cyan]")
-        console.print(f"   Symbol: {coin}/{collateral}")
-        console.print(f"   Interval: {interval}")
-        console.print(f"   Period: {start_date} → {end_date}")
-        
-        # Activate transparency patch BEFORE running backtrader
-        console.print("\n🔧 [yellow]Activating TransparencyPatch...[/yellow]")
-        activate_patch(debug=False)
-        
-        # Initialize cerebro
-        cerebro = bt.Cerebro(oldbuysell=True, runonce=False, stdstats=False)
-        
-        # Load data using YOUR PolarsDataLoader
-        console.print(f"\n📥 [cyan]Loading data for {coin}...[/cyan]")
-        spec = DataSpec(
-            symbol=coin,
-            interval=interval,
-            start_date=start_date,
-            end_date=end_date,
-            collateral=collateral
-        )
-        
-        df = self.loader.load_data(spec, use_cache=True)
-        data_feed = self.loader.make_backtrader_feed(df, spec)
-        
-        console.print(f"✅ [green]Loaded {len(df):,} bars[/green]")
-        
-        cerebro.adddata(data_feed)
-        
-        # Add data collection strategy (no trading, just capture)
-        cerebro.addstrategy(
-            DataCollectionStrategy,
-            backtest=True,
-            debug=False
-        )
-        
-        # Set minimal broker settings (not needed for data collection, but required)
-        cerebro.broker.setcash(10000)
-        cerebro.broker.setcommission(commission=0.001)
-        
-        # Run backtest (pure data collection)
-        console.print("\n📊 [bold green]Running Backtrader to collect indicator data...[/bold green]")
-        cerebro.run()
-        
-        # Export collected data
-        console.print("\n💾 [yellow]Exporting collected data...[/yellow]")
-        df_collected = export_data(
-            filename=f'{coin}_{interval}_neural_data',
-            export_dir='neural_data'
-        )
-        
-        console.print(f"\n✅ [bold green]Collection Complete![/bold green]")
-        console.print(f"   Bars: {len(df_collected):,}")
-        console.print(f"   Features: {len(df_collected.columns)}")
-        console.print(f"   OHLCV columns: {len([c for c in df_collected.columns if c in ['open', 'high', 'low', 'close', 'volume']])}")
-        console.print(f"   Indicator features: {len([c for c in df_collected.columns if c not in ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']])}")
-        
-        # Clean up
-        del cerebro, data_feed
-        import gc
-        gc.collect()
-        
-        return df_collected
-
-    def prepare_training_data_optimized(self, pipeline, df, prediction_horizon: int = 5):
-        """
-        Optimized version with batch processing, progress tracking, AND CONSISTENT FEATURE SIZES.
-        """
-        from rich.console import Console
-        from tqdm import tqdm
-        
-        console = Console()
-        console.print("[cyan]Preparing training data (OPTIMIZED)...[/cyan]")
-        
-        df_pd = df.to_pandas()
-        
-        if 'close' not in df_pd.columns:
-            raise ValueError("DataFrame must contain 'close' column")
-        
-        # Calculate forward returns
-        close_prices = df_pd['close'].values
-        returns = np.zeros(len(close_prices))
-        for i in range(len(close_prices) - prediction_horizon):
-            returns[i] = (close_prices[i + prediction_horizon] - close_prices[i]) / close_prices[i]
-        
-        console.print(f"   ✅ Calculated forward returns (horizon={prediction_horizon})")
-        
-        # Build indicator data dict
-        ohlcv_cols = ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']
-        indicator_cols = [c for c in df_pd.columns if c not in ohlcv_cols]
-        
-        console.print(f"   ✅ Found {len(indicator_cols)} indicator features")
-        
-        indicator_data_full = {}
-        for col in df_pd.columns:
-            if col not in ['bar', 'datetime']:
-                indicator_data_full[col] = df_pd[col].fillna(0).values
-        
-        seq_len = pipeline.config.get('seqlen', 100)
-        console.print(f"\n   Extracting features (seq_len={seq_len})...")
-        
-        features_list = []
-        expected_feature_dim = None  # Track expected dimension
-        
-        # Extract features with progress bar AND size validation
-        with tqdm(total=len(df_pd) - seq_len, desc="Extracting features") as pbar:
-            for i in range(seq_len, len(df_pd)):
-                # Build current_data dict (slice up to current bar)
-                current_data = {key: values[:i] for key, values in indicator_data_full.items()}
-                
-                try:
-                    features = pipeline.feature_extractor.extract_all_features(current_data)
-                    
-                    # Convert to numpy array if needed
-                    if not isinstance(features, np.ndarray):
-                        features = np.array(features, dtype=np.float32)
-                    
-                    # Flatten if multi-dimensional
-                    if features.ndim > 1:
-                        features = features.flatten()
-                    
-                    # FIRST ITERATION: Set expected dimension
-                    if expected_feature_dim is None:
-                        expected_feature_dim = len(features)
-                        console.print(f"   Expected feature dimension: {expected_feature_dim}")
-                    
-                    # VALIDATE SIZE
-                    actual_dim = len(features)
-                    if actual_dim != expected_feature_dim:
-                        console.print(f"[yellow]⚠️  Size mismatch at bar {i}: got {actual_dim}, expected {expected_feature_dim}[/yellow]")
-                        
-                        # Pad or truncate to match expected size
-                        if actual_dim < expected_feature_dim:
-                            # Pad with zeros
-                            features = np.pad(features, (0, expected_feature_dim - actual_dim), 
-                                            mode='constant', constant_values=0)
-                        else:
-                            # Truncate
-                            features = features[:expected_feature_dim]
-                    
-                    features_list.append(features)
-                    
-                except Exception as e:
-                    console.print(f"[yellow]⚠️  Warning at bar {i}: {e}[/yellow]")
-                    
-                    # Use correctly sized fallback
-                    if len(features_list) > 0:
-                        # Use zeros with same shape as previous feature
-                        features_list.append(np.zeros_like(features_list[-1]))
-                    elif expected_feature_dim is not None:
-                        # Use zeros with expected dimension
-                        features_list.append(np.zeros(expected_feature_dim, dtype=np.float32))
-                    else:
-                        # Skip this bar if we don't know the dimension yet
-                        console.print(f"[red]❌ Skipping bar {i} - no valid features yet[/red]")
-                        continue
-                
-                pbar.update(1)
-        
-        # SAFE ARRAY CREATION with validation
-        console.print("\n   Creating feature array...")
-        
-        if len(features_list) == 0:
-            raise ValueError("No features extracted! Check your data and feature extractor.")
-        
-        # Debug: Check shapes before creating array
-        console.print(f"   Total features extracted: {len(features_list)}")
-        if len(features_list) > 0:
-            sample_shapes = [f.shape if isinstance(f, np.ndarray) else len(f) for f in features_list[:5]]
-            console.print(f"   Sample shapes (first 5): {sample_shapes}")
-        
-        # Verify all features have consistent shape
-        inconsistent_indices = []
-        first_shape = features_list[0].shape if isinstance(features_list[0], np.ndarray) else (len(features_list[0]),)
-        
-        for idx, f in enumerate(features_list):
-            f_shape = f.shape if isinstance(f, np.ndarray) else (len(f),)
-            if f_shape != first_shape:
-                console.print(f"[red]❌ Inconsistent shape at index {idx}: {f_shape} != {first_shape}[/red]")
-                inconsistent_indices.append(idx)
-        
-        if inconsistent_indices:
-            console.print(f"[red]Found {len(inconsistent_indices)} inconsistent features. Fixing...[/red]")
-            # Fix inconsistent entries by padding/truncating
-            for idx in inconsistent_indices:
-                f = features_list[idx]
-                if len(f) < first_shape[0]:
-                    features_list[idx] = np.pad(f, (0, first_shape[0] - len(f)), mode='constant')
-                else:
-                    features_list[idx] = f[:first_shape[0]]
-        
-        # NOW create the array - should work!
-        try:
-            # Use vstack for safety (handles 1D arrays better than np.array)
-            features = np.vstack(features_list).astype(np.float32)
-        except ValueError as e:
-            console.print(f"[red]❌ Failed to create feature array: {e}[/red]")
-            console.print(f"   features_list length: {len(features_list)}")
-            if len(features_list) > 0:
-                console.print(f"   Unique shapes: {set([f.shape for f in features_list])}")
-            raise
-        
-        # Align returns with features
-        returns = returns[seq_len:seq_len + len(features)]
-        
-        console.print(f"[green]✅ Feature extraction complete![/green]")
-        console.print(f"   Shape: {features.shape}")
-        console.print(f"   Feature dimension: {features.shape[1]}")
-        console.print(f"   NaN count: {np.isnan(features).sum()}")
-        console.print(f"   Inf count: {np.isinf(features).sum()}")
-        
-        # Get timestamps if available
-        timestamps = None
-        if 'datetime' in df_pd.columns:
-            timestamps = df_pd['datetime'].values[seq_len:seq_len + len(features)]
-        
-        return {
-            'features': features,
-            'returns': returns,
-            'feature_dim': features.shape[1],
-            'timestamps': timestamps,
-            'indicator_columns': indicator_cols
-        }
-
-    def prepare_training_data(
-        self,
-        df: pl.DataFrame,
-        prediction_horizon: int = 5
-    ) -> Dict:
-        """Use the optimized version."""
-        return self.prepare_training_data_optimized(self, df, prediction_horizon)
-
-    def train_neural_model(
-        self,
-        training_data: Dict,
-        save_path: str = 'best_model.pt'
-    ):
-        """
-        Train the neural network on collected data.
-        """
-        from rich.console import Console
-        from torch.utils.data import DataLoader
-        from training.trainer import NeuralTrainer, TradingDataset
-        from models.architecture import create_model
-        
-        console = Console()
-        console.print("\n🧠 [bold magenta]Starting Neural Network Training[/bold magenta]")
-        
-        features = training_data['features']
-        returns = training_data['returns']
-        feature_dim = training_data['feature_dim']
-        
-        # Update config with feature dimension
-        self.config['feature_dim'] = feature_dim
-        
-        # Fit scaler on training data
-        train_end = int(len(features) * 0.7)
-        console.print(f"\n   Fitting scaler on {train_end:,} training samples...")
-        self.feature_extractor.fit_scaler(features[:train_end])
-        
-        # Normalize features
-        console.print("   Normalizing features...")
-        features_normalized = np.array([
-            self.feature_extractor.transform(f) for f in features
-        ])
-        
-        # Train/val/test split (chronological, no shuffle)
-        val_start = int(len(features) * 0.7)
-        test_start = int(len(features) * 0.85)
-        
-        train_features = features_normalized[:val_start]
-        train_returns = returns[:val_start]
-        
-        val_features = features_normalized[val_start:test_start]
-        val_returns = returns[val_start:test_start]
-        
-        test_features = features_normalized[test_start:]
-        test_returns = returns[test_start:]
-        
-        console.print(f"\n   📊 Data Split:")
-        console.print(f"      Train: {len(train_features):>8,} bars ({len(train_features)/len(features)*100:>5.1f}%)")
-        console.print(f"      Val:   {len(val_features):>8,} bars ({len(val_features)/len(features)*100:>5.1f}%)")
-        console.print(f"      Test:  {len(test_features):>8,} bars ({len(test_features)/len(features)*100:>5.1f}%)")
-        
-        # Create datasets
-        train_dataset = TradingDataset(
-            train_features, train_returns,
-            seq_len=self.config['seq_len'],
-            prediction_horizon=self.config.get('prediction_horizon', 5)
-        )
-        
-        val_dataset = TradingDataset(
-            val_features, val_returns,
-            seq_len=self.config['seq_len'],
-            prediction_horizon=self.config.get('prediction_horizon', 5)
-        )
-        
-        # Create dataloaders
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=self.config.get('batch_size', 32),
-            shuffle=False,  # Don't shuffle time series!
-            num_workers=4,
-            pin_memory=True if torch.cuda.is_available() else False
-        )
-        
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=self.config.get('batch_size', 32),
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True if torch.cuda.is_available() else False
-        )
-        
-        # Create model
-        console.print("\n🏗️  [cyan]Building neural architecture...[/cyan]")
-        model = create_model(feature_dim, self.config)
-        
-        total_params = sum(p.numel() for p in model.parameters())
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        console.print(f"   Total parameters:     {total_params:>12,}")
-        console.print(f"   Trainable parameters: {trainable_params:>12,}")
-        
-        # Create trainer
-        trainer = NeuralTrainer(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            config=self.config,
-            device=self.config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
-        )
-        
-        # Train
-        console.print("\n🎯 [bold green]Starting training loop...[/bold green]")
-        trainer.train(self.config.get('num_epochs', 100))
-        console.print(f"[cyan]Train size: {len(train_dataset)}[/cyan]")
-        console.print(f"[cyan]Val size:   {len(val_dataset)}[/cyan]")
-
-        # Save feature extractor
-        import pickle
-        feature_extractor_path = save_path.replace('.pt', '_feature_extractor.pkl')
-        with open(feature_extractor_path, 'wb') as f:
-            pickle.dump(self.feature_extractor, f)
-        
-        console.print(f"\n✅ [bold green]Training complete![/bold green]")
-        console.print(f"   Model saved to: {save_path}")
-        console.print(f"   Feature extractor saved to: {feature_extractor_path}")
-        
-        return trainer, test_features, test_returns
-
-# Keep your existing NeuralDataPipeline.train_neural_model(...) here; 
-# ensure it reads seq_len from config['seq_len'] and saves best_model_feature_extractor.pkl 
-# alongside best checkpoints so analysis can run immediately. 
-# ------------------------------------------------------------------------------
-
 if __name__ == '__main__':
-
-    # Test if Pipeline and all around is set, ready, and gucci.
     '''
     DEBUG_config = {
         'seq_len': 10,
@@ -878,7 +505,7 @@ if __name__ == '__main__':
         # parallel controls
         'fe_workers': 4,
         'fe_chunk': 512,
-        'fe_parallel_threshold': 10_000,
+        'fe_parallel_threshold': 100_000,
     }
 
     train_neural_system(
@@ -890,7 +517,7 @@ if __name__ == '__main__':
         config=DEBUG_config,
     )
     '''
-    
+
     full_quant_config = {
         'seq_len': 100,
         'prediction_horizon': 5,
@@ -912,13 +539,11 @@ if __name__ == '__main__':
         'save_every': 10,
         'use_wandb': True,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        # Parallel extraction tuning
-        'fe_workers': max(1, (torch.get_num_threads() or 8) - 1),
+        'fe_workers': 4,
         'fe_chunk': 1024,
-        'fe_parallel_threshold': 10_000,
+        'fe_parallel_threshold': 999999,  # 100_000 Force single-thread 
     }
 
-    # If all is running fine, sit tight.
     train_neural_system(
         coin='BTC',
         interval='4h',

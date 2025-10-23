@@ -7,6 +7,272 @@ from typing import Dict
 from tqdm import tqdm
 import wandb  # For experiment tracking
 
+# TODO :: Save config with metadata
+
+'''
+import json
+import numpy as np
+from pathlib import Path
+from datetime import datetime
+
+
+def save_model_config(
+    model,
+    train_loader,
+    val_loader,
+    returns_array,
+    features_array,
+    config,
+    save_dir='models'
+):
+   
+    # Calculate returns statistics (CRITICAL FOR BACKTEST!)
+    returns_stats = {
+        'mean': float(np.mean(returns_array)),
+        'std': float(np.std(returns_array)),  # ← CRITICAL: return_scale
+        'min': float(np.min(returns_array)),
+        'max': float(np.max(returns_array)),
+        'median': float(np.median(returns_array)),
+        'q25': float(np.percentile(returns_array, 25)),
+        'q75': float(np.percentile(returns_array, 75)),
+    }
+    
+    # Get validation predictions for threshold calibration
+    print("Calculating validation predictions for threshold calibration...")
+    model.eval()
+    val_predictions = {
+        'entry_prob': [],
+        'exit_prob': [],
+        'expected_return': [],
+        'position_size': [],
+        'volatility_forecast': []
+    }
+    
+    with torch.no_grad():
+        for batch_x, _ in val_loader:
+            batch_x = batch_x.to(next(model.parameters()).device)
+            out = model(batch_x)
+            
+            val_predictions['entry_prob'].extend(out['entry_prob'].cpu().numpy().tolist())
+            val_predictions['exit_prob'].extend(out['exit_prob'].cpu().numpy().tolist())
+            val_predictions['expected_return'].extend(out['expected_return'].cpu().numpy().tolist())
+            val_predictions['position_size'].extend(out['position_size'].cpu().numpy().tolist())
+            val_predictions['volatility_forecast'].extend(out['volatility_forecast'].cpu().numpy().tolist())
+    
+    # Calculate validation distributions
+    val_stats = {}
+    for key, values in val_predictions.items():
+        values = np.array(values)
+        val_stats[key] = {
+            'min': float(np.min(values)),
+            'max': float(np.max(values)),
+            'mean': float(np.mean(values)),
+            'std': float(np.std(values)),
+            'p25': float(np.percentile(values, 25)),
+            'p50': float(np.percentile(values, 50)),
+            'p75': float(np.percentile(values, 75)),
+            'p90': float(np.percentile(values, 90)),
+        }
+    
+    # Denormalize expected_return for validation stats
+    val_stats['expected_return_denorm'] = {
+        'min': val_stats['expected_return']['min'] * returns_stats['std'],
+        'max': val_stats['expected_return']['max'] * returns_stats['std'],
+        'mean': val_stats['expected_return']['mean'] * returns_stats['std'],
+        'p50': val_stats['expected_return']['p50'] * returns_stats['std'],
+    }
+    
+    # Build complete config
+    model_config = {
+        'model_metadata': {
+            'version': '1.0.0',
+            'name': config.get('model_name', 'neural_trading_model'),
+            'created_date': datetime.now().isoformat(),
+            'framework': 'pytorch',
+            'model_type': 'transformer_with_vae_regime_detection',
+        },
+        
+        'training_configuration': {
+            'dataset': {
+                'symbol': config.get('symbol', 'BTCUSDT'),
+                'interval': config.get('interval', '4h'),
+                'start_date': config.get('start_date', '2017-01-01'),
+                'end_date': config.get('end_date', '2024-01-01'),
+                'train_split': config.get('train_split', 0.70),
+                'val_split': config.get('val_split', 0.15),
+                'test_split': config.get('test_split', 0.15),
+                'total_samples': len(returns_array),
+                'sequence_length': config.get('seq_len', 100),
+                'prediction_horizon': config.get('prediction_horizon', 1),
+                'returns_calculation': 'bar_to_bar_pct_change',
+                'returns_stats': returns_stats,  # ← CRITICAL!
+            },
+            
+            'labels': {
+                'entry_label': {
+                    'type': 'binary',
+                    'threshold': 0.01,
+                    'description': '1.0 if future_return > 1%, else 0.0'
+                },
+                'exit_label': {
+                    'type': 'binary',
+                    'threshold': -0.005,
+                    'description': '1.0 if future_return < -0.5%, else 0.0'
+                },
+                'expected_return': {
+                    'type': 'regression',
+                    'target': 'future_return',
+                    'normalization': 'tanh_bounded',
+                    'scale_factor': returns_stats['std'],  # ← CRITICAL!
+                    'description': 'Model outputs Tanh [-1, 1], multiply by scale_factor'
+                },
+            },
+            
+            'model_architecture': {
+                'input_dim': features_array.shape[1] if len(features_array.shape) > 1 else features_array.shape[0],
+                'd_model': config.get('d_model', 256),
+                'num_heads': config.get('num_heads', 8),
+                'num_layers': config.get('num_layers', 6),
+                'dropout': config.get('dropout', 0.1),
+                'vae_latent_dim': config.get('vae_latent_dim', 16),
+            },
+            
+            'training_hyperparameters': config.get('hyperparameters', {}),
+        },
+        
+        'validation_distributions': val_stats,  # ← CRITICAL FOR THRESHOLDS!
+        
+        'backtest_requirements': {
+            'critical_parameters': {
+                'return_scale': returns_stats['std'],  # ← CRITICAL!
+                'prediction_horizon': config.get('prediction_horizon', 1),
+                'sequence_length': config.get('seq_len', 100),
+            },
+            
+            'recommended_thresholds': {
+                'min_entry_prob': float(val_stats['entry_prob']['p25']),  # 25th percentile
+                'min_expected_return': float(val_stats['expected_return_denorm']['p25']),
+                'max_exit_prob': float(val_stats['exit_prob']['p75']),  # 75th percentile
+                'comment': 'Calibrated from validation set distributions'
+            },
+        },
+        
+        'file_references': {
+            'model_checkpoint': f"{save_dir}/best_model.pt",
+            'feature_extractor': f"{save_dir}/feature_extractor.pkl",
+            'config_file': f"{save_dir}/model_config.json",
+        }
+    }
+    
+    # Save to JSON
+    config_path = Path(save_dir) / 'model_config.json'
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(config_path, 'w') as f:
+        json.dump(model_config, f, indent=2)
+    
+    print(f"✅ Model config saved to {config_path}")
+    print(f"\n🔑 CRITICAL PARAMETERS:")
+    print(f"   return_scale: {returns_stats['std']:.6f}")
+    print(f"   min_entry_prob: {val_stats['entry_prob']['p25']:.3f}")
+    print(f"   min_expected_return: {val_stats['expected_return_denorm']['p25']:.6f}")
+    print(f"   max_exit_prob: {val_stats['exit_prob']['p75']:.3f}")
+    
+    return model_config
+
+    
+def train_model():
+    """Example training script with config saving"""
+    
+    # Your existing training code...
+    model = NeuralTradingModel(...)
+    train_loader = DataLoader(...)
+    val_loader = DataLoader(...)
+    
+    # Train model
+    for epoch in range(100):
+        # ... training loop ...
+        pass
+    
+    # Save model checkpoint
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'epoch': epoch,
+    }, 'models/best_model.pt')
+    
+    # ← ADD THIS: Save config with critical metadata
+    config = save_model_config(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        returns_array=returns,  # Your returns array
+        features_array=features,  # Your features array
+        config={
+            'symbol': 'BTCUSDT',
+            'interval': '4h',
+            'start_date': '2017-01-01',
+            'end_date': '2024-01-01',
+            'seq_len': 100,
+            'prediction_horizon': 1,
+            'd_model': 256,
+            'num_heads': 8,
+            'num_layers': 6,
+        },
+        save_dir='models'
+    )
+    
+    print("✅ Training complete with config saved!")
+
+
+# ============================================================================
+# LOAD CONFIG IN BACKTEST
+# ============================================================================
+
+def load_model_config(config_path='models/model_config.json'):
+    """Load model config for backtest"""
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    # Extract critical parameters
+    return_scale = config['backtest_requirements']['critical_parameters']['return_scale']
+    min_entry_prob = config['backtest_requirements']['recommended_thresholds']['min_entry_prob']
+    min_expected_return = config['backtest_requirements']['recommended_thresholds']['min_expected_return']
+    
+    print(f"📋 Loaded config:")
+    print(f"   return_scale: {return_scale}")
+    print(f"   min_entry_prob: {min_entry_prob}")
+    print(f"   min_expected_return: {min_expected_return}")
+    
+    return config
+
+
+def run_backtest_with_config():
+    """Run backtest using saved config"""
+    
+    # Load config
+    config = load_model_config('models/model_config.json')
+    
+    # Extract parameters
+    backtest_params = config['backtest_requirements']
+    
+    # Run backtest with CORRECT parameters
+    cerebro.addstrategy(
+        PerfectNeuralStrategy,
+        model_path='models/best_model.pt',
+        feature_extractor_path='models/feature_extractor.pkl',
+        return_scale=backtest_params['critical_parameters']['return_scale'],  # ← FROM CONFIG!
+        min_entry_prob=backtest_params['recommended_thresholds']['min_entry_prob'],
+        min_expected_return=backtest_params['recommended_thresholds']['min_expected_return'],
+        max_exit_prob=backtest_params['recommended_thresholds']['max_exit_prob'],
+        position_size_mode='neural',
+        debug=True
+    )
+    
+    results = cerebro.run()
+    return results
+'''
+
 class TradingDataset(Dataset):
     def __init__(self, features: np.ndarray, returns: np.ndarray, seq_len: int = 100, prediction_horizon: int = 1):
         self.features = torch.as_tensor(features, dtype=torch.float32)
@@ -354,17 +620,17 @@ class NeuralTrainer:
             self.scheduler.step()
             
             # Log to wandb
-            # if self.config.get('use_wandb', True):
-            #     wandb.log({
-            #         'epoch': epoch,
-            #         'train_loss': train_loss,
-            #         'val_loss': val_loss,
-            #         'entry_accuracy': entry_acc,
-            #         'exit_accuracy': exit_acc,
-            #         'learning_rate': self.optimizer.param_groups[0]['lr'],
-            #         **{f'train_{k}': v for k, v in train_components.items()},
-            #         **{f'val_{k}': v for k, v in val_components.items()}
-            #     })
+            if self.config.get('use_wandb', True):
+                wandb.log({
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'val_loss': val_loss,
+                    'entry_accuracy': entry_acc,
+                    'exit_accuracy': exit_acc,
+                    'learning_rate': self.optimizer.param_groups[0]['lr'],
+                    **{f'train_{k}': v for k, v in train_components.items()},
+                    **{f'val_{k}': v for k, v in val_components.items()}
+                })
             
             print(f"\nEpoch {epoch} Summary:")
             print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")

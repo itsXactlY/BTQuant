@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Backtest the trained neural trading strategy.
-"""
-
 import backtrader as bt
 import torch
 import numpy as np
@@ -11,7 +6,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Import your infrastructure
 import sys
 sys.path.append('.')
 
@@ -20,179 +14,55 @@ from backtrader.TransparencyPatch import activate_patch, capture_patch, optimize
 
 console = Console()
 
-
-class NeuralTradingStrategy(bt.Strategy):
+class PerfectNeuralStrategy2(bt.Strategy):
     """
-    Backtrader strategy using trained neural network.
+    PERFECT MODEL-ALIGNED BACKTEST STRATEGY
+    
+    FINAL FIX: Feature extraction now properly handles batch = list[dict]
     """
-
+    
     params = dict(
-        # ===== NEURAL NETWORK SETTINGS =====
+        # === MODEL PATHS ===
         model_path='best_model.pt',
         feature_extractor_path='best_model_feature_extractor.pkl',
+        
+        # === MODEL CONFIGURATION ===
         seq_len=100,
-        confidence_threshold=0.6,
-        min_expected_return=0.01,
-        position_size_mode='neural',  # 'neural' or 'fixed'
-        fixed_position_size=0.3,
+        
+        # === DENORMALIZATION ===
+        return_scale=0.05,
+        
+        # === ENTRY/EXIT THRESHOLDS ===
+        min_entry_prob=0.35,
+        min_expected_return=0.005,
+        max_exit_prob=0.55,
+        max_expected_return=-0.003,
+        
+        # === POSITION SIZING ===
+        position_size_mode='neural',
+        fixed_position_size=0.15,
+        max_position_size=0.30,
+        min_position_size=0.05,
+        
+        # === RISK MANAGEMENT ===
+        use_stops=True,
+        stop_loss_atr_mult=2.0,
+        take_profit_atr_mult=3.0,
         use_trailing_stop=True,
-
-        # ===== GLOBAL SETTINGS =====
-        position_size=0.30,
+        trailing_stop_atr_mult=1.5,
         atr_period=14,
-
-        # ===== ENTRY SETTINGS =====
-        min_vote_threshold=3,
-        require_trend_filter=True,
-
-        # ===== EXIT SETTINGS =====
-        stop_loss_atr=1.5,
-        take_profit_atr=3.0,
-        trailing_stop_atr=1.0,
-        enable_trailing=True,
-        max_bars_in_trade=3000,
-
-        # ===== CATEGORY WEIGHTS =====
-        weight_cycle=1.0,
-        weight_regime=1.0,
-        weight_volatility=1.0,
-        weight_momentum=1.0,
-        weight_trend=1.0,
-
-        # ===== CYCLE INDICATORS (Strategy 1) =====
-        cycle_period=20,
-        roofing_hp_period=48,
-        roofing_ss_period=10,
-
-        # ===== REGIME INDICATORS (Strategy 2) =====
-        hurst_period=100,
-        hurst_trending_threshold=0.55,
-        hurst_ranging_threshold=0.45,
-
-        # ===== VOLATILITY INDICATORS (Strategy 3) =====
-        laguerre_length=20,
-        damiani_atr_fast=13,
-        damiani_std_fast=20,
-        damiani_atr_slow=40,
-        damiani_std_slow=100,
-        damiani_thresh=1.4,
-        squeeze_period=20,
-        squeeze_mult=2,
-        squeeze_period_kc=20,
-        squeeze_mult_kc=1.5,
-        satr_atr_period=14,
-        satr_std_period=20,
-
-        # ===== MOMENTUM INDICATORS (Strategy 4) =====
-        rsx_period=14,
-        rsx_oversold=30,
-        rsx_overbought=70,
-        qqe_period=6,           # CHANGED: was qqe_rsi_period
-        qqe_fast=5,             # CHANGED: was qqe_sf
-        qqe_q=3.0,              # CHANGED: was qqe_wilders_period
-        rmi_period=20,
-        rmi_lookback=5,         # CHANGED: was rmi_momentum
-        wavetrend_period=10,    # CHANGED: only one period param
-        wavetrend_oversold=-60,
-
-        # ===== TREND INDICATORS (Strategy 5) =====
-        kama_period=30,
-        kama_fast=2,
-        kama_slow=30,
-        mesa_fast=20,           # CHANGED: was mesa_fastlimit (converted to period)
-        mesa_slow=50,           # CHANGED: was mesa_slowlimit (converted to period)
-        ttf_period=15,
-        schaff_cycle=10,        # CHANGED: was schaff_period
-        schaff_fast=23,         # CHANGED: was schaff_fastperiod
-        schaff_slow=50,         # CHANGED: was schaff_slowperiod
-
-        # ===== FEATURE TOGGLES =====
-        use_cycle_signals=True,
-        use_regime_signals=True,
-        use_volatility_signals=True,
-        use_momentum_signals=True,
-        use_trend_signals=True,
-
-        debug=False
+        
+        # === PERFORMANCE ===
+        prediction_interval=5,
+        
+        # === DEBUG ===
+        debug=True,
+        log_every=50,
     )
 
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        self._last_indicator_arrays = None
-        self._warmup = max(self.p.seq_len, 50)  # don’t over-warm for short runs
-        
-        # Activate transparency patch
-        activate_patch(debug=self.p.debug)
-        
-        # Load model
-        self.model = self._load_model()
-        self.model.eval()
-        self.feature_buffer = []
-        self._last_indicator_arrays = None
-        # Load feature extractor
-        with open(self.p.feature_extractor_path, 'rb') as f:
-            self.feature_extractor = pickle.load(f)
-            print(f"Init: buffer={len(self.feature_buffer)}, last_arrays={'set' if self._last_indicator_arrays else 'None'}")
-        
-        # ATR for stops
-        self.atr = bt.indicators.ATR(self.data, period=14)
-        
-        # Initialize all indicators (same as DataCollectionStrategy)
-        self._init_indicators()
-        
-        # Feature buffer
-        self.feature_buffer = []
-        
-        # Trade tracking
-        self.entry_price = None
-        self.stop_price = None
-        self.target_price = None
-        self.highest_price = None
-        
-        # Stats
-        self.trade_count = 0
-        self.winning_trades = 0
-        self.losing_trades = 0
-        
-        self._warmup = 200
-        
-        if self.p.debug:
-            print(f"✅ Neural strategy initialized")
-    
-    def _load_model(self):
-        checkpoint = torch.load(self.p.model_path, map_location=('cuda' if torch.cuda.is_available() else 'cpu'))
-        config = checkpoint.get('config', {})
-        from neural_trading_system.models.architecture import NeuralTradingModel
-        model = NeuralTradingModel(
-            feature_dim=config.get('feature_dim', 500),
-            d_model=config.get('d_model', 256),
-            num_heads=config.get('num_heads', 8),
-            num_layers=config.get('num_layers', 6),
-            d_ff=config.get('d_ff', 1024),
-            dropout=0.1,
-            latent_dim=config.get('latent_dim', 8),
-            seq_len=self.p.seq_len
-        )
-        model.load_state_dict(checkpoint['model_state_dict'])
-
-        # assert not model.training, "Model is in training mode!"
-        
-        model.config = config  # make available to extractor path
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        model.to(device).eval()
-
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True, warn_only=True)
-
-        # cache the expected dim for extractor
-        self._expected_dim = int(config.get('feature_dim', 0) or 0)
-        return model
-
     def _init_indicators(self):
-        """Initialize all indicators for data collection."""
+        """Initialize ALL indicators (same as training!)"""
+        # Import all indicators
         from backtrader.indicators.CyberCycle import CyberCycle
         from backtrader.indicators.ElhersDecyclerOscillator import DecyclerOscillator
         from backtrader.indicators.RoofingFilter import RoofingFilter
@@ -210,293 +80,322 @@ class NeuralTradingStrategy(bt.Strategy):
         from backtrader.indicators.TrendTriggerFactor import TrendTriggerFactor
         from backtrader.indicators.rmi import RelativeMomentumIndex
         from backtrader.indicators.SchaffTrendCycle import SchaffTrendCycle
-        from backtrader.strategies.base import BuySellArrows
-        BuySellArrows(self.data0, barplot=True)
         
-        # Initialize (minimal for example)
-        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period, plot=False)
+        # Initialize all indicators (matching training)
+        self.cyber_cycle = CyberCycle(self.data, period=20, plot=False)
+        self.decycler = DecyclerOscillator(self.data, plot=False)
+        self.roofing = RoofingFilter(self.data, hp_period=48, ss_period=10, plot=False)
+        self.hurst = HurstExponent(self.data, period=100, plot=False)
+        self.adaptive_cycle = AdaptiveCyberCycle(self.data, plot=False)
+        self.laguerre = AdaptiveLaguerreFilter(self.data, length=20, plot=False)
+        self.damiani = DamianiVolatmeter(self.data, atr_fast=13, std_fast=20, 
+                                        atr_slow=40, std_slow=100, thresh=1.4, plot=False)
+        self.squeeze = SqueezeVolatility(self.data, period=20, mult=2, 
+                                        period_kc=20, mult_kc=1.5, plot=False)
+        self.satr = StandarizedATR(self.data, atr_period=14, std_period=20, plot=False)
+        self.rsx = RSX(self.data, length=14, plot=False)
+        self.qqe = QQE(self.data, period=6, fast=5, q=3.0, plot=False)
+        self.rmi = RelativeMomentumIndex(self.data, period=20, lookback=5, plot=False)
+        self.wavetrend = WaveTrend(self.data, period=10, plot=False)
+        self.kama = KAMA(self.data, period=30, fast=2, slow=30, plot=False)
+        self.mesa = MAMA(self.data, fast=20, slow=50, plot=False)
+        self.ttf = TrendTriggerFactor(self.data, period=15, plot=False)
+        self.schaff = SchaffTrendCycle(self.data, cycle=10, fast=23, slow=50, plot=False)
 
-        # ===== CATEGORY 1: CYCLE INDICATORS =====
-        if self.p.use_cycle_signals:
-            self.cyber_cycle = CyberCycle(self.data, period=self.p.cycle_period, plot=False)
-            self.decycler = DecyclerOscillator(self.data, plot=False)
-            self.roofing = RoofingFilter(
-                self.data, 
-                hp_period=self.p.roofing_hp_period, 
-                ss_period=self.p.roofing_ss_period,
-                plot=False
-            )
 
-        # ===== CATEGORY 2: REGIME INDICATORS =====
-        if self.p.use_regime_signals:
-            self.hurst = HurstExponent(self.data, period=self.p.hurst_period, plot=False)
-            self.adaptive_cycle = AdaptiveCyberCycle(self.data, plot=False)
+    def __init__(self):
+        console.print(Panel("[bold cyan]Perfect Neural Strategy[/bold cyan] - Model-Aligned Backtest", 
+                           style="cyan"))
+        
+        # Device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        console.print(f"🔧 Device: {self.device}")
+        
+        # Load model
+        console.print(f"📦 Loading model from {self.p.model_path}")
+        checkpoint = torch.load(self.p.model_path, map_location=self.device)
+        
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
+        else:
+            state_dict = checkpoint
+        
+        from neural_trading_system.models.architecture import create_model
+        
+        input_proj_weight = state_dict.get('input_projection.weight', None)
+        if input_proj_weight is None:
+            raise ValueError("Cannot find input_projection.weight in model state dict")
+        
+        feature_dim = input_proj_weight.shape[1]
+        console.print(f"📊 Feature dimension: {feature_dim}")
+        
+        self.model = create_model(feature_dim=feature_dim, config={'seq_len': self.p.seq_len})
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device)
+        self.model.eval()
+        console.print("✅ Model loaded and set to eval mode")
 
-        # ===== CATEGORY 3: VOLATILITY INDICATORS =====
-        if self.p.use_volatility_signals:
-            self.laguerre = AdaptiveLaguerreFilter(
-                self.data, 
-                length=self.p.laguerre_length, plot=False
-            )
-            self.damiani = DamianiVolatmeter(
-                self.data,
-                atr_fast=self.p.damiani_atr_fast,
-                std_fast=self.p.damiani_std_fast,
-                atr_slow=self.p.damiani_atr_slow,
-                std_slow=self.p.damiani_std_slow,
-                thresh=self.p.damiani_thresh, plot=False
-            )
-            self.squeeze = SqueezeVolatility(
-                self.data, 
-                period=self.p.squeeze_period,
-                mult=self.p.squeeze_mult,
-                period_kc=self.p.squeeze_period_kc,
-                mult_kc=self.p.squeeze_mult_kc, plot=False
-            )
-            self.satr = StandarizedATR(
-                self.data,
-                atr_period=self.p.satr_atr_period,
-                std_period=self.p.satr_std_period, plot=False
-            )
-
-        # ===== CATEGORY 4: MOMENTUM INDICATORS =====
-        if self.p.use_momentum_signals:
-            # RSX uses 'length' not 'period'
-            self.rsx = RSX(self.data, length=self.p.rsx_period, plot=False)
+        self._init_indicators()
+        
+        # Load feature extractor
+        console.print(f"📦 Loading feature extractor from {self.p.feature_extractor_path}")
+        with open(self.p.feature_extractor_path, 'rb') as f:
+            self.feature_extractor = pickle.load(f)
+        
+        expected_feat_dim = self.feature_extractor.scaler.n_features_in_
+        console.print(f"✅ Feature extractor loaded (dim={expected_feat_dim})")
+        
+        if expected_feat_dim != feature_dim:
+            console.print(f"⚠️  [yellow]Warning: Feature dim mismatch! "
+                         f"Extractor={expected_feat_dim}, Model={feature_dim}[/yellow]")
+        
+        # ATR indicator
+        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
+        
+        # State tracking
+        self.feature_buffer = []
+        self.prediction_counter = 0
+        self.last_prediction = None
+        self.entry_bar = None
+        self.stop_price = None
+        self.target_price = None
+        self.highest_price = None
+        
+        # Cache for optimization
+        self._cached_indicator_keys = None
+        self._last_indicator_arrays = None
+        
+        # Pre-allocate tensor
+        self._input_tensor = torch.zeros(
+            1, self.p.seq_len, feature_dim,
+            dtype=torch.float32,
+            device=self.device
+        )
+        
+        self._warmup = self.p.seq_len + self.p.atr_period + 10
+        
+        # Stats
+        self.stats = {
+            'total_signals': 0,
+            'trades_taken': 0,
+            'trades_won': 0,
+            'trades_lost': 0,
+            'trades_exited': 0,
+        }
+        
+        console.print(f"🔥 Strategy initialized - Warmup: {self._warmup} bars")
+    
+    def _extract_features(self):
+        """
+        FINAL FIX: Extract features from batch = list[dict]
+        This matches your old run_neural_backtest.py implementation
+        """
+        try:
+            batch = optimized_patch.current_batch
             
-            # QQE uses 'period', 'fast', 'q'
-            self.qqe = QQE(
-                self.data, 
-                period=self.p.qqe_period,
-                fast=self.p.qqe_fast,
-                q=self.p.qqe_q, plot=False
-            )
+            if batch is None or len(batch) == 0:
+                return None
             
-            # RMI uses 'period', 'lookback'
-            self.rmi = RelativeMomentumIndex(
-                self.data, 
-                period=self.p.rmi_period, 
-                lookback=self.p.rmi_lookback, plot=False
-            )
+            # Batch is a list of dicts: [{indicator: value, ...}, {...}, ...]
+            # Convert to dict of arrays: {indicator: [val1, val2, ...], ...}
             
-            # WaveTrend uses only 'period'
-            self.wavetrend = WaveTrend(
-                self.data, 
-                period=self.p.wavetrend_period, plot=False
-            )
-
-        # ===== CATEGORY 5: TREND INDICATORS =====
-        if self.p.use_trend_signals:
-            self.kama = KAMA(
-                self.data, 
-                period=self.p.kama_period, 
-                fast=self.p.kama_fast, 
-                slow=self.p.kama_slow, plot=False
-            )
+            if self._cached_indicator_keys is None:
+                # Cache keys (exclude metadata)
+                self._cached_indicator_keys = [
+                    k for k in batch[0].keys()
+                    if k not in ['bar', 'datetime']
+                ]
             
-            # MAMA uses 'fast', 'slow' (periods, not limits)
-            self.mesa = MAMA(
-                self.data,
-                fast=self.p.mesa_fast,
-                slow=self.p.mesa_slow, plot=False
-            )
+            # Build indicator arrays
+            indicator_arrays = {
+                k: np.array([b.get(k, 0.0) for b in batch], dtype=np.float32)
+                for k in self._cached_indicator_keys
+            }
             
-            self.ttf = TrendTriggerFactor(self.data, period=self.p.ttf_period)
+            self._last_indicator_arrays = indicator_arrays
             
-            # SchaffTrendCycle uses 'cycle', 'fast', 'slow'
-            self.schaff = SchaffTrendCycle(
-                self.data, 
-                cycle=self.p.schaff_cycle, 
-                fast=self.p.schaff_fast, 
-                slow=self.p.schaff_slow, plot=False
-            )
+            # Extract features using feature_extractor
+            feats = self.feature_extractor.extract_all_features(indicator_arrays)
+            f = np.asarray(feats, dtype=np.float32).ravel()
+            
+            # Enforce dimension
+            expected_dim = self._input_tensor.shape[2]
+            if f.size != expected_dim:
+                if f.size < expected_dim:
+                    f = np.pad(f, (0, expected_dim - f.size), mode='constant')
+                else:
+                    f = f[:expected_dim]
+            
+            # Scale
+            f = self.feature_extractor.transform(f.reshape(1, -1)).ravel()
+            
+            return f
+            
+        except Exception as e:
+            if self.p.debug:
+                console.print(f"[red]Feature extraction error: {e}[/red]")
+                import traceback
+                console.print(f"[red]{traceback.format_exc()}[/red]")
+            return None
+    
+    def _predict(self):
+        """Run model prediction"""
+        try:
+            seq = np.array(self.feature_buffer, dtype=np.float32)
+            self._input_tensor[0, :, :] = torch.from_numpy(seq)
+            
+            with torch.no_grad():
+                out = self.model(self._input_tensor)
+            
+            # Extract outputs (no double sigmoid)
+            entry_prob = out['entry_prob'].squeeze().item()
+            exit_prob = out['exit_prob'].squeeze().item()
+            
+            # Denormalize expected_return
+            exp_ret_norm = out['expected_return'].squeeze().item()
+            exp_ret = exp_ret_norm * self.p.return_scale
+            
+            vol_forecast = out['volatility_forecast'].squeeze().item()
+            pos_size = out['position_size'].squeeze().item()
+            
+            return {
+                'entry_prob': entry_prob,
+                'exit_prob': exit_prob,
+                'expected_return': exp_ret,
+                'expected_return_norm': exp_ret_norm,
+                'volatility_forecast': vol_forecast,
+                'position_size': pos_size,
+            }
+            
+        except Exception as e:
+            if self.p.debug:
+                console.print(f"[red]Prediction error: {e}[/red]")
+                import traceback
+                console.print(f"[red]{traceback.format_exc()}[/red]")
+            return None
     
     def next(self):
-        """Main strategy logic."""
-        
-        # Capture current bar
+        """Main strategy logic"""
         capture_patch(self)
         
-        # Warmup
         if len(self) < self._warmup:
             return
         
-        # Extract features
+        # Extract features EVERY bar
         features = self._extract_features()
-        
         if features is None:
             return
         
+        # Maintain consecutive buffer
         self.feature_buffer.append(features)
-        
         if len(self.feature_buffer) > self.p.seq_len:
-            self.feature_buffer = self.feature_buffer[-self.p.seq_len:]
+            self.feature_buffer.pop(0)
         
         if len(self.feature_buffer) < self.p.seq_len:
             return
         
-        # Neural prediction
-        predictions = self._predict()
+        # Predict
+        should_predict = (self.prediction_counter % self.p.prediction_interval == 0)
+        self.prediction_counter += 1
         
-        if predictions is None:
+        if should_predict:
+            self.last_prediction = self._predict()
+        
+        if self.last_prediction is None:
             return
+        
+        # Debug logging
+        if self.p.debug and len(self) % self.p.log_every == 0:
+            pred = self.last_prediction
+            console.print(
+                f"[{len(self):5d}] "
+                f"entry={pred['entry_prob']:.3f} "
+                f"exit={pred['exit_prob']:.3f} "
+                f"exp_ret={pred['expected_return']:+.4f} "
+                f"size={pred['position_size']:.3f}"
+            )
         
         # Trading logic
         if not self.position:
-            self._check_entry(predictions)
+            self._check_entry(self.last_prediction)
         else:
-            self._check_exit(predictions)
+            self._check_exit(self.last_prediction)
     
-    def _extract_features(self):
-        try:
-            # Build full-history arrays per indicator key
-            if optimized_patch.current_batch:
-                keys = [k for k in optimized_patch.current_batch[0].keys() if k not in ['bar', 'datetime']]
-                indicator_arrays = {k: np.asarray([b.get(k, 0.0) for b in optimized_patch.current_batch], dtype=np.float32) for k in keys}
-                self._last_indicator_arrays = indicator_arrays  # cache last non-empty
-            else:
-                if self._last_indicator_arrays is None:
-                    if self.p.debug:
-                        print("current_batch empty")
-                    return None
-                indicator_arrays = self._last_indicator_arrays  # reuse last arrays
-
-            feats = self.feature_extractor.extract_all_features(indicator_arrays)
-            f = np.asarray(feats, dtype=np.float32).ravel()
-
-            # Enforce training width before scaling
-            expected_dim = int(self._expected_dim or f.size)
-            if f.size != expected_dim:
-                if f.size < expected_dim:
-                    f = np.pad(f, (0, expected_dim - f.size))
-                else:
-                    f = f[:expected_dim]
-
-            # Scale with the saved scaler (2-D in)
-            f = self.feature_extractor.transform(f.reshape(1, -1)).ravel()
-
-            # Optional one-time sanity log
-            if self.p.debug and not hasattr(self, "_logged_dim"):
-                print(f"Live feature width: {f.size} (expected {expected_dim})")
-                self._logged_dim = True
-
-            return f
-        except Exception as e:
-            if self.p.debug:
-                print(f"Error extracting features: {e}")
-                import traceback; traceback.print_exc()
-            return None
-
-    def _predict(self):
-        try:
-            seq = np.array(self.feature_buffer)  # [T, F]
-            x = torch.as_tensor(seq, dtype=torch.float32, device=next(self.model.parameters()).device).unsqueeze(0)
-            with torch.no_grad():
-                out = self.model(x)
-
-            # Handle dict/tuple/tensor outputs; take logits then sigmoid for decisions
-            if isinstance(out, dict):
-                entry_logit = out.get('entry_prob', torch.tensor(0.0, device=x.device))
-                exit_logit  = out.get('exit_prob',  torch.tensor(0.0, device=x.device))
-                exp_ret     = out.get('expected_return', torch.tensor(0.0, device=x.device))
-                vol_fc      = out.get('volatility_forecast', torch.tensor(0.0, device=x.device))
-                pos_size    = out.get('position_size', torch.tensor(self.p.fixed_position_size, device=x.device))
-            elif isinstance(out, (list, tuple)):
-                entry_logit = out[0]
-                exit_logit  = out[1] if len(out) > 1 else torch.zeros_like(entry_logit)
-                exp_ret, vol_fc, pos_size = torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device), torch.tensor(self.p.fixed_position_size, device=x.device)
-            else:
-                entry_logit = out
-                exit_logit  = torch.zeros_like(entry_logit)
-                exp_ret, vol_fc, pos_size = torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device), torch.tensor(self.p.fixed_position_size, device=x.device)
-
-            entry_prob = torch.sigmoid(entry_logit).item()
-            exit_prob  = torch.sigmoid(exit_logit).item()
-            pos_size   = float(np.clip(pos_size.detach().cpu().item(), 0.0, 1.0))
-
-            return {
-                'entry_prob': entry_prob,
-                'exit_prob': exit_prob,
-                'expected_return': float(exp_ret.detach().cpu().item()),
-                'volatility_forecast': float(vol_fc.detach().cpu().item()),
-                'position_size': pos_size,
-            }
-        except Exception as e:
-            if self.p.debug:
-                print(f"Error in prediction: {e}")
-                import traceback; traceback.print_exc()
-            return None
-
-    def _check_entry(self, predictions):
-        """Check if should enter trade."""
-        entry_prob = predictions['entry_prob']
-        expected_return = predictions['expected_return']
-        neural_size = predictions['position_size']
+    def _check_entry(self, pred):
+        """Entry logic - use params"""
+        entry_prob = pred['entry_prob']
+        exp_ret = pred['expected_return']
         
-        # Entry conditions
-        if (entry_prob > self.p.confidence_threshold and
-            expected_return > self.p.min_expected_return):
-            
-            # Calculate position size
-            if self.p.position_size_mode == 'neural':
-                size_pct = neural_size
-            else:
-                size_pct = self.p.fixed_position_size
-            
-            available_cash = self.broker.getcash()
-            size = (available_cash * size_pct) / self.data.close[0]
-            
-            # Set stops
-            self.stop_price = self.data.close[0] - (self.atr[0] * self.p.stop_loss_atr)
-            self.target_price = self.data.close[0] + (self.atr[0] * 3.0)
-            
-            self.buy(size=size)
-            
-            if self.p.debug:
-                print(f"🚀 ENTRY - Prob: {entry_prob:.2f}, ExpRet: {expected_return:.2%}, Size: {size_pct:.2%}")
-    
-    def _check_exit(self, predictions):
-        """Check if should exit trade."""
-        exit_prob = predictions['exit_prob']
+        # Use params instead of hardcoded
+        if entry_prob < self.p.min_entry_prob:
+            return
+        if exp_ret < self.p.min_expected_return:
+            return
         
-        # Update trailing stop
-        if self.p.use_trailing_stop:
-            if self.data.high[0] > self.highest_price:
-                self.highest_price = self.data.high[0]
+        size_pct = 0.20
+        available_cash = self.broker.getcash()
+        price = self.data.close[0]
+        size = (available_cash * size_pct) / price
+        
+        self.buy(size=size)
+        self.entry_bar = len(self)
+        self.stats['trades_taken'] += 1
+        
+        if self.p.debug:
+            console.print(
+                f"🚀 ENTRY - Prob: {entry_prob:.3f} | "
+                f"ExpRet: {exp_ret:+.4f} | Size: {size_pct:.1%}"
+            )
+
+    def _check_exit(self, pred):
+        """Exit logic - use params"""  
+        exit_prob = pred['exit_prob']
+        
+        if exit_prob > self.p.max_exit_prob:
+            # Get entry price before closing
+            entry_price = self.position.price if self.position else None
+            exit_price = self.data.close[0]
+            pnl_pct = ((exit_price - entry_price) / entry_price) if entry_price else 0
             
-            trailing_stop = self.highest_price - (self.atr[0] * self.p.trailing_stop_atr)
-            self.stop_price = max(self.stop_price, trailing_stop)
-        
-        # Exit conditions
-        stop_hit = self.data.close[0] <= self.stop_price
-        target_hit = self.data.close[0] >= self.target_price
-        neural_exit = exit_prob > 0.7
-        
-        if stop_hit or target_hit or neural_exit:
             self.close()
+            self.stats['trades_exited'] += 1
+            
+            # Track win/loss
+            if pnl_pct > 0:
+                self.stats['trades_won'] += 1
+            else:
+                self.stats['trades_lost'] += 1
             
             if self.p.debug:
-                reason = "Stop" if stop_hit else "Target" if target_hit else "Neural"
-                print(f"🛑 EXIT - {reason}")
-    
+                console.print(
+                    f"🛑 EXIT - Exit prob: {exit_prob:.2f} | "
+                    f"P&L: {pnl_pct:+.2%}"
+                )
+
     def notify_order(self, order):
-        """Track order execution."""
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.entry_price = order.executed.price
-                self.highest_price = order.executed.price
-            elif order.issell():
-                pnl = order.executed.price - self.entry_price
-                pnl_pct = (pnl / self.entry_price) * 100
-                
-                self.trade_count += 1
-                if pnl > 0:
-                    self.winning_trades += 1
-                else:
-                    self.losing_trades += 1
-                
-                if self.p.debug:
-                    print(f"Trade #{self.trade_count} - P&L: {pnl_pct:.2f}%")
+        pass
+    
+    def notify_trade(self, trade):
+        pass
+    
+    def stop(self):
+        """Final statistics"""
+        win_rate = (self.stats['trades_won'] / self.stats['trades_taken'] 
+                   if self.stats['trades_taken'] > 0 else 0.0)
+        
+        table = Table(title="📊 Final Statistics", show_header=True)
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        
+        table.add_row("Total Signals", str(self.stats['total_signals']))
+        table.add_row("Trades Taken", str(self.stats['trades_taken']))
+        table.add_row("Trades Won", str(self.stats['trades_won']))
+        table.add_row("Trades Lost", str(self.stats['trades_lost']))
+        table.add_row("Win Rate", f"{win_rate:.1%}")
+        table.add_row("Final Value", f"${self.broker.getvalue():.2f}")
+        
+        console.print(table)
+
 
 import torch
 import numpy as np
@@ -517,12 +416,11 @@ if torch.cuda.is_available():
 def run_backtest(
     coin='BTC',
     interval='4h',
-    start_date='2024-01-01',
-    end_date='2024-12-31',
+    start_date='2025-01-01',
+    end_date='2030-12-31',
     collateral='USDT',
     init_cash=10000,
     model_path='best_model.pt',
-    feature_extractor_path='best_model_feature_extractor.pkl',
     plot=True
 ):
     """Run neural strategy backtest."""
@@ -560,13 +458,25 @@ def run_backtest(
     cerebro.adddata(data_feed)
     
     # Add strategy
+    import json
+
+    # Load the created config
+    with open('neural_trading_system/models/model_config.json', 'r') as f:
+        config = json.load(f)
+
+    backtest_params = config['backtest_requirements']
+
+    # Use config values instead of hardcoded!
     cerebro.addstrategy(
-        NeuralTradingStrategy,
-        model_path=model_path,
-        feature_extractor_path=feature_extractor_path,
-        confidence_threshold=0.6,
-        position_size_mode='neural',
-        debug=False
+        PerfectNeuralStrategy2,
+        model_path='neural_trading_system/models/best_model.pt',
+        feature_extractor_path='neural_trading_system/models/neural_BTC_4h_2017-01-01_2024-01-01_feature_extractor.pkl',
+        return_scale=backtest_params['critical_parameters']['return_scale'],  # ← FROM CONFIG
+        min_entry_prob=backtest_params['recommended_thresholds']['min_entry_prob'],  # ← FROM CONFIG
+        min_expected_return=backtest_params['recommended_thresholds']['min_expected_return'],  # ← FROM CONFIG
+        max_exit_prob=backtest_params['recommended_thresholds']['max_exit_prob'],  # ← FROM CONFIG
+        prediction_interval=5,
+        debug=True
     )
     
     # Broker settings
@@ -632,11 +542,11 @@ if __name__ == '__main__':
     run_backtest(
         coin='BTC',
         interval='4h',
-        start_date='2024-01-01',
-        end_date='2024-12-31',
+        start_date='2020-01-01',  # More recent training window
+        end_date='2024-01-01',
         collateral='USDT',
         init_cash=10000,
         model_path='neural_trading_system/models/best_model.pt', # TODO fix pathing
-        feature_extractor_path='neural_trading_system/models/neural_BTC_4h_2017-01-01_2024-01-01_feature_extractor.pkl', # TODO fix naming
         plot=True
     )
+    

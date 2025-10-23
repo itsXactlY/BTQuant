@@ -6,7 +6,7 @@ import pandas as pd
 
 console = Console()
 
-file = "BTC_4h_neural_data.parquet"
+file = "BTC_4h_2017-01-01_2024-01-01_neural_data.parquet"
 
 # Load once
 base_pl = pl.read_parquet(file)
@@ -73,3 +73,19 @@ console.print("[bold green]\n✅ Conclusion:[/bold green] Even when processing 1
               "[cyan]Polars[/cyan] obliterates [yellow]Pandas[/yellow] — "
               "massively faster, fully parallel, and memory-efficient.\n"
               "[dim]Perfect for multi-year, sub-minute neural datasets in BTQuant.[/dim]\n")
+
+
+
+
+console.print(f"[bold cyan]File:[/bold cyan] {file}")
+console.print(f"[dim]Shape:[/dim] {base_pl.shape[0]:,} rows × {base_pl.shape[1]} columns")
+
+table = Table(title="Schema", show_lines=False)
+table.add_column("Column", style="cyan")
+table.add_column("Type", style="green")
+for col, dtype in base_pl.schema.items():
+    table.add_row(col, str(dtype))
+console.print(table)
+
+console.print("[bold green]Preview:[/bold green]")
+console.print(base_pl.head(50))

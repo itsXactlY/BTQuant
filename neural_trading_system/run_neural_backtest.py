@@ -28,6 +28,7 @@ class NeuralTradingStrategy(bt.Strategy):
     """
 
     params = dict(
+        # ===== NEURAL NETWORK SETTINGS =====
         model_path='best_model.pt',
         feature_extractor_path='best_model_feature_extractor.pkl',
         seq_len=100,
@@ -113,7 +114,7 @@ class NeuralTradingStrategy(bt.Strategy):
         use_momentum_signals=True,
         use_trend_signals=True,
 
-        debug=True
+        debug=False
     )
 
 
@@ -129,10 +130,12 @@ class NeuralTradingStrategy(bt.Strategy):
         # Load model
         self.model = self._load_model()
         self.model.eval()
-        
+        self.feature_buffer = []
+        self._last_indicator_arrays = None
         # Load feature extractor
         with open(self.p.feature_extractor_path, 'rb') as f:
             self.feature_extractor = pickle.load(f)
+            print(f"Init: buffer={len(self.feature_buffer)}, last_arrays={'set' if self._last_indicator_arrays else 'None'}")
         
         # ATR for stops
         self.atr = bt.indicators.ATR(self.data, period=14)
@@ -169,14 +172,22 @@ class NeuralTradingStrategy(bt.Strategy):
             num_heads=config.get('num_heads', 8),
             num_layers=config.get('num_layers', 6),
             d_ff=config.get('d_ff', 1024),
-            dropout=0.0,
+            dropout=0.1,
             latent_dim=config.get('latent_dim', 8),
             seq_len=self.p.seq_len
         )
         model.load_state_dict(checkpoint['model_state_dict'])
+
+        assert not model.training, "Model is in training mode!"
+        
         model.config = config  # make available to extractor path
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model.to(device).eval()
+
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.use_deterministic_algorithms(True, warn_only=True)
+
         # cache the expected dim for extractor
         self._expected_dim = int(config.get('feature_dim', 0) or 0)
         return model
@@ -200,30 +211,33 @@ class NeuralTradingStrategy(bt.Strategy):
         from backtrader.indicators.TrendTriggerFactor import TrendTriggerFactor
         from backtrader.indicators.rmi import RelativeMomentumIndex
         from backtrader.indicators.SchaffTrendCycle import SchaffTrendCycle
+        from backtrader.strategies.base import BuySellArrows
+        BuySellArrows(self.data0, barplot=True)
         
         # Initialize (minimal for example)
-        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
+        self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period, plot=False)
 
         # ===== CATEGORY 1: CYCLE INDICATORS =====
         if self.p.use_cycle_signals:
-            self.cyber_cycle = CyberCycle(self.data, period=self.p.cycle_period)
-            self.decycler = DecyclerOscillator(self.data)
+            self.cyber_cycle = CyberCycle(self.data, period=self.p.cycle_period, plot=False)
+            self.decycler = DecyclerOscillator(self.data, plot=False)
             self.roofing = RoofingFilter(
                 self.data, 
                 hp_period=self.p.roofing_hp_period, 
-                ss_period=self.p.roofing_ss_period
+                ss_period=self.p.roofing_ss_period,
+                plot=False
             )
 
         # ===== CATEGORY 2: REGIME INDICATORS =====
         if self.p.use_regime_signals:
-            self.hurst = HurstExponent(self.data, period=self.p.hurst_period)
-            self.adaptive_cycle = AdaptiveCyberCycle(self.data)
+            self.hurst = HurstExponent(self.data, period=self.p.hurst_period, plot=False)
+            self.adaptive_cycle = AdaptiveCyberCycle(self.data, plot=False)
 
         # ===== CATEGORY 3: VOLATILITY INDICATORS =====
         if self.p.use_volatility_signals:
             self.laguerre = AdaptiveLaguerreFilter(
                 self.data, 
-                length=self.p.laguerre_length
+                length=self.p.laguerre_length, plot=False
             )
             self.damiani = DamianiVolatmeter(
                 self.data,
@@ -231,45 +245,45 @@ class NeuralTradingStrategy(bt.Strategy):
                 std_fast=self.p.damiani_std_fast,
                 atr_slow=self.p.damiani_atr_slow,
                 std_slow=self.p.damiani_std_slow,
-                thresh=self.p.damiani_thresh
+                thresh=self.p.damiani_thresh, plot=False
             )
             self.squeeze = SqueezeVolatility(
                 self.data, 
                 period=self.p.squeeze_period,
                 mult=self.p.squeeze_mult,
                 period_kc=self.p.squeeze_period_kc,
-                mult_kc=self.p.squeeze_mult_kc
+                mult_kc=self.p.squeeze_mult_kc, plot=False
             )
             self.satr = StandarizedATR(
-                self.data, 
+                self.data,
                 atr_period=self.p.satr_atr_period,
-                std_period=self.p.satr_std_period
+                std_period=self.p.satr_std_period, plot=False
             )
 
         # ===== CATEGORY 4: MOMENTUM INDICATORS =====
         if self.p.use_momentum_signals:
             # RSX uses 'length' not 'period'
-            self.rsx = RSX(self.data, length=self.p.rsx_period)
+            self.rsx = RSX(self.data, length=self.p.rsx_period, plot=False)
             
             # QQE uses 'period', 'fast', 'q'
             self.qqe = QQE(
                 self.data, 
                 period=self.p.qqe_period,
                 fast=self.p.qqe_fast,
-                q=self.p.qqe_q
+                q=self.p.qqe_q, plot=False
             )
             
             # RMI uses 'period', 'lookback'
             self.rmi = RelativeMomentumIndex(
                 self.data, 
                 period=self.p.rmi_period, 
-                lookback=self.p.rmi_lookback
+                lookback=self.p.rmi_lookback, plot=False
             )
             
             # WaveTrend uses only 'period'
             self.wavetrend = WaveTrend(
                 self.data, 
-                period=self.p.wavetrend_period
+                period=self.p.wavetrend_period, plot=False
             )
 
         # ===== CATEGORY 5: TREND INDICATORS =====
@@ -278,14 +292,14 @@ class NeuralTradingStrategy(bt.Strategy):
                 self.data, 
                 period=self.p.kama_period, 
                 fast=self.p.kama_fast, 
-                slow=self.p.kama_slow
+                slow=self.p.kama_slow, plot=False
             )
             
             # MAMA uses 'fast', 'slow' (periods, not limits)
             self.mesa = MAMA(
                 self.data,
                 fast=self.p.mesa_fast,
-                slow=self.p.mesa_slow
+                slow=self.p.mesa_slow, plot=False
             )
             
             self.ttf = TrendTriggerFactor(self.data, period=self.p.ttf_period)
@@ -295,7 +309,7 @@ class NeuralTradingStrategy(bt.Strategy):
                 self.data, 
                 cycle=self.p.schaff_cycle, 
                 fast=self.p.schaff_fast, 
-                slow=self.p.schaff_slow
+                slow=self.p.schaff_slow, plot=False
             )
     
     def next(self):
@@ -485,6 +499,19 @@ class NeuralTradingStrategy(bt.Strategy):
                 if self.p.debug:
                     print(f"Trade #{self.trade_count} - P&L: {pnl_pct:.2f}%")
 
+import torch
+import numpy as np
+import random
+
+# Force determinism
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True, warn_only=True)
 
 def run_backtest(
     coin='BTC',
@@ -538,7 +565,7 @@ def run_backtest(
         feature_extractor_path=feature_extractor_path,
         confidence_threshold=0.6,
         position_size_mode='neural',
-        debug=True
+        debug=False
     )
     
     # Broker settings

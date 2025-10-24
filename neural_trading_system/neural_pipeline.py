@@ -75,6 +75,17 @@ from backtrader.indicators.dv2 import DV2
 from backtrader.indicators.awesomeoscillator import AwesomeOscillator
 from backtrader.indicators.prettygoodoscillator import PrettyGoodOscillator
 
+def find_latest_cache(cache_dir='neural_data/features'):
+    """Find the most recent feature cache"""
+    cache_path = Path(cache_dir)
+    if not cache_path.exists():
+        return None
+    
+    cache_files = list(cache_path.glob('features_*.pkl'))
+    if not cache_files:
+        return None
+    
+    return str(max(cache_files, key=lambda p: p.stat().st_mtime))
 
 class DataCollectionStrategy(bt.Strategy):
     """
@@ -352,7 +363,7 @@ class NeuralDataPipeline:
         
         from data.feature_extractor import IndicatorFeatureExtractor
         self.feature_extractor = IndicatorFeatureExtractor(
-            lookback_windows=config.get('lookback_windows', [5, 10, 20, 50, 100])
+            lookback_windows=config.get('lookback_windows', [5, 10, 20, 50, 100, 200])
         )
     
     def collect_data_from_backtrader(
@@ -427,8 +438,7 @@ class NeuralDataPipeline:
 
     def prepare_training_data(self, df: pl.DataFrame, prediction_horizon: int = 5, force_cache_file: str = None) -> Dict:
         """
-        Optimized feature extraction with disk caching. First run extracts and saves; 
-        subsequent runs load from cache in seconds.
+        Optimized feature extraction with disk caching and high-signal filtering.
         """
         from rich.console import Console
         import pickle
@@ -439,7 +449,7 @@ class NeuralDataPipeline:
         cache_dir = Path('neural_data/features')
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # FORCE LOAD if specified
+        # ✅ NEW: First check if force_cache_file is specified
         if force_cache_file:
             cache_file = Path(force_cache_file)
             if cache_file.exists():
@@ -450,6 +460,26 @@ class NeuralDataPipeline:
                 return cached
             else:
                 console.print(f"[red]❌ Cache file not found: {cache_file}[/red]")
+        
+        # ✅ NEW: Auto-detect existing cache files
+        existing_caches = list(cache_dir.glob('features_*.pkl'))
+        if existing_caches:
+            # Use the most recent cache
+            latest_cache = max(existing_caches, key=lambda p: p.stat().st_mtime)
+            console.print(f"[yellow]🔍 Found existing cache: {latest_cache.name}[/yellow]")
+            console.print(f"[yellow]   Use this cache? (it will skip feature extraction)[/yellow]")
+            
+            # Auto-use the cache
+            console.print(f"[cyan]📥 Auto-loading existing cache: {latest_cache}[/cyan]")
+            with open(latest_cache, 'rb') as f:
+                cached = pickle.load(f)
+            console.print(f"[green]✅ Loaded! Shape: {cached['features'].shape}[/green]")
+            return cached
+        
+        # Create cache hash (only if no existing cache found)
+        data_hash = hashlib.md5(str(df.shape).encode()).hexdigest()[:16]
+        config_str = f"seq{self.config.get('seq_len', 100)}_hor{prediction_horizon}"
+        cache_file = cache_dir / f'features_{data_hash}_{config_str}.pkl'
         
         # Try to load cached features
         if cache_file.exists():
@@ -473,7 +503,7 @@ class NeuralDataPipeline:
 
         # 2) Indicator columns
         ohlcv_cols = ['bar', 'datetime', 'open', 'high', 'low', 'close', 'volume']
-        indicator_cols = [c for c in df.columns if c not in ohlcv_cols]
+        indicator_cols = [c for c in df.columns if c not in ohlcv_cols + ['forward_return']]
         console.print(f"   ✅ Found {len(indicator_cols)} indicator features")
 
         # 3) Fill nulls
@@ -482,7 +512,9 @@ class NeuralDataPipeline:
 
         # 4) Build numpy arrays
         indicator_arrays = {c: df.get_column(c).to_numpy() for c in indicator_cols}
+        returns_array = df.get_column('forward_return').to_numpy()
 
+        seq_len = int(self.config.get('seq_len', 100))
         console.print(f"\n   Extracting features (seq_len={seq_len})...")
 
         total_rows = df.height
@@ -528,17 +560,31 @@ class NeuralDataPipeline:
         features = np.vstack(features_list).astype(np.float32)
 
         # 8) Align returns
-        returns = df.get_column('forward_return')[seq_len:seq_len + len(features)].to_numpy().copy()
+        returns = returns_array[seq_len:seq_len + len(features)].copy()
         np.nan_to_num(returns, copy=False)
 
-        console.print(f"[green]✅ Complete! Shape: {features.shape}, NaN: {np.isnan(features).sum()}, Inf: {np.isinf(features).sum()}[/green]")
+        # ✅ NEW: Filter for high-signal periods
+        console.print(f"\n[yellow]📊 Filtering for high-signal data...[/yellow]")
+        signal_threshold = np.percentile(np.abs(returns), 20)  # Keep top 80%
+        high_signal_mask = np.abs(returns) > signal_threshold
+        
+        features_filtered = features[high_signal_mask]
+        returns_filtered = returns[high_signal_mask]
+        
+        console.print(f"   Signal threshold: {signal_threshold:.6f}")
+        console.print(f"   Kept {len(features_filtered):,} / {len(features):,} bars ({len(features_filtered)/len(features)*100:.1f}%)")
+        console.print(f"   Filtered returns - Mean: {np.mean(returns_filtered):.6f}, Std: {np.std(returns_filtered):.6f}")
+
+        console.print(f"[green]✅ Complete! Shape: {features_filtered.shape}, NaN: {np.isnan(features_filtered).sum()}, Inf: {np.isinf(features_filtered).sum()}[/green]")
 
         timestamps = df.get_column('datetime')[seq_len:seq_len + len(features)].to_numpy() if 'datetime' in df.columns else None
+        if timestamps is not None:
+            timestamps = timestamps[high_signal_mask]
 
         result = {
-            'features': features,
-            'returns': returns[:len(features)],
-            'feature_dim': features.shape[1],
+            'features': features_filtered,
+            'returns': returns_filtered,
+            'feature_dim': features_filtered.shape[1],
             'timestamps': timestamps,
             'indicator_columns': indicator_cols,
         }
@@ -594,10 +640,10 @@ class NeuralDataPipeline:
         train_dataset = TradingDataset(train_features, train_returns, seq_len=self.config['seq_len'], prediction_horizon=self.config.get('prediction_horizon', 5))
         val_dataset = TradingDataset(val_features, val_returns, seq_len=self.config['seq_len'], prediction_horizon=self.config.get('prediction_horizon', 5))
         
-        train_loader = DataLoader(train_dataset, batch_size=self.config.get('batch_size', 32), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
-        val_loader = DataLoader(val_dataset, batch_size=self.config.get('batch_size', 32), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
+        train_loader = DataLoader(train_dataset, batch_size=self.config.get('batch_size', 128), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
+        val_loader = DataLoader(val_dataset, batch_size=self.config.get('batch_size', 128), shuffle=False, num_workers=4, pin_memory=True if torch.cuda.is_available() else False)
         
-        console.print("\n🏗️  [cyan]Building neural architecture...[/cyan]")
+        console.print("\n🗂️  [cyan]Building neural architecture...[/cyan]")
         model = create_model(feature_dim, self.config)
         
         total_params = sum(p.numel() for p in model.parameters())
@@ -608,7 +654,7 @@ class NeuralDataPipeline:
         trainer = NeuralTrainer(model=model, train_loader=train_loader, val_loader=val_loader, config=self.config, device=self.config.get('device', 'cuda' if torch.cuda.is_available() else 'cpu'))
         
         console.print("\n🎯 [bold green]Starting training loop...[/bold green]")
-        trainer.train(self.config.get('num_epochs', 100))
+        trainer.train(self.config.get('num_epochs', 200))
         console.print(f"[cyan]Train size: {len(train_dataset)}[/cyan]")
         console.print(f"[cyan]Val size:   {len(val_dataset)}[/cyan]")
 
@@ -637,7 +683,7 @@ def train_neural_system(
     config: Dict = None,
 ):
     """
-    One-command training pipeline.
+    One-command training pipeline with enhanced configuration.
     """
     from rich.console import Console
     from rich.panel import Panel
@@ -646,39 +692,52 @@ def train_neural_system(
 
     if config is None:
         config = {
+            # === ENHANCED ARCHITECTURE ===
             'seq_len': 100,
             'prediction_horizon': 5,
-            'lookback_windows': [5, 10, 20, 50, 100],
-            'd_model': 256,
-            'num_heads': 8,
-            'num_layers': 6,
-            'd_ff': 1024,
-            'dropout': 0.1,
-            'latent_dim': 8,
-            'batch_size': 32,
-            'num_epochs': 100,
-            'lr': 1e-4,
-            'min_lr': 1e-6,
-            'weight_decay': 1e-5,
-            'grad_accum_steps': 4,
-            'T_0': 10,
-            'patience': 15,
-            'save_every': 10,
+            'lookback_windows': [5, 10, 20, 50, 100, 200],
+            'd_model': 512,
+            'num_heads': 16,
+            'num_layers': 8,
+            'd_ff': 2048,
+            'dropout': 0.15,
+            'latent_dim': 16,
+            
+            # === ENHANCED TRAINING ===
+            'batch_size': 128,
+            'num_epochs': 200,
+            'lr': 0.0003,
+            'min_lr': 1e-7,
+            'weight_decay': 1e-4,
+            'grad_accum_steps': 2,
+            'T_0': 20,
+            'patience': 25,
+            'save_every': 5,
+            
+            # === TRACKING ===
             'use_wandb': True,
-            'run_name': f'neural_{coin}_{interval}',
+            'run_name': f'elite_neural_{coin}_{interval}',
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-            'fe_workers': 4,
-            'fe_chunk': 1024,
-            'fe_parallel_threshold': 100_000,
+            'best_model_path': 'models/best_model.pt',
         }
 
     console.print(Panel.fit(
-        f"[bold cyan]NEURAL TRADING SYSTEM[/bold cyan]\n"
-        f"[yellow]Automated Training Pipeline[/yellow]\n\n"
+        f"[bold cyan]🚀 ELITE NEURAL TRADING SYSTEM[/bold cyan]\n"
+        f"[yellow]Maximum Performance Configuration[/yellow]\n\n"
         f"Symbol: {coin}/{collateral}\n"
         f"Interval: {interval}\n"
         f"Period: {start_date} → {end_date}\n"
-        f"Device: {config['device']}",
+        f"Device: {config['device']}\n\n"
+        f"Architecture:\n"
+        f"  • d_model: {config['d_model']}\n"
+        f"  • num_heads: {config['num_heads']}\n"
+        f"  • num_layers: {config['num_layers']}\n"
+        f"  • latent_dim: {config['latent_dim']}\n\n"
+        f"Training:\n"
+        f"  • batch_size: {config['batch_size']}\n"
+        f"  • epochs: {config['num_epochs']}\n"
+        f"  • learning_rate: {config['lr']}\n"
+        f"  • patience: {config['patience']}",
         title="🧠 Configuration",
         border_style="cyan",
     ))
@@ -686,13 +745,17 @@ def train_neural_system(
     pipeline = NeuralDataPipeline(config)
     df = pipeline.collect_data_from_backtrader(coin=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral)
 
+    # Find existing cache
+    latest_cache = find_latest_cache()
+    console.print(f"[cyan]🔍 Latest cache: {latest_cache}[/cyan]" if latest_cache else "[yellow]No cache found[/yellow]")
+
     training_data = pipeline.prepare_training_data(
         df, 
         prediction_horizon=config['prediction_horizon'],
-        force_cache_file='neural_data/features/features_faee3f17ea44d4f8.pkl'
+        force_cache_file=latest_cache  # Auto-use latest
     )
 
-    model_path = f'models/neural_{coin}_{interval}_{start_date}_{end_date}.pt'
+    model_path = f'models/elite_neural_{coin}_{interval}_{start_date}_{end_date}.pt'
     trainer, test_features, test_returns = pipeline.train_neural_model(training_data, save_path=model_path)
 
     console.print("\n" + "=" * 80)
@@ -715,57 +778,39 @@ def train_neural_system(
 
 
 if __name__ == '__main__':
-    '''
-    DEBUG_config = {
-        'seq_len': 10,
-        'prediction_horizon': 1,
-        'd_model': 256,
-        'num_heads': 8,
-        'num_layers': 1,
-        'batch_size': 4,
-        'num_epochs': 10,
-        'lookback_windows': [5, 10],
-        'device': 'cuda',
-        # parallel controls
-        'fe_workers': 4,
-        'fe_chunk': 512,
-        'fe_parallel_threshold': 100_000,
-    }
-
-    train_neural_system(
-        coin='BTC',
-        interval='4h',
-        start_date='2020-01-01',
-        end_date='2020-03-01',
-        collateral='USDT',
-        config=DEBUG_config,
-    )
-    '''
-
-    full_quant_config = {
-        'seq_len': 50, # from 100
-        'prediction_horizon': 10,
-        'lookback_windows': [5, 10, 20, 50, 100],
-        'd_model': 384,
-        'num_heads': 12,
-        'num_layers': 3, # From 8
-        'd_ff': 512, # from 1024
-        'dropout': 0.2, # from 0.1
-        'latent_dim': 8,
-        'batch_size': 64,
-        'num_epochs': 150,
-        'lr': 0.00005,
-        'min_lr': 1e-6,
-        'weight_decay': 1e-5,
-        'grad_accum_steps': 4,
-        'T_0': 10,
-        'patience': 15,
-        'save_every': 10,
+    
+    # ✅ ELITE CONFIGURATION FOR MAXIMUM PERFORMANCE
+    elite_config = {
+        # === ARCHITECTURE - Deep & Expressive ===
+        'seq_len': 100,
+        'prediction_horizon': 5,
+        'lookback_windows': [5, 10, 20, 50, 100, 200],
+        'd_model': 256,        # ← Changed from 512
+        'num_heads': 8,        # ← Changed from 16
+        'num_layers': 6,       # ← Changed from 8
+        'd_ff': 1024,          # ← Changed from 2048
+        'dropout': 0.15,
+        'latent_dim': 16,
+        
+        # === TRAINING - Aggressive Learning ===
+        'batch_size': 16,      # Reduce if still OOM
+        'num_epochs': 200,
+        'learning_rate': 1e-4,
+        'lr': 0.0003,
+        'min_lr': 1e-7,
+        'weight_decay': 1e-4,
+        'grad_accum_steps': 2,
+        
+        # === SCHEDULER ===
+        'T_0': 20,
+        'patience': 25,
+        'save_every': 5,
+        
+        # === TRACKING ===
         'use_wandb': True,
+        'run_name': 'elite_btc_1h_full_history',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'fe_workers': 4,
-        'fe_chunk': 1024,
-        'fe_parallel_threshold': 999999,  # 100_000 Force single-thread 
+        'best_model_path': 'models/best_model.pt',
     }
 
     train_neural_system(
@@ -774,5 +819,5 @@ if __name__ == '__main__':
         start_date='2017-01-01',
         end_date='2024-12-31',
         collateral='USDT',
-        config=full_quant_config
+        config=elite_config
     )

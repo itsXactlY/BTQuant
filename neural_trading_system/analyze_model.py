@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """
-import glob
 Analyze trained neural trading model.
 Visualize attention patterns, feature importance, and learned regimes.
 """
@@ -36,12 +35,12 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
 
     model = NeuralTradingModel(
         feature_dim=config.get('feature_dim', 500),
-        d_model=config.get('d_model', 256),
-        num_heads=config.get('num_heads', 8),
-        num_layers=config.get('num_layers', 6),
-        d_ff=config.get('d_ff', 1024),
+        d_model=config.get('d_model', 512),
+        num_heads=config.get('num_heads', 16),
+        num_layers=config.get('num_layers', 8),
+        d_ff=config.get('d_ff', 2048),
         dropout=0.0,
-        latent_dim=config.get('latent_dim', 8),
+        latent_dim=config.get('latent_dim', 16),
         seq_len=config.get('seq_len', 100),
     )
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -74,11 +73,11 @@ def print_model_summary(model, config):
     table.add_column("Parameter", style="cyan")
     table.add_column("Value", justify="right", style="yellow")
     table.add_row("Feature Dimension", str(config.get('feature_dim', 'N/A')))
-    table.add_row("Model Dimension", str(config.get('d_model', 256)))
-    table.add_row("Attention Heads", str(config.get('num_heads', 8)))
-    table.add_row("Transformer Layers", str(config.get('num_layers', 6)))
-    table.add_row("Feed-Forward Dim", str(config.get('d_ff', 1024)))
-    table.add_row("Latent Dimension", str(config.get('latent_dim', 8)))
+    table.add_row("Model Dimension", str(config.get('d_model', 512)))
+    table.add_row("Attention Heads", str(config.get('num_heads', 16)))
+    table.add_row("Transformer Layers", str(config.get('num_layers', 8)))
+    table.add_row("Feed-Forward Dim", str(config.get('d_ff', 2048)))
+    table.add_row("Latent Dimension", str(config.get('latent_dim', 16)))
     table.add_row("Sequence Length", str(config.get('seq_len', 100)))
     console.print(table)
 
@@ -87,6 +86,7 @@ def print_model_summary(model, config):
     console.print(f"\n📊 [bold]Total Parameters:[/bold] {total_params:,}")
     console.print(f"📊 [bold]Trainable Parameters:[/bold] {trainable_params:,}")
     console.print("=" * 80)
+
 
 class LazySequenceDataset:
     """Memory-efficient sequence generator - loads on demand"""
@@ -101,6 +101,12 @@ class LazySequenceDataset:
     
     def __getitem__(self, idx):
         """Generate sequence on-the-fly"""
+        # Handle slicing
+        if isinstance(idx, slice):
+            indices = range(*idx.indices(len(self)))
+            return self.get_batch(list(indices))
+        
+        # Handle single index
         seq = self.features[idx:idx + self.seq_len]
         ret = self.returns[idx]
         return seq, ret
@@ -142,6 +148,7 @@ def prepare_test_sequences_from_cache(cache_path: str, config: dict):
     
     return dataset, returns[:len(dataset)]
 
+
 def analyze_attention_patterns(analyzer, test_dataset, num_samples=5):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]ATTENTION PATTERN ANALYSIS[/bold cyan]", border_style="cyan"))
@@ -156,7 +163,6 @@ def analyze_attention_patterns(analyzer, test_dataset, num_samples=5):
         attention_weights, predictions = analyzer.extract_attention_weights(sample_seq)
         
         console.print(f"   Layers: {len(attention_weights)}")
-        # If model outputs logits, convert to probability for readability
         p_entry = torch.sigmoid(predictions['entry_prob']).item() if predictions['entry_prob'].ndim == 0 else torch.sigmoid(predictions['entry_prob']).squeeze().item()
         console.print(f"   Entry Probability: {p_entry:.3f}")
         console.print(f"   Expected Return: {predictions['expected_return'].item():.4f}")
@@ -216,14 +222,20 @@ def analyze_regime_space(analyzer, test_dataset, test_returns):
     analyzer.visualize_regime_space(test_sequences, sample_returns)
 
 
-def analyze_decision_boundary(analyzer, test_sequences, test_returns):
+def analyze_decision_boundary(analyzer, test_dataset, test_returns):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]DECISION BOUNDARY ANALYSIS[/bold cyan]", border_style="cyan"))
     console.print("\n🔍 [yellow]Analyzing decision boundary...[/yellow]")
-    if len(test_sequences) == 0:
+    if len(test_dataset) == 0:
         console.print("⚠️  No sequences available for decision boundary analysis")
         return
-    analyzer.analyze_decision_boundary(test_sequences, test_returns)
+    
+    # Get a batch of up to 1000 sequences
+    n_samples = min(1000, len(test_dataset))
+    indices = list(range(n_samples))
+    test_sequences, sample_returns = test_dataset.get_batch(indices)
+    
+    analyzer.analyze_decision_boundary(test_sequences, sample_returns)
 
 
 def main():
@@ -237,7 +249,15 @@ def main():
     # Configuration
     MODEL_PATH = 'models/best_model.pt'
     FEATURE_EXTRACTOR_PATH = glob.glob('models/*feature_extractor.pkl')[0]
-    FEATURE_CACHE_PATH = 'neural_data/features/features_faee3f17ea44d4f8.pkl'  # YOUR CACHE!
+    
+    # Find the most recent feature cache
+    cache_files = list(Path('neural_data/features').glob('features_*.pkl'))
+    if not cache_files:
+        console.print("[red]❌ No feature cache found[/red]")
+        console.print("[yellow]💡 Run training first to generate cache[/yellow]")
+        return
+    
+    FEATURE_CACHE_PATH = str(sorted(cache_files, key=lambda p: p.stat().st_mtime)[-1])
 
     # Check files
     if not Path(MODEL_PATH).exists():
@@ -246,20 +266,20 @@ def main():
     if not Path(FEATURE_EXTRACTOR_PATH).exists():
         console.print(f"[red]❌ Feature extractor not found: {FEATURE_EXTRACTOR_PATH}[/red]")
         return
-    if not Path(FEATURE_CACHE_PATH).exists():
-        console.print(f"[red]❌ Feature cache not found: {FEATURE_CACHE_PATH}[/red]")
-        console.print("[yellow]💡 Run training first to generate cache[/yellow]")
-        return
 
     # Load model/extractor
     model, feature_extractor, config = load_model_and_data(MODEL_PATH, FEATURE_EXTRACTOR_PATH)
     print_model_summary(model, config)
 
     # Load sequences from cache (INSTANT!)
-    test_sequences, test_returns = prepare_test_sequences_from_cache(
+    test_dataset, test_returns = prepare_test_sequences_from_cache(
         FEATURE_CACHE_PATH, 
         config
     )
+    
+    if test_dataset is None:
+        console.print("[red]❌ Failed to load test dataset[/red]")
+        return
 
     # Initialize analyzer
     console.print("\n🔧 [cyan]Initializing analyzer...[/cyan]")
@@ -268,12 +288,12 @@ def main():
     model.to(device)
     console.print("✅ [green]Analyzer ready[/green]")
 
-    # Run analyses (same as before)
+    # Run analyses
     try:
-        analyze_attention_patterns(analyzer, test_sequences, num_samples=3)
-        analyze_feature_importance(analyzer, test_sequences, num_samples=100, feature_dim=config.get('feature_dim'))
-        analyze_regime_space(analyzer, test_sequences, test_returns)
-        analyze_decision_boundary(analyzer, test_sequences, test_returns)
+        analyze_attention_patterns(analyzer, test_dataset, num_samples=3)
+        analyze_feature_importance(analyzer, test_dataset, num_samples=100, feature_dim=config.get('feature_dim'))
+        analyze_regime_space(analyzer, test_dataset, test_returns)
+        analyze_decision_boundary(analyzer, test_dataset, test_returns)
     except Exception as e:
         console.print(f"\n[red]❌ Analysis failed: {e}[/red]")
         import traceback
@@ -281,7 +301,6 @@ def main():
 
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold green]✅ ANALYSIS COMPLETE![/bold green]", border_style="green"))
-
 
 
 if __name__ == '__main__':

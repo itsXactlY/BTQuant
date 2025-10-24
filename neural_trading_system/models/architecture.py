@@ -76,22 +76,32 @@ class FeedForward(nn.Module):
         return self.layer_norm(residual + x)
 
 class TransformerBlock(nn.Module):
-    """Single transformer encoder block."""
+    """Enhanced transformer encoder block with layer scaling."""
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
         super().__init__()
         self.attention = MultiHeadSelfAttention(d_model, num_heads, dropout)
         self.feed_forward = FeedForward(d_model, d_ff, dropout)
+        
+        # NEW: Layer scale for better gradient flow
+        self.layer_scale_1 = nn.Parameter(torch.ones(d_model) * 0.1)
+        self.layer_scale_2 = nn.Parameter(torch.ones(d_model) * 0.1)
 
     def forward(self, x, mask=None):
-        x, attn_weights = self.attention(x, mask)
-        x = self.feed_forward(x)
+        # Attention with scaled residual
+        attn_out, attn_weights = self.attention(x, mask)
+        x = x + self.layer_scale_1 * (attn_out - x)
+        
+        # Feed-forward with scaled residual
+        ff_out = self.feed_forward(x)
+        x = x + self.layer_scale_2 * (ff_out - x)
+        
         return x, attn_weights
 
 class MarketRegimeVAE(nn.Module):
     """
     ✅ FIXED: Variational Autoencoder with stability safeguards.
     """
-    def __init__(self, input_dim, latent_dim=8):
+    def __init__(self, input_dim, latent_dim=16):
         super().__init__()
 
         # Encoder
@@ -156,17 +166,20 @@ class MarketRegimeVAE(nn.Module):
 
 class NeuralTradingModel(nn.Module):
     """
-    ✅ FIXED: Main neural trading architecture with improved initialization.
+    ✅ ENHANCED: Main neural trading architecture with:
+    - Deeper capacity
+    - Layer scaling for better gradient flow
+    - Improved initialization
     """
     def __init__(
         self,
         feature_dim,
-        d_model=256,
-        num_heads=8,
-        num_layers=6,
-        d_ff=1024,
-        dropout=0.1,
-        latent_dim=8,
+        d_model=512,
+        num_heads=16,
+        num_layers=8,
+        d_ff=2048,
+        dropout=0.15,
+        latent_dim=16,
         seq_len=100
     ):
         super().__init__()
@@ -190,41 +203,47 @@ class NeuralTradingModel(nn.Module):
         # Market regime VAE
         self.regime_vae = MarketRegimeVAE(d_model, latent_dim)
 
-        # Multi-task heads
-        def head(output_activation=None):
+        # Multi-task heads with stronger capacity
+        def head(output_activation=None, hidden_dim=256):
             layers = [
-                nn.Linear(d_model + latent_dim, 128),
-                nn.LayerNorm(128),
+                nn.Linear(d_model + latent_dim, hidden_dim),
+                nn.LayerNorm(hidden_dim),
                 nn.GELU(),
                 nn.Dropout(0.3),
-                nn.Linear(128, 64),
+                nn.Linear(hidden_dim, hidden_dim // 2),
+                nn.LayerNorm(hidden_dim // 2),
                 nn.GELU(),
-                nn.Linear(64, 1)
+                nn.Dropout(0.2),
+                nn.Linear(hidden_dim // 2, 1)
             ]
             if output_activation is not None:
                 layers.append(output_activation)
             return nn.Sequential(*layers)
 
-        # Heads
-        self.entry_head = head()
-        self.exit_head = head()
-        self.return_head = head(nn.Tanh())
-        self.volatility_head = head(nn.Softplus())
-        self.position_size_head = head(nn.Sigmoid())
+        # Heads - stronger capacity
+        self.entry_head = head(hidden_dim=256)
+        self.exit_head = head(hidden_dim=256)
+        self.return_head = head(nn.Tanh(), hidden_dim=256)
+        self.volatility_head = head(nn.Softplus(), hidden_dim=128)
+        self.position_size_head = head(nn.Sigmoid(), hidden_dim=128)
 
         self._init_weights()
 
     def _init_weights(self):
-        """✅ FIXED: Improved initialization for stability."""
+        """✅ ENHANCED: Improved initialization for stability."""
         for name, module in self.named_modules():
             if isinstance(module, nn.Linear):
-                # Standard Xavier for most layers
+                # Xavier for most layers
                 nn.init.xavier_uniform_(module.weight, gain=1.0)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
             elif isinstance(module, nn.LayerNorm):
                 nn.init.ones_(module.weight)
                 nn.init.zeros_(module.bias)
+            elif isinstance(module, nn.Parameter):
+                # Layer scale parameters
+                if 'layer_scale' in name:
+                    nn.init.constant_(module, 0.1)
 
     def forward(self, x, mask=None):
         batch_size, seq_len, _ = x.size()
@@ -289,12 +308,12 @@ def create_model(feature_dim, config=None):
         config = {}
 
     model_params = {
-        'd_model': config.get('d_model', 256),
-        'num_heads': config.get('num_heads', 8),
-        'num_layers': config.get('num_layers', 6),
-        'd_ff': config.get('d_ff', 1024),
-        'dropout': config.get('dropout', 0.1),
-        'latent_dim': config.get('latent_dim', 8),
+        'd_model': config.get('d_model', 512),
+        'num_heads': config.get('num_heads', 16),
+        'num_layers': config.get('num_layers', 8),
+        'd_ff': config.get('d_ff', 2048),
+        'dropout': config.get('dropout', 0.15),
+        'latent_dim': config.get('latent_dim', 16),
         'seq_len': config.get('seq_len', 100)
     }
 

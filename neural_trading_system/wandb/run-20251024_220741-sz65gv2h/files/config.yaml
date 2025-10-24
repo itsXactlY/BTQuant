@@ -1,0 +1,108 @@
+_wandb:
+    value:
+        cli_version: 0.21.3
+        e:
+            91k46a6urjxy34lfo83r1zz6l53mym2x:
+                codePath: neural_trading_system/neural_pipeline.py
+                codePathLocal: neural_pipeline.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "462839042048"
+                        used: "350700879872"
+                email: aLcaTr4z@gmail.com
+                executable: /home/alca/projects/.btq/bin/python
+                git:
+                    commit: d18c5fcd58c396d3af072ec46b2444e007f09eb0
+                    remote: https://github.com/itsXactlY/BTQuant/
+                gpu: NVIDIA GeForce GTX 1070
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Pascal
+                      cudaCores: 1920
+                      memoryTotal: "8589934592"
+                      name: NVIDIA GeForce GTX 1070
+                      uuid: GPU-e48e4469-9bdd-ab8f-8c16-ec2a1c0101ab
+                host: alca
+                memory:
+                    total: "33592385536"
+                os: Linux-6.17.2-zen1-1-zen-x86_64-with-glibc2.42
+                program: /home/alca/projects/BTQuant/neural_trading_system/neural_pipeline.py
+                python: CPython 3.13.7
+                root: /home/alca/projects/BTQuant/neural_trading_system
+                startedAt: "2025-10-24T20:07:41.662777Z"
+                writerId: 91k46a6urjxy34lfo83r1zz6l53mym2x
+        m: []
+        python_version: 3.13.7
+        t:
+            "1":
+                - 1
+                - 5
+                - 35
+                - 53
+            "2":
+                - 1
+                - 5
+                - 35
+                - 53
+            "3":
+                - 13
+                - 16
+            "4": 3.13.7
+            "5": 0.21.3
+            "12": 0.21.3
+            "13": linux-x86_64
+T_0:
+    value: 20
+batch_size:
+    value: 128
+best_model_path:
+    value: models/best_model.pt
+d_ff:
+    value: 2048
+d_model:
+    value: 512
+device:
+    value: cuda
+dropout:
+    value: 0.15
+feature_dim:
+    value: 9867
+grad_accum_steps:
+    value: 2
+latent_dim:
+    value: 16
+lookback_windows:
+    value:
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+        - 200
+lr:
+    value: 0.0003
+min_lr:
+    value: 1e-07
+num_epochs:
+    value: 200
+num_heads:
+    value: 16
+num_layers:
+    value: 8
+patience:
+    value: 25
+prediction_horizon:
+    value: 5
+run_name:
+    value: elite_btc_1h_full_history
+save_every:
+    value: 5
+seq_len:
+    value: 100
+use_wandb:
+    value: true
+weight_decay:
+    value: 0.0001

@@ -1,0 +1,109 @@
+_wandb:
+    value:
+        cli_version: 0.21.3
+        e:
+            wcw7wvf7ljncmm9ao93it5cyw6h4j3y4:
+                codePath: neural_trading_system/neural_pipeline.py
+                codePathLocal: neural_pipeline.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "462839042048"
+                        used: "347935080448"
+                email: aLcaTr4z@gmail.com
+                executable: /home/alca/projects/.btq/bin/python
+                git:
+                    commit: c597dbdcdb7a247ba5818b5846f83bc206b755ec
+                    remote: https://github.com/itsXactlY/BTQuant/
+                gpu: NVIDIA GeForce GTX 1070
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Pascal
+                      cudaCores: 1920
+                      memoryTotal: "8589934592"
+                      name: NVIDIA GeForce GTX 1070
+                      uuid: GPU-e48e4469-9bdd-ab8f-8c16-ec2a1c0101ab
+                host: alca
+                memory:
+                    total: "33592385536"
+                os: Linux-6.17.2-zen1-1-zen-x86_64-with-glibc2.42
+                program: /home/alca/projects/BTQuant/neural_trading_system/neural_pipeline.py
+                python: CPython 3.13.7
+                root: /home/alca/projects/BTQuant/neural_trading_system
+                startedAt: "2025-10-24T16:38:11.089949Z"
+                writerId: wcw7wvf7ljncmm9ao93it5cyw6h4j3y4
+        m: []
+        python_version: 3.13.7
+        t:
+            "1":
+                - 1
+                - 5
+                - 35
+                - 53
+            "2":
+                - 1
+                - 5
+                - 35
+                - 53
+            "3":
+                - 13
+                - 16
+            "4": 3.13.7
+            "5": 0.21.3
+            "12": 0.21.3
+            "13": linux-x86_64
+T_0:
+    value: 10
+batch_size:
+    value: 64
+d_ff:
+    value: 1024
+d_model:
+    value: 384
+device:
+    value: cuda
+dropout:
+    value: 0.1
+fe_chunk:
+    value: 1024
+fe_parallel_threshold:
+    value: 999999
+fe_workers:
+    value: 4
+feature_dim:
+    value: 9867
+grad_accum_steps:
+    value: 4
+latent_dim:
+    value: 8
+lookback_windows:
+    value:
+        - 5
+        - 10
+        - 20
+        - 50
+        - 100
+lr:
+    value: 5e-05
+min_lr:
+    value: 1e-06
+num_epochs:
+    value: 150
+num_heads:
+    value: 12
+num_layers:
+    value: 8
+patience:
+    value: 15
+prediction_horizon:
+    value: 10
+save_every:
+    value: 10
+seq_len:
+    value: 100
+use_wandb:
+    value: true
+weight_decay:
+    value: 1e-05

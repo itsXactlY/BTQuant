@@ -5,275 +5,11 @@ from torch.utils.data import Dataset
 import numpy as np
 from typing import Dict
 from tqdm import tqdm
-import wandb  # For experiment tracking
+import wandb
 
-# TODO :: Save config with metadata
-
-'''
-import json
-import numpy as np
-from pathlib import Path
-from datetime import datetime
-
-
-def save_model_config(
-    model,
-    train_loader,
-    val_loader,
-    returns_array,
-    features_array,
-    config,
-    save_dir='models'
-):
-   
-    # Calculate returns statistics (CRITICAL FOR BACKTEST!)
-    returns_stats = {
-        'mean': float(np.mean(returns_array)),
-        'std': float(np.std(returns_array)),  # ← CRITICAL: return_scale
-        'min': float(np.min(returns_array)),
-        'max': float(np.max(returns_array)),
-        'median': float(np.median(returns_array)),
-        'q25': float(np.percentile(returns_array, 25)),
-        'q75': float(np.percentile(returns_array, 75)),
-    }
-    
-    # Get validation predictions for threshold calibration
-    print("Calculating validation predictions for threshold calibration...")
-    model.eval()
-    val_predictions = {
-        'entry_prob': [],
-        'exit_prob': [],
-        'expected_return': [],
-        'position_size': [],
-        'volatility_forecast': []
-    }
-    
-    with torch.no_grad():
-        for batch_x, _ in val_loader:
-            batch_x = batch_x.to(next(model.parameters()).device)
-            out = model(batch_x)
-            
-            val_predictions['entry_prob'].extend(out['entry_prob'].cpu().numpy().tolist())
-            val_predictions['exit_prob'].extend(out['exit_prob'].cpu().numpy().tolist())
-            val_predictions['expected_return'].extend(out['expected_return'].cpu().numpy().tolist())
-            val_predictions['position_size'].extend(out['position_size'].cpu().numpy().tolist())
-            val_predictions['volatility_forecast'].extend(out['volatility_forecast'].cpu().numpy().tolist())
-    
-    # Calculate validation distributions
-    val_stats = {}
-    for key, values in val_predictions.items():
-        values = np.array(values)
-        val_stats[key] = {
-            'min': float(np.min(values)),
-            'max': float(np.max(values)),
-            'mean': float(np.mean(values)),
-            'std': float(np.std(values)),
-            'p25': float(np.percentile(values, 25)),
-            'p50': float(np.percentile(values, 50)),
-            'p75': float(np.percentile(values, 75)),
-            'p90': float(np.percentile(values, 90)),
-        }
-    
-    # Denormalize expected_return for validation stats
-    val_stats['expected_return_denorm'] = {
-        'min': val_stats['expected_return']['min'] * returns_stats['std'],
-        'max': val_stats['expected_return']['max'] * returns_stats['std'],
-        'mean': val_stats['expected_return']['mean'] * returns_stats['std'],
-        'p50': val_stats['expected_return']['p50'] * returns_stats['std'],
-    }
-    
-    # Build complete config
-    model_config = {
-        'model_metadata': {
-            'version': '1.0.0',
-            'name': config.get('model_name', 'neural_trading_model'),
-            'created_date': datetime.now().isoformat(),
-            'framework': 'pytorch',
-            'model_type': 'transformer_with_vae_regime_detection',
-        },
-        
-        'training_configuration': {
-            'dataset': {
-                'symbol': config.get('symbol', 'BTCUSDT'),
-                'interval': config.get('interval', '4h'),
-                'start_date': config.get('start_date', '2017-01-01'),
-                'end_date': config.get('end_date', '2024-01-01'),
-                'train_split': config.get('train_split', 0.70),
-                'val_split': config.get('val_split', 0.15),
-                'test_split': config.get('test_split', 0.15),
-                'total_samples': len(returns_array),
-                'sequence_length': config.get('seq_len', 100),
-                'prediction_horizon': config.get('prediction_horizon', 1),
-                'returns_calculation': 'bar_to_bar_pct_change',
-                'returns_stats': returns_stats,  # ← CRITICAL!
-            },
-            
-            'labels': {
-                'entry_label': {
-                    'type': 'binary',
-                    'threshold': 0.01,
-                    'description': '1.0 if future_return > 1%, else 0.0'
-                },
-                'exit_label': {
-                    'type': 'binary',
-                    'threshold': -0.005,
-                    'description': '1.0 if future_return < -0.5%, else 0.0'
-                },
-                'expected_return': {
-                    'type': 'regression',
-                    'target': 'future_return',
-                    'normalization': 'tanh_bounded',
-                    'scale_factor': returns_stats['std'],  # ← CRITICAL!
-                    'description': 'Model outputs Tanh [-1, 1], multiply by scale_factor'
-                },
-            },
-            
-            'model_architecture': {
-                'input_dim': features_array.shape[1] if len(features_array.shape) > 1 else features_array.shape[0],
-                'd_model': config.get('d_model', 256),
-                'num_heads': config.get('num_heads', 8),
-                'num_layers': config.get('num_layers', 6),
-                'dropout': config.get('dropout', 0.1),
-                'vae_latent_dim': config.get('vae_latent_dim', 16),
-            },
-            
-            'training_hyperparameters': config.get('hyperparameters', {}),
-        },
-        
-        'validation_distributions': val_stats,  # ← CRITICAL FOR THRESHOLDS!
-        
-        'backtest_requirements': {
-            'critical_parameters': {
-                'return_scale': returns_stats['std'],  # ← CRITICAL!
-                'prediction_horizon': config.get('prediction_horizon', 1),
-                'sequence_length': config.get('seq_len', 100),
-            },
-            
-            'recommended_thresholds': {
-                'min_entry_prob': float(val_stats['entry_prob']['p25']),  # 25th percentile
-                'min_expected_return': float(val_stats['expected_return_denorm']['p25']),
-                'max_exit_prob': float(val_stats['exit_prob']['p75']),  # 75th percentile
-                'comment': 'Calibrated from validation set distributions'
-            },
-        },
-        
-        'file_references': {
-            'model_checkpoint': f"{save_dir}/best_model.pt",
-            'feature_extractor': f"{save_dir}/feature_extractor.pkl",
-            'config_file': f"{save_dir}/model_config.json",
-        }
-    }
-    
-    # Save to JSON
-    config_path = Path(save_dir) / 'model_config.json'
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(config_path, 'w') as f:
-        json.dump(model_config, f, indent=2)
-    
-    print(f"✅ Model config saved to {config_path}")
-    print(f"\n🔑 CRITICAL PARAMETERS:")
-    print(f"   return_scale: {returns_stats['std']:.6f}")
-    print(f"   min_entry_prob: {val_stats['entry_prob']['p25']:.3f}")
-    print(f"   min_expected_return: {val_stats['expected_return_denorm']['p25']:.6f}")
-    print(f"   max_exit_prob: {val_stats['exit_prob']['p75']:.3f}")
-    
-    return model_config
-
-    
-def train_model():
-    """Example training script with config saving"""
-    
-    # Your existing training code...
-    model = NeuralTradingModel(...)
-    train_loader = DataLoader(...)
-    val_loader = DataLoader(...)
-    
-    # Train model
-    for epoch in range(100):
-        # ... training loop ...
-        pass
-    
-    # Save model checkpoint
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'epoch': epoch,
-    }, 'models/best_model.pt')
-    
-    # ← ADD THIS: Save config with critical metadata
-    config = save_model_config(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        returns_array=returns,  # Your returns array
-        features_array=features,  # Your features array
-        config={
-            'symbol': 'BTCUSDT',
-            'interval': '4h',
-            'start_date': '2017-01-01',
-            'end_date': '2024-01-01',
-            'seq_len': 100,
-            'prediction_horizon': 1,
-            'd_model': 256,
-            'num_heads': 8,
-            'num_layers': 6,
-        },
-        save_dir='models'
-    )
-    
-    print("✅ Training complete with config saved!")
-
-
-# ============================================================================
-# LOAD CONFIG IN BACKTEST
-# ============================================================================
-
-def load_model_config(config_path='models/model_config.json'):
-    """Load model config for backtest"""
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    # Extract critical parameters
-    return_scale = config['backtest_requirements']['critical_parameters']['return_scale']
-    min_entry_prob = config['backtest_requirements']['recommended_thresholds']['min_entry_prob']
-    min_expected_return = config['backtest_requirements']['recommended_thresholds']['min_expected_return']
-    
-    print(f"📋 Loaded config:")
-    print(f"   return_scale: {return_scale}")
-    print(f"   min_entry_prob: {min_entry_prob}")
-    print(f"   min_expected_return: {min_expected_return}")
-    
-    return config
-
-
-def run_backtest_with_config():
-    """Run backtest using saved config"""
-    
-    # Load config
-    config = load_model_config('models/model_config.json')
-    
-    # Extract parameters
-    backtest_params = config['backtest_requirements']
-    
-    # Run backtest with CORRECT parameters
-    cerebro.addstrategy(
-        PerfectNeuralStrategy,
-        model_path='models/best_model.pt',
-        feature_extractor_path='models/feature_extractor.pkl',
-        return_scale=backtest_params['critical_parameters']['return_scale'],  # ← FROM CONFIG!
-        min_entry_prob=backtest_params['recommended_thresholds']['min_entry_prob'],
-        min_expected_return=backtest_params['recommended_thresholds']['min_expected_return'],
-        max_exit_prob=backtest_params['recommended_thresholds']['max_exit_prob'],
-        position_size_mode='neural',
-        debug=True
-    )
-    
-    results = cerebro.run()
-    return results
-'''
 
 class TradingDataset(Dataset):
+    """Enhanced dataset with soft labels and adaptive thresholds"""
     def __init__(self, features: np.ndarray, returns: np.ndarray, seq_len: int = 100, prediction_horizon: int = 1):
         # ✅ CRITICAL FIX: Normalize features to prevent extreme values
         self.features = torch.as_tensor(features, dtype=torch.float32)
@@ -295,6 +31,18 @@ class TradingDataset(Dataset):
 
         # Ensure non-negative length
         self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon + 1)
+        
+        # NEW: Dynamic thresholds based on volatility
+        self.returns_std = float(np.std(returns))
+        self.returns_mean = float(np.mean(returns))
+        self.entry_threshold = max(0.01, 1.5 * self.returns_std)  # Adaptive
+        self.exit_threshold = max(0.005, 0.75 * self.returns_std)
+        
+        print(f"📊 Dataset Statistics:")
+        print(f"   Returns mean: {self.returns_mean:.6f}")
+        print(f"   Returns std: {self.returns_std:.6f}")
+        print(f"   Entry threshold: {self.entry_threshold:.4f}")
+        print(f"   Exit threshold: {self.exit_threshold:.4f}")
 
     def __len__(self):
         return self.valid_length
@@ -320,8 +68,18 @@ class TradingDataset(Dataset):
         else:
             actual_volatility = torch.std(return_window, unbiased=False)
 
-        entry_label = torch.tensor(1.0 if future_return > 0.01 else 0.0, dtype=torch.float32)
-        exit_label = torch.tensor(1.0 if future_return < -0.005 else 0.0, dtype=torch.float32)
+        # NEW: Soft labels with confidence based on magnitude
+        # Convert return to confidence score using sigmoid
+        entry_confidence = torch.sigmoid(
+            (future_return - self.entry_threshold) / (0.5 * self.returns_std)
+        )
+        exit_confidence = torch.sigmoid(
+            (self.exit_threshold - future_return) / (0.5 * self.returns_std)
+        )
+        
+        # Clamp to [0, 1] for safety
+        entry_label = torch.clamp(entry_confidence, 0.0, 1.0)
+        exit_label = torch.clamp(exit_confidence, 0.0, 1.0)
 
         return {
             'features': feature_seq,
@@ -331,14 +89,36 @@ class TradingDataset(Dataset):
             'exit_label': exit_label
         }
 
+
+def focal_loss(logits, targets, alpha=0.25, gamma=2.0):
+    """
+    Focal loss to focus learning on hard examples.
+    Helps with class imbalance and pushes model to be more confident.
+    """
+    bce = F.binary_cross_entropy_with_logits(logits, targets, reduction='none')
+    probs = torch.sigmoid(logits)
+    pt = torch.where(targets == 1, probs, 1 - probs)
+    focal_weight = (1 - pt) ** gamma
+    loss = alpha * focal_weight * bce
+    return loss.mean()
+
+
 class MultiTaskLoss(nn.Module):
     """
-    ✅ FIXED Multi-task loss with VAE stability and proper logits handling.
+    ✅ ENHANCED Multi-task loss with:
+    - Temperature scaling for calibration
+    - Confidence penalty to push away from 0.5
+    - Focal loss for hard examples
+    - Huber loss for returns (robust to outliers)
     """
     def __init__(self, num_tasks=5):
         super().__init__()
         # Learnable uncertainty parameters
         self.log_vars = nn.Parameter(torch.zeros(num_tasks))
+        
+        # NEW: Learnable temperature for calibration
+        self.entry_temp = nn.Parameter(torch.ones(1))
+        self.exit_temp = nn.Parameter(torch.ones(1))
 
     def forward(self, predictions: Dict, targets: Dict):
         """
@@ -346,30 +126,42 @@ class MultiTaskLoss(nn.Module):
             predictions: Dict from model forward pass
             targets: Dict with ground truth labels
         """
-        # ✅ FIXED: Use entry_logits for BCE loss (not entry_prob!)
-        logits_entry = predictions['entry_logits'].view(-1)  # [B]
-        labels_entry = targets['entry_label'].view(-1)  # [B]
-        entry_loss = F.binary_cross_entropy_with_logits(logits_entry, labels_entry)
+        # ✅ ENHANCED: Use temperature-scaled logits for better calibration
+        temp = torch.clamp(self.entry_temp, min=0.1, max=10.0).to(predictions['entry_logits'].device)
+        logits_entry = predictions['entry_logits'].view(-1) / temp
+        labels_entry = targets['entry_label'].view(-1)
+        entry_loss = focal_loss(logits_entry, labels_entry, alpha=0.25, gamma=2.0)
 
-        # ✅ FIXED: Use exit_logits
-        logits_exit = predictions['exit_logits'].view(-1)  # [B]
-        labels_exit = targets['exit_label'].view(-1)  # [B]
-        exit_loss = F.binary_cross_entropy_with_logits(logits_exit, labels_exit)
+        # ✅ ENHANCED: Use temperature-scaled logits
+        temp_exit = torch.clamp(self.exit_temp, min=0.1, max=10.0).to(predictions['exit_logits'].device)
+        logits_exit = predictions['exit_logits'].view(-1) / temp_exit
+        labels_exit = targets['exit_label'].view(-1)
+        exit_loss = focal_loss(logits_exit, labels_exit, alpha=0.25, gamma=2.0)
+        
+        # NEW: Confidence penalty - penalize predictions near 0.5
+        entry_probs = predictions['entry_prob'].view(-1)
+        exit_probs = predictions['exit_prob'].view(-1)
+        
+        # Exponential penalty for being near 0.5 (maximum uncertainty)
+        confidence_penalty = (
+            torch.mean(torch.exp(-10 * (entry_probs - 0.5).pow(2))) +
+            torch.mean(torch.exp(-10 * (exit_probs - 0.5).pow(2)))
+        )
 
-        # Return regression loss
-        ret_pred = predictions['expected_return'].view(-1)  # [B]
-        ret_true = targets['future_return'].view(-1)  # [B]
-        return_loss = F.mse_loss(ret_pred, ret_true)
+        # Return regression loss - Huber loss (more robust to outliers)
+        ret_pred = predictions['expected_return'].view(-1)
+        ret_true = targets['future_return'].view(-1)
+        return_loss = F.smooth_l1_loss(ret_pred, ret_true)
 
         # Volatility forecasting loss
-        vol_pred = predictions['volatility_forecast'].view(-1)  # [B]
-        vol_true = targets['actual_volatility'].view(-1)  # [B]
+        vol_pred = predictions['volatility_forecast'].view(-1)
+        vol_true = targets['actual_volatility'].view(-1)
         volatility_loss = F.mse_loss(vol_pred, vol_true)
 
         # ✅ FIXED: VAE reconstructs sequence_repr now
         vae_recon_loss = F.mse_loss(
             predictions['vae_recon'],
-            predictions['sequence_repr']  # Reconstruct sequence representation
+            predictions['sequence_repr']
         )
 
         # ✅ CRITICAL FIX: Clamp logvar in loss calculation
@@ -398,7 +190,8 @@ class MultiTaskLoss(nn.Module):
             precision_exit * exit_loss + self.log_vars[1] +
             precision_return * return_loss + self.log_vars[2] +
             precision_volatility * volatility_loss + self.log_vars[3] +
-            precision_vae * vae_loss + self.log_vars[4]
+            precision_vae * vae_loss + self.log_vars[4] +
+            0.1 * confidence_penalty  # NEW: Add confidence penalty
         )
 
         return {
@@ -408,12 +201,19 @@ class MultiTaskLoss(nn.Module):
             'return_loss': return_loss.item(),
             'volatility_loss': volatility_loss.item(),
             'vae_loss': vae_loss.item(),
+            'confidence_penalty': confidence_penalty.item(),
+            'entry_temp': self.entry_temp.item(),
+            'exit_temp': self.exit_temp.item(),
             'uncertainties': self.log_vars.detach().cpu().numpy()
         }
 
+
 class NeuralTrainer:
     """
-    ✅ FIXED Training loop with proper gradient handling and data validation.
+    ✅ ENHANCED Training loop with:
+    - Prediction distribution monitoring
+    - Better gradient handling
+    - Early stopping based on confidence spread
     """
     def __init__(
         self,
@@ -432,8 +232,8 @@ class NeuralTrainer:
         # Optimizer with weight decay
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
-            lr=1e-4,  # ✅ Fixed learning rate
-            weight_decay=1e-6,
+            lr=config.get('lr', 0.0003),  # Higher default LR
+            weight_decay=config.get('weight_decay', 1e-4),
             betas=(0.9, 0.999),
             eps=1e-8
         )
@@ -441,9 +241,9 @@ class NeuralTrainer:
         # Learning rate scheduler
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             self.optimizer,
-            T_0=config.get('T_0', 10),
+            T_0=config.get('T_0', 20),
             T_mult=2,
-            eta_min=config.get('min_lr', 1e-6)
+            eta_min=config.get('min_lr', 1e-7)
         )
 
         # Loss function
@@ -455,19 +255,18 @@ class NeuralTrainer:
         # Tracking
         self.best_val_loss = float('inf')
         self.patience_counter = 0
-        self.gradient_accumulation_steps = config.get('grad_accum_steps', 4)
+        self.gradient_accumulation_steps = config.get('grad_accum_steps', 2)
 
         # ✅ FIXED: Initialize wandb conditionally
         self.use_wandb = config.get('use_wandb', False)
         if self.use_wandb:
             try:
-                import wandb
                 wandb.init(
                     project="neural-trading-system",
                     config=config,
                     name=config.get('run_name', 'experiment')
                 )
-                self.wandb = wandb  # Store reference
+                self.wandb = wandb
             except ImportError:
                 print("⚠️ wandb not installed, disabling logging")
                 self.use_wandb = False
@@ -476,13 +275,17 @@ class NeuralTrainer:
             self.wandb = None
 
     def train_epoch(self, epoch):
-        """Train for one epoch."""
+        """Train for one epoch with enhanced monitoring."""
         self.model.train()
         total_loss = 0
         loss_components = {
             'entry': 0, 'exit': 0, 'return': 0,
-            'volatility': 0, 'vae': 0
+            'volatility': 0, 'vae': 0, 'confidence_penalty': 0
         }
+        
+        # NEW: Track prediction distributions
+        all_entry_probs = []
+        all_exit_probs = []
 
         progress_bar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
         self.optimizer.zero_grad()
@@ -553,17 +356,34 @@ class NeuralTrainer:
             loss_components['return'] += loss_dict['return_loss']
             loss_components['volatility'] += loss_dict['volatility_loss']
             loss_components['vae'] += loss_dict['vae_loss']
+            loss_components['confidence_penalty'] += loss_dict['confidence_penalty']
+            
+            # NEW: Collect predictions for distribution analysis
+            with torch.no_grad():
+                all_entry_probs.extend(predictions['entry_prob'].cpu().numpy().flatten().tolist())
+                all_exit_probs.extend(predictions['exit_prob'].cpu().numpy().flatten().tolist())
 
             # Update progress bar
             progress_bar.set_postfix({
                 'loss': f"{loss_dict['total_loss']:.4f}",
-                'lr': f"{self.optimizer.param_groups[0]['lr']:.6f}"
+                'lr': f"{self.optimizer.param_groups[0]['lr']:.6f}",
+                'entry_temp': f"{loss_dict.get('entry_temp', 1.0):.3f}",
             })
 
         # Average losses
         n_batches = len(self.train_loader)
         avg_loss = total_loss / n_batches
         avg_components = {k: v / n_batches for k, v in loss_components.items()}
+        
+        # NEW: Analyze prediction distribution
+        entry_probs_array = np.array(all_entry_probs)
+        exit_probs_array = np.array(all_exit_probs)
+        
+        print(f"\n📊 Prediction Distribution (Epoch {epoch}):")
+        print(f"   Entry Probs - Mean: {entry_probs_array.mean():.3f}, Std: {entry_probs_array.std():.3f}")
+        print(f"   Entry >0.7: {(entry_probs_array > 0.7).mean()*100:.1f}%, <0.3: {(entry_probs_array < 0.3).mean()*100:.1f}%")
+        print(f"   Exit Probs  - Mean: {exit_probs_array.mean():.3f}, Std: {exit_probs_array.std():.3f}")
+        print(f"   Exit >0.7: {(exit_probs_array > 0.7).mean()*100:.1f}%, <0.3: {(exit_probs_array < 0.3).mean()*100:.1f}%")
 
         return avg_loss, avg_components
 
@@ -573,13 +393,17 @@ class NeuralTrainer:
         total_loss = 0
         loss_components = {
             'entry': 0, 'exit': 0, 'return': 0,
-            'volatility': 0, 'vae': 0
+            'volatility': 0, 'vae': 0, 'confidence_penalty': 0
         }
 
         # Metrics
         entry_correct = 0
         exit_correct = 0
         total_samples = 0
+        
+        # NEW: Track validation predictions
+        all_entry_probs = []
+        all_entry_labels = []
 
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc='Validation'):
@@ -606,13 +430,21 @@ class NeuralTrainer:
                 loss_components['return'] += loss_dict['return_loss']
                 loss_components['volatility'] += loss_dict['volatility_loss']
                 loss_components['vae'] += loss_dict['vae_loss']
+                loss_components['confidence_penalty'] += loss_dict['confidence_penalty']
 
-                # Calculate accuracy
+                # Calculate accuracy (using 0.5 threshold for soft labels)
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
                 exit_pred = (predictions['exit_prob'] > 0.5).float().squeeze()
-                entry_correct += (entry_pred == entry_label).sum().item()
-                exit_correct += (exit_pred == exit_label).sum().item()
+                entry_true = (entry_label > 0.5).float()
+                exit_true = (exit_label > 0.5).float()
+                
+                entry_correct += (entry_pred == entry_true).sum().item()
+                exit_correct += (exit_pred == exit_true).sum().item()
                 total_samples += len(entry_label)
+                
+                # Collect for calibration analysis
+                all_entry_probs.extend(predictions['entry_prob'].cpu().numpy().flatten().tolist())
+                all_entry_labels.extend(entry_label.cpu().numpy().flatten().tolist())
 
         # Average metrics
         n_batches = len(self.val_loader)
@@ -620,6 +452,13 @@ class NeuralTrainer:
         avg_components = {k: v / n_batches for k, v in loss_components.items()}
         entry_accuracy = entry_correct / total_samples
         exit_accuracy = exit_correct / total_samples
+        
+        # NEW: Calibration analysis
+        entry_probs_array = np.array(all_entry_probs)
+        print(f"\n📊 Validation Prediction Spread:")
+        print(f"   Std: {entry_probs_array.std():.3f} (target: >0.15)")
+        print(f"   High conf (>0.7): {(entry_probs_array > 0.7).mean()*100:.1f}%")
+        print(f"   Low conf (<0.3): {(entry_probs_array < 0.3).mean()*100:.1f}%")
 
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
 
@@ -665,13 +504,13 @@ class NeuralTrainer:
                 self.patience_counter += 1
 
             # Early stopping
-            if self.patience_counter >= self.config.get('patience', 15):
+            if self.patience_counter >= self.config.get('patience', 25):
                 print(f"\n⏹️ Early stopping triggered after {epoch + 1} epochs")
                 break
 
             # Save checkpoint every N epochs
             if (epoch + 1) % self.config.get('save_every', 10) == 0:
-                checkpoint_path = f"checkpoint_epoch_{epoch}.pt"
+                checkpoint_path = f"models/checkpoint_epoch_{epoch}.pt"
                 self.save_checkpoint(checkpoint_path, epoch, val_loss)
 
         print("\n✅ Training completed!")

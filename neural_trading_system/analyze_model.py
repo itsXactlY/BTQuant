@@ -56,7 +56,7 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
     return model, feature_extractor, config
 
 
-def load_test_data(data_path: str = 'neural_data/BTC_4h_neural_data.parquet'):
+def load_test_data(data_path: str = 'neural_data/BTC_1h_2017-01-01_2024-12-31_neural_data.parquet'):
     """Load Polars DataFrame for test data."""
     import polars as pl
     console.print(f"\n📥 [cyan]Loading test data from: {data_path}[/cyan]")
@@ -88,77 +88,73 @@ def print_model_summary(model, config):
     console.print(f"📊 [bold]Trainable Parameters:[/bold] {trainable_params:,}")
     console.print("=" * 80)
 
+class LazySequenceDataset:
+    """Memory-efficient sequence generator - loads on demand"""
+    def __init__(self, features, returns, seq_len):
+        self.features = features
+        self.returns = returns
+        self.seq_len = seq_len
+        self.num_sequences = len(features) - seq_len
+    
+    def __len__(self):
+        return self.num_sequences
+    
+    def __getitem__(self, idx):
+        """Generate sequence on-the-fly"""
+        seq = self.features[idx:idx + self.seq_len]
+        ret = self.returns[idx]
+        return seq, ret
+    
+    def get_batch(self, indices):
+        """Get multiple sequences at once"""
+        sequences = np.stack([self.features[i:i+self.seq_len] for i in indices])
+        returns = self.returns[indices]
+        return sequences, returns
 
-def prepare_test_sequences(df, feature_extractor, config):
-    import polars as pl
-    from tqdm import tqdm
-    console.print("\n🔧 [cyan]Preparing test sequences (Polars-only)...[/cyan]")
 
+def prepare_test_sequences_from_cache(cache_path: str, config: dict):
+    """Load pre-computed features and create lazy dataset."""
+    import pickle
+    
+    console.print(f"\n📥 [cyan]Loading cached features from: {cache_path}[/cyan]")
+    
+    with open(cache_path, 'rb') as f:
+        cached_data = pickle.load(f)
+    
+    features = cached_data['features']
+    returns = cached_data['returns']
+    
+    console.print(f"✅ [green]Loaded {len(features):,} pre-computed features[/green]")
+    console.print(f"   Feature dimension: {features.shape[1]}")
+    
     seq_len = int(config.get('seq_len', 100))
-    horizon = int(config.get('prediction_horizon', 5))
-    feature_dim_expected = int(config.get('feature_dim'))  # enforce training width [web:94]
-
-    # Vectorized forward returns
-    df = df.with_columns([
-        ((pl.col('close').shift(-horizon) - pl.col('close')) / pl.col('close')).alias('forward_return')
-    ])
-
-    ohlcv_cols = ['bar','datetime','open','high','low','close','volume']
-    indicator_cols = [c for c in df.columns if c not in ohlcv_cols]
-
-    from polars import selectors as cs
-    df = df.with_columns(cs.numeric().fill_null(0))
-
-    arrs = {c: df.get_column(c).to_numpy() for c in indicator_cols}
-
-    features_list = []
-    total_rows = df.height
-    valid_rows = total_rows - horizon
-
-    for i in tqdm(range(seq_len, valid_rows), desc="Extracting features"):
-        current_data = {k: arrs[k][:i] for k in indicator_cols}  # match training boundary [web:94]
-        try:
-            feats = feature_extractor.extract_all_features(current_data)
-            f = np.asarray(feats, dtype=np.float32).ravel()
-            # Enforce the training feature width BEFORE transform
-            if f.size != feature_dim_expected:
-                if f.size < feature_dim_expected:
-                    f = np.pad(f, (0, feature_dim_expected - f.size))
-                else:
-                    f = f[:feature_dim_expected]
-            f = feature_extractor.transform(f)  # same scaler as training [web:94]
-            features_list.append(f)
-        except Exception:
-            features_list.append(np.zeros(feature_dim_expected, dtype=np.float32))
-
-    if not features_list:
-        return np.empty((0, seq_len, feature_dim_expected), np.float32), np.empty((0,), np.float32)
-
-    features = np.vstack(features_list).astype(np.float32)
-
+    
     if len(features) <= seq_len:
-        return np.empty((0, seq_len, feature_dim_expected), np.float32), np.empty((0,), np.float32)
+        console.print("[red]Not enough data for sequences[/red]")
+        return None, None
+    
+    # Create lazy dataset instead of materializing all sequences
+    dataset = LazySequenceDataset(features, returns, seq_len)
+    
+    console.print(f"✅ [green]Created lazy dataset with {len(dataset):,} sequences[/green]")
+    console.print(f"   Memory usage: ~{features.nbytes / 1e9:.2f} GB (features only)")
+    console.print(f"   vs {len(dataset) * seq_len * features.shape[1] * 4 / 1e9:.2f} GB if materialized")
+    
+    return dataset, returns[:len(dataset)]
 
-    sequences = np.stack([features[i:i+seq_len] for i in range(len(features) - seq_len)], axis=0)
-
-    rets = df.get_column('forward_return')[seq_len:seq_len + len(features)].to_numpy().copy()
-    rets = rets[:len(sequences)]
-    np.nan_to_num(rets, copy=False)
-
-    console.print(f"✅ [green]Prepared {len(sequences):,} test sequences[/green]")
-    return sequences, rets
-
-
-def analyze_attention_patterns(analyzer, test_sequences, num_samples=5):
+def analyze_attention_patterns(analyzer, test_dataset, num_samples=5):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]ATTENTION PATTERN ANALYSIS[/bold cyan]", border_style="cyan"))
 
-    n = min(num_samples, len(test_sequences))
-    for i in range(n):
-        console.print(f"\n🔍 [yellow]Analyzing sample {i + 1}/{n}...[/yellow]")
-        sample_seq = test_sequences[i]
+    n = min(num_samples, len(test_dataset))
+    indices = np.random.choice(len(test_dataset), n, replace=False)
+    
+    for i, idx in enumerate(indices):
+        console.print(f"\n🔍 [yellow]Analyzing sample {i + 1}/{n} (index {idx})...[/yellow]")
+        sample_seq, _ = test_dataset[idx]  # Load only this one sequence
+        
         attention_weights, predictions = analyzer.extract_attention_weights(sample_seq)
-
+        
         console.print(f"   Layers: {len(attention_weights)}")
         # If model outputs logits, convert to probability for readability
         p_entry = torch.sigmoid(predictions['entry_prob']).item() if predictions['entry_prob'].ndim == 0 else torch.sigmoid(predictions['entry_prob']).squeeze().item()
@@ -173,16 +169,18 @@ def analyze_attention_patterns(analyzer, test_sequences, num_samples=5):
             analyzer.plot_attention_timeline(attention_weights)
 
 
-def analyze_feature_importance(analyzer, test_sequences, num_samples=100, feature_dim=None):
+def analyze_feature_importance(analyzer, test_dataset, num_samples=100, feature_dim=None):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]FEATURE IMPORTANCE ANALYSIS[/bold cyan]", border_style="cyan"))
 
-    n = min(num_samples, len(test_sequences))
-    if n == 0:
-        console.print("⚠️  No sequences available for feature importance")
-        return
-
+    n = min(num_samples, len(test_dataset))
+    indices = np.random.choice(len(test_dataset), n, replace=False)
+    
     console.print(f"\n🔍 [yellow]Computing feature importance on {n} samples...[/yellow]")
+    
+    # Get batch of sequences
+    test_sequences, _ = test_dataset.get_batch(indices)
+    
     importance_vec, feature_names = analyzer.compute_feature_importance(
         test_sequences, num_samples=n, feature_dim=feature_dim, return_names=True
     )
@@ -205,15 +203,17 @@ def analyze_feature_importance(analyzer, test_sequences, num_samples=100, featur
     analyzer.plot_feature_importance(importance_dict, top_n=30)
 
 
-
-def analyze_regime_space(analyzer, test_sequences, test_returns):
+def analyze_regime_space(analyzer, test_dataset, test_returns):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]MARKET REGIME SPACE ANALYSIS[/bold cyan]", border_style="cyan"))
     console.print("\n🔍 [yellow]Visualizing learned market regimes...[/yellow]")
-    if len(test_sequences) == 0:
-        console.print("⚠️  No sequences available for regime visualization")
-        return
-    analyzer.visualize_regime_space(test_sequences, test_returns)
+    
+    # Sample subset for visualization
+    n_samples = min(1000, len(test_dataset))
+    indices = np.linspace(0, len(test_dataset)-1, n_samples, dtype=int)
+    test_sequences, sample_returns = test_dataset.get_batch(indices)
+    
+    analyzer.visualize_regime_space(test_sequences, sample_returns)
 
 
 def analyze_decision_boundary(analyzer, test_sequences, test_returns):
@@ -236,44 +236,44 @@ def main():
 
     # Configuration
     MODEL_PATH = 'models/best_model.pt'
-    FEATURE_EXTRACTOR_PATH = glob.glob('models/*feature_extractor.pkl')[0] # TODO :: remove the timeframe etc. or viceversa the loader
-    DATA_PATH = 'neural_data/BTC_4h_neural_data.parquet'
+    FEATURE_EXTRACTOR_PATH = glob.glob('models/*feature_extractor.pkl')[0]
+    FEATURE_CACHE_PATH = 'neural_data/features/features_faee3f17ea44d4f8.pkl'  # YOUR CACHE!
 
     # Check files
     if not Path(MODEL_PATH).exists():
         console.print(f"[red]❌ Model not found: {MODEL_PATH}[/red]")
-        console.print("[yellow]💡 Run training first: python neural_pipeline.py[/yellow]")
         return
     if not Path(FEATURE_EXTRACTOR_PATH).exists():
         console.print(f"[red]❌ Feature extractor not found: {FEATURE_EXTRACTOR_PATH}[/red]")
-        console.print("[yellow]💡 Ensure best_model_feature_extractor.pkl is saved during training[/yellow]")
+        return
+    if not Path(FEATURE_CACHE_PATH).exists():
+        console.print(f"[red]❌ Feature cache not found: {FEATURE_CACHE_PATH}[/red]")
+        console.print("[yellow]💡 Run training first to generate cache[/yellow]")
         return
 
     # Load model/extractor
     model, feature_extractor, config = load_model_and_data(MODEL_PATH, FEATURE_EXTRACTOR_PATH)
     print_model_summary(model, config)
 
-    # Load test data
-    df = load_test_data(DATA_PATH)
-
-    # Prepare test sequences (Polars-only and consistent)
-    test_sequences, test_returns = prepare_test_sequences(df, feature_extractor, config)
+    # Load sequences from cache (INSTANT!)
+    test_sequences, test_returns = prepare_test_sequences_from_cache(
+        FEATURE_CACHE_PATH, 
+        config
+    )
 
     # Initialize analyzer
     console.print("\n🔧 [cyan]Initializing analyzer...[/cyan]")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     analyzer = AttentionAnalyzer(model, feature_extractor, device=device)
-    model.to(device) # Move to available GPU:0
+    model.to(device)
     console.print("✅ [green]Analyzer ready[/green]")
 
-    # Run analyses
+    # Run analyses (same as before)
     try:
         analyze_attention_patterns(analyzer, test_sequences, num_samples=3)
         analyze_feature_importance(analyzer, test_sequences, num_samples=100, feature_dim=config.get('feature_dim'))
         analyze_regime_space(analyzer, test_sequences, test_returns)
         analyze_decision_boundary(analyzer, test_sequences, test_returns)
-    except KeyboardInterrupt:
-        console.print("\n[yellow]⚠️  Analysis interrupted by user[/yellow]")
     except Exception as e:
         console.print(f"\n[red]❌ Analysis failed: {e}[/red]")
         import traceback
@@ -281,6 +281,7 @@ def main():
 
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold green]✅ ANALYSIS COMPLETE![/bold green]", border_style="green"))
+
 
 
 if __name__ == '__main__':

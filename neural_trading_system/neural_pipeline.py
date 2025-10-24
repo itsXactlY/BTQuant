@@ -425,7 +425,7 @@ class NeuralDataPipeline:
         
         return df_collected
 
-    def prepare_training_data(self, df: pl.DataFrame, prediction_horizon: int = 5) -> Dict:
+    def prepare_training_data(self, df: pl.DataFrame, prediction_horizon: int = 5, force_cache_file: str = None) -> Dict:
         """
         Optimized feature extraction with disk caching. First run extracts and saves; 
         subsequent runs load from cache in seconds.
@@ -439,12 +439,17 @@ class NeuralDataPipeline:
         cache_dir = Path('neural_data/features')
         cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # Hash based on: df shape, seq_len, prediction_horizon, lookback_windows
-        seq_len = int(self.config.get('seq_len', self.config.get('seqlen', 100)))
-        lookback_str = str(sorted(self.config.get('lookback_windows', [5, 10, 20, 50, 100])))
-        cache_key_raw = f"{df.shape[0]}_{df.shape[1]}_{seq_len}_{prediction_horizon}_{lookback_str}"
-        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()[:16]
-        cache_file = cache_dir / f'features_{cache_key}.pkl'
+        # FORCE LOAD if specified
+        if force_cache_file:
+            cache_file = Path(force_cache_file)
+            if cache_file.exists():
+                console.print(f"[cyan]📥 Force loading cache: {cache_file}[/cyan]")
+                with open(cache_file, 'rb') as f:
+                    cached = pickle.load(f)
+                console.print(f"[green]✅ Loaded! Shape: {cached['features'].shape}[/green]")
+                return cached
+            else:
+                console.print(f"[red]❌ Cache file not found: {cache_file}[/red]")
         
         # Try to load cached features
         if cache_file.exists():
@@ -681,7 +686,11 @@ def train_neural_system(
     pipeline = NeuralDataPipeline(config)
     df = pipeline.collect_data_from_backtrader(coin=coin, interval=interval, start_date=start_date, end_date=end_date, collateral=collateral)
 
-    training_data = pipeline.prepare_training_data(df, prediction_horizon=config['prediction_horizon'])
+    training_data = pipeline.prepare_training_data(
+        df, 
+        prediction_horizon=config['prediction_horizon'],
+        force_cache_file='neural_data/features/features_faee3f17ea44d4f8.pkl'
+    )
 
     model_path = f'models/neural_{coin}_{interval}_{start_date}_{end_date}.pt'
     trainer, test_features, test_returns = pipeline.train_neural_model(training_data, save_path=model_path)
@@ -734,14 +743,14 @@ if __name__ == '__main__':
     '''
 
     full_quant_config = {
-        'seq_len': 100,
+        'seq_len': 50, # from 100
         'prediction_horizon': 10,
         'lookback_windows': [5, 10, 20, 50, 100],
         'd_model': 384,
         'num_heads': 12,
-        'num_layers': 8,
-        'd_ff': 1024,
-        'dropout': 0.1,
+        'num_layers': 3, # From 8
+        'd_ff': 512, # from 1024
+        'dropout': 0.2, # from 0.1
         'latent_dim': 8,
         'batch_size': 64,
         'num_epochs': 150,

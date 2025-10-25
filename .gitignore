@@ -88,3 +88,6 @@ neural_trading_system/models/best_model.pt
 *.html
 *.pt
 neural_trading_system/wandb/*
+neural_trading_system/neural_data/features/features_faee3f17ea44d4f8.parquet
+neural_trading_system/neural_data/features/*.parquet
+neural_trading_system/neural_data/features/*.pt

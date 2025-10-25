@@ -10,7 +10,6 @@ from rich.console import Console
 import wandb
 import hashlib
 import json
-
 import psutil
 import torch
 
@@ -163,65 +162,172 @@ def sanitize_and_overwrite_cache(df, config, pipeline, find_latest_cache, consol
 # =============================================================================
 # TRADING DATASET
 # =============================================================================
-class TradingDataset(Dataset):
-    """Enhanced dataset with writable safety, soft labels, and adaptive thresholds."""
-    def __init__(self, features: np.ndarray, returns: np.ndarray, seq_len: int = 100, prediction_horizon: int = 1):
-        # 🧩 Ensure NumPy arrays are writable before Torch conversion
-        if not features.flags.writeable:
-            features = np.array(features, copy=True)
-            console.print("[yellow]⚠️ Copied read-only feature array to writable memory.[/yellow]")
-        if not returns.flags.writeable:
-            returns = np.array(returns, copy=True)
-            console.print("[yellow]⚠️ Copied read-only returns array to writable memory.[/yellow]")
 
-        # 🔢 Convert to tensors
+def _pos_weight_of(labels: torch.Tensor) -> torch.Tensor:
+    p = labels.mean().clamp(1e-6, 1-1e-6)
+    return ((1.0 - p) / p).detach()
+
+def multitask_loss(out, y, loss_weights, kl_weight=1e-3):
+    """
+    out: dict from model forward
+    y: dict of targets (all as float tensors)
+    """
+    bce = nn.BCEWithLogitsLoss
+    huber = nn.SmoothL1Loss(beta=0.01)
+    mse   = nn.MSELoss()
+
+    # dynamic pos_weights per batch (robust for class imbalance)
+    w_entry = _pos_weight_of(y['entry'])
+    w_exit  = _pos_weight_of(y['exit'])
+    w_tp    = _pos_weight_of(y['tp'])
+    w_sl    = _pos_weight_of(y['sl'])
+    w_hold  = _pos_weight_of(y['hold'])
+
+    loss_entry = bce(pos_weight=w_entry)(out['entry_logit'], y['entry'])
+    loss_exit  = bce(pos_weight=w_exit )(out['exit_logit'],  y['exit'])
+    loss_tp    = bce(pos_weight=w_tp   )(out['tp_logit'],    y['tp'])
+    loss_sl    = bce(pos_weight=w_sl   )(out['sl_logit'],    y['sl'])
+    loss_hold  = bce(pos_weight=w_hold )(out['hold_logit'],  y['hold'])
+
+    loss_ret   = huber(out['expected_return'],    y['ret'])
+    loss_vol   = mse  (out['volatility_forecast'],y['vol'])
+    loss_pos   = mse  (out['position_size'],      y['pos'])
+
+    loss = (loss_weights['entry'] * loss_entry
+          + loss_weights['exit']  * loss_exit
+          + loss_weights['tp']    * loss_tp
+          + loss_weights['sl']    * loss_sl
+          + loss_weights['hold']  * loss_hold
+          + loss_weights['ret']   * loss_ret
+          + loss_weights['vol']   * loss_vol
+          + loss_weights['pos']   * loss_pos
+          + kl_weight * out['kl_loss'])
+
+    return loss, {
+        "entry": loss_entry.item(), "exit": loss_exit.item(),
+        "tp": loss_tp.item(), "sl": loss_sl.item(), "hold": loss_hold.item(),
+        "ret": loss_ret.item(), "vol": loss_vol.item(), "pos": loss_pos.item()
+    }
+
+# Suggested weights
+DEFAULT_WEIGHTS = {
+    "entry": 1.0, "exit": 1.2, "tp": 0.9, "sl": 1.2, "hold": 0.6,
+    "ret": 1.0, "vol": 0.5, "pos": 0.25
+}
+
+class TradingDataset(Dataset):
+    """
+    Trading dataset with self-aware exit signals:
+    - Entry/Exit signals (original)
+    - Take Profit labels
+    - Stop Loss labels  
+    - Hold labels
+    """
+    def __init__(
+        self,
+        features: np.ndarray,
+        returns: np.ndarray,
+        seq_len: int = 100,
+        prediction_horizon: int = 1,
+        tp_threshold: float = 0.02,  # 2% TP
+        sl_threshold: float = -0.01  # 1% SL
+    ):
         self.features = torch.as_tensor(features, dtype=torch.float32)
+
+        if torch.isnan(self.features).any() or torch.isinf(self.features).any():
+            print("⚠️ NaN/Inf detected in source features! Replacing with zeros.")
+            self.features = torch.nan_to_num(self.features, nan=0.0, posinf=0.0, neginf=0.0)
+
+        features_max = self.features.abs().max()
+        if features_max > 100:
+            print(f"⚠️ Extreme feature values detected (max={features_max:.2e}). Clamping to [-100, 100].")
+            self.features = torch.clamp(self.features, min=-100, max=100)
+
         self.returns = torch.as_tensor(returns, dtype=torch.float32)
         self.seq_len = seq_len
         self.prediction_horizon = prediction_horizon
+        self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon - 50)  # Extra buffer
 
-        # 🧹 Handle NaN/Inf values
-        if torch.isnan(self.features).any() or torch.isinf(self.features).any():
-            console.print("[yellow]⚠️ NaN/Inf detected in features — replacing with zeros.[/yellow]")
-            self.features = torch.nan_to_num(self.features, nan=0.0, posinf=0.0, neginf=0.0)
-
-        # ⚠️ Clamp extreme feature magnitudes
-        features_max = self.features.abs().max()
-        if features_max > 100:
-            console.print(f"[yellow]⚠️ Extreme feature values detected (max={features_max:.2e}). Clamping to [-100, 100].[/yellow]")
-            self.features = torch.clamp(self.features, min=-100, max=100)
-
-        # 📏 Dataset structure
-        self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon + 1)
-
-        # 📈 Return statistics for adaptive thresholds
         self.returns_std = float(np.std(returns))
         self.returns_mean = float(np.mean(returns))
+
+        # Entry/exit thresholds (original)
         self.entry_threshold = max(0.01, 1.5 * self.returns_std)
         self.exit_threshold = max(0.005, 0.75 * self.returns_std)
 
-        # 🧠 Console summary
-        console.print(f"[cyan]📊 Dataset Statistics:[/cyan]")
-        console.print(f"   • Returns mean: {self.returns_mean:.6f}")
-        console.print(f"   • Returns std: {self.returns_std:.6f}")
-        console.print(f"   • Entry threshold: {self.entry_threshold:.4f}")
-        console.print(f"   • Exit threshold: {self.exit_threshold:.4f}")
+        # TP/SL thresholds (new)
+        self.tp_threshold = tp_threshold
+        self.sl_threshold = sl_threshold
+
+        # Generate exit labels
+        self._generate_exit_labels()
+
+        print(f"📊 Dataset Statistics:")
+        print(f"   Returns mean: {self.returns_mean:.6f}")
+        print(f"   Returns std: {self.returns_std:.6f}")
+        print(f"   Entry threshold: {self.entry_threshold:.4f}")
+        print(f"   TP threshold: {self.tp_threshold:.4f}")
+        print(f"   SL threshold: {self.sl_threshold:.4f}")
+
+    def _generate_exit_labels(self):
+        """Generate TP/SL/hold labels for entire sequence."""
+        T = len(self.returns)
+        tp_labels = np.zeros(T, dtype=np.float32)
+        sl_labels = np.zeros(T, dtype=np.float32)
+        hold_labels = np.zeros(T, dtype=np.float32)
+
+        # For each potential position
+        for i in range(T - 50):
+            # Look ahead 50 bars
+            future_rets = self.returns[i:i+50].numpy()
+            cumulative = np.cumsum(future_rets)
+
+            # Find first TP/SL trigger
+            tp_hit = np.where(cumulative >= self.tp_threshold)[0]
+            sl_hit = np.where(cumulative <= self.sl_threshold)[0]
+
+            if len(tp_hit) > 0 and len(sl_hit) > 0:
+                if tp_hit[0] < sl_hit[0]:
+                    # TP first
+                    tp_labels[i + tp_hit[0]] = 1.0
+                    hold_labels[i:i+tp_hit[0]] = 1.0
+                else:
+                    # SL first
+                    sl_labels[i + sl_hit[0]] = 1.0
+                    hold_labels[i:i+sl_hit[0]] = 0.5
+            elif len(tp_hit) > 0:
+                tp_labels[i + tp_hit[0]] = 1.0
+                hold_labels[i:i+tp_hit[0]] = 1.0
+            elif len(sl_hit) > 0:
+                sl_labels[i + sl_hit[0]] = 1.0
+                hold_labels[i:i+sl_hit[0]] = 0.3
+            else:
+                hold_labels[i:i+50] = 0.6
+
+        self.tp_labels = torch.as_tensor(tp_labels, dtype=torch.float32)
+        self.sl_labels = torch.as_tensor(sl_labels, dtype=torch.float32)
+        self.hold_labels = torch.as_tensor(hold_labels, dtype=torch.float32)
+
+        print(f"✅ Exit labels generated:")
+        print(f"   TP triggers: {(self.tp_labels > 0).sum().item()}")
+        print(f"   SL triggers: {(self.sl_labels > 0).sum().item()}")
+        print(f"   Hold bars: {(self.hold_labels > 0.5).sum().item()}")
 
     def __len__(self):
         return self.valid_length
 
     def __getitem__(self, idx):
         if idx < 0 or idx >= self.valid_length:
-            raise IndexError(f"Index {idx} out of range for dataset of length {self.valid_length}")
+            raise IndexError(f"Index {idx} out of range")
 
         start = idx
         end = idx + self.seq_len
-        label_idx = end + self.prediction_horizon - 1
-
         feature_seq = self.features[start:end]
+
+        label_idx = end + self.prediction_horizon - 1
         future_return = self.returns[label_idx]
 
-        # 🔮 Compute short-term realized volatility
+        # Volatility
         return_window = self.returns[end:end + self.prediction_horizon]
         if return_window.numel() == 0:
             actual_volatility = torch.tensor(0.0, dtype=torch.float32)
@@ -230,51 +336,127 @@ class TradingDataset(Dataset):
         else:
             actual_volatility = torch.std(return_window, unbiased=False)
 
-        # 🎯 Soft labels for entry/exit prediction
+        # Entry/Exit labels (soft)
         entry_label = torch.sigmoid(future_return * 100)
         exit_label = torch.sigmoid(-future_return * 100)
+
+        # TP/SL/Hold labels (hard)
+        tp_label = self.tp_labels[label_idx]
+        sl_label = self.sl_labels[label_idx]
+        hold_label = self.hold_labels[label_idx]
 
         return {
             'features': feature_seq,
             'future_return': future_return,
             'actual_volatility': actual_volatility,
             'entry_label': entry_label,
-            'exit_label': exit_label
+            'exit_label': exit_label,
+            # New exit management labels
+            'take_profit_label': tp_label,
+            'stop_loss_label': sl_label,
+            'hold_label': hold_label
         }
 
 
 class MultiTaskLoss(nn.Module):
-    """Multi-task loss with temperature scaling, confidence penalty, focal loss, and Huber loss"""
-    def __init__(self, num_tasks=5):
+    """
+    Multi-task loss with exit management:
+    - Entry/Exit signals (original)
+    - Return/Volatility prediction (original)
+    - VAE regime detection (original)
+    - Take Profit signal (NEW)
+    - Stop Loss signal (NEW)
+    - Hold signal (NEW)
+    """
+    def __init__(self, num_tasks=8):  # 5 original + 3 new
         super().__init__()
+        # Learnable uncertainty parameters
         self.log_vars = nn.Parameter(torch.zeros(num_tasks))
+
+        # Temperature for calibration
         self.entry_temp = nn.Parameter(torch.ones(1))
         self.exit_temp = nn.Parameter(torch.ones(1))
 
     def focal_loss(self, logits, labels, alpha=0.75, gamma=2.0):
-        """Focal Loss for addressing class imbalance."""
+        """Focal Loss for imbalanced classification."""
         bce = F.binary_cross_entropy_with_logits(logits, labels, reduction='none')
         pt = torch.exp(-bce)
         focal = alpha * (1 - pt) ** gamma * bce
         return focal.mean()
 
     def forward(self, predictions: dict, targets: dict):
-        """Multi-task loss with focal loss, diversity penalty, and proper device handling."""
+        """
+        Compute multi-task loss with exit management.
+
+        Args:
+            predictions: Model outputs with exit management heads
+            targets: Ground truth labels including TP/SL/hold
+        """
         device = predictions['entry_logits'].device
 
-        # 1. ENTRY SIGNAL LOSS
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # ORIGINAL LOSSES (Entry, Exit, Return, Vol, VAE)
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # 1. Entry signal loss
         temp = torch.clamp(self.entry_temp, min=0.1, max=10.0).to(device)
         logits_entry = predictions['entry_logits'].view(-1) / temp
         labels_entry = targets['entry_label'].view(-1)
         entry_loss = self.focal_loss(logits_entry, labels_entry, alpha=0.75, gamma=2.0)
 
-        # 2. EXIT SIGNAL LOSS
+        # 2. Exit signal loss
         temp_exit = torch.clamp(self.exit_temp, min=0.1, max=10.0).to(device)
         logits_exit = predictions['exit_logits'].view(-1) / temp_exit
         labels_exit = targets['exit_label'].view(-1)
         exit_loss = self.focal_loss(logits_exit, labels_exit, alpha=0.75, gamma=2.0)
 
-        # 3. PREDICTION DIVERSITY PENALTY
+        # 3. Return prediction loss
+        ret_pred = predictions['expected_return'].view(-1)
+        ret_true = targets['future_return'].view(-1)
+        return_loss = F.smooth_l1_loss(ret_pred, ret_true)
+
+        # 4. Volatility forecasting loss
+        vol_pred = predictions['volatility_forecast'].view(-1)
+        vol_true = targets['actual_volatility'].view(-1)
+        volatility_loss = F.mse_loss(vol_pred, vol_true)
+
+        # 5. VAE loss
+        vae_recon_loss = F.mse_loss(
+            predictions['vae_recon'],
+            predictions['sequence_repr']
+        )
+        regime_logvar_clamped = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
+        kl_loss = -0.5 * torch.sum(
+            1 + regime_logvar_clamped - 
+            predictions['regime_mu'].pow(2) - 
+            regime_logvar_clamped.exp(),
+            dim=1
+        ).mean()
+        vae_loss = vae_recon_loss + 0.00001 * kl_loss
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # NEW EXIT MANAGEMENT LOSSES
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        # 6. Take Profit loss (high alpha for rare events)
+        tp_logits = predictions['take_profit_logits'].view(-1)
+        tp_labels = targets['take_profit_label'].view(-1)
+        tp_loss = self.focal_loss(tp_logits, tp_labels, alpha=0.85, gamma=2.5)
+
+        # 7. Stop Loss loss (high alpha for rare events)
+        sl_logits = predictions['stop_loss_logits'].view(-1)
+        sl_labels = targets['stop_loss_label'].view(-1)
+        sl_loss = self.focal_loss(sl_logits, sl_labels, alpha=0.85, gamma=2.5)
+
+        # 8. Hold loss (lower alpha for common events)
+        hold_logits = predictions['hold_logits'].view(-1)
+        hold_labels = targets['hold_label'].view(-1)
+        hold_loss = self.focal_loss(hold_logits, hold_labels, alpha=0.25, gamma=2.0)
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DIVERSITY & CONFIDENCE PENALTIES
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
         entry_probs = predictions['entry_prob'].view(-1)
         exit_probs = predictions['exit_prob'].view(-1)
 
@@ -288,39 +470,18 @@ class MultiTaskLoss(nn.Module):
             torch.mean(torch.exp(-10 * (exit_probs - 0.5).pow(2)))
         )
 
-        # 4. RETURN PREDICTION LOSS
-        ret_pred = predictions['expected_return'].view(-1)
-        ret_true = targets['future_return'].view(-1)
-        return_loss = F.smooth_l1_loss(ret_pred, ret_true)
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # UNCERTAINTY-WEIGHTED COMBINATION
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        # 5. VOLATILITY FORECASTING LOSS
-        vol_pred = predictions['volatility_forecast'].view(-1)
-        vol_true = targets['actual_volatility'].view(-1)
-        volatility_loss = F.mse_loss(vol_pred, vol_true)
-
-        # 6. VAE LOSS
-        vae_recon_loss = F.mse_loss(
-            predictions['vae_recon'],
-            predictions['sequence_repr']
-        )
-
-        regime_logvar_clamped = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
-
-        kl_loss = -0.5 * torch.sum(
-            1 + regime_logvar_clamped - 
-            predictions['regime_mu'].pow(2) - 
-            regime_logvar_clamped.exp(),
-            dim=1
-        ).mean()
-
-        vae_loss = vae_recon_loss + 0.00001 * kl_loss
-
-        # 7. UNCERTAINTY-WEIGHTED COMBINATION
         precision_entry = torch.exp(-self.log_vars[0])
         precision_exit = torch.exp(-self.log_vars[1])
         precision_return = torch.exp(-self.log_vars[2])
         precision_volatility = torch.exp(-self.log_vars[3])
         precision_vae = torch.exp(-self.log_vars[4])
+        precision_tp = torch.exp(-self.log_vars[5])
+        precision_sl = torch.exp(-self.log_vars[6])
+        precision_hold = torch.exp(-self.log_vars[7])
 
         total_loss = (
             precision_entry * entry_loss + self.log_vars[0] +
@@ -328,6 +489,9 @@ class MultiTaskLoss(nn.Module):
             precision_return * return_loss + self.log_vars[2] +
             precision_volatility * volatility_loss + self.log_vars[3] +
             precision_vae * vae_loss + self.log_vars[4] +
+            precision_tp * tp_loss + self.log_vars[5] +
+            precision_sl * sl_loss + self.log_vars[6] +
+            precision_hold * hold_loss + self.log_vars[7] +
             0.01 * diversity_penalty +
             0.05 * confidence_penalty
         )
@@ -339,6 +503,9 @@ class MultiTaskLoss(nn.Module):
             'return_loss': return_loss.item(),
             'volatility_loss': volatility_loss.item(),
             'vae_loss': vae_loss.item(),
+            'take_profit_loss': tp_loss.item(),
+            'stop_loss_loss': sl_loss.item(),
+            'hold_loss': hold_loss.item(),
             'diversity_penalty': diversity_penalty.item(),
             'confidence_penalty': confidence_penalty.item(),
             'entry_temp': self.entry_temp.item(),
@@ -380,7 +547,7 @@ class NeuralTrainer:
             gamma=0.5
         )
 
-        self.criterion = MultiTaskLoss(num_tasks=5)
+        self.criterion = MultiTaskLoss(num_tasks=8) 
         self.scaler = torch.amp.GradScaler('cuda') if device == 'cuda' else None
 
         self.best_val_loss = float('inf')

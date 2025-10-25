@@ -12,6 +12,8 @@ import hashlib
 import json
 import psutil
 import torch
+from tqdm import tqdm
+
 
 console = Console()
 
@@ -209,126 +211,99 @@ def multitask_loss(out, y, loss_weights, kl_weight=1e-3):
         "ret": loss_ret.item(), "vol": loss_vol.item(), "pos": loss_pos.item()
     }
 
-# Suggested weights
-DEFAULT_WEIGHTS = {
-    "entry": 1.0, "exit": 1.2, "tp": 0.9, "sl": 1.2, "hold": 0.6,
-    "ret": 1.0, "vol": 0.5, "pos": 0.25
-}
-
 class TradingDataset(Dataset):
-    """
-    Trading dataset with self-aware exit signals:
-    - Entry/Exit signals (original)
-    - Take Profit labels
-    - Stop Loss labels  
-    - Hold labels
-    """
-    def __init__(
-        self,
-        features: np.ndarray,
-        returns: np.ndarray,
-        seq_len: int = 100,
-        prediction_horizon: int = 1,
-        tp_threshold: float = 0.02,  # 2% TP
-        sl_threshold: float = -0.01  # 1% SL
-    ):
+    """Enhanced dataset with exit management labels"""
+    def __init__(self, features: np.ndarray, returns: np.ndarray, prices: np.ndarray, 
+                 seq_len: int = 100, prediction_horizon: int = 1):
         self.features = torch.as_tensor(features, dtype=torch.float32)
-
-        if torch.isnan(self.features).any() or torch.isinf(self.features).any():
-            print("⚠️ NaN/Inf detected in source features! Replacing with zeros.")
-            self.features = torch.nan_to_num(self.features, nan=0.0, posinf=0.0, neginf=0.0)
-
-        features_max = self.features.abs().max()
-        if features_max > 100:
-            print(f"⚠️ Extreme feature values detected (max={features_max:.2e}). Clamping to [-100, 100].")
-            self.features = torch.clamp(self.features, min=-100, max=100)
-
         self.returns = torch.as_tensor(returns, dtype=torch.float32)
+        self.prices = torch.as_tensor(prices, dtype=torch.float32)
         self.seq_len = seq_len
         self.prediction_horizon = prediction_horizon
-        self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon - 50)  # Extra buffer
 
-        self.returns_std = float(np.std(returns))
-        self.returns_mean = float(np.mean(returns))
+        # Safety checks
+        if torch.isnan(self.features).any() or torch.isinf(self.features).any():
+            self.features = torch.nan_to_num(self.features, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        features_max = self.features.abs().max()
+        if features_max > 100:
+            self.features = torch.clamp(self.features, min=-100, max=100)
 
-        # Entry/exit thresholds (original)
-        self.entry_threshold = max(0.01, 1.5 * self.returns_std)
-        self.exit_threshold = max(0.005, 0.75 * self.returns_std)
-
-        # TP/SL thresholds (new)
-        self.tp_threshold = tp_threshold
-        self.sl_threshold = sl_threshold
-
-        # Generate exit labels
-        self._generate_exit_labels()
-
-        print(f"📊 Dataset Statistics:")
-        print(f"   Returns mean: {self.returns_mean:.6f}")
-        print(f"   Returns std: {self.returns_std:.6f}")
-        print(f"   Entry threshold: {self.entry_threshold:.4f}")
-        print(f"   TP threshold: {self.tp_threshold:.4f}")
-        print(f"   SL threshold: {self.sl_threshold:.4f}")
-
-    def _generate_exit_labels(self):
-        """Generate TP/SL/hold labels for entire sequence."""
-        T = len(self.returns)
-        tp_labels = np.zeros(T, dtype=np.float32)
-        sl_labels = np.zeros(T, dtype=np.float32)
-        hold_labels = np.zeros(T, dtype=np.float32)
-
-        # For each potential position
-        for i in range(T - 50):
-            # Look ahead 50 bars
-            future_rets = self.returns[i:i+50].numpy()
-            cumulative = np.cumsum(future_rets)
-
-            # Find first TP/SL trigger
-            tp_hit = np.where(cumulative >= self.tp_threshold)[0]
-            sl_hit = np.where(cumulative <= self.sl_threshold)[0]
-
-            if len(tp_hit) > 0 and len(sl_hit) > 0:
-                if tp_hit[0] < sl_hit[0]:
-                    # TP first
-                    tp_labels[i + tp_hit[0]] = 1.0
-                    hold_labels[i:i+tp_hit[0]] = 1.0
-                else:
-                    # SL first
-                    sl_labels[i + sl_hit[0]] = 1.0
-                    hold_labels[i:i+sl_hit[0]] = 0.5
-            elif len(tp_hit) > 0:
-                tp_labels[i + tp_hit[0]] = 1.0
-                hold_labels[i:i+tp_hit[0]] = 1.0
-            elif len(sl_hit) > 0:
-                sl_labels[i + sl_hit[0]] = 1.0
-                hold_labels[i:i+sl_hit[0]] = 0.3
-            else:
-                hold_labels[i:i+50] = 0.6
-
-        self.tp_labels = torch.as_tensor(tp_labels, dtype=torch.float32)
-        self.sl_labels = torch.as_tensor(sl_labels, dtype=torch.float32)
-        self.hold_labels = torch.as_tensor(hold_labels, dtype=torch.float32)
-
-        print(f"✅ Exit labels generated:")
-        print(f"   TP triggers: {(self.tp_labels > 0).sum().item()}")
-        print(f"   SL triggers: {(self.sl_labels > 0).sum().item()}")
-        print(f"   Hold bars: {(self.hold_labels > 0.5).sum().item()}")
+        self.valid_length = max(0, len(self.features) - seq_len - prediction_horizon + 1)
 
     def __len__(self):
         return self.valid_length
 
     def __getitem__(self, idx):
-        if idx < 0 or idx >= self.valid_length:
-            raise IndexError(f"Index {idx} out of range")
-
         start = idx
         end = idx + self.seq_len
         feature_seq = self.features[start:end]
 
         label_idx = end + self.prediction_horizon - 1
         future_return = self.returns[label_idx]
+        current_price = self.prices[end - 1]
+        future_price = self.prices[label_idx]
 
-        # Volatility
-        return_window = self.returns[end:end + self.prediction_horizon]
+        # 🆕 Compute exit labels by simulating different holding periods
+        max_lookforward = min(50, len(self.returns) - label_idx)  # Look up to 50 bars ahead
+        
+        if max_lookforward > 5:
+            future_prices = self.prices[label_idx:label_idx + max_lookforward]
+            future_rets = (future_prices - current_price) / current_price
+            
+            # Find optimal exit points
+            peak_return = future_rets.max()
+            peak_idx = future_rets.argmax()
+            trough_return = future_rets.min()
+            trough_idx = future_rets.argmin()
+            
+            # 💰 Take-profit label: Did price reach good profit then reverse?
+            # If peak > threshold and current position would be near peak
+            take_profit_target = 0.0
+            if peak_return > 0.02:  # 2% profit threshold
+                # Was this bar near the peak? (within 20% of time to peak)
+                bars_to_peak = peak_idx
+                if bars_to_peak <= 5:  # Peak is soon
+                    take_profit_target = 1.0
+                elif bars_to_peak <= 10:
+                    take_profit_target = 0.7
+            
+            # 🛑 Stop-loss label: Did price fall significantly?
+            stop_loss_target = 0.0
+            if trough_return < -0.015:  # -1.5% loss threshold
+                bars_to_trough = trough_idx
+                if bars_to_trough <= 3:  # Loss is imminent
+                    stop_loss_target = 1.0
+                elif bars_to_trough <= 7:
+                    stop_loss_target = 0.7
+            
+            # 🚀 Let-winner-run label: Is trend continuing strongly?
+            let_run_target = 0.0
+            if future_return > 0.01:  # Currently profitable
+                # Check if returns continue to grow
+                if max_lookforward >= 20:
+                    near_returns = future_rets[:10].mean()
+                    far_returns = future_rets[10:20].mean()
+                    if far_returns > near_returns and far_returns > 0.02:
+                        let_run_target = 1.0  # Strong continuation
+            
+            # 🚨 Regime change label: Volatility spike or pattern break
+            regime_change_target = 0.0
+            if max_lookforward >= 10:
+                recent_vol = future_rets[:5].std()
+                future_vol = future_rets[5:10].std()
+                if future_vol > recent_vol * 2:  # Volatility doubled
+                    regime_change_target = 1.0
+                    
+        else:
+            # Not enough data - neutral labels
+            take_profit_target = 0.0
+            stop_loss_target = 0.0
+            let_run_target = 0.0
+            regime_change_target = 0.0
+
+        # Volatility calculation
+        return_window = self.returns[idx + self.seq_len: idx + self.seq_len + self.prediction_horizon]
         if return_window.numel() == 0:
             actual_volatility = torch.tensor(0.0, dtype=torch.float32)
         elif return_window.numel() == 1:
@@ -336,95 +311,65 @@ class TradingDataset(Dataset):
         else:
             actual_volatility = torch.std(return_window, unbiased=False)
 
-        # Entry/Exit labels (soft)
-        entry_label = torch.sigmoid(future_return * 100)
-        exit_label = torch.sigmoid(-future_return * 100)
-
-        # TP/SL/Hold labels (hard)
-        tp_label = self.tp_labels[label_idx]
-        sl_label = self.sl_labels[label_idx]
-        hold_label = self.hold_labels[label_idx]
+        # Entry labels (original soft labels)
+        returns_std = self.returns.std()
+        entry_threshold = max(0.01, 1.5 * returns_std)
+        entry_confidence = torch.sigmoid(
+            (future_return - entry_threshold) / (0.5 * returns_std)
+        )
+        entry_label = torch.clamp(entry_confidence, 0.0, 1.0)
 
         return {
             'features': feature_seq,
             'future_return': future_return,
             'actual_volatility': actual_volatility,
             'entry_label': entry_label,
-            'exit_label': exit_label,
-            # New exit management labels
-            'take_profit_label': tp_label,
-            'stop_loss_label': sl_label,
-            'hold_label': hold_label
+            
+            # 🆕 NEW: Exit management labels
+            'take_profit_label': torch.tensor(take_profit_target, dtype=torch.float32),
+            'stop_loss_label': torch.tensor(stop_loss_target, dtype=torch.float32),
+            'let_winner_run_label': torch.tensor(let_run_target, dtype=torch.float32),
+            'regime_change_label': torch.tensor(regime_change_target, dtype=torch.float32),
+            
+            # Position context (simulated for training)
+            'unrealized_pnl': future_return,  # Simulated P&L
+            'time_in_position': torch.tensor(float(self.prediction_horizon), dtype=torch.float32),
         }
 
 
 class MultiTaskLoss(nn.Module):
     """
-    Multi-task loss with exit management:
-    - Entry/Exit signals (original)
-    - Return/Volatility prediction (original)
-    - VAE regime detection (original)
-    - Take Profit signal (NEW)
-    - Stop Loss signal (NEW)
-    - Hold signal (NEW)
+    🆕 ENHANCED: Multi-task loss with exit management objectives
     """
-    def __init__(self, num_tasks=8):  # 5 original + 3 new
+    def __init__(self, num_tasks=9):  # Increased from 5 to 9
         super().__init__()
-        # Learnable uncertainty parameters
+        # Learnable uncertainty parameters for all tasks
         self.log_vars = nn.Parameter(torch.zeros(num_tasks))
-
-        # Temperature for calibration
+        
+        # Temperature scaling
         self.entry_temp = nn.Parameter(torch.ones(1))
-        self.exit_temp = nn.Parameter(torch.ones(1))
-
-    def focal_loss(self, logits, labels, alpha=0.75, gamma=2.0):
-        """Focal Loss for imbalanced classification."""
-        bce = F.binary_cross_entropy_with_logits(logits, labels, reduction='none')
-        pt = torch.exp(-bce)
-        focal = alpha * (1 - pt) ** gamma * bce
-        return focal.mean()
-
+        
     def forward(self, predictions: dict, targets: dict):
-        """
-        Compute multi-task loss with exit management.
-
-        Args:
-            predictions: Model outputs with exit management heads
-            targets: Ground truth labels including TP/SL/hold
-        """
         device = predictions['entry_logits'].device
-
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # ORIGINAL LOSSES (Entry, Exit, Return, Vol, VAE)
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        # 1. Entry signal loss
+        
+        # ===== ORIGINAL LOSSES =====
         temp = torch.clamp(self.entry_temp, min=0.1, max=10.0).to(device)
         logits_entry = predictions['entry_logits'].view(-1) / temp
         labels_entry = targets['entry_label'].view(-1)
-        entry_loss = self.focal_loss(logits_entry, labels_entry, alpha=0.75, gamma=2.0)
+        entry_loss = focal_loss(logits_entry, labels_entry, alpha=0.25, gamma=2.0)
 
-        # 2. Exit signal loss
-        temp_exit = torch.clamp(self.exit_temp, min=0.1, max=10.0).to(device)
-        logits_exit = predictions['exit_logits'].view(-1) / temp_exit
-        labels_exit = targets['exit_label'].view(-1)
-        exit_loss = self.focal_loss(logits_exit, labels_exit, alpha=0.75, gamma=2.0)
-
-        # 3. Return prediction loss
+        # Return regression
         ret_pred = predictions['expected_return'].view(-1)
         ret_true = targets['future_return'].view(-1)
         return_loss = F.smooth_l1_loss(ret_pred, ret_true)
 
-        # 4. Volatility forecasting loss
+        # Volatility forecasting
         vol_pred = predictions['volatility_forecast'].view(-1)
         vol_true = targets['actual_volatility'].view(-1)
         volatility_loss = F.mse_loss(vol_pred, vol_true)
 
-        # 5. VAE loss
-        vae_recon_loss = F.mse_loss(
-            predictions['vae_recon'],
-            predictions['sequence_repr']
-        )
+        # VAE loss
+        vae_recon_loss = F.mse_loss(predictions['vae_recon'], predictions['sequence_repr'])
         regime_logvar_clamped = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
         kl_loss = -0.5 * torch.sum(
             1 + regime_logvar_clamped - 
@@ -434,98 +379,89 @@ class MultiTaskLoss(nn.Module):
         ).mean()
         vae_loss = vae_recon_loss + 0.00001 * kl_loss
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # NEW EXIT MANAGEMENT LOSSES
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        # 6. Take Profit loss (high alpha for rare events)
-        tp_logits = predictions['take_profit_logits'].view(-1)
-        tp_labels = targets['take_profit_label'].view(-1)
-        tp_loss = self.focal_loss(tp_logits, tp_labels, alpha=0.85, gamma=2.5)
-
-        # 7. Stop Loss loss (high alpha for rare events)
-        sl_logits = predictions['stop_loss_logits'].view(-1)
-        sl_labels = targets['stop_loss_label'].view(-1)
-        sl_loss = self.focal_loss(sl_logits, sl_labels, alpha=0.85, gamma=2.5)
-
-        # 8. Hold loss (lower alpha for common events)
-        hold_logits = predictions['hold_logits'].view(-1)
-        hold_labels = targets['hold_label'].view(-1)
-        hold_loss = self.focal_loss(hold_logits, hold_labels, alpha=0.25, gamma=2.0)
-
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # DIVERSITY & CONFIDENCE PENALTIES
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-        entry_probs = predictions['entry_prob'].view(-1)
-        exit_probs = predictions['exit_prob'].view(-1)
-
-        entry_std = entry_probs.std()
-        exit_std = exit_probs.std()
-
-        diversity_penalty = 1.0 / (entry_std + 1e-3) + 1.0 / (exit_std + 1e-3)
-
-        confidence_penalty = (
-            torch.mean(torch.exp(-10 * (entry_probs - 0.5).pow(2))) +
-            torch.mean(torch.exp(-10 * (exit_probs - 0.5).pow(2)))
+        # ===== 🆕 NEW: EXIT MANAGEMENT LOSSES =====
+        exit_signals = predictions['exit_signals']
+        
+        # Regime change detection loss
+        if 'regime_change' in predictions:
+            regime_change_pred = predictions['regime_change']['regime_change_score'].view(-1)
+            regime_change_true = targets['regime_change_label'].view(-1)
+            regime_change_loss = F.binary_cross_entropy_with_logits(
+            regime_change_pred, 
+            regime_change_true
         )
+        else:
+            regime_change_loss = torch.tensor(0.0, device=device)
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # UNCERTAINTY-WEIGHTED COMBINATION
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # Take-profit loss (only if in profit)
+        take_profit_loss = torch.tensor(0.0, device=device)
+        stop_loss_loss = torch.tensor(0.0, device=device)
+        let_run_loss = torch.tensor(0.0, device=device)
+        
+        if 'profit_taking' in exit_signals and exit_signals['profit_taking'] is not None:
+            tp_pred = exit_signals['profit_taking']['take_profit_prob'].view(-1)
+            tp_true = targets['take_profit_label'].view(-1)
+            take_profit_loss = F.binary_cross_entropy_with_logits(tp_pred, tp_true)
+            
+            # Let winner run loss
+            if 'let_winner_run' in exit_signals and exit_signals['let_winner_run'] is not None:
+                lr_pred = exit_signals['let_winner_run']['hold_score'].view(-1)
+                lr_true = targets['let_winner_run_label'].view(-1)
+                let_run_loss = F.binary_cross_entropy_with_logits(lr_pred, lr_true)
+            
+        if 'stop_loss' in exit_signals and exit_signals['stop_loss'] is not None:
+            sl_pred = exit_signals['stop_loss']['stop_loss_prob'].view(-1)
+            sl_true = targets['stop_loss_label'].view(-1)
+            stop_loss_loss = F.binary_cross_entropy_with_logits(sl_pred, sl_true)
 
-        precision_entry = torch.exp(-self.log_vars[0])
-        precision_exit = torch.exp(-self.log_vars[1])
-        precision_return = torch.exp(-self.log_vars[2])
-        precision_volatility = torch.exp(-self.log_vars[3])
-        precision_vae = torch.exp(-self.log_vars[4])
-        precision_tp = torch.exp(-self.log_vars[5])
-        precision_sl = torch.exp(-self.log_vars[6])
-        precision_hold = torch.exp(-self.log_vars[7])
+        # Confidence penalty (push away from 0.5)
+        entry_probs = predictions['entry_prob'].view(-1)
+        confidence_penalty = torch.mean(torch.exp(-10 * (entry_probs - 0.5).pow(2)))
 
+        # ===== UNCERTAINTY-WEIGHTED COMBINATION =====
+        precision = [torch.exp(-self.log_vars[i]) for i in range(9)]
+        
         total_loss = (
-            precision_entry * entry_loss + self.log_vars[0] +
-            precision_exit * exit_loss + self.log_vars[1] +
-            precision_return * return_loss + self.log_vars[2] +
-            precision_volatility * volatility_loss + self.log_vars[3] +
-            precision_vae * vae_loss + self.log_vars[4] +
-            precision_tp * tp_loss + self.log_vars[5] +
-            precision_sl * sl_loss + self.log_vars[6] +
-            precision_hold * hold_loss + self.log_vars[7] +
-            0.01 * diversity_penalty +
-            0.05 * confidence_penalty
+            precision[0] * entry_loss + self.log_vars[0] +
+            precision[1] * return_loss + self.log_vars[1] +
+            precision[2] * volatility_loss + self.log_vars[2] +
+            precision[3] * vae_loss + self.log_vars[3] +
+            precision[4] * regime_change_loss + self.log_vars[4] +
+            precision[5] * take_profit_loss + self.log_vars[5] +
+            precision[6] * stop_loss_loss + self.log_vars[6] +
+            precision[7] * let_run_loss + self.log_vars[7] +
+            precision[8] * confidence_penalty + self.log_vars[8]
         )
 
         return {
             'total_loss': total_loss,
             'entry_loss': entry_loss.item(),
-            'exit_loss': exit_loss.item(),
             'return_loss': return_loss.item(),
             'volatility_loss': volatility_loss.item(),
             'vae_loss': vae_loss.item(),
-            'take_profit_loss': tp_loss.item(),
-            'stop_loss_loss': sl_loss.item(),
-            'hold_loss': hold_loss.item(),
-            'diversity_penalty': diversity_penalty.item(),
+            'regime_change_loss': regime_change_loss.item(),
+            'take_profit_loss': take_profit_loss.item(),
+            'stop_loss_loss': stop_loss_loss.item(),
+            'let_run_loss': let_run_loss.item(),
             'confidence_penalty': confidence_penalty.item(),
             'entry_temp': self.entry_temp.item(),
-            'exit_temp': self.exit_temp.item(),
-            'entry_std': entry_std.item(),
-            'exit_std': exit_std.item(),
             'uncertainties': self.log_vars.detach().cpu().numpy()
         }
 
 
+def focal_loss(logits, targets, alpha=0.25, gamma=2.0):
+    """Focal loss for handling class imbalance"""
+    bce = F.binary_cross_entropy_with_logits(logits, targets, reduction='none')
+    probs = torch.sigmoid(logits)
+    pt = torch.where(targets == 1, probs, 1 - probs)
+    focal_weight = (1 - pt) ** gamma
+    loss = alpha * focal_weight * bce
+    return loss.mean()
+
+
 class NeuralTrainer:
-    """Training loop with proper GradScaler handling and gradient stability"""
-    def __init__(
-        self,
-        model,
-        train_loader,
-        val_loader,
-        config: dict,
-        device='cuda' if torch.cuda.is_available() else 'cpu'
-    ):
+    """Enhanced trainer with exit management tracking"""
+    def __init__(self, model, train_loader, val_loader, config: dict, device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -540,27 +476,27 @@ class NeuralTrainer:
             eps=1e-8
         )
 
-        # ✅ FIXED: Use StepLR instead of CosineAnnealingWarmRestarts
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             self.optimizer,
-            step_size=10,
-            gamma=0.5
+            T_0=config.get('T_0', 20),
+            T_mult=2,
+            eta_min=config.get('min_lr', 1e-7)
         )
 
-        self.criterion = MultiTaskLoss(num_tasks=8) 
+        self.criterion = MultiTaskLoss(num_tasks=9)
         self.scaler = torch.amp.GradScaler('cuda') if device == 'cuda' else None
-
         self.best_val_loss = float('inf')
         self.patience_counter = 0
         self.gradient_accumulation_steps = config.get('grad_accum_steps', 2)
 
-        self.use_wandb = config.get('use_wandb', True)
+        self.use_wandb = config.get('use_wandb', False)
         if self.use_wandb:
             try:
+                import wandb
                 wandb.init(
-                    project="neural-trading-system",
+                    project="neural-trading-exit-management",
                     config=config,
-                    name=config.get('run_name', 'experiment')
+                    name=config.get('run_name', 'exit_aware_model')
                 )
                 self.wandb = wandb
             except ImportError:
@@ -570,417 +506,256 @@ class NeuralTrainer:
         else:
             self.wandb = None
 
-    def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
-        """Train for one epoch with optional per-batch UI callback."""
+    def train_epoch(self, epoch):
+        """Train for one epoch with exit management monitoring"""
         self.model.train()
-        total_loss = 0.0
+        total_loss = 0
         loss_components = {
-            'entry': 0, 'exit': 0, 'return': 0,
-            'volatility': 0, 'vae': 0, 'confidence_penalty': 0
+            'entry': 0, 'return': 0, 'volatility': 0, 'vae': 0,
+            'regime_change': 0, 'take_profit': 0, 'stop_loss': 0, 
+            'let_run': 0, 'confidence_penalty': 0
         }
+        
+        # Track exit signal distributions
+        all_take_profit_probs = []
+        all_stop_loss_probs = []
+        all_let_run_scores = []
 
-        all_entry_probs, all_exit_probs = [], []
-        nan_batches_skipped = 0
+        progress_bar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
         self.optimizer.zero_grad()
 
-        n_batches = len(self.train_loader)
-
-        for batch_idx, batch in enumerate(self.train_loader):
+        for batch_idx, batch in enumerate(progress_bar):
+            # Move to device
             features = batch['features'].to(self.device)
             future_return = batch['future_return'].to(self.device)
             actual_volatility = batch['actual_volatility'].to(self.device)
             entry_label = batch['entry_label'].to(self.device)
-            exit_label = batch['exit_label'].to(self.device)
+            
+            # Exit labels
+            take_profit_label = batch['take_profit_label'].to(self.device)
+            stop_loss_label = batch['stop_loss_label'].to(self.device)
+            let_run_label = batch['let_winner_run_label'].to(self.device)
+            regime_change_label = batch['regime_change_label'].to(self.device)
+            
+            # Position context
+            unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
+            time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
 
+            # Safety checks
             if torch.isnan(features).any() or torch.isinf(features).any():
-                nan_batches_skipped += 1
+                print(f"\n⚠️ NaN/Inf in batch {batch_idx} features. Skipping.")
                 self.optimizer.zero_grad()
-                # notify UI even if we skip
-                if callable(on_batch) and (batch_idx % batch_update_every == 0):
-                    on_batch(batch_idx + 1, n_batches, float('nan'),
-                            self.optimizer.param_groups[0]['lr'])
                 continue
 
-            with (torch.amp.autocast('cuda') if self.scaler else torch.enable_grad()):
-                predictions = self.model(features)
+            # Forward pass with position context
+            with torch.amp.autocast('cuda') if self.scaler else torch.enable_grad():
+                position_context = {
+                    'unrealized_pnl': unrealized_pnl,
+                    'time_in_position': time_in_position,
+                }
+                
+                predictions = self.model(features, position_context=position_context)
+
                 targets = {
                     'features': features,
                     'future_return': future_return,
                     'actual_volatility': actual_volatility,
                     'entry_label': entry_label,
-                    'exit_label': exit_label
+                    'take_profit_label': take_profit_label,
+                    'stop_loss_label': stop_loss_label,
+                    'let_winner_run_label': let_run_label,
+                    'regime_change_label': regime_change_label,
                 }
+
                 loss_dict = self.criterion(predictions, targets)
                 loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
 
+            # Check for NaN
             if torch.isnan(loss) or torch.isinf(loss):
-                nan_batches_skipped += 1
+                print(f"\n⚠️ NaN/Inf in loss at batch {batch_idx}. Skipping.")
                 self.optimizer.zero_grad()
-                if callable(on_batch) and (batch_idx % batch_update_every == 0):
-                    on_batch(batch_idx + 1, n_batches, float('nan'),
-                            self.optimizer.param_groups[0]['lr'])
                 continue
 
-            # backward
+            # Backward
             if self.scaler:
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
 
-            # grad step (with accumulation)
+            # Gradient accumulation
             if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
-                try:
-                    if self.scaler:
-                        self.scaler.unscale_(self.optimizer)
-                except RuntimeError as e:
-                    if "already been called" not in str(e):
-                        raise
-
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
-                self.last_grad_norm = float(grad_norm)
-
-                has_nan_grad = any(
-                    (p.grad is not None and torch.isnan(p.grad).any())
-                    for p in self.model.parameters()
-                )
-                if has_nan_grad:
-                    nan_batches_skipped += 1
-                    self.optimizer.zero_grad()
+                if self.scaler:
+                    self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                
+                if self.scaler:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
                 else:
-                    if self.scaler:
-                        self.scaler.step(self.optimizer)
-                        self.scaler.update()
-                    else:
-                        self.optimizer.step()
-                    self.optimizer.zero_grad()
+                    self.optimizer.step()
+                self.optimizer.zero_grad()
 
-            # accounting
+            # Track losses
             total_loss += loss_dict['total_loss']
-            loss_components['entry'] += loss_dict['entry_loss']
-            loss_components['exit'] += loss_dict['exit_loss']
-            loss_components['return'] += loss_dict['return_loss']
-            loss_components['volatility'] += loss_dict['volatility_loss']
-            loss_components['vae'] += loss_dict['vae_loss']
-            loss_components['confidence_penalty'] += loss_dict['confidence_penalty']
-
+            for k in loss_components.keys():
+                if f'{k}_loss' in loss_dict:
+                    loss_components[k] += loss_dict[f'{k}_loss']
+            
+            # Track exit signals
             with torch.no_grad():
-                all_entry_probs.extend(predictions['entry_prob'].detach().cpu().numpy().ravel().tolist())
-                all_exit_probs.extend(predictions['exit_prob'].detach().cpu().numpy().ravel().tolist())
+                exit_signals = predictions.get('exit_signals', {})
+                
+                if 'profit_taking' in exit_signals and exit_signals['profit_taking'] is not None:
+                    tp = exit_signals['profit_taking']['take_profit_prob']
+                    all_take_profit_probs.extend(tp.cpu().numpy().flatten().tolist())
+                    
+                if 'let_winner_run' in exit_signals and exit_signals['let_winner_run'] is not None:
+                    lr = exit_signals['let_winner_run']['hold_score']
+                    all_let_run_scores.extend(lr.cpu().numpy().flatten().tolist())
+                
+                if 'stop_loss' in exit_signals and exit_signals['stop_loss'] is not None:
+                    sl = exit_signals['stop_loss']['stop_loss_prob']
+                    all_stop_loss_probs.extend(sl.cpu().numpy().flatten().tolist())
 
-            # 🔁 push per-batch update to Rich every N batches
-            if callable(on_batch) and ((batch_idx + 1) % batch_update_every == 0):
-                on_batch(
-                    batch_idx + 1,
-                    n_batches,
-                    float(loss_dict['total_loss']),
-                    self.optimizer.param_groups[0]['lr'],
-                )
+            # Update progress
+            progress_bar.set_postfix({
+                'loss': f"{loss_dict['total_loss']:.4f}",
+                'lr': f"{self.optimizer.param_groups[0]['lr']:.6f}",
+            })
 
-        n_valid_batches = max(n_batches - nan_batches_skipped, 1)
-        avg_loss = total_loss / n_valid_batches
-        avg_components = {k: v / n_valid_batches for k, v in loss_components.items()}
+        # Average losses
+        n_batches = len(self.train_loader)
+        avg_loss = total_loss / n_batches
+        avg_components = {k: v / n_batches for k, v in loss_components.items()}
+        
+        # Exit signal analysis
+        print(f"\n📊 Exit Signal Distribution (Epoch {epoch}):")
+        if all_take_profit_probs:
+            tp_array = np.array(all_take_profit_probs)
+            print(f"   Take-Profit - Mean: {tp_array.mean():.3f}, Std: {tp_array.std():.3f}")
+            print(f"   High TP (>0.7): {(tp_array > 0.7).mean()*100:.1f}%")
+        
+        if all_stop_loss_probs:
+            sl_array = np.array(all_stop_loss_probs)
+            print(f"   Stop-Loss - Mean: {sl_array.mean():.3f}, Std: {sl_array.std():.3f}")
+            print(f"   High SL (>0.7): {(sl_array > 0.7).mean()*100:.1f}%")
+        
+        if all_let_run_scores:
+            lr_array = np.array(all_let_run_scores)
+            print(f"   Let-Run - Mean: {lr_array.mean():.3f}, Std: {lr_array.std():.3f}")
+            print(f"   Strong Hold (>0.7): {(lr_array > 0.7).mean()*100:.1f}%")
 
-        # (keep the prediction spread prints if you like)
         return avg_loss, avg_components
 
-    def _legacy_train(self, num_epochs):
-        """Classic tqdm-only training loop (fallback mode)."""
-        console.print("[cyan]Running legacy tqdm training loop...[/cyan]")
-
-        for epoch in range(num_epochs):
-            train_loss, train_components = self.train_epoch(epoch)
-            val_loss, val_components, entry_acc, exit_acc = self.validate()
-            self.scheduler.step()
-
-            lr = self.optimizer.param_groups[0]['lr']
-            console.print(
-                f"[bold cyan]Epoch {epoch}[/bold cyan] "
-                f"Train Loss: [green]{train_loss:.4f}[/green] | "
-                f"Val Loss: [yellow]{val_loss:.4f}[/yellow] | "
-                f"Entry Acc: {entry_acc:.4f} | Exit Acc: {exit_acc:.4f} | LR: {lr:.6f}"
-            )
-
-            if self.use_wandb and self.wandb is not None:
-                self.wandb.log({
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "val_loss": val_loss,
-                    "entry_acc": entry_acc,
-                    "exit_acc": exit_acc,
-                    "lr": lr,
-                })
-
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.patience_counter = 0
-                best_path = self.config.get('best_model_path', 'models/best_model.pt')
-                self.save_checkpoint(best_path, epoch, val_loss)
-                console.print(f"[green]💾 New best model saved![/green] Val loss: {val_loss:.4f}")
-            else:
-                self.patience_counter += 1
-
-            if self.patience_counter >= self.config.get('patience', 25):
-                console.print(f"[red]⏹️ Early stopping triggered at epoch {epoch + 1}[/red]")
-                break
-
-        console.print("\n[bold green]✅ Training completed successfully (legacy mode)![/bold green]")
-
-    def train(self, num_epochs):
-        """Full training loop with non-flickering Rich dashboard + per-batch Train & Val progress."""
-        from rich.live import Live
-        from rich.table import Table
-        from rich.progress import (
-            Progress, BarColumn, TextColumn, TimeElapsedColumn,
-            TimeRemainingColumn, MofNCompleteColumn
-        )
-        from rich.console import Group
-
-        if not self.config.get('rich_dashboard', True):
-            console.print("[yellow]⚠️ Rich dashboard disabled — using tqdm output[/yellow]")
-            return self._legacy_train(num_epochs)
-
-        # ── epoch progress bar (outer) ─────────────────────────────────────────────
-        epoch_progress = Progress(
-            TextColumn("[cyan]Epoch[/cyan] {task.fields[epoch]:03d}"),
-            BarColumn(complete_style="bright_magenta"),
-            "[progress.percentage]{task.percentage:>3.1f}%",
-            "•", TextColumn("[green]Train:[/green] {task.fields[loss]:.4f}"),
-            "•", TextColumn("[yellow]Val:[/yellow] {task.fields[val]:.4f}"),
-            "•", TextColumn("[blue]LR:[/blue] {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            expand=True,
-        )
-        epoch_task = epoch_progress.add_task(
-            "Epochs", total=num_epochs, epoch=0, loss=0.0, val=0.0, lr=self.optimizer.param_groups[0]['lr']
-        )
-
-        # ── training batch progress ────────────────────────────────────────────────
-        train_progress = Progress(
-            TextColumn("[white]Train[/white]"),
-            BarColumn(complete_style="magenta"),
-            MofNCompleteColumn(),
-            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
-            "•", TextColumn("lr {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True,
-        )
-        train_task = train_progress.add_task(
-            "Batches", total=max(1, len(self.train_loader)), bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
-        )
-
-        # ── validation batch progress (NEW) ────────────────────────────────────────
-        val_progress = Progress(
-            TextColumn("[white]Validation[/white]"),
-            BarColumn(complete_style="bright_blue"),
-            MofNCompleteColumn(),
-            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
-            "•", TextColumn("lr {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True,
-        )
-        val_task = val_progress.add_task(
-            "Batches", total=max(1, len(self.val_loader)), bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
-        )
-
-        # ── metrics table ──────────────────────────────────────────────────────────
-        dashboard = Table(expand=True, show_header=True, header_style="bold white")
-        dashboard.add_column("Metric", justify="left", style="bold cyan")
-        dashboard.add_column("Value", justify="right")
-        self.loss_history = []
-
-        def update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm):
-            """Safely rebuild the metrics table each refresh (avoids IndexError in Live)."""
-            table = Table(expand=True, show_header=True, header_style="bold white")
-            table.add_column("Metric", justify="left", style="bold cyan")
-            table.add_column("Value", justify="right")
-
-            table.add_row("Epoch", f"{epoch}")
-            table.add_row("Train Loss", f"{train_loss:.5f}")
-            table.add_row("Val Loss", f"{val_loss:.5f}")
-            table.add_row("Entry Acc", f"{entry_acc:.4f}")
-            table.add_row("Exit Acc", f"{exit_acc:.4f}")
-            table.add_row("Grad Norm", f"{grad_norm:.4f}" if grad_norm else "—")
-            table.add_row("LR", f"{lr:.6f}")
-            table.add_row(
-                "GPU Mem (MB)" if torch.cuda.is_available() else "CPU Mem (%)",
-                f"{(torch.cuda.memory_allocated(self.device) / 1e6) if torch.cuda.is_available() else psutil.virtual_memory().percent:.1f}"
-            )
-
-            if hasattr(self, "_last_val_spread"):
-                s = self._last_val_spread
-                table.add_row(
-                    "Val Spread (std/hi/lo/ym)",
-                    f"{s['std']:.3f} / {100*s['hi']:.1f}% / {100*s['lo']:.1f}% / {s['label_mean']:.3f}"
-                )
-
-            if len(self.loss_history) > 2:
-                chars = "▁▂▃▄▅▆▇█"
-                # safely convert CUDA tensors to CPU floats
-                loss_values = [
-                    float(x.detach().cpu()) if torch.is_tensor(x) else float(x)
-                    for x in self.loss_history
-                ]
-                # normalize into [1, len(chars)]
-                scaled = np.interp(loss_values, (min(loss_values), max(loss_values)), (1, len(chars)))
-                spark = "".join(chars[int(x) - 1] for x in scaled.astype(int))
-                table.add_row("Loss Trend", spark)
-
-            group.renderables[-1] = table
-
-        # compose a single Live group to avoid flicker
-        group = Group(epoch_progress, train_progress, val_progress, dashboard)
-
-        with Live(group, refresh_per_second=6, console=console, transient=False):
-            for epoch in range(num_epochs):
-                # reset train progress
-                train_progress.reset(
-                    train_task, total=max(1, len(self.train_loader)), completed=0,
-                    bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
-                )
-
-                # per-batch train callback
-                def on_train_batch(bi, total, loss, lr):
-                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and np.isnan(loss))) else loss
-                    train_progress.update(train_task, completed=bi, bloss=shown_loss, lr=lr)
-
-                # train epoch
-                train_loss, _ = self.train_epoch(epoch, on_batch=on_train_batch, batch_update_every=10)
-
-                # reset val progress
-                val_progress.reset(
-                    val_task, total=max(1, len(self.val_loader)), completed=0,
-                    bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
-                )
-
-                # per-batch validation callback
-                def on_val_batch(bi, total, loss, lr):
-                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and np.isnan(loss))) else loss
-                    val_progress.update(val_task, completed=bi, bloss=shown_loss, lr=lr)
-
-                # validate
-                val_loss, _, entry_acc, exit_acc = self.validate(on_batch=on_val_batch, batch_update_every=10)
-
-                # scheduler
-                self.scheduler.step()
-
-                lr = self.optimizer.param_groups[0]['lr']
-                grad_norm = getattr(self, 'last_grad_norm', None)
-                self.loss_history.append(float(val_loss.detach().cpu()) if torch.is_tensor(val_loss) else float(val_loss))
-
-                # update epoch progress & dashboard
-                epoch_progress.update(epoch_task, advance=1, epoch=epoch, loss=train_loss, val=val_loss, lr=lr)
-                update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm)
-
-                # logging & checkpoints
-                if self.use_wandb and self.wandb is not None:
-                    self.wandb.log({
-                        'epoch': epoch,
-                        'train_loss': train_loss,
-                        'val_loss': val_loss,
-                        'entry_accuracy': entry_acc,
-                        'exit_accuracy': exit_acc,
-                        'learning_rate': lr
-                    })
-
-                if val_loss < self.best_val_loss:
-                    self.best_val_loss = val_loss
-                    self.patience_counter = 0
-                    best_path = self.config.get('best_model_path', 'models/best_model.pt')
-                    self.save_checkpoint(best_path, epoch, val_loss)
-                    console.print(f"[green]💾 New best model saved![/green] Val loss: {val_loss:.4f}")
-                else:
-                    self.patience_counter += 1
-                    if self.patience_counter >= self.config.get('patience', 25):
-                        console.print(f"[red]⏹️ Early stopping triggered at epoch {epoch + 1}[/red]")
-                        break
-
-        console.print("\n[bold green]✅ Training completed successfully![/bold green]")
-
-    def validate(self, on_batch=None, batch_update_every: int = 10):
-        """Validate with optional per-batch UI callback (no tqdm, no console spam)."""
+    def validate(self):
+        """Validation with exit management metrics"""
         self.model.eval()
-        total_loss = 0.0
+        total_loss = 0
         loss_components = {
-            'entry': 0, 'exit': 0, 'return': 0,
-            'volatility': 0, 'vae': 0, 'confidence_penalty': 0
+            'entry': 0, 'return': 0, 'volatility': 0, 'vae': 0,
+            'regime_change': 0, 'take_profit': 0, 'stop_loss': 0,
+            'let_run': 0, 'confidence_penalty': 0
         }
 
         entry_correct = 0
-        exit_correct = 0
         total_samples = 0
 
-        all_entry_probs = []
-        all_entry_labels = []
-
-        n_batches = len(self.val_loader)
-
         with torch.no_grad():
-            for batch_idx, batch in enumerate(self.val_loader):
+            for batch in tqdm(self.val_loader, desc='Validation'):
                 features = batch['features'].to(self.device)
                 future_return = batch['future_return'].to(self.device)
                 actual_volatility = batch['actual_volatility'].to(self.device)
                 entry_label = batch['entry_label'].to(self.device)
-                exit_label = batch['exit_label'].to(self.device)
+                
+                take_profit_label = batch['take_profit_label'].to(self.device)
+                stop_loss_label = batch['stop_loss_label'].to(self.device)
+                let_run_label = batch['let_winner_run_label'].to(self.device)
+                regime_change_label = batch['regime_change_label'].to(self.device)
+                
+                unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
+                time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
 
-                predictions = self.model(features)
+                position_context = {
+                    'unrealized_pnl': unrealized_pnl,
+                    'time_in_position': time_in_position,
+                }
+                
+                predictions = self.model(features, position_context=position_context)
+
                 targets = {
                     'features': features,
                     'future_return': future_return,
                     'actual_volatility': actual_volatility,
                     'entry_label': entry_label,
-                    'exit_label': exit_label
+                    'take_profit_label': take_profit_label,
+                    'stop_loss_label': stop_loss_label,
+                    'let_winner_run_label': let_run_label,
+                    'regime_change_label': regime_change_label,
                 }
 
                 loss_dict = self.criterion(predictions, targets)
                 total_loss += loss_dict['total_loss']
-                loss_components['entry'] += loss_dict['entry_loss']
-                loss_components['exit'] += loss_dict['exit_loss']
-                loss_components['return'] += loss_dict['return_loss']
-                loss_components['volatility'] += loss_dict['volatility_loss']
-                loss_components['vae'] += loss_dict['vae_loss']
-                loss_components['confidence_penalty'] += loss_dict['confidence_penalty']
+                for k in loss_components.keys():
+                    if f'{k}_loss' in loss_dict:
+                        loss_components[k] += loss_dict[f'{k}_loss']
 
-                # accuracy (threshold 0.5 on probs / labels)
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
-                exit_pred = (predictions['exit_prob'] > 0.5).float().squeeze()
                 entry_true = (entry_label > 0.5).float()
-                exit_true = (exit_label > 0.5).float()
                 entry_correct += (entry_pred == entry_true).sum().item()
-                exit_correct += (exit_pred == exit_true).sum().item()
                 total_samples += len(entry_label)
 
-                # spread (optional use later)
-                all_entry_probs.extend(predictions['entry_prob'].cpu().numpy().ravel().tolist())
-                all_entry_labels.extend(entry_label.cpu().numpy().ravel().tolist())
+        n_batches = len(self.val_loader)
+        avg_loss = total_loss / n_batches
+        avg_components = {k: v / n_batches for k, v in loss_components.items()}
+        entry_accuracy = entry_correct / total_samples
 
-                # 🔁 push per-batch update to UI every N batches
-                if callable(on_batch) and ((batch_idx + 1) % batch_update_every == 0):
-                    on_batch(
-                        batch_idx + 1,
-                        n_batches,
-                        float(loss_dict['total_loss']),
-                        self.optimizer.param_groups[0]['lr'],
-                    )
+        return avg_loss, avg_components, entry_accuracy
 
-        avg_loss = total_loss / max(1, n_batches)
-        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
-        entry_accuracy = entry_correct / max(total_samples, 1)
-        exit_accuracy = exit_correct / max(total_samples, 1)
+    def train(self, num_epochs):
+        """Full training loop"""
+        print("\n🎯 Starting training with exit management...")
 
-        # (Keep spread if you want to display somewhere else in the dashboard)
-        self._last_val_spread = {
-            "std": float(np.std(np.array(all_entry_probs))) if all_entry_probs else 0.0,
-            "hi": float((np.array(all_entry_probs) > 0.7).mean()) if all_entry_probs else 0.0,
-            "lo": float((np.array(all_entry_probs) < 0.3).mean()) if all_entry_probs else 0.0,
-            "label_mean": float(np.mean(np.array(all_entry_labels))) if all_entry_labels else 0.0,
-        }
+        for epoch in range(num_epochs):
+            train_loss, train_components = self.train_epoch(epoch)
+            val_loss, val_components, entry_acc = self.validate()
+            self.scheduler.step()
 
-        return avg_loss, avg_components, entry_accuracy, exit_accuracy
+            if self.use_wandb and self.wandb is not None:
+                self.wandb.log({
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'val_loss': val_loss,
+                    'entry_accuracy': entry_acc,
+                    'learning_rate': self.optimizer.param_groups[0]['lr'],
+                    **{f'train_{k}': v for k, v in train_components.items()},
+                    **{f'val_{k}': v for k, v in val_components.items()}
+                })
+
+            print(f"\nEpoch {epoch} Summary:")
+            print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+            print(f"Entry Acc: {entry_acc:.3f}")
+
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                self.patience_counter = 0
+                best_path = self.config.get('best_model_path', 'models/best_exit_aware_model.pt')
+                self.save_checkpoint(best_path, epoch, val_loss)
+                print(f"💾 New best model saved! Val loss: {val_loss:.4f}")
+            else:
+                self.patience_counter += 1
+
+            if self.patience_counter >= self.config.get('patience', 25):
+                print(f"\nⓘ Early stopping triggered after {epoch + 1} epochs")
+                break
+
+            if (epoch + 1) % self.config.get('save_every', 10) == 0:
+                checkpoint_path = f"models/checkpoint_exit_aware_epoch_{epoch}.pt"
+                self.save_checkpoint(checkpoint_path, epoch, val_loss)
+
+        print("\n✅ Training completed!")
 
     def save_checkpoint(self, filename, epoch, val_loss):
-        """Save model checkpoint."""
+        """Save model checkpoint"""
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
@@ -992,7 +767,7 @@ class NeuralTrainer:
         torch.save(checkpoint, filename)
 
     def load_checkpoint(self, filename):
-        """Load model checkpoint."""
+        """Load model checkpoint"""
         checkpoint = torch.load(filename, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

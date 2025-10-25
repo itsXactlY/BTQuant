@@ -3,48 +3,43 @@ import numpy as np
 from typing import Dict, Tuple
 from collections import deque
 
+
 class LivePredictor:
     """
-    Real-time prediction engine for live trading.
-    Optimized for minimal latency.
+    🆕 ENHANCED: Real-time predictor with intelligent exit management
     """
     
-    def __init__(
-        self,
-        model_path: str,
-        feature_extractor,
-        seq_len: int = 100,
-        device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-    ):
+    def __init__(self, model_path: str, feature_extractor, seq_len: int = 100, device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
         self.model = self._load_model(model_path, device)
         self.feature_extractor = feature_extractor
         self.seq_len = seq_len
         self.device = device
         
-        # Circular buffer for features
         self.feature_buffer = deque(maxlen=seq_len)
         
-        # Cache for faster inference
-        self.last_prediction = None
-        self.prediction_cache_size = 0
+        # 🆕 Position tracking
+        self.in_position = False
+        self.entry_price = None
+        self.entry_time = None
+        self.current_bars_in_position = 0
         
-        print(f"🚀 LivePredictor initialized on {device}")
+        print(f"🚀 LivePredictor initialized with exit management on {device}")
     
     def _load_model(self, model_path: str, device: str):
-        """Load and prepare model for inference."""
+        """Load model"""
         checkpoint = torch.load(model_path, map_location=device)
         config = checkpoint.get('config', {})
         
-        from models.architecture import NeuralTradingModel
+        from models.architecture_v2 import NeuralTradingModel
         
         model = NeuralTradingModel(
             feature_dim=config.get('feature_dim', 500),
-            d_model=config.get('d_model', 256),
-            num_heads=config.get('num_heads', 8),
-            num_layers=config.get('num_layers', 6),
-            d_ff=config.get('d_ff', 1024),
+            d_model=config.get('d_model', 512),
+            num_heads=config.get('num_heads', 16),
+            num_layers=config.get('num_layers', 8),
+            d_ff=config.get('d_ff', 2048),
             dropout=0.0,
-            latent_dim=config.get('latent_dim', 8),
+            latent_dim=config.get('latent_dim', 16),
             seq_len=config.get('seq_len', 100)
         )
         
@@ -52,132 +47,179 @@ class LivePredictor:
         model.to(device)
         model.eval()
         
-        # Optional: Convert to TorchScript for faster inference
-        # model = torch.jit.script(model)
-        
         return model
     
-    def update(self, indicator_data: Dict[str, np.ndarray]):
-        """
-        Update with new bar data.
-        
-        Args:
-            indicator_data: Dict with all indicator values and internals
-        """
-        # Extract features from current state
+    def update(self, indicator_data: Dict[str, np.ndarray], current_price: float):
+        """Update with new bar"""
         features = self.feature_extractor.extract_all_features(indicator_data)
         features = self.feature_extractor.transform(features)
-        
-        # Add to buffer
         self.feature_buffer.append(features)
-    
-    def predict(self) -> Dict[str, float]:
-        """
-        Get current predictions.
         
-        Returns:
-            Dict with:
-                - entry_prob: float
-                - exit_prob: float
-                - expected_return: float
-                - volatility_forecast: float
-                - position_size: float
-                - regime_embedding: np.ndarray
-                - confidence_score: float (meta-metric)
+        if self.in_position:
+            self.current_bars_in_position += 1
+    
+    def predict(self, current_price: float) -> Dict[str, float]:
         """
-        # Need full sequence
+        🆕 ENHANCED: Get predictions with intelligent exit signals
+        """
         if len(self.feature_buffer) < self.seq_len:
             return None
         
-        # Prepare input
-        feature_sequence = np.array(list(self.feature_buffer))  # [seq_len, feature_dim]
-        feature_tensor = torch.FloatTensor(feature_sequence).unsqueeze(0)
-        feature_tensor = feature_tensor.to(self.device)
+        feature_sequence = np.array(list(self.feature_buffer))
+        feature_tensor = torch.FloatTensor(feature_sequence).unsqueeze(0).to(self.device)
+        
+        # Build position context
+        position_context = None
+        if self.in_position and self.entry_price is not None:
+            unrealized_pnl = (current_price - self.entry_price) / self.entry_price
+            position_context = {
+                'unrealized_pnl': torch.tensor([[unrealized_pnl]], dtype=torch.float32, device=self.device),
+                'time_in_position': torch.tensor([[float(self.current_bars_in_position)]], dtype=torch.float32, device=self.device),
+            }
         
         # Inference
         with torch.no_grad():
-            predictions = self.model(feature_tensor)
+            predictions = self.model(feature_tensor, position_context=position_context)
         
-        # Extract values
+        # Extract core predictions
         result = {
             'entry_prob': predictions['entry_prob'].cpu().item(),
-            'exit_prob': predictions['exit_prob'].cpu().item(),
             'expected_return': predictions['expected_return'].cpu().item(),
             'volatility_forecast': predictions['volatility_forecast'].cpu().item(),
             'position_size': predictions['position_size'].cpu().item(),
             'regime_embedding': predictions['regime_z'].cpu().numpy()[0],
         }
         
-        # Compute confidence score (meta-metric combining multiple signals)
-        confidence = self._compute_confidence(predictions)
-        result['confidence_score'] = confidence
+        # 🆕 Add regime change signals
+        regime_change = predictions['regime_change']
+        result.update({
+            'regime_change_score': regime_change['regime_change_score'].cpu().item(),
+            'regime_stability': regime_change['stability'].cpu().item(),
+            'vol_spike': regime_change['vol_change'].cpu().item(),
+            'volume_anomaly': regime_change['volume_anomaly'].cpu().item(),
+        })
         
-        self.last_prediction = result
+        # 🆕 Add exit signals if in position
+        exit_signals = predictions['exit_signals']
+        if self.in_position:
+            unrealized_pnl = (current_price - self.entry_price) / self.entry_price
+            
+            if unrealized_pnl > 0:
+                # In profit - get take-profit and let-run signals
+                if exit_signals['profit_taking'] is not None:
+                    result.update({
+                        'take_profit_prob': exit_signals['profit_taking']['take_profit_prob'].cpu().item(),
+                        'momentum_fade': exit_signals['profit_taking']['momentum_fade'].cpu().item(),
+                        'resistance_near': exit_signals['profit_taking']['resistance_near'].cpu().item(),
+                        'profit_optimal': exit_signals['profit_taking']['profit_optimal'].cpu().item(),
+                    })
+                
+                if exit_signals['let_winner_run'] is not None:
+                    result.update({
+                        'hold_score': exit_signals['let_winner_run']['hold_score'].cpu().item(),
+                        'trend_strength': exit_signals['let_winner_run']['trend_strength'].cpu().item(),
+                        'momentum_accel': exit_signals['let_winner_run']['momentum_accel'].cpu().item(),
+                    })
+                
+                # Unified exit decision for profit
+                result['should_exit'] = exit_signals['should_exit_profit'].cpu().item()
+                result['exit_reason'] = 'TAKE_PROFIT' if result['should_exit'] > 0.7 else 'HOLD_WINNER'
+                
+            else:
+                # In loss - get stop-loss signals
+                if exit_signals['stop_loss'] is not None:
+                    result.update({
+                        'stop_loss_prob': exit_signals['stop_loss']['stop_loss_prob'].cpu().item(),
+                        'pattern_failure': exit_signals['stop_loss']['pattern_failure'].cpu().item(),
+                        'acceleration_down': exit_signals['stop_loss']['acceleration_down'].cpu().item(),
+                        'support_break': exit_signals['stop_loss']['support_break'].cpu().item(),
+                    })
+                
+                result['should_exit'] = exit_signals['should_exit_loss'].cpu().item()
+                result['exit_reason'] = 'STOP_LOSS' if result['should_exit'] > 0.7 else 'HOLD_LOSS'
+            
+            result['unrealized_pnl'] = unrealized_pnl
+            result['bars_in_position'] = self.current_bars_in_position
+        else:
+            result['should_exit'] = 0.0
+            result['exit_reason'] = 'NOT_IN_POSITION'
+        
+        # Unified exit probability
+        result['unified_exit_prob'] = predictions['unified_exit_prob'].cpu().item()
+        
         return result
     
-    def _compute_confidence(self, predictions: Dict) -> float:
-        """
-        Compute overall confidence in the prediction.
+    def enter_position(self, entry_price: float):
+        """Mark position entry"""
+        self.in_position = True
+        self.entry_price = entry_price
+        self.entry_time = 0
+        self.current_bars_in_position = 0
+        print(f"📈 Entered position at {entry_price}")
+    
+    def exit_position(self, exit_price: float, reason: str):
+        """Mark position exit"""
+        if self.in_position and self.entry_price is not None:
+            pnl = (exit_price - self.entry_price) / self.entry_price
+            print(f"📉 Exited position at {exit_price} | Reason: {reason}")
+            print(f"    P&L: {pnl*100:.2f}% | Held for {self.current_bars_in_position} bars")
         
-        Combines multiple factors:
-        - Entry probability certainty (far from 0.5)
-        - Low predicted volatility
-        - Expected return magnitude
-        - Regime stability (low variance in latent space)
-        """
-        entry_prob = predictions['entry_prob'].item()
-        vol_forecast = predictions['volatility_forecast'].item()
-        exp_return = abs(predictions['expected_return'].item())
-        
-        # Entry certainty (0.5 = uncertain, 0 or 1 = certain)
-        entry_certainty = abs(entry_prob - 0.5) * 2  # Scale to [0, 1]
-        
-        # Volatility confidence (lower vol = higher confidence)
-        vol_confidence = 1.0 / (1.0 + vol_forecast)
-        
-        # Return magnitude
-        return_confidence = min(exp_return * 10, 1.0)  # Cap at 1.0
-        
-        # Weighted combination
-        confidence = (
-            0.4 * entry_certainty +
-            0.3 * vol_confidence +
-            0.3 * return_confidence
-        )
-        
-        return confidence
+        self.in_position = False
+        self.entry_price = None
+        self.entry_time = None
+        self.current_bars_in_position = 0
     
     def get_trade_signal(
         self,
-        min_entry_prob: float = 0.6,
+        current_price: float,
+        min_entry_prob: float = 0.65,
         min_confidence: float = 0.5,
-        min_expected_return: float = 0.01
+        min_expected_return: float = 0.015,
+        exit_threshold: float = 0.7
     ) -> Tuple[str, Dict]:
         """
-        Get actionable trade signal with filters.
+        🆕 ENHANCED: Get actionable trade signal with intelligent exits
         
         Returns:
             signal: 'ENTRY', 'EXIT', or 'HOLD'
-            details: Dict with prediction details
+            details: Dict with all prediction details
         """
-        if self.last_prediction is None:
+        pred = self.predict(current_price)
+        
+        if pred is None:
             return 'HOLD', {}
         
-        pred = self.last_prediction
+        # === EXIT LOGIC (Priority: check exits first if in position) ===
+        if self.in_position:
+            # Check unified exit signal
+            if pred['should_exit'] > exit_threshold:
+                return 'EXIT', pred
+            
+            # Additional safety: regime change during loss
+            if pred.get('unrealized_pnl', 0) < 0 and pred['regime_change_score'] > 0.8:
+                pred['exit_reason'] = 'REGIME_CHANGE_CUTLOSS'
+                return 'EXIT', pred
+            
+            # Let winner run if conditions are met
+            if pred.get('hold_score', 0) > 0.75 and pred.get('unrealized_pnl', 0) > 0.02:
+                pred['action_detail'] = 'Letting winner run - strong continuation signals'
+                return 'HOLD', pred
+            
+            return 'HOLD', pred
         
-        # Entry conditions
+        # === ENTRY LOGIC (Only if not in position) ===
         if (pred['entry_prob'] > min_entry_prob and
-            pred['confidence_score'] > min_confidence and
-            pred['expected_return'] > min_expected_return):
+            pred['expected_return'] > min_expected_return and
+            pred['regime_stability'] > 0.4):  # Don't enter during regime chaos
+            
             return 'ENTRY', pred
-        
-        # Exit conditions
-        if pred['exit_prob'] > 0.7:
-            return 'EXIT', pred
         
         return 'HOLD', pred
     
     def reset(self):
-        """Reset the predictor state."""
+        """Reset predictor state"""
         self.feature_buffer.clear()
-        self.last_prediction = None
+        self.in_position = False
+        self.entry_price = None
+        self.entry_time = None
+        self.current_bars_in_position = 0

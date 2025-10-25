@@ -87,3 +87,4 @@ neural_trading_system/checkpoint_epoch_9.pt
 neural_trading_system/models/best_model.pt
 *.html
 *.pt
+neural_trading_system/wandb/*

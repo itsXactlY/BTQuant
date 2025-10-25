@@ -7,10 +7,8 @@ import polars as pl
 import time
 from pathlib import Path
 from rich.console import Console
-import wandb
 import hashlib
 import json
-import psutil
 import torch
 from tqdm import tqdm
 
@@ -506,54 +504,46 @@ class NeuralTrainer:
         else:
             self.wandb = None
 
-    def train_epoch(self, epoch):
-        """Train for one epoch with exit management monitoring"""
+    def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
+        """Train for one epoch with Rich dashboard batch updates (no tqdm spam)."""
         self.model.train()
-        total_loss = 0
+        total_loss = 0.0
         loss_components = {
             'entry': 0, 'return': 0, 'volatility': 0, 'vae': 0,
-            'regime_change': 0, 'take_profit': 0, 'stop_loss': 0, 
+            'regime_change': 0, 'take_profit': 0, 'stop_loss': 0,
             'let_run': 0, 'confidence_penalty': 0
         }
-        
-        # Track exit signal distributions
+
+        # Exit signal tracking
         all_take_profit_probs = []
         all_stop_loss_probs = []
         all_let_run_scores = []
 
-        progress_bar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
         self.optimizer.zero_grad()
+        n_batches = len(self.train_loader)
 
-        for batch_idx, batch in enumerate(progress_bar):
+        for batch_idx, batch in enumerate(self.train_loader):
             # Move to device
             features = batch['features'].to(self.device)
             future_return = batch['future_return'].to(self.device)
             actual_volatility = batch['actual_volatility'].to(self.device)
             entry_label = batch['entry_label'].to(self.device)
-            
-            # Exit labels
+
             take_profit_label = batch['take_profit_label'].to(self.device)
             stop_loss_label = batch['stop_loss_label'].to(self.device)
             let_run_label = batch['let_winner_run_label'].to(self.device)
             regime_change_label = batch['regime_change_label'].to(self.device)
-            
-            # Position context
+
             unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
             time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
 
-            # Safety checks
+            # Skip bad batches
             if torch.isnan(features).any() or torch.isinf(features).any():
-                print(f"\n⚠️ NaN/Inf in batch {batch_idx} features. Skipping.")
                 self.optimizer.zero_grad()
                 continue
 
-            # Forward pass with position context
             with torch.amp.autocast('cuda') if self.scaler else torch.enable_grad():
-                position_context = {
-                    'unrealized_pnl': unrealized_pnl,
-                    'time_in_position': time_in_position,
-                }
-                
+                position_context = {'unrealized_pnl': unrealized_pnl, 'time_in_position': time_in_position}
                 predictions = self.model(features, position_context=position_context)
 
                 targets = {
@@ -570,24 +560,20 @@ class NeuralTrainer:
                 loss_dict = self.criterion(predictions, targets)
                 loss = loss_dict['total_loss'] / self.gradient_accumulation_steps
 
-            # Check for NaN
             if torch.isnan(loss) or torch.isinf(loss):
-                print(f"\n⚠️ NaN/Inf in loss at batch {batch_idx}. Skipping.")
                 self.optimizer.zero_grad()
                 continue
 
-            # Backward
+            # Backward + grad step
             if self.scaler:
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
 
-            # Gradient accumulation
             if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                 if self.scaler:
                     self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                
                 if self.scaler:
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -600,159 +586,300 @@ class NeuralTrainer:
             for k in loss_components.keys():
                 if f'{k}_loss' in loss_dict:
                     loss_components[k] += loss_dict[f'{k}_loss']
-            
-            # Track exit signals
+
+            # Exit signals
             with torch.no_grad():
                 exit_signals = predictions.get('exit_signals', {})
-                
-                if 'profit_taking' in exit_signals and exit_signals['profit_taking'] is not None:
-                    tp = exit_signals['profit_taking']['take_profit_prob']
-                    all_take_profit_probs.extend(tp.cpu().numpy().flatten().tolist())
-                    
-                if 'let_winner_run' in exit_signals and exit_signals['let_winner_run'] is not None:
-                    lr = exit_signals['let_winner_run']['hold_score']
-                    all_let_run_scores.extend(lr.cpu().numpy().flatten().tolist())
-                
-                if 'stop_loss' in exit_signals and exit_signals['stop_loss'] is not None:
-                    sl = exit_signals['stop_loss']['stop_loss_prob']
-                    all_stop_loss_probs.extend(sl.cpu().numpy().flatten().tolist())
+                if 'profit_taking' in exit_signals:
+                    tp = exit_signals['profit_taking'].get('take_profit_prob')
+                    if tp is not None:
+                        all_take_profit_probs.extend(tp.cpu().numpy().flatten().tolist())
 
-            # Update progress
-            progress_bar.set_postfix({
-                'loss': f"{loss_dict['total_loss']:.4f}",
-                'lr': f"{self.optimizer.param_groups[0]['lr']:.6f}",
-            })
+                if 'let_winner_run' in exit_signals:
+                    lr = exit_signals['let_winner_run'].get('hold_score')
+                    if lr is not None:
+                        all_let_run_scores.extend(lr.cpu().numpy().flatten().tolist())
 
-        # Average losses
-        n_batches = len(self.train_loader)
-        avg_loss = total_loss / n_batches
-        avg_components = {k: v / n_batches for k, v in loss_components.items()}
-        
-        # Exit signal analysis
-        print(f"\n📊 Exit Signal Distribution (Epoch {epoch}):")
-        if all_take_profit_probs:
-            tp_array = np.array(all_take_profit_probs)
-            print(f"   Take-Profit - Mean: {tp_array.mean():.3f}, Std: {tp_array.std():.3f}")
-            print(f"   High TP (>0.7): {(tp_array > 0.7).mean()*100:.1f}%")
-        
-        if all_stop_loss_probs:
-            sl_array = np.array(all_stop_loss_probs)
-            print(f"   Stop-Loss - Mean: {sl_array.mean():.3f}, Std: {sl_array.std():.3f}")
-            print(f"   High SL (>0.7): {(sl_array > 0.7).mean()*100:.1f}%")
-        
-        if all_let_run_scores:
-            lr_array = np.array(all_let_run_scores)
-            print(f"   Let-Run - Mean: {lr_array.mean():.3f}, Std: {lr_array.std():.3f}")
-            print(f"   Strong Hold (>0.7): {(lr_array > 0.7).mean()*100:.1f}%")
+                if 'stop_loss' in exit_signals:
+                    sl = exit_signals['stop_loss'].get('stop_loss_prob')
+                    if sl is not None:
+                        all_stop_loss_probs.extend(sl.cpu().numpy().flatten().tolist())
+
+            # ✅ Rich dashboard callback update
+            if on_batch and ((batch_idx + 1) % batch_update_every == 0):
+                on_batch(
+                    batch_idx + 1,
+                    n_batches,
+                    float(loss.item()),
+                    self.optimizer.param_groups[0]['lr']
+                )
+
+        # Aggregate
+        avg_loss = total_loss / max(1, n_batches)
+        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
+
+        # Optional summary
+        if all_take_profit_probs or all_stop_loss_probs or all_let_run_scores:
+            print(f"\n📊 Exit Signal Distribution (Epoch {epoch}):")
+            if all_take_profit_probs:
+                tp = np.array(all_take_profit_probs)
+                print(f"   Take-Profit  Mean={tp.mean():.3f}, Std={tp.std():.3f}, >0.7={100*(tp>0.7).mean():.1f}%")
+            if all_stop_loss_probs:
+                sl = np.array(all_stop_loss_probs)
+                print(f"   Stop-Loss    Mean={sl.mean():.3f}, Std={sl.std():.3f}, >0.7={100*(sl>0.7).mean():.1f}%")
+            if all_let_run_scores:
+                lr = np.array(all_let_run_scores)
+                print(f"   Let-Run      Mean={lr.mean():.3f}, Std={lr.std():.3f}, >0.7={100*(lr>0.7).mean():.1f}%")
 
         return avg_loss, avg_components
+    
+    def train(self, num_epochs):
+        """Full training loop with non-flickering Rich dashboard + per-batch Train & Val progress."""
+        from rich.live import Live
+        from rich.table import Table
+        from rich.progress import (
+            Progress, BarColumn, TextColumn, TimeElapsedColumn,
+            TimeRemainingColumn, MofNCompleteColumn
+        )
+        from rich.console import Group
+        import numpy as np
+        import torch, psutil
 
-    def validate(self):
-        """Validation with exit management metrics"""
+        console = Console()
+
+        if not self.config.get('rich_dashboard', True):
+            console.print("[yellow]⚠️ Rich dashboard disabled — using tqdm output[/yellow]")
+            return self._legacy_train(num_epochs)
+
+        # ───────────────────────────────────────────────────────────────
+        # epoch progress bar
+        # ───────────────────────────────────────────────────────────────
+        epoch_progress = Progress(
+            TextColumn("[cyan]Epoch[/cyan] {task.fields[epoch]:03d}"),
+            BarColumn(complete_style="bright_magenta"),
+            "[progress.percentage]{task.percentage:>3.1f}%",
+            "•", TextColumn("[green]Train:[/green] {task.fields[loss]:.4f}"),
+            "•", TextColumn("[yellow]Val:[/yellow] {task.fields[val]:.4f}"),
+            "•", TextColumn("[blue]LR:[/blue] {task.fields[lr]:.6f}"),
+            TimeElapsedColumn(),
+            expand=True,
+        )
+        epoch_task = epoch_progress.add_task(
+            "Epochs", total=num_epochs, epoch=0, loss=0.0, val=0.0,
+            lr=self.optimizer.param_groups[0]['lr']
+        )
+
+        # ───────────────────────────────────────────────────────────────
+        # training batch progress
+        # ───────────────────────────────────────────────────────────────
+        train_progress = Progress(
+            TextColumn("[white]Train[/white]"),
+            BarColumn(complete_style="magenta"),
+            MofNCompleteColumn(),
+            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
+            "•", TextColumn("lr {task.fields[lr]:.6f}"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            expand=True,
+        )
+        train_task = train_progress.add_task(
+            "Batches", total=max(1, len(self.train_loader)),
+            bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
+        )
+
+        # ───────────────────────────────────────────────────────────────
+        # validation batch progress
+        # ───────────────────────────────────────────────────────────────
+        val_progress = Progress(
+            TextColumn("[white]Validation[/white]"),
+            BarColumn(complete_style="bright_blue"),
+            MofNCompleteColumn(),
+            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
+            "•", TextColumn("lr {task.fields[lr]:.6f}"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            expand=True,
+        )
+        val_task = val_progress.add_task(
+            "Batches", total=max(1, len(self.val_loader)),
+            bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
+        )
+
+        # ───────────────────────────────────────────────────────────────
+        # metrics dashboard
+        # ───────────────────────────────────────────────────────────────
+        dashboard = Table(expand=True, show_header=True, header_style="bold white")
+        dashboard.add_column("Metric", justify="left", style="bold cyan")
+        dashboard.add_column("Value", justify="right")
+        self.loss_history = []
+
+        def update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm):
+            """Safely rebuild the metrics table for Rich Live."""
+            table = Table(expand=True, show_header=True, header_style="bold white")
+            table.add_column("Metric", justify="left", style="bold cyan")
+            table.add_column("Value", justify="right")
+
+            table.add_row("Epoch", f"{epoch}")
+            table.add_row("Train Loss", f"{train_loss:.5f}")
+            table.add_row("Val Loss", f"{val_loss:.5f}")
+            table.add_row("Entry Acc", f"{entry_acc:.4f}")
+            table.add_row("Exit Acc", f"{exit_acc:.4f}")
+            table.add_row("Grad Norm", f"{grad_norm:.4f}" if grad_norm else "—")
+            table.add_row("LR", f"{lr:.6f}")
+            table.add_row(
+                "GPU Mem (MB)" if torch.cuda.is_available() else "CPU Mem (%)",
+                f"{(torch.cuda.memory_allocated(self.device) / 1e6) if torch.cuda.is_available() else psutil.virtual_memory().percent:.1f}"
+            )
+
+            # sparkline
+            if len(self.loss_history) > 2:
+                chars = "▁▂▃▄▅▆▇█"
+                vals = [
+                    float(x.detach().cpu()) if torch.is_tensor(x) else float(x)
+                    for x in self.loss_history
+                ]
+                scaled = np.interp(vals, (min(vals), max(vals)), (1, len(chars)))
+                spark = "".join(chars[int(x) - 1] for x in scaled.astype(int))
+                table.add_row("Loss Trend", spark)
+
+            group.renderables[-1] = table
+
+        # ───────────────────────────────────────────────────────────────
+        # combine all into one live layout
+        # ───────────────────────────────────────────────────────────────
+        group = Group(epoch_progress, train_progress, val_progress, dashboard)
+
+        with Live(group, refresh_per_second=6, console=console, transient=False):
+            for epoch in range(num_epochs):
+                # reset train bar
+                train_progress.reset(
+                    train_task, total=max(1, len(self.train_loader)), completed=0,
+                    bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
+                )
+
+                def on_train_batch(bi, total, loss, lr):
+                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and np.isnan(loss))) else loss
+                    train_progress.update(train_task, completed=bi, bloss=shown_loss, lr=lr)
+
+                train_loss, _ = self.train_epoch(epoch, on_batch=on_train_batch, batch_update_every=10)
+
+                # reset val bar
+                val_progress.reset(
+                    val_task, total=max(1, len(self.val_loader)), completed=0,
+                    bloss=0.0, lr=self.optimizer.param_groups[0]['lr']
+                )
+
+                def on_val_batch(bi, total, loss, lr):
+                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and np.isnan(loss))) else loss
+                    val_progress.update(val_task, completed=bi, bloss=shown_loss, lr=lr)
+
+                val_loss, _, entry_acc, exit_acc = self.validate(on_batch=on_val_batch, batch_update_every=10)
+
+                self.scheduler.step()
+                lr = self.optimizer.param_groups[0]['lr']
+                grad_norm = getattr(self, 'last_grad_norm', None)
+                self.loss_history.append(float(val_loss.detach().cpu()) if torch.is_tensor(val_loss) else float(val_loss))
+
+                epoch_progress.update(epoch_task, advance=1, epoch=epoch, loss=train_loss, val=val_loss, lr=lr)
+                update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm)
+
+                # wandb logging + checkpoints
+                if self.use_wandb and self.wandb is not None:
+                    self.wandb.log({
+                        'epoch': epoch,
+                        'train_loss': train_loss,
+                        'val_loss': val_loss,
+                        'entry_accuracy': entry_acc,
+                        'exit_accuracy': exit_acc,
+                        'learning_rate': lr
+                    })
+
+                if val_loss < self.best_val_loss:
+                    self.best_val_loss = val_loss
+                    self.patience_counter = 0
+                    best_path = self.config.get('best_model_path', 'models/best_model.pt')
+                    self.save_checkpoint(best_path, epoch, val_loss)
+                    console.print(f"[green]💾 New best model saved![/green] Val loss: {val_loss:.4f}")
+                else:
+                    self.patience_counter += 1
+                    if self.patience_counter >= self.config.get('patience', 25):
+                        console.print(f"[red]⏹️ Early stopping triggered at epoch {epoch + 1}[/red]")
+                        break
+
+        console.print("\n[bold green]✅ Training completed successfully![/bold green]")
+
+
+
+    def validate(self, on_batch=None, batch_update_every: int = 10):
+        """Validate with optional per-batch UI callback (no tqdm, no console spam)."""
         self.model.eval()
-        total_loss = 0
+        total_loss = 0.0
         loss_components = {
-            'entry': 0, 'return': 0, 'volatility': 0, 'vae': 0,
-            'regime_change': 0, 'take_profit': 0, 'stop_loss': 0,
-            'let_run': 0, 'confidence_penalty': 0
+            'entry': 0, 'exit': 0, 'return': 0,
+            'volatility': 0, 'vae': 0, 'confidence_penalty': 0
         }
 
         entry_correct = 0
+        exit_correct = 0
         total_samples = 0
+        all_entry_probs, all_entry_labels = [], []
+        n_batches = len(self.val_loader)
 
         with torch.no_grad():
-            for batch in tqdm(self.val_loader, desc='Validation'):
+            for batch_idx, batch in enumerate(self.val_loader):
                 features = batch['features'].to(self.device)
                 future_return = batch['future_return'].to(self.device)
                 actual_volatility = batch['actual_volatility'].to(self.device)
                 entry_label = batch['entry_label'].to(self.device)
-                
-                take_profit_label = batch['take_profit_label'].to(self.device)
-                stop_loss_label = batch['stop_loss_label'].to(self.device)
-                let_run_label = batch['let_winner_run_label'].to(self.device)
-                regime_change_label = batch['regime_change_label'].to(self.device)
-                
-                unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
-                time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
+                exit_label = batch['exit_label'].to(self.device)
 
-                position_context = {
-                    'unrealized_pnl': unrealized_pnl,
-                    'time_in_position': time_in_position,
-                }
-                
-                predictions = self.model(features, position_context=position_context)
-
+                predictions = self.model(features)
                 targets = {
                     'features': features,
                     'future_return': future_return,
                     'actual_volatility': actual_volatility,
                     'entry_label': entry_label,
-                    'take_profit_label': take_profit_label,
-                    'stop_loss_label': stop_loss_label,
-                    'let_winner_run_label': let_run_label,
-                    'regime_change_label': regime_change_label,
+                    'exit_label': exit_label
                 }
 
                 loss_dict = self.criterion(predictions, targets)
                 total_loss += loss_dict['total_loss']
-                for k in loss_components.keys():
-                    if f'{k}_loss' in loss_dict:
-                        loss_components[k] += loss_dict[f'{k}_loss']
+                loss_components['entry'] += loss_dict['entry_loss']
+                loss_components['exit'] += loss_dict['exit_loss']
+                loss_components['return'] += loss_dict['return_loss']
+                loss_components['volatility'] += loss_dict['volatility_loss']
+                loss_components['vae'] += loss_dict['vae_loss']
+                loss_components['confidence_penalty'] += loss_dict['confidence_penalty']
 
+                # accuracies
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
+                exit_pred = (predictions['exit_prob'] > 0.5).float().squeeze()
                 entry_true = (entry_label > 0.5).float()
+                exit_true = (exit_label > 0.5).float()
                 entry_correct += (entry_pred == entry_true).sum().item()
+                exit_correct += (exit_pred == exit_true).sum().item()
                 total_samples += len(entry_label)
 
-        n_batches = len(self.val_loader)
-        avg_loss = total_loss / n_batches
-        avg_components = {k: v / n_batches for k, v in loss_components.items()}
-        entry_accuracy = entry_correct / total_samples
+                all_entry_probs.extend(predictions['entry_prob'].cpu().numpy().ravel().tolist())
+                all_entry_labels.extend(entry_label.cpu().numpy().ravel().tolist())
 
-        return avg_loss, avg_components, entry_accuracy
+                if callable(on_batch) and (batch_idx % batch_update_every == 0):
+                    on_batch(batch_idx + 1, n_batches, float('nan'),
+                            self.optimizer.param_groups[0]['lr'])
 
-    def train(self, num_epochs):
-        """Full training loop"""
-        print("\n🎯 Starting training with exit management...")
+        avg_loss = total_loss / max(1, n_batches)
+        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
+        entry_accuracy = entry_correct / max(total_samples, 1)
+        exit_accuracy = exit_correct / max(total_samples, 1)
 
-        for epoch in range(num_epochs):
-            train_loss, train_components = self.train_epoch(epoch)
-            val_loss, val_components, entry_acc = self.validate()
-            self.scheduler.step()
+        self._last_val_spread = {
+            "std": float(np.std(np.array(all_entry_probs))) if all_entry_probs else 0.0,
+            "hi": float((np.array(all_entry_probs) > 0.7).mean()) if all_entry_probs else 0.0,
+            "lo": float((np.array(all_entry_probs) < 0.3).mean()) if all_entry_probs else 0.0,
+            "label_mean": float(np.mean(np.array(all_entry_labels))) if all_entry_labels else 0.0,
+        }
 
-            if self.use_wandb and self.wandb is not None:
-                self.wandb.log({
-                    'epoch': epoch,
-                    'train_loss': train_loss,
-                    'val_loss': val_loss,
-                    'entry_accuracy': entry_acc,
-                    'learning_rate': self.optimizer.param_groups[0]['lr'],
-                    **{f'train_{k}': v for k, v in train_components.items()},
-                    **{f'val_{k}': v for k, v in val_components.items()}
-                })
-
-            print(f"\nEpoch {epoch} Summary:")
-            print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
-            print(f"Entry Acc: {entry_acc:.3f}")
-
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                self.patience_counter = 0
-                best_path = self.config.get('best_model_path', 'models/best_exit_aware_model.pt')
-                self.save_checkpoint(best_path, epoch, val_loss)
-                print(f"💾 New best model saved! Val loss: {val_loss:.4f}")
-            else:
-                self.patience_counter += 1
-
-            if self.patience_counter >= self.config.get('patience', 25):
-                print(f"\nⓘ Early stopping triggered after {epoch + 1} epochs")
-                break
-
-            if (epoch + 1) % self.config.get('save_every', 10) == 0:
-                checkpoint_path = f"models/checkpoint_exit_aware_epoch_{epoch}.pt"
-                self.save_checkpoint(checkpoint_path, epoch, val_loss)
-
-        print("\n✅ Training completed!")
+        return avg_loss, avg_components, entry_accuracy, exit_accuracy
 
     def save_checkpoint(self, filename, epoch, val_loss):
         """Save model checkpoint"""

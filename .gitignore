@@ -53,3 +53,6 @@ test/unified_tune.py
 test/unified.py
 dependencies/MsSQL/fast_mssql.egg-info/PKG-INFO
 neural_trading_system/neural_data/BTC_1h_2017-01-01_2025-01-01_neural_data.parquet
+neural_trading_system/ui/__init__.py
+neural_trading_system/ui/dashboard.py
+tests/test_dashboard.py

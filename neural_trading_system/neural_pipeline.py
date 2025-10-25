@@ -6,8 +6,6 @@ import numpy as np
 import torch
 from pathlib import Path
 from typing import Dict
-from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
 import time
 
 from backtrader.TransparencyPatch import activate_patch, capture_patch, export_data, optimized_patch
@@ -858,7 +856,7 @@ def train_neural_system(
         }
 
     console.print(Panel.fit(
-        f"[bold cyan]🚀 EXIT-AWARE NEURAL TRADING SYSTEM[/bold cyan]\n"
+        f"[bold cyan]🚀 STUXNET :: SELF-AWARE NEURAL TRADING SYSTEM[/bold cyan]\n"
         f"[yellow]Intelligent Exit Management - No Fixed TP/SL[/yellow]\n\n"
         f"Symbol: {coin}/{collateral}\n"
         f"Interval: {interval}\n"

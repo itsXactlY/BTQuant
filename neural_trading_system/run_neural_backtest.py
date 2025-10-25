@@ -22,7 +22,7 @@ import torch
 import backtrader as bt
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
+from neural_trading_system.ui.dashboard import BacktestDashboard, BacktestMetrics
 
 # ---------------------------------------------------------------------
 # Repo imports (keep these paths consistent with your project layout)
@@ -550,24 +550,29 @@ def run_backtest(
     drawdown = strat.analyzers.drawdown.get_analysis()
     trades = strat.analyzers.trades.get_analysis()
 
-    table = Table(show_header=True, header_style="bold magenta", title="📊 Backtest Results")
-    table.add_column("Metric", style="cyan")
-    table.add_column("Value", justify="right", style="yellow")
-    table.add_row("Initial Cash", f"${init_cash:,.2f}")
-    table.add_row("Final Value", f"${final_value:,.2f}")
-    table.add_row("Total Return", f"{total_return:.2f}%")
-    table.add_row("Sharpe Ratio", f"{sharpe:.3f}" if sharpe is not None else "N/A")
-    table.add_row("Max Drawdown", f"{drawdown.get('max',{}).get('drawdown', 0):.2f}%")
-    table.add_row("", "")
-    table.add_row("Total Trades", str(trades.get('total', {}).get('total', 0)))
-    table.add_row("Won Trades", str(trades.get('won', {}).get('total', 0)))
-    table.add_row("Lost Trades", str(trades.get('lost', {}).get('total', 0)))
-    if trades.get('total', {}).get('total', 0) > 0:
-        winrate = 100.0 * trades.get('won', {}).get('total', 0) / max(1, trades.get('total', {}).get('total', 1))
-        table.add_row("Win Rate", f"{winrate:.2f}%")
+    total_trades = trades.get('total', {}).get('total', 0)
+    winning_trades = trades.get('won', {}).get('total', 0)
+    losing_trades = trades.get('lost', {}).get('total', 0)
+    max_dd = drawdown.get('max', {}).get('drawdown', None)
+    winrate = (
+        100.0 * winning_trades / total_trades if total_trades > 0 else None
+    )
+
+    dashboard = BacktestDashboard(console=console)
+    metrics = BacktestMetrics(
+        initial_cash=init_cash,
+        final_value=final_value,
+        total_return=total_return,
+        sharpe_ratio=sharpe,
+        max_drawdown=max_dd,
+        total_trades=total_trades,
+        winning_trades=winning_trades,
+        losing_trades=losing_trades,
+        win_rate=winrate,
+    )
 
     console.print("\n")
-    console.print(table)
+    dashboard.render_summary(metrics)
 
     if plot:
         console.print("\n📊 [cyan]Generating plot...[/cyan]")

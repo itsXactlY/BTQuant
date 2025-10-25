@@ -47,6 +47,34 @@ class DataQualityChecker:
             return {}
         
         df = pl.read_parquet(parquet_path)
+        # Ensure datetime column is parsed correctly
+        if df["datetime"].dtype == pl.Utf8:
+            df = df.with_columns(
+                pl.when(pl.col("datetime").str.contains(r"\.\d+"))
+                .then(pl.col("datetime").str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S%.f", strict=False))
+                .otherwise(pl.col("datetime").str.strptime(pl.Datetime, format="%Y-%m-%d %H:%M:%S", strict=False))
+                .alias("datetime")
+            )
+
+        # Drop rows with null datetime
+        df = df.filter(pl.col("datetime").is_not_null())
+
+        dates = df["datetime"].to_list()
+
+        # Skip gaps if we have fewer than 2 timestamps
+        if len(dates) > 1:
+            for i in range(1, len(dates)):
+                if dates[i] is None or dates[i-1] is None:
+                    continue
+                try:
+                    delta = (dates[i] - dates[i-1]).total_seconds()
+                    if delta > 7200:  # >2h gap (for 1h interval)
+                        print(f"⚠️  Gap detected between {dates[i-1]} and {dates[i]} (Δ={delta/3600:.2f}h)")
+                except Exception as e:
+                    print(f"⚠️  Skipped bad timestamp pair: {dates[i-1]}, {dates[i]} ({e})")
+        else:
+            print("⚠️  Not enough valid timestamps to check continuity.")
+        df.write_parquet(parquet_path)
         console.print(f"✅ Loaded {len(df):,} rows, {len(df.columns)} columns")
         
         # Basic stats
@@ -297,7 +325,13 @@ class DataQualityChecker:
         
         # Feature variance across samples
         feature_vars = np.var(features, axis=0)
-        axes[1, 1].hist(feature_vars[~np.isnan(feature_vars)], bins=100, alpha=0.7, edgecolor='black')
+        # 🧠 Safe histogram plotting
+        finite_vals = feature_vars[np.isfinite(feature_vars)]
+        if len(finite_vals) > 0:
+            finite_vals = np.clip(finite_vals, -1e6, 1e6)
+            axes[1, 1].hist(finite_vals, bins=100, alpha=0.7, edgecolor='black')
+        else:
+            axes[1, 1].text(0.5, 0.5, "No finite feature vars", ha='center', va='center', color='red')
         axes[1, 1].set_title('Feature Variance Distribution')
         axes[1, 1].set_xlabel('Variance')
         axes[1, 1].set_ylabel('Count')
@@ -1175,3 +1209,13 @@ if __name__ == '__main__':
         log_path=args.log,
         output_dir=args.output
     )
+
+
+
+'''
+python comprehensive_diagnostics.py \
+  --parquet neural_data/BTC_1h_2017-01-01_2024-12-31_neural_data.parquet \
+  --cache neural_data/features/features_faee3f17ea44d4f8.pkl \
+  --output diagnostics_nantrace
+
+'''

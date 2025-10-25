@@ -147,7 +147,6 @@ class MarketRegimeVAE(nn.Module):
     def forward(self, x):
         # ✅ CRITICAL: Check input for NaN/Inf FIRST
         if torch.isnan(x).any() or torch.isinf(x).any():
-            print(f"⚠️ NaN/Inf in VAE input! Setting to zero.")
             x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
 
         mu, logvar = self.encode(x)
@@ -250,7 +249,6 @@ class NeuralTradingModel(nn.Module):
 
         # ✅ CRITICAL: Check and clip input features
         if torch.isnan(x).any() or torch.isinf(x).any():
-            print(f"⚠️ NaN/Inf in model input! Replacing with zeros.")
             x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Clamp extreme values to prevent overflow

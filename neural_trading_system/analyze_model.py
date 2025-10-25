@@ -30,11 +30,19 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
     checkpoint = torch.load(model_path, map_location='cpu')
     config = checkpoint.get('config', {})
 
+    # Dynamically infer input feature dimension from checkpoint
+    try:
+        input_dim = checkpoint['model_state_dict']['input_projection.weight'].shape[1]
+        console.print(f"[green]✅ Detected input feature dimension from checkpoint:[/green] {input_dim}")
+    except Exception:
+        input_dim = config.get('feature_dim', 500)
+        console.print(f"[yellow]⚠️ Could not infer feature_dim from checkpoint; using config/default:[/yellow] {input_dim}")
+
     # Lazy import to avoid circular imports
     from models.architecture import NeuralTradingModel  # noqa: E402
 
     model = NeuralTradingModel(
-        feature_dim=config.get('feature_dim', 500),
+        feature_dim=input_dim,
         d_model=config.get('d_model', 512),
         num_heads=config.get('num_heads', 16),
         num_layers=config.get('num_layers', 8),
@@ -43,10 +51,13 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
         latent_dim=config.get('latent_dim', 16),
         seq_len=config.get('seq_len', 100),
     )
-    model.load_state_dict(checkpoint['model_state_dict'])
+
+    # Load weights
+    model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     model.eval()
     console.print("✅ [green]Model loaded successfully[/green]")
 
+    # Load feature extractor
     console.print(f"\n📥 [cyan]Loading feature extractor from: {feature_extractor_path}[/cyan]")
     with open(feature_extractor_path, 'rb') as f:
         feature_extractor = pickle.load(f)
@@ -117,35 +128,58 @@ class LazySequenceDataset:
         returns = self.returns[indices]
         return sequences, returns
 
-
 def prepare_test_sequences_from_cache(cache_path: str, config: dict):
     """Load pre-computed features and create lazy dataset."""
+    import polars as pl
     import pickle
-    
+    import os
+
     console.print(f"\n📥 [cyan]Loading cached features from: {cache_path}[/cyan]")
-    
-    with open(cache_path, 'rb') as f:
-        cached_data = pickle.load(f)
-    
-    features = cached_data['features']
-    returns = cached_data['returns']
-    
-    console.print(f"✅ [green]Loaded {len(features):,} pre-computed features[/green]")
+
+    # Auto-detect file type
+    with open(cache_path, "rb") as f:
+        header = f.read(8)
+
+    if header.startswith(b"ARROW1") or header.startswith(b"PAR1"):
+        console.print("[cyan]📦 Detected Arrow/Parquet format — loading with Polars[/cyan]")
+        df = pl.read_ipc(cache_path)
+        if "returns" in df.columns:
+            returns = df["returns"].to_numpy()
+            features = df.drop("returns").to_numpy()
+
+            # 🩹 Patch for 9867 vs 9868 mismatch
+            if features.shape[1] + 1 == 9868:
+                console.print("[yellow]⚠️ Adding dummy feature column to match model input dimension.[/yellow]")
+                pad = np.zeros((features.shape[0], 1), dtype=features.dtype)
+                features = np.hstack([features, pad])
+        else:
+            returns = np.zeros(len(df))
+            features = df.to_numpy()
+
+    elif header.startswith(b"\x80") or header.startswith(b"\x81"):
+        console.print("[yellow]📦 Detected Pickle format — loading with pickle[/yellow]")
+        with open(cache_path, "rb") as f:
+            cached_data = pickle.load(f)
+        features = cached_data["features"]
+        returns = cached_data["returns"]
+
+    else:
+        raise ValueError(f"❌ Unknown cache format: starts with {header!r}")
+
+    console.print(f"✅ [green]Loaded {len(features):,} features[/green]")
     console.print(f"   Feature dimension: {features.shape[1]}")
-    
-    seq_len = int(config.get('seq_len', 100))
-    
+
+    seq_len = int(config.get("seq_len", 100))
     if len(features) <= seq_len:
         console.print("[red]Not enough data for sequences[/red]")
         return None, None
-    
+
     # Create lazy dataset instead of materializing all sequences
     dataset = LazySequenceDataset(features, returns, seq_len)
-    
     console.print(f"✅ [green]Created lazy dataset with {len(dataset):,} sequences[/green]")
     console.print(f"   Memory usage: ~{features.nbytes / 1e9:.2f} GB (features only)")
     console.print(f"   vs {len(dataset) * seq_len * features.shape[1] * 4 / 1e9:.2f} GB if materialized")
-    
+
     return dataset, returns[:len(dataset)]
 
 

@@ -55,6 +55,37 @@ class IndicatorFeatureExtractor:
         except Exception:
             return np.array([0.0])
 
+    def safe_transform(self, X):
+        """
+        RobustScaler wrapper that auto-fixes ±1 feature mismatches
+        between cached scalers and current feature arrays.
+        """
+        expected = getattr(self.scaler, "n_features_in_", None)
+        if expected is None:
+            return self.scaler.transform(X)
+
+        # Normalize shape
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+        actual = X.shape[1]
+
+        if expected == actual:
+            return self.scaler.transform(X)
+
+        if abs(expected - actual) == 1:
+            console.print(f"[yellow]⚠️ Auto-adjusting feature dim: model={actual}, scaler={expected}[/yellow]")
+            if actual > expected:
+                # model has 1 more → drop the last col
+                X_adj = X[:, :expected]
+            else:
+                # scaler expects 1 more → pad with zeros
+                pad = np.zeros((X.shape[0], expected - actual))
+                X_adj = np.hstack([X, pad])
+            return self.scaler.transform(X_adj)
+
+        console.print(f"[red]❌ Feature dimension mismatch too large ({actual} vs {expected})[/red]")
+        raise ValueError(f"Feature dimension mismatch ({actual} vs {expected})")
+
     # --------------------------------------------------------------------------
     # Core feature extraction
     # --------------------------------------------------------------------------

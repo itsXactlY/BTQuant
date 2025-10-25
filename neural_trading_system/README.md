@@ -10,7 +10,7 @@ A transparent, production-grade neural pipeline that transforms traditional indi
 
 ### The Problem with FreqAI
 
-FreqAI treats trading as a generic ML problem:
+FreqAI and other blackboxes treats trading as a generic ML problem:
 - ❌ **Opaque features**: Auto-generated indicators you can't inspect
 - ❌ **Black-box models**: XGBoost/LightGBM with no interpretability
 - ❌ **No attention mechanism**: Can't see which historical bars matter

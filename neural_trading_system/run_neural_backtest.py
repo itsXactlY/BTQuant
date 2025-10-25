@@ -1,13 +1,43 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NEURAL STRATEGY BACKTEST — model-aligned + scaler-safe
+NEURAL STRATEGY BACKTEST — model-aligned, scaler-safe, hard-stop (no trailing)
 
-Key fixes:
-- Auto-detect model feature_dim, d_model, d_ff, and #layers from checkpoint.
-- Robust feature scaling: always pass the scaler exactly n_features_in_ columns,
-  then stitch back to the model's feature_dim (neutral zeros for "extra" cols).
-- No "Transform failed..." spam; inputs are scaled consistently.
+What this script does
+---------------------
+• Loads your trained Transformer model and feature extractor.
+• Pulls live indicator batches via TransparencyPatch and builds the exact feature
+  vector the model expects (robust to 9867↔︎9868 scaler mismatch).
+• Makes predictions every bar (by default).
+• Enters long when the model is confident AND expected return is strong.
+• Sizes the position using the model’s `position_size` head (0..1), clipped to
+  [min_position_fraction, max_position_fraction].
+• Immediately places a **non-trailing hard stop** (ATR×mult or Vol×mult).
+  - If price moves against us, we cut the loss deterministically.
+  - No trailing “nonsense”.
+• Exits by policy (probability gate and/or sign flip) OR by stop — whichever hits first.
+• Reports performance metrics via Backtrader analyzers.
+
+Architecture notes (assumed)
+----------------------------
+Input: [B, T, F] → Linear(F→d_model) → PosEnc → Transformer×N → GAP → VAE(Regime)
+→ Heads:
+    - entry_prob (BCEWithLogits during training → sigmoid at inference)
+    - exit_prob  (same)
+    - expected_return (denormalized 5-bar return — already scaled in your latest model)
+    - volatility_forecast
+    - position_size (sigmoid 0..1)
+
+Key params to tune
+------------------
+min_entry_prob         : Increase to demand stronger setups.
+min_expected_return    : Model’s expected 5-bar move to open a trade (denormalized).
+use_exit_probability   : Use exit_prob to time exits (usually True).
+require_negative_exp_for_exit : Require exp_ret <= 0 for probability exits (lets winners run).
+exit_on_sign_flip      : Exit if exp_ret <= 0 regardless of exit_prob (set True for stricter cuts).
+stop_mode              : 'atr' or 'vol' (only initial stop; no trailing).
+atr_mult / vol_mult    : How far the initial stop is placed.
+
 """
 
 import os
@@ -40,32 +70,24 @@ console = Console()
 # =============================================================================
 
 def _discover_paths():
-    """
-    Resolve model / feature-extractor with sane defaults.
-    """
+    """Resolve model / feature-extractor / config with sane defaults."""
     base = Path(__file__).resolve().parent
-    models_dir = base / "models"
-    if not models_dir.exists():
-        models_dir = base  # fallback
 
-    # Prefer best_model.pt in neural_trading_system/models/
-    candidates = [
+    # Prefer in ./models and neural_trading_system/models
+    model_candidates = [
         base / "models" / "best_model.pt",
         base / "models" / "elite_neural_BTC_1h_2017-01-01_2024-12-31.pt",
         Path("neural_trading_system/models/best_model.pt"),
         Path("neural_trading_system/models/elite_neural_BTC_1h_2017-01-01_2024-12-31.pt"),
         Path("models/best_model.pt"),
     ]
-    model_path = next((str(p) for p in candidates if p.exists()), None)
+    model_path = next((str(p) for p in model_candidates if p.exists()), None)
 
-    # Feature extractor
     fx_candidates = list((base / "models").glob("*feature_extractor.pkl")) + \
                     list(Path("neural_trading_system/models").glob("*feature_extractor.pkl")) + \
                     list(Path("models").glob("*feature_extractor.pkl"))
-
     fx_path = str(fx_candidates[0]) if fx_candidates else None
 
-    # Optional config
     cfg_candidates = [
         base / "models" / "model_config.json",
         Path("neural_trading_system/models/model_config.json"),
@@ -92,7 +114,6 @@ def _detect_arch_from_state(state_dict):
     """
     Infer feature_dim, d_model, d_ff, num_layers from checkpoint weights.
     """
-    # input_projection: weight [d_model, feature_dim]
     ip_w = state_dict.get("input_projection.weight")
     if ip_w is None:
         raise RuntimeError("input_projection.weight not found in checkpoint")
@@ -100,26 +121,32 @@ def _detect_arch_from_state(state_dict):
     d_model = ip_w.shape[0]
     feature_dim = ip_w.shape[1]
 
-    # Try to detect feed-forward size from first block
     ff_w = state_dict.get("transformer_blocks.0.feed_forward.linear1.weight")
-    d_ff = ff_w.shape[0] if ff_w is not None else 4 * d_model  # fallback
+    d_ff = ff_w.shape[0] if ff_w is not None else 4 * d_model
 
-    # Count how many blocks exist in the checkpoint
     block_idxs = set()
     pat = re.compile(r"^transformer_blocks\.(\d+)\.")
     for k in state_dict.keys():
         m = pat.match(k)
         if m:
             block_idxs.add(int(m.group(1)))
-    num_layers = max(block_idxs) + 1 if block_idxs else 6  # fallback
+    num_layers = max(block_idxs) + 1 if block_idxs else 6
 
     return feature_dim, d_model, d_ff, num_layers
 
 
+def _import_create_model():
+    """Import create_model from either location to be robust."""
+    try:
+        from neural_trading_system.models.architecture import create_model
+        return create_model
+    except Exception:
+        from models.architecture import create_model  # fallback
+        return create_model
+
+
 def _silence_torch_determinism():
-    """
-    Keep determinism similar to your previous setup.
-    """
+    """Keep determinism similar to your previous setup."""
     os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
     torch.manual_seed(42)
     np.random.seed(42)
@@ -137,53 +164,77 @@ def _silence_torch_determinism():
 
 class PerfectNeuralStrategy2(bt.Strategy):
     """
-    PERFECT MODEL-ALIGNED BACKTEST STRATEGY
-    - Pulls features from TransparencyPatch batch (list[dict])
-    - Extracts via feature_extractor.extract_all_features(...)
-    - Scales robustly: align to scaler dim first, then back to model dim
+    Model-faithful policy with HARD initial stop (no trailing).
+
+    Flow
+    ----
+    next():
+      1) capture_patch → feature batch → extractor → scaler-safe vector
+      2) maintain rolling seq_len buffer
+      3) predict every bar (default)
+      4) if flat → check entry; else → check exit
+
+    Entry
+    -----
+    • entry_prob ≥ min_entry_prob
+    • expected_return ≥ min_expected_return  (denorm 5-bar)
+    • size fraction = clip(model.position_size, [min_position_fraction, max_position_fraction])
+    • place non-trailing hard stop after buy is filled (notify_order)
+
+    Exit
+    ----
+    • hard stop triggers (broker Stop order), OR
+    • (optional) exit_prob > max_exit_prob, optionally require exp_ret ≤ 0
+    • (optional) sign-only exit when exp_ret ≤ 0
     """
 
     params = dict(
-        # Model / FE paths (will be overridden by run_backtest args)
+        # === Paths (overridden by runner) ===
         model_path='best_model.pt',
         feature_extractor_path='best_model_feature_extractor.pkl',
 
-        # Core model settings
+        # === Core ===
         seq_len=100,
 
-        # Denormalization
-        return_scale=0.016205,  # can be overridden via config
+        # === Thresholds (denormalized exp_ret; horizon ≈ 5 bars) ===
+        min_entry_prob=0.55,
+        min_expected_return=0.012,   # ≈1.2% over 5 bars
 
-        # Thresholds (can be overridden by config)
-        min_entry_prob=0.45,        # was ~0.395 (P25). Ask for stronger setups
-        min_expected_return=0.015,  # target ≥ 1.5% expected 5-bar move
-        max_exit_prob=0.50,         # tolerate more noise before bailing
+        # === Exit policy (no trailing) ===
+        use_exit_probability=True,
+        max_exit_prob=0.70,
+        require_negative_exp_for_exit=True,  # let winners run unless exp_ret flips
+        exit_on_sign_flip=False,             # set True to cut as soon as exp_ret ≤ 0 after hold
 
-        # Position sizing (simple)
-        fixed_position_size=0.20,
+        # === Position sizing from model ===
+        use_model_position_size=True,
+        min_position_fraction=0.05,          # ignore tiny sizes
+        max_position_fraction=0.95,
 
-        # Risk (indicators)
+        # === Hard stop (initial only; no trailing) ===
+        hard_stop_enabled=True,
+        stop_mode='atr',                     # 'atr' or 'vol'
         atr_period=14,
+        atr_mult=2.0,                        # entry_price - atr_mult * ATR
+        vol_mult=2.5,                        # entry_price - vol_mult * volatility_forecast
 
-        # Perf
-        prediction_interval=5,
-        min_hold_bars=5,
+        # === Cadence / hold window ===
+        prediction_interval=1,               # predict every bar
+        min_hold_bars=5,                     # align to training horizon
 
-        # Debug
+        # === Debug ===
         debug=True,
         log_every=50,
     )
 
     # ----------------------------- Indicators ------------------------------
     def _init_indicators(self):
-        # Minimal set for speed; add the full suite if you need exact parity
         self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period, plot=False)
 
     # -------------------------- Safe scaling helper ------------------------
     def _scale_to_model_dim(self, f_vec: np.ndarray) -> np.ndarray:
         """
         Scale features SAFELY:
-        - Determine model_dim vs scaler_dim.
         - Always call scaler.transform on exactly scaler_dim columns.
         - Stitch back to model_dim with neutral zeros if needed.
         """
@@ -193,35 +244,27 @@ class PerfectNeuralStrategy2(bt.Strategy):
         scaler = getattr(self.feature_extractor, 'scaler', None)
         scaler_dim = getattr(scaler, 'n_features_in_', None)
 
-        # Ensure at least model_dim length (pad/truncate) for the final shape
         if f.size < model_dim:
             f = np.pad(f, (0, model_dim - f.size), mode='constant')
         elif f.size > model_dim:
             f = f[:model_dim]
 
-        # No scaler present -> pass-through
         if scaler is None or scaler_dim is None:
             return f
 
-        # Common case: scaler_dim == model_dim - 1 (your setup)
         if scaler_dim == model_dim:
-            # Perfect match
             return scaler.transform(f.reshape(1, -1)).ravel()
 
         if scaler_dim + 1 == model_dim:
-            # Scale the known part, keep 1 extra column neutral(0)
             base = f[:scaler_dim]
             base_scaled = scaler.transform(base.reshape(1, -1)).ravel()
-            # Append neutral extra column (0)
             return np.concatenate([base_scaled, np.zeros((1,), dtype=np.float32)])
 
         if model_dim + 1 == scaler_dim:
-            # Rare: scaler expects 1 more column than model
             base = np.concatenate([f, np.zeros((1,), dtype=np.float32)])
             scaled = scaler.transform(base.reshape(1, -1)).ravel()
             return scaled[:model_dim]
 
-        # Larger mismatch -> safest is pass-through (or raise)
         return f
 
     # ------------------------------- Setup ---------------------------------
@@ -237,29 +280,27 @@ class PerfectNeuralStrategy2(bt.Strategy):
         checkpoint = torch.load(self.p.model_path, map_location=self.device)
         state_dict = checkpoint.get('model_state_dict', checkpoint)
 
-        # Detect architecture from weights (feature_dim, d_model, d_ff, num_layers)
+        # Detect architecture & build model
         feature_dim, d_model, d_ff, num_layers = _detect_arch_from_state(state_dict)
         console.print(f"📊 Feature dimension: {feature_dim}")
         console.print(f"📏 Detected model hidden size (d_model): {d_model}")
         console.print(f"⚙️ Detected feed_forward_dim: {d_ff}")
 
-        # Build model with detected sizes
-        from neural_trading_system.models.architecture import create_model
+        create_model = _import_create_model()
         model_cfg = {
             'seq_len': self.p.seq_len,
             'd_model': d_model,
             'd_ff': d_ff,
             'num_layers': num_layers,
-            # num_heads & dropout — use your training defaults (shapes are independent)
             'num_heads': 8,
             'dropout': 0.15,
         }
         self.model = create_model(feature_dim, model_cfg).to(self.device)
 
-        # Load weights (allow missing/extra due to block count differences)
         missing, unexpected = self.model.load_state_dict(state_dict, strict=False)
         if missing or unexpected:
-            console.print(f"⚠️ Missing keys: {len(missing)} (e.g. {list(missing)[:3]})")
+            if missing:
+                console.print(f"⚠️ Missing keys: {len(missing)} (e.g. {list(missing)[:3]})")
             if unexpected:
                 console.print(f"⚠️ Unexpected keys: {len(unexpected)} (e.g. {list(unexpected)[:3]})")
 
@@ -280,51 +321,42 @@ class PerfectNeuralStrategy2(bt.Strategy):
         if expected_dim and expected_dim != feature_dim:
             console.print(f"⚠️ Feature dim mismatch — Extractor={expected_dim}, Model={feature_dim}")
 
-        # Indicators (minimal set; extend if you require parity)
+        # Indicators & buffers
         self._init_indicators()
 
-        # Pre-alloc input tensor (B=1, T=seq_len, F=feature_dim)
-        self._input_tensor = torch.zeros(
-            1, self.p.seq_len, feature_dim, dtype=torch.float32, device=self.device
-        )
-
-        # Warmup (enough bars to fill seq + indicators)
+        self._input_tensor = torch.zeros(1, self.p.seq_len, feature_dim, dtype=torch.float32, device=self.device)
         self._warmup = self.p.seq_len + self.p.atr_period + 10
 
-        # Buffers/state
         self.feature_buffer = []
         self.prediction_counter = 0
         self.last_prediction = None
+
+        # Trade state
         self.entry_bar_index = None
+        self.entry_price = None
+        self.entry_pred = None
+        self.stop_order = None
+        self.last_buy_order = None
 
         console.print(f"🔥 Strategy initialized — Warmup: {self._warmup} bars")
 
     # --------------------------- Feature Builder ----------------------------
     def _extract_features(self):
-        """
-        Pulls batch (list[dict]) from TransparencyPatch and produces a model_len vector.
-        """
         try:
             batch = optimized_patch.current_batch
             if batch is None or len(batch) == 0:
                 return None
 
-            # Convert list[dict] -> dict[str, np.ndarray]
             if not hasattr(self, "_cached_indicator_keys"):
-                self._cached_indicator_keys = [
-                    k for k in batch[0].keys() if k not in ("bar", "datetime")
-                ]
+                self._cached_indicator_keys = [k for k in batch[0].keys() if k not in ("bar", "datetime")]
 
             indicator_arrays = {
                 k: np.array([b.get(k, 0.0) for b in batch], dtype=np.float32)
                 for k in self._cached_indicator_keys
             }
 
-            # Use your extractor
             feats = self.feature_extractor.extract_all_features(indicator_arrays)
             f_raw = np.asarray(feats, dtype=np.float32).ravel()
-
-            # Scale safely to model dimension (handles scaler 9867 vs model 9868)
             f_scaled = self._scale_to_model_dim(f_raw)
             return f_scaled
 
@@ -343,17 +375,9 @@ class PerfectNeuralStrategy2(bt.Strategy):
             with torch.no_grad():
                 out = self.model(self._input_tensor)
 
-            # NOTE: model already outputs probabilities for 'entry_prob' / 'exit_prob'
             entry_prob = float(out['entry_prob'].squeeze().item())
             exit_prob = float(out['exit_prob'].squeeze().item())
-
-            # Denormalize expected_return (model output ∈ [-1,1] * return_scale)
-            # exp_ret_norm = float(out['expected_return'].squeeze().item())
-            # exp_ret = exp_ret_norm * float(self.p.return_scale)
-            # AFTER — model already outputs DENORMALIZED 5-bar return
-            exp_ret = float(out['expected_return'].squeeze().item())
-            exp_ret_norm = exp_ret  # keep for logging; same value when using denorm heads
-
+            exp_ret = float(out['expected_return'].squeeze().item())  # already denorm in your latest pipeline
             vol_forecast = float(out['volatility_forecast'].squeeze().item())
             pos_size = float(out['position_size'].squeeze().item())
 
@@ -361,7 +385,6 @@ class PerfectNeuralStrategy2(bt.Strategy):
                 'entry_prob': entry_prob,
                 'exit_prob': exit_prob,
                 'expected_return': exp_ret,
-                'expected_return_norm': exp_ret_norm,
                 'volatility_forecast': vol_forecast,
                 'position_size': pos_size,
             }
@@ -371,6 +394,53 @@ class PerfectNeuralStrategy2(bt.Strategy):
                 console.print(f"[red]Prediction error: {e}[/red]")
                 console.print(f"[red]{traceback.format_exc()}[/red]")
             return None
+
+    # ------------------------------ Helpers ---------------------------------
+    def _clip_position_fraction(self, raw_frac: float) -> float:
+        f = max(self.p.min_position_fraction, min(self.p.max_position_fraction, raw_frac))
+        return f
+
+    def _compute_initial_stop(self, entry_price: float, pred: dict) -> float:
+        """Return stop price (long only). No trailing."""
+        if not self.p.hard_stop_enabled:
+            return None
+
+        if self.p.stop_mode == 'atr':
+            atr_val = float(self.atr[0])
+            if not np.isfinite(atr_val) or atr_val <= 0:
+                return None
+            return max(1e-9, entry_price - self.p.atr_mult * atr_val)
+
+        elif self.p.stop_mode == 'vol':
+            vol = float(pred.get('volatility_forecast', 0.0))
+            if not np.isfinite(vol) or vol <= 0:
+                return None
+            return max(1e-9, entry_price - self.p.vol_mult * vol)
+
+        return None
+
+    def _place_stop_after_fill(self):
+        """Place the non-trailing hard stop for the current long position."""
+        if not self.p.hard_stop_enabled or not self.position:
+            return
+        if self.stop_order and self.stop_order.status in [bt.Order.Submitted, bt.Order.Accepted]:
+            return  # already placed
+
+        entry_price = float(self.position.price)
+        stop_px = self._compute_initial_stop(entry_price, self.entry_pred or {})
+        if stop_px is None:
+            return
+        self.stop_order = self.sell(exectype=bt.Order.Stop, price=stop_px, size=self.position.size)
+        if self.p.debug:
+            console.print(f"🛡️  STOP SET  price={stop_px:.2f} (mode={self.p.stop_mode})")
+
+    def _cancel_stop_if_any(self):
+        if self.stop_order and self.stop_order.status not in [bt.Order.Canceled, bt.Order.Expired]:
+            try:
+                self.broker.cancel(self.stop_order)
+            except Exception:
+                pass
+            self.stop_order = None
 
     # -------------------------------- Core ----------------------------------
     def next(self):
@@ -391,7 +461,7 @@ class PerfectNeuralStrategy2(bt.Strategy):
         if len(self.feature_buffer) < self.p.seq_len:
             return
 
-        # Predict at interval
+        # Predict each bar (or by interval)
         if (self.prediction_counter % self.p.prediction_interval) == 0:
             self.last_prediction = self._predict()
         self.prediction_counter += 1
@@ -409,10 +479,13 @@ class PerfectNeuralStrategy2(bt.Strategy):
                 f"size={pred['position_size']:.3f}"
             )
 
-        # Entry/exit logic (simple)
+        # Entry/exit logic
         if not self.position:
             self._check_entry(self.last_prediction)
         else:
+            # place stop if not yet placed (after fill)
+            self._place_stop_after_fill()
+
             if (self.prediction_counter - 1) % self.p.prediction_interval == 0:
                 self._check_exit(self.last_prediction)
 
@@ -422,35 +495,78 @@ class PerfectNeuralStrategy2(bt.Strategy):
         if pred['expected_return'] < self.p.min_expected_return:
             return
 
-        cash = self.broker.getcash()
+        # Size from model (fraction of available cash)
+        if self.p.use_model_position_size:
+            frac = self._clip_position_fraction(pred['position_size'])
+            if frac <= 0.0:
+                return
+        else:
+            frac = 0.20  # fallback (not used by default)
+
+        cash = float(self.broker.getcash())
         price = float(self.data.close[0])
-        size = (cash * self.p.fixed_position_size) / max(price, 1e-9)
-        self.buy(size=size)
+        size = (cash * frac) / max(price, 1e-9)
+        if size <= 0:
+            return
+
+        self.last_buy_order = self.buy(size=size)
         self.entry_bar_index = len(self)
+        self.entry_price = price
+        self.entry_pred = dict(pred)  # snapshot for stop calc
 
         if self.p.debug:
             console.print(
                 f"🚀 ENTRY  prob={pred['entry_prob']:.3f} "
-                f"exp_ret={pred['expected_return']:+.4f} size={self.p.fixed_position_size:.0%}"
+                f"exp_ret={pred['expected_return']:+.4f} "
+                f"frac={frac:.1%} size={size:.4f}"
             )
 
     def _check_exit(self, pred):
+        # Respect minimum hold window for *model exits* (stops can still hit anytime)
         if self.entry_bar_index is not None and (len(self) - self.entry_bar_index) < self.p.min_hold_bars:
             return
-        if pred['exit_prob'] > self.p.max_exit_prob:
-            entry_price = float(self.position.price) if self.position else None
+
+        should_exit = False
+
+        # Probability gate
+        if self.p.use_exit_probability:
+            if self.p.require_negative_exp_for_exit:
+                should_exit = (pred['exit_prob'] > self.p.max_exit_prob) and (pred['expected_return'] <= 0.0)
+            else:
+                should_exit = (pred['exit_prob'] > self.p.max_exit_prob)
+
+        # Optional: sign-only exit (ignore prob)
+        if self.p.exit_on_sign_flip:
+            should_exit = should_exit or (pred['expected_return'] <= 0.0)
+
+        if should_exit and self.position:
+            entry_price = float(self.position.price)
             exit_price = float(self.data.close[0])
-            pnl_pct = ((exit_price - entry_price) / entry_price) if entry_price else 0.0
+            pnl_pct = (exit_price - entry_price) / entry_price
+            self._cancel_stop_if_any()
             self.close()
             if self.p.debug:
                 console.print(
-                    f"🛑 EXIT   exit_prob={pred['exit_prob']:.3f} pnl={pnl_pct:+.2%}"
+                    f"🧠 MODEL EXIT  exit_prob={pred['exit_prob']:.3f} "
+                    f"exp_ret={pred['expected_return']:+.4f} pnl={pnl_pct:+.2%}"
                 )
+            self.entry_bar_index = None
+            self.entry_price = None
+            self.entry_pred = None
 
-    def notify_order(self, order):  # noqa: D401
-        return
+    # --------------------------- Order callbacks ----------------------------
+    def notify_order(self, order):
+        # Place stop AFTER the buy is filled
+        if order.status == order.Completed:
+            if order.isbuy():
+                # position is live now; place the hard stop (non-trailing)
+                self._place_stop_after_fill()
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            if self.p.debug:
+                console.print(f"[yellow]Order issue: status={order.getstatusname()}[/yellow]")
 
-    def notify_trade(self, trade):  # noqa: D401
+    def notify_trade(self, trade):
+        # You can add PnL logging here if desired.
         return
 
 
@@ -462,7 +578,7 @@ def run_backtest(
     coin='BTC',
     interval='1h',
     start_date='2017-01-01',
-    end_date='2024-12-31',
+    end_date='2030-12-31',
     collateral='USDT',
     init_cash=10_000.0,
     model_path=None,
@@ -495,7 +611,7 @@ def run_backtest(
         border_style="cyan"
     ))
 
-    # Optional thresholds + return_scale from config
+    # Optional thresholds + scales from config
     cfg = _load_model_config(config_path)
     strat_kwargs = dict(
         model_path=model_path,
@@ -506,12 +622,12 @@ def run_backtest(
         crit = bt_req.get('critical_parameters', {})
         thr = bt_req.get('recommended_thresholds', {})
 
-        if 'return_scale' in crit:
-            strat_kwargs['return_scale'] = float(crit['return_scale'])
         if 'sequence_length' in crit:
             strat_kwargs['seq_len'] = int(crit['sequence_length'])
+        if 'return_scale' in crit:
+            # Kept for compatibility; your latest model head outputs are denorm already.
+            pass
 
-        # thresholds
         if 'min_entry_prob' in thr:
             strat_kwargs['min_entry_prob'] = float(thr['min_entry_prob'])
         if 'min_expected_return' in thr:
@@ -519,7 +635,7 @@ def run_backtest(
         if 'max_exit_prob' in thr:
             strat_kwargs['max_exit_prob'] = float(thr['max_exit_prob'])
 
-    # Build cerebro
+    # Engine
     cerebro = bt.Cerebro(oldbuysell=True, runonce=False, stdstats=False)
 
     # Data
@@ -590,12 +706,12 @@ if __name__ == '__main__':
     run_backtest(
         coin='BTC',
         interval='1h',
-        start_date='2017-01-01',
-        end_date='2024-12-31',
+        start_date='2024-12-31',
+        # end_date='2024-12-31',
         collateral='USDT',
         init_cash=10_000.0,
         model_path=None,               # auto-discover
         feature_extractor_path=None,   # auto-discover
         config_path=None,              # auto-discover
-        plot=False,
+        plot=True,
     )

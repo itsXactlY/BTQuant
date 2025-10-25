@@ -41,16 +41,18 @@ def fetch_single_data(coin, start_date, end_date, interval, collateral="USDT"):
         console.print(f"[red]Error fetching data for {coin}: {str(e)}[/red]")
         return None
 
-def optimize_backtest(strategy, data=None, coin=None, 
+def optimize_backtest(strategy, data=None, coin=None,
     start_date=None,
     end_date="2030-12-31",
-    interval=None,    
+    interval=None,
     collateral="USDT",
     commission=COMMISSION_PER_TRANSACTION,
     init_cash=INIT_CASH,
     asset_name=None,
     bulk=False,
-    show_progress=True, **kwargs):
+    show_progress=True,
+    quantstats=False,
+    **kwargs):
     from backtrader.analyzers import TimeReturn, SharpeRatio, DrawDown, TradeAnalyzer
     from backtrader.strategies.base import CustomSQN, CustomData
     import pandas as pd
@@ -70,30 +72,50 @@ def optimize_backtest(strategy, data=None, coin=None,
         if show_progress and not bulk:
             console.print(f"✅ [bold green]Data fetched for {coin}[/bold green]")
     
-    kwargs = {
-        k: v if isinstance(v, Iterable) and not isinstance(v, str) else [v]
-        for k, v in kwargs.items()
+    quantstats_option = kwargs.pop('quantstats', quantstats)
+
+    if isinstance(quantstats_option, Iterable) and not isinstance(quantstats_option, (str, bytes)):
+        quantstats_values = [bool(value) for value in quantstats_option]
+    else:
+        quantstats_values = [bool(quantstats_option)]
+
+    quantstats_enabled = quantstats_values[0] if quantstats_values else False
+
+    default_opt_params = {
+        'breakout_period': [20, 40, 55],
+        'adxth': [20, 25, 30],
+        'vol_mult': [1.3, 1.6, 2.0],
+        'init_sl_atr_mult': [1.0, 1.25, 1.5],
+        'trail_atr_mult': [2.5, 3.0, 3.5],
+        'dca_atr_mult': [0.8, 1.0, 1.2],
+        'max_adds': [2, 3, 4],
     }
-    
+
+    default_opt_params.update(kwargs)
+
+    opt_params = {}
+    for key, value in default_opt_params.items():
+        if isinstance(value, Iterable) and not isinstance(value, str):
+            opt_params[key] = value
+        else:
+            opt_params[key] = [value]
+
+    opt_params.setdefault('backtest', [True])
+    opt_params['quantstats'] = quantstats_values
+
     from backtrader.feed import DataBase
     if isinstance(data, DataBase):
         data_feed = data
     else:
         data_feed = CustomData(dataname=data)
-    
+
     cerebro = bt.Cerebro(oldbuysell=True)
     cerebro.adddata(data_feed)
     # cerebro.addstrategy(strategy, backtest=True)
     cerebro.optstrategy(
-    strategy,
-    breakout_period=[20, 40, 55],
-    adxth=[20, 25, 30],
-    vol_mult=[1.3, 1.6, 2.0],
-    init_sl_atr_mult=[1.0, 1.25, 1.5],
-    trail_atr_mult=[2.5, 3.0, 3.5],
-    dca_atr_mult=[0.8, 1.0, 1.2],
-    max_adds=[2, 3, 4],
-)
+        strategy,
+        **opt_params,
+    )
     
     cerebro.broker.setcash(init_cash)
     cerebro.addanalyzer(TimeReturn, _name='time_return')
@@ -133,7 +155,7 @@ def optimize_backtest(strategy, data=None, coin=None,
     returns = pd.Series(returns)
     returns = returns.dropna()
     
-    if quantstats:
+    if quantstats_enabled:
         import quantstats_lumi as quantstats
         from datetime import datetime
         import os

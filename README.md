@@ -1,4 +1,4 @@
-# BTQuant - Advanced Quantitative High-Frequency Trading Framework
+# BTQuant - Advanced Quantitative Trading Framework
 
 ## Overview
 
@@ -9,10 +9,9 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 ## Core Capabilities
 
 ### 📊 Backtesting Engine
-- **Historical Strategy Analysis**: Leverages **Backtrader** for comprehensive strategy validation using **tick-level historical data** with institutional-grade accuracy optimized for parallel processing
-- **Enterprise Data Management**: **Microsoft SQL Server** integration optimized for **massive tick datasets** and high-frequency portfolio analytics optimized for parallel processing
+- **Historical Strategy Analysis**: Leverages **Backtrader** for comprehensive strategy validation using **tick-level historical data** with institutional-grade accuracy
+- **Enterprise Data Management**: **Microsoft SQL Server** integration optimized for **massive tick datasets** and high-frequency portfolio analytics
 - **Scalable Infrastructure**: Production-ready architecture designed for **tick-by-tick backtesting** at scale
-- **Bulk Result Dashboard**: Production-ready quantstat dashboard for **massive datasets** at scale
 
 ### 🎯 Forward Testing
 - **Exchange-Perfect Simulation**: **JackRabbitRelay** delivers **native exchange replication** - not generic CCXT wrappers - for true market condition testing
@@ -49,7 +48,7 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - ❌ *Not reliant on slow CCXT tick approximations*
 
 #### **WebSocket Superiority**
-- ✅ **Custom WebSocket implementations** for **major exchanges**
+- ✅ **Custom WebSocket implementations** for **each major exchange**
 - ✅ **Sub-millisecond latency** through **optimized connection pools**
 - ❌ *CCXT fallback available only as backup*
 
@@ -67,7 +66,6 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - ✅ **MS SQL optimization** for **billion-row tick datasets**
 - ✅ **Custom indexing** for **microsecond-level queries**
 - ✅ **Real-time data ingestion** at **institutional scale**
-- ✅ **Quantstat Dashboard** for **massive bulk datasets**
 
 ---
 
@@ -89,8 +87,6 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 📖 **[Complete Documentation](https://github.com/itsXactlY/BTQuant/wiki)**
 
 💬 **[Join Our HFT Community](https://discord.gg/Y7uBxmRg3Z)** - Connect with quantitative traders using **real tick data**
-
-📊 **[Ckeck out your own Results](https://btquant.streamlit.app/)** - Easily overview - **no installation required**
 
 ---
 

@@ -1,109 +1,73 @@
-"""
-Context-Aware Exit Label Generation
-Works with features + returns only (no OHLCV required)
-"""
-
 import numpy as np
-import torch
-from typing import Dict
 
-def generate_context_aware_labels_from_returns(
-    dataset,
-    returns: np.ndarray,
-    features: np.ndarray,
-    lookback: int = 50
-) -> None:
+def context_aware_labels_from_returns(
+    future_prices: np.ndarray,
+    current_price: float,
+    rolling_vol: float,
+    max_lookforward: int = 50,
+    tp_pctile: float = 0.60,     # was ~0.75 → make TP easier
+    sl_pctile: float = 0.40,     # was ~0.25 → make SL easier
+    tp_z: float = 0.75,          # how many vols above mean for TP
+    sl_z: float = 0.75,          # how many vols below mean for SL
+    rc_vol_spike: float = 1.8    # regime change if vol spikes this multiple
+):
     """
-    Generate context-aware exit labels using only returns + features.
-
-    No hardcoded thresholds - learns from data patterns:
-    - Volatility clustering
-    - Momentum patterns
-    - Peak/trough detection
-
-    Args:
-        dataset: TradingDataset object to store labels in
-        returns: Numpy array of returns
-        features: Numpy array of features
-        lookback: Bars to look ahead for exit detection
+    Returns:
+      dict with keys:
+        take_profit_label, stop_loss_label, let_winner_run_label, regime_change_label
+      Each is a float in [0,1].
     """
-    T = len(returns)
-    tp_labels = np.zeros(T, dtype=np.float32)
-    sl_labels = np.zeros(T, dtype=np.float32)
-    hold_labels = np.zeros(T, dtype=np.float32)
+    horizon = min(max_lookforward, len(future_prices))
+    if horizon < 5:
+        return dict(
+            take_profit_label=0.0,
+            stop_loss_label=0.0,
+            let_winner_run_label=0.0,
+            regime_change_label=0.0
+        )
 
-    # Calculate rolling volatility (context)
-    window = 20
-    volatility = np.array([
-        np.std(returns[max(0, i-window):i+1]) if i >= window 
-        else np.std(returns[:i+1])
-        for i in range(T)
-    ])
+    fp = future_prices[:horizon]
+    future_rets = (fp - current_price) / max(current_price, 1e-12)
 
-    # Volatility regime (relative to recent history)
-    vol_ma = np.convolve(volatility, np.ones(100)/100, mode='same')
-    vol_regime = volatility / (vol_ma + 1e-8)
+    # volatility-scaled thresholds
+    vol = max(float(rolling_vol), 1e-6)
+    mu = float(np.mean(future_rets))
+    sd = float(np.std(future_rets) + 1e-9)
 
-    print("🧠 Generating context-aware exit labels...")
-    print(f"   Analyzing {T} bars with {lookback}-bar lookback")
+    tp_thresh = max(np.quantile(future_rets, tp_pctile), mu + tp_z * vol)
+    sl_thresh = min(np.quantile(future_rets, sl_pctile), mu - sl_z * vol)
 
-    for i in range(T - lookback):
-        future_rets = returns[i:i+lookback]
-        cumulative = np.cumsum(future_rets)
+    peak_ret = float(np.max(future_rets))
+    trough_ret = float(np.min(future_rets))
+    peak_idx = int(np.argmax(future_rets))
+    trough_idx = int(np.argmin(future_rets))
 
-        # Find peak and trough
-        peak_idx = np.argmax(cumulative)
-        peak_return = cumulative[peak_idx]
-        trough_idx = np.argmin(cumulative)
-        trough_return = cumulative[trough_idx]
+    # ── labels
+    # TP: hit a decent gain reasonably soon
+    tp = 1.0 if (peak_ret >= tp_thresh and peak_idx <= 10) else (0.7 if peak_idx <= 20 and peak_ret >= tp_thresh else 0.0)
 
-        # Get context at peak/trough
-        vol_at_peak = vol_regime[i + peak_idx] if (i + peak_idx) < T else 1.0
-        vol_at_trough = vol_regime[i + trough_idx] if (i + trough_idx) < T else 1.0
+    # SL: hit a meaningful drawdown reasonably soon
+    sl = 1.0 if (trough_ret <= sl_thresh and trough_idx <= 7) else (0.7 if trough_idx <= 14 and trough_ret <= sl_thresh else 0.0)
 
-        # Calculate dynamic thresholds OUTSIDE the conditionals
-        peak_threshold = np.percentile(cumulative[cumulative > 0], 75) if np.any(cumulative > 0) else 0.01
-        trough_threshold = np.percentile(cumulative[cumulative < 0], 25) if np.any(cumulative < 0) else -0.01
+    # Let-winner-run: later-window mean beats near-window mean, and overall gain
+    if horizon >= 20:
+        near = float(np.mean(future_rets[:10]))
+        far  = float(np.mean(future_rets[10:20]))
+        lr = 1.0 if (far > near and far > tp_thresh * 0.5) else (0.5 if far > near else 0.0)
+    else:
+        lr = 1.0 if peak_ret >= tp_thresh else 0.0
 
-        # ✅ TAKE PROFIT: Peak + high volatility (exhaustion)
-        if peak_return > peak_threshold and vol_at_peak > 1.3:
-            tp_labels[i + peak_idx] = 1.0
-            hold_labels[i:i+peak_idx] = 0.9
+    # Regime change: volatility spike
+    if horizon >= 10:
+        recent_vol = float(np.std(future_rets[:5]) + 1e-9)
+        future_vol = float(np.std(future_rets[5:10]) + 1e-9)
+        rc = 1.0 if (future_vol > rc_vol_spike * max(recent_vol, 1e-9)) else 0.0
+    else:
+        rc = 0.0
 
-        # ✅ STOP LOSS: Trough + high volatility (regime change)
-        elif trough_return < trough_threshold and vol_at_trough > 1.3:
-            sl_labels[i + trough_idx] = 1.0
-            hold_labels[i:i+trough_idx] = 0.3
-
-        # ✅ HOLD: Stable volatility, no extremes
-        else:
-            avg_vol = np.mean(vol_regime[i:i+lookback])
-            if avg_vol < 1.2:
-                hold_labels[i:i+lookback] = 0.7  # Stable
-            else:
-                hold_labels[i:i+lookback] = 0.5  # Uncertain
-
-    tp_count = int(np.sum(tp_labels > 0))
-    sl_count = int(np.sum(sl_labels > 0))
-    hold_count = int(np.sum(hold_labels > 0.6))
-
-    print(f"✅ Context-aware labels generated:")
-    print(f"   TP triggers: {tp_count}")
-    print(f"   SL triggers: {sl_count}")
-    print(f"   Hold bars: {hold_count}")
-
-    if tp_count > 0:
-        tp_indices = np.where(tp_labels > 0)[0]
-        tp_rets = returns[tp_indices]
-        print(f"   Avg TP return: {tp_rets.mean():.3%} (±{tp_rets.std():.3%})")
-    if sl_count > 0:
-        sl_indices = np.where(sl_labels > 0)[0]
-        sl_rets = returns[sl_indices]
-        print(f"   Avg SL return: {sl_rets.mean():.3%} (±{sl_rets.std():.3%})")
-
-    # Store in dataset
-    dataset.tp_labels = torch.as_tensor(tp_labels, dtype=torch.float32)
-    dataset.sl_labels = torch.as_tensor(sl_labels, dtype=torch.float32)
-    dataset.hold_labels = torch.as_tensor(hold_labels, dtype=torch.float32)
-
-    print("🎯 Model will learn context-aware exits (no hardcoded thresholds)")
+    return dict(
+        take_profit_label=float(tp),
+        stop_loss_label=float(sl),
+        let_winner_run_label=float(lr),
+        regime_change_label=float(rc),
+    )

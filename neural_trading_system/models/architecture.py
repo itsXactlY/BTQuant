@@ -1,449 +1,250 @@
-# architecture_v2.py
+from __future__ import annotations
+import math
+from typing import Optional, Tuple, Dict, Any, List
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from typing import Dict, Tuple
-import math
+
+# ---------------------------------------------------------------------
+# Positional Encoding (sinusoidal)
+# ---------------------------------------------------------------------
 
 class PositionalEncoding(nn.Module):
-    """Positional encoding for temporal sequences."""
-    def __init__(self, d_model, max_len=5000):
+    def __init__(self, d_model: int, dropout: float = 0.0, max_len: int = 10000):
         super().__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() *
-                             (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
+        self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x):
-        return x + self.pe[:, :x.size(1)]
+        pe = torch.zeros(max_len, d_model, dtype=torch.float32)
+        position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2, dtype=torch.float32)
+            * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)  # even
+        pe[:, 1::2] = torch.cos(position * div_term)  # odd
+        pe = pe.unsqueeze(0)  # [1, max_len, d_model]
+        self.register_buffer("pe", pe, persistent=False)
 
-class MultiHeadSelfAttention(nn.Module):
-    """Custom multi-head attention for indicator relationships."""
-    def __init__(self, d_model, num_heads, dropout=0.1):
-        super().__init__()
-        assert d_model % num_heads == 0
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.d_k = d_model // num_heads
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, T, D]
+        T = x.size(1)
+        x = x + self.pe[:, :T]
+        return self.dropout(x)
 
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-        self.W_o = nn.Linear(d_model, d_model)
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(d_model)
 
-    def forward(self, x, mask=None):
-        batch_size, seq_len, d_model = x.size()
-
-        Q = self.W_q(x).view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
-        K = self.W_k(x).view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
-        V = self.W_v(x).view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
-
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-
-        attn_weights = F.softmax(scores, dim=-1)
-        attn_weights = self.dropout(attn_weights)
-        context = torch.matmul(attn_weights, V)
-        context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
-        output = self.W_o(context)
-
-        return self.layer_norm(x + self.dropout(output)), attn_weights
-
-class FeedForward(nn.Module):
-    """Position-wise feed-forward network."""
-    def __init__(self, d_model, d_ff, dropout=0.1):
-        super().__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
-        self.dropout = nn.Dropout(dropout)
-        self.layer_norm = nn.LayerNorm(d_model)
-
-    def forward(self, x):
-        residual = x
-        x = F.gelu(self.linear1(x))
-        x = self.dropout(x)
-        x = self.linear2(x)
-        x = self.dropout(x)
-        return self.layer_norm(residual + x)
+# ---------------------------------------------------------------------
+# Transformer block (batch_first MHA + FFN)
+# ---------------------------------------------------------------------
 
 class TransformerBlock(nn.Module):
-    """Enhanced transformer encoder block with layer scaling."""
-    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float):
         super().__init__()
-        self.attention = MultiHeadSelfAttention(d_model, num_heads, dropout)
-        self.feed_forward = FeedForward(d_model, d_ff, dropout)
-        
-        self.layer_scale_1 = nn.Parameter(torch.ones(d_model) * 0.1)
-        self.layer_scale_2 = nn.Parameter(torch.ones(d_model) * 0.1)
+        self.mha = nn.MultiheadAttention(
+            embed_dim=d_model,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
 
-    def forward(self, x, mask=None):
-        attn_out, attn_weights = self.attention(x, mask)
-        x = x + self.layer_scale_1 * (attn_out - x)
-        
-        ff_out = self.feed_forward(x)
-        x = x + self.layer_scale_2 * (ff_out - x)
-        
-        return x, attn_weights
+        self.ff = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model),
+        )
+        self.dropout2 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(d_model)
+
+    def forward(
+        self, x: torch.Tensor, mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        x: [B, T, D]
+        returns: (x_out [B,T,D], attn_weights [B, num_heads, T, T])
+        """
+        attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, need_weights=True, average_attn_weights=False)
+        x = self.norm1(x + self.dropout1(attn_out))
+        ff_out = self.ff(x)
+        x = self.norm2(x + self.dropout2(ff_out))
+        return x, attn_weights  # attn_weights: [B, num_heads, T, T]
+
+
+# ---------------------------------------------------------------------
+# Market Regime VAE (lightweight)
+# ---------------------------------------------------------------------
 
 class MarketRegimeVAE(nn.Module):
-    """Variational Autoencoder for regime detection with stability."""
-    def __init__(self, input_dim, latent_dim=16):
+    def __init__(self, d_model: int, latent_dim: int):
         super().__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 256),
-            nn.LayerNorm(256),
+        self.enc = nn.Sequential(
+            nn.Linear(d_model, 256),
             nn.GELU(),
-            nn.Dropout(0.2),
             nn.Linear(256, 128),
-            nn.LayerNorm(128),
             nn.GELU(),
-            nn.Dropout(0.2),
         )
+        self.mu = nn.Linear(128, latent_dim)
+        self.logvar = nn.Linear(128, latent_dim)
 
-        self.fc_mu = nn.Linear(128, latent_dim)
-        self.fc_logvar = nn.Linear(128, latent_dim)
-
-        self.decoder = nn.Sequential(
+        self.dec = nn.Sequential(
             nn.Linear(latent_dim, 128),
-            nn.LayerNorm(128),
             nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 256),
-            nn.LayerNorm(256),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, input_dim)
+            nn.Linear(128, d_model),
         )
 
-    def encode(self, x):
-        h = self.encoder(x)
-        return self.fc_mu(h), self.fc_logvar(h)
+    def encode(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        h = self.enc(x)
+        return self.mu(h), self.logvar(h)
 
-    def reparameterize(self, mu, logvar):
+    def reparameterize(self, mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def decode(self, z):
-        return self.decoder(z)
+    def decode(self, z: torch.Tensor) -> torch.Tensor:
+        return self.dec(z)
 
-    def forward(self, x):
-        if torch.isnan(x).any() or torch.isinf(x).any():
-            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
-
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        x: [B, D]
+        returns: recon [B,D], mu [B,L], logvar [B,L], z [B,L]
+        """
         mu, logvar = self.encode(x)
-        logvar = torch.clamp(logvar, min=-10, max=10)
         z = self.reparameterize(mu, logvar)
         recon = self.decode(z)
-
-        if torch.isnan(recon).any():
-            recon = torch.nan_to_num(recon, nan=0.0, posinf=0.0, neginf=0.0)
-
         return recon, mu, logvar, z
 
 
+# ---------------------------------------------------------------------
+# Regime Change Detector (simple, stable)
+# ---------------------------------------------------------------------
+
 class RegimeChangeDetector(nn.Module):
-    """
-    🚨 NEW: Detects when market regime is shifting.
-    Looks at volatility changes, volume anomalies, and pattern breaks.
-    """
-    def __init__(self, d_model, latent_dim):
+    def __init__(self, d_model: int, latent_dim: int):
         super().__init__()
-        
-        # Temporal comparison network
-        self.regime_comparator = nn.Sequential(
-            nn.Linear(d_model + latent_dim * 2, 256),
-            nn.LayerNorm(256),
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model + 2 * latent_dim, 256),
             nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.LayerNorm(64),
+            nn.Linear(256, 64),
             nn.GELU(),
         )
-        
-        # Multi-scale regime change scores
-        self.volatility_change_head = nn.Linear(64, 1)  # Sudden vol shift
-        self.volume_anomaly_head = nn.Linear(64, 1)     # Unusual volume
-        self.trend_break_head = nn.Linear(64, 1)        # Trend reversal
-        self.liquidity_shift_head = nn.Linear(64, 1)    # Market depth change
-        
-        # Overall regime stability score
-        self.stability_head = nn.Sequential(
-            nn.Linear(64, 32),
-            nn.GELU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()  # 0 = unstable, 1 = stable
-        )
-        
-    def forward(self, current_repr, current_regime, historical_regime_mean):
-        """
-        Args:
-            current_repr: [B, d_model] - current market state
-            current_regime: [B, latent_dim] - current regime embedding
-            historical_regime_mean: [B, latent_dim] - avg regime from window
-        """
-        # Concatenate for comparison
-        x = torch.cat([current_repr, current_regime, historical_regime_mean], dim=1)
-        
-        features = self.regime_comparator(x)
-        
-        # Individual change signals
-        vol_change = torch.sigmoid(self.volatility_change_head(features))
-        volume_anomaly = torch.sigmoid(self.volume_anomaly_head(features))
-        trend_break = torch.sigmoid(self.trend_break_head(features))
-        liquidity_shift = torch.sigmoid(self.liquidity_shift_head(features))
-        
-        # Overall stability (inverse of change)
-        stability = self.stability_head(features)
-        
-        # Regime change score: weighted combination
-        regime_change_score = (
-            0.3 * vol_change +
-            0.25 * volume_anomaly +
-            0.25 * trend_break +
-            0.2 * liquidity_shift
-        )
-        
+        self.stability_head = nn.Linear(64, 1)  # sigmoid → [0,1], higher = stable
+
+    def forward(
+        self,
+        current_repr: torch.Tensor,          # [B, D]
+        current_z: torch.Tensor,             # [B, L]
+        historical_z: torch.Tensor,          # [B, L]
+    ) -> Dict[str, torch.Tensor]:
+        delta_z = current_z - historical_z
+        x = torch.cat([current_repr, current_z, delta_z], dim=1)
+        h = self.mlp(x)
+        stability = torch.sigmoid(self.stability_head(h))  # [B,1]
+        regime_change_score = 1.0 - stability
         return {
-            'regime_change_score': regime_change_score,
-            'stability': stability,
-            'vol_change': vol_change,
-            'volume_anomaly': volume_anomaly,
-            'trend_break': trend_break,
-            'liquidity_shift': liquidity_shift
+            "stability": stability,                 # [B,1]
+            "regime_change_score": regime_change_score,  # [B,1]
         }
 
 
+# ---------------------------------------------------------------------
+# Exit Heads (FP32-sanitized finals)
+# ---------------------------------------------------------------------
 class ProfitTakingModule(nn.Module):
-    """
-    💰 NEW: Learns optimal profit-taking timing.
-    Considers: unrealized profit, momentum fade, resistance levels, regime stability.
-    """
     def __init__(self, d_model, latent_dim):
         super().__init__()
-        
-        # Takes current state + position context
         self.profit_analyzer = nn.Sequential(
-            nn.Linear(d_model + latent_dim + 3, 256),  # +3 for position context
-            nn.LayerNorm(256),
-            nn.GELU(),
-            nn.Dropout(0.2),
+            nn.Linear(d_model + latent_dim + 3, 256),
+            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
             nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.GELU(),
+            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
+            nn.Linear(128, 64), nn.GELU(),
         )
-        
-        # Multiple profit-taking signals
-        self.momentum_fade_head = nn.Linear(64, 1)      # Momentum weakening
-        self.resistance_near_head = nn.Linear(64, 1)    # Near resistance
-        self.profit_ratio_optimal_head = nn.Linear(64, 1)  # Good risk/reward hit
-        self.extension_risk_head = nn.Linear(64, 1)     # Overextended
-        
-        # Final take-profit probability
+        # LOGIT head (no Sigmoid here)
         self.take_profit_head = nn.Sequential(
-            nn.Linear(64, 32),
-            nn.GELU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()  # Probability to take profit NOW
+            nn.Linear(64, 32), nn.GELU(),
+            nn.Linear(32, 1)
         )
-        
+
     def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
-        """
-        Args:
-            current_repr: [B, d_model]
-            regime_z: [B, latent_dim]
-            unrealized_pnl: [B, 1] - current P&L ratio (e.g., 0.05 = 5%)
-            time_in_position: [B, 1] - normalized time holding
-            expected_return: [B, 1] - model's return forecast
-        """
-        # Position context
         position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
-        
         x = torch.cat([current_repr, regime_z, position_context], dim=1)
         features = self.profit_analyzer(x)
-        
-        # Individual signals
-        momentum_fade = torch.sigmoid(self.momentum_fade_head(features))
-        resistance_near = torch.sigmoid(self.resistance_near_head(features))
-        profit_optimal = torch.sigmoid(self.profit_ratio_optimal_head(features))
-        extension_risk = torch.sigmoid(self.extension_risk_head(features))
-        
-        # Overall take-profit decision
-        take_profit_prob = self.take_profit_head(features)
-        
-        return {
-            'take_profit_prob': take_profit_prob,
-            'momentum_fade': momentum_fade,
-            'resistance_near': resistance_near,
-            'profit_optimal': profit_optimal,
-            'extension_risk': extension_risk
-        }
-
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            tp_logit = self.take_profit_head(feat32)
+        tp_prob = torch.sigmoid(tp_logit)
+        return {"take_profit_logit": tp_logit, "take_profit_prob": tp_prob}
 
 class StopLossModule(nn.Module):
-    """
-    🛑 NEW: Learns when to cut losses intelligently.
-    Not just "price down X%" - considers regime breaks, failed patterns, acceleration.
-    """
     def __init__(self, d_model, latent_dim):
         super().__init__()
-        
         self.loss_analyzer = nn.Sequential(
             nn.Linear(d_model + latent_dim + 3, 256),
-            nn.LayerNorm(256),
-            nn.GELU(),
-            nn.Dropout(0.2),
+            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
             nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.GELU(),
+            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
+            nn.Linear(128, 64), nn.GELU(),
         )
-        
-        # Loss-cutting signals
-        self.pattern_failure_head = nn.Linear(64, 1)    # Setup invalidated
-        self.acceleration_down_head = nn.Linear(64, 1)  # Loss accelerating
-        self.support_break_head = nn.Linear(64, 1)      # Key level broken
-        self.regime_hostile_head = nn.Linear(64, 1)     # Regime turned bad
-        
-        # Final stop-loss probability
         self.stop_loss_head = nn.Sequential(
-            nn.Linear(64, 32),
-            nn.GELU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()  # Probability to cut NOW
+            nn.Linear(64, 32), nn.GELU(),
+            nn.Linear(32, 1)
         )
-        
-    def forward(self, current_repr, regime_z, unrealized_pnl, regime_change_score, time_in_position):
-        """
-        Args:
-            current_repr: [B, d_model]
-            regime_z: [B, latent_dim]
-            unrealized_pnl: [B, 1] - current P&L ratio (negative)
-            regime_change_score: [B, 1] - from RegimeChangeDetector
-            time_in_position: [B, 1]
-        """
-        position_context = torch.cat([unrealized_pnl, regime_change_score, time_in_position], dim=1)
-        
+
+    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
+        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
         x = torch.cat([current_repr, regime_z, position_context], dim=1)
         features = self.loss_analyzer(x)
-        
-        # Individual signals
-        pattern_failure = torch.sigmoid(self.pattern_failure_head(features))
-        acceleration_down = torch.sigmoid(self.acceleration_down_head(features))
-        support_break = torch.sigmoid(self.support_break_head(features))
-        regime_hostile = torch.sigmoid(self.regime_hostile_head(features))
-        
-        # Overall stop-loss decision
-        stop_loss_prob = self.stop_loss_head(features)
-        
-        return {
-            'stop_loss_prob': stop_loss_prob,
-            'pattern_failure': pattern_failure,
-            'acceleration_down': acceleration_down,
-            'support_break': support_break,
-            'regime_hostile': regime_hostile
-        }
-
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            sl_logit = self.stop_loss_head(feat32)
+        sl_prob = torch.sigmoid(sl_logit)
+        return {"stop_loss_logit": sl_logit, "stop_loss_prob": sl_prob}
 
 class LetWinnerRunModule(nn.Module):
-    """
-    🚀 NEW: Decides when to HOLD and let a winner run.
-    Looks for: trend continuation, momentum acceleration, breakout confirmation.
-    """
     def __init__(self, d_model, latent_dim):
         super().__init__()
-        
-        self.continuation_analyzer = nn.Sequential(
+        self.hold_analyzer = nn.Sequential(
             nn.Linear(d_model + latent_dim + 3, 256),
-            nn.LayerNorm(256),
-            nn.GELU(),
-            nn.Dropout(0.2),
+            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
             nn.Linear(256, 128),
-            nn.LayerNorm(128),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(128, 64),
-            nn.GELU(),
+            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
+            nn.Linear(128, 64), nn.GELU(),
         )
-        
-        # Continuation signals
-        self.trend_strength_head = nn.Linear(64, 1)     # Strong trend intact
-        self.momentum_accel_head = nn.Linear(64, 1)     # Momentum building
-        self.breakout_confirm_head = nn.Linear(64, 1)   # Breakout extending
-        self.regime_favorable_head = nn.Linear(64, 1)   # Regime supports move
-        
-        # Hold recommendation
-        self.hold_score_head = nn.Sequential(
-            nn.Linear(64, 32),
-            nn.GELU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()  # High = strong HOLD signal
+        self.let_run_head = nn.Sequential(
+            nn.Linear(64, 32), nn.GELU(),
+            nn.Linear(32, 1)
         )
-        
-    def forward(self, current_repr, regime_z, unrealized_pnl, momentum_indicator, regime_stability):
-        """
-        Args:
-            current_repr: [B, d_model]
-            regime_z: [B, latent_dim]
-            unrealized_pnl: [B, 1] - current profit
-            momentum_indicator: [B, 1] - from model's momentum features
-            regime_stability: [B, 1] - from RegimeChangeDetector
-        """
-        position_context = torch.cat([unrealized_pnl, momentum_indicator, regime_stability], dim=1)
-        
-        x = torch.cat([current_repr, regime_z, position_context], dim=1)
-        features = self.continuation_analyzer(x)
-        
-        # Individual signals
-        trend_strength = torch.sigmoid(self.trend_strength_head(features))
-        momentum_accel = torch.sigmoid(self.momentum_accel_head(features))
-        breakout_confirm = torch.sigmoid(self.breakout_confirm_head(features))
-        regime_favorable = torch.sigmoid(self.regime_favorable_head(features))
-        
-        # Overall hold recommendation
-        hold_score = self.hold_score_head(features)
-        
-        return {
-            'hold_score': hold_score,
-            'trend_strength': trend_strength,
-            'momentum_accel': momentum_accel,
-            'breakout_confirm': breakout_confirm,
-            'regime_favorable': regime_favorable
-        }
 
+    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
+        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
+        x = torch.cat([current_repr, regime_z, position_context], dim=1)
+        features = self.hold_analyzer(x)
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
+        with torch.amp.autocast(device_type='cuda', enabled=False):
+            hold_logit = self.let_run_head(feat32)
+        hold_prob = torch.sigmoid(hold_logit)
+        return {"hold_logit": hold_logit, "hold_score": hold_prob}
+
+# ---------------------------------------------------------------------
+# NeuralTradingModel
+# ---------------------------------------------------------------------
 
 class NeuralTradingModel(nn.Module):
     """
-    🎯 ENHANCED: Self-aware trading model with intelligent exit management.
-    No fixed TP/SL - learns optimal timing from data.
+    Enhanced: Self-aware trading model with intelligent exit management.
     """
     def __init__(
         self,
-        feature_dim,
-        d_model=512,
-        num_heads=16,
-        num_layers=8,
-        d_ff=2048,
-        dropout=0.15,
-        latent_dim=16,
-        seq_len=100
+        feature_dim: int,
+        d_model: int = 512,
+        num_heads: int = 16,
+        num_layers: int = 8,
+        d_ff: int = 2048,
+        dropout: float = 0.15,
+        latent_dim: int = 16,
+        seq_len: int = 100,
     ):
         super().__init__()
         self.feature_dim = feature_dim
@@ -451,11 +252,11 @@ class NeuralTradingModel(nn.Module):
         self.seq_len = seq_len
         self.latent_dim = latent_dim
 
-        # Input projection
+        # Input projection + PE
         self.input_projection = nn.Linear(feature_dim, d_model)
         self.pos_encoding = PositionalEncoding(d_model, max_len=seq_len)
 
-        # Transformer encoder stack
+        # Transformer stack
         self.transformer_blocks = nn.ModuleList([
             TransformerBlock(d_model, num_heads, d_ff, dropout)
             for _ in range(num_layers)
@@ -464,15 +265,15 @@ class NeuralTradingModel(nn.Module):
         # Market regime VAE
         self.regime_vae = MarketRegimeVAE(d_model, latent_dim)
 
-        # 🆕 NEW MODULES FOR INTELLIGENT EXIT MANAGEMENT
+        # Exit management modules
         self.regime_change_detector = RegimeChangeDetector(d_model, latent_dim)
-        self.profit_taking_module = ProfitTakingModule(d_model, latent_dim)
-        self.stop_loss_module = StopLossModule(d_model, latent_dim)
-        self.let_winner_run_module = LetWinnerRunModule(d_model, latent_dim)
+        self.profit_taking_module   = ProfitTakingModule(d_model, latent_dim)
+        self.stop_loss_module       = StopLossModule(d_model, latent_dim)
+        self.let_winner_run_module  = LetWinnerRunModule(d_model, latent_dim)
 
-        # Original heads (entry, return, volatility, position sizing)
-        def head(output_activation=None, hidden_dim=256):
-            layers = [
+        # Heads
+        def head(output_activation: Optional[nn.Module] = None, hidden_dim: int = 256):
+            layers: List[nn.Module] = [
                 nn.Linear(d_model + latent_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
                 nn.GELU(),
@@ -481,182 +282,141 @@ class NeuralTradingModel(nn.Module):
                 nn.LayerNorm(hidden_dim // 2),
                 nn.GELU(),
                 nn.Dropout(0.2),
-                nn.Linear(hidden_dim // 2, 1)
+                nn.Linear(hidden_dim // 2, 1),
             ]
             if output_activation is not None:
                 layers.append(output_activation)
             return nn.Sequential(*layers)
 
-        self.entry_head = head(hidden_dim=256)
-        self.return_head = head(nn.Tanh(), hidden_dim=256)
-        self.volatility_head = head(nn.Softplus(), hidden_dim=128)
-        self.position_size_head = head(nn.Sigmoid(), hidden_dim=128)
+        self.entry_head          = head(hidden_dim=256)                  # logits → sigmoid later
+        self.return_head         = head(nn.Tanh(), hidden_dim=256)       # [-1,1]
+        self.volatility_head     = head(nn.Softplus(), hidden_dim=128)   # >0
+        self.position_size_head  = head(nn.Sigmoid(), hidden_dim=128)    # [0,1]
 
         self._init_weights()
 
     def _init_weights(self):
-        """Improved initialization for stability."""
         for name, module in self.named_modules():
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight, gain=1.0)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
+        
+        # Nudge exit-head biases toward conservative priors
+        # Access the final Linear layer inside each Sequential using [-1]
+        if hasattr(self, "profit_taking_module"):
+            nn.init.constant_(self.profit_taking_module.take_profit_head[-1].bias, -1.5)  # ~p=0.18
+        if hasattr(self, "stop_loss_module"):
+            nn.init.constant_(self.stop_loss_module.stop_loss_head[-1].bias, -1.2)  # ~p=0.23
+        if hasattr(self, "let_winner_run_module"):
+            nn.init.constant_(self.let_winner_run_module.let_run_head[-1].bias, -0.5)  # ~p=0.38
 
-    def forward(self, x, position_context=None, mask=None):
-        """
-        Args:
-            x: [B, seq_len, feature_dim]
-            position_context: Dict with:
-                - 'unrealized_pnl': [B, 1] - current P&L if in position
-                - 'time_in_position': [B, 1] - bars since entry
-                - 'entry_price': [B, 1] - entry price
-                (None if not in position)
-        """
-        batch_size, seq_len, _ = x.size()
+    def forward(
+        self,
+        x: torch.Tensor,                              # [B, T, feature_dim]
+        position_context: Optional[Dict[str, torch.Tensor]] = None,
+        mask: Optional[torch.Tensor] = None,
+    ) -> Dict[str, Any]:
+        device = x.device
+        B, T, _ = x.shape
 
-        # Safety checks
+        # Safety (no in-place ops)
         if torch.isnan(x).any() or torch.isinf(x).any():
             x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
-        x = torch.clamp(x, min=-100, max=100)
+        x = x.clamp(-100, 100)
 
-        # Project and encode
-        x = self.input_projection(x)
-        x = self.pos_encoding(x)
+        # Project + positional encoding
+        x = self.input_projection(x)          # [B, T, D]
+        x = self.pos_encoding(x)              # [B, T, D]
 
         # Transformer stack
         attn_weights_list = []
         for block in self.transformer_blocks:
-            x, attn_weights = block(x, mask)
-            attn_weights_list.append(attn_weights)
+            x, attn_w = block(x, mask=mask)   # [B, T, D], [B, H, T, T]
+            attn_weights_list.append(attn_w)
 
-        # Current state representation
-        current_repr = x[:, -1, :]  # [B, d_model]
-        
-        # Historical regime (mean of last 20 bars)
-        lookback = min(20, seq_len)
-        historical_repr = x[:, -lookback:, :].mean(dim=1)  # [B, d_model]
+        # Representations
+        current_repr   = x[:, -1, :]                         # [B, D]
+        lookback       = min(20, T)
+        historical_repr = x[:, -lookback:, :].mean(dim=1)    # [B, D]
 
-        # VAE for regime detection
-        recon, mu, logvar, current_regime_z = self.regime_vae(current_repr)
-        _, _, _, historical_regime_z = self.regime_vae(historical_repr)
+        # Regime VAE
+        recon, mu, logvar, current_z = self.regime_vae(current_repr)
+        _, _, _, historical_z        = self.regime_vae(historical_repr)
 
-        # 🚨 Regime change detection
-        regime_change_info = self.regime_change_detector(
-            current_repr, 
-            current_regime_z, 
-            historical_regime_z
-        )
+        # Regime change detector
+        regime_change_info = self.regime_change_detector(current_repr, current_z, historical_z)
 
-        # Original predictions
-        combined_repr = torch.cat([current_repr, current_regime_z], dim=1)
-        entry_logits = self.entry_head(combined_repr)
-        entry_prob = torch.sigmoid(entry_logits)
-        expected_return = self.return_head(combined_repr)
-        volatility_forecast = self.volatility_head(combined_repr)
-        position_size = self.position_size_head(combined_repr)
+        # Core heads (entry / return / vol / position size)
+        cr = torch.cat([current_repr, current_z], dim=1)     # [B, D+L]
+        entry_logits        = self.entry_head(cr)            # [B, 1] (logits)
+        entry_prob          = torch.sigmoid(entry_logits)    # [B, 1]
+        expected_return     = self.return_head(cr)           # [B, 1]
+        volatility_forecast = self.volatility_head(cr)       # [B, 1]
+        position_size       = self.position_size_head(cr)    # [B, 1]
 
-        # 🆕 EXIT MANAGEMENT PREDICTIONS
-        exit_signals = {}
-        
+        # --- EXIT MANAGEMENT (always compute; blend by sign) ---
         if position_context is not None:
-            # In position - compute exit signals
-            unrealized_pnl = position_context.get('unrealized_pnl', torch.zeros(batch_size, 1, device=x.device))
-            time_in_pos = position_context.get('time_in_position', torch.zeros(batch_size, 1, device=x.device))
-            
-            # Momentum proxy from expected return
-            momentum_indicator = expected_return
-            
-            if unrealized_pnl.mean() > 0:
-                # In profit - check take-profit signals
-                profit_signals = self.profit_taking_module(
-                    current_repr,
-                    current_regime_z,
-                    unrealized_pnl,
-                    time_in_pos,
-                    expected_return
-                )
-                
-                # Check if should let winner run
-                winner_signals = self.let_winner_run_module(
-                    current_repr,
-                    current_regime_z,
-                    unrealized_pnl,
-                    momentum_indicator,
-                    regime_change_info['stability']
-                )
-                
-                exit_signals.update({
-                    'profit_taking': profit_signals,
-                    'let_winner_run': winner_signals,
-                    # Final exit decision balances both
-                    'should_exit_profit': profit_signals['take_profit_prob'] * (1 - winner_signals['hold_score'])
-                })
-            else:
-                # In loss - check stop-loss signals
-                loss_signals = self.stop_loss_module(
-                    current_repr,
-                    current_regime_z,
-                    unrealized_pnl,
-                    regime_change_info['regime_change_score'],
-                    time_in_pos
-                )
-                
-                exit_signals.update({
-                    'stop_loss': loss_signals,
-                    'should_exit_loss': loss_signals['stop_loss_prob']
-                })
-        else:
-            # Not in position - no exit signals needed
-            exit_signals = {
-                'profit_taking': None,
-                'stop_loss': None,
-                'let_winner_run': None
-            }
+            # Device-safe defaults
+            unrealized_pnl = position_context.get('unrealized_pnl',  torch.zeros(B, 1, device=device))
+            time_in_pos    = position_context.get('time_in_position', torch.zeros(B, 1, device=device))
+            exp_ret_ctx    = expected_return  # momentum proxy
 
+            # Always compute all three heads (each module does its own FP32 sanitize internally)
+            tp   = self.profit_taking_module(current_repr, current_z, unrealized_pnl, time_in_pos, exp_ret_ctx)
+            sl   = self.stop_loss_module(current_repr, current_z, unrealized_pnl, time_in_pos, exp_ret_ctx)
+            hold = self.let_winner_run_module(current_repr, current_z, unrealized_pnl, time_in_pos, exp_ret_ctx)
+
+            exit_signals = {'profit_taking': tp, 'stop_loss': sl, 'let_winner_run': hold}
+
+            # Per-sample blend: in profit → TP vs HOLD; in loss → SL
+            pos_mask = (unrealized_pnl > 0).float()
+            neg_mask = 1.0 - pos_mask
+
+            tp_now   = tp['take_profit_prob']   # [B, 1]
+            sl_now   = sl['stop_loss_prob']     # [B, 1]
+            hold_now = hold['hold_score']       # [B, 1]
+
+            unified = pos_mask * (tp_now * (1.0 - hold_now)) + neg_mask * sl_now
+        else:
+            exit_signals = {'profit_taking': None, 'stop_loss': None, 'let_winner_run': None}
+            unified = torch.zeros(B, 1, device=device)
+
+        # Return all outputs
         return {
-            # Original outputs
             'entry_logits': entry_logits,
             'entry_prob': entry_prob,
             'expected_return': expected_return,
             'volatility_forecast': volatility_forecast,
             'position_size': position_size,
-            'regime_mu': mu,
-            'regime_logvar': logvar,
-            'regime_z': current_regime_z,
+            'regime_mu': mu, 'regime_logvar': logvar, 'regime_z': current_z,
             'vae_recon': recon,
             'attention_weights': attn_weights_list,
             'sequence_repr': current_repr,
-            
-            # 🆕 NEW: Intelligent exit management
             'regime_change': regime_change_info,
             'exit_signals': exit_signals,
-            
-            # 🆕 Unified exit probability (combines all exit logic)
-            'unified_exit_prob': self._compute_unified_exit(exit_signals, regime_change_info)
+            'unified_exit_prob': torch.clamp(unified, 0.0, 1.0),
         }
-    
-    def _compute_unified_exit(self, exit_signals, regime_change_info):
-        """
-        Combines all exit signals into one unified exit probability.
-        Higher value = stronger exit signal.
-        """
-        # Check if we have exit signals (in position)
-        if 'should_exit_profit' in exit_signals:
-            # In profit: balance take-profit vs let-run
-            return exit_signals['should_exit_profit']
-        elif 'should_exit_loss' in exit_signals:
-            # In loss: stop-loss signal
-            return exit_signals['should_exit_loss']
-        else:
-            # Not in position - return zeros with correct shape
-            # Get batch size from regime_change_info
-            batch_size = regime_change_info['stability'].size(0)
-            device = regime_change_info['stability'].device
-            return torch.zeros(batch_size, 1, device=device)
 
+    @staticmethod
+    def _compute_unified_exit(
+        exit_signals: Dict[str, Any],
+        regime_change_info: Dict[str, torch.Tensor],
+        batch: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        """
+        Combines exit signals into one probability.
+        If no position (signals are None), returns zeros [B,1].
+        """
+        if isinstance(exit_signals, dict):
+            if "should_exit_profit" in exit_signals and exit_signals["should_exit_profit"] is not None:
+                return exit_signals["should_exit_profit"]
+            if "should_exit_loss" in exit_signals and exit_signals["should_exit_loss"] is not None:
+                return exit_signals["should_exit_loss"]
+
+        # Not in position or signals missing: zeros
+        return torch.zeros(batch, 1, device=device)
 
 def create_model(feature_dim, config=None):
     """Factory function to create model."""

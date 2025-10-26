@@ -49,8 +49,42 @@ class MultiTaskLoss(nn.Module):
         loss = alpha * (1.0 - pt) ** gamma * bce
         return loss.mean()
 
-    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 8.0):
+    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):  # INCREASED from 8.0 for stronger exit learning):
         """Call from trainer each epoch to ramp exit importance."""
+
+
+    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.01) -> torch.Tensor:
+        """Compute attention entropy regularization to prevent collapse."""
+        if not attention_weights:
+            return torch.tensor(0.0, device=self.log_vars.device)
+
+        total_entropy_loss = 0.0
+        count = 0
+
+        for attn in attention_weights:
+            if not isinstance(attn, torch.Tensor):
+                continue
+
+            # attn shape: [B, num_heads, seq_len, seq_len]
+            # Average over heads and batch
+            attn_avg = attn.mean(dim=1)  # [B, seq_len, seq_len]
+
+            # Compute entropy for each position
+            entropy = -torch.sum(
+                attn_avg * torch.log(attn_avg + 1e-8),
+                dim=-1
+            ).mean()
+
+            # We want to MAXIMIZE entropy (prevent collapse)
+            # So we minimize the negative entropy
+            total_entropy_loss -= entropy
+            count += 1
+
+        if count == 0:
+            return torch.tensor(0.0, device=self.log_vars.device)
+
+        return weight * (total_entropy_loss / count)
+
         r = 1.0 if ramp_epochs <= 0 else min(1.0, float(max(0, epoch)) / float(ramp_epochs))
         self._exit_boost = 1.0 + r * (max_boost - 1.0)
 
@@ -158,14 +192,30 @@ class MultiTaskLoss(nn.Module):
         precision_vol    = torch.exp(-self.log_vars[3])
         precision_vae    = torch.exp(-self.log_vars[4])
 
+        # Compute attention entropy loss (prevent collapse)
+        attention_weights = predictions.get('attention_weights', [])
+        entropy_reg_loss = self.compute_attention_entropy_loss(
+            attention_weights,
+            weight=0.15  # INCREASED: Stronger regularization to prevent collapse  # Regularization strength
+        )
+
+        # DEBUG: Log entropy loss value (remove after confirming it works)
+        if torch.is_tensor(entropy_reg_loss) and entropy_reg_loss.item() != 0.0:
+            if not hasattr(self, '_entropy_log_count'):
+                self._entropy_log_count = 0
+            self._entropy_log_count += 1
+            # if self._entropy_log_count % 100 == 0:  # Log every 100 batches
+            #     print(f"[DEBUG] Entropy reg loss: {entropy_reg_loss.item():.6f}")
+
         total_loss = (
-            self.task_weights["entry"]      * (precision_entry  * entry_loss      + self.log_vars[0]) +
-            self._exit_boost                * (exit_bundle_loss) +
-            self.task_weights["return"]     * (precision_return * return_loss     + self.log_vars[2]) +
-            self.task_weights["volatility"] * (precision_vol    * volatility_loss + self.log_vars[3]) +
-            self.task_weights["vae"]        * (precision_vae    * vae_loss        + self.log_vars[4]) +
+            self.task_weights["entry"] * (precision_entry * entry_loss + self.log_vars[0]) +
+            self._exit_boost * (exit_bundle_loss) +
+            self.task_weights["return"] * (precision_return * return_loss + self.log_vars[2]) +
+            self.task_weights["volatility"] * (precision_vol * volatility_loss + self.log_vars[3]) +
+            self.task_weights["vae"] * (precision_vae * vae_loss + self.log_vars[4]) +
             0.01 * diversity_penalty +
-            0.05 * confidence_penalty
+            0.05 * confidence_penalty +
+            entropy_reg_loss  # NEW: Prevent attention collapse
         )
 
         return {
@@ -180,7 +230,7 @@ class MultiTaskLoss(nn.Module):
             'exit_bundle_loss': float(exit_bundle_loss.detach()),
             'diversity_penalty': float(diversity_penalty.detach()),
             'confidence_penalty': float(confidence_penalty.detach()),
-            'uncertainties': self.log_vars.detach().cpu().numpy(),
+            'entropy_loss': float(entropy_reg_loss.detach())  # NEW: Track entropy regularization: self.log_vars.detach().cpu().numpy(),
         }
 
 # ============================================================
@@ -208,10 +258,21 @@ class NeuralTrainer:
         # Use ReduceLROnPlateau and step with val loss
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min',
-            factor=config.get('lr_factor', 0.5),
-            patience=config.get('lr_patience', 5),
-            min_lr=config.get('min_lr', 1e-7)
-        )
+            factor=config.get('lr_factor', 0.5))
+
+        # Learning rate warmup scheduler
+        self.warmup_epochs = config.get('warmup_epochs', 5)
+        self.base_lr = config.get('lr', 7e-5)
+
+        def lr_lambda(epoch):
+            if epoch < self.warmup_epochs:
+                # Linear warmup
+                return float(epoch + 1) / float(self.warmup_epochs)
+            return 1.0
+
+        self.warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, 
+                                                                  lr_lambda=lr_lambda, 
+                                                                  last_epoch=-1) # Fallback to default
 
         self.criterion = MultiTaskLoss(num_tasks=5)
         self.gradient_accumulation_steps = config.get('grad_accum_steps', 2)
@@ -366,7 +427,17 @@ class NeuralTrainer:
             if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                 if self.use_amp:
                     self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                # Track gradient norm BEFORE clipping
+                    total_grad_norm = 0.0
+                    for p in self.model.parameters():
+                        if p.grad is not None:
+                            param_norm = p.grad.data.norm(2)
+                            total_grad_norm += param_norm.item() ** 2
+                    total_grad_norm = total_grad_norm ** 0.5
+                    self.last_grad_norm = total_grad_norm  # Store for dashboard
+
+                    # Clip gradients
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
                 if self.use_amp:
                     self.scaler.step(self.optimizer)
@@ -455,7 +526,35 @@ class NeuralTrainer:
         avg_loss = total_loss / max(1, n_batches)
         avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
         entry_accuracy = entry_correct / max(1, total_samples)
-        exit_accuracy = 0.0  # placeholder unless you add a unified exit label
+        # Calculate actual exit accuracy
+        exit_correct = 0
+        exit_total = 0
+
+        # Check if we have exit predictions and labels
+        if 'unified_exit_prob' in predictions:
+            unified_exit = predictions['unified_exit_prob']
+
+            # We need to create a unified exit label from individual exit labels
+            # For samples in profit: use take_profit_label
+            # For samples in loss: use stop_loss_label
+            if 'unrealized_pnl' in batch:
+                pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(-1)
+                in_profit = (pnl > 0).float()
+                in_loss = (pnl <= 0).float()
+
+                # Create unified exit label
+                unified_label = (
+                    in_profit * batch['take_profit_label'].to(self.device).float() +
+                    in_loss * batch['stop_loss_label'].to(self.device).float()
+                )
+
+                # Calculate accuracy
+                exit_pred = (unified_exit > 0.5).float().squeeze()
+                exit_true = (unified_label > 0.5).float().squeeze()
+                exit_correct = (exit_pred == exit_true).sum().item()
+                exit_total = len(exit_true)
+
+        exit_accuracy = exit_correct / max(1, exit_total)
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
 
     def save_checkpoint(self, filename, epoch, val_loss):
@@ -645,7 +744,11 @@ class NeuralTrainer:
 
                 # step ReduceLROnPlateau with the metric
                 val_loss_float = float(self._sf(val_loss))
-                self.scheduler.step(val_loss_float)
+                # Apply warmup scheduler for first N epochs, then use ReduceLROnPlateau
+                if epoch < self.warmup_epochs:
+                    self.warmup_scheduler.step()
+                else:
+                    self.scheduler.step(val_loss_float)
 
                 lr_now = self._sf(self.optimizer.param_groups[0]['lr'])
                 grad_norm = getattr(self, 'last_grad_norm', None)

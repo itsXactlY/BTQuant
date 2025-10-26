@@ -88,6 +88,15 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 
 💬 **[Join Our HFT Community](https://discord.gg/Y7uBxmRg3Z)** - Connect with quantitative traders using **real tick data**
 
+### New Learning Resources
+
+- Explore the fully documented **BaseStrategy showcase** located at
+  `Examples/BaseStrategy_Showcase.py` for an end-to-end walkthrough covering
+  backtesting, CCXT connectivity, and Web3/PancakeSwap routing.
+- Check out the new automated tests in `tests/test_order_tracker.py` to learn
+  how order tracking is validated and to use them as a template for additional
+  coverage.
+
 ---
 
 *BTQuant: Where **custom infrastructure** meets **institutional performance***

@@ -955,7 +955,7 @@ if __name__ == '__main__':
         # === TRAINING ===
         'batch_size': 16,
         'num_epochs': 200,
-        'lr': 0.0003,
+        'lr': 0.0001, # 0.0003
         'min_lr': 1e-7,
         'weight_decay': 1e-4,
         'grad_accum_steps': 2,

@@ -29,8 +29,8 @@ def average(x, bessel=False):
     Args:
       x: iterable with len
 
-      oneless: (default ``False``) reduces the length of the array for the
-                division.
+      bessel: (default ``False``) if ``True`` divides by ``N - 1`` instead of
+                ``N``.
 
     Returns:
       A float with the average of the elements of x

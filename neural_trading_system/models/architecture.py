@@ -10,9 +10,10 @@ import torch.nn as nn
 # ---------------------------------------------------------------------
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.0, max_len: int = 10000):
+    def __init__(self, d_model: int, dropout: float = 0.0, max_len: int = 10000, scale: float = 1.0):  # ← ADD scale param
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
+        self.scale = scale  # ← STORE scale
 
         pe = torch.zeros(max_len, d_model, dtype=torch.float32)
         position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
@@ -20,15 +21,14 @@ class PositionalEncoding(nn.Module):
             torch.arange(0, d_model, 2, dtype=torch.float32)
             * (-math.log(10000.0) / d_model)
         )
-        pe[:, 0::2] = torch.sin(position * div_term)  # even
-        pe[:, 1::2] = torch.cos(position * div_term)  # odd
-        pe = pe.unsqueeze(0)  # [1, max_len, d_model]
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
         self.register_buffer("pe", pe, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, T, D]
         T = x.size(1)
-        x = x + 0.1 * self.pe[:, :T]  # ← Scale down PE by 0.1
+        x = x + self.scale * self.pe[:, :T]  # ← USE self.scale instead of hardcoded 0.1
         return self.dropout(x)
 
 
@@ -40,8 +40,11 @@ class TransformerBlock(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout, layer_idx=0, num_layers=6):
         super().__init__()
         
+        # ADAPTIVE ATTENTION DROPOUT: Higher for early layers
+        attn_dropout = 0.4 if layer_idx == 0 else 0.15  # ← Layer 0 gets 0.
+
         self.mha = nn.MultiheadAttention(
-            d_model, num_heads, dropout=dropout, batch_first=True
+            d_model, num_heads, dropout=attn_dropout, batch_first=True
         )
         
         self.ff = nn.Sequential(
@@ -58,14 +61,29 @@ class TransformerBlock(nn.Module):
         self.dropout1 = nn.Dropout(adaptive_dropout)
         self.dropout2 = nn.Dropout(adaptive_dropout)
     
+    # def forward(self, x, mask=None):
+    #     attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, 
+    #                                       need_weights=True, 
+    #                                       average_attn_weights=False)
+    #     x = self.norm1(x + self.dropout1(attn_out))
+    #     ff_out = self.ff(x)
+    #     x = self.norm2(x + self.dropout2(ff_out))
+    #     return x, attn_weights
+    
+    # Plan B
     def forward(self, x, mask=None):
-        attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, 
-                                          need_weights=True, 
-                                          average_attn_weights=False)
-        x = self.norm1(x + self.dropout1(attn_out))
-        ff_out = self.ff(x)
-        x = self.norm2(x + self.dropout2(ff_out))
+        # PRE-NORM (more stable)
+        attn_out, attn_weights = self.mha(
+            self.norm1(x), self.norm1(x), self.norm1(x),  # ← Norm BEFORE attention
+            attn_mask=mask, 
+            need_weights=True, 
+            average_attn_weights=False
+        )
+        x = x + self.dropout1(attn_out)
+        ff_out = self.ff(self.norm2(x))  # ← Norm BEFORE feedforward
+        x = x + self.dropout2(ff_out)
         return x, attn_weights
+
 
 # ---------------------------------------------------------------------
 # Market Regime VAE (lightweight)
@@ -171,7 +189,7 @@ class ProfitTakingModule(nn.Module):
         with torch.amp.autocast(device_type='cuda', enabled=False):
             tp_logit = self.take_profit_head(feat32)
         tp_prob = torch.sigmoid(tp_logit)
-        return {"take_profit_logit": tp_logit, "take_profit_prob": tp_prob}
+        return {"take_profit_logits": tp_logit, "take_profit_prob": tp_prob}
 
 class StopLossModule(nn.Module):
     def __init__(self, d_model, latent_dim):
@@ -196,7 +214,7 @@ class StopLossModule(nn.Module):
         with torch.amp.autocast(device_type='cuda', enabled=False):
             sl_logit = self.stop_loss_head(feat32)
         sl_prob = torch.sigmoid(sl_logit)
-        return {"stop_loss_logit": sl_logit, "stop_loss_prob": sl_prob}
+        return {"stop_loss_logits": sl_logit, "stop_loss_prob": sl_prob}
 
 class LetWinnerRunModule(nn.Module):
     def __init__(self, d_model, latent_dim):
@@ -241,6 +259,8 @@ class NeuralTradingModel(nn.Module):
         dropout: float = 0.15,
         latent_dim: int = 16,
         seq_len: int = 100,
+        positional_encoding_scale: float = 1.0,
+        input_projection_gain: float = 1.0,
     ):
         super().__init__()
         self.feature_dim = feature_dim
@@ -250,10 +270,10 @@ class NeuralTradingModel(nn.Module):
 
         # Input projection + PE
         self.input_projection = nn.Linear(feature_dim, d_model)
-        nn.init.xavier_uniform_(self.input_projection.weight, gain=2.0)  # ← Higher gain
+        nn.init.xavier_uniform_(self.input_projection.weight, gain=input_projection_gain)
         if self.input_projection.bias is not None:
             nn.init.zeros_(self.input_projection.bias)
-        self.pos_encoding = PositionalEncoding(d_model, max_len=seq_len)
+        self.pos_encoding = PositionalEncoding(d_model, max_len=seq_len, scale=positional_encoding_scale)
 
         # Transformer stack
         self.transformer_blocks = nn.ModuleList([
@@ -360,6 +380,8 @@ class NeuralTradingModel(nn.Module):
         position_size       = self.position_size_head(cr)    # [B, 1]
 
         # --- EXIT MANAGEMENT (always compute; blend by sign) ---
+        take_profit_logits = None
+        stop_loss_logits = None
         if position_context is not None:
             # Device-safe defaults
             unrealized_pnl = position_context.get('unrealized_pnl',  torch.zeros(B, 1, device=device))
@@ -372,6 +394,8 @@ class NeuralTradingModel(nn.Module):
             hold = self.let_winner_run_module(current_repr, current_z, unrealized_pnl, time_in_pos, exp_ret_ctx)
 
             exit_signals = {'profit_taking': tp, 'stop_loss': sl, 'let_winner_run': hold}
+            take_profit_logits = tp.get('take_profit_logits')
+            stop_loss_logits = sl.get('stop_loss_logits')
 
             # Per-sample blend: in profit → TP vs HOLD; in loss → SL
             pos_mask = (unrealized_pnl > 0).float()
@@ -400,6 +424,8 @@ class NeuralTradingModel(nn.Module):
             'regime_change': regime_change_info,
             'exit_signals': exit_signals,
             'unified_exit_prob': torch.clamp(unified, 0.0, 1.0),
+            'take_profit_logits': take_profit_logits,
+            'stop_loss_logits': stop_loss_logits,
         }
 
     @staticmethod
@@ -434,7 +460,9 @@ def create_model(feature_dim, config=None):
         'd_ff': config.get('d_ff', 2048),
         'dropout': config.get('dropout', 0.15),
         'latent_dim': config.get('latent_dim', 16),
-        'seq_len': config.get('seq_len', 100)
+        'seq_len': config.get('seq_len', 100),
+        'positional_encoding_scale': config.get('positional_encoding_scale', 1.0),
+        'input_projection_gain': config.get('input_projection_gain', 1.0),
     }
 
     model = NeuralTradingModel(

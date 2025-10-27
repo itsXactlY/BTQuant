@@ -969,13 +969,13 @@ if __name__ == '__main__':
         'd_ff': 2048,
         'dropout': 0.05,
         'latent_dim': 16,
-        'positional_encoding_scale': 0.1,
-        'input_projection_gain': 2.0,
+        'positional_encoding_scale': 1.0,
+        'input_projection_gain': 1.0,
         
         # === TRAINING ===
         'batch_size': 16,
         'num_epochs': 200,
-        'lr': 5e-5, # 0.0003
+        'lr': 2e-5, # 0.0003
         'min_lr': 1e-7,
         'weight_decay': 1e-4,
         'grad_accum_steps': 2,

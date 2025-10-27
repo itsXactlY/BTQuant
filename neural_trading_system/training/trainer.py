@@ -49,41 +49,43 @@ class MultiTaskLoss(nn.Module):
         loss = alpha * (1.0 - pt) ** gamma * bce
         return loss.mean()
 
-    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.1) -> torch.Tensor:
-        """Compute attention entropy regularization to prevent collapse."""
+    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.5) -> torch.Tensor:
+        """Prevent attention collapse, especially in early layers."""
         if not attention_weights:
             return torch.tensor(0.0, device=self.log_vars.device)
         
-        total_entropy_loss = 0.0
-        count = 0
+        total_penalty = 0.0
         
-        for attn in attention_weights:
+        for layer_idx, attn in enumerate(attention_weights):
             if not isinstance(attn, torch.Tensor):
                 continue
             
-            # attn shape: [B, num_heads, seq_len, seq_len]
+            # attn: [B, num_heads, seq_len, seq_len]
             attn_avg = attn.mean(dim=1)  # [B, seq_len, seq_len]
             
-            # Compute entropy for each position
+            # Compute entropy per query position
             entropy = -torch.sum(
                 attn_avg * torch.log(attn_avg + 1e-8),
-                dim=-1
-            ).mean()
+                dim=-1  # Over key positions
+            ).mean()  # Average over batch and queries
             
-            # Penalize if entropy is too low (mode collapse)
-            min_entropy_threshold = 2.0
-            if entropy < min_entropy_threshold:
-                penalty = (min_entropy_threshold - entropy) ** 2
-                total_entropy_loss += penalty
-            else:
-                total_entropy_loss += entropy  # Maximize entropy if above threshold
+            # Target entropy (uniform distribution over 100 tokens = log(100) ≈ 4.6)
+            target_entropy = torch.log(torch.tensor(attn.shape[-1], dtype=torch.float32))
             
-            count += 1
+            # Penalty grows quadratically as entropy drops below 50% of target
+            min_acceptable = 0.5 * target_entropy  # e.g., 2.3 for seq_len=100
+            
+            if entropy < min_acceptable:
+                # Strong penalty for collapsed attention
+                penalty = ((min_acceptable - entropy) / target_entropy) ** 2
+                
+                # Layer 0 gets EXTRA penalty (it's collapsing first)
+                if layer_idx == 0:
+                    penalty *= 10.0  # Triple penalty for first layer
+                
+                total_penalty += penalty
         
-        if count == 0:
-            return torch.tensor(0.0, device=self.log_vars.device)
-        
-        return weight * (total_entropy_loss / count)
+        return weight * total_penalty
 
     def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
         """Ramp exit weight linearly from 1.0 to max_boost over ramp_epochs."""
@@ -130,8 +132,8 @@ class MultiTaskLoss(nn.Module):
         vae_loss = vae_recon_loss + 1e-5 * kl_loss
         
         # ======== EXIT (TP/SL) ========
-        exit_logits_tp = predictions.get('take_profit_logit', torch.zeros(len(entry_true), device=device)).view(-1)
-        exit_logits_sl = predictions.get('stop_loss_logit', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_logits_tp = predictions.get('take_profit_logits', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_logits_sl = predictions.get('stop_loss_logits', torch.zeros(len(entry_true), device=device)).view(-1)
         exit_true_tp = targets['take_profit_label'].view(-1).float()
         exit_true_sl = targets['stop_loss_label'].view(-1).float()
         
@@ -144,7 +146,12 @@ class MultiTaskLoss(nn.Module):
         # entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=1.0) # From 0.1
         
         # TODO :: PLAN B
-        entropy_reg_loss = torch.tensor(0.0, device=device)
+        # entropy_reg_loss = torch.tensor(0.0, device=device)
+        attention_weights = predictions.get('attention_weights', [])
+        entropy_reg_loss = self.compute_attention_entropy_loss(
+            attention_weights, 
+            weight=5.0  # Increase from 0.1 to 0.5 for stronger regularization
+        )
         
         # diversity_penalty = torch.tensor(0.0, device=device)
         # confidence_penalty = torch.tensor(0.0, device=device)
@@ -324,6 +331,18 @@ class NeuralTrainer:
 
             attns = predictions.get('attention_weights', [])
             entropies = []
+            for layer_idx, A in enumerate(attns):
+                if not isinstance(A, torch.Tensor): continue
+                
+                # Check per-head entropy
+                per_head_entropy = []
+                for head in range(A.shape[1]):
+                    head_attn = A[:, head, :, :].float().clamp(1e-6, 1)
+                    H = (-head_attn * head_attn.log()).sum(dim=-1).mean().item()
+                    per_head_entropy.append(H)
+                
+                print(f"   Layer {layer_idx} per-head entropy: {per_head_entropy}")
+            
             for A in attns:
                 if not isinstance(A, torch.Tensor): continue
                 P = A.float().clamp(1e-6, 1).view(-1, A.shape[-1])  # (B*heads*T, T)
@@ -332,6 +351,21 @@ class NeuralTrainer:
             attn_txt = " / ".join(f"{h:.2f}" for h in entropies) if entropies else "—"
 
             exit_signals = predictions.get('exit_signals', {})
+
+            layer0_heads = per_head_entropy  # From your existing code
+            dead_heads = sum(1 for h in layer0_heads if h < 0.1)
+            avg_entropy = sum(layer0_heads) / len(layer0_heads)
+
+            if dead_heads > 0:
+                print(f"   🔴 ALERT: {dead_heads}/8 heads collapsed (< 0.1 entropy)")
+            if avg_entropy < 0.5:
+                print(f"   🟡 WARNING: Layer 0 avg entropy = {avg_entropy:.2f}")
+                
+            # AUTO-STOP if too many dead heads
+            if dead_heads >= 4 and epoch > 2:
+                print(f"   ☠️ STOPPING: {dead_heads} heads collapsed - model is dead")
+                raise KeyboardInterrupt("Layer 0 collapse detected")
+
             def mean_or_dash(x):
                 if isinstance(x, torch.Tensor): return f"{x.detach().float().mean().item():.3f}"
                 return "—"
@@ -427,15 +461,15 @@ class NeuralTrainer:
                 entry_correct += batch_entry_correct
                 entry_total += batch_entry_total
                 
-                if debug_mode and batch_idx == 0:
-                    print(f"\n{'='*80}")
-                    print(f"CHECKPOINT: ENTRY ACCURACY (BATCH 0)")
-                    print(f"{'='*80}")
-                    print(f"  entry_pred shape: {entry_pred.shape}")
-                    print(f"  entry_true shape: {entry_true.shape}")
-                    print(f"  Batch entry_correct: {batch_entry_correct} / {batch_entry_total}")
-                    print(f"  Running total: {entry_correct} / {entry_total}")
-                    print(f"  Batch accuracy: {batch_entry_correct / max(1, batch_entry_total):.4f}")
+                # if debug_mode and batch_idx == 0:
+                #     print(f"\n{'='*80}")
+                #     print(f"CHECKPOINT: ENTRY ACCURACY (BATCH 0)")
+                #     print(f"{'='*80}")
+                #     print(f"  entry_pred shape: {entry_pred.shape}")
+                #     print(f"  entry_true shape: {entry_true.shape}")
+                #     print(f"  Batch entry_correct: {batch_entry_correct} / {batch_entry_total}")
+                #     print(f"  Running total: {entry_correct} / {entry_total}")
+                #     print(f"  Batch accuracy: {batch_entry_correct / max(1, batch_entry_total):.4f}")
                 
                 # ====== CHECKPOINT: EXIT ACCURACY (FIXED) ======
                 if 'unified_exit_prob' in predictions:
@@ -468,19 +502,19 @@ class NeuralTrainer:
                     exit_correct += batch_exit_correct
                     exit_total += batch_exit_total
                     
-                    if debug_mode and batch_idx == 0:
-                        print(f"\n{'='*80}")
-                        print(f"CHECKPOINT: EXIT ACCURACY (BATCH 0)")
-                        print(f"{'='*80}")
-                        print(f"  unified_exit shape AFTER squeeze: {unified_exit.shape}")
-                        print(f"  unified_label shape: {unified_label.shape}")
-                        print(f"  exit_pred shape: {exit_pred.shape}")
-                        print(f"  exit_true shape: {exit_true.shape}")
-                        print(f"  Batch exit_correct: {batch_exit_correct} / {batch_exit_total}")
-                        print(f"  Running total: {exit_correct} / {exit_total}")
-                        print(f"  Batch accuracy: {batch_exit_correct / max(1, batch_exit_total):.4f}")
-                        print(f"  in_profit count: {in_profit.sum().item()}")
-                        print(f"  in_loss count: {in_loss.sum().item()}")
+                    # if debug_mode and batch_idx == 0:
+                    #     print(f"\n{'='*80}")
+                    #     print(f"CHECKPOINT: EXIT ACCURACY (BATCH 0)")
+                    #     print(f"{'='*80}")
+                    #     print(f"  unified_exit shape AFTER squeeze: {unified_exit.shape}")
+                    #     print(f"  unified_label shape: {unified_label.shape}")
+                    #     print(f"  exit_pred shape: {exit_pred.shape}")
+                    #     print(f"  exit_true shape: {exit_true.shape}")
+                    #     print(f"  Batch exit_correct: {batch_exit_correct} / {batch_exit_total}")
+                    #     print(f"  Running total: {exit_correct} / {exit_total}")
+                    #     print(f"  Batch accuracy: {batch_exit_correct / max(1, batch_exit_total):.4f}")
+                    #     print(f"  in_profit count: {in_profit.sum().item()}")
+                    #     print(f"  in_loss count: {in_loss.sum().item()}")
                 
                 if on_batch and ((batch_idx + 1) % batch_update_every == 0):
                     on_batch(
@@ -571,20 +605,20 @@ class NeuralTrainer:
                 continue
             
             # ====== CHECKPOINT: LOSS SANITY (First batch only) ======
-            if batch_idx == 0 and epoch == 0:
-                print(f"\n{'='*80}")
-                print(f"CHECKPOINT: LOSS COMPONENTS (EPOCH 0, BATCH 0)")
-                print(f"{'='*80}")
-                print(f"  entry_loss: {out.get('entry_loss', 'N/A')}")
-                print(f"  return_loss: {out.get('return_loss', 'N/A')}")
-                print(f"  volatility_loss: {out.get('volatility_loss', 'N/A')}")
-                print(f"  vae_loss: {out.get('vae_loss', 'N/A')}")
-                print(f"  exit_bundle_loss: {out.get('exit_bundle_loss', 'N/A')}")
-                print(f"  total_loss: {out['total_loss'].item():.6f}")
-                print(f"  total_loss is positive: {'YES ✓' if out['total_loss'].item() > 0 else 'NO ⚠️  BUG'}")
-                print(f"  total_loss is NaN: {'YES ⚠️  BUG' if torch.isnan(out['total_loss']) else 'NO ✓'}")
-                print(f"  total_loss is Inf: {'YES ⚠️  BUG' if torch.isinf(out['total_loss']) else 'NO ✓'}")
-                print(f"{'='*80}\n")
+            # if batch_idx == 0 and epoch == 0:
+            #     print(f"\n{'='*80}")
+            #     print(f"CHECKPOINT: LOSS COMPONENTS (EPOCH 0, BATCH 0)")
+            #     print(f"{'='*80}")
+            #     print(f"  entry_loss: {out.get('entry_loss', 'N/A')}")
+            #     print(f"  return_loss: {out.get('return_loss', 'N/A')}")
+            #     print(f"  volatility_loss: {out.get('volatility_loss', 'N/A')}")
+            #     print(f"  vae_loss: {out.get('vae_loss', 'N/A')}")
+            #     print(f"  exit_bundle_loss: {out.get('exit_bundle_loss', 'N/A')}")
+            #     print(f"  total_loss: {out['total_loss'].item():.6f}")
+            #     print(f"  total_loss is positive: {'YES ✓' if out['total_loss'].item() > 0 else 'NO ⚠️  BUG'}")
+            #     print(f"  total_loss is NaN: {'YES ⚠️  BUG' if torch.isnan(out['total_loss']) else 'NO ✓'}")
+            #     print(f"  total_loss is Inf: {'YES ⚠️  BUG' if torch.isinf(out['total_loss']) else 'NO ✓'}")
+            #     print(f"{'='*80}\n")
             
             if self.use_amp:
                 self.scaler.scale(loss).backward()

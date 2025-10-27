@@ -56,3 +56,7 @@ neural_trading_system/neural_data/BTC_1h_2017-01-01_2025-01-01_neural_data.parqu
 neural_trading_system/ui/__init__.py
 neural_trading_system/ui/dashboard.py
 tests/test_dashboard.py
+neural_trading_system/neural_data/BTC_1h_2017-01-01_2024-01-01_neural_data.parquet
+neural_trading_system/backtest/exit_aware_neural_strategy.py
+neural_trading_system/backtest/indicator_deck.py
+neural_trading_system/backtest/neural_backtest_suite.py

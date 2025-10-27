@@ -49,44 +49,37 @@ class MultiTaskLoss(nn.Module):
         loss = alpha * (1.0 - pt) ** gamma * bce
         return loss.mean()
 
-    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):  # INCREASED from 8.0 for stronger exit learning):
-        """Call from trainer each epoch to ramp exit importance."""
-
-
     def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.01) -> torch.Tensor:
         """Compute attention entropy regularization to prevent collapse."""
         if not attention_weights:
             return torch.tensor(0.0, device=self.log_vars.device)
-
+        
         total_entropy_loss = 0.0
         count = 0
-
+        
         for attn in attention_weights:
             if not isinstance(attn, torch.Tensor):
                 continue
-
+            
             # attn shape: [B, num_heads, seq_len, seq_len]
             # Average over heads and batch
             attn_avg = attn.mean(dim=1)  # [B, seq_len, seq_len]
-
+            
             # Compute entropy for each position
             entropy = -torch.sum(
                 attn_avg * torch.log(attn_avg + 1e-8),
                 dim=-1
             ).mean()
-
+            
             # We want to MAXIMIZE entropy (prevent collapse)
             # So we minimize the negative entropy
             total_entropy_loss -= entropy
             count += 1
-
+        
         if count == 0:
             return torch.tensor(0.0, device=self.log_vars.device)
-
+        
         return weight * (total_entropy_loss / count)
-
-        r = 1.0 if ramp_epochs <= 0 else min(1.0, float(max(0, epoch)) / float(ramp_epochs))
-        self._exit_boost = 1.0 + r * (max_boost - 1.0)
 
     def forward(self, predictions: dict, targets: dict):
         device = predictions['entry_logits'].device
@@ -366,133 +359,54 @@ class NeuralTrainer:
             print(f"   TP μ: {mean_or_dash(tp.get('take_profit_prob'))} | SL μ: {mean_or_dash(sl.get('stop_loss_prob'))} | HOLD μ: {mean_or_dash(lr.get('hold_score'))}")
 
     # ---------- core loops ----------
-    def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
-        """Train for one epoch (AMP-aware, FP32-sanitized exits live in the model)."""
-        self.model.train()
-        total_loss = 0.0
-        loss_components = {}
-
-        self.optimizer.zero_grad()
-        n_batches = len(self.train_loader)
-
-        for batch_idx, batch in enumerate(self.train_loader):
-            features = batch['features'].to(self.device)
-            future_return = batch['future_return'].to(self.device)
-            actual_volatility = batch['actual_volatility'].to(self.device)
-            entry_label = batch['entry_label'].to(self.device)
-
-            take_profit_label = batch['take_profit_label'].to(self.device)
-            stop_loss_label = batch['stop_loss_label'].to(self.device)
-            let_run_label = batch['let_winner_run_label'].to(self.device)
-            regime_change_label = batch['regime_change_label'].to(self.device)
-
-            unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
-            time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
-
-            if torch.isnan(features).any() or torch.isinf(features).any():
-                self.optimizer.zero_grad()
-                continue
-
-            position_context = {
-                'unrealized_pnl': unrealized_pnl,
-                'time_in_position': time_in_position
-            }
-
-            with torch.amp.autocast(device_type='cuda', enabled=False):
-                predictions = self.model(features, position_context=position_context)
-
-                targets = {
-                    'features': features,
-                    'future_return': future_return,
-                    'actual_volatility': actual_volatility,
-                    'entry_label': entry_label,
-                    'take_profit_label': take_profit_label,
-                    'stop_loss_label': stop_loss_label,
-                    'let_winner_run_label': let_run_label,
-                    'regime_change_label': regime_change_label,
-                }
-
-                out = self.criterion(predictions, targets)
-                loss = out['total_loss'] / self.gradient_accumulation_steps
-
-            if torch.isnan(loss) or torch.isinf(loss):
-                self.optimizer.zero_grad()
-                continue
-
-            if self.use_amp:
-                self.scaler.scale(loss).backward()
-            else:
-                loss.backward()
-
-            if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
-                if self.use_amp:
-                    self.scaler.unscale_(self.optimizer)
-                # Track gradient norm BEFORE clipping
-                    total_grad_norm = 0.0
-                    for p in self.model.parameters():
-                        if p.grad is not None:
-                            param_norm = p.grad.data.norm(2)
-                            total_grad_norm += param_norm.item() ** 2
-                    total_grad_norm = total_grad_norm ** 0.5
-                    self.last_grad_norm = total_grad_norm  # Store for dashboard
-
-                    # Clip gradients
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-
-                if self.use_amp:
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    self.optimizer.step()
-                self.optimizer.zero_grad()
-
-            total_loss += self._sf(out['total_loss'])
-            for k, v in out.items():
-                if k == 'total_loss': continue
-                loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
-
-            if on_batch and ((batch_idx + 1) % batch_update_every == 0):
-                on_batch(
-                    batch_idx + 1,
-                    n_batches,
-                    float(self._sf(loss)),
-                    self.optimizer.param_groups[0]['lr']
-                )
-
-        avg_loss = total_loss / max(1, n_batches)
-        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
-        return avg_loss, avg_components
 
     def validate(self, on_batch=None, batch_update_every: int = 10):
-        """Validate model on val_loader with guarded metrics."""
+        """Validate model on val_loader with FIXED accuracy calculations."""
         self.model.eval()
         total_loss = 0.0
         loss_components = {}
-        entry_correct, total_samples = 0, 0
-
+        
+        # FIX: Initialize accumulators BEFORE the loop
+        entry_correct = 0
+        entry_total = 0
+        exit_correct = 0
+        exit_total = 0
+        
         n_batches = len(self.val_loader)
+        debug_mode = (n_batches > 0)
+        batch_counter = 0
+        
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.val_loader):
                 features = batch['features'].to(self.device)
                 future_return = batch['future_return'].to(self.device)
                 actual_volatility = batch['actual_volatility'].to(self.device)
                 entry_label = batch['entry_label'].to(self.device)
-
                 take_profit_label = batch['take_profit_label'].to(self.device)
                 stop_loss_label = batch['stop_loss_label'].to(self.device)
                 let_run_label = batch['let_winner_run_label'].to(self.device)
                 regime_change_label = batch['regime_change_label'].to(self.device)
-
-                unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
+                unrealized_pnl = batch['unrealized_pnl'].to(self.device)
                 time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
-
+                
+                # FIX: Ensure shapes are consistent [B] not [B, 1]
+                if unrealized_pnl.dim() == 2:
+                    unrealized_pnl = unrealized_pnl.squeeze(-1)  # [B, 1] → [B]
+                if entry_label.dim() == 2:
+                    entry_label = entry_label.squeeze(-1)
+                if take_profit_label.dim() == 2:
+                    take_profit_label = take_profit_label.squeeze(-1)
+                if stop_loss_label.dim() == 2:
+                    stop_loss_label = stop_loss_label.squeeze(-1)
+                
+                batch_size = len(unrealized_pnl)
+                
                 position_context = {
-                    'unrealized_pnl': unrealized_pnl,
+                    'unrealized_pnl': unrealized_pnl.unsqueeze(-1),  # [B] → [B, 1] for model
                     'time_in_position': time_in_position
                 }
-
+                
                 predictions = self.model(features, position_context=position_context)
-
                 targets = {
                     'features': features,
                     'future_return': future_return,
@@ -503,18 +417,84 @@ class NeuralTrainer:
                     'let_winner_run_label': let_run_label,
                     'regime_change_label': regime_change_label,
                 }
-
+                
                 out = self.criterion(predictions, targets)
                 total_loss += self._sf(out['total_loss'])
+                
                 for k, v in out.items():
-                    if k == 'total_loss': continue
+                    if k == 'total_loss':
+                        continue
                     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
-
+                
+                # ====== CHECKPOINT: ENTRY ACCURACY (FIXED) ======
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
                 entry_true = (entry_label > 0.5).float()
-                entry_correct += (entry_pred == entry_true).sum().item()
-                total_samples += len(entry_label)
-
+                
+                # Ensure same shape for comparison
+                entry_pred = entry_pred.view(-1)  # [B]
+                entry_true = entry_true.view(-1)  # [B]
+                
+                batch_entry_correct = (entry_pred == entry_true).sum().item()
+                batch_entry_total = len(entry_label)
+                
+                entry_correct += batch_entry_correct
+                entry_total += batch_entry_total
+                
+                if debug_mode and batch_idx == 0:
+                    print(f"\n{'='*80}")
+                    print(f"CHECKPOINT: ENTRY ACCURACY (BATCH 0)")
+                    print(f"{'='*80}")
+                    print(f"  entry_pred shape: {entry_pred.shape}")
+                    print(f"  entry_true shape: {entry_true.shape}")
+                    print(f"  Batch entry_correct: {batch_entry_correct} / {batch_entry_total}")
+                    print(f"  Running total: {entry_correct} / {entry_total}")
+                    print(f"  Batch accuracy: {batch_entry_correct / max(1, batch_entry_total):.4f}")
+                
+                # ====== CHECKPOINT: EXIT ACCURACY (FIXED) ======
+                if 'unified_exit_prob' in predictions:
+                    unified_exit = predictions['unified_exit_prob']  # [B, 1]
+                    
+                    # FIX: Ensure all tensors are 1D [B] before comparison
+                    unified_exit = unified_exit.squeeze(-1)  # [B, 1] → [B]
+                    
+                    # Create unified exit label - SAME DIMENSION AS unified_exit
+                    in_profit = (unrealized_pnl > 0).float()  # [B]
+                    in_loss = (unrealized_pnl <= 0).float()   # [B]
+                    
+                    # FIXED: Element-wise multiplication stays [B]
+                    unified_label = (
+                        in_profit * take_profit_label.float() +
+                        in_loss * stop_loss_label.float()
+                    )  # [B]
+                    
+                    # Calculate accuracy with matching shapes
+                    exit_pred = (unified_exit > 0.5).float()  # [B]
+                    exit_true = (unified_label > 0.5).float()  # [B]
+                    
+                    # Ensure both 1D
+                    exit_pred = exit_pred.view(-1)  # [B]
+                    exit_true = exit_true.view(-1)  # [B]
+                    
+                    batch_exit_correct = (exit_pred == exit_true).sum().item()
+                    batch_exit_total = len(exit_true)
+                    
+                    exit_correct += batch_exit_correct
+                    exit_total += batch_exit_total
+                    
+                    if debug_mode and batch_idx == 0:
+                        print(f"\n{'='*80}")
+                        print(f"CHECKPOINT: EXIT ACCURACY (BATCH 0)")
+                        print(f"{'='*80}")
+                        print(f"  unified_exit shape AFTER squeeze: {unified_exit.shape}")
+                        print(f"  unified_label shape: {unified_label.shape}")
+                        print(f"  exit_pred shape: {exit_pred.shape}")
+                        print(f"  exit_true shape: {exit_true.shape}")
+                        print(f"  Batch exit_correct: {batch_exit_correct} / {batch_exit_total}")
+                        print(f"  Running total: {exit_correct} / {exit_total}")
+                        print(f"  Batch accuracy: {batch_exit_correct / max(1, batch_exit_total):.4f}")
+                        print(f"  in_profit count: {in_profit.sum().item()}")
+                        print(f"  in_loss count: {in_loss.sum().item()}")
+                
                 if on_batch and ((batch_idx + 1) % batch_update_every == 0):
                     on_batch(
                         batch_idx + 1,
@@ -522,40 +502,182 @@ class NeuralTrainer:
                         float(self._sf(out['total_loss'])),
                         self.optimizer.param_groups[0]['lr'],
                     )
-
+                
+                batch_counter += 1
+        
+        # ====== FINAL CALCULATIONS ======
         avg_loss = total_loss / max(1, n_batches)
         avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
-        entry_accuracy = entry_correct / max(1, total_samples)
-        # Calculate actual exit accuracy
-        exit_correct = 0
-        exit_total = 0
-
-        # Check if we have exit predictions and labels
-        if 'unified_exit_prob' in predictions:
-            unified_exit = predictions['unified_exit_prob']
-
-            # We need to create a unified exit label from individual exit labels
-            # For samples in profit: use take_profit_label
-            # For samples in loss: use stop_loss_label
-            if 'unrealized_pnl' in batch:
-                pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(-1)
-                in_profit = (pnl > 0).float()
-                in_loss = (pnl <= 0).float()
-
-                # Create unified exit label
-                unified_label = (
-                    in_profit * batch['take_profit_label'].to(self.device).float() +
-                    in_loss * batch['stop_loss_label'].to(self.device).float()
-                )
-
-                # Calculate accuracy
-                exit_pred = (unified_exit > 0.5).float().squeeze()
-                exit_true = (unified_label > 0.5).float().squeeze()
-                exit_correct = (exit_pred == exit_true).sum().item()
-                exit_total = len(exit_true)
-
+        
+        entry_accuracy = entry_correct / max(1, entry_total)
         exit_accuracy = exit_correct / max(1, exit_total)
+        
+        print(f"\n{'='*80}")
+        print(f"CHECKPOINT: FINAL VALIDATION METRICS")
+        print(f"{'='*80}")
+        print(f"  Total batches processed: {batch_counter}")
+        print(f"  Entry accuracy: {entry_correct} correct / {entry_total} total = {entry_accuracy:.4f}")
+        print(f"  Exit accuracy: {exit_correct} correct / {exit_total} total = {exit_accuracy:.4f}")
+        print(f"  Avg val loss: {avg_loss:.6f}")
+        print(f"  Entry accuracy valid [0,1]: {'YES ✓' if 0.0 <= entry_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
+        print(f"  Exit accuracy valid [0,1]: {'YES ✓' if 0.0 <= exit_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
+        print(f"{'='*80}\n")
+        
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
+
+    def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
+        """Train for one epoch (AMP-aware, FP32-sanitized exits live in the model)."""
+        self.model.train()
+        total_loss = 0.0
+        loss_components = {}
+        self.optimizer.zero_grad()
+        
+        n_batches = len(self.train_loader)
+        
+        for batch_idx, batch in enumerate(self.train_loader):
+            features = batch['features'].to(self.device)
+            future_return = batch['future_return'].to(self.device)
+            actual_volatility = batch['actual_volatility'].to(self.device)
+            entry_label = batch['entry_label'].to(self.device)
+            take_profit_label = batch['take_profit_label'].to(self.device)
+            stop_loss_label = batch['stop_loss_label'].to(self.device)
+            let_run_label = batch['let_winner_run_label'].to(self.device)
+            regime_change_label = batch['regime_change_label'].to(self.device)
+            unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
+            time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
+            
+            if torch.isnan(features).any() or torch.isinf(features).any():
+                self.optimizer.zero_grad()
+                continue
+            
+            position_context = {
+                'unrealized_pnl': unrealized_pnl,
+                'time_in_position': time_in_position
+            }
+            
+            with torch.amp.autocast(device_type='cuda', enabled=False):
+                predictions = self.model(features, position_context=position_context)
+                targets = {
+                    'features': features,
+                    'future_return': future_return,
+                    'actual_volatility': actual_volatility,
+                    'entry_label': entry_label,
+                    'take_profit_label': take_profit_label,
+                    'stop_loss_label': stop_loss_label,
+                    'let_winner_run_label': let_run_label,
+                    'regime_change_label': regime_change_label,
+                }
+            
+            out = self.criterion(predictions, targets)
+            loss = out['total_loss'] / self.gradient_accumulation_steps
+            
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[WARNING] NaN/Inf loss detected at batch {batch_idx}, skipping")
+                self.optimizer.zero_grad()
+                continue
+            
+            # ====== CHECKPOINT: LOSS SANITY (First batch only) ======
+            if batch_idx == 0 and epoch == 0:
+                print(f"\n{'='*80}")
+                print(f"CHECKPOINT: LOSS COMPONENTS (EPOCH 0, BATCH 0)")
+                print(f"{'='*80}")
+                print(f"  entry_loss: {out.get('entry_loss', 'N/A')}")
+                print(f"  return_loss: {out.get('return_loss', 'N/A')}")
+                print(f"  volatility_loss: {out.get('volatility_loss', 'N/A')}")
+                print(f"  vae_loss: {out.get('vae_loss', 'N/A')}")
+                print(f"  exit_bundle_loss: {out.get('exit_bundle_loss', 'N/A')}")
+                print(f"  total_loss: {out['total_loss'].item():.6f}")
+                print(f"  total_loss is positive: {'YES ✓' if out['total_loss'].item() > 0 else 'NO ⚠️  BUG'}")
+                print(f"  total_loss is NaN: {'YES ⚠️  BUG' if torch.isnan(out['total_loss']) else 'NO ✓'}")
+                print(f"  total_loss is Inf: {'YES ⚠️  BUG' if torch.isinf(out['total_loss']) else 'NO ✓'}")
+                print(f"{'='*80}\n")
+            
+            if self.use_amp:
+                self.scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            
+            if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
+                if self.use_amp:
+                    self.scaler.unscale_(self.optimizer)
+                
+                # ====== CHECKPOINT: GRADIENT FLOW (First batch only) ======
+                if batch_idx == 0 and epoch == 0:
+                    print(f"\n{'='*80}")
+                    print(f"CHECKPOINT: GRADIENT FLOW (EPOCH 0, BATCH 0)")
+                    print(f"{'='*80}")
+                    
+                    total_grad_norm = 0.0
+                    zero_grad_count = 0
+                    
+                    for name, param in self.model.named_parameters():
+                        if param.grad is not None:
+                            grad_norm = param.grad.data.norm(2).item()
+                            total_grad_norm += grad_norm ** 2
+                            if grad_norm == 0.0:
+                                zero_grad_count += 1
+                        else:
+                            zero_grad_count += 1
+                    
+                    total_grad_norm = total_grad_norm ** 0.5
+                    
+                    print(f"  Total gradient norm (before clip): {total_grad_norm:.6f}")
+                    print(f"  Gradient norm is exploding (>10): {'YES ⚠️  BUG' if total_grad_norm > 10.0 else 'NO ✓'}")
+                    print(f"  Gradient norm is dead (<1e-6): {'YES ⚠️  BUG' if total_grad_norm < 1e-6 else 'NO ✓'}")
+                    print(f"  Layers with zero gradient: {zero_grad_count}")
+                    print(f"{'='*80}\n")
+                
+                # Track gradient norm BEFORE clipping
+                total_grad_norm = 0.0
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_grad_norm += param_norm.item() ** 2
+                
+                total_grad_norm = total_grad_norm ** 0.5
+                self.last_grad_norm = total_grad_norm
+                
+                # Clip gradients
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                
+                if self.use_amp:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    self.optimizer.step()
+                
+                self.optimizer.zero_grad()
+            
+            total_loss += self._sf(out['total_loss'])
+            
+            for k, v in out.items():
+                if k == 'total_loss':
+                    continue
+                loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
+            
+            if on_batch and ((batch_idx + 1) % batch_update_every == 0):
+                on_batch(
+                    batch_idx + 1,
+                    n_batches,
+                    float(self._sf(loss)),
+                    self.optimizer.param_groups[0]['lr']
+                )
+        
+        avg_loss = total_loss / max(1, n_batches)
+        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
+        
+        return avg_loss, avg_components
+
+    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
+        """Call from trainer each epoch to ramp exit importance."""
+        # Linear ramp from 1.0 to max_boost over ramp_epochs
+        if ramp_epochs <= 0:
+            r = 1.0
+        else:
+            r = min(1.0, float(max(0, epoch)) / float(ramp_epochs))
+        
+        self._exit_boost = 1.0 + r * (max_boost - 1.0)
+        print(f"[DEBUG] Epoch {epoch}: exit boost = {self._exit_boost:.3f}")  # Optional debug
 
     def save_checkpoint(self, filename, epoch, val_loss):
         """Save model checkpoint"""
@@ -691,7 +813,7 @@ class NeuralTrainer:
         with Live(group, refresh_per_second=6, console=console, transient=False):
             for epoch in range(num_epochs):
                 # ramp exit weight this epoch
-                self.criterion.set_exit_weight_ramp(
+                self.set_exit_weight_ramp(
                     epoch=epoch,
                     ramp_epochs=self.config.get('exit_ramp_epochs', 10),
                     max_boost=self.config.get('exit_max_boost', 8.0),
@@ -792,7 +914,7 @@ class NeuralTrainer:
     # Very small fallback if rich_dashboard=False
     def _legacy_train(self, num_epochs):
         for epoch in range(num_epochs):
-            self.criterion.set_exit_weight_ramp(
+            self.set_exit_weight_ramp(
                 epoch=epoch,
                 ramp_epochs=self.config.get('exit_ramp_epochs', 10),
                 max_boost=self.config.get('exit_max_boost', 8.0),

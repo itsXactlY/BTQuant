@@ -959,20 +959,23 @@ if __name__ == '__main__':
     # 🆕 EXIT-AWARE CONFIGURATION
     exit_aware_config = {
         # === ARCHITECTURE - Balanced Performance ===
+        'feature_dim': 25100,
         'seq_len': 100,
         'prediction_horizon': 5,
         'lookback_windows': [5, 10, 20, 50, 100, 200],
-        'd_model': 256,
+        'd_model': 512,
         'num_heads': 8,
         'num_layers': 6,
-        'd_ff': 1024,
-        'dropout': 0.15,
+        'd_ff': 2048,
+        'dropout': 0.05,
         'latent_dim': 16,
+        'positional_encoding_scale': 0.1,
+        'input_projection_gain': 2.0,
         
         # === TRAINING ===
         'batch_size': 16,
         'num_epochs': 200,
-        'lr': 0.0001, # 0.0003
+        'lr': 5e-5, # 0.0003
         'min_lr': 1e-7,
         'weight_decay': 1e-4,
         'grad_accum_steps': 2,

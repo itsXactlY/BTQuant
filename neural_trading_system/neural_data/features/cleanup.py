@@ -4,7 +4,7 @@ import glob
 from pathlib import Path
 
 # Find feature cache
-cache_files = list(Path('.').rglob('features_faee3f17ea44d4f8.pkl'))
+cache_files = list(Path('.').rglob('features_8b00f0d3817ad9c7_seq100_hor5.pkl'))
 if not cache_files:
     print("❌ No feature cache found!")
     print("Run from BTQuant root directory")

@@ -28,7 +28,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, T, D]
         T = x.size(1)
-        x = x + self.pe[:, :T]
+        x = x + 0.1 * self.pe[:, :T]  # ← Scale down PE by 0.1
         return self.dropout(x)
 
 
@@ -37,39 +37,35 @@ class PositionalEncoding(nn.Module):
 # ---------------------------------------------------------------------
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float):
+    def __init__(self, d_model, num_heads, d_ff, dropout, layer_idx=0, num_layers=6):
         super().__init__()
+        
         self.mha = nn.MultiheadAttention(
-            embed_dim=d_model,
-            num_heads=num_heads,
-            dropout=dropout,
-            batch_first=True,
+            d_model, num_heads, dropout=dropout, batch_first=True
         )
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
+        
         self.ff = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model),
+            nn.Linear(d_ff, d_model)
         )
-        self.dropout2 = nn.Dropout(dropout)
+        
+        self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
-
-    def forward(
-        self, x: torch.Tensor, mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        x: [B, T, D]
-        returns: (x_out [B,T,D], attn_weights [B, num_heads, T, T])
-        """
-        attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, need_weights=True, average_attn_weights=False)
+        
+        # ADAPTIVE DROPOUT: Lower for early layers
+        adaptive_dropout = dropout * (0.3 + 0.7 * (layer_idx / max(1, num_layers - 1)))
+        self.dropout1 = nn.Dropout(adaptive_dropout)
+        self.dropout2 = nn.Dropout(adaptive_dropout)
+    
+    def forward(self, x, mask=None):
+        attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, 
+                                          need_weights=True, 
+                                          average_attn_weights=False)
         x = self.norm1(x + self.dropout1(attn_out))
         ff_out = self.ff(x)
         x = self.norm2(x + self.dropout2(ff_out))
-        return x, attn_weights  # attn_weights: [B, num_heads, T, T]
-
+        return x, attn_weights
 
 # ---------------------------------------------------------------------
 # Market Regime VAE (lightweight)
@@ -254,12 +250,16 @@ class NeuralTradingModel(nn.Module):
 
         # Input projection + PE
         self.input_projection = nn.Linear(feature_dim, d_model)
+        nn.init.xavier_uniform_(self.input_projection.weight, gain=2.0)  # ← Higher gain
+        if self.input_projection.bias is not None:
+            nn.init.zeros_(self.input_projection.bias)
         self.pos_encoding = PositionalEncoding(d_model, max_len=seq_len)
 
         # Transformer stack
         self.transformer_blocks = nn.ModuleList([
-            TransformerBlock(d_model, num_heads, d_ff, dropout)
-            for _ in range(num_layers)
+            TransformerBlock(d_model, num_heads, d_ff, dropout, 
+                            layer_idx=i, num_layers=num_layers)
+            for i in range(num_layers)
         ])
 
         # Market regime VAE
@@ -326,6 +326,10 @@ class NeuralTradingModel(nn.Module):
         x = x.clamp(-100, 100)
 
         # Project + positional encoding
+        if self.training and hasattr(self, '_log_input_stats'):
+            print(f"Input projection output: mean={x.mean():.4f}, std={x.std():.4f}, "
+                f"min={x.min():.4f}, max={x.max():.4f}")
+
         x = self.input_projection(x)          # [B, T, D]
         x = self.pos_encoding(x)              # [B, T, D]
 

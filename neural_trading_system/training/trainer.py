@@ -130,8 +130,8 @@ class MultiTaskLoss(nn.Module):
         vae_loss = vae_recon_loss + 1e-5 * kl_loss
         
         # ======== EXIT (TP/SL) ========
-        exit_logits_tp = predictions.get('take_profit_logits', torch.zeros(len(entry_true), device=device)).view(-1)
-        exit_logits_sl = predictions.get('stop_loss_logits', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_logits_tp = predictions.get('take_profit_logit', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_logits_sl = predictions.get('stop_loss_logit', torch.zeros(len(entry_true), device=device)).view(-1)
         exit_true_tp = targets['take_profit_label'].view(-1).float()
         exit_true_sl = targets['stop_loss_label'].view(-1).float()
         
@@ -140,14 +140,14 @@ class MultiTaskLoss(nn.Module):
         exit_bundle_loss = exit_loss_tp + exit_loss_sl
         
         # ======== REGULARIZATION ========
-        attention_weights = predictions.get('attention_weights', [])
-        entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=0.1)
+        # attention_weights = predictions.get('attention_weights', [])
+        # entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=1.0) # From 0.1
         
         # TODO :: PLAN B
-        # entropy_reg_loss = torch.tensor(0.0, device=device)
+        entropy_reg_loss = torch.tensor(0.0, device=device)
         
-        diversity_penalty = torch.tensor(0.0, device=device)
-        confidence_penalty = torch.tensor(0.0, device=device)
+        # diversity_penalty = torch.tensor(0.0, device=device)
+        # confidence_penalty = torch.tensor(0.0, device=device)
         
         # ======== DEBUG OUTPUT ========
         # print(f"\n{'='*80}")
@@ -182,21 +182,21 @@ class MultiTaskLoss(nn.Module):
         term5 = self.task_weights["vae"] * (precision_vae * vae_loss + log_vars_clamped[4])
         term6 = entropy_reg_loss
         
-        print(f"\nTERM BREAKDOWN:")
-        print(f"term1 (entry):       {term1.item():.6f}")
-        print(f"term2 (exit):        {term2.item():.6f}")
-        print(f"term3 (return):      {term3.item():.6f}")
-        print(f"term4 (volatility):  {term4.item():.6f}")
-        print(f"term5 (vae):         {term5.item():.6f}")
-        print(f"term6 (entropy):     {term6.item():.6f}")
+        # print(f"\nTERM BREAKDOWN:")
+        # print(f"term1 (entry):       {term1.item():.6f}")
+        # print(f"term2 (exit):        {term2.item():.6f}")
+        # print(f"term3 (return):      {term3.item():.6f}")
+        # print(f"term4 (volatility):  {term4.item():.6f}")
+        # print(f"term5 (vae):         {term5.item():.6f}")
+        # print(f"term6 (entropy):     {term6.item():.6f}")
         
         total_loss = term1 + term2 + term3 + term4 + term5 + term6
         
-        print(f"\nFINAL: total_loss = {total_loss.item():.6f}")
-        print(f"⚠️  IS_NEGATIVE: {total_loss.item() < 0}")
-        print(f"⚠️  IS_NaN: {torch.isnan(total_loss)}")
-        print(f"⚠️  IS_Inf: {torch.isinf(total_loss)}")
-        print(f"{'='*80}\n")
+        # print(f"\nFINAL: total_loss = {total_loss.item():.6f}")
+        # print(f"⚠️  IS_NEGATIVE: {total_loss.item() < 0}")
+        # print(f"⚠️  IS_NaN: {torch.isnan(total_loss)}")
+        # print(f"⚠️  IS_Inf: {torch.isinf(total_loss)}")
+        # print(f"{'='*80}\n")
         
         # Clamp total loss to prevent negative values from propagating
         if total_loss.item() < 0:
@@ -499,16 +499,16 @@ class NeuralTrainer:
         entry_accuracy = entry_correct / max(1, entry_total)
         exit_accuracy = exit_correct / max(1, exit_total)
         
-        print(f"\n{'='*80}")
-        print(f"CHECKPOINT: FINAL VALIDATION METRICS")
-        print(f"{'='*80}")
-        print(f"  Total batches processed: {batch_counter}")
-        print(f"  Entry accuracy: {entry_correct} correct / {entry_total} total = {entry_accuracy:.4f}")
-        print(f"  Exit accuracy: {exit_correct} correct / {exit_total} total = {exit_accuracy:.4f}")
-        print(f"  Avg val loss: {avg_loss:.6f}")
-        print(f"  Entry accuracy valid [0,1]: {'YES ✓' if 0.0 <= entry_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
-        print(f"  Exit accuracy valid [0,1]: {'YES ✓' if 0.0 <= exit_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
-        print(f"{'='*80}\n")
+        # print(f"\n{'='*80}")
+        # print(f"CHECKPOINT: FINAL VALIDATION METRICS")
+        # print(f"{'='*80}")
+        # print(f"  Total batches processed: {batch_counter}")
+        # print(f"  Entry accuracy: {entry_correct} correct / {entry_total} total = {entry_accuracy:.4f}")
+        # print(f"  Exit accuracy: {exit_correct} correct / {exit_total} total = {exit_accuracy:.4f}")
+        # print(f"  Avg val loss: {avg_loss:.6f}")
+        # print(f"  Entry accuracy valid [0,1]: {'YES ✓' if 0.0 <= entry_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
+        # print(f"  Exit accuracy valid [0,1]: {'YES ✓' if 0.0 <= exit_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
+        # print(f"{'='*80}\n")
         
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
 
@@ -544,6 +544,13 @@ class NeuralTrainer:
             
             with torch.amp.autocast(device_type='cuda', enabled=False):
                 predictions = self.model(features, position_context=position_context)
+                if batch_idx == 0 and epoch == 0:
+                    exit_keys = [k for k in predictions.keys() if 'exit' in k.lower() or 'logit' in k.lower()]
+                    print(f"Exit-related keys in predictions: {exit_keys}")
+                    for key in exit_keys:
+                        val = predictions[key]
+                        if isinstance(val, torch.Tensor):
+                            print(f"  {key}: shape={val.shape}, sample values={val[:3].detach().cpu().numpy()}")
                 targets = {
                     'features': features,
                     'future_return': future_return,
@@ -658,13 +665,15 @@ class NeuralTrainer:
     def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
         """Call from trainer each epoch to ramp exit importance."""
         # Linear ramp from 1.0 to max_boost over ramp_epochs
-        if ramp_epochs <= 0:
-            r = 1.0
-        else:
-            r = min(1.0, float(max(0, epoch)) / float(ramp_epochs))
-        
-        self._exit_boost = 1.0 + r * (max_boost - 1.0)
-        print(f"[DEBUG] Epoch {epoch}: exit boost = {self._exit_boost:.3f}")  # Optional debug
+        self.criterion.set_exit_weight_ramp(
+            epoch=epoch,
+            ramp_epochs=ramp_epochs,
+            max_boost=max_boost,
+        )
+
+        exit_boost = getattr(self.criterion, "_exit_boost", None)
+        if exit_boost is not None:
+            print(f"[DEBUG] Epoch {epoch}: exit boost = {exit_boost:.3f}")  # Optional debug
 
     def save_checkpoint(self, filename, epoch, val_loss):
         """Save model checkpoint"""

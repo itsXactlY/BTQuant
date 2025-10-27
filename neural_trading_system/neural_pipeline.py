@@ -195,7 +195,7 @@ class DataCollectionStrategy(bt.Strategy):
         
         # === CONFIG ===
         backtest=True,
-        debug=False,
+        debug=True,
     )
 
     def __init__(self, **kwargs):
@@ -668,7 +668,24 @@ class NeuralDataPipeline:
         }
         
         # ===== 13) CACHE RESULT =====
-        console.print(f"[yellow]💾 Caching features to {cache_file.name}[/yellow]")
+        console.print(f"[yellow]🔧 Normalizing features before caching...[/yellow]")
+        from sklearn.preprocessing import StandardScaler
+        scaler_cache = StandardScaler()
+        split_idx = int(len(features_filtered) * 0.7)
+        scaler_cache.fit(features_filtered[:split_idx])
+        features_filtered = scaler_cache.transform(features_filtered)
+
+        console.print(f"[yellow]💾 Caching normalized features to {cache_file.name}[/yellow]")
+
+        result = {
+            'features': features_filtered,  # ✅ NOW NORMALIZED!
+            'returns': returns_filtered,
+            'prices': prices_filtered,
+            'feature_dim': features_filtered.shape[1],
+            'timestamps': timestamps,
+            'indicator_columns': indicator_cols,
+        }
+
         with open(cache_file, 'wb') as f:
             pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
         console.print(f"[green]✅ Cached! Next run will load in ~2 seconds[/green]")
@@ -976,7 +993,7 @@ if __name__ == '__main__':
         coin='BTC',
         interval='1h',
         start_date='2017-01-01',
-        end_date='2025-01-01',
+        end_date='2024-01-01',
         collateral='USDT',
         config=exit_aware_config
     )

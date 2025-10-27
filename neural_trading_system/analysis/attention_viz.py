@@ -1,479 +1,335 @@
+# analysis/attention_viz.py
+from __future__ import annotations
+from typing import Any, Dict, List, Optional, Tuple, Union
+from pathlib import Path
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import seaborn as sns
-from typing import Dict, List
+
+ArrayLike = Union[np.ndarray, torch.Tensor]
+
 
 class AttentionAnalyzer:
-    def __init__(self, model: nn.Module, feature_extractor, device='cpu'):
+    def __init__(
+        self,
+        model: nn.Module,
+        feature_extractor: Any,
+        device: str = "cpu",
+        auto_scale: bool = False,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.model = model.to(device)
         self.model.eval()
         self.feature_extractor = feature_extractor
         self.device = torch.device(device)
-        self._hooks = []
-        self._captured_attn = []  # list of tensors per forward pass
+        self.auto_scale = auto_scale
+        self.config = config or {}
+        self.seq_len = int(self.config.get("seq_len", 100))  # <-- needed for pseudo-temporal views
 
-        # Try to locate attention modules inside the model to hook
+        self._hooks: List[Any] = []
+        self._captured_attn: List[torch.Tensor] = []
         self._register_attention_hooks()
 
-    def _register_attention_hooks(self):
-        # Clear old hooks if any
+    # ---------------- hooks ----------------
+    def _register_attention_hooks(self) -> None:
         for h in self._hooks:
-            try:
-                h.remove()
-            except Exception:
-                pass
-        self._hooks = []
-        self._captured_attn = []
+            try: h.remove()
+            except Exception: pass
+        self._hooks, self._captured_attn = [], []
 
-        # Helper to capture attention outputs
-        def make_hook():
-            def hook(module, inputs, output):
-                # Accept attention tensor in common shapes:
-                # - [B, heads, seq, seq]
-                # - or tuple/list where first element is attention
+        def hook_factory(_name: str):
+            def hook(module, _inp, out):
                 attn = None
-                if isinstance(output, (tuple, list)):
-                    # Prefer the last tensor that looks like attention
-                    for out in output:
-                        if torch.is_tensor(out) and out.dim() == 4:
-                            attn = out
-                    if attn is None and len(output) > 0 and torch.is_tensor(output[0]):
-                        attn = output[0]
-                elif torch.is_tensor(output):
-                    attn = output if output.dim() == 4 else None
-
-                if attn is not None:
-                    self._captured_attn.append(attn.detach().to('cpu'))
+                if isinstance(out, (tuple, list)) and len(out) >= 2 and torch.is_tensor(out[1]):
+                    attn = out[1]
+                if attn is None and hasattr(module, "attn_output_weights"):
+                    attn = getattr(module, "attn_output_weights")
+                if torch.is_tensor(attn):
+                    self._captured_attn.append(attn.detach().cpu())
             return hook
 
-        # Strategy 1: Find modules named "attention" (e.g., MultiHeadSelfAttention)
-        for name, module in self.model.named_modules():
-            name_lower = name.lower()
-            if 'attention' in name_lower or 'attn' in name_lower:
-                self._hooks.append(module.register_forward_hook(make_hook()))
+        for name, m in self.model.named_modules():
+            if isinstance(m, nn.MultiheadAttention):
+                self._hooks.append(m.register_forward_hook(hook_factory(name)))
+        for name, m in self.model.named_modules():
+            lname = name.lower()
+            if ("attention" in lname or "attn" in lname) and not isinstance(m, nn.MultiheadAttention):
+                self._hooks.append(m.register_forward_hook(hook_factory(name)))
 
-        # If nothing was found, optionally try to find per-block attributes that store attn tensors after forward.
-        # This requires post-forward polling; you can implement a fallback if your blocks expose "last_attn" tensors.
+    # --------------- utils -----------------
+    def _ensure_parent(self, p: Optional[str]) -> None:
+        if p: Path(p).parent.mkdir(parents=True, exist_ok=True)
 
-    def extract_attention_weights(self, sample_seq):
+    def _maybe_scale(self, x_np: np.ndarray) -> np.ndarray:
+        if not self.auto_scale:
+            return x_np.astype(np.float32, copy=False)
+        scaler = getattr(self.feature_extractor, "scaler", None)
+        if scaler is None or not hasattr(scaler, "n_features_in_"):
+            return x_np.astype(np.float32, copy=False)
+        F = x_np.shape[-1]; S = int(scaler.n_features_in_)
+        if F == S:
+            return scaler.transform(x_np).astype(np.float32, copy=False)
+        if F + 1 == S:
+            pad = np.zeros((x_np.shape[0], 1), dtype=np.float32)
+            y = scaler.transform(np.hstack([x_np.astype(np.float32), pad])).astype(np.float32, copy=False)
+            return y[:, :F]
+        if F - 1 == S:
+            y = scaler.transform(x_np[:, :S]).astype(np.float32, copy=False)
+            return np.hstack([y, np.zeros((y.shape[0], 1), dtype=np.float32)])
+        return x_np.astype(np.float32, copy=False)
+
+    def _prepare_input(self, sample: ArrayLike) -> torch.Tensor:
         """
-        sample_seq: np.ndarray with shape [seq_len, feature_dim] OR torch.Tensor on the correct device
-        Returns: (list_of_attn_tensors_per_hook, predictions_dict)
+        Keep model contract: it currently expects [B, T, F] but your checkpoint uses T=1, F=flat_len.
+        So we forward as [1, 1, flat_len]. We do NOT reshape to [1, T, F_t] to avoid weight mismatch.
         """
-        self._captured_attn = []
+        if isinstance(sample, torch.Tensor):
+            x = sample.detach().to(self.device, dtype=torch.float32)
+            if x.dim() == 1:
+                x = x.view(1, 1, -1)      # [1, 1, F_flat]
+            elif x.dim() == 2:
+                x = x.unsqueeze(0)        # [1, T=?, F=?]
+            elif x.dim() != 3:
+                raise ValueError(f"Unsupported tensor dim {x.dim()}")
+            if x.size(0) != 1:
+                x = x[:1]
+            return x
+
+        arr = np.asarray(sample, dtype=np.float32)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)      # [1, F_flat]
+        elif arr.ndim != 2:
+            raise ValueError(f"Unsupported input ndim={arr.ndim}; expected 1 or 2.")
+        arr = self._maybe_scale(arr)
+        x = torch.from_numpy(arr).to(self.device)
+        if x.dim() == 1:
+            x = x.view(1, 1, -1)
+        elif x.dim() == 2:
+            x = x.unsqueeze(0)            # [1, 1, F_flat] or [1, T, F] if user already shaped
+        if x.size(0) != 1:
+            x = x[:1]
+        # If someone passed [1,T,F] and T>1, we’ll respect it; otherwise we’re [1,1,F_flat].
+        return x
+
+    def _forward(self, x3: torch.Tensor) -> Dict[str, Any]:
         with torch.no_grad():
-            if isinstance(sample_seq, np.ndarray):
-                x = torch.as_tensor(sample_seq, dtype=torch.float32, device=self.device)
-            else:
-                x = sample_seq.to(self.device, dtype=torch.float32)
+            out = self.model(x3)
+        preds: Dict[str, Any] = {}
+        if isinstance(out, dict):
+            for k, v in out.items():
+                preds[k] = v.detach().cpu() if torch.is_tensor(v) else v
+        elif isinstance(out, (list, tuple)):
+            keys = ["entry_prob", "exit_prob", "expected_return", "volatility_forecast", "position_size"]
+            for i, k in enumerate(keys[:len(out)]):
+                v = out[i]; preds[k] = v.detach().cpu() if torch.is_tensor(v) else v
+        elif torch.is_tensor(out):
+            v = out.detach().cpu().view(-1)
+            keys = ["entry_prob", "exit_prob", "expected_return", "volatility_forecast", "position_size"]
+            for i, k in enumerate(keys[:len(v)]): preds[k] = v[i]
+        # logits -> prob fallback
+        if "entry_prob" not in preds and "entry_logits" in preds:
+            el = preds["entry_logits"]
+            preds["entry_prob"] = float(torch.sigmoid(el).item()) if torch.is_tensor(el) else 1/(1+np.exp(-float(el)))
+        if "exit_prob" not in preds and "unified_exit_prob" in preds:
+            preds["exit_prob"] = preds["unified_exit_prob"]
+        for k, v in list(preds.items()):
+            if isinstance(v, torch.Tensor) and v.numel() == 1: preds[k] = float(v.item())
+        return preds
 
-            if x.dim() == 2:
-                x = x.unsqueeze(0)  # [1, seq_len, feature_dim]
+    # --------------- public ---------------
+    def extract_attention_weights(self, sample_seq: ArrayLike) -> Tuple[List[torch.Tensor], Dict[str, Any]]:
+        self._captured_attn = []
+        x3 = self._prepare_input(sample_seq)
+        preds = self._forward(x3)
+        if not self._captured_attn and isinstance(preds, dict):
+            maybe = preds.get("attention_weights", None)
+            if torch.is_tensor(maybe):
+                attn = maybe.detach().cpu()
+                if attn.dim() == 4 and attn.size(0) == 1: attn = attn[0]
+                self._captured_attn = [attn]
+        return list(self._captured_attn), preds
 
-            # Forward pass (no extra kwargs)
-            preds = self.model(x)
-        
-            def _to_cpu(obj):
-                # Return a structure where all tensors are detached and moved to CPU
-                if torch.is_tensor(obj):
-                    return obj.detach().to('cpu')  # only valid for tensors [web:249]
-                if isinstance(obj, dict):
-                    return {k: _to_cpu(v) for k, v in obj.items()}  # recurse into dicts
-                if isinstance(obj, (list, tuple)):
-                    # If list/tuple of tensors, try to stack; otherwise, map elementwise
-                    if len(obj) > 0 and all(torch.is_tensor(x) for x in obj):
-                        try:
-                            return torch.stack([x.detach().to('cpu') for x in obj])  # fast path [web:249]
-                        except Exception:
-                            return [x.detach().to('cpu') for x in obj]  # fallback [web:249]
-                    else:
-                        return [_to_cpu(x) for x in obj]  # recurse mixed/nested [web:249]
-                # If it’s a number or other type, return as-is
-                return obj  # non-tensor; detach doesn’t apply [web:238]
-
-            predictions = _to_cpu(preds)
-
-        # Return captured attentions and predictions
-        return list(self._captured_attn), predictions
-
-    def compute_feature_importance(self, sequences, num_samples=100, method='gradient'):
-        """
-        Example importance: mean absolute gradient of entry head logit w.r.t. input features.
-        Assumes model returns a dict with key 'entry_prob' as logits or probabilities.
-        """
-        n = min(num_samples, len(sequences))
-        if n == 0:
-            return 0.0
-
-        self.model.eval()
-        # Accumulate importance per feature
-        agg = None
-        count = 0
-
-        for i in range(n):
-            seq = sequences[i]  # [seq_len, feature_dim]
-            x = torch.as_tensor(seq, dtype=torch.float32, device=self.device).unsqueeze(0)  # [1, T, F]
-            x.requires_grad_(True)
-
-            out = self.model(x)
-            # Try several common keys for the entry head
-            logit = None
-            for k in ['entry_prob', 'entry_logit', 'entry']:
-                if isinstance(out, dict) and k in out:
-                    logit = out[k]
-                    break
-            if logit is None:
-                # Fallback: if single tensor output, use it
-                if torch.is_tensor(out):
-                    logit = out
-                elif isinstance(out, (tuple, list)) and len(out) > 0 and torch.is_tensor(out[0]):
-                    logit = out[0]
-                else:
-                    continue
-
-            # Ensure scalar for backward
-            logit_scalar = logit.view(-1)[0]
-            self.model.zero_grad(set_to_none=True)
-            if x.grad is not None:
-                x.grad.zero_()
-            logit_scalar.backward()
-
-            grad = x.grad.detach()  # [1, T, F]
-            imp = grad.abs().mean(dim=1).squeeze(0)  # [F], mean over time
-
-            imp_cpu = imp.to('cpu').numpy()
-            if agg is None:
-                agg = imp_cpu.astype(np.float32)
-            else:
-                # Pad/truncate to match agg length if needed
-                if imp_cpu.shape[0] != agg.shape[0]:
-                    if imp_cpu.shape[0] < agg.shape[0]:
-                        imp_cpu = np.pad(imp_cpu, (0, agg.shape[0] - imp_cpu.shape[0]))
-                    else:
-                        agg = np.pad(agg, (0, imp_cpu.shape[0] - agg.shape[0]))
-                agg += imp_cpu
-            count += 1
-
-        if count == 0:
-            return 0.0
-
-        return agg / max(1, count)
-
-    def plot_attention_heatmap(
-        self,
-        attention_weights,
-        layer_idx: int = -1,
-        head_idx: int = 0,
-        figsize=(12, 10)
-    ):
-        """
-        attention_weights: tensor/array with shape:
-        - [B, H, T, T] or [H, T, T] or [T, T]
-        """
-        # Normalize to torch tensor on CPU
-        if isinstance(attention_weights, np.ndarray):
-            attn = torch.from_numpy(attention_weights)
-        elif torch.is_tensor(attention_weights):
-            attn = attention_weights
-        elif isinstance(attention_weights, (list, tuple)):
-            # Convert list to tensor if possible
-            try:
-                attn = torch.as_tensor(attention_weights)
-            except Exception:
-                # Fallback: take first element if it’s a tensor/array
-                for x in attention_weights:
-                    if torch.is_tensor(x) or isinstance(x, np.ndarray):
-                        attn = torch.as_tensor(x)
-                        break
-                else:
-                    raise ValueError("No tensor-like attention in list")
-
-        attn = attn.detach().cpu()
-
-        # Remove batch dim if present: [B, H, T, T] -> [H, T, T]
-        if attn.dim() == 4 and attn.size(0) == 1:
-            attn = attn[0]
-
-        # If heads present, pick specific head or mean across heads
-        if attn.dim() == 3:
-            if head_idx is None:
-                attn2d = attn.mean(dim=0)  # [T, T] average over heads
-            else:
-                attn2d = attn[head_idx]    # [T, T] single head
-        elif attn.dim() == 2:
-            attn2d = attn
-        else:
-            raise ValueError(f"Unexpected attention shape: {tuple(attn.shape)}")
-
-        a = attn2d.numpy()  # 2-D array for seaborn
-
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        plt.figure(figsize=figsize)
-        sns.heatmap(
-            a,
-            cmap='viridis',
-            cbar_kws={'label': 'Attention Weight'},
-            xticklabels=np.arange(a.shape[1]),
-            yticklabels=np.arange(a.shape[0]),
-        )
-        plt.title(f'Attention Heatmap - Layer {layer_idx}, Head {0 if head_idx is None else head_idx}')
-        plt.xlabel('Key Position (Historical Bars)')
-        plt.ylabel('Query Position (Historical Bars)')
-        plt.tight_layout()
-        plt.show()
-
-
-    def plot_attention_timeline(
-        self,
-        attention_weights_list: List[np.ndarray],
-        figsize=(15, 8)
-    ):
-        """
-        Plot how attention evolves across layers.
-        Shows which historical bars are most important.
-        """
-        num_layers = len(attention_weights_list)
-        
-        fig, axes = plt.subplots(num_layers, 1, figsize=figsize, sharex=True)
-        
-        for layer_idx, attn_weights in enumerate(attention_weights_list):
-            # Average across heads
-            attn_avg = attn_weights.mean(axis=0)  # [seq_len, seq_len]
-            
-            # Focus on attention to the last position (current decision)
-            attention_to_now = attn_avg[-1, :]  # [seq_len]
-            
-            ax = axes[layer_idx] if num_layers > 1 else axes
-            ax.plot(attention_to_now, linewidth=2)
-            ax.set_ylabel(f'Layer {layer_idx}')
-            ax.grid(True, alpha=0.3)
-            ax.set_xlim(0, len(attention_to_now))
-        
-        axes[-1].set_xlabel('Historical Bar Index (0 = oldest, -1 = current)')
-        fig.suptitle('Attention Evolution Across Layers', fontsize=14, fontweight='bold')
-        plt.tight_layout()
-        plt.show()
-
-    def compute_feature_importance(
-        self,
-        sequences: np.ndarray,
-        num_samples: int = 100,
-        feature_dim: int | None = None,
-        return_names: bool = False
-    ):
-        """
-        Gradient-based attribution over the entry head.
-        Returns a 1D numpy array of length feature_dim (or inferred), and optionally feature names.
-        """
+    def compute_feature_importance(self, sequences: np.ndarray, num_samples: int = 100,
+                                   feature_dim: Optional[int] = None, return_names: bool = False):
         self.model.eval()
         n = min(num_samples, len(sequences))
         if n == 0:
             vec = np.zeros(int(feature_dim or 1), dtype=np.float32)
-            return (vec, [f'feature_{i}' for i in range(vec.size)]) if return_names else vec
+            return (vec, [f"feature_{i}" for i in range(vec.size)]) if return_names else vec
 
-        agg = None
-        count = 0
+        agg, count = None, 0
         for i in range(n):
-            seq = sequences[i]  # [T, F]
-            x = torch.as_tensor(seq, dtype=torch.float32, device=self.device).unsqueeze(0)  # [1, T, F]
-            x.requires_grad_(True)
-
-            out = self.model(x)
-            # Pick a tensor to backprop
-            target = None
+            x3 = self._prepare_input(sequences[i]).clone().detach().requires_grad_(True)
+            out = self.model(x3)
             if isinstance(out, dict):
-                v = out.get('entry_prob', None)
-                if torch.is_tensor(v):
-                    target = v
-                elif isinstance(v, (list, tuple)) and len(v) > 0 and torch.is_tensor(v[0]):
-                    target = v[0]
-            if target is None:
-                if torch.is_tensor(out):
-                    target = out
-                elif isinstance(out, (list, tuple)) and len(out) > 0 and torch.is_tensor(out[0]):
-                    target = out[0]
-            if target is None:
-                continue
-
-            logit_scalar = target.view(-1)[0]
-            self.model.zero_grad(set_to_none=True)
-            if x.grad is not None:
-                x.grad.zero_()
-            logit_scalar.backward()
-
-            grad = x.grad  # [1, T, F]
-            if grad is None:
-                continue
-            imp = grad.abs().mean(dim=1).squeeze(0)  # [F]
-            imp_np = imp.detach().cpu().numpy()
-
-            if agg is None:
-                agg = imp_np.astype(np.float32)
+                target = out.get("entry_logits", out.get("entry_prob", None))
+            elif isinstance(out, (list, tuple)) and len(out) > 0:
+                target = out[0]
             else:
-                # pad/truncate to match
-                if imp_np.shape[0] != agg.shape[0]:
-                    if imp_np.shape[0] < agg.shape[0]:
-                        imp_np = np.pad(imp_np, (0, agg.shape[0] - imp_np.shape[0]))
-                    else:
-                        agg = np.pad(agg, (0, imp_np.shape[0] - agg.shape[0]))
-                agg += imp_np
-            count += 1
+                target = out.view(-1)[0] if torch.is_tensor(out) else None
+            if target is None: continue
 
-        if count == 0:
-            vec = np.zeros(int(feature_dim or (agg.shape[0] if agg is not None else 1)), dtype=np.float32)
-        else:
-            vec = agg / float(count)
-        # Enforce expected feature length
+            self.model.zero_grad(set_to_none=True)
+            if x3.grad is not None: x3.grad.zero_()
+            target.view(-1)[0].backward()
+            grad = x3.grad
+            if grad is None: continue
+            imp = grad.abs().mean(dim=(0, 1)).detach().cpu().numpy()  # [F_flat] or [F]
+            agg = imp.astype(np.float32) if agg is None else (agg + imp)
+            count += 1
+        vec = np.zeros_like(agg) if count == 0 else agg / float(count)
         if feature_dim is not None and vec.shape[0] != int(feature_dim):
             d = int(feature_dim)
             vec = np.pad(vec, (0, d - vec.shape[0])) if vec.shape[0] < d else vec[:d]
         if return_names:
-            names = [f'feature_{i}' for i in range(vec.shape[0])]
+            names = [f"feature_{i}" for i in range(vec.shape[0])]
             return vec, names
         return vec
 
-
-    def plot_feature_importance(
-        self,
-        importance_dict: Dict[str, float],
-        top_n: int = 30,
-        figsize=(12, 8)
-    ):
-        """Plot top N most important features."""
-        # Get top N
-        top_features = list(importance_dict.items())[:top_n]
-        names, values = zip(*top_features)
-        
-        plt.figure(figsize=figsize)
-        plt.barh(range(len(names)), values)
-        plt.yticks(range(len(names)), names)
-        plt.xlabel('Importance Score')
-        plt.title(f'Top {top_n} Most Important Features')
-        plt.tight_layout()
-        plt.gca().invert_yaxis()
-        plt.show()
-    
-    def visualize_regime_space(
-        self,
-        test_sequences: np.ndarray,
-        test_returns: np.ndarray,
-        figsize=(10, 8)
-    ):
+    # -------- PSEUDO-TEMPORAL EXPLANATIONS (for flat windows) --------
+    def temporal_saliency_from_flat(self, flat_vec: np.ndarray) -> np.ndarray:
         """
-        Visualize the learned market regime space (VAE latent space).
-        Shows how the model clusters different market conditions.
+        Computes per-time-step importance from a flattened window (length L),
+        using gradient |d(entry)/dX| aggregated over each time slice.
+        Returns array of shape [T] with T=self.seq_len.
         """
-        regime_embeddings = []
-        returns_list = []
-        
-        for seq, ret in zip(test_sequences[:500], test_returns[:500]):
-            feature_tensor = torch.FloatTensor(seq).unsqueeze(0).to(self.device)
-            
-            with torch.no_grad():
-                predictions = self.model(feature_tensor)
-                regime_z = predictions['regime_z'].cpu().numpy()[0]
-                regime_embeddings.append(regime_z)
-                returns_list.append(ret)
-        
-        regime_embeddings = np.array(regime_embeddings)
-        returns_list = np.array(returns_list)
-        
-        # Use PCA for 2D visualization if latent_dim > 2
-        from sklearn.decomposition import PCA
-        
-        if regime_embeddings.shape[1] > 2:
-            pca = PCA(n_components=2)
-            regime_2d = pca.fit_transform(regime_embeddings)
+        x3 = self._prepare_input(flat_vec).clone().detach().requires_grad_(True)  # [1,1,L]
+        out = self.model(x3)
+        if isinstance(out, dict):
+            target = out.get("entry_logits", out.get("entry_prob", None))
+        elif isinstance(out, (list, tuple)) and len(out) > 0:
+            target = out[0]
         else:
-            regime_2d = regime_embeddings
-        
-        # Color by future returns
-        plt.figure(figsize=figsize)
-        scatter = plt.scatter(
-            regime_2d[:, 0],
-            regime_2d[:, 1],
-            c=returns_list,
-            cmap='RdYlGn',
-            alpha=0.6,
-            s=20
-        )
-        plt.colorbar(scatter, label='Future Return')
-        plt.xlabel('Regime Dimension 1')
-        plt.ylabel('Regime Dimension 2')
-        plt.title('Learned Market Regime Space (colored by future returns)')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
-    
-    def analyze_decision_boundary(
-        self,
-        test_sequences: np.ndarray,
-        test_returns: np.ndarray
-    ):
+            target = out.view(-1)[0] if torch.is_tensor(out) else None
+        if target is None:
+            return np.zeros(self.seq_len, dtype=np.float32)
+
+        self.model.zero_grad(set_to_none=True)
+        if x3.grad is not None: x3.grad.zero_()
+        target.view(-1)[0].backward()
+        grad = x3.grad.detach().cpu().view(-1).numpy()  # [L]
+        L = grad.size
+        T = max(1, self.seq_len)
+        if L % T != 0:
+            # fallback: uniform chunking
+            chunk = L // T
+            splits = [slice(i*chunk, (i+1)*chunk) for i in range(T-1)] + [slice((T-1)*chunk, L)]
+        else:
+            step = L // T
+            splits = [slice(i*step, (i+1)*step) for i in range(T)]
+        imp = np.array([np.mean(np.abs(grad[s])) for s in splits], dtype=np.float32)
+        # normalize 0..1 for nicer plots
+        if imp.max() > 0: imp = imp / imp.max()
+        return imp
+
+    def temporal_occlusion_from_flat(self, flat_vec: np.ndarray, block: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Analyze the model's decision boundary.
-        Shows entry probability vs actual returns.
+        Occlusion over time: zero out contiguous time blocks (size `block`) in the
+        flattened vector and record change in entry probability.
+        Returns:
+          deltas: [T] (occlusion impact per step anchor)
+          probs:  [T] (prediction under occlusion)
         """
-        entry_probs = []
-        actual_returns = []
-        
-        for seq, ret in zip(test_sequences[:1000], test_returns[:1000]):
-            feature_tensor = torch.FloatTensor(seq).unsqueeze(0).to(self.device)
-            
-            with torch.no_grad():
-                predictions = self.model(feature_tensor)
-                entry_prob = predictions['entry_prob'].cpu().item()
-                entry_probs.append(entry_prob)
-                actual_returns.append(ret)
-        
-        entry_probs = np.array(entry_probs)
-        actual_returns = np.array(actual_returns)
-        
-        # Plot
-        fig, axes = plt.subplots(1, 2, figsize=(15, 5))
-        
-        # Scatter plot
-        axes[0].scatter(entry_probs, actual_returns, alpha=0.3, s=10)
-        axes[0].axhline(y=0, color='r', linestyle='--', alpha=0.5)
-        axes[0].axvline(x=0.5, color='b', linestyle='--', alpha=0.5)
-        axes[0].set_xlabel('Entry Probability')
-        axes[0].set_ylabel('Actual Return')
-        axes[0].set_title('Entry Probability vs Actual Return')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Binned analysis
-        bins = np.linspace(0, 1, 11)
-        bin_centers = (bins[:-1] + bins[1:]) / 2
-        bin_returns = []
-        
-        for i in range(len(bins) - 1):
-            mask = (entry_probs >= bins[i]) & (entry_probs < bins[i+1])
-            if mask.sum() > 0:
-                bin_returns.append(actual_returns[mask].mean())
-            else:
-                bin_returns.append(0)
-        
-        axes[1].bar(bin_centers, bin_returns, width=0.08, alpha=0.7)
-        axes[1].axhline(y=0, color='r', linestyle='--', alpha=0.5)
-        axes[1].set_xlabel('Entry Probability Bin')
-        axes[1].set_ylabel('Average Actual Return')
-        axes[1].set_title('Average Return by Confidence Level')
-        axes[1].grid(True, alpha=0.3, axis='y')
-        
+        base = float(self._forward(self._prepare_input(flat_vec)).get("entry_prob", np.nan))
+        L = flat_vec.size
+        T = max(1, self.seq_len)
+        step = L // T if L >= T else 1
+        deltas, probs = [], []
+        for t in range(T):
+            lo = t*step; hi = min(L, lo + block*step)
+            x_mut = flat_vec.copy()
+            x_mut[lo:hi] = 0.0
+            p_mut = float(self._forward(self._prepare_input(x_mut)).get("entry_prob", np.nan))
+            probs.append(p_mut)
+            deltas.append(p_mut - base)
+        return np.array(deltas, dtype=np.float32), np.array(probs, dtype=np.float32)
+
+    # --------------- plotting ---------------
+    def plot_attention_heatmap(self, attention_weights, layer_idx=-1, head_idx=0, save_path: Optional[str] = None):
+        if isinstance(attention_weights, list) and len(attention_weights) > 0:
+            attn = attention_weights[0]; attn = attn.detach().cpu() if torch.is_tensor(attn) else torch.as_tensor(attn)
+        elif torch.is_tensor(attention_weights):
+            attn = attention_weights.detach().cpu()
+        else:
+            attn = torch.as_tensor(attention_weights)
+        if attn.dim() == 4 and attn.size(0) == 1: attn = attn[0]
+        if attn.dim() == 3: attn2d = attn[head_idx if head_idx < attn.size(0) else 0]
+        elif attn.dim() == 2: attn2d = attn
+        else: raise ValueError(f"Unexpected attention shape: {tuple(attn.shape)}")
+        a = attn2d.numpy()
+        plt.figure(figsize=(11, 10))
+        plt.imshow(a, aspect="auto")
+        plt.title(f"Attention Heatmap — Layer {layer_idx}, Head {head_idx}")
+        plt.xlabel("Key position"); plt.ylabel("Query position")
+        plt.colorbar(); plt.tight_layout()
+        if save_path: self._ensure_parent(save_path); plt.savefig(save_path, bbox_inches="tight"); plt.close()
+        else: plt.show()
+
+    def plot_attention_timeline(self, attention_weights_list: List[torch.Tensor], save_path: Optional[str] = None):
+        if not attention_weights_list: return
+        lens: List[int] = []
+        for w in attention_weights_list:
+            w = w.detach().cpu() if torch.is_tensor(w) else torch.as_tensor(w)
+            if w.dim() == 4 and w.size(0) == 1: w = w[0]
+            L = int(w.shape[-1]); lens.append(L)
+        plt.figure(figsize=(14, 5.5))
+        plt.plot(lens)
+        plt.title("Attention map sizes per captured layer")
+        plt.xlabel("Captured layer index"); plt.ylabel("Sequence length (T)")
         plt.tight_layout()
-        plt.show()
-        
-        # Print calibration stats
-        high_conf = actual_returns[entry_probs > 0.7]
-        low_conf = actual_returns[entry_probs < 0.3]
-        
-        print("\n📊 Decision Boundary Analysis:")
-        print(f"High confidence (>0.7) samples: {len(high_conf)}")
-        print(f"  - Win rate: {(high_conf > 0).mean():.2%}")
-        print(f"  - Avg return: {high_conf.mean():.2%}")
-        print(f"\nLow confidence (<0.3) samples: {len(low_conf)}")
-        print(f"  - Win rate: {(low_conf > 0).mean():.2%}")
-        print(f"  - Avg return: {low_conf.mean():.2%}")
+        if save_path: self._ensure_parent(save_path); plt.savefig(save_path, bbox_inches="tight"); plt.close()
+        else: plt.show()
+
+    def plot_feature_importance(self, importance_dict: Dict[str, float], top_n: int = 30, save_path: Optional[str] = None):
+        items = sorted(importance_dict.items(), key=lambda x: -x[1])[:top_n]
+        labels = [k for k, _ in items]; vals = [float(v) for _, v in items]
+        y = np.arange(len(labels))[::-1]
+        plt.figure(figsize=(11, 7.5))
+        plt.barh(y, vals); plt.yticks(y, labels)
+        plt.title(f"Top {top_n} Features (saliency)"); plt.tight_layout()
+        if save_path: self._ensure_parent(save_path); plt.savefig(save_path, bbox_inches="tight"); plt.close()
+        else: plt.show()
+
+    def visualize_regime_space(self, test_sequences: np.ndarray, test_returns: np.ndarray,
+                               max_points: int = 1000, save_path: Optional[str] = None) -> None:
+        regime_embeddings: List[np.ndarray] = []; returns_list: List[float] = []
+        take = min(max_points, len(test_sequences))
+        for i in range(take):
+            x3 = self._prepare_input(test_sequences[i])
+            with torch.no_grad(): preds = self.model(x3)
+            if isinstance(preds, dict) and "regime_z" in preds and torch.is_tensor(preds["regime_z"]):
+                regime_embeddings.append(preds["regime_z"].detach().cpu().view(-1).numpy())
+                returns_list.append(float(test_returns[i]))
+        if not regime_embeddings: return
+        regime_embeddings = np.array(regime_embeddings); returns_list = np.array(returns_list)
+
+        from sklearn.decomposition import PCA
+        regime_2d = PCA(n_components=2).fit_transform(regime_embeddings) if regime_embeddings.shape[1] > 2 else regime_embeddings
+        plt.figure(figsize=(9.5, 7.5))
+        sc = plt.scatter(regime_2d[:, 0], regime_2d[:, 1], c=returns_list, cmap="RdYlGn", s=20, alpha=0.75)
+        plt.colorbar(sc, label="Future Return"); plt.xlabel("Regime Dim 1"); plt.ylabel("Regime Dim 2")
+        plt.title("Learned Market Regime Space"); plt.grid(True, alpha=0.3); plt.tight_layout()
+        if save_path: self._ensure_parent(save_path); plt.savefig(save_path, bbox_inches="tight"); plt.close()
+        else: plt.show()
+
+    def predict_entry_proba(self, X: np.ndarray) -> np.ndarray:
+        if X is None or len(X) == 0: return np.array([], dtype=np.float32)
+        probs: List[float] = []
+        with torch.no_grad():
+            for i in range(len(X)):
+                x3 = self._prepare_input(X[i]); out = self.model(x3)
+                p = None
+                if isinstance(out, dict):
+                    if "entry_prob" in out and torch.is_tensor(out["entry_prob"]):
+                        p = float(out["entry_prob"].detach().cpu().view(-1)[-1].item())
+                    elif "entry_logits" in out:
+                        el = out["entry_logits"]
+                        p = float(torch.sigmoid(el).detach().cpu().view(-1)[-1].item()) if torch.is_tensor(el) else 1/(1+np.exp(-float(el)))
+                elif torch.is_tensor(out):
+                    v = out.detach().cpu().view(-1); p = float(v[0].item()) if v.numel() > 0 else None
+                probs.append(np.nan if p is None else p)
+        return np.asarray(probs, dtype=np.float32)

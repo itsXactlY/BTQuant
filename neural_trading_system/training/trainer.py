@@ -49,7 +49,7 @@ class MultiTaskLoss(nn.Module):
         loss = alpha * (1.0 - pt) ** gamma * bce
         return loss.mean()
 
-    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.01) -> torch.Tensor:
+    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.1) -> torch.Tensor:
         """Compute attention entropy regularization to prevent collapse."""
         if not attention_weights:
             return torch.tensor(0.0, device=self.log_vars.device)
@@ -62,7 +62,6 @@ class MultiTaskLoss(nn.Module):
                 continue
             
             # attn shape: [B, num_heads, seq_len, seq_len]
-            # Average over heads and batch
             attn_avg = attn.mean(dim=1)  # [B, seq_len, seq_len]
             
             # Compute entropy for each position
@@ -71,9 +70,14 @@ class MultiTaskLoss(nn.Module):
                 dim=-1
             ).mean()
             
-            # We want to MAXIMIZE entropy (prevent collapse)
-            # So we minimize the negative entropy
-            total_entropy_loss -= entropy
+            # Penalize if entropy is too low (mode collapse)
+            min_entropy_threshold = 2.0
+            if entropy < min_entropy_threshold:
+                penalty = (min_entropy_threshold - entropy) ** 2
+                total_entropy_loss += penalty
+            else:
+                total_entropy_loss += entropy  # Maximize entropy if above threshold
+            
             count += 1
         
         if count == 0:
@@ -81,149 +85,132 @@ class MultiTaskLoss(nn.Module):
         
         return weight * (total_entropy_loss / count)
 
+    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
+        """Ramp exit weight linearly from 1.0 to max_boost over ramp_epochs."""
+        if ramp_epochs <= 0:
+            r = 1.0
+        else:
+            r = min(1.0, float(max(0, epoch)) / float(ramp_epochs))
+        
+        self._exit_boost = 1.0 + r * (max_boost - 1.0)
+
     def forward(self, predictions: dict, targets: dict):
+        """Compute multi-task loss with debug output."""
         device = predictions['entry_logits'].device
-
-        # ----- ENTRY (focal on logits) -----
-        temp = torch.clamp(self.entry_temp, min=0.1, max=10.0).to(device)
-        entry_logits = predictions['entry_logits'].view(-1) / temp
-        entry_true   = targets['entry_label'].view(-1)
-        alpha_entry  = self._batch_alpha(entry_true)
-        entry_loss   = self._focal_loss(entry_logits, entry_true, alpha=alpha_entry, gamma=2.0)
-
-        # ----- EXIT HEADS (prefer logits; fallback to prob->logit) -----
-        def prob_to_logit(prob: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
-            prob = prob.clamp(eps, 1 - eps)
-            return torch.log(prob) - torch.log1p(-prob)
-
-        exit_signals = predictions.get('exit_signals', {}) or {}
-
-        # take-profit
-        tp_logit = None
-        tp_pack  = exit_signals.get('profit_taking', {}) or {}
-        if 'take_profit_logit' in tp_pack:
-            tp_logit = tp_pack['take_profit_logit']
-        elif 'take_profit_prob' in tp_pack:
-            tp_logit = prob_to_logit(tp_pack['take_profit_prob'])
-
-        tp_loss = torch.tensor(0.0, device=device)
-        if tp_logit is not None and 'take_profit_label' in targets:
-            y = targets['take_profit_label'].view(-1)
-            tp_loss = F.binary_cross_entropy_with_logits(tp_logit.view(-1), y)
-
-        # stop-loss
-        sl_logit = None
-        sl_pack  = exit_signals.get('stop_loss', {}) or {}
-        if 'stop_loss_logit' in sl_pack:
-            sl_logit = sl_pack['stop_loss_logit']
-        elif 'stop_loss_prob' in sl_pack:
-            sl_logit = prob_to_logit(sl_pack['stop_loss_prob'])
-
-        sl_loss = torch.tensor(0.0, device=device)
-        if sl_logit is not None and 'stop_loss_label' in targets:
-            y = targets['stop_loss_label'].view(-1)
-            sl_loss = F.binary_cross_entropy_with_logits(sl_logit.view(-1), y)
-
-        # let-winner-run (hold)
-        hold_logit = None
-        hold_pack  = exit_signals.get('let_winner_run', {}) or {}
-        if 'hold_logit' in hold_pack:
-            hold_logit = hold_pack['hold_logit']
-        elif 'hold_score' in hold_pack:
-            hold_logit = prob_to_logit(hold_pack['hold_score'])
-
-        hold_loss = torch.tensor(0.0, device=device)
-        if hold_logit is not None and 'let_winner_run_label' in targets:
-            y = targets['let_winner_run_label'].view(-1)
-            hold_loss = F.binary_cross_entropy_with_logits(hold_logit.view(-1), y)
-
-        exit_terms = [t for t in (tp_loss, sl_loss, hold_loss)]
-        exit_bundle_loss = torch.stack(exit_terms).mean() if len(exit_terms) else torch.tensor(0.0, device=device)
-
-        # ----- RETURN / VOL / VAE -----
+        
+        # ======== ENTRY ========
+        entry_logits = predictions['entry_logits'].view(-1)
+        entry_true = targets['entry_label'].view(-1).float()
+        
+        alpha_entry = self._batch_alpha(entry_true)
+        entry_loss = self._focal_loss(entry_logits, entry_true, alpha=alpha_entry, gamma=2.0)
+        
+        # ======== RETURN ========
         ret_pred = predictions['expected_return'].view(-1)
         ret_true = targets['future_return'].view(-1)
         return_loss = F.smooth_l1_loss(ret_pred, ret_true)
-
+        
+        # ======== VOLATILITY ========
         vol_pred = predictions['volatility_forecast'].view(-1)
         vol_true = targets['actual_volatility'].view(-1)
         volatility_loss = F.mse_loss(vol_pred, vol_true)
-
-        vae_recon  = predictions.get('vae_recon', None)
-        seq_repr   = predictions.get('sequence_repr', None)
-        regime_mu  = predictions.get('regime_mu', None)
-        regime_lv  = predictions.get('regime_logvar', None)
-
-        if vae_recon is not None and seq_repr is not None:
-            vae_recon_loss = F.mse_loss(vae_recon, seq_repr)
-        else:
-            vae_recon_loss = torch.tensor(0.0, device=device)
-
-        if regime_mu is not None and regime_lv is not None:
-            regime_lv = torch.clamp(regime_lv, min=-10, max=10)
-            kl_loss = -0.5 * torch.sum(1 + regime_lv - regime_mu.pow(2) - regime_lv.exp(), dim=1).mean()
-        else:
-            kl_loss = torch.tensor(0.0, device=device)
-
+        
+        # ======== VAE ========
+        vae_recon_loss = torch.tensor(0.0, device=device)
+        kl_loss = torch.tensor(0.0, device=device)
+        
+        if 'vae_recon' in predictions and 'sequence_repr' in predictions:
+            vae_recon_loss = F.mse_loss(predictions['vae_recon'], predictions['sequence_repr'])
+        
+        if 'regime_mu' in predictions and 'regime_logvar' in predictions:
+            mu = predictions['regime_mu']
+            lv = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
+            kl_loss = -0.5 * torch.sum(1 + lv - mu.pow(2) - lv.exp(), dim=1).mean()
+        
         vae_loss = vae_recon_loss + 1e-5 * kl_loss
-
-        # ----- DIVERSITY + CONFIDENCE (guarded) -----
-        entry_probs = predictions.get('entry_prob', torch.sigmoid(predictions['entry_logits'])).view(-1)
-        if entry_probs.numel() >= 2:
-            entry_std = entry_probs.float().std(correction=0)
-            exit_std  = entry_probs.float().std(correction=0)  # reuse if no unified exit prob
-        else:
-            entry_std = torch.tensor(0.0, device=device)
-            exit_std  = torch.tensor(0.0, device=device)
-
-        diversity_penalty  = 1.0 / (entry_std + 1e-3) + 1.0 / (exit_std + 1e-3)
-        confidence_penalty = torch.mean(torch.exp(-10 * (entry_probs - 0.5).pow(2)))
-
-        # ----- uncertainty-weighted sum -----
-        precision_entry  = torch.exp(-self.log_vars[0])
-        precision_return = torch.exp(-self.log_vars[2])
-        precision_vol    = torch.exp(-self.log_vars[3])
-        precision_vae    = torch.exp(-self.log_vars[4])
-
-        # Compute attention entropy loss (prevent collapse)
+        
+        # ======== EXIT (TP/SL) ========
+        exit_logits_tp = predictions.get('take_profit_logits', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_logits_sl = predictions.get('stop_loss_logits', torch.zeros(len(entry_true), device=device)).view(-1)
+        exit_true_tp = targets['take_profit_label'].view(-1).float()
+        exit_true_sl = targets['stop_loss_label'].view(-1).float()
+        
+        exit_loss_tp = F.binary_cross_entropy_with_logits(exit_logits_tp, exit_true_tp)
+        exit_loss_sl = F.binary_cross_entropy_with_logits(exit_logits_sl, exit_true_sl)
+        exit_bundle_loss = exit_loss_tp + exit_loss_sl
+        
+        # ======== REGULARIZATION ========
         attention_weights = predictions.get('attention_weights', [])
-        entropy_reg_loss = self.compute_attention_entropy_loss(
-            attention_weights,
-            weight=0.15  # INCREASED: Stronger regularization to prevent collapse  # Regularization strength
-        )
-
-        # DEBUG: Log entropy loss value (remove after confirming it works)
-        if torch.is_tensor(entropy_reg_loss) and entropy_reg_loss.item() != 0.0:
-            if not hasattr(self, '_entropy_log_count'):
-                self._entropy_log_count = 0
-            self._entropy_log_count += 1
-            # if self._entropy_log_count % 100 == 0:  # Log every 100 batches
-            #     print(f"[DEBUG] Entropy reg loss: {entropy_reg_loss.item():.6f}")
-
-        total_loss = (
-            self.task_weights["entry"] * (precision_entry * entry_loss + self.log_vars[0]) +
-            self._exit_boost * (exit_bundle_loss) +
-            self.task_weights["return"] * (precision_return * return_loss + self.log_vars[2]) +
-            self.task_weights["volatility"] * (precision_vol * volatility_loss + self.log_vars[3]) +
-            self.task_weights["vae"] * (precision_vae * vae_loss + self.log_vars[4]) +
-            0.01 * diversity_penalty +
-            0.05 * confidence_penalty +
-            entropy_reg_loss  # NEW: Prevent attention collapse
-        )
-
+        entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=0.1)
+        
+        # TODO :: PLAN B
+        # entropy_reg_loss = torch.tensor(0.0, device=device)
+        
+        diversity_penalty = torch.tensor(0.0, device=device)
+        confidence_penalty = torch.tensor(0.0, device=device)
+        
+        # ======== DEBUG OUTPUT ========
+        # print(f"\n{'='*80}")
+        # print(f"LOSS COMPONENT BREAKDOWN")
+        # print(f"{'='*80}")
+        # print(f"entry_loss:         {entry_loss.item():.6f}")
+        # print(f"return_loss:        {return_loss.item():.6f}")
+        # print(f"volatility_loss:    {volatility_loss.item():.6f}")
+        # print(f"vae_loss:           {vae_loss.item():.6f}")
+        # print(f"exit_bundle_loss:   {exit_bundle_loss.item():.6f}")
+        # print(f"entropy_reg_loss:   {entropy_reg_loss.item():.6f}")
+        # print(f"diversity_penalty:  {diversity_penalty.item():.6f}")
+        # print(f"confidence_penalty: {confidence_penalty.item():.6f}")
+        # print(f"\nlog_vars: {self.log_vars.detach()}")
+        # print(f"_exit_boost: {self._exit_boost}")
+        
+        # ======== COMPUTE TOTAL LOSS (FIXED FORMULA) ========
+        # CLAMPED log_vars to prevent extreme negative values
+        log_vars_clamped = torch.clamp(self.log_vars, min=-10, max=10)
+        
+        # Precisions (inverse variance weighting)
+        precision_entry = torch.exp(-log_vars_clamped[0])
+        precision_return = torch.exp(-log_vars_clamped[2])
+        precision_vol = torch.exp(-log_vars_clamped[3])
+        precision_vae = torch.exp(-log_vars_clamped[4])
+        
+        # Build loss with uncertainty weighting
+        term1 = self.task_weights["entry"] * (precision_entry * entry_loss + log_vars_clamped[0])
+        term2 = self._exit_boost * exit_bundle_loss
+        term3 = self.task_weights["return"] * (precision_return * return_loss + log_vars_clamped[2])
+        term4 = self.task_weights["volatility"] * (precision_vol * volatility_loss + log_vars_clamped[3])
+        term5 = self.task_weights["vae"] * (precision_vae * vae_loss + log_vars_clamped[4])
+        term6 = entropy_reg_loss
+        
+        print(f"\nTERM BREAKDOWN:")
+        print(f"term1 (entry):       {term1.item():.6f}")
+        print(f"term2 (exit):        {term2.item():.6f}")
+        print(f"term3 (return):      {term3.item():.6f}")
+        print(f"term4 (volatility):  {term4.item():.6f}")
+        print(f"term5 (vae):         {term5.item():.6f}")
+        print(f"term6 (entropy):     {term6.item():.6f}")
+        
+        total_loss = term1 + term2 + term3 + term4 + term5 + term6
+        
+        print(f"\nFINAL: total_loss = {total_loss.item():.6f}")
+        print(f"⚠️  IS_NEGATIVE: {total_loss.item() < 0}")
+        print(f"⚠️  IS_NaN: {torch.isnan(total_loss)}")
+        print(f"⚠️  IS_Inf: {torch.isinf(total_loss)}")
+        print(f"{'='*80}\n")
+        
+        # Clamp total loss to prevent negative values from propagating
+        if total_loss.item() < 0:
+            print(f"⚠️  NEGATIVE LOSS DETECTED! Clamping to 0.1")
+            total_loss = torch.clamp(total_loss, min=0.1)
+        
         return {
             'total_loss': total_loss,
-            'entry_loss': float(entry_loss.detach()),
-            'return_loss': float(return_loss.detach()),
-            'volatility_loss': float(volatility_loss.detach()),
-            'vae_loss': float(vae_loss.detach()),
-            'take_profit_loss': float(tp_loss.detach()),
-            'stop_loss_loss': float(sl_loss.detach()),
-            'let_run_loss': float(hold_loss.detach()),
-            'exit_bundle_loss': float(exit_bundle_loss.detach()),
-            'diversity_penalty': float(diversity_penalty.detach()),
-            'confidence_penalty': float(confidence_penalty.detach()),
-            'entropy_loss': float(entropy_reg_loss.detach())  # NEW: Track entropy regularization: self.log_vars.detach().cpu().numpy(),
+            'entry_loss': entry_loss,
+            'return_loss': return_loss,
+            'volatility_loss': volatility_loss,
+            'vae_loss': vae_loss,
+            'exit_bundle_loss': exit_bundle_loss,
+            'entropy_reg_loss': entropy_reg_loss,
         }
 
 # ============================================================

@@ -225,6 +225,7 @@ class NeuralTrainer:
         self.scaler = torch.amp.GradScaler(enabled=self.use_amp)
 
         self.use_wandb = config.get('use_wandb', False)
+        self.global_batch_step = 0
         if self.use_wandb:
             try:
                 import wandb
@@ -249,6 +250,9 @@ class NeuralTrainer:
 
         self.best_val_loss = float('inf')
         self.patience_counter = 0
+        self.loss_history = []
+        self.last_epoch_train_components = {}
+        self.last_epoch_val_components = {}
 
     # ---------- small helpers ----------
     def _sf(self, x):
@@ -272,6 +276,67 @@ class NeuralTrainer:
                 return float('nan')
             return float(((p - t)**2).mean().item())
 
+    def _log_to_wandb(self, *, step: int, epoch: int, train_loss, train_components, val_loss,
+                      val_components, entry_acc, exit_acc, lr_now, probe_metrics=None):
+        """Send aggregated metrics to Weights & Biases with consistent namespaces."""
+        if not (self.use_wandb and self.wandb is not None):
+            return
+
+        import psutil
+
+        payload = {
+            'epoch': epoch,
+            'train/loss': self._sf(train_loss),
+            'val/loss': self._sf(val_loss),
+            'val/entry_accuracy': self._sf(entry_acc),
+            'val/exit_accuracy': self._sf(exit_acc),
+            'optimizer/lr': self._sf(lr_now),
+        }
+
+        for name, value in (train_components or {}).items():
+            payload[f'train/{name}'] = self._sf(value)
+        for name, value in (val_components or {}).items():
+            payload[f'val/{name}'] = self._sf(value)
+
+        grad_norm = getattr(self, 'last_grad_norm', None)
+        if grad_norm is not None:
+            payload['diagnostics/grad_norm'] = self._sf(grad_norm)
+
+        exit_boost = getattr(self.criterion, '_exit_boost', None)
+        if exit_boost is not None:
+            payload['diagnostics/exit_boost'] = float(exit_boost)
+
+        payload['diagnostics/scheduler_lr'] = self._sf(lr_now)
+
+        if torch.cuda.is_available():
+            payload['diagnostics/gpu_memory_mb'] = float(torch.cuda.memory_allocated(self.device) / 1e6)
+        else:
+            payload['diagnostics/cpu_memory_percent'] = float(psutil.virtual_memory().percent)
+
+        if probe_metrics:
+            payload.update(probe_metrics)
+
+        loss_values = [self._sf(v) for v in getattr(self, 'loss_history', [])]
+        sparkline = None
+        if len(loss_values) > 2:
+            lo, hi = min(loss_values), max(loss_values)
+            if hi > lo:
+                chars = "▁▂▃▄▅▆▇█"
+                scaled = np.interp(loss_values, (lo, hi), (1, len(chars)))
+                sparkline = "".join(chars[int(x) - 1] for x in scaled.astype(int))
+
+        if sparkline:
+            payload['dashboard/loss_sparkline'] = sparkline
+
+        if loss_values:
+            history_table = self.wandb.Table(columns=['epoch', 'val_loss'])
+            start_idx = max(0, len(loss_values) - 50)
+            for idx in range(start_idx, len(loss_values)):
+                history_table.add_data(idx, loss_values[idx])
+            payload['dashboard/loss_history'] = history_table
+
+        self.wandb.log(payload, step=step)
+
     def _epoch_probe(self, epoch: int, batch: dict, predictions: dict):
         """Light diagnostics on one minibatch: calibration, quick correlations, attn entropy."""
         import numpy as np
@@ -294,37 +359,38 @@ class NeuralTrainer:
 
             attns = predictions.get('attention_weights', [])
             entropies = []
+            layer0_heads = []
             for layer_idx, A in enumerate(attns):
-                if not isinstance(A, torch.Tensor): continue
-                
-                # Check per-head entropy
+                if not isinstance(A, torch.Tensor):
+                    continue
+
                 per_head_entropy = []
                 for head in range(A.shape[1]):
                     head_attn = A[:, head, :, :].float().clamp(1e-6, 1)
                     H = (-head_attn * head_attn.log()).sum(dim=-1).mean().item()
                     per_head_entropy.append(H)
-                
+
+                if layer_idx == 0:
+                    layer0_heads = per_head_entropy
+
                 print(f"   Layer {layer_idx} per-head entropy: {per_head_entropy}")
-            
-            for A in attns:
-                if not isinstance(A, torch.Tensor): continue
+
                 P = A.float().clamp(1e-6, 1).view(-1, A.shape[-1])  # (B*heads*T, T)
-                H = (-P * P.log()).sum(dim=1).mean().item()
-                entropies.append(H)
+                H_layer = (-P * P.log()).sum(dim=1).mean().item()
+                entropies.append(H_layer)
+
             attn_txt = " / ".join(f"{h:.2f}" for h in entropies) if entropies else "—"
 
             exit_signals = predictions.get('exit_signals', {})
 
-            layer0_heads = per_head_entropy  # From your existing code
             dead_heads = sum(1 for h in layer0_heads if h < 0.1)
-            avg_entropy = sum(layer0_heads) / len(layer0_heads)
+            avg_entropy = (sum(layer0_heads) / len(layer0_heads)) if layer0_heads else 0.0
 
             if dead_heads > 0:
                 print(f"   🔴 ALERT: {dead_heads}/8 heads collapsed (< 0.1 entropy)")
-            if avg_entropy < 0.5:
+            if layer0_heads and avg_entropy < 0.5:
                 print(f"   🟡 WARNING: Layer 0 avg entropy = {avg_entropy:.2f}")
-                
-            # AUTO-STOP if too many dead heads
+
             if dead_heads >= 4 and epoch > 2:
                 print(f"   ☠️ STOPPING: {dead_heads} heads collapsed - model is dead")
                 raise KeyboardInterrupt("Layer 0 collapse detected")
@@ -341,6 +407,39 @@ class NeuralTrainer:
             print(f"   Entry  Brier: {entry_brier:.4f} | Ret Corr: {corr_ret:.3f} | Vol Corr: {corr_vol:.3f}")
             print(f"   Attn entropy per layer: {attn_txt}")
             print(f"   TP μ: {mean_or_dash(tp.get('take_profit_prob'))} | SL μ: {mean_or_dash(sl.get('stop_loss_prob'))} | HOLD μ: {mean_or_dash(lr.get('hold_score'))}")
+
+            def tensor_mean(x):
+                if isinstance(x, torch.Tensor):
+                    return float(x.detach().float().mean().item())
+                return None
+
+            probe_metrics = {
+                'probe/entry_brier': float(entry_brier),
+            }
+
+            if not math.isnan(corr_ret):
+                probe_metrics['probe/return_corr'] = float(corr_ret)
+            if not math.isnan(corr_vol):
+                probe_metrics['probe/vol_corr'] = float(corr_vol)
+            if entropies:
+                probe_metrics['probe/attn_entropy_mean'] = float(np.nanmean(entropies))
+                probe_metrics['probe/attn_entropy_min'] = float(np.nanmin(entropies))
+            if layer0_heads:
+                probe_metrics['probe/layer0_dead_heads'] = float(dead_heads)
+                probe_metrics['probe/layer0_entropy_mean'] = float(avg_entropy)
+
+            tp_prob = tensor_mean(tp.get('take_profit_prob'))
+            sl_prob = tensor_mean(sl.get('stop_loss_prob'))
+            hold_score = tensor_mean(lr.get('hold_score'))
+
+            if tp_prob is not None:
+                probe_metrics['probe/take_profit_prob_mean'] = tp_prob
+            if sl_prob is not None:
+                probe_metrics['probe/stop_loss_prob_mean'] = sl_prob
+            if hold_score is not None:
+                probe_metrics['probe/hold_score_mean'] = hold_score
+
+            return probe_metrics
 
     # ---------- core loops ----------
 
@@ -524,13 +623,16 @@ class NeuralTrainer:
     def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
         """Train for one epoch (AMP-aware, FP32-sanitized exits live in the model)."""
         self.model.train()
-        total_loss = 0.0
-        loss_components = {}
+        total_loss_accum = 0.0
+        component_sums = {}
         self.optimizer.zero_grad()
         
         n_batches = len(self.train_loader)
         
         for batch_idx, batch in enumerate(self.train_loader):
+            batch_idx_global = self.global_batch_step
+            self.global_batch_step += 1
+
             features = batch['features'].to(self.device)
             future_return = batch['future_return'].to(self.device)
             actual_volatility = batch['actual_volatility'].to(self.device)
@@ -571,9 +673,9 @@ class NeuralTrainer:
                     'regime_change_label': regime_change_label,
                 }
             
-            total_loss, loss_components = self.criterion(predictions, targets)
-            loss = total_loss / self.gradient_accumulation_steps
-            
+            total_loss_tensor, batch_components = self.criterion(predictions, targets)
+            loss = total_loss_tensor / self.gradient_accumulation_steps
+
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"[WARNING] NaN/Inf loss detected at batch {batch_idx}, skipping")
                 self.optimizer.zero_grad()
@@ -664,15 +766,13 @@ class NeuralTrainer:
                     self.scaler.update()
                 else:
                     self.optimizer.step()
-                
+
                 self.optimizer.zero_grad()
-            
-            total_loss += self._sf(total_loss)
-            
-            for k, v in loss_components.items():
-                if k == 'total_loss':
-                    continue
-                loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
+
+            total_loss_accum += self._sf(total_loss_tensor)
+
+            for name, value in batch_components.items():
+                component_sums[name] = component_sums.get(name, 0.0) + self._sf(value)
             
             if on_batch and ((batch_idx + 1) % batch_update_every == 0):
                 on_batch(
@@ -681,10 +781,31 @@ class NeuralTrainer:
                     float(self._sf(loss)),
                     self.optimizer.param_groups[0]['lr']
                 )
-        
-        avg_loss = total_loss / max(1, n_batches)
-        avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
-        
+
+            if self.use_wandb and self.wandb is not None:
+                wandb_interval = self.config.get('wandb_log_interval', 0)
+                if wandb_interval and wandb_interval > 0 and ((batch_idx_global + 1) % wandb_interval == 0):
+                    batch_payload = {
+                        'batch/train/loss': self._sf(total_loss_tensor),
+                        'batch/train/lr': self._sf(self.optimizer.param_groups[0]['lr']),
+                    }
+
+                    for name, value in batch_components.items():
+                        batch_payload[f'batch/train/{name}'] = self._sf(value)
+
+                    grad_norm = getattr(self, 'last_grad_norm', None)
+                    if grad_norm is not None:
+                        batch_payload['batch/grad_norm'] = self._sf(grad_norm)
+
+                    exit_boost = getattr(self.criterion, '_exit_boost', None)
+                    if exit_boost is not None:
+                        batch_payload['batch/exit_boost'] = float(exit_boost)
+
+                    self.wandb.log(batch_payload, step=batch_idx_global)
+
+        avg_loss = total_loss_accum / max(1, n_batches)
+        avg_components = {k: v / max(1, n_batches) for k, v in component_sums.items()}
+
         return avg_loss, avg_components
 
     def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
@@ -942,15 +1063,57 @@ class NeuralTrainer:
 
     # Very small fallback if rich_dashboard=False
     def _legacy_train(self, num_epochs):
+        if not hasattr(self, 'loss_history'):
+            self.loss_history = []
+
         for epoch in range(num_epochs):
             self.set_exit_weight_ramp(
                 epoch=epoch,
                 ramp_epochs=self.config.get('exit_ramp_epochs', 10),
                 max_boost=self.config.get('exit_max_boost', 8.0),
             )
-            train_loss, _ = self.train_epoch(epoch)
-            val_loss, _, _, _ = self.validate()
-            self.scheduler.step(float(self._sf(val_loss)))
+            train_loss, train_components = self.train_epoch(epoch)
+            val_loss, val_components, entry_acc, exit_acc = self.validate()
+
+            self.last_epoch_train_components = dict(train_components or {})
+            self.last_epoch_val_components = dict(val_components or {})
+
+            probe_metrics = {}
+            try:
+                first_val = next(iter(self.val_loader))
+                features = first_val['features'].to(self.device)
+                position_context = {
+                    'unrealized_pnl': first_val['unrealized_pnl'].to(self.device).unsqueeze(1),
+                    'time_in_position': first_val['time_in_position'].to(self.device).unsqueeze(1),
+                }
+                with torch.no_grad():
+                    preds = self.model(features, position_context=position_context)
+                probe_metrics = self._epoch_probe(epoch, first_val, preds) or {}
+            except StopIteration:
+                probe_metrics = {}
+
+            val_loss_float = float(self._sf(val_loss))
+            if epoch < self.warmup_epochs:
+                self.warmup_scheduler.step()
+            else:
+                self.scheduler.step(val_loss_float)
+
+            lr_now = self._sf(self.optimizer.param_groups[0]['lr'])
+            self.loss_history.append(self._sf(val_loss))
+
+            self._log_to_wandb(
+                step=epoch,
+                epoch=epoch,
+                train_loss=train_loss,
+                train_components=train_components,
+                val_loss=val_loss,
+                val_components=val_components,
+                entry_acc=entry_acc,
+                exit_acc=exit_acc,
+                lr_now=lr_now,
+                probe_metrics=probe_metrics,
+            )
+
             if self._sf(val_loss) < self._sf(self.best_val_loss):
                 self.best_val_loss = self._sf(val_loss)
                 best_path = self.config.get('best_model_path', 'models/best_model.pt')

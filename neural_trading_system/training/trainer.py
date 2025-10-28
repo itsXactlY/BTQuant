@@ -233,6 +233,12 @@ class NeuralTrainer:
                     config=config,
                     name=config.get('run_name', 'exit_aware_model')
                 )
+                watch_freq = config.get('wandb_watch_freq', 100)
+                wandb.watch(self.model, log='all', log_freq=watch_freq)
+                wandb.config.update({'wandb_watch_freq': watch_freq}, allow_val_change=True)
+                wandb.define_metric('epoch')
+                for metric_name in ('train_loss', 'val_loss', 'entry_accuracy', 'exit_accuracy', 'learning_rate'):
+                    wandb.define_metric(metric_name, step_metric='epoch')
                 self.wandb = wandb
             except ImportError:
                 print("⚠️ wandb not installed, disabling logging")
@@ -728,203 +734,211 @@ class NeuralTrainer:
         import psutil
 
         console = Console()
+        wandb_active = self.use_wandb and self.wandb is not None
 
-        if not self.config.get('rich_dashboard', True):
-            console.print("[yellow]⚠️ Rich dashboard disabled — using simple loop[/yellow]")
-            return self._legacy_train(num_epochs)
+        try:
+            if not self.config.get('rich_dashboard', True):
+                console.print("[yellow]⚠️ Rich dashboard disabled — using simple loop[/yellow]")
+                return self._legacy_train(num_epochs)
 
-        # epoch progress
-        epoch_progress = Progress(
-            TextColumn("[cyan]Epoch[/cyan] {task.fields[epoch]:03d}"),
-            BarColumn(complete_style="bright_magenta"),
-            "[progress.percentage]{task.percentage:>3.1f}%",
-            "•", TextColumn("[green]Train:[/green] {task.fields[loss]:.4f}"),
-            "•", TextColumn("[yellow]Val:[/yellow] {task.fields[val]:.4f}"),
-            "•", TextColumn("[blue]LR:[/blue] {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            expand=True,
-        )
-        epoch_task = epoch_progress.add_task(
-            "Epochs",
-            total=num_epochs,
-            epoch=0,
-            loss=0.0,
-            val=0.0,
-            lr=self._sf(self.optimizer.param_groups[0]['lr'])
-        )
-
-        # training batch progress
-        train_progress = Progress(
-            TextColumn("[white]Train[/white]"),
-            BarColumn(complete_style="magenta"),
-            MofNCompleteColumn(),
-            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
-            "•", TextColumn("lr {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True,
-        )
-        train_task = train_progress.add_task(
-            "Batches",
-            total=max(1, len(self.train_loader)),
-            bloss=0.0,
-            lr=self._sf(self.optimizer.param_groups[0]['lr'])
-        )
-
-        # validation batch progress
-        val_progress = Progress(
-            TextColumn("[white]Validation[/white]"),
-            BarColumn(complete_style="bright_blue"),
-            MofNCompleteColumn(),
-            "•", TextColumn("loss {task.fields[bloss]:.4f}"),
-            "•", TextColumn("lr {task.fields[lr]:.6f}"),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-            expand=True,
-        )
-        val_task = val_progress.add_task(
-            "Batches",
-            total=max(1, len(self.val_loader)),
-            bloss=0.0,
-            lr=self._sf(self.optimizer.param_groups[0]['lr'])
-        )
-
-        # metrics dashboard
-        dashboard = Table(expand=True, show_header=True, header_style="bold white")
-        dashboard.add_column("Metric", justify="left", style="bold cyan")
-        dashboard.add_column("Value", justify="right")
-        self.loss_history = []
-
-        def update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm):
-            table = Table(expand=True, show_header=True, header_style="bold white")
-            table.add_column("Metric", justify="left", style="bold cyan")
-            table.add_column("Value", justify="right")
-
-            table.add_row("Epoch", f"{int(epoch)}")
-            table.add_row("Train Loss", f"{self._sf(train_loss):.5f}")
-            table.add_row("Val Loss",   f"{self._sf(val_loss):.5f}")
-            table.add_row("Entry Acc",  f"{self._sf(entry_acc):.4f}")
-            table.add_row("Exit Acc",   f"{self._sf(exit_acc):.4f}")
-            table.add_row("Grad Norm",  f"{self._sf(grad_norm):.4f}" if grad_norm is not None else "—")
-            table.add_row("LR",         f"{self._sf(lr):.6f}")
-            table.add_row(
-                "GPU Mem (MB)" if torch.cuda.is_available() else "CPU Mem (%)",
-                f"{(torch.cuda.memory_allocated(self.device) / 1e6) if torch.cuda.is_available() else psutil.virtual_memory().percent:.1f}"
+            # epoch progress
+            epoch_progress = Progress(
+                TextColumn("[cyan]Epoch[/cyan] {task.fields[epoch]:03d}"),
+                BarColumn(complete_style="bright_magenta"),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•", TextColumn("[green]Train:[/green] {task.fields[loss]:.4f}"),
+                "•", TextColumn("[yellow]Val:[/yellow] {task.fields[val]:.4f}"),
+                "•", TextColumn("[blue]LR:[/blue] {task.fields[lr]:.6f}"),
+                TimeElapsedColumn(),
+                expand=True,
+            )
+            epoch_task = epoch_progress.add_task(
+                "Epochs",
+                total=num_epochs,
+                epoch=0,
+                loss=0.0,
+                val=0.0,
+                lr=self._sf(self.optimizer.param_groups[0]['lr'])
             )
 
-            if len(self.loss_history) > 2:
-                chars = "▁▂▃▄▅▆▇█"
-                vals = [ self._sf(v) for v in self.loss_history ]
-                lo, hi = min(vals), max(vals)
-                if hi > lo:
-                    scaled = np.interp(vals, (lo, hi), (1, len(chars)))
-                    spark = "".join(chars[int(x) - 1] for x in scaled.astype(int))
-                    table.add_row("Loss Trend", spark)
+            # training batch progress
+            train_progress = Progress(
+                TextColumn("[white]Train[/white]"),
+                BarColumn(complete_style="magenta"),
+                MofNCompleteColumn(),
+                "•", TextColumn("loss {task.fields[bloss]:.4f}"),
+                "•", TextColumn("lr {task.fields[lr]:.6f}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                expand=True,
+            )
+            train_task = train_progress.add_task(
+                "Batches",
+                total=max(1, len(self.train_loader)),
+                bloss=0.0,
+                lr=self._sf(self.optimizer.param_groups[0]['lr'])
+            )
 
-            group.renderables[-1] = table
+            # validation batch progress
+            val_progress = Progress(
+                TextColumn("[white]Validation[/white]"),
+                BarColumn(complete_style="bright_blue"),
+                MofNCompleteColumn(),
+                "•", TextColumn("loss {task.fields[bloss]:.4f}"),
+                "•", TextColumn("lr {task.fields[lr]:.6f}"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                expand=True,
+            )
+            val_task = val_progress.add_task(
+                "Batches",
+                total=max(1, len(self.val_loader)),
+                bloss=0.0,
+                lr=self._sf(self.optimizer.param_groups[0]['lr'])
+            )
 
-        group = Group(epoch_progress, train_progress, val_progress, dashboard)
+            # metrics dashboard
+            dashboard = Table(expand=True, show_header=True, header_style="bold white")
+            dashboard.add_column("Metric", justify="left", style="bold cyan")
+            dashboard.add_column("Value", justify="right")
+            self.loss_history = []
 
-        with Live(group, refresh_per_second=6, console=console, transient=False):
-            for epoch in range(num_epochs):
-                # ramp exit weight this epoch
-                self.set_exit_weight_ramp(
-                    epoch=epoch,
-                    ramp_epochs=self.config.get('exit_ramp_epochs', 10),
-                    max_boost=self.config.get('exit_max_boost', 8.0),
+            def update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr, grad_norm):
+                table = Table(expand=True, show_header=True, header_style="bold white")
+                table.add_column("Metric", justify="left", style="bold cyan")
+                table.add_column("Value", justify="right")
+
+                table.add_row("Epoch", f"{int(epoch)}")
+                table.add_row("Train Loss", f"{self._sf(train_loss):.5f}")
+                table.add_row("Val Loss",   f"{self._sf(val_loss):.5f}")
+                table.add_row("Entry Acc",  f"{self._sf(entry_acc):.4f}")
+                table.add_row("Exit Acc",   f"{self._sf(exit_acc):.4f}")
+                table.add_row("Grad Norm",  f"{self._sf(grad_norm):.4f}" if grad_norm is not None else "—")
+                table.add_row("LR",         f"{self._sf(lr):.6f}")
+                table.add_row(
+                    "GPU Mem (MB)" if torch.cuda.is_available() else "CPU Mem (%)",
+                    f"{(torch.cuda.memory_allocated(self.device) / 1e6) if torch.cuda.is_available() else psutil.virtual_memory().percent:.1f}"
                 )
 
-                # reset train bar
-                train_progress.reset(
-                    train_task,
-                    total=max(1, len(self.train_loader)),
-                    completed=0,
-                    bloss=0.0,
-                    lr=self._sf(self.optimizer.param_groups[0]['lr'])
-                )
+                if len(self.loss_history) > 2:
+                    chars = "▁▂▃▄▅▆▇█"
+                    vals = [ self._sf(v) for v in self.loss_history ]
+                    lo, hi = min(vals), max(vals)
+                    if hi > lo:
+                        scaled = np.interp(vals, (lo, hi), (1, len(chars)))
+                        spark = "".join(chars[int(x) - 1] for x in scaled.astype(int))
+                        table.add_row("Loss Trend", spark)
 
-                def on_train_batch(bi, total, loss, lr):
-                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and math.isnan(loss))) else self._sf(loss)
-                    train_progress.update(train_task, completed=bi, bloss=shown_loss, lr=self._sf(lr))
+                group.renderables[-1] = table
 
-                train_loss, _ = self.train_epoch(epoch, on_batch=on_train_batch, batch_update_every=10)
+            group = Group(epoch_progress, train_progress, val_progress, dashboard)
 
-                # reset val bar
-                val_progress.reset(
-                    val_task,
-                    total=max(1, len(self.val_loader)),
-                    completed=0,
-                    bloss=0.0,
-                    lr=self._sf(self.optimizer.param_groups[0]['lr'])
-                )
+            with Live(group, refresh_per_second=6, console=console, transient=False):
+                for epoch in range(num_epochs):
+                    # ramp exit weight this epoch
+                    self.set_exit_weight_ramp(
+                        epoch=epoch,
+                        ramp_epochs=self.config.get('exit_ramp_epochs', 10),
+                        max_boost=self.config.get('exit_max_boost', 8.0),
+                    )
 
-                def on_val_batch(bi, total, loss, lr):
-                    shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and math.isnan(loss))) else self._sf(loss)
-                    val_progress.update(val_task, completed=bi, bloss=shown_loss, lr=self._sf(lr))
+                    # reset train bar
+                    train_progress.reset(
+                        train_task,
+                        total=max(1, len(self.train_loader)),
+                        completed=0,
+                        bloss=0.0,
+                        lr=self._sf(self.optimizer.param_groups[0]['lr'])
+                    )
 
-                val_loss, _, entry_acc, exit_acc = self.validate(on_batch=on_val_batch, batch_update_every=10)
+                    def on_train_batch(bi, total, loss, lr):
+                        shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and math.isnan(loss))) else self._sf(loss)
+                        train_progress.update(train_task, completed=bi, bloss=shown_loss, lr=self._sf(lr))
 
-                # small batch probe
+                    train_loss, _ = self.train_epoch(epoch, on_batch=on_train_batch, batch_update_every=10)
+
+                    # reset val bar
+                    val_progress.reset(
+                        val_task,
+                        total=max(1, len(self.val_loader)),
+                        completed=0,
+                        bloss=0.0,
+                        lr=self._sf(self.optimizer.param_groups[0]['lr'])
+                    )
+
+                    def on_val_batch(bi, total, loss, lr):
+                        shown_loss = 0.0 if (loss is None or (isinstance(loss, float) and math.isnan(loss))) else self._sf(loss)
+                        val_progress.update(val_task, completed=bi, bloss=shown_loss, lr=self._sf(lr))
+
+                    val_loss, _, entry_acc, exit_acc = self.validate(on_batch=on_val_batch, batch_update_every=10)
+
+                    # small batch probe
+                    try:
+                        self.model.eval()
+                        first_val = next(iter(self.val_loader))
+                        features = first_val['features'].to(self.device)
+                        position_context = {
+                            'unrealized_pnl': first_val['unrealized_pnl'].to(self.device).unsqueeze(1),
+                            'time_in_position': first_val['time_in_position'].to(self.device).unsqueeze(1),
+                        }
+                        with torch.no_grad():
+                            preds = self.model(features, position_context=position_context)
+                        self._epoch_probe(epoch, first_val, preds)
+                    except StopIteration:
+                        pass
+
+                    # step ReduceLROnPlateau with the metric
+                    val_loss_float = float(self._sf(val_loss))
+                    # Apply warmup scheduler for first N epochs, then use ReduceLROnPlateau
+                    if epoch < self.warmup_epochs:
+                        self.warmup_scheduler.step()
+                    else:
+                        self.scheduler.step(val_loss_float)
+
+                    lr_now = self._sf(self.optimizer.param_groups[0]['lr'])
+                    grad_norm = getattr(self, 'last_grad_norm', None)
+                    self.loss_history.append(self._sf(val_loss))
+
+                    epoch_progress.update(
+                        epoch_task,
+                        advance=1,
+                        epoch=int(epoch),
+                        loss=self._sf(train_loss),
+                        val=self._sf(val_loss),
+                        lr=lr_now
+                    )
+                    update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr_now, grad_norm)
+
+                    # logging & checkpoints
+                    if self.use_wandb and self.wandb is not None:
+                        self.wandb.log({
+                            'epoch': epoch,
+                            'train_loss': self._sf(train_loss),
+                            'val_loss': self._sf(val_loss),
+                            'entry_accuracy': self._sf(entry_acc),
+                            'exit_accuracy': self._sf(exit_acc),
+                            'learning_rate': lr_now
+                        })
+
+                    if self._sf(val_loss) < self._sf(self.best_val_loss):
+                        self.best_val_loss = self._sf(val_loss)
+                        self.patience_counter = 0
+                        best_path = self.config.get('best_model_path', 'models/best_model.pt')
+                        self.save_checkpoint(best_path, epoch, self._sf(val_loss))
+                        console.print(f"[green]💾 New best model saved![/green] Val loss: {self._sf(val_loss):.4f}")
+                    else:
+                        self.patience_counter += 1
+                        if self.patience_counter >= self.config.get('patience', 25):
+                            console.print(f"[red]⏹️ Early stopping triggered at epoch {epoch + 1}[/red]")
+                            break
+
+            console.print("\n[bold green]✅ Training completed successfully![/bold green]")
+        finally:
+            if wandb_active:
                 try:
-                    self.model.eval()
-                    first_val = next(iter(self.val_loader))
-                    features = first_val['features'].to(self.device)
-                    position_context = {
-                        'unrealized_pnl': first_val['unrealized_pnl'].to(self.device).unsqueeze(1),
-                        'time_in_position': first_val['time_in_position'].to(self.device).unsqueeze(1),
-                    }
-                    with torch.no_grad():
-                        preds = self.model(features, position_context=position_context)
-                    self._epoch_probe(epoch, first_val, preds)
-                except StopIteration:
+                    self.wandb.finish()
+                except Exception:
                     pass
-
-                # step ReduceLROnPlateau with the metric
-                val_loss_float = float(self._sf(val_loss))
-                # Apply warmup scheduler for first N epochs, then use ReduceLROnPlateau
-                if epoch < self.warmup_epochs:
-                    self.warmup_scheduler.step()
-                else:
-                    self.scheduler.step(val_loss_float)
-
-                lr_now = self._sf(self.optimizer.param_groups[0]['lr'])
-                grad_norm = getattr(self, 'last_grad_norm', None)
-                self.loss_history.append(self._sf(val_loss))
-
-                epoch_progress.update(
-                    epoch_task,
-                    advance=1,
-                    epoch=int(epoch),
-                    loss=self._sf(train_loss),
-                    val=self._sf(val_loss),
-                    lr=lr_now
-                )
-                update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr_now, grad_norm)
-
-                # logging & checkpoints
-                if self.use_wandb and self.wandb is not None:
-                    self.wandb.log({
-                        'epoch': epoch,
-                        'train_loss': self._sf(train_loss),
-                        'val_loss': self._sf(val_loss),
-                        'entry_accuracy': self._sf(entry_acc),
-                        'exit_accuracy': self._sf(exit_acc),
-                        'learning_rate': lr_now
-                    })
-
-                if self._sf(val_loss) < self._sf(self.best_val_loss):
-                    self.best_val_loss = self._sf(val_loss)
-                    self.patience_counter = 0
-                    best_path = self.config.get('best_model_path', 'models/best_model.pt')
-                    self.save_checkpoint(best_path, epoch, self._sf(val_loss))
-                    console.print(f"[green]💾 New best model saved![/green] Val loss: {self._sf(val_loss):.4f}")
-                else:
-                    self.patience_counter += 1
-                    if self.patience_counter >= self.config.get('patience', 25):
-                        console.print(f"[red]⏹️ Early stopping triggered at epoch {epoch + 1}[/red]")
-                        break
-
-        console.print("\n[bold green]✅ Training completed successfully![/bold green]")
 
     # Very small fallback if rich_dashboard=False
     def _legacy_train(self, num_epochs):

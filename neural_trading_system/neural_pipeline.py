@@ -986,16 +986,16 @@ if __name__ == '__main__':
         'save_every': 5,
         
         # === TRACKING ===
-        'use_wandb': False,
-        'run_name': 'exit_aware_btc_1h',
+        'use_wandb': True,
+        'run_name': 'exit_aware_15m_debug', #'run_name': 'exit_aware_btc_1h_v2',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'best_model_path': 'models/best_exit_aware_model.pt',
     }
 
     train_neural_system(
         coin='BTC',
-        interval='1h',
-        start_date='2017-01-01',
+        interval='15m',
+        start_date='2023-01-01',
         end_date='2024-01-01',
         collateral='USDT',
         config=exit_aware_config

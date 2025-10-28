@@ -17,8 +17,8 @@ from rich.panel import Panel
 console = Console()
 
 # PATHS
-MODEL_PATH = "models/best_exit_aware_model_12_production_ready.pt"
-FEATURE_CACHE = "neural_data/features/features_36db232ee667373f_seq100_hor5.pkl"
+MODEL_PATH = "models/best_exit_aware_model.pt"
+FEATURE_CACHE = "neural_data/features/features_8b00f0d3817ad9c7_seq100_hor5.pkl"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

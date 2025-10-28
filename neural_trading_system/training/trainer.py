@@ -24,16 +24,22 @@ class MultiTaskLoss(nn.Module):
         # log_vars: entry, (unused placeholder), return, vol, vae
         self.log_vars = nn.Parameter(torch.zeros(num_tasks))
         self.entry_temp = nn.Parameter(torch.ones(1))
-
         self.task_weights = {
-            "entry": 1.0,
-            "return": 1.5,
-            "volatility": 2.0,
-            "vae": 1.0,
+            'entry': 1.0,
+            'return': 1.5,
+            'volatility': 2.0,
+            'vae': 1.0,
         }
+        self.alpha = 1.5
         self._exit_boost = 1.0  # ramped externally per epoch
 
     # ---------- helpers ----------
+    def compute_grad_norm(self, loss, model_params):
+        """Compute L2 norm of gradients for a single task."""
+        grads = torch.autograd.grad(loss, model_params, retain_graph=True, create_graph=True)
+        grad_norm = torch.norm(torch.stack([torch.norm(g) for g in grads]))
+        return grad_norm
+
     @staticmethod
     def _batch_alpha(y: torch.Tensor, lo: float = 0.25, hi: float = 0.75) -> float:
         """Dynamic α for focal loss based on batch positive rate."""
@@ -49,52 +55,41 @@ class MultiTaskLoss(nn.Module):
         loss = alpha * (1.0 - pt) ** gamma * bce
         return loss.mean()
 
-    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 0.5) -> torch.Tensor:
-        """Prevent attention collapse, especially in early layers."""
+    def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 10.0):
         if not attention_weights:
             return torch.tensor(0.0, device=self.log_vars.device)
         
         total_penalty = 0.0
-        
         for layer_idx, attn in enumerate(attention_weights):
             if not isinstance(attn, torch.Tensor):
                 continue
             
-            # attn: [B, num_heads, seq_len, seq_len]
-            attn_avg = attn.mean(dim=1)  # [B, seq_len, seq_len]
+            # Compute per-head entropy
+            attn_avg = attn.mean(dim=1)  # (B, seq_len, seq_len)
+            entropy = -torch.sum(attn_avg * torch.log(attn_avg + 1e-8), dim=-1).mean()
             
-            # Compute entropy per query position
-            entropy = -torch.sum(
-                attn_avg * torch.log(attn_avg + 1e-8),
-                dim=-1  # Over key positions
-            ).mean()  # Average over batch and queries
-            
-            # Target entropy (uniform distribution over 100 tokens = log(100) ≈ 4.6)
+            # Target entropy: uniform over seq_len tokens
             target_entropy = torch.log(torch.tensor(attn.shape[-1], dtype=torch.float32))
             
-            # Penalty grows quadratically as entropy drops below 50% of target
-            min_acceptable = 0.5 * target_entropy  # e.g., 2.3 for seq_len=100
+            # Penalize heads below 70% of target (not 50%)
+            min_acceptable = 0.7 * target_entropy
             
             if entropy < min_acceptable:
-                # Strong penalty for collapsed attention
-                penalty = ((min_acceptable - entropy) / target_entropy) ** 2
-                
-                # Layer 0 gets EXTRA penalty (it's collapsing first)
-                if layer_idx == 0:
-                    penalty *= 10.0  # Triple penalty for first layer
-                
+                # Quadratic penalty scaled by layer depth
+                layer_scale = 3.0 if layer_idx == 0 else 1.0
+                penalty = layer_scale * ((min_acceptable - entropy) / target_entropy) ** 2
                 total_penalty += penalty
         
         return weight * total_penalty
 
-    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
-        """Ramp exit weight linearly from 1.0 to max_boost over ramp_epochs."""
-        if ramp_epochs <= 0:
-            r = 1.0
+    def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 20, max_boost: float = 4.0):
+        """Logarithmic exit weight growth for smoother gradient transitions."""
+        if ramp_epochs == 0:
+            self.exit_boost = max_boost
         else:
-            r = min(1.0, float(max(0, epoch)) / float(ramp_epochs))
-        
-        self._exit_boost = 1.0 + r * (max_boost - 1.0)
+            progress = min(1.0, float(epoch) / float(ramp_epochs))
+            # Log schedule: very slow initial growth, accelerates toward end
+            self.exit_boost = 1.0 + (max_boost - 1.0) * (np.log1p(progress * 9) / np.log1p(9))
 
     def forward(self, predictions: dict, targets: dict):
         """Compute multi-task loss with debug output."""
@@ -103,7 +98,6 @@ class MultiTaskLoss(nn.Module):
         # ======== ENTRY ========
         entry_logits = predictions['entry_logits'].view(-1)
         entry_true = targets['entry_label'].view(-1).float()
-        
         alpha_entry = self._batch_alpha(entry_true)
         entry_loss = self._focal_loss(entry_logits, entry_true, alpha=alpha_entry, gamma=2.0)
         
@@ -120,15 +114,12 @@ class MultiTaskLoss(nn.Module):
         # ======== VAE ========
         vae_recon_loss = torch.tensor(0.0, device=device)
         kl_loss = torch.tensor(0.0, device=device)
-        
         if 'vae_recon' in predictions and 'sequence_repr' in predictions:
             vae_recon_loss = F.mse_loss(predictions['vae_recon'], predictions['sequence_repr'])
-        
         if 'regime_mu' in predictions and 'regime_logvar' in predictions:
             mu = predictions['regime_mu']
             lv = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
             kl_loss = -0.5 * torch.sum(1 + lv - mu.pow(2) - lv.exp(), dim=1).mean()
-        
         vae_loss = vae_recon_loss + 1e-5 * kl_loss
         
         # ======== EXIT (TP/SL) ========
@@ -142,76 +133,42 @@ class MultiTaskLoss(nn.Module):
         exit_bundle_loss = exit_loss_tp + exit_loss_sl
         
         # ======== REGULARIZATION ========
-        # attention_weights = predictions.get('attention_weights', [])
-        # entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=1.0) # From 0.1
-        
-        # TODO :: PLAN B
-        # entropy_reg_loss = torch.tensor(0.0, device=device)
         attention_weights = predictions.get('attention_weights', [])
-        entropy_reg_loss = self.compute_attention_entropy_loss(
-            attention_weights, 
-            weight=5.0  # Increase from 0.1 to 0.5 for stronger regularization
-        )
+        entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=5.0)
         
-        # diversity_penalty = torch.tensor(0.0, device=device)
-        # confidence_penalty = torch.tensor(0.0, device=device)
+        # ======== COMPUTE TOTAL LOSS ========
+        # STRICTER clamping: exp(-3) to exp(3) = [0.05, 20.09]
+        clamped_logvars = torch.clamp(self.log_vars, min=-3.0, max=3.0)
         
-        # ======== DEBUG OUTPUT ========
-        # print(f"\n{'='*80}")
-        # print(f"LOSS COMPONENT BREAKDOWN")
-        # print(f"{'='*80}")
-        # print(f"entry_loss:         {entry_loss.item():.6f}")
-        # print(f"return_loss:        {return_loss.item():.6f}")
-        # print(f"volatility_loss:    {volatility_loss.item():.6f}")
-        # print(f"vae_loss:           {vae_loss.item():.6f}")
-        # print(f"exit_bundle_loss:   {exit_bundle_loss.item():.6f}")
-        # print(f"entropy_reg_loss:   {entropy_reg_loss.item():.6f}")
-        # print(f"diversity_penalty:  {diversity_penalty.item():.6f}")
-        # print(f"confidence_penalty: {confidence_penalty.item():.6f}")
-        # print(f"\nlog_vars: {self.log_vars.detach()}")
-        # print(f"_exit_boost: {self._exit_boost}")
+        # Compute precisions with HARD CAP
+        prec_entry = torch.exp(-clamped_logvars[0]).clamp(max=10.0)
+        prec_return = torch.exp(-clamped_logvars[2]).clamp(max=10.0)
+        prec_vol = torch.exp(-clamped_logvars[3]).clamp(max=10.0)
+        prec_vae = torch.exp(-clamped_logvars[4]).clamp(max=10.0)
         
-        # ======== COMPUTE TOTAL LOSS (FIXED FORMULA) ========
-        # CLAMPED log_vars to prevent extreme negative values
-        log_vars_clamped = torch.clamp(self.log_vars, min=-10, max=10)
+        # Build weighted loss terms
+        # Use explicit float() to ensure scalar multiplication
+        w_entry = float(self.task_weights['entry'])
+        w_return = float(self.task_weights['return'])
+        w_vol = float(self.task_weights['volatility'])
+        w_vae = float(self.task_weights['vae'])
         
-        # Precisions (inverse variance weighting)
-        precision_entry = torch.exp(-log_vars_clamped[0])
-        precision_return = torch.exp(-log_vars_clamped[2])
-        precision_vol = torch.exp(-log_vars_clamped[3])
-        precision_vae = torch.exp(-log_vars_clamped[4])
-        
-        # Build loss with uncertainty weighting
-        term1 = self.task_weights["entry"] * (precision_entry * entry_loss + log_vars_clamped[0])
+        term1 = w_entry * (prec_entry * entry_loss + clamped_logvars[0])
         term2 = self._exit_boost * exit_bundle_loss
-        term3 = self.task_weights["return"] * (precision_return * return_loss + log_vars_clamped[2])
-        term4 = self.task_weights["volatility"] * (precision_vol * volatility_loss + log_vars_clamped[3])
-        term5 = self.task_weights["vae"] * (precision_vae * vae_loss + log_vars_clamped[4])
+        term3 = w_return * (prec_return * return_loss + clamped_logvars[2])
+        term4 = w_vol * (prec_vol * volatility_loss + clamped_logvars[3])
+        term5 = w_vae * (prec_vae * vae_loss + clamped_logvars[4])
         term6 = entropy_reg_loss
-        
-        # print(f"\nTERM BREAKDOWN:")
-        # print(f"term1 (entry):       {term1.item():.6f}")
-        # print(f"term2 (exit):        {term2.item():.6f}")
-        # print(f"term3 (return):      {term3.item():.6f}")
-        # print(f"term4 (volatility):  {term4.item():.6f}")
-        # print(f"term5 (vae):         {term5.item():.6f}")
-        # print(f"term6 (entropy):     {term6.item():.6f}")
         
         total_loss = term1 + term2 + term3 + term4 + term5 + term6
         
-        # print(f"\nFINAL: total_loss = {total_loss.item():.6f}")
-        # print(f"⚠️  IS_NEGATIVE: {total_loss.item() < 0}")
-        # print(f"⚠️  IS_NaN: {torch.isnan(total_loss)}")
-        # print(f"⚠️  IS_Inf: {torch.isinf(total_loss)}")
-        # print(f"{'='*80}\n")
-        
-        # Clamp total loss to prevent negative values from propagating
+        # Safety clamp for negative losses
         if total_loss.item() < 0:
-            print(f"⚠️  NEGATIVE LOSS DETECTED! Clamping to 0.1")
+            print(f"⚠️ NEGATIVE LOSS DETECTED! Clamping to 0.1")
             total_loss = torch.clamp(total_loss, min=0.1)
         
-        return {
-            'total_loss': total_loss,
+        # Return as tuple (total_loss, components_dict)
+        return total_loss, {
             'entry_loss': entry_loss,
             'return_loss': return_loss,
             'volatility_loss': volatility_loss,
@@ -420,8 +377,6 @@ class NeuralTrainer:
                 if stop_loss_label.dim() == 2:
                     stop_loss_label = stop_loss_label.squeeze(-1)
                 
-                batch_size = len(unrealized_pnl)
-                
                 position_context = {
                     'unrealized_pnl': unrealized_pnl.unsqueeze(-1),  # [B] → [B, 1] for model
                     'time_in_position': time_in_position
@@ -439,14 +394,28 @@ class NeuralTrainer:
                     'regime_change_label': regime_change_label,
                 }
                 
-                out = self.criterion(predictions, targets)
-                total_loss += self._sf(out['total_loss'])
+                # out = self.criterion(predictions, targets)
+                # total_loss += self._sf(out['total_loss'])
                 
-                for k, v in out.items():
-                    if k == 'total_loss':
-                        continue
+                # for k, v in out.items():
+                #     if k == 'total_loss':
+                #         continue
+                #     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
+                
+                # total_loss += self._sf(total_loss)  # Changed from out['total_loss']
+                # for k, v in loss_components.items():
+                #     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
+
+                # Unpack the tuple returned by criterion
+                total_loss_tensor, loss_components_dict = self.criterion(predictions, targets)
+
+                # Accumulate total loss
+                total_loss += self._sf(total_loss_tensor)
+
+                # Accumulate component losses
+                for k, v in loss_components_dict.items():
                     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
-                
+
                 # ====== CHECKPOINT: ENTRY ACCURACY (FIXED) ======
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
                 entry_true = (entry_label > 0.5).float()
@@ -516,13 +485,13 @@ class NeuralTrainer:
                     #     print(f"  in_profit count: {in_profit.sum().item()}")
                     #     print(f"  in_loss count: {in_loss.sum().item()}")
                 
-                if on_batch and ((batch_idx + 1) % batch_update_every == 0):
-                    on_batch(
-                        batch_idx + 1,
-                        n_batches,
-                        float(self._sf(out['total_loss'])),
-                        self.optimizer.param_groups[0]['lr'],
-                    )
+                    if on_batch and ((batch_idx + 1) % batch_update_every == 0):
+                        on_batch(
+                            batch_idx + 1,
+                            n_batches,
+                            float(self._sf(total_loss_tensor)),
+                            self.optimizer.param_groups[0]['lr'],
+                        )
                 
                 batch_counter += 1
         
@@ -596,8 +565,8 @@ class NeuralTrainer:
                     'regime_change_label': regime_change_label,
                 }
             
-            out = self.criterion(predictions, targets)
-            loss = out['total_loss'] / self.gradient_accumulation_steps
+            total_loss, loss_components = self.criterion(predictions, targets)
+            loss = total_loss / self.gradient_accumulation_steps
             
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"[WARNING] NaN/Inf loss detected at batch {batch_idx}, skipping")
@@ -666,8 +635,24 @@ class NeuralTrainer:
                 self.last_grad_norm = total_grad_norm
                 
                 # Clip gradients
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 
+                # Dynamic adjustment: if norms consistently low, relax clipping
+                if hasattr(self, 'grad_history'):
+                    self.grad_history.append(grad_norm)
+                    if len(self.grad_history) > 100:
+                        avg_norm = sum(self.grad_history[-100:]) / 100
+                        if avg_norm < 0.5:
+                            self.current_clip_norm = min(2.0, self.current_clip_norm * 1.01)
+                        elif avg_norm > 0.9:
+                            self.current_clip_norm = max(0.5, self.current_clip_norm * 0.99)
+                else:
+                    self.grad_history = []
+                    self.current_clip_norm = 1.0
+                
+                # if grad_norm > 10.0:
+                #     print(f"⚠️ Large gradient: {grad_norm:.2f}")
+
                 if self.use_amp:
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -676,9 +661,9 @@ class NeuralTrainer:
                 
                 self.optimizer.zero_grad()
             
-            total_loss += self._sf(out['total_loss'])
+            total_loss += self._sf(total_loss)
             
-            for k, v in out.items():
+            for k, v in loss_components.items():
                 if k == 'total_loss':
                     continue
                 loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)

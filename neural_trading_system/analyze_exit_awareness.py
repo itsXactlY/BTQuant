@@ -437,8 +437,8 @@ if __name__ == '__main__':
         test_data = pickle.load(f)
     
     analyzer = ExitAwarenessAnalyzer(
-        model_path='models/best_exit_aware_model_12_production_ready.pt',
-        feature_extractor_path='models/best_exit_aware_model_12_feature_extractor.pkl',
+        model_path='models/best_exit_aware_model.pt',
+        feature_extractor_path='models/exit_aware_BTC_1h_2017-01-01_2024-01-01_feature_extractor.pkl',
         test_data=test_data
     )
     

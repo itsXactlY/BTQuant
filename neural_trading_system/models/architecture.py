@@ -36,52 +36,44 @@ class PositionalEncoding(nn.Module):
 # Transformer block (batch_first MHA + FFN)
 # ---------------------------------------------------------------------
 
+import torch.nn.utils.spectral_norm as spectral_norm
+
 class TransformerBlock(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout, layer_idx=0, num_layers=6):
         super().__init__()
         
-        # ADAPTIVE ATTENTION DROPOUT: Higher for early layers
-        attn_dropout = 0.4 if layer_idx == 0 else 0.15  # ← Layer 0 gets 0.
-
+        # Apply spectral norm to Q, K, V projections
+        attn_dropout = 0.2 if layer_idx == 0 else 0.15  # Less aggressive
         self.mha = nn.MultiheadAttention(
             d_model, num_heads, dropout=attn_dropout, batch_first=True
         )
+        self.mha.in_proj_weight = nn.Parameter(
+            spectral_norm(nn.Linear(d_model, 3*d_model, bias=False)).weight
+        )
+        
+        # Add learnable scalar per Apple's σReparam
+        self.sigma_scale = nn.Parameter(torch.ones(1))
         
         self.ff = nn.Sequential(
-            nn.Linear(d_model, d_ff),
+            spectral_norm(nn.Linear(d_model, d_ff)),
             nn.GELU(),
-            nn.Linear(d_ff, d_model)
+            spectral_norm(nn.Linear(d_ff, d_model))
         )
         
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
-        
-        # ADAPTIVE DROPOUT: Lower for early layers
-        adaptive_dropout = dropout * (0.3 + 0.7 * (layer_idx / max(1, num_layers - 1)))
-        self.dropout1 = nn.Dropout(adaptive_dropout)
-        self.dropout2 = nn.Dropout(adaptive_dropout)
+        self.dropout1 = nn.Dropout(0.15)  # Uniform dropout
+        self.dropout2 = nn.Dropout(0.15)
     
-    # def forward(self, x, mask=None):
-    #     attn_out, attn_weights = self.mha(x, x, x, attn_mask=mask, 
-    #                                       need_weights=True, 
-    #                                       average_attn_weights=False)
-    #     x = self.norm1(x + self.dropout1(attn_out))
-    #     ff_out = self.ff(x)
-    #     x = self.norm2(x + self.dropout2(ff_out))
-    #     return x, attn_weights
-    
-    # Plan B
     def forward(self, x, mask=None):
-        # PRE-NORM (more stable)
         attn_out, attn_weights = self.mha(
-            self.norm1(x), self.norm1(x), self.norm1(x),  # ← Norm BEFORE attention
-            attn_mask=mask, 
-            need_weights=True, 
-            average_attn_weights=False
+            self.norm1(x), self.norm1(x), self.norm1(x),
+            attn_mask=mask, need_weights=True, average_attn_weights=False
         )
-        x = x + self.dropout1(attn_out)
-        ff_out = self.ff(self.norm2(x))  # ← Norm BEFORE feedforward
-        x = x + self.dropout2(ff_out)
+        x = x + self.sigma_scale * self.dropout1(attn_out)
+        
+        ff_out = self.ff(self.norm2(x))
+        x = x + self.sigma_scale * self.dropout2(ff_out)
         return x, attn_weights
 
 
@@ -165,81 +157,106 @@ class RegimeChangeDetector(nn.Module):
 # ---------------------------------------------------------------------
 # Exit Heads (FP32-sanitized finals)
 # ---------------------------------------------------------------------
-class ProfitTakingModule(nn.Module):
-    def __init__(self, d_model, latent_dim):
-        super().__init__()
-        self.profit_analyzer = nn.Sequential(
-            nn.Linear(d_model + latent_dim + 3, 256),
-            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(256, 128),
-            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(128, 64), nn.GELU(),
-        )
-        # LOGIT head (no Sigmoid here)
-        self.take_profit_head = nn.Sequential(
-            nn.Linear(64, 32), nn.GELU(),
-            nn.Linear(32, 1)
-        )
-
-    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
-        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
-        x = torch.cat([current_repr, regime_z, position_context], dim=1)
-        features = self.profit_analyzer(x)
-        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
-        with torch.amp.autocast(device_type='cuda', enabled=False):
-            tp_logit = self.take_profit_head(feat32)
-        tp_prob = torch.sigmoid(tp_logit)
-        return {"take_profit_logits": tp_logit, "take_profit_prob": tp_prob}
-
-class StopLossModule(nn.Module):
-    def __init__(self, d_model, latent_dim):
-        super().__init__()
-        self.loss_analyzer = nn.Sequential(
-            nn.Linear(d_model + latent_dim + 3, 256),
-            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(256, 128),
-            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(128, 64), nn.GELU(),
-        )
-        self.stop_loss_head = nn.Sequential(
-            nn.Linear(64, 32), nn.GELU(),
-            nn.Linear(32, 1)
-        )
-
-    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
-        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
-        x = torch.cat([current_repr, regime_z, position_context], dim=1)
-        features = self.loss_analyzer(x)
-        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
-        with torch.amp.autocast(device_type='cuda', enabled=False):
-            sl_logit = self.stop_loss_head(feat32)
-        sl_prob = torch.sigmoid(sl_logit)
-        return {"stop_loss_logits": sl_logit, "stop_loss_prob": sl_prob}
+from torch.nn.utils import spectral_norm
 
 class LetWinnerRunModule(nn.Module):
     def __init__(self, d_model, latent_dim):
         super().__init__()
+        
+        # Apply spectral_norm to each Linear layer separately
         self.hold_analyzer = nn.Sequential(
-            nn.Linear(d_model + latent_dim + 3, 256),
+            spectral_norm(nn.Linear(d_model + latent_dim + 3, 256)),
             nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(256, 128),
+            spectral_norm(nn.Linear(256, 128)),
             nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
-            nn.Linear(128, 64), nn.GELU(),
+            spectral_norm(nn.Linear(128, 64)),
+            nn.GELU(),
         )
+        
         self.let_run_head = nn.Sequential(
-            nn.Linear(64, 32), nn.GELU(),
-            nn.Linear(32, 1)
+            spectral_norm(nn.Linear(64, 32)),
+            nn.GELU(),
+            spectral_norm(nn.Linear(32, 1))
         )
-
+    
     def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
         position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
         x = torch.cat([current_repr, regime_z, position_context], dim=1)
+        
+        # Compute features (spectral_norm ensures bounded gradients)
         features = self.hold_analyzer(x)
-        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp_(-1e4, 1e4)
-        with torch.amp.autocast(device_type='cuda', enabled=False):
-            hold_logit = self.let_run_head(feat32)
+        
+        # Sanitize to FP32 for stability
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp(-1e4, 1e4)
+        
+        # Keep in mixed precision (remove autocast)
+        hold_logit = self.let_run_head(feat32)
         hold_prob = torch.sigmoid(hold_logit)
+        
         return {"hold_logit": hold_logit, "hold_score": hold_prob}
+
+class ProfitTakingModule(nn.Module):
+    def __init__(self, d_model, latent_dim):
+        super().__init__()
+        
+        self.profit_analyzer = nn.Sequential(
+            spectral_norm(nn.Linear(d_model + latent_dim + 3, 256)),
+            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
+            spectral_norm(nn.Linear(256, 128)),
+            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
+            spectral_norm(nn.Linear(128, 64)),
+            nn.GELU(),
+        )
+        
+        self.take_profit_head = nn.Sequential(
+            spectral_norm(nn.Linear(64, 32)),
+            nn.GELU(),
+            spectral_norm(nn.Linear(32, 1))
+        )
+    
+    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
+        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
+        x = torch.cat([current_repr, regime_z, position_context], dim=1)
+        features = self.profit_analyzer(x)
+        
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp(-1e4, 1e4)
+        
+        tp_logit = self.take_profit_head(feat32)
+        tp_prob = torch.sigmoid(tp_logit)
+        
+        return {"take_profit_logits": tp_logit, "take_profit_prob": tp_prob}
+
+
+class StopLossModule(nn.Module):
+    def __init__(self, d_model, latent_dim):
+        super().__init__()
+        
+        self.loss_analyzer = nn.Sequential(
+            spectral_norm(nn.Linear(d_model + latent_dim + 3, 256)),
+            nn.LayerNorm(256), nn.GELU(), nn.Dropout(0.2),
+            spectral_norm(nn.Linear(256, 128)),
+            nn.LayerNorm(128), nn.GELU(), nn.Dropout(0.2),
+            spectral_norm(nn.Linear(128, 64)),
+            nn.GELU(),
+        )
+        
+        self.stop_loss_head = nn.Sequential(
+            spectral_norm(nn.Linear(64, 32)),
+            nn.GELU(),
+            spectral_norm(nn.Linear(32, 1))
+        )
+    
+    def forward(self, current_repr, regime_z, unrealized_pnl, time_in_position, expected_return):
+        position_context = torch.cat([unrealized_pnl, time_in_position, expected_return], dim=1)
+        x = torch.cat([current_repr, regime_z, position_context], dim=1)
+        features = self.loss_analyzer(x)
+        
+        feat32 = torch.nan_to_num(features.float(), 0.0, 0.0, 0.0).clamp(-1e4, 1e4)
+        
+        sl_logit = self.stop_loss_head(feat32)
+        sl_prob = torch.sigmoid(sl_logit)
+        
+        return {"stop_loss_logits": sl_logit, "stop_loss_prob": sl_prob}
 
 # ---------------------------------------------------------------------
 # NeuralTradingModel

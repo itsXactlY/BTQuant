@@ -1,5 +1,6 @@
 # neural_pipeline.py - COMPLETE FILE
 
+import json
 import backtrader as bt
 import polars as pl
 import numpy as np
@@ -25,17 +26,13 @@ from backtrader.indicators.hurst import HurstExponent
 from backtrader.indicators.wavetrend import WaveTrend
 from backtrader.indicators.DamianiVolatmeter import DamianiVolatmeter
 from backtrader.indicators.SqueezeVolatility import SqueezeVolatility
-from backtrader.indicators.StandarizedATR import StandarizedATR
 from backtrader.indicators.RSX import RSX
 from backtrader.indicators.qqemod import QQEMod as QQE
 from backtrader.indicators.MesaAdaptiveMovingAverage import MAMA
 from backtrader.indicators.TrendTriggerFactor import TrendTriggerFactor
 from backtrader.indicators.rmi import RelativeMomentumIndex
 from backtrader.indicators.SchaffTrendCycle import SchaffTrendCycle
-
 from backtrader.indicators.SuperTrend import SuperTrend
-from backtrader.indicators.VumanchuMarketCipher_A import VuManchCipherA
-from backtrader.indicators.VumanchuMarketCipher_B import VuManchCipherB
 from backtrader.indicators.WaddahAttarExplosion import WaddahAttarExplosion
 from backtrader.indicators.vortex import Vortex
 from backtrader.indicators.ultimateoscillator import UltimateOscillator
@@ -45,9 +42,6 @@ from backtrader.indicators.ChaikinMoneyFlow import ChaikinMoneyFlow
 from backtrader.indicators.ChaikinVolatility import ChaikinVolatility
 from backtrader.indicators.Klingeroscillator import KlingerOscillator
 from backtrader.indicators.LaguerreFilter import LaguerreFilter
-from backtrader.indicators.MADR import MADRIndicator
-from backtrader.indicators.MADRV2 import ModifiedMADR
-from backtrader.indicators.SMAA import SSMA
 from backtrader.indicators.SSLChannel import SSLChannel
 from backtrader.indicators.SignalFiller import SignalFiller
 from backtrader.indicators.TrendDirectionForceIndex import TrendDirectionForceIndex
@@ -57,24 +51,21 @@ from backtrader.indicators.ASH import ASH
 from backtrader.indicators.ASI import AccumulativeSwingIndex
 from backtrader.indicators.AccumulativeSwingIndex import AccumulativeSwingIndex
 from backtrader.indicators.FibonacciLevels import FibonacciLevels
-from backtrader.indicators.HeikinAshi import HeikenAshi
 from backtrader.indicators.iDecycler import iDecycler
 from backtrader.indicators.iFisher import iFisher
 from backtrader.indicators.iTrend import iTrend
 from backtrader.indicators.lrsi import LaguerreRSI
-
 from backtrader.indicators.tsi import TrueStrengthIndicator
 from backtrader.indicators.hma import HullMovingAverage
 from backtrader.indicators.zlema import ZeroLagExponentialMovingAverage
 from backtrader.indicators.zlind import ZeroLagIndicator
 from backtrader.indicators.kst import KnowSureThing
-from backtrader.indicators.ols import OLS_Slope_InterceptN
 from backtrader.indicators.psar import ParabolicSAR
 from backtrader.indicators.dpo import DetrendedPriceOscillator
 from backtrader.indicators.dv2 import DV2
 from backtrader.indicators.awesomeoscillator import AwesomeOscillator
 from backtrader.indicators.prettygoodoscillator import PrettyGoodOscillator
-
+from backtrader.indicators.trix import Trix
 
 def find_latest_cache(cache_dir='neural_data/features'):
     """Find the most recent feature cache"""
@@ -235,7 +226,6 @@ class DataCollectionStrategy(bt.Strategy):
             self.laguerrefilter = LaguerreFilter(self.data, plot=False)
             self.damiani = DamianiVolatmeter(self.data, atr_fast=self.p.damiani_atr_fast, std_fast=self.p.damiani_std_fast, atr_slow=self.p.damiani_atr_slow, std_slow=self.p.damiani_std_slow, thresh=self.p.damiani_thresh, plot=False)
             self.squeeze = SqueezeVolatility(self.data, period=self.p.squeeze_period, mult=self.p.squeeze_mult, period_kc=self.p.squeeze_period_kc, mult_kc=self.p.squeeze_mult_kc, plot=False)
-            self.satr = StandarizedATR(self.data, atr_period=self.p.satr_atr_period, std_period=self.p.satr_std_period, plot=False)
             self.chaikin_vol = ChaikinVolatility(self.data, ema_period=self.p.chaikin_vol_period, roc_period=self.p.chaikin_vol_period, plot=False)
         
         # ====================================================================
@@ -275,8 +265,6 @@ class DataCollectionStrategy(bt.Strategy):
         # MARKET CIPHER INDICATORS
         # ====================================================================
         
-        self.vumanchu_a = VuManchCipherA(self.data, plot=False)
-        self.vumanchu_b = VuManchCipherB(self.data, plot=False)
         self.waddah = WaddahAttarExplosion(self.data, fast=self.p.waddah_fast, slow=self.p.waddah_slow, channel=self.p.waddah_channel, mult=self.p.waddah_mult, sensitivity=self.p.waddah_sensitivity, plot=False)
         
         # ====================================================================
@@ -300,12 +288,8 @@ class DataCollectionStrategy(bt.Strategy):
         self.ash = ASH(self.data, plot=False)
         self.asi = AccumulativeSwingIndex(self.data, plot=False)
         self.accswing = AccumulativeSwingIndex(self.data, plot=False)
-        self.madr = MADRIndicator(self.data, window=self.p.madr_period, plot=False)
-        self.madrv2 = ModifiedMADR(self.data, plot=False)
-        self.smaa = SSMA(self.data, period=self.p.smaa_period, plot=False)
         self.sigfiller = SignalFiller(self.data, plot=False)
         self.fib = FibonacciLevels(self.data, plot=False)
-        self.heikinashi = HeikenAshi(self.data, plot=False)
         self.zlind = ZeroLagIndicator(self.data, plot=False)
         self.psar = ParabolicSAR(self.data, af=self.p.psar_af, afmax=self.p.psar_max_af, plot=False)
         self.dpo = DetrendedPriceOscillator(self.data, period=self.p.dpo_period, plot=False)
@@ -331,7 +315,7 @@ class DataCollectionStrategy(bt.Strategy):
         self.ema26 = bt.indicators.EMA(self.data, period=26)
         self.dema = bt.indicators.DEMA(self.data, period=20)
         self.tema = bt.indicators.TEMA(self.data, period=20)
-        self.trix = bt.indicators.TRIX(self.data)
+        self.trix = Trix(self.data)
         self.mom = bt.indicators.Momentum(self.data, period=12)
         self.roc = bt.indicators.RateOfChange(self.data, period=12)
 
@@ -951,6 +935,15 @@ def train_neural_system(
         border_style="green",
     ))
 
+    config_path = config['best_model_path'].replace('.pt', '_config.json')
+    with open(config_path, 'w') as f:
+        # Save only JSON-serializable config
+        json_config = {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool, list, dict))}
+        json.dump(json_config, f, indent=2)
+    
+    console.print(f"[green]✅ Config saved to {config_path}[/green]")
+
+
     return pipeline, trainer, training_data
 
 
@@ -975,7 +968,7 @@ if __name__ == '__main__':
         # === TRAINING ===
         'batch_size': 16,
         'num_epochs': 200,
-        'lr': 2e-5, # 0.0003
+        'lr': 2e-5, # from 0.0003
         'min_lr': 1e-7,
         'weight_decay': 1e-4,
         'grad_accum_steps': 2,
@@ -987,7 +980,7 @@ if __name__ == '__main__':
         
         # === TRACKING ===
         'use_wandb': True,
-        'run_name': 'exit_aware_15m_debug', #'run_name': 'exit_aware_btc_1h_v2',
+        'run_name': 'exit_aware_15m_full', #'run_name': 'exit_aware_btc_1h_v2',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'best_model_path': 'models/best_exit_aware_model.pt',
     }
@@ -995,7 +988,7 @@ if __name__ == '__main__':
     train_neural_system(
         coin='BTC',
         interval='15m',
-        start_date='2023-01-01',
+        start_date='2017-01-01',
         end_date='2024-01-01',
         collateral='USDT',
         config=exit_aware_config

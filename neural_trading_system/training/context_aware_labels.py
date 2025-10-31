@@ -5,18 +5,18 @@ def context_aware_labels_from_returns(
     current_price: float,
     rolling_vol: float,
     max_lookforward: int = 50,
-    tp_pctile: float = 0.60,     # was ~0.75 → make TP easier
-    sl_pctile: float = 0.40,     # was ~0.25 → make SL easier
-    tp_z: float = 0.75,          # how many vols above mean for TP
-    sl_z: float = 0.75,          # how many vols below mean for SL
-    rc_vol_spike: float = 1.8    # regime change if vol spikes this multiple
+    tp_pctile: float = 0.60,
+    sl_pctile: float = 0.40,
+    tp_z: float = 0.75,
+    sl_z: float = 0.75,
+    rc_vol_spike: float = 1.8
 ):
-    """
-    Returns:
-      dict with keys:
-        take_profit_label, stop_loss_label, let_winner_run_label, regime_change_label
-      Each is a float in [0,1].
-    """
+\
+\
+\
+\
+\
+
     horizon = min(max_lookforward, len(future_prices))
     if horizon < 5:
         return dict(
@@ -29,7 +29,6 @@ def context_aware_labels_from_returns(
     fp = future_prices[:horizon]
     future_rets = (fp - current_price) / max(current_price, 1e-12)
 
-    # volatility-scaled thresholds
     vol = max(float(rolling_vol), 1e-6)
     mu = float(np.mean(future_rets))
     sd = float(np.std(future_rets) + 1e-9)
@@ -42,14 +41,10 @@ def context_aware_labels_from_returns(
     peak_idx = int(np.argmax(future_rets))
     trough_idx = int(np.argmin(future_rets))
 
-    # ── labels
-    # TP: hit a decent gain reasonably soon
     tp = 1.0 if (peak_ret >= tp_thresh and peak_idx <= 10) else (0.7 if peak_idx <= 20 and peak_ret >= tp_thresh else 0.0)
 
-    # SL: hit a meaningful drawdown reasonably soon
     sl = 1.0 if (trough_ret <= sl_thresh and trough_idx <= 7) else (0.7 if trough_idx <= 14 and trough_ret <= sl_thresh else 0.0)
 
-    # Let-winner-run: later-window mean beats near-window mean, and overall gain
     if horizon >= 20:
         near = float(np.mean(future_rets[:10]))
         far  = float(np.mean(future_rets[10:20]))
@@ -57,7 +52,6 @@ def context_aware_labels_from_returns(
     else:
         lr = 1.0 if peak_ret >= tp_thresh else 0.0
 
-    # Regime change: volatility spike
     if horizon >= 10:
         recent_vol = float(np.std(future_rets[:5]) + 1e-9)
         future_vol = float(np.std(future_rets[5:10]) + 1e-9)

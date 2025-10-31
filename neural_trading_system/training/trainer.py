@@ -1,3 +1,4 @@
+from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,20 +9,16 @@ from rich.console import Console
 import torch
 import math
 
-# ============================================================
-# MultiTaskLoss (single, stable implementation)
-# ============================================================
-
 class MultiTaskLoss(nn.Module):
-    """
-    Multi-task loss with ramped exit weight and numerically stable (logits-based) supervision.
-    - Entry: focal on logits
-    - Exits: BCEWithLogits on logits (tp/sl/hold)
-    - Returns/Vol/VAE: standard losses
-    """
+\
+\
+\
+\
+\
+
     def __init__(self, num_tasks: int = 5):
         super().__init__()
-        # log_vars: entry, (unused placeholder), return, vol, vae
+
         self.log_vars = nn.Parameter(torch.zeros(num_tasks))
         self.entry_temp = nn.Parameter(torch.ones(1))
         self.task_weights = {
@@ -31,25 +28,24 @@ class MultiTaskLoss(nn.Module):
             'vae': 1.0,
         }
         self.alpha = 1.5
-        self._exit_boost = 1.0  # ramped externally per epoch
+        self._exit_boost = 1.0
 
-    # ---------- helpers ----------
     def compute_grad_norm(self, loss, model_params):
-        """Compute L2 norm of gradients for a single task."""
+
         grads = torch.autograd.grad(loss, model_params, retain_graph=True, create_graph=True)
         grad_norm = torch.norm(torch.stack([torch.norm(g) for g in grads]))
         return grad_norm
 
     @staticmethod
     def _batch_alpha(y: torch.Tensor, lo: float = 0.25, hi: float = 0.75) -> float:
-        """Dynamic α for focal loss based on batch positive rate."""
+
         with torch.no_grad():
             p = y.float().mean().clamp_(1e-6, 1 - 1e-6).item()
         return float(max(lo, min(hi, 1.0 - p)))
 
     @staticmethod
     def _focal_loss(logits: torch.Tensor, targets: torch.Tensor, alpha: float = 0.5, gamma: float = 2.0) -> torch.Tensor:
-        """Numerically stable focal loss on logits (no in-place ops)."""
+
         bce = F.binary_cross_entropy_with_logits(logits, targets, reduction='none')
         pt  = torch.exp(-bce).clamp(1e-6, 1.0)
         loss = alpha * (1.0 - pt) ** gamma * bce
@@ -58,60 +54,53 @@ class MultiTaskLoss(nn.Module):
     def compute_attention_entropy_loss(self, attention_weights: list, weight: float = 10.0):
         if not attention_weights:
             return torch.tensor(0.0, device=self.log_vars.device)
-        
+
         total_penalty = 0.0
         for layer_idx, attn in enumerate(attention_weights):
             if not isinstance(attn, torch.Tensor):
                 continue
-            
-            # Compute per-head entropy
-            attn_avg = attn.mean(dim=1)  # (B, seq_len, seq_len)
+
+            attn_avg = attn.mean(dim=1)
             entropy = -torch.sum(attn_avg * torch.log(attn_avg + 1e-8), dim=-1).mean()
-            
-            # Target entropy: uniform over seq_len tokens
+
             target_entropy = torch.log(torch.tensor(attn.shape[-1], dtype=torch.float32))
-            
-            # Penalize heads below 70% of target (not 50%)
+
             min_acceptable = 0.7 * target_entropy
-            
+
             if entropy < min_acceptable:
-                # Quadratic penalty scaled by layer depth
+
                 layer_scale = 3.0 if layer_idx == 0 else 1.0
                 penalty = layer_scale * ((min_acceptable - entropy) / target_entropy) ** 2
                 total_penalty += penalty
-        
+
         return weight * total_penalty
 
     def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 20, max_boost: float = 4.0):
-        """Logarithmic exit weight growth for smoother gradient transitions."""
+
         if ramp_epochs == 0:
             self.exit_boost = max_boost
         else:
             progress = min(1.0, float(epoch) / float(ramp_epochs))
-            # Log schedule: very slow initial growth, accelerates toward end
+
             self.exit_boost = 1.0 + (max_boost - 1.0) * (np.log1p(progress * 9) / np.log1p(9))
 
     def forward(self, predictions: dict, targets: dict):
-        """Compute multi-task loss with debug output."""
+
         device = predictions['entry_logits'].device
-        
-        # ======== ENTRY ========
+
         entry_logits = predictions['entry_logits'].view(-1)
         entry_true = targets['entry_label'].view(-1).float()
         alpha_entry = self._batch_alpha(entry_true)
         entry_loss = self._focal_loss(entry_logits, entry_true, alpha=alpha_entry, gamma=2.0)
-        
-        # ======== RETURN ========
+
         ret_pred = predictions['expected_return'].view(-1)
         ret_true = targets['future_return'].view(-1)
         return_loss = F.smooth_l1_loss(ret_pred, ret_true)
-        
-        # ======== VOLATILITY ========
+
         vol_pred = predictions['volatility_forecast'].view(-1)
         vol_true = targets['actual_volatility'].view(-1)
         volatility_loss = F.mse_loss(vol_pred, vol_true)
-        
-        # ======== VAE ========
+
         vae_recon_loss = torch.tensor(0.0, device=device)
         kl_loss = torch.tensor(0.0, device=device)
         if 'vae_recon' in predictions and 'sequence_repr' in predictions:
@@ -121,53 +110,44 @@ class MultiTaskLoss(nn.Module):
             lv = torch.clamp(predictions['regime_logvar'], min=-10, max=10)
             kl_loss = -0.5 * torch.sum(1 + lv - mu.pow(2) - lv.exp(), dim=1).mean()
         vae_loss = vae_recon_loss + 1e-5 * kl_loss
-        
-        # ======== EXIT (TP/SL) ========
+
         exit_logits_tp = predictions.get('take_profit_logits', torch.zeros(len(entry_true), device=device)).view(-1)
         exit_logits_sl = predictions.get('stop_loss_logits', torch.zeros(len(entry_true), device=device)).view(-1)
         exit_true_tp = targets['take_profit_label'].view(-1).float()
         exit_true_sl = targets['stop_loss_label'].view(-1).float()
-        
+
         exit_loss_tp = F.binary_cross_entropy_with_logits(exit_logits_tp, exit_true_tp)
         exit_loss_sl = F.binary_cross_entropy_with_logits(exit_logits_sl, exit_true_sl)
         exit_bundle_loss = exit_loss_tp + exit_loss_sl
-        
-        # ======== REGULARIZATION ========
+
         attention_weights = predictions.get('attention_weights', [])
         entropy_reg_loss = self.compute_attention_entropy_loss(attention_weights, weight=5.0)
-        
-        # ======== COMPUTE TOTAL LOSS ========
-        # STRICTER clamping: exp(-3) to exp(3) = [0.05, 20.09]
+
         clamped_logvars = torch.clamp(self.log_vars, min=-3.0, max=3.0)
-        
-        # Compute precisions with HARD CAP
+
         prec_entry = torch.exp(-clamped_logvars[0]).clamp(max=10.0)
         prec_return = torch.exp(-clamped_logvars[2]).clamp(max=10.0)
         prec_vol = torch.exp(-clamped_logvars[3]).clamp(max=10.0)
         prec_vae = torch.exp(-clamped_logvars[4]).clamp(max=10.0)
-        
-        # Build weighted loss terms
-        # Use explicit float() to ensure scalar multiplication
+
         w_entry = float(self.task_weights['entry'])
         w_return = float(self.task_weights['return'])
         w_vol = float(self.task_weights['volatility'])
         w_vae = float(self.task_weights['vae'])
-        
+
         term1 = w_entry * (prec_entry * entry_loss + clamped_logvars[0])
         term2 = self._exit_boost * exit_bundle_loss
         term3 = w_return * (prec_return * return_loss + clamped_logvars[2])
         term4 = w_vol * (prec_vol * volatility_loss + clamped_logvars[3])
         term5 = w_vae * (prec_vae * vae_loss + clamped_logvars[4])
         term6 = entropy_reg_loss
-        
+
         total_loss = term1 + term2 + term3 + term4 + term5 + term6
-        
-        # Safety clamp for negative losses
+
         if total_loss.item() < 0:
             print(f"⚠️ NEGATIVE LOSS DETECTED! Clamping to 0.1")
             total_loss = torch.clamp(total_loss, min=0.1)
-        
-        # Return as tuple (total_loss, components_dict)
+
         return total_loss, {
             'entry_loss': entry_loss,
             'return_loss': return_loss,
@@ -177,12 +157,8 @@ class MultiTaskLoss(nn.Module):
             'entropy_reg_loss': entropy_reg_loss,
         }
 
-# ============================================================
-# Trainer
-# ============================================================
-
 class NeuralTrainer:
-    """Enhanced trainer with exit management tracking + rich dashboard + epoch probes."""
+
     def __init__(self, model, train_loader, val_loader, config: dict,
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.model = model.to(device)
@@ -199,24 +175,22 @@ class NeuralTrainer:
             eps=1e-8
         )
 
-        # Use ReduceLROnPlateau and step with val loss
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min',
             factor=config.get('lr_factor', 0.5))
 
-        # Learning rate warmup scheduler
         self.warmup_epochs = config.get('warmup_epochs', 5)
         self.base_lr = config.get('lr', 7e-5)
 
         def lr_lambda(epoch):
             if epoch < self.warmup_epochs:
-                # Linear warmup
+
                 return float(epoch + 1) / float(self.warmup_epochs)
             return 1.0
 
-        self.warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, 
-                                                                  lr_lambda=lr_lambda, 
-                                                                  last_epoch=-1) # Fallback to default
+        self.warmup_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer,
+                                                                  lr_lambda=lr_lambda,
+                                                                  last_epoch=-1)
 
         self.criterion = MultiTaskLoss(num_tasks=5)
         self.gradient_accumulation_steps = config.get('grad_accum_steps', 2)
@@ -254,9 +228,8 @@ class NeuralTrainer:
         self.last_epoch_train_components = {}
         self.last_epoch_val_components = {}
 
-    # ---------- small helpers ----------
     def _sf(self, x):
-        """safe float for dashboard formatting"""
+
         if isinstance(x, torch.Tensor):
             x = x.detach()
             if x.numel() == 1:
@@ -278,7 +251,7 @@ class NeuralTrainer:
 
     def _log_to_wandb(self, *, step: int, epoch: int, train_loss, train_components, val_loss,
                       val_components, entry_acc, exit_acc, lr_now, probe_metrics=None):
-        """Send aggregated metrics to Weights & Biases with consistent namespaces."""
+
         if not (self.use_wandb and self.wandb is not None):
             return
 
@@ -338,7 +311,7 @@ class NeuralTrainer:
         self.wandb.log(payload, step=step)
 
     def _epoch_probe(self, epoch: int, batch: dict, predictions: dict):
-        """Light diagnostics on one minibatch: calibration, quick correlations, attn entropy."""
+
         import numpy as np
         with torch.no_grad():
             entry_prob = predictions.get('entry_prob', torch.sigmoid(predictions['entry_logits']))
@@ -375,7 +348,7 @@ class NeuralTrainer:
 
                 print(f"   Layer {layer_idx} per-head entropy: {per_head_entropy}")
 
-                P = A.float().clamp(1e-6, 1).view(-1, A.shape[-1])  # (B*heads*T, T)
+                P = A.float().clamp(1e-6, 1).view(-1, A.shape[-1])
                 H_layer = (-P * P.log()).sum(dim=1).mean().item()
                 entropies.append(H_layer)
 
@@ -441,24 +414,21 @@ class NeuralTrainer:
 
             return probe_metrics
 
-    # ---------- core loops ----------
-
     def validate(self, on_batch=None, batch_update_every: int = 10):
-        """Validate model on val_loader with FIXED accuracy calculations."""
+
         self.model.eval()
         total_loss = 0.0
         loss_components = {}
-        
-        # FIX: Initialize accumulators BEFORE the loop
+
         entry_correct = 0
         entry_total = 0
         exit_correct = 0
         exit_total = 0
-        
+
         n_batches = len(self.val_loader)
         debug_mode = (n_batches > 0)
         batch_counter = 0
-        
+
         with torch.no_grad():
             for batch_idx, batch in enumerate(self.val_loader):
                 features = batch['features'].to(self.device)
@@ -471,22 +441,21 @@ class NeuralTrainer:
                 regime_change_label = batch['regime_change_label'].to(self.device)
                 unrealized_pnl = batch['unrealized_pnl'].to(self.device)
                 time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
-                
-                # FIX: Ensure shapes are consistent [B] not [B, 1]
+
                 if unrealized_pnl.dim() == 2:
-                    unrealized_pnl = unrealized_pnl.squeeze(-1)  # [B, 1] → [B]
+                    unrealized_pnl = unrealized_pnl.squeeze(-1)
                 if entry_label.dim() == 2:
                     entry_label = entry_label.squeeze(-1)
                 if take_profit_label.dim() == 2:
                     take_profit_label = take_profit_label.squeeze(-1)
                 if stop_loss_label.dim() == 2:
                     stop_loss_label = stop_loss_label.squeeze(-1)
-                
+
                 position_context = {
-                    'unrealized_pnl': unrealized_pnl.unsqueeze(-1),  # [B] → [B, 1] for model
+                    'unrealized_pnl': unrealized_pnl.unsqueeze(-1),
                     'time_in_position': time_in_position
                 }
-                
+
                 predictions = self.model(features, position_context=position_context)
                 targets = {
                     'features': features,
@@ -498,98 +467,51 @@ class NeuralTrainer:
                     'let_winner_run_label': let_run_label,
                     'regime_change_label': regime_change_label,
                 }
-                
-                # out = self.criterion(predictions, targets)
-                # total_loss += self._sf(out['total_loss'])
-                
-                # for k, v in out.items():
-                #     if k == 'total_loss':
-                #         continue
-                #     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
-                
-                # total_loss += self._sf(total_loss)  # Changed from out['total_loss']
-                # for k, v in loss_components.items():
-                #     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
 
-                # Unpack the tuple returned by criterion
                 total_loss_tensor, loss_components_dict = self.criterion(predictions, targets)
 
-                # Accumulate total loss
                 total_loss += self._sf(total_loss_tensor)
 
-                # Accumulate component losses
                 for k, v in loss_components_dict.items():
                     loss_components[k] = loss_components.get(k, 0.0) + self._sf(v)
 
-                # ====== CHECKPOINT: ENTRY ACCURACY (FIXED) ======
                 entry_pred = (predictions['entry_prob'] > 0.5).float().squeeze()
                 entry_true = (entry_label > 0.5).float()
-                
-                # Ensure same shape for comparison
-                entry_pred = entry_pred.view(-1)  # [B]
-                entry_true = entry_true.view(-1)  # [B]
-                
+
+                entry_pred = entry_pred.view(-1)
+                entry_true = entry_true.view(-1)
+
                 batch_entry_correct = (entry_pred == entry_true).sum().item()
                 batch_entry_total = len(entry_label)
-                
+
                 entry_correct += batch_entry_correct
                 entry_total += batch_entry_total
-                
-                # if debug_mode and batch_idx == 0:
-                #     print(f"\n{'='*80}")
-                #     print(f"CHECKPOINT: ENTRY ACCURACY (BATCH 0)")
-                #     print(f"{'='*80}")
-                #     print(f"  entry_pred shape: {entry_pred.shape}")
-                #     print(f"  entry_true shape: {entry_true.shape}")
-                #     print(f"  Batch entry_correct: {batch_entry_correct} / {batch_entry_total}")
-                #     print(f"  Running total: {entry_correct} / {entry_total}")
-                #     print(f"  Batch accuracy: {batch_entry_correct / max(1, batch_entry_total):.4f}")
-                
-                # ====== CHECKPOINT: EXIT ACCURACY (FIXED) ======
+
                 if 'unified_exit_prob' in predictions:
-                    unified_exit = predictions['unified_exit_prob']  # [B, 1]
-                    
-                    # FIX: Ensure all tensors are 1D [B] before comparison
-                    unified_exit = unified_exit.squeeze(-1)  # [B, 1] → [B]
-                    
-                    # Create unified exit label - SAME DIMENSION AS unified_exit
-                    in_profit = (unrealized_pnl > 0).float()  # [B]
-                    in_loss = (unrealized_pnl <= 0).float()   # [B]
-                    
-                    # FIXED: Element-wise multiplication stays [B]
+                    unified_exit = predictions['unified_exit_prob']
+
+                    unified_exit = unified_exit.squeeze(-1)
+
+                    in_profit = (unrealized_pnl > 0).float()
+                    in_loss = (unrealized_pnl <= 0).float()
+
                     unified_label = (
                         in_profit * take_profit_label.float() +
                         in_loss * stop_loss_label.float()
-                    )  # [B]
-                    
-                    # Calculate accuracy with matching shapes
-                    exit_pred = (unified_exit > 0.5).float()  # [B]
-                    exit_true = (unified_label > 0.5).float()  # [B]
-                    
-                    # Ensure both 1D
-                    exit_pred = exit_pred.view(-1)  # [B]
-                    exit_true = exit_true.view(-1)  # [B]
-                    
+                    )
+
+                    exit_pred = (unified_exit > 0.5).float()
+                    exit_true = (unified_label > 0.5).float()
+
+                    exit_pred = exit_pred.view(-1)
+                    exit_true = exit_true.view(-1)
+
                     batch_exit_correct = (exit_pred == exit_true).sum().item()
                     batch_exit_total = len(exit_true)
-                    
+
                     exit_correct += batch_exit_correct
                     exit_total += batch_exit_total
-                    
-                    # if debug_mode and batch_idx == 0:
-                    #     print(f"\n{'='*80}")
-                    #     print(f"CHECKPOINT: EXIT ACCURACY (BATCH 0)")
-                    #     print(f"{'='*80}")
-                    #     print(f"  unified_exit shape AFTER squeeze: {unified_exit.shape}")
-                    #     print(f"  unified_label shape: {unified_label.shape}")
-                    #     print(f"  exit_pred shape: {exit_pred.shape}")
-                    #     print(f"  exit_true shape: {exit_true.shape}")
-                    #     print(f"  Batch exit_correct: {batch_exit_correct} / {batch_exit_total}")
-                    #     print(f"  Running total: {exit_correct} / {exit_total}")
-                    #     print(f"  Batch accuracy: {batch_exit_correct / max(1, batch_exit_total):.4f}")
-                    #     print(f"  in_profit count: {in_profit.sum().item()}")
-                    #     print(f"  in_loss count: {in_loss.sum().item()}")
-                
+
                     if on_batch and ((batch_idx + 1) % batch_update_every == 0):
                         on_batch(
                             batch_idx + 1,
@@ -597,38 +519,26 @@ class NeuralTrainer:
                             float(self._sf(total_loss_tensor)),
                             self.optimizer.param_groups[0]['lr'],
                         )
-                
+
                 batch_counter += 1
-        
-        # ====== FINAL CALCULATIONS ======
+
         avg_loss = total_loss / max(1, n_batches)
         avg_components = {k: v / max(1, n_batches) for k, v in loss_components.items()}
-        
+
         entry_accuracy = entry_correct / max(1, entry_total)
         exit_accuracy = exit_correct / max(1, exit_total)
-        
-        # print(f"\n{'='*80}")
-        # print(f"CHECKPOINT: FINAL VALIDATION METRICS")
-        # print(f"{'='*80}")
-        # print(f"  Total batches processed: {batch_counter}")
-        # print(f"  Entry accuracy: {entry_correct} correct / {entry_total} total = {entry_accuracy:.4f}")
-        # print(f"  Exit accuracy: {exit_correct} correct / {exit_total} total = {exit_accuracy:.4f}")
-        # print(f"  Avg val loss: {avg_loss:.6f}")
-        # print(f"  Entry accuracy valid [0,1]: {'YES ✓' if 0.0 <= entry_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
-        # print(f"  Exit accuracy valid [0,1]: {'YES ✓' if 0.0 <= exit_accuracy <= 1.0 else 'NO ⚠️  BUG'}")
-        # print(f"{'='*80}\n")
-        
+
         return avg_loss, avg_components, entry_accuracy, exit_accuracy
 
     def train_epoch(self, epoch, on_batch=None, batch_update_every: int = 10):
-        """Train for one epoch (AMP-aware, FP32-sanitized exits live in the model)."""
+
         self.model.train()
         total_loss_accum = 0.0
         component_sums = {}
         self.optimizer.zero_grad()
-        
+
         n_batches = len(self.train_loader)
-        
+
         for batch_idx, batch in enumerate(self.train_loader):
             batch_idx_global = self.global_batch_step
             self.global_batch_step += 1
@@ -643,16 +553,16 @@ class NeuralTrainer:
             regime_change_label = batch['regime_change_label'].to(self.device)
             unrealized_pnl = batch['unrealized_pnl'].to(self.device).unsqueeze(1)
             time_in_position = batch['time_in_position'].to(self.device).unsqueeze(1)
-            
+
             if torch.isnan(features).any() or torch.isinf(features).any():
                 self.optimizer.zero_grad()
                 continue
-            
+
             position_context = {
                 'unrealized_pnl': unrealized_pnl,
                 'time_in_position': time_in_position
             }
-            
+
             with torch.amp.autocast(device_type='cuda', enabled=False):
                 predictions = self.model(features, position_context=position_context)
                 if batch_idx == 0 and epoch == 0:
@@ -672,7 +582,7 @@ class NeuralTrainer:
                     'let_winner_run_label': let_run_label,
                     'regime_change_label': regime_change_label,
                 }
-            
+
             total_loss_tensor, batch_components = self.criterion(predictions, targets)
             loss = total_loss_tensor / self.gradient_accumulation_steps
 
@@ -680,41 +590,24 @@ class NeuralTrainer:
                 print(f"[WARNING] NaN/Inf loss detected at batch {batch_idx}, skipping")
                 self.optimizer.zero_grad()
                 continue
-            
-            # ====== CHECKPOINT: LOSS SANITY (First batch only) ======
-            # if batch_idx == 0 and epoch == 0:
-            #     print(f"\n{'='*80}")
-            #     print(f"CHECKPOINT: LOSS COMPONENTS (EPOCH 0, BATCH 0)")
-            #     print(f"{'='*80}")
-            #     print(f"  entry_loss: {out.get('entry_loss', 'N/A')}")
-            #     print(f"  return_loss: {out.get('return_loss', 'N/A')}")
-            #     print(f"  volatility_loss: {out.get('volatility_loss', 'N/A')}")
-            #     print(f"  vae_loss: {out.get('vae_loss', 'N/A')}")
-            #     print(f"  exit_bundle_loss: {out.get('exit_bundle_loss', 'N/A')}")
-            #     print(f"  total_loss: {out['total_loss'].item():.6f}")
-            #     print(f"  total_loss is positive: {'YES ✓' if out['total_loss'].item() > 0 else 'NO ⚠️  BUG'}")
-            #     print(f"  total_loss is NaN: {'YES ⚠️  BUG' if torch.isnan(out['total_loss']) else 'NO ✓'}")
-            #     print(f"  total_loss is Inf: {'YES ⚠️  BUG' if torch.isinf(out['total_loss']) else 'NO ✓'}")
-            #     print(f"{'='*80}\n")
-            
+
             if self.use_amp:
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
-            
+
             if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                 if self.use_amp:
                     self.scaler.unscale_(self.optimizer)
-                
-                # ====== CHECKPOINT: GRADIENT FLOW (First batch only) ======
+
                 if batch_idx == 0 and epoch == 0:
                     print(f"\n{'='*80}")
                     print(f"CHECKPOINT: GRADIENT FLOW (EPOCH 0, BATCH 0)")
                     print(f"{'='*80}")
-                    
+
                     total_grad_norm = 0.0
                     zero_grad_count = 0
-                    
+
                     for name, param in self.model.named_parameters():
                         if param.grad is not None:
                             grad_norm = param.grad.data.norm(2).item()
@@ -723,29 +616,26 @@ class NeuralTrainer:
                                 zero_grad_count += 1
                         else:
                             zero_grad_count += 1
-                    
+
                     total_grad_norm = total_grad_norm ** 0.5
-                    
+
                     print(f"  Total gradient norm (before clip): {total_grad_norm:.6f}")
                     print(f"  Gradient norm is exploding (>10): {'YES ⚠️  BUG' if total_grad_norm > 10.0 else 'NO ✓'}")
                     print(f"  Gradient norm is dead (<1e-6): {'YES ⚠️  BUG' if total_grad_norm < 1e-6 else 'NO ✓'}")
                     print(f"  Layers with zero gradient: {zero_grad_count}")
                     print(f"{'='*80}\n")
-                
-                # Track gradient norm BEFORE clipping
+
                 total_grad_norm = 0.0
                 for p in self.model.parameters():
                     if p.grad is not None:
                         param_norm = p.grad.data.norm(2)
                         total_grad_norm += param_norm.item() ** 2
-                
+
                 total_grad_norm = total_grad_norm ** 0.5
                 self.last_grad_norm = total_grad_norm
-                
-                # Clip gradients
+
                 grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-                
-                # Dynamic adjustment: if norms consistently low, relax clipping
+
                 if hasattr(self, 'grad_history'):
                     self.grad_history.append(grad_norm)
                     if len(self.grad_history) > 100:
@@ -757,9 +647,6 @@ class NeuralTrainer:
                 else:
                     self.grad_history = []
                     self.current_clip_norm = 1.0
-                
-                # if grad_norm > 10.0:
-                #     print(f"⚠️ Large gradient: {grad_norm:.2f}")
 
                 if self.use_amp:
                     self.scaler.step(self.optimizer)
@@ -773,7 +660,7 @@ class NeuralTrainer:
 
             for name, value in batch_components.items():
                 component_sums[name] = component_sums.get(name, 0.0) + self._sf(value)
-            
+
             if on_batch and ((batch_idx + 1) % batch_update_every == 0):
                 on_batch(
                     batch_idx + 1,
@@ -809,8 +696,7 @@ class NeuralTrainer:
         return avg_loss, avg_components
 
     def set_exit_weight_ramp(self, epoch: int, ramp_epochs: int = 10, max_boost: float = 12.0):
-        """Call from trainer each epoch to ramp exit importance."""
-        # Linear ramp from 1.0 to max_boost over ramp_epochs
+
         self.criterion.set_exit_weight_ramp(
             epoch=epoch,
             ramp_epochs=ramp_epochs,
@@ -819,32 +705,56 @@ class NeuralTrainer:
 
         exit_boost = getattr(self.criterion, "_exit_boost", None)
         if exit_boost is not None:
-            print(f"[DEBUG] Epoch {epoch}: exit boost = {exit_boost:.3f}")  # Optional debug
+            print(f"[DEBUG] Epoch {epoch}: exit boost = {exit_boost:.3f}")
 
-    def save_checkpoint(self, filename, epoch, val_loss):
-        """Save model checkpoint"""
+    def save_checkpoint(self, epoch: int, path: Path, config: dict):
+
         checkpoint = {
-            'epoch': int(epoch),
+            'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.scheduler.state_dict(),
-            'val_loss': float(self._sf(val_loss)),
-            'config': self.config
+            'best_val_loss': self.best_val_loss,
+            'config': config,
+            'feature_names': getattr(config, 'selected_features', None),
+            'scaler_state': None,
+            'metadata': {
+                'timestamp': str(datetime.now()),
+                'n_features': config['n_features'],
+                'seq_len': config['seq_len'],
+                'total_windows': len(self.splits['train'])
+            }
         }
-        Path(filename).parent.mkdir(parents=True, exist_ok=True)
-        torch.save(checkpoint, filename)
+        torch.save(checkpoint, path)
+        Console.print(f"💾 Saved checkpoint: {path} (epoch {epoch})")
 
-    def load_checkpoint(self, filename):
-        """Load model checkpoint"""
-        checkpoint = torch.load(filename, map_location=self.device)
+    def load_checkpoint(self, path: Path):
+
+        checkpoint = torch.load(path, map_location=self.device)
+
+        if 'config' not in checkpoint:
+            raise ValueError(f"Checkpoint missing config. Old format?")
+
+        loaded_config = checkpoint['config']
+
+        if loaded_config['n_features'] != self.model.n_features:
+            raise ValueError(f"Feature mismatch: checkpoint={loaded_config['n_features']}, "
+                            f"model={self.model.n_features}")
+
+        if loaded_config['seq_len'] != self.model.seq_len:
+            raise ValueError(f"Seq length mismatch: checkpoint={loaded_config['seq_len']}, "
+                            f"model={self.model.seq_len}")
+
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        return checkpoint['epoch'], checkpoint['val_loss']
+        self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
 
-    # ---------- main loop with Rich ----------
+        console.print(f"✅ Loaded checkpoint from epoch {checkpoint['epoch']}")
+        console.print(f"📋 Config: {loaded_config['n_features']} features, {loaded_config['seq_len']} seq_len")
+
+        return checkpoint['config']
+
     def train(self, num_epochs):
-        """Full training loop with non-flickering Rich dashboard + per-batch Train & Val progress (tensor-safe)."""
+
         from rich.live import Live
         from rich.table import Table
         from rich.progress import (
@@ -862,7 +772,6 @@ class NeuralTrainer:
                 console.print("[yellow]⚠️ Rich dashboard disabled — using simple loop[/yellow]")
                 return self._legacy_train(num_epochs)
 
-            # epoch progress
             epoch_progress = Progress(
                 TextColumn("[cyan]Epoch[/cyan] {task.fields[epoch]:03d}"),
                 BarColumn(complete_style="bright_magenta"),
@@ -882,7 +791,6 @@ class NeuralTrainer:
                 lr=self._sf(self.optimizer.param_groups[0]['lr'])
             )
 
-            # training batch progress
             train_progress = Progress(
                 TextColumn("[white]Train[/white]"),
                 BarColumn(complete_style="magenta"),
@@ -900,7 +808,6 @@ class NeuralTrainer:
                 lr=self._sf(self.optimizer.param_groups[0]['lr'])
             )
 
-            # validation batch progress
             val_progress = Progress(
                 TextColumn("[white]Validation[/white]"),
                 BarColumn(complete_style="bright_blue"),
@@ -918,7 +825,6 @@ class NeuralTrainer:
                 lr=self._sf(self.optimizer.param_groups[0]['lr'])
             )
 
-            # metrics dashboard
             dashboard = Table(expand=True, show_header=True, header_style="bold white")
             dashboard.add_column("Metric", justify="left", style="bold cyan")
             dashboard.add_column("Value", justify="right")
@@ -956,14 +862,13 @@ class NeuralTrainer:
 
             with Live(group, refresh_per_second=6, console=console, transient=False):
                 for epoch in range(num_epochs):
-                    # ramp exit weight this epoch
+
                     self.set_exit_weight_ramp(
                         epoch=epoch,
                         ramp_epochs=self.config.get('exit_ramp_epochs', 10),
                         max_boost=self.config.get('exit_max_boost', 8.0),
                     )
 
-                    # reset train bar
                     train_progress.reset(
                         train_task,
                         total=max(1, len(self.train_loader)),
@@ -978,7 +883,6 @@ class NeuralTrainer:
 
                     train_loss, _ = self.train_epoch(epoch, on_batch=on_train_batch, batch_update_every=10)
 
-                    # reset val bar
                     val_progress.reset(
                         val_task,
                         total=max(1, len(self.val_loader)),
@@ -993,7 +897,6 @@ class NeuralTrainer:
 
                     val_loss, _, entry_acc, exit_acc = self.validate(on_batch=on_val_batch, batch_update_every=10)
 
-                    # small batch probe
                     try:
                         self.model.eval()
                         first_val = next(iter(self.val_loader))
@@ -1008,9 +911,8 @@ class NeuralTrainer:
                     except StopIteration:
                         pass
 
-                    # step ReduceLROnPlateau with the metric
                     val_loss_float = float(self._sf(val_loss))
-                    # Apply warmup scheduler for first N epochs, then use ReduceLROnPlateau
+
                     if epoch < self.warmup_epochs:
                         self.warmup_scheduler.step()
                     else:
@@ -1030,7 +932,6 @@ class NeuralTrainer:
                     )
                     update_dashboard(epoch, train_loss, val_loss, entry_acc, exit_acc, lr_now, grad_norm)
 
-                    # logging & checkpoints
                     if self.use_wandb and self.wandb is not None:
                         self.wandb.log({
                             'epoch': epoch,
@@ -1061,7 +962,6 @@ class NeuralTrainer:
                 except Exception:
                     pass
 
-    # Very small fallback if rich_dashboard=False
     def _legacy_train(self, num_epochs):
         if not hasattr(self, 'loss_history'):
             self.loss_history = []
@@ -1120,8 +1020,8 @@ class NeuralTrainer:
                 self.save_checkpoint(best_path, epoch, self._sf(val_loss))
 
 class TradingDataset(Dataset):
-    """Enhanced dataset with exit management labels"""
-    def __init__(self, features: np.ndarray, returns: np.ndarray, prices: np.ndarray, 
+
+    def __init__(self, features: np.ndarray, returns: np.ndarray, prices: np.ndarray,
                  seq_len: int = 100, prediction_horizon: int = 1):
         self.features = torch.as_tensor(features, dtype=torch.float32)
         self.returns = torch.as_tensor(returns, dtype=torch.float32)
@@ -1129,10 +1029,9 @@ class TradingDataset(Dataset):
         self.seq_len = seq_len
         self.prediction_horizon = prediction_horizon
 
-        # Safety checks
         if torch.isnan(self.features).any() or torch.isinf(self.features).any():
             self.features = torch.nan_to_num(self.features, nan=0.0, posinf=0.0, neginf=0.0)
-        
+
         features_max = self.features.abs().max()
         if features_max > 100:
             self.features = torch.clamp(self.features, min=-100, max=100)
@@ -1152,65 +1051,57 @@ class TradingDataset(Dataset):
         current_price = self.prices[end - 1]
         future_price = self.prices[label_idx]
 
-        # 🆕 Compute exit labels by simulating different holding periods
-        max_lookforward = min(50, len(self.returns) - label_idx)  # Look up to 50 bars ahead
-        
+        max_lookforward = min(50, len(self.returns) - label_idx)
+
         if max_lookforward > 5:
             future_prices = self.prices[label_idx:label_idx + max_lookforward]
             future_rets = (future_prices - current_price) / current_price
-            
-            # Find optimal exit points
+
             peak_return = future_rets.max()
             peak_idx = future_rets.argmax()
             trough_return = future_rets.min()
             trough_idx = future_rets.argmin()
-            
-            # 💰 Take-profit label: Did price reach good profit then reverse?
-            # If peak > threshold and current position would be near peak
+
             take_profit_target = 0.0
-            if peak_return > 0.02:  # 2% profit threshold
-                # Was this bar near the peak? (within 20% of time to peak)
+            if peak_return > 0.02:
+
                 bars_to_peak = peak_idx
-                if bars_to_peak <= 5:  # Peak is soon
+                if bars_to_peak <= 5:
                     take_profit_target = 1.0
                 elif bars_to_peak <= 10:
                     take_profit_target = 0.7
-            
-            # 🛑 Stop-loss label: Did price fall significantly?
+
             stop_loss_target = 0.0
-            if trough_return < -0.015:  # -1.5% loss threshold
+            if trough_return < -0.015:
                 bars_to_trough = trough_idx
-                if bars_to_trough <= 3:  # Loss is imminent
+                if bars_to_trough <= 3:
                     stop_loss_target = 1.0
                 elif bars_to_trough <= 7:
                     stop_loss_target = 0.7
-            
-            # 🚀 Let-winner-run label: Is trend continuing strongly?
+
             let_run_target = 0.0
-            if future_return > 0.01:  # Currently profitable
-                # Check if returns continue to grow
+            if future_return > 0.01:
+
                 if max_lookforward >= 20:
                     near_returns = future_rets[:10].mean()
                     far_returns = future_rets[10:20].mean()
                     if far_returns > near_returns and far_returns > 0.02:
-                        let_run_target = 1.0  # Strong continuation
-            
-            # 🚨 Regime change label: Volatility spike or pattern break
+                        let_run_target = 1.0
+
             regime_change_target = 0.0
             if max_lookforward >= 10:
                 recent_vol = future_rets[:5].std()
                 future_vol = future_rets[5:10].std()
-                if future_vol > recent_vol * 2:  # Volatility doubled
+                if future_vol > recent_vol * 2:
                     regime_change_target = 1.0
-                    
+
         else:
-            # Not enough data - neutral labels
+
             take_profit_target = 0.0
             stop_loss_target = 0.0
             let_run_target = 0.0
             regime_change_target = 0.0
 
-        # Volatility calculation
         return_window = self.returns[idx + self.seq_len: idx + self.seq_len + self.prediction_horizon]
         if return_window.numel() == 0:
             actual_volatility = torch.tensor(0.0, dtype=torch.float32)
@@ -1219,7 +1110,6 @@ class TradingDataset(Dataset):
         else:
             actual_volatility = torch.std(return_window, unbiased=False)
 
-        # Entry labels (original soft labels)
         returns_std = self.returns.std()
         entry_threshold = max(0.01, 1.5 * returns_std)
         entry_confidence = torch.sigmoid(
@@ -1232,14 +1122,12 @@ class TradingDataset(Dataset):
             'future_return': future_return,
             'actual_volatility': actual_volatility,
             'entry_label': entry_label,
-            
-            # 🆕 NEW: Exit management labels
+
             'take_profit_label': torch.tensor(take_profit_target, dtype=torch.float32),
             'stop_loss_label': torch.tensor(stop_loss_target, dtype=torch.float32),
             'let_winner_run_label': torch.tensor(let_run_target, dtype=torch.float32),
             'regime_change_label': torch.tensor(regime_change_target, dtype=torch.float32),
-            
-            # Position context (simulated for training)
-            'unrealized_pnl': future_return,  # Simulated P&L
+
+            'unrealized_pnl': future_return,
             'time_in_position': torch.tensor(float(self.prediction_horizon), dtype=torch.float32),
         }

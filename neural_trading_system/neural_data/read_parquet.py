@@ -8,18 +8,15 @@ console = Console()
 
 file = "BTC_4h_2017-01-01_2024-01-01_neural_data.parquet"
 
-# Load once
 base_pl = pl.read_parquet(file)
 base_pd = pd.read_parquet(file)
 
-# Clone 100× for heavy test
 pl_big = pl.concat([base_pl] * 100)
 pd_big = pd.concat([base_pd] * 100, ignore_index=True)
 
 console.print(f"\n[bold cyan]📊 BTQuant Neural Data Benchmark[/bold cyan]")
 console.print(f"[dim]Rows:[/dim] {pl_big.shape[0]:,} | [dim]Columns:[/dim] {pl_big.shape[1]}\n")
 
-# Helper for formatted rows
 def bench(name, polars_func, pandas_func):
     t0 = time.time()
     polars_func()
@@ -34,7 +31,6 @@ def bench(name, polars_func, pandas_func):
 
 results = []
 
-# Benchmarks
 results.append(bench(
     "Mean Computation",
     lambda: pl_big.lazy().select(pl.all().mean()).collect(),
@@ -53,7 +49,6 @@ results.append(bench(
     lambda: pd_big["close"].rolling(20).mean()
 ))
 
-# Build Rich Table
 table = Table(title="⚡ Polars vs Pandas Performance", show_lines=True)
 table.add_column("Operation", justify="left", style="cyan")
 table.add_column("Polars (x100)", justify="right", style="green")
@@ -73,9 +68,6 @@ console.print("[bold green]\n✅ Conclusion:[/bold green] Even when processing 1
               "[cyan]Polars[/cyan] obliterates [yellow]Pandas[/yellow] — "
               "massively faster, fully parallel, and memory-efficient.\n"
               "[dim]Perfect for multi-year, sub-minute neural datasets in BTQuant.[/dim]\n")
-
-
-
 
 console.print(f"[bold cyan]File:[/bold cyan] {file}")
 console.print(f"[dim]Shape:[/dim] {base_pl.shape[0]:,} rows × {base_pl.shape[1]} columns")

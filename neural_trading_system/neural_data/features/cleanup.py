@@ -3,7 +3,6 @@ import numpy as np
 import glob
 from pathlib import Path
 
-# Find feature cache
 cache_files = list(Path('.').rglob('features_8b00f0d3817ad9c7_seq100_hor5.pkl'))
 if not cache_files:
     print("❌ No feature cache found!")
@@ -13,7 +12,6 @@ if not cache_files:
 cache_path = str(cache_files[0])
 print(f"\n📁 Found cache: {cache_path}")
 
-# Load
 print("Loading cache...")
 with open(cache_path, 'rb') as f:
     data = pickle.load(f)
@@ -28,7 +26,6 @@ print(f"   Features Inf: {np.isinf(features).sum():,}")
 print(f"   Returns NaN: {np.isnan(returns).sum():,}")
 print(f"   Returns Inf: {np.isinf(returns).sum():,}")
 
-# CLEAN IT
 print("\n🧹 Cleaning data...")
 features_clean = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)
 returns_clean = np.nan_to_num(returns, nan=0.0, posinf=0.0, neginf=0.0)
@@ -39,7 +36,6 @@ print(f"   Features Inf: {np.isinf(features_clean).sum():,}")
 print(f"   Returns NaN: {np.isnan(returns_clean).sum():,}")
 print(f"   Returns Inf: {np.isinf(returns_clean).sum():,}")
 
-# Save cleaned version
 data['features'] = features_clean
 data['returns'] = returns_clean
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""
-Analyze trained neural trading model.
-Visualize attention patterns, feature importance, regimes, and prediction diagnostics.
-"""
+\
+\
+\
 
 from __future__ import annotations
 
@@ -17,37 +16,28 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import matplotlib
-matplotlib.use("Agg")  # headless plotting
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Ensure package resolutio
-
-# Analysis tools
-from analysis.attention_viz import AttentionAnalyzer  # noqa: E402
+from analysis.attention_viz import AttentionAnalyzer
 
 console = Console()
 OUT_DIR = Path("analysis")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
-# =============================================================================
-# File discovery
-# =============================================================================
-
 def _latest(path_glob: str) -> Optional[str]:
     files = [Path(p) for p in glob.glob(path_glob)]
     return str(max(files, key=lambda p: p.stat().st_mtime)) if files else None
-
 
 def discover_model_and_extractor(
     model_path: Optional[str] = None,
     feature_extractor_path: Optional[str] = None
 ) -> Tuple[str, str]:
     if not model_path:
-        # prefer exit-aware naming, else any .pt
+
         model_path = _latest("models/*exit*aware*.pt") or _latest("models/*.pt")
     if not feature_extractor_path:
         feature_extractor_path = _latest("models/*feature_extractor.pkl")
@@ -59,7 +49,6 @@ def discover_model_and_extractor(
 
     return model_path, feature_extractor_path
 
-
 def discover_feature_cache(cache_path: Optional[str] = None) -> str:
     if cache_path and Path(cache_path).exists():
         return cache_path
@@ -68,18 +57,12 @@ def discover_feature_cache(cache_path: Optional[str] = None) -> str:
         raise FileNotFoundError("❌ No feature cache found under neural_data/features/features_*.pkl")
     return latest
 
-
-# =============================================================================
-# Model + extractor
-# =============================================================================
-
 def load_model_and_data(model_path: str, feature_extractor_path: str):
-    """Load trained model checkpoint and feature extractor."""
+
     console.print(f"\n📥 [cyan]Loading model from: {model_path}[/cyan]")
     checkpoint = torch.load(model_path, map_location='cpu')
     config = checkpoint.get('config', {})
 
-    # Infer input feature dimension from checkpoint
     try:
         input_dim = checkpoint['model_state_dict']['input_projection.weight'].shape[1]
         console.print(f"[green]✅ Detected input feature dimension from checkpoint:[/green] {input_dim}")
@@ -87,8 +70,7 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
         input_dim = config.get('feature_dim', 500)
         console.print(f"[yellow]⚠️ Could not infer feature_dim from checkpoint; using config/default:[/yellow] {input_dim}")
 
-    # Lazy import to avoid circular imports
-    from models.architecture import NeuralTradingModel  # noqa: E402
+    from models.architecture import NeuralTradingModel
 
     model = NeuralTradingModel(
         feature_dim=input_dim,
@@ -101,12 +83,10 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
         seq_len=config.get('seq_len', 100),
     )
 
-    # Load weights
     model.load_state_dict(checkpoint['model_state_dict'], strict=True)
     model.eval()
     console.print("✅ [green]Model loaded successfully[/green]")
 
-    # Load feature extractor
     console.print(f"\n📥 [cyan]Loading feature extractor from: {feature_extractor_path}[/cyan]")
     with open(feature_extractor_path, 'rb') as f:
         feature_extractor = pickle.load(f)
@@ -114,9 +94,8 @@ def load_model_and_data(model_path: str, feature_extractor_path: str):
 
     return model, feature_extractor, config
 
-
 def print_model_summary(model, config):
-    """Pretty-print model architecture and parameter counts."""
+
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]MODEL ARCHITECTURE[/bold cyan]", border_style="cyan"))
 
@@ -138,16 +117,11 @@ def print_model_summary(model, config):
     console.print(f"📊 [bold]Trainable Parameters:[/bold] {trainable_params:,}")
     console.print("=" * 80)
 
-
-# =============================================================================
-# Dataset utilities — one cached row == one flattened window [F]
-# =============================================================================
-
 class FlatWindowDataset:
-    """Each row in `features` is already a flattened seq window (shape = [F])."""
+
     def __init__(self, features: np.ndarray, returns: np.ndarray, timestamps: Optional[np.ndarray] = None):
-        self.features = features  # [N, F]
-        self.returns = returns    # [N]
+        self.features = features
+        self.returns = returns
         self.ts = timestamps if (timestamps is not None and len(timestamps) == len(features)) else None
 
     def __len__(self):
@@ -165,20 +139,17 @@ class FlatWindowDataset:
         ts = self.ts[indices] if self.ts is not None else None
         return X, y, ts
 
-
 def _read_bytes_head(path: str, n: int = 8) -> bytes:
     with open(path, "rb") as f:
         return f.read(n)
 
-
 def load_cached_features(cache_path: str) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
-    """
-    Load pickled cache produced by your pipeline (dict with features, returns, [timestamps]).
-    Fallbacks for Arrow/Parquet IPC if needed.
-    """
+\
+\
+\
+
     header = _read_bytes_head(cache_path, 8)
 
-    # Arrow/IPC or Parquet
     if header.startswith(b"ARROW1") or header.startswith(b"PAR1"):
         import polars as pl
         console.print("[cyan]📦 Detected Arrow/Parquet format — loading with Polars[/cyan]")
@@ -192,7 +163,6 @@ def load_cached_features(cache_path: str) -> Tuple[np.ndarray, np.ndarray, Optio
         timestamps = df["datetime"].to_numpy() if "datetime" in df.columns else None
         return features.astype(np.float32), returns.astype(np.float32), timestamps
 
-    # Pickle cache
     console.print("[yellow]📦 Detected Pickle format — loading with pickle[/yellow]")
     with open(cache_path, "rb") as f:
         cached = pickle.load(f)
@@ -206,20 +176,13 @@ def load_cached_features(cache_path: str) -> Tuple[np.ndarray, np.ndarray, Optio
     console.print(f"   Feature dimension: {features.shape[1]}")
     return features, returns, timestamps
 
-
 def prepare_dataset_from_cache(cache_path: str, config: dict) -> Tuple[FlatWindowDataset, np.ndarray]:
     features, returns, timestamps = load_cached_features(cache_path)
 
-    # No need to chop for seq_len; each row is a flattened window
     dataset = FlatWindowDataset(features, returns, timestamps)
     console.print(f"✅ [green]Created dataset with {len(dataset):,} samples[/green]")
     console.print(f"   Memory usage: ~{features.nbytes / 1e9:.2f} GB (features only)")
     return dataset, returns
-
-
-# =============================================================================
-# Analyses (all save to OUT_DIR)
-# =============================================================================
 
 def analyze_attention_patterns(analyzer: AttentionAnalyzer, ds: FlatWindowDataset, num_samples: int = 5):
     console.print("\n" + "=" * 80)
@@ -230,7 +193,7 @@ def analyze_attention_patterns(analyzer: AttentionAnalyzer, ds: FlatWindowDatase
 
     for i, idx in enumerate(indices):
         console.print(f"\n🔍 [yellow]Analyzing sample {i + 1}/{n} (index {idx})...[/yellow]")
-        x_vec, y, _ = ds[idx]  # one flattened window [F]
+        x_vec, y, _ = ds[idx]
         attn_list, preds = analyzer.extract_attention_weights(x_vec)
 
         p_entry = preds.get("entry_prob", None)
@@ -251,7 +214,6 @@ def analyze_attention_patterns(analyzer: AttentionAnalyzer, ds: FlatWindowDatase
         else:
             console.print("[yellow]⚠️ No attention weights available — hooks/return_attn may be off[/yellow]")
 
-
 def analyze_feature_importance(analyzer: AttentionAnalyzer, ds: FlatWindowDataset, num_samples: int = 100, feature_dim: Optional[int] = None):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]FEATURE IMPORTANCE ANALYSIS[/bold cyan]", border_style="cyan"))
@@ -260,15 +222,14 @@ def analyze_feature_importance(analyzer: AttentionAnalyzer, ds: FlatWindowDatase
     indices = np.random.choice(len(ds), n, replace=False)
 
     console.print(f"\n🔍 [yellow]Computing feature importance on {n} samples...[/yellow]")
-    X, _, _ = ds.get_batch(indices)  # [B, F]
+    X, _, _ = ds.get_batch(indices)
 
     importance_vec, feature_names = analyzer.compute_feature_importance(
         X, num_samples=n, feature_dim=feature_dim, return_names=True
     )
 
-    # Build dict for display
     importance_dict = dict(zip(feature_names, importance_vec.tolist()))
-    # Sort for top-N display
+
     sorted_items = sorted(importance_dict.items(), key=lambda x: -x[1])
 
     console.print("\n📊 [bold]Top 20 Most Important Features:[/bold]")
@@ -284,40 +245,33 @@ def analyze_feature_importance(analyzer: AttentionAnalyzer, ds: FlatWindowDatase
     analyzer.plot_feature_importance(importance_dict, top_n=30, save_path=str(fi_path))
     console.print(f"📁 Saved: [green]{fi_path}[/green]")
 
-
 def analyze_regime_space(analyzer: AttentionAnalyzer, ds: FlatWindowDataset, returns_all: np.ndarray):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]MARKET REGIME SPACE ANALYSIS[/bold cyan]", border_style="cyan"))
     console.print("\n🔍 [yellow]Visualizing learned market regimes...[/yellow]")
 
-    # Sample subset for visualization
     n_samples = min(1000, len(ds))
     indices = np.linspace(0, len(ds)-1, n_samples, dtype=int)
     X, y, _ = ds.get_batch(list(indices))
 
-    # Use analyzer's helper (now accepts save_path)
     save_path = OUT_DIR / "regime_space.png"
     analyzer.visualize_regime_space(X, y, max_points=n_samples, save_path=str(save_path))
     console.print(f"📁 Saved: [green]{save_path}[/green]")
-
 
 def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset, returns_all: np.ndarray):
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold cyan]DECISION BOUNDARY ANALYSIS[/bold cyan]", border_style="cyan"))
     console.print("\n🔍 [yellow]Analyzing decision boundary...[/yellow]")
 
-    # ----- Gather a slice
     n_samples = min(2000, len(ds))
     indices = list(range(n_samples))
-    X, y, _ = ds.get_batch(indices)  # X:[B,F], y:[B]
+    X, y, _ = ds.get_batch(indices)
 
-    # ----- Predict probabilities
-    probs = analyzer.predict_entry_proba(X)  # np.array [B]
+    probs = analyzer.predict_entry_proba(X)
     if probs is None or len(probs) == 0 or np.all(np.isnan(probs)):
         console.print("[red]No predictions produced[/red]")
         return
 
-    # ----- Adaptive thresholds, like before
     valid_mask = ~np.isnan(probs)
     p = probs[valid_mask]
     r = y[valid_mask]
@@ -334,7 +288,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
     hi_idx = p >= hi_thr
     lo_idx = p <= lo_thr
 
-    # ----- Stats helper
     def stats(mask: np.ndarray):
         if mask.sum() == 0:
             return 0, float("nan"), float("nan"), float("nan")
@@ -357,9 +310,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
     console.print(f"  - Win rate: {wr_lo:.2f}%")
     console.print(f"  - Avg return: {mu_lo:+.6f}  (~{mu_lo*100:+.4f}%)")
 
-    # =========================
-    # PLOT 1: Return histograms
-    # =========================
     if n_hi > 0 or n_lo > 0:
         hi_r = r[hi_idx] if n_hi > 0 else np.array([])
         lo_r = r[lo_idx] if n_lo > 0 else np.array([])
@@ -387,9 +337,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         plt.savefig(hpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{hpath}[/green]")
 
-    # =========================
-    # PLOT 2: Boxplot (percent)
-    # =========================
     if n_hi > 0 and n_lo > 0:
         plt.figure(figsize=(7, 5))
         plt.boxplot([lo_r * 100.0, hi_r * 100.0],
@@ -401,9 +348,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         plt.savefig(bpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{bpath}[/green]")
 
-    # ====================================
-    # PLOT 3: Win rate bar chart (percent)
-    # ====================================
     groups = []
     wrs = []
     counts = []
@@ -431,9 +375,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         plt.savefig(wpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{wpath}[/green]")
 
-    # ==========================================
-    # PLOT 4: Mean return with 95% CI (percent)
-    # ==========================================
     mu = []
     ci = []
     g2 = []
@@ -458,10 +399,7 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         plt.savefig(mpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{mpath}[/green]")
 
-    # ==========================
-    # PLOT 5: Lift curve (TOP-k)
-    # ==========================
-    order = np.argsort(-p)  # descending by probability
+    order = np.argsort(-p)
     r_sorted = r[order]
     if r_sorted.size > 10:
         cum_avg = np.cumsum(r_sorted) / np.arange(1, r_sorted.size + 1)
@@ -480,9 +418,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         plt.savefig(lpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{lpath}[/green]")
 
-    # ====================
-    # CSV summary to disk
-    # ====================
     import csv
     csv_path = OUT_DIR / "decision_boundary_summary.csv"
     with open(csv_path, "w", newline="") as f:
@@ -491,9 +426,6 @@ def analyze_decision_boundary(analyzer: AttentionAnalyzer, ds: FlatWindowDataset
         w.writerow(["low",  f"<= {lo_thr:.6f}", n_lo, f"{wr_lo:.4f}", f"{mu_lo:+.8f}", f"{mu_lo*100:+.6f}", f"{se_lo:.8f}", f"{se_lo*100:.6f}"])
         w.writerow(["high", f">= {hi_thr:.6f}", n_hi, f"{wr_hi:.4f}", f"{mu_hi:+.8f}", f"{mu_hi*100:+.6f}", f"{se_hi:.8f}", f"{se_hi*100:.6f}"])
     console.print(f"📄 Saved: [green]{csv_path}[/green]")
-
-
-# ------------------------ NEW: Prediction diagnostics ------------------------
 
 def analyze_prediction_diagnostics(
     analyzer: AttentionAnalyzer,
@@ -509,7 +441,6 @@ def analyze_prediction_diagnostics(
     X, y, ts = ds.get_batch(idx)
     probs = analyzer.predict_entry_proba(X)
 
-    # 1) Histogram of entry probabilities
     plt.figure(figsize=(8, 5))
     clean = probs[~np.isnan(probs)]
     plt.hist(clean, bins=40)
@@ -521,7 +452,6 @@ def analyze_prediction_diagnostics(
     plt.savefig(hpath, bbox_inches="tight"); plt.close()
     console.print(f"📁 Saved: [green]{hpath}[/green]")
 
-    # 2) Calibration by decile
     valid_mask = ~np.isnan(probs)
     p = probs[valid_mask]
     r = y[valid_mask]
@@ -544,7 +474,6 @@ def analyze_prediction_diagnostics(
         plt.savefig(cpath, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{cpath}[/green]")
 
-        # Save CSV with bin stats
         import csv
         csv_path = OUT_DIR / "calibration_by_decile.csv"
         with open(csv_path, "w", newline="") as f:
@@ -554,7 +483,6 @@ def analyze_prediction_diagnostics(
                 w.writerow([m, a])
         console.print(f"📄 Saved: [green]{csv_path}[/green]")
 
-    # 3) Scatter: p(entry) vs future return
     plt.figure(figsize=(8, 5))
     plt.scatter(p, r*100.0, s=6, alpha=0.5)
     plt.title("p(entry) vs Future Return")
@@ -565,7 +493,6 @@ def analyze_prediction_diagnostics(
     plt.savefig(spath, bbox_inches="tight"); plt.close()
     console.print(f"📁 Saved: [green]{spath}[/green]")
 
-    # 4) If timestamps exist, plot a short timeseries of p(entry)
     if ts is not None:
         take = min(2000, len(ts))
         plt.figure(figsize=(10, 4))
@@ -586,11 +513,10 @@ def analyze_pseudo_temporal_attention(analyzer, ds, num_samples=3, out_dir=Path(
     indices = np.random.choice(len(ds), n, replace=False)
 
     for i, idx in enumerate(indices):
-        x_vec, _, _ = ds[idx]  # flat [L]
-        sal = analyzer.temporal_saliency_from_flat(x_vec)              # [T]
-        dlt, _ = analyzer.temporal_occlusion_from_flat(x_vec, block=3) # [T]
+        x_vec, _, _ = ds[idx]
+        sal = analyzer.temporal_saliency_from_flat(x_vec)
+        dlt, _ = analyzer.temporal_occlusion_from_flat(x_vec, block=3)
 
-        # plot saliency
         plt.figure(figsize=(12, 3))
         plt.plot(sal)
         plt.title(f"Temporal saliency (|grad|, normalized) — sample {idx}")
@@ -599,7 +525,6 @@ def analyze_pseudo_temporal_attention(analyzer, ds, num_samples=3, out_dir=Path(
         plt.tight_layout(); plt.savefig(p1, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{p1}[/green]")
 
-        # plot occlusion delta
         plt.figure(figsize=(12, 3))
         plt.plot(dlt)
         plt.axhline(0.0, ls="--", c="k", lw=0.8)
@@ -609,10 +534,6 @@ def analyze_pseudo_temporal_attention(analyzer, ds, num_samples=3, out_dir=Path(
         plt.tight_layout(); plt.savefig(p2, bbox_inches="tight"); plt.close()
         console.print(f"📁 Saved: [green]{p2}[/green]")
 
-# =============================================================================
-# Main
-# =============================================================================
-
 def main():
     console.print(Panel.fit(
         "[bold cyan]NEURAL TRADING SYSTEM[/bold cyan]\n"
@@ -621,7 +542,6 @@ def main():
         border_style="cyan"
     ))
 
-    # ----- Discover files
     try:
         MODEL_PATH, FEATURE_EXTRACTOR_PATH = discover_model_and_extractor(
             model_path=None, feature_extractor_path=None
@@ -637,28 +557,23 @@ def main():
         console.print("[yellow]💡 Run training first to generate cache[/yellow]")
         return
 
-    # Sanity display
     console.print(f"[cyan]Model:            {MODEL_PATH}[/cyan]")
     console.print(f"[cyan]FeatureExtractor: {FEATURE_EXTRACTOR_PATH}[/cyan]")
     console.print(f"[cyan]Feature cache:    {FEATURE_CACHE_PATH}[/cyan]")
 
-    # Load model/extractor
     model, feature_extractor, config = load_model_and_data(MODEL_PATH, FEATURE_EXTRACTOR_PATH)
-    # Preserve true feature_dim into config for printing
+
     config['feature_dim'] = getattr(getattr(feature_extractor, 'scaler', None), 'n_features_in_', None) or config.get('feature_dim', 'N/A')
     print_model_summary(model, config)
 
-    # Load sequences from cache
     ds, returns_all = prepare_dataset_from_cache(FEATURE_CACHE_PATH, config)
 
-    # Initialize analyzer
     console.print("\n🔧 [cyan]Initializing analyzer...[/cyan]")
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     analyzer = AttentionAnalyzer(model, feature_extractor, device=device, auto_scale=False, config=config)
     model.to(device)
     console.print("✅ [green]Analyzer ready[/green]")
 
-    # Run analyses
     try:
         analyze_attention_patterns(analyzer, ds, num_samples=3)
         analyze_pseudo_temporal_attention(analyzer, ds, num_samples=3, out_dir=OUT_DIR)
@@ -673,7 +588,6 @@ def main():
 
     console.print("\n" + "=" * 80)
     console.print(Panel.fit("[bold green]✅ ANALYSIS COMPLETE![/bold green]", border_style="green"))
-
 
 if __name__ == '__main__':
     main()

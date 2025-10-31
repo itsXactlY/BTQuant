@@ -61,3 +61,8 @@ neural_trading_system/backtest/exit_aware_neural_strategy.py
 neural_trading_system/backtest/indicator_deck.py
 neural_trading_system/backtest/neural_backtest_suite.py
 neural_trading_system/neural_data/BTC_15m_2023-01-01_2024-01-01_neural_data.parquet
+neural_trading_system/neural_data/BTC_15m_2017-01-01_2024-01-01_neural_data.parquet
+neural_trading_system/neural_data/BTC_15m_2024-01-01_2024-04-01_neural_data.parquet
+neural_trading_system/neural_data/BTC_15m_2025-01-01_2026-01-01_neural_data.parquet
+neural_trading_system/plot/BTC_15m_2023-01-01_2024-01-01_neural_data.parquet
+neural_trading_system/neural_data/BTC_1h_2023-01-01_2024-01-01_neural_data.parquet

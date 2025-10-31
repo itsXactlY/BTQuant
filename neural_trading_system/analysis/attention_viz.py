@@ -1,4 +1,4 @@
-# analysis/attention_viz.py
+
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple, Union
 from pathlib import Path
@@ -11,7 +11,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ArrayLike = Union[np.ndarray, torch.Tensor]
-
 
 class AttentionAnalyzer:
     def __init__(
@@ -28,13 +27,12 @@ class AttentionAnalyzer:
         self.device = torch.device(device)
         self.auto_scale = auto_scale
         self.config = config or {}
-        self.seq_len = int(self.config.get("seq_len", 100))  # <-- needed for pseudo-temporal views
+        self.seq_len = int(self.config.get("seq_len", 100))
 
         self._hooks: List[Any] = []
         self._captured_attn: List[torch.Tensor] = []
         self._register_attention_hooks()
 
-    # ---------------- hooks ----------------
     def _register_attention_hooks(self) -> None:
         for h in self._hooks:
             try: h.remove()
@@ -60,7 +58,6 @@ class AttentionAnalyzer:
             if ("attention" in lname or "attn" in lname) and not isinstance(m, nn.MultiheadAttention):
                 self._hooks.append(m.register_forward_hook(hook_factory(name)))
 
-    # --------------- utils -----------------
     def _ensure_parent(self, p: Optional[str]) -> None:
         if p: Path(p).parent.mkdir(parents=True, exist_ok=True)
 
@@ -83,16 +80,16 @@ class AttentionAnalyzer:
         return x_np.astype(np.float32, copy=False)
 
     def _prepare_input(self, sample: ArrayLike) -> torch.Tensor:
-        """
-        Keep model contract: it currently expects [B, T, F] but your checkpoint uses T=1, F=flat_len.
-        So we forward as [1, 1, flat_len]. We do NOT reshape to [1, T, F_t] to avoid weight mismatch.
-        """
+\
+\
+\
+
         if isinstance(sample, torch.Tensor):
             x = sample.detach().to(self.device, dtype=torch.float32)
             if x.dim() == 1:
-                x = x.view(1, 1, -1)      # [1, 1, F_flat]
+                x = x.view(1, 1, -1)
             elif x.dim() == 2:
-                x = x.unsqueeze(0)        # [1, T=?, F=?]
+                x = x.unsqueeze(0)
             elif x.dim() != 3:
                 raise ValueError(f"Unsupported tensor dim {x.dim()}")
             if x.size(0) != 1:
@@ -101,7 +98,7 @@ class AttentionAnalyzer:
 
         arr = np.asarray(sample, dtype=np.float32)
         if arr.ndim == 1:
-            arr = arr.reshape(1, -1)      # [1, F_flat]
+            arr = arr.reshape(1, -1)
         elif arr.ndim != 2:
             raise ValueError(f"Unsupported input ndim={arr.ndim}; expected 1 or 2.")
         arr = self._maybe_scale(arr)
@@ -109,10 +106,10 @@ class AttentionAnalyzer:
         if x.dim() == 1:
             x = x.view(1, 1, -1)
         elif x.dim() == 2:
-            x = x.unsqueeze(0)            # [1, 1, F_flat] or [1, T, F] if user already shaped
+            x = x.unsqueeze(0)
         if x.size(0) != 1:
             x = x[:1]
-        # If someone passed [1,T,F] and T>1, we’ll respect it; otherwise we’re [1,1,F_flat].
+
         return x
 
     def _forward(self, x3: torch.Tensor) -> Dict[str, Any]:
@@ -130,7 +127,7 @@ class AttentionAnalyzer:
             v = out.detach().cpu().view(-1)
             keys = ["entry_prob", "exit_prob", "expected_return", "volatility_forecast", "position_size"]
             for i, k in enumerate(keys[:len(v)]): preds[k] = v[i]
-        # logits -> prob fallback
+
         if "entry_prob" not in preds and "entry_logits" in preds:
             el = preds["entry_logits"]
             preds["entry_prob"] = float(torch.sigmoid(el).item()) if torch.is_tensor(el) else 1/(1+np.exp(-float(el)))
@@ -140,7 +137,6 @@ class AttentionAnalyzer:
             if isinstance(v, torch.Tensor) and v.numel() == 1: preds[k] = float(v.item())
         return preds
 
-    # --------------- public ---------------
     def extract_attention_weights(self, sample_seq: ArrayLike) -> Tuple[List[torch.Tensor], Dict[str, Any]]:
         self._captured_attn = []
         x3 = self._prepare_input(sample_seq)
@@ -178,7 +174,7 @@ class AttentionAnalyzer:
             target.view(-1)[0].backward()
             grad = x3.grad
             if grad is None: continue
-            imp = grad.abs().mean(dim=(0, 1)).detach().cpu().numpy()  # [F_flat] or [F]
+            imp = grad.abs().mean(dim=(0, 1)).detach().cpu().numpy()
             agg = imp.astype(np.float32) if agg is None else (agg + imp)
             count += 1
         vec = np.zeros_like(agg) if count == 0 else agg / float(count)
@@ -190,14 +186,13 @@ class AttentionAnalyzer:
             return vec, names
         return vec
 
-    # -------- PSEUDO-TEMPORAL EXPLANATIONS (for flat windows) --------
     def temporal_saliency_from_flat(self, flat_vec: np.ndarray) -> np.ndarray:
-        """
-        Computes per-time-step importance from a flattened window (length L),
-        using gradient |d(entry)/dX| aggregated over each time slice.
-        Returns array of shape [T] with T=self.seq_len.
-        """
-        x3 = self._prepare_input(flat_vec).clone().detach().requires_grad_(True)  # [1,1,L]
+\
+\
+\
+\
+
+        x3 = self._prepare_input(flat_vec).clone().detach().requires_grad_(True)
         out = self.model(x3)
         if isinstance(out, dict):
             target = out.get("entry_logits", out.get("entry_prob", None))
@@ -211,29 +206,29 @@ class AttentionAnalyzer:
         self.model.zero_grad(set_to_none=True)
         if x3.grad is not None: x3.grad.zero_()
         target.view(-1)[0].backward()
-        grad = x3.grad.detach().cpu().view(-1).numpy()  # [L]
+        grad = x3.grad.detach().cpu().view(-1).numpy()
         L = grad.size
         T = max(1, self.seq_len)
         if L % T != 0:
-            # fallback: uniform chunking
+
             chunk = L // T
             splits = [slice(i*chunk, (i+1)*chunk) for i in range(T-1)] + [slice((T-1)*chunk, L)]
         else:
             step = L // T
             splits = [slice(i*step, (i+1)*step) for i in range(T)]
         imp = np.array([np.mean(np.abs(grad[s])) for s in splits], dtype=np.float32)
-        # normalize 0..1 for nicer plots
+
         if imp.max() > 0: imp = imp / imp.max()
         return imp
 
     def temporal_occlusion_from_flat(self, flat_vec: np.ndarray, block: int = 5) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Occlusion over time: zero out contiguous time blocks (size `block`) in the
-        flattened vector and record change in entry probability.
-        Returns:
-          deltas: [T] (occlusion impact per step anchor)
-          probs:  [T] (prediction under occlusion)
-        """
+\
+\
+\
+\
+\
+\
+
         base = float(self._forward(self._prepare_input(flat_vec)).get("entry_prob", np.nan))
         L = flat_vec.size
         T = max(1, self.seq_len)
@@ -248,7 +243,6 @@ class AttentionAnalyzer:
             deltas.append(p_mut - base)
         return np.array(deltas, dtype=np.float32), np.array(probs, dtype=np.float32)
 
-    # --------------- plotting ---------------
     def plot_attention_heatmap(self, attention_weights, layer_idx=-1, head_idx=0, save_path: Optional[str] = None):
         if isinstance(attention_weights, list) and len(attention_weights) > 0:
             attn = attention_weights[0]; attn = attn.detach().cpu() if torch.is_tensor(attn) else torch.as_tensor(attn)

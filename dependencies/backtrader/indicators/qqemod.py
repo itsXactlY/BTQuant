@@ -1,6 +1,6 @@
 import backtrader as bt
 
-class QQE(bt.Indicator):
+class QQEMod(bt.Indicator):
     lines = ('qqe_line', 'rsi_ma', 'long_band', 'short_band', 'trend', 'qqe_oscillator')
     params = (
         ('rsi_period', 6),

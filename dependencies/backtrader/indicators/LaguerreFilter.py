@@ -22,16 +22,18 @@ class LaguerreFilter(bt.Indicator):
                      )
 
     def __init__(self):
-        self.addminperiod(30)
+        self.addminperiod(self.p.period)
         self.alpha = 2/(self.p.period+1)
         self.l.p = (self.data.high + self.data.low)/2
 
     def prenext(self):
+        price = self.l.p[0]
+        self.l.L0[0] = price
+        self.l.L1[0] = price
+        self.l.L2[0] = price
+        self.l.L3[0] = price
+        self.l.filter[0] = price
 
-        self.l.L0[0] = self.l.p[0]
-        self.l.L1[0] = self.l.p[-1]
-        self.l.L2[0] = self.l.p[-2]
-        self.l.L3[0] = self.l.p[-2]
 
     def next(self):
         a = self.alpha

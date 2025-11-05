@@ -178,7 +178,7 @@ class BaseStrategy(bt.Strategy):
 
     def _init_metrics(self):
         """Initialize performance metrics"""
-        self.init_cash = self.params.init_cash
+        self.init_cash = self.broker.getcash() #self.params.init_cash
         self.total_cash_added = 0
         self.total_pnl = 0.0
         self.total_wins = 0

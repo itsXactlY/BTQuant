@@ -136,7 +136,7 @@ class CommInfoBase(with_metaclass(MetaParams)):
         self._stocklike = self.p.stocklike
         self._commtype = self.p.commtype
 
-        # The initial block checks for the behavior of the original
+        # The intial block checks for the behavior of the original
         # CommissionInfo in which the commission scheme (perc/fixed) was
         # determined by parameter "margin" evaluating to False/True
         # If the parameter "commtype" is None, this behavior is emulated

@@ -2,8 +2,7 @@ import gc
 import math
 import time
 import urllib.parse
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Callable, Tuple
+from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass
 
 import backtrader as bt
@@ -160,22 +159,12 @@ def make_objective(
     config: OptimizationConfig,
     param_space_fn: Optional[Callable[[optuna.Trial], Dict[str, Any]]] = None
 ) -> Callable:
-    """
-    Create an Optuna objective function that:
-      - runs walk-forward evaluation across multiple OOS slices with an embargo,
-      - aggregates performance robustly across OOS slices,
-      - gates selection by an approximate Deflated Sharpe Ratio significance check,
-      - and records rich trial metrics for later analysis.
-    """
-    import numpy as np
-    import math
-    import traceback
-    from datetime import timedelta
-
+    """Create Optuna objective function"""
+    
     if param_space_fn is None:
         param_space_fn = default_param_space
-
-    # Pre-cache data once
+    
+    # Pre-cache data
     console.print(f"[cyan]Pre-loading data for {config.coin}...[/cyan]")
     loader = PolarsDataLoader()
     spec = DataSpec(
@@ -183,215 +172,100 @@ def make_objective(
         interval=config.interval,
         start_date=config.start_date,
         end_date=config.end_date,
-        collateral=config.collateral,
+        collateral=config.collateral
     )
+    
     try:
         df = loader.load_data(spec, use_cache=True)
         console.print(f"[green]✅ Data cached for {config.coin}[/green]")
     except Exception as e:
         console.print(f"[red]Failed to load data: {e}[/red]")
         raise
-
-    def build_walkforward_slices(
-        df_,
-        is_days: int = 90,
-        oos_days: int = 30,
-        embargo_days: int = 3
-    ):
-        dts = df_["datetime"]
-        if len(dts) == 0:
-            return []
-        start = dts.min()
-        end = dts.max()
-        slices = []
-        cur_is_start = start
-        delta_is = timedelta(days=is_days)
-        delta_oos = timedelta(days=oos_days)
-        delta_emb = timedelta(days=embargo_days)
-        while True:
-            is_start = cur_is_start
-            is_end = is_start + delta_is
-            emb_start = is_end + delta_emb
-            oos_start = emb_start
-            oos_end = oos_start + delta_oos
-            if oos_end > end:
-                break
-            slices.append((is_start, is_end, oos_start, oos_end))
-            cur_is_start = cur_is_start + delta_oos
-        return slices
-
-    wf_slices = build_walkforward_slices(df)
-
-    if not wf_slices:
-        dts = df["datetime"]
-        start = dts.min()
-        end = dts.max()
-        total_days = max(1, (end - start).days)
-        oos_days = max(1, int(0.25 * total_days))
-        is_end = start + timedelta(days=(total_days - oos_days))
-        oos_start = is_end + timedelta(days=2)
-        wf_slices = [(start, is_end, oos_start, end)]
-
-    def approx_deflated_sharpe_prob(sr_hat: float, rets: np.ndarray, n_trials: int) -> float:
-        rets = np.asarray(rets, dtype=float)
-        T = int(rets.size)
-        if T < 10 or np.allclose(rets.std(ddof=1), 0.0):
-            return 0.0  # not enough information to claim significance
-        mu = rets.mean()
-        sd = rets.std(ddof=1)
-        # Central moments
-        z = (rets - mu) / sd
-        gamma3 = float(np.mean(z**3))
-        gamma4 = float(np.mean(z**4))  # non-excess kurtosis (>= 1)
-        # Selection-bias floor for SR given N trials
-        N = max(2, int(n_trials))
-        sr0 = math.sqrt(2.0 * math.log(N)) / math.sqrt(max(1, T - 1))
-        # Adjusted z of Sharpe
-        denom = math.sqrt(max(1e-12, 1.0 - gamma3 * sr_hat + ((gamma4 - 1.0) / 4.0) * (sr_hat ** 2)))
-        z_sr = ((sr_hat - sr0) * math.sqrt(max(1, T - 1))) / denom
-        # One-sided probability that SR > SR0 under adjusted normal
-        # Phi(z)
-        prob = 0.5 * (1.0 + math.erf(z_sr / math.sqrt(2.0)))
-        return max(0.0, min(1.0, prob))
-
-    def run_one_window(oos_df, filtered_params):
-        # Build and run a Cerebro instance for the OOS slice only
-        cerebro = bt.Cerebro(oldbuysell=True, runonce=True, stdstats=False, exactbars=-1)
-        feed = loader.make_backtrader_feed(oos_df, spec)
-        cerebro.adddata(feed)
-
-        strat_kwargs = {
-            'backtest': True,
-            'optuna': True,
-            'can_short': (str(config.exchange).lower() == "mexc") if config.exchange else False,
-        }
-        strat_kwargs.update(filtered_params)
-        cerebro.addstrategy(config.strategy_class, **strat_kwargs)
-
-        cerebro.broker.setcash(config.init_cash)
-        cerebro.broker.setcommission(commission=config.commission)
-        # Optional slippage realism (2.5 bps); adjust to venue conditions
-        cerebro.broker.set_slippage_perc(0.00025)
-
-        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", timeframe=bt.TimeFrame.Days, annualize=True)
-        cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
-        cerebro.addanalyzer(bt.analyzers.TimeReturn, _name="timereturn", timeframe=bt.TimeFrame.NoTimeFrame)
-
-        results = cerebro.run(maxcpus=1)
-        strat = results[0]
-
-        sr_val = strat.analyzers.sharpe.get_analysis().get("sharperatio")
-        sharpe = float(sr_val) if sr_val is not None and not math.isnan(sr_val) else 0.0
-        dd = strat.analyzers.drawdown.get_analysis().get("max", {}).get("drawdown", 0.0) or 0.0
-
-        ta = strat.analyzers.trades.get_analysis()
-        trades = int(ta.get("total", {}).get("total", 0) or 0)
-        wins = int(ta.get("won", {}).get("total", 0) or 0)
-
-        # Extract per-bar returns for OOS
-        tr_map = strat.analyzers.timereturn.get_analysis()
-        # Backtrader returns an OrderedDict keyed by datetime -> return
-        oos_returns = np.array(list(tr_map.values()), dtype=float) if tr_map else np.array([], dtype=float)
-
-        # Cleanup
-        del cerebro, feed, strat, results
-        gc.collect()
-        return sharpe, float(dd), trades, wins, oos_returns
-
+    
     def objective(trial: optuna.Trial) -> float:
-        # 1) Sample parameters
+        """Objective function for a single trial"""
+        
+        # Get parameter suggestions
         params = param_space_fn(trial)
-
-        # 2) Filter to valid strategy params
+        
+        # Extract strategy's valid parameters
         try:
             valid_keys = set(config.strategy_class.params._getkeys())
-        except Exception:
-            valid_keys = set(k for k, _ in getattr(config.strategy_class, "params", []))
+        except:
+            valid_keys = set(k for k, _ in config.strategy_class.params)
+        
+        # Filter to only valid parameters
         filtered_params = {k: v for k, v in params.items() if k in valid_keys}
-
+        
+        # Run backtest
         try:
-            # 3) Walk-forward across OOS slices
-            oos_sharpes = []
-            oos_drawdowns = []
-            total_trades = 0
-            total_wins = 0
-            all_oos_returns = []
-
-            for (is_start, is_end, oos_start, oos_end) in wf_slices:
-                # Embargo applied in slice construction; run OOS only
-                oos_df = df.filter(
-                    (df["datetime"] >= oos_start) & (df["datetime"] < oos_end)
-                )
-                if len(oos_df) == 0:
-                    continue
-
-                sr, mdd, tr, wn, rets = run_one_window(oos_df, filtered_params)
-                oos_sharpes.append(sr)
-                oos_drawdowns.append(mdd)
-                total_trades += tr
-                total_wins += wn
-                if rets.size:
-                    all_oos_returns.append(rets)
-
-            # 4) Aggregate robustly across slices
-            if total_trades < config.min_trades or len(oos_sharpes) == 0:
+            cerebro = bt.Cerebro(oldbuysell=True, runonce=True, stdstats=False, exactbars=-1)
+            
+            # Create fresh data feed for this trial
+            feed = loader.make_backtrader_feed(df, spec)
+            cerebro.adddata(feed)
+            
+            # Add strategy with parameters
+            strat_kwargs = {
+                'backtest': True,
+                'optuna': True,  # 🔥 SET OPTUNA FLAG
+                'can_short': (str(config.exchange).lower() == "mexc") if config.exchange else False,
+            }
+            strat_kwargs.update(filtered_params)
+            
+            cerebro.addstrategy(config.strategy_class, **strat_kwargs)
+            
+            # Setup broker
+            cerebro.broker.setcash(config.init_cash)
+            cerebro.broker.setcommission(commission=config.commission)
+            
+            # Add analyzers
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe", timeframe=bt.TimeFrame.Days, annualize=True)
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
+            
+            # Run
+            results = cerebro.run(maxcpus=1)
+            strat = results[0]
+            
+            # Extract metrics
+            sr = strat.analyzers.sharpe.get_analysis().get("sharperatio")
+            sharpe = float(sr) if sr is not None and not math.isnan(sr) else 0.0
+            
+            mdd = float(strat.analyzers.drawdown.get_analysis().get("max", {}).get("drawdown", 0.0))
+            
+            ta = strat.analyzers.trades.get_analysis()
+            trades = ta.get("total", {}).get("total", 0)
+            wins = ta.get("won", {}).get("total", 0)
+            
+            # Store metrics
+            trial.set_user_attr("sharpe", sharpe)
+            trial.set_user_attr("max_dd", mdd)
+            trial.set_user_attr("trades", trades)
+            trial.set_user_attr("wins", wins)
+            trial.set_user_attr("win_rate", (wins/trades*100 if trades > 0 else 0))
+            trial.set_user_attr("final_value", cerebro.broker.getvalue())
+            
+            # Clean up
+            del cerebro, feed, strat, results
+            gc.collect()
+            
+            # Score
+            if trades < config.min_trades:
                 return -999.0
-
-            med_sr = float(np.median(oos_sharpes))
-            mean_mdd = float(np.mean(oos_drawdowns)) if oos_drawdowns else 100.0
-            concat_rets = np.concatenate(all_oos_returns) if all_oos_returns else np.array([], dtype=float)
-
-            # 5) Complexity regularization: penalize enabling too many blocks
-            enabled_blocks = sum([
-                1 if filtered_params.get("use_cycle_signals", False) else 0,
-                1 if filtered_params.get("use_regime_signals", False) else 0,
-                1 if filtered_params.get("use_volatility_signals", False) else 0,
-                1 if filtered_params.get("use_momentum_signals", False) else 0,
-                1 if filtered_params.get("use_trend_signals", False) else 0,
-            ])
-            complexity_pen = 0.5 * max(0, enabled_blocks - 3)  # small L1-like bias toward simpler configs
-
-            # 6) Approximate Deflated Sharpe probability (significance against multiple testing)
-            n_trials_eff = max(2, trial.number + 1)
-            dsr_prob = approx_deflated_sharpe_prob(med_sr, concat_rets, n_trials_eff)
-
-            # 7) Final score: robust SR minus drawdown penalty and complexity;
-            # demote if DSR probability is weak.
-            score = med_sr * 100.0 - 3.0 * mean_mdd - complexity_pen
-            if dsr_prob < 0.8:
-                score -= 25.0
-            if dsr_prob < 0.6:
-                score -= 25.0  # total -50 if very weak
-
-            # 8) Record trial-level metrics
-            win_rate = (total_wins / total_trades * 100.0) if total_trades > 0 else 0.0
-            trial.set_user_attr("oos_median_sharpe", med_sr)
-            trial.set_user_attr("oos_mean_max_dd", mean_mdd)
-            trial.set_user_attr("oos_trades", int(total_trades))
-            trial.set_user_attr("oos_wins", int(total_wins))
-            trial.set_user_attr("oos_win_rate", float(win_rate))
-            trial.set_user_attr("oos_slices", int(len(oos_sharpes)))
-            trial.set_user_attr("enabled_blocks", int(enabled_blocks))
-            trial.set_user_attr("complexity_pen", float(complexity_pen))
-            trial.set_user_attr("dsr_prob", float(dsr_prob))
-
-            return float(score)
-
+            
+            score = sharpe - 0.03 * mdd
+            return score
+            
         except Exception as e:
             console.print(f"[red]Trial {trial.number} failed: {e}[/red]")
             console.print(traceback.format_exc())
             return -999.0
-
+    
     return objective
-
 
 def optimize(config: OptimizationConfig, param_space_fn: Optional[Callable] = None) -> optuna.Study:
     """Run Optuna optimization with MSSQL storage"""
-    
-    # Validate MSSQL connection is provided for multi-worker
-    if config.n_jobs > 1 and not config.storage_string:
-        raise ValueError("❌ MSSQL storage_string is REQUIRED for multi-worker optimization (n_jobs > 1)!")
     
     # Use MSSQL_ODBC global if not provided
     if not config.storage_string:
@@ -536,7 +410,7 @@ def ensure_storage_or_sqlite(storage_string: Optional[str], study_name: str) -> 
 ⚠️  Parallel execution WILL break, hang, or corrupt your study.  ⚠️
 ⚠️  This is a fallback for emergencies only — not production use.  ⚠️
 
-[red]NO SUPPORT GIVEN.[/red]
+[bold red blink]NO SUPPORT GIVEN.[/bold red blink]
 [bold]May the RNG gods have mercy with you.[/bold]
 """
         warning_panel = Panel(

@@ -209,7 +209,7 @@ class TradingViewData(DataBase):
         self._start_date = start_date
         
         self.symbol = store.symbol
-        self.params.symbol = store.symbol
+        self.params.symbol = store.symbol  # Also add to params
         
         self._state_manager = StateManager(DataState.LIVE)
         self._buffer = ThreadSafeDataBuffer(max_size=self.p.max_buffer)

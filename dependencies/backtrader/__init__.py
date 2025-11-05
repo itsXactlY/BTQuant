@@ -93,3 +93,8 @@ import backtrader.indicators.contrib
 import backtrader.studies.contrib
 
 from .imports import *
+
+
+# Disabled until more time to make it properly
+# from .visuals.plotly_engine import activate_plotly_engine
+# activate_plotly_engine()

@@ -972,9 +972,14 @@ def bulk_backtest(
         params_mode="mtf",
         **backtest_kwargs):
 
-    """Enhanced bulk backtest with unified progress tracking and auto-discovery"""
+    """Enhanced bulk backtest with unified progress tracking and auto-discovery
+    Example Coinlist: coinlist = ['1000CAT','AAVE', 'ACA', 'ACE', 'ACH', 'ACM', 'ACT', 'ACX']
+    Or just None to fully fetch whole Database available of Coins
+    """
     import warnings
     warnings.filterwarnings("ignore", category=RuntimeWarning)
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
 
     # Validate required parameters first
     if not all([start_date, end_date, interval]):
@@ -1235,8 +1240,6 @@ def print_detailed_results(results):
     return results
 
 
-
-
 def bulk_backtest_with_optuna(
         study_name: str,
         strategy_class,
@@ -1349,11 +1352,9 @@ def bulk_backtest_with_optuna(
     console.print(f"[bold blue]Study Best Value: {best_trial.value}[/bold blue]")
     console.print(f"[dim]Trial Number: {best_trial.number} | Trials Completed: {len(study.trials)}[/dim]\n")
     
-    # ==================== Validate Required Parameters ====================
     if not all([start_date, end_date, interval]):
         raise ValueError("start_date, end_date, and interval are required")
     
-    # ==================== Auto-discover Coins ====================
     if coins is None:
         console.print("[bold blue]🔍 Auto-discovering coins from database...[/bold blue]")
         try:
@@ -1381,7 +1382,7 @@ def bulk_backtest_with_optuna(
         'quantstats': False,
         'params_mode': params_mode,
         'add_mtf_resamples': False,
-        'params': best_params,  # ✨ Inject Optuna best params here
+        'params': best_params,
     }
     default_backtest_params.update(backtest_kwargs)
     

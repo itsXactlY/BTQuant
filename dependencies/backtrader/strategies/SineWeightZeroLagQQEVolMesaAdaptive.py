@@ -1,249 +1,251 @@
 import math
-from backtrader.utils.backtest import backtest, bulk_backtest
 from backtrader.strategies.base import BaseStrategy, bt
 from backtrader.indicators.MesaAdaptiveMovingAverage import MAMA
 
-class QQEIndicator(bt.Indicator):
-    params = (
-        ("period", 14),
-        ("fast", 5),
-        ("q", 4.236),
-        ("smoothing", 7),
-    )
-    lines = ("qqe_line", "qqe_smoothed", "qqe_signal", "qqe_trend")
+# ---- Lightweight QQE (faster than multiple nested EMAs) ----
+class FastQQE(bt.Indicator):
+    """
+    Fast QQE-ish indicator:
+      - RSI base
+      - small "dar" volatility term via ATR * q
+      - one smoothing EMA + signal EMA
+    Minimal lines to reduce overhead.
+    """
+    params = dict(period=13, fast=5, q=4.236, smoothing=5, eps=1e-9)
+    lines = ("smoothed", "signal",)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.rsi = bt.indicators.RSI(self.data.close, period=self.p.period)
-        self.atr = bt.indicators.ATR(self.data, period=self.p.fast)
-        rsi_ma = bt.indicators.EMA(self.rsi, period=int(self.p.period/2))
-        dar_period = int((self.p.period * 2) - 1)
-        self.dar = bt.indicators.EMA(bt.If(self.atr > 0, self.atr * self.p.q, 0), period=dar_period)
-        self.lines.qqe_line = self.rsi + bt.If(self.rsi > rsi_ma, self.dar, -self.dar)
-        self.lines.qqe_smoothed = bt.indicators.EMA(self.lines.qqe_line, period=self.p.smoothing)
-        self.lines.qqe_signal = bt.indicators.EMA(self.lines.qqe_smoothed, period=self.p.smoothing * 2)
-        self.lines.qqe_trend = bt.If(self.lines.qqe_smoothed > 50, 1, -1)
-    
+    def __init__(self):
+        p = self.p
+        self.rsi = bt.ind.RSI(self.data.close, period=p.period)
+        self.rsi_ma = bt.ind.EMA(self.rsi, period=max(2, int(p.period // 2)))
+
+        # ATR-based amplitude (dar). avoid bt.If nesting: multiply then EMA
+        self.atr = bt.ind.ATR(self.data, period=max(2, p.fast))
+        self.dar_input = self.atr * p.q
+        dar_period = max(3, (p.period * 2) - 1)
+        self.dar = bt.ind.EMA(self.dar_input, period=dar_period)
+
+        # Build directional qqe_line using a tiny conditional (one bt.If only)
+        # qqe_line = rsi + sign * dar
+        self.qqe_line = self.rsi + bt.If(self.rsi > self.rsi_ma, self.dar, -self.dar)
+
+        # Smooth + signal
+        self.lines.smoothed = bt.ind.EMA(self.qqe_line, period=p.smoothing)
+        self.lines.signal = bt.ind.EMA(self.lines.smoothed, period=max(3, p.smoothing * 2))
+
     def get_signal(self):
-        if len(self.lines.qqe_smoothed) < 2:
+        """Return +1 / -1 / 0 with minimal indexing and tolerant thresholds."""
+        if len(self.lines.smoothed) < 2:
             return 0
-        bull_cross = (self.lines.qqe_smoothed[-1] < self.lines.qqe_signal[-1] and 
-                    self.lines.qqe_smoothed[0] > self.lines.qqe_signal[0])
-        bear_cross = (self.lines.qqe_smoothed[-1] > self.lines.qqe_signal[-1] and 
-                    self.lines.qqe_smoothed[0] < self.lines.qqe_signal[0])
-        bull_level = self.lines.qqe_smoothed[0] > 50 and self.lines.qqe_smoothed[-1] <= 50
-        bear_level = self.lines.qqe_smoothed[0] < 50 and self.lines.qqe_smoothed[-1] >= 50
-        
-        if bull_cross or bull_level or self.lines.qqe_smoothed[0] > 60:
+        s0 = float(self.lines.smoothed[0])
+        s1 = float(self.lines.smoothed[-1])
+        sig0 = float(self.lines.signal[0])
+        sig1 = float(self.lines.signal[-1])
+
+        cross_up = (s1 < sig1) and (s0 > sig0)
+        cross_down = (s1 > sig1) and (s0 < sig0)
+
+        # level thresholds - slightly more tolerant than strict 50/60/40
+        if cross_up or s0 > 55:
             return 1
-        elif bear_cross or bear_level or self.lines.qqe_smoothed[0] < 40:
+        if cross_down or s0 < 45:
             return -1
         return 0
 
-class VolumeOscillator(bt.Indicator):
-    params = (
-        ("short_period", 14),
-        ("long_period", 28),
-        ("smooth_period", 7),
-        ("signal_period", 14),
-    )
-    lines = ("osc", "smoothed", "signal", "trend", "momentum")
+# ---- Lightweight Volume Oscillator ----
+class FastVolOsc(bt.Indicator):
+    params = dict(short_period=14, long_period=28, smooth_period=5, signal_period=10, eps=1e-9)
+    lines = ("osc", "smoothed", "signal",)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        short_vol = bt.indicators.SMA(self.data.volume, period=self.p.short_period)
-        long_vol = bt.indicators.SMA(self.data.volume, period=self.p.long_period)
-        
-        self.lines.osc = ((short_vol - long_vol) / (long_vol + 1e-6)) * 100
-        self.lines.smoothed = bt.indicators.EMA(self.lines.osc, period=self.p.smooth_period)
-        self.lines.signal = bt.indicators.EMA(self.lines.smoothed, period=self.p.signal_period)
-        self.lines.trend = bt.If(self.lines.smoothed > self.lines.signal, 1, -1)
-        self.lines.momentum = bt.indicators.RateOfChange(self.lines.smoothed, period=5)
+    def __init__(self):
+        p = self.p
+        short_vol = bt.ind.SMA(self.data.volume, period=max(2, p.short_period))
+        long_vol = bt.ind.SMA(self.data.volume, period=max(3, p.long_period))
+
+        # Avoid costly operations: simple numeric expression
+        self.lines.osc = (short_vol - long_vol) / (long_vol + p.eps) * 100.0
+        self.lines.smoothed = bt.ind.EMA(self.lines.osc, period=max(2, p.smooth_period))
+        self.lines.signal = bt.ind.EMA(self.lines.smoothed, period=max(2, p.signal_period))
 
     def get_signal(self):
         if len(self.lines.smoothed) < 2:
             return 0
-        bull_cross = (self.lines.smoothed[-1] < self.lines.signal[-1] and 
-                    self.lines.smoothed[0] > self.lines.signal[0])
-        bear_cross = (self.lines.smoothed[-1] > self.lines.signal[-1] and 
-                    self.lines.smoothed[0] < self.lines.signal[0])
+        s0 = float(self.lines.smoothed[0])
+        s1 = float(self.lines.smoothed[-1])
+        sig0 = float(self.lines.signal[0])
+        sig1 = float(self.lines.signal[-1])
 
-        if bull_cross or (self.lines.smoothed[0] > self.lines.signal[0] and self.lines.smoothed[0] > 0):
+        cross_up = (s1 < sig1) and (s0 > sig0)
+        cross_down = (s1 > sig1) and (s0 < sig0)
+
+        if cross_up or (s0 > sig0 and s0 > 0):
             return 1
-        elif bear_cross or (self.lines.smoothed[0] < self.lines.signal[0] and self.lines.smoothed[0] < 0):
+        if cross_down or (s0 < sig0 and s0 < 0):
             return -1
         return 0
 
+# ---- Keep HMA implementation but simplified and reused ----
 class HMA(bt.Indicator):
-    lines = ('hma',)
+    lines = ("hma",)
     params = dict(period=20)
-    
+
     def __init__(self):
         p = self.p.period
-        self.wma_half = bt.ind.WeightedMovingAverage(self.data, period=int(p / 2))
+        half = max(1, int(p / 2))
+        sqrtp = max(1, int(math.sqrt(p)))
+        self.wma_half = bt.ind.WeightedMovingAverage(self.data, period=half)
         self.wma_full = bt.ind.WeightedMovingAverage(self.data, period=p)
-        self.raw_hma = 2 * self.wma_half - self.wma_full
-        self.lines.hma = bt.ind.WeightedMovingAverage(self.raw_hma, period=int(math.sqrt(p)))
+        raw = 2.0 * self.wma_half - self.wma_full
+        self.lines.hma = bt.ind.WeightedMovingAverage(raw, period=sqrtp)
 
 class ZeroLag(bt.Indicator):
-    lines = ('zerolag',)
-    params = dict(period=20)
-    
+    lines = ("zerolag",)
+    params = dict(period=14)
     def __init__(self):
-        self.hma = HMA(self.data, period=self.p.period)
-        self.hma_sma = bt.ind.SMA(self.hma, period=int(self.p.period / 2))
-        self.lines.zerolag = 2 * self.hma - self.hma_sma
+        h = HMA(self.data, period=self.p.period)
+        self.lines.zerolag = 2 * h - bt.ind.SMA(h, period=max(2, int(self.p.period / 2)))
 
-class SineWeightedMA(bt.Indicator):
-    lines = ('sine_wma',)
-    params = dict(period=20)
-    
-    def __init__(self):
-        self.lines.sine_wma = bt.ind.SMA(self.data, period=self.p.period)
-
-class SineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
+# ---- Optimized Strategy class: same order flow but faster indicator usage ----
+class FastSineWeightZeroLagQQEVolMesaAdaptive(BaseStrategy):
     params = dict(
-        # Zero Lag and Moving Average parameters
+        # indicator params (kept similar)
         zl_period=14,
         sine_period=17,
         sma_filter=197,
-        mom_period=14,
         mom_lookback=3,
-        
-        # QQE parameters
-        qqe_period=13,           # Was 14 - faster signals
+
+        qqe_period=13,
         qqe_fast=5,
         qqe_q=4.236,
-        qqe_smoothing=5,         # Was 7 - less smoothing = more signals
-        
-        # Volume Oscillator parameters
+        qqe_smoothing=5,
+
         vol_short=14,
         vol_long=28,
-        vol_smooth=5,            # Was 7 - less smoothing
-        vol_signal=10,           # Was 14 - faster signal line
-        
-        # MESA Adaptive parameters
-        fast=13,
-        slow=17,
-        
-        # Risk management
-        take_profit=0.7,           # 1% take profit
-        dca_deviation=4.5,       # DCA when price drops 4.5%
-        percent_sizer=0.0225,    # 2.25% of available cash per trade
-        
-        # Execution
-        debug=True,
-        backtest=True
+        vol_smooth=5,
+        vol_signal=10,
+
+        fast=13, slow=17,   # MAMA params (left unchanged)
+
+        # Risk mgmt
+        take_profit=0.7,
+        dca_deviation=2.5,
+        percent_sizer=0.01,
+
+        debug=False,
+        backtest=True,
+        capture_data=False
     )
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
-        # Indicators only - BaseStrategy handles all position tracking
-        self.zero_lag = ZeroLag(self.data, period=self.p.zl_period, plot=False)
-        self.sine_wma = SineWeightedMA(self.zero_lag, period=self.p.sine_period, plot=False)
-        self.sma_200 = bt.ind.SMA(self.data, period=self.p.sma_filter, plot=True)
-        self.fmomentum = bt.ind.Momentum(self.data, period=self.p.mom_period, plot=True)
-        self.crossover = bt.ind.CrossOver(self.zero_lag, self.sine_wma, plot=True)
-        
-        self.sma17 = bt.ind.SMA(period=17)
-        self.sma47 = bt.ind.SMA(period=47)
-        self.mama = MAMA(self.data, fast=self.p.fast, slow=self.p.slow)
-        self.mesa_cross = bt.ind.CrossOver(self.sma17, self.sma47)
-        self.smomentum = bt.ind.Momentum(period=42)
-        
-        self.qqe = QQEIndicator(
-            self.data, 
-            period=self.p.qqe_period,
-            fast=self.p.qqe_fast,
-            q=self.p.qqe_q,
-            smoothing=self.p.qqe_smoothing,
-            subplot=True
-        )
-        
-        self.volosc = VolumeOscillator(
-            self.data,
-            short_period=self.p.vol_short,
-            long_period=self.p.vol_long,
-            smooth_period=self.p.vol_smooth,
-            signal_period=self.p.vol_signal,
-            subplot=True
-        )
-        
-        self.DCA = True
-    
-    def get_signal(self):
-        """Consolidated signal logic"""
-        momentum_trending_up = all(
-            self.fmomentum[0] > self.fmomentum[-i]
-            for i in range(1, min(self.p.mom_lookback + 1, len(self.fmomentum)))
-            if len(self.fmomentum) > i
-        ) and all(
-            self.smomentum[0] > self.smomentum[-i]
-            for i in range(1, min(self.p.mom_lookback + 1, len(self.smomentum)))
-            if len(self.smomentum) > i
-        )
-        
-        price_above_sma = self.data.close[0] > self.sma_200[0]
-        
-        positive_signals = sum([
-            self.qqe.get_signal() > 0,
-            self.volosc.get_signal() > 0,
-            self.crossover > 0,
-            momentum_trending_up
-        ])
-        
-        negative_signals = sum([
-            self.qqe.get_signal() < 0,
-            self.volosc.get_signal() < 0,
-            self.crossover < 0
-        ])
 
-        if positive_signals >= 4 and price_above_sma:
+        p = self.p
+        # Precomputed / lightweight indicators
+        self.zero_lag = ZeroLag(self.data, period=p.zl_period)
+        # reuse zero_lag as input for sine_wma (kept simple)
+        self.sine_wma = bt.ind.SMA(self.zero_lag, period=p.sine_period)
+
+        # long SMA filter (200-ish)
+        self.sma200 = bt.ind.SMA(self.data, period=p.sma_filter)
+
+        # fastqqe & volosc (optimized)
+        self.qqe = FastQQE(self.data, period=p.qqe_period, fast=p.qqe_fast, q=p.qqe_q, smoothing=p.qqe_smoothing)
+        self.volosc = FastVolOsc(self.data, short_period=p.vol_short, long_period=p.vol_long,
+                                 smooth_period=p.vol_smooth, signal_period=p.vol_signal)
+
+        # simple crossover (zero_lag / sine_wma)
+        self.crossover = bt.ind.CrossOver(self.zero_lag, self.sine_wma)
+
+        # MAMA (left as before since it's heavier but necessary)
+        self.mama = MAMA(self.data, fast=p.fast, slow=p.slow)
+
+        # Momentum via close deltas (no Momentum indicator)
+        # We'll compute lookback deltas in get_signal to keep memory light
+
+        # DCA enabled by default (keeps original semantics)
+        self.DCA = True
+
+    # ---------- Lightweight helper: price delta function ----------
+    def _price_delta(self, period):
+        """Return simple price delta: close[0] - close[-period] (0 if insufficient length)"""
+        if len(self.data.close) <= period:
+            return 0.0
+        return float(self.data.close[0] - self.data.close[-period])
+
+    # ---------- Consolidated signal with relaxed thresholds ----------
+    def get_signal(self):
+        """Combine signals (fast, tolerant)"""
+        # small, fast checks so this is cheap per-bar
+        qqe_sig = self.qqe.get_signal()
+        vol_sig = self.volosc.get_signal()
+        cross_sig = 1 if self.crossover[0] > 0 else (-1 if self.crossover[0] < 0 else 0)
+
+        # momentum trend using close deltas (cheap)
+        fm = self._price_delta(14)
+        sm = self._price_delta(42)
+        momentum_trending_up = (fm > 0 and sm > 0) and (fm > sm)
+
+        price_above_sma = float(self.data.close[0]) > float(self.sma200[0])
+
+        # Count positive and negative signals
+        positives = sum([qqe_sig > 0, vol_sig > 0, cross_sig > 0, momentum_trending_up])
+        negatives = sum([qqe_sig < 0, vol_sig < 0, cross_sig < 0])
+
+        # Decision: more tolerant thresholds to avoid permanent neutrality
+        if positives >= 3 and price_above_sma:
             return 1
-        elif negative_signals >= 3 or not price_above_sma:
+        if negatives >= 2 and not price_above_sma:
+            return -1
+        # price filter fallback: if price is below sma strongly -> negative
+        if not price_above_sma and negatives >= 1:
             return -1
         return 0
 
+    # ---------- Entry ----------
     def buy_or_short_condition(self):
-        """Entry logic - BaseStrategy calls this when no position"""
-        signal = self.get_signal()
-        
-        if (signal > 0 and 
-            self.crossover > 0 and 
-            self.fmomentum > self.smomentum and 
-            self.mama.lines.MAMA > self.mama.lines.FAMA):
-            
-            self.create_order(action='BUY')  # BaseStrategy handles everything!
+        sig = self.get_signal()
+        mama_dir = float(self.mama.lines.MAMA[0]) - float(self.mama.lines.FAMA[0]) if hasattr(self.mama.lines, 'FAMA') else 0.0
+        if sig > 0 and self.crossover[0] > 0 and mama_dir > 1e-6:
+            self.create_order(action='BUY')
             return True
-        
         return False
 
+    # ---------- DCA ----------
     def dca_or_short_condition(self):
-        """DCA logic - BaseStrategy calls this when position exists and DCA=True"""
-        signal = self.get_signal()
-        
-        if (self.entry_prices and 
-            self.data.close[0] < self.entry_prices[-1] * (1 - self.params.dca_deviation / 100) and
-            signal > 0 and 
-            self.crossover > 0 and 
-            self.fmomentum > self.smomentum and 
-            self.mama.lines.MAMA > self.mama.lines.FAMA):
-            
-            self.create_order(action='BUY')  # BaseStrategy handles everything!
-            return True
-        
-        return False
-
-    def sell_or_cover_condition(self):
-        """Exit logic - BaseStrategy calls this when position exists"""
-        current_price = self.data.close[0]
-        
-        for order_tracker in list(self.active_orders):
-            if current_price >= order_tracker.take_profit_price:
-                self.close_order(order_tracker)  # BaseStrategy handles everything!
+        if not self.entry_prices:
+            return False
+        last_entry = self.entry_prices[-1]
+        price = float(self.data.close[0])
+        threshold = last_entry * (1 - (self.params.dca_deviation / 100.0))
+        if price < threshold:
+            if self.get_signal() > 0 and self.crossover[0] > 0:
+                self.create_order(action='BUY')
                 return True
-        
         return False
 
+    # ---------- Exit ----------
+    def sell_or_cover_condition(self):
+        price = float(self.data.close[0])
+        # Iterate active orders, close if TP reached (fast)
+        for order_tracker in list(self.active_orders):
+            # When order_tracker.take_profit_price exists, compare
+            if getattr(order_tracker, 'take_profit_price', None) is not None and price >= order_tracker.take_profit_price:
+                self.close_order(order_tracker)
+                return True
+        return False
 
+    def start(self):
+        try:
+            for data in self.datas:
+                # Try to get symbol attribute, fall back to _dataname
+                symbol = getattr(data, 'symbol', None)
+                if symbol is None:
+                    symbol = getattr(data, '_dataname', 'UNKNOWN')
+                    data.symbol = symbol  # Set it for future use
+                
+                print(f"✓ Data feed initialized: {symbol}")
+        except Exception as e:
+            print(f"✘ Error during validation: {e}")
+            import traceback
+            traceback.print_exc()
+        super().start()

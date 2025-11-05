@@ -1,0 +1,48 @@
+# Copyright (C) 2022-2025 Exaloop Inc. <https://exaloop.io>
+
+def bisect_left(
+    a: List[T], x: S, lo: int = 0, hi: Optional[int] = None, T: type, S: type
+) -> int:
+    if lo < 0:
+        raise ValueError("lo must be non-negative")
+    hi: int = len(a) if hi is None else hi
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if a[mid] < x:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+def bisect_right(
+    a: List[T], x: S, lo: int = 0, hi: Optional[int] = None, T: type, S: type
+) -> int:
+    if lo < 0:
+        raise ValueError("lo must be non-negative")
+    hi: int = len(a) if hi is None else hi
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if x < a[mid]:
+            hi = mid
+        else:
+            lo = mid + 1
+    return lo
+
+def insort_left(
+    a: List[T], x: S, lo: int = 0, hi: Optional[int] = None, T: type, S: type
+):
+    lo = bisect_left(a, x, lo, hi)
+    a.insert(lo, x)
+
+def insort_right(
+    a: List[T], x: S, lo: int = 0, hi: Optional[int] = None, T: type, S: type
+):
+    lo = bisect_right(a, x, lo, hi)
+
+    if lo == len(a):
+        a.append(x)
+    else:
+        a.insert(lo, x)
+
+bisect = bisect_right
+insort = insort_right

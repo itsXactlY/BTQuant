@@ -1,3 +1,9 @@
 [submodule "dependencies/quantstats_lumi_btquant"]
 	path = dependencies/quantstats_lumi_btquant
 	url = https://github.com/ItsXactlY/quantstats_lumi_btquant
+[submodule "dependencies/codon"]
+	path = dependencies/codon
+	url = https://github.com/exaloop/codon
+[submodule "dependencies/dependencies/codon"]
+	path = dependencies/dependencies/codon
+	url = https://github.com/exaloop/codon

@@ -1,0 +1,85 @@
+# Copyright (C) 2022-2025 Exaloop Inc. <https://exaloop.io>
+
+from algorithms.pdqsort import pdq_sort_inplace
+from algorithms.insertionsort import insertion_sort_inplace
+from algorithms.heapsort import heap_sort_inplace
+from algorithms.qsort import qsort_inplace
+from algorithms.timsort import tim_sort_inplace
+
+def sorted(
+    v: Generator[T],
+    key=Optional[int](),
+    reverse: bool = False,
+    algorithm: Literal[str] = "auto",
+    T: type,
+) -> List[T]:
+    newlist = [a for a in v]
+    if not isinstance(key, Optional):
+        newlist.sort(key, reverse, algorithm)
+    else:
+        newlist.sort(reverse=reverse, algorithm=algorithm)
+    return newlist
+
+def _is_pdq_compatible(x):
+    if (isinstance(x, int) or
+        isinstance(x, float) or
+        isinstance(x, bfloat16) or
+        isinstance(x, float16) or
+        isinstance(x, float32) or
+        isinstance(x, float128) or
+        isinstance(x, bool) or
+        isinstance(x, byte) or
+        isinstance(x, str) or
+        isinstance(x, Int) or
+        isinstance(x, UInt)):
+        return True
+    elif isinstance(x, Tuple):
+        for a in x:
+            if not _is_pdq_compatible(a):
+                return False
+        return True
+    else:
+        return False
+
+def _sort_list(
+    self: List[T], key: CallableTrait[[T], S], algorithm: Literal[str], T: type, S: type
+):
+    if algorithm == "tim" or algorithm == "auto":
+        tim_sort_inplace(self, key)
+    elif algorithm == "pdq":
+        pdq_sort_inplace(self, key)
+    elif algorithm == "insertion":
+        insertion_sort_inplace(self, key)
+    elif algorithm == "heap":
+        heap_sort_inplace(self, key)
+    elif algorithm == "quick":
+        qsort_inplace(self, key)
+    else:
+        compile_error("invalid sort algorithm")
+
+@extend
+class List:
+    def sort(
+        self,
+        key=Optional[int](),
+        reverse: bool = False,
+        algorithm: Literal[str] = "auto",
+    ):
+        if isinstance(key, Optional):
+            if algorithm == "auto":
+                # Python uses Timsort in all cases, but if we
+                # know stability does not matter (i.e. sorting
+                # primitive type with no key), we will use
+                # faster PDQ instead. PDQ is ~50% faster than
+                # Timsort for sorting 1B 64-bit ints.
+                if self:
+                    if _is_pdq_compatible(self[0]):
+                        pdq_sort_inplace(self, lambda x: x)
+                    else:
+                        tim_sort_inplace(self, lambda x: x)
+            else:
+                _sort_list(self, lambda x: x, algorithm)
+        else:
+            _sort_list(self, key, algorithm)
+        if reverse:
+            self.reverse()

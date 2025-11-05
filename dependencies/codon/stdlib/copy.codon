@@ -1,0 +1,11 @@
+# Copyright (C) 2022-2025 Exaloop Inc. <https://exaloop.io>
+
+class Error(Static[Exception]):
+    def __init__(self, message: str = ""):
+        super().__init__("copy.Error", message)
+
+def copy(x):
+	return x.__copy__()
+
+def deepcopy(x):
+	return x.__deepcopy__()

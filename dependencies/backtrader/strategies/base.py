@@ -84,6 +84,7 @@ class BaseStrategy(bt.Strategy):
         ('coin', None),
         ('collateral', None),
         ('debug', False),
+        ('capture_data', False),
         ('backtest', True),
         ('bulk', False),      # NEW: Flag for bulk operations
         ('optuna', False),    # NEW: Flag for optuna optimization
@@ -100,7 +101,6 @@ class BaseStrategy(bt.Strategy):
         ("percent_sizer", 0),
         ("order_cooldown", 0),
         ("enable_alerts", False),
-        
         ("alert_channel", None)
     )
 
@@ -110,7 +110,9 @@ class BaseStrategy(bt.Strategy):
         # Core data references
         self.dataclose = self.datas[0].close
         self.symbol = self.p.asset or self.p.symbol
-        
+        self.live_data = False      # True only when feed is LIVE
+        self._warming_up = False    # True during DELAYED phase
+
         # Auto-initialize all tracking variables - strategies don't need to do this
         self._init_position_tracking()
         self._init_metrics()
@@ -178,7 +180,7 @@ class BaseStrategy(bt.Strategy):
 
     def _init_metrics(self):
         """Initialize performance metrics"""
-        self.init_cash = self.broker.getcash() #self.params.init_cash
+        self.init_cash = self.params.init_cash
         self.total_cash_added = 0
         self.total_pnl = 0.0
         self.total_wins = 0
@@ -395,12 +397,14 @@ class BaseStrategy(bt.Strategy):
         self.web3order_thread.start()
         print(cgood("PancakeSwap Web3 trading initialized"))
 
-    def _init_alert_system(self, session=".__!_"):
+    def _init_alert_system(self, session="._"):
         """Initialize alert system with Telegram and Discord services if enabled"""
         if not self.p.enable_alerts:
             return None
         
         try:
+            from backtrader.brokers.jrrbroker import TelegramService
+            from backtrader.dontcommit import telegram_api_hash, telegram_api_id, telegram_channel, telegram_session_file, telegram_channel_debug
             base_session_file = ".base.session"
             new_session_file = f"{session}_{uuid.uuid4().hex}.session"
             
@@ -419,6 +423,7 @@ class BaseStrategy(bt.Strategy):
             )
             
             async def init_services():
+                from backtrader.brokers.jrrbroker import AlertManager, DiscordService, discord_webhook_url
                 await self.telegram_service.initialize(loop=self.alert_loop)
                 return AlertManager(
                     [self.telegram_service, DiscordService(discord_webhook_url)],
@@ -704,34 +709,69 @@ class BaseStrategy(bt.Strategy):
         """Called for every data point - this is where strategy logic runs"""
         if self.p.capture_data:
             capture_patch(self)
-        
+
         self.conditions_checked = False
-        
-        # Debug output
-        if self.p.debug and hasattr(self, 'live_data') and self.live_data:
+
+        # MODE FLAGS
+        is_backtest = bool(self.params.backtest)
+        is_live_trading = not is_backtest
+        is_live_data = bool(getattr(self, 'live_data', False))
+        print(f'Backtest: {is_backtest}')
+
+        # ─────────────────────────────────────────
+        # 1) LIVE run but still on historical warmup (DELAYED)
+        #    → indicators warm, NO trades, NO state changes
+        # ─────────────────────────────────────────
+        if is_live_trading and not is_live_data:
+            # Let indicators update, but DON'T size or execute anything
+            if self.p.debug:
+                # optional one-liner so you see warmup is happening
+                # print(f"[{self.data.datetime.datetime(0)}] WARMUP (no trades)")
+                pass
+            return  # EARLY EXIT: warmup only
+
+        # From here on we are either:
+        #  - pure backtest      (is_backtest True), or
+        #  - live + LIVE data   (is_live_trading True AND is_live_data True)
+
+        # Position sizing (shared for backtest + live once live_data=True)
+        if self.dataclose[0] > 0:
+            self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
+        else:
+            self.stake = 0
+
+        # Debug output only when we're "active" (backtest or true live)
+        if self.p.debug and (is_backtest or (is_live_trading and is_live_data)):
             if self.buy_executed:
                 self.print_counter += 1
             if self.print_counter % 15 == 0:
-                self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose
                 pos = "OPEN" if self.buy_executed else "FLAT"
                 dca = "DCA" if self.DCA else "-"
                 price = fmt_num(self.data.close[0], 6)
                 cash = fmt_num(self.broker.getcash(), 2)
-                print(f"{Fore.WHITE if COLORAMA else ''}⏱ {datetime.now().strftime('%H:%M:%S')} | {self.symbol or ''} | {pos} {dca} | Px {price} | Cash {cash}{Style.RESET_ALL if COLORAMA else ''}")
-                
-                if self.buy_executed and self.average_entry_price and self.take_profit_price:
+                print(
+                    f"{Fore.WHITE if COLORAMA else ''}⏱ {datetime.now().strftime('%H:%M:%S')} "
+                    f"| {self.symbol or ''} | {pos} {dca} | Px {price} | Cash {cash}"
+                    f"{Style.RESET_ALL if COLORAMA else ''}"
+                )
+                if (
+                    self.buy_executed
+                    and getattr(self, "average_entry_price", None)
+                    and getattr(self, "take_profit_price", None)
+                ):
                     print(chead("Position Report", char='─', color=Fore.BLUE))
                     print(f"Price:        {fmt_num(self.data.close[0], prec=9)}")
                     print(f"Entry (avg):  {fmt_num(self.average_entry_price, prec=9)}")
                     print(f"Take Profit:  {fmt_num(self.take_profit_price, prec=9)}")
                     print(csep('─', 60, color=Fore.BLUE))
-        
-        # Execute strategy logic based on mode
-        if hasattr(self, 'live_data') and self.live_data:
-            self._execute_strategy_logic()
-        elif self.params.backtest:
-            self.stake = self.broker.getcash() * self.p.percent_sizer / self.dataclose if self.dataclose[0] > 0 else 0
-            self._execute_strategy_logic()
+
+        # ─────────────────────────────────────────
+        # 2) Execute strategy logic
+        #    - backtest: on all bars
+        #    - live: only once data is LIVE
+        # ─────────────────────────────────────────
+        self._execute_strategy_logic()
+
 
     def _execute_strategy_logic(self):
         """
@@ -864,12 +904,33 @@ class BaseStrategy(bt.Strategy):
     # ============================================================================
     
     def notify_data(self, data, status, *args, **kwargs):
-        """Handle data status changes"""
-        dn = data._name
-        dt = datetime.now()
-        msg = 'Data Status: {}'.format(data._getstatusname(status))
-        print(dt, dn, msg)
-        self.live_data = (data._getstatusname(status) == 'LIVE')
+        """
+        Track data status so we know when we are:
+        - DELAYED  -> historical warmup in live run
+        - LIVE     -> true live trading
+        """
+        if status == data.DELAYED:
+            self.live_data = False
+            self._warming_up = True
+
+        elif status == data.LIVE:
+            self.live_data = True
+            self._warming_up = False
+
+            # Optional: ensure clean state at live start
+            if not self.params.backtest:
+                # Make absolutely sure we don't carry any historical "ghost" state
+                if hasattr(self, 'reset_position_state'):
+                    self.reset_position_state()
+                if hasattr(self, 'entry_prices'):
+                    self.entry_prices.clear()
+                if hasattr(self, 'sizes'):
+                    self.sizes.clear()
+
+        else:
+            # NOTSUBSCRIBED / other
+            self.live_data = False
+            # keep _warming_up as-is
 
     def notify_order(self, order):
         """Handle order execution notifications"""
@@ -1017,26 +1078,73 @@ class BuySellArrows(bt.observers.BuySell):
 
 
 import os
+import sys
 import csv
 import traceback
 from datetime import datetime
+
+
+def _detect_default_base_dir() -> str:
+    """
+    Detect a sane default base directory for OrderTracker:
+
+    - If running inside a virtualenv/venv:
+        -> <venv_root>/.OrderTracker_Live
+          e.g. /home/user/project/.priv/.OrderTracker_Live
+
+    - Otherwise:
+        -> <cwd>/.OrderTracker_Live
+    """
+    prefix = getattr(sys, "prefix", None)
+    base_prefix = getattr(sys, "base_prefix", None)
+
+    in_venv = (
+        prefix is not None
+        and base_prefix is not None
+        and os.path.isdir(prefix)
+        and prefix != base_prefix
+    )
+
+    if in_venv:
+        # venv root (e.g. /home/alca/projects/BTQuant/.priv)
+        return os.path.join(prefix, ".OrderTracker_Live")
+
+    # Fallback: local to current working directory
+    return os.path.join(os.getcwd(), ".OrderTracker_Live")
+
 
 class OrderTracker:
     """
     Tracks individual orders/positions with automatic CSV persistence.
     Completely independent - strategies don't need to manage this directly.
     Supports separate CSV files per symbol.
-    
+
     CSV persistence is DISABLED during:
     - Backtests (backtest=True)
     - Bulk operations (bulk=True)
     - Optuna optimizations (optuna=True)
+
+    CSV files are stored in a dedicated folder:
+    - Default: inside current venv (e.g. .priv/.OrderTracker_Live)
+    - Fallback: ./ .OrderTracker_Live in CWD
     """
+
     _order_counter = 0
     _persistence_enabled = True  # Global flag to disable CSV operations
+    _base_dir = _detect_default_base_dir()  # Default folder for CSV files
 
-    def __init__(self, entry_price, size, take_profit_pct, symbol=None, order_type="BUY", 
-                 backtest=False, bulk=False, optuna=False, data_datetime=None):
+    def __init__(
+        self,
+        entry_price,
+        size,
+        take_profit_pct,
+        symbol=None,
+        order_type="BUY",
+        backtest=False,
+        bulk=False,
+        optuna=False,
+        data_datetime=None,
+    ):
         self.entry_price = entry_price
         self.size = size
         self.take_profit_price = entry_price * (1 + take_profit_pct / 100)
@@ -1046,15 +1154,19 @@ class OrderTracker:
         self.optuna = optuna
 
         OrderTracker._order_counter += 1
-        self.tracker_id = f"order_{OrderTracker._order_counter}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        self.tracker_id = (
+            f"order_{OrderTracker._order_counter}_"
+            f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
         self.timestamp = data_datetime if data_datetime else datetime.now()
 
-        if symbol is None or (hasattr(symbol, 'is_empty') and symbol.is_empty()):
+        if symbol is None or (hasattr(symbol, "is_empty") and symbol.is_empty()):
             symbol = "UNKNOWN"
-        elif hasattr(symbol, '__len__') and len(symbol) == 0:
+        elif hasattr(symbol, "__len__") and len(symbol) == 0:
             symbol = "UNKNOWN"
         elif isinstance(symbol, (str, int, float)) and not symbol:
             symbol = "UNKNOWN"
+
         self.symbol = symbol
         self.order_type = order_type
         self.closed = False
@@ -1066,7 +1178,33 @@ class OrderTracker:
         if self._should_persist():
             self.save_to_csv()
 
-    def _should_persist(self):
+    # ------------------------------------------------------------------
+    # Base directory helpers
+    # ------------------------------------------------------------------
+    @classmethod
+    def set_base_dir(cls, path: str):
+        """Set custom base directory for all CSV files."""
+        cls._base_dir = path
+
+    @classmethod
+    def get_base_dir(cls) -> str:
+        """Get current base directory (absolute path)."""
+        base = cls._base_dir
+        if not os.path.isabs(base):
+            base = os.path.abspath(base)
+        return base
+
+    @classmethod
+    def _ensure_base_dir(cls) -> str:
+        """Ensure that the base directory exists on disk."""
+        base = cls.get_base_dir()
+        os.makedirs(base, exist_ok=True)
+        return base
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _should_persist(self) -> bool:
         """
         Determine if CSV persistence should be enabled.
         Returns False for backtest, bulk, optuna, or if globally disabled.
@@ -1074,62 +1212,102 @@ class OrderTracker:
         # Check global flag first
         if not OrderTracker._persistence_enabled:
             return False
-        
+
         # Disable for backtest, bulk, or optuna
         if self.backtest or self.bulk or self.optuna:
             return False
-        
+
         return True
 
-    def _get_csv_file(self):
-        """Return the CSV filename for this symbol"""
+    def _get_csv_file(self) -> str:
+        """Return the CSV filename for this symbol (full path)."""
         safe_symbol = self.symbol.replace("/", "_") if self.symbol else "unknown"
-        return f"{safe_symbol}_order_tracker.csv"
+        base_dir = self._ensure_base_dir()
+        return os.path.join(base_dir, f"{safe_symbol}_order_tracker.csv")
 
+    @classmethod
+    def _get_csv_file_for_symbol(cls, symbol: str) -> str:
+        """Return CSV filename (full path) for a given symbol."""
+        if not symbol:
+            safe_symbol = "unknown"
+        else:
+            safe_symbol = symbol.replace("/", "_")
+        base_dir = cls._ensure_base_dir()
+        return os.path.join(base_dir, f"{safe_symbol}_order_tracker.csv")
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
     def close_order(self, exit_price, exit_datetime=None):
         self.closed = True
         self.exit_price = exit_price
         self.exit_timestamp = exit_datetime if exit_datetime else datetime.now()
-        self.profit_pct = ((exit_price / self.entry_price) - 1) * 100 if self.order_type == "BUY" else ((self.entry_price / exit_price) - 1) * 100
-        
+        if self.order_type == "BUY":
+            self.profit_pct = ((exit_price / self.entry_price) - 1) * 100
+        else:
+            self.profit_pct = ((self.entry_price / exit_price) - 1) * 100
+
         # Only update CSV if persistence is enabled
         if self._should_persist():
             self.update_csv()
 
     def save_to_csv(self):
-        """Save order to CSV - only called if _should_persist() returns True"""
+        """Save order to CSV - only called if _should_persist() returns True."""
         csv_file = self._get_csv_file()
+        # Ensure directory exists
+        self._ensure_base_dir()
         file_exists = os.path.isfile(csv_file)
 
-        with open(csv_file, 'a', newline='') as f:
-            fieldnames = ['tracker_id', 'symbol', 'order_type', 'entry_price', 'size',
-                          'take_profit_price', 'timestamp', 'closed', 'exit_price',
-                          'exit_timestamp', 'profit_pct']
+        with open(csv_file, "a", newline="") as f:
+            fieldnames = [
+                "tracker_id",
+                "symbol",
+                "order_type",
+                "entry_price",
+                "size",
+                "take_profit_price",
+                "timestamp",
+                "closed",
+                "exit_price",
+                "exit_timestamp",
+                "profit_pct",
+            ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
 
             if not file_exists:
                 writer.writeheader()
 
-            writer.writerow({
-                'tracker_id': self.tracker_id,
-                'symbol': self.symbol,
-                'order_type': self.order_type,
-                'entry_price': f"{self.entry_price:.8f}",
-                'size': f"{self.size:.10f}",
-                'take_profit_price': f"{self.take_profit_price:.8f}",
-                'timestamp': self.timestamp.isoformat(),
-                'closed': self.closed,
-                'exit_price': f"{self.exit_price:.8f}" if self.exit_price else '',
-                'exit_timestamp': self.exit_timestamp.isoformat() if self.exit_timestamp else '',
-                'profit_pct': f"{self.profit_pct:.4f}" if self.profit_pct else ''
-            })
+            writer.writerow(
+                {
+                    "tracker_id": self.tracker_id,
+                    "symbol": self.symbol,
+                    "order_type": self.order_type,
+                    "entry_price": f"{self.entry_price:.8f}",
+                    "size": f"{self.size:.10f}",
+                    "take_profit_price": f"{self.take_profit_price:.8f}",
+                    "timestamp": self.timestamp.isoformat(),
+                    "closed": self.closed,
+                    "exit_price": f"{self.exit_price:.8f}"
+                    if self.exit_price
+                    else "",
+                    "exit_timestamp": self.exit_timestamp.isoformat()
+                    if self.exit_timestamp
+                    else "",
+                    "profit_pct": f"{self.profit_pct:.4f}"
+                    if self.profit_pct is not None
+                    else "",
+                }
+            )
             f.flush()
             os.fsync(f.fileno())
 
     def update_csv(self):
-        """Update CSV - only called if _should_persist() returns True"""
+        """Update CSV - only called if _should_persist() returns True."""
         try:
             csv_file = self._get_csv_file()
+            # Ensure directory exists
+            self._ensure_base_dir()
+
             if not os.path.isfile(csv_file):
                 self.save_to_csv()
                 return
@@ -1137,18 +1315,20 @@ class OrderTracker:
             temp_file = f"{csv_file}.tmp"
             modified = False
 
-            with open(csv_file, 'r', newline='') as infile, open(temp_file, 'w', newline='') as outfile:
+            with open(csv_file, "r", newline="") as infile, open(
+                temp_file, "w", newline=""
+            ) as outfile:
                 reader = csv.DictReader(infile)
                 fieldnames = reader.fieldnames
                 writer = csv.DictWriter(outfile, fieldnames=fieldnames)
                 writer.writeheader()
 
                 for row in reader:
-                    if row['tracker_id'] == self.tracker_id:
-                        row['closed'] = 'True'
-                        row['exit_price'] = f"{self.exit_price:.8f}"
-                        row['exit_timestamp'] = self.exit_timestamp.isoformat()
-                        row['profit_pct'] = f"{self.profit_pct:.4f}"
+                    if row["tracker_id"] == self.tracker_id:
+                        row["closed"] = "True"
+                        row["exit_price"] = f"{self.exit_price:.8f}"
+                        row["exit_timestamp"] = self.exit_timestamp.isoformat()
+                        row["profit_pct"] = f"{self.profit_pct:.4f}"
                         modified = True
                     writer.writerow(row)
 
@@ -1162,7 +1342,9 @@ class OrderTracker:
             traceback.print_exc()
 
     @classmethod
-    def load_active_orders_from_csv(cls, symbol=None, backtest=False, bulk=False, optuna=False):
+    def load_active_orders_from_csv(
+        cls, symbol=None, backtest=False, bulk=False, optuna=False
+    ):
         """
         Load active orders from CSV.
         Returns empty list if in backtest/bulk/optuna mode.
@@ -1176,23 +1358,27 @@ class OrderTracker:
             if not symbol:
                 return active_orders
 
-            csv_file = f"{symbol.replace('/', '_')}_order_tracker.csv"
+            csv_file = cls._get_csv_file_for_symbol(symbol)
             if not os.path.isfile(csv_file):
                 return active_orders
 
-            with open(csv_file, 'r', newline='') as f:
+            with open(csv_file, "r", newline="") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    if row['closed'].lower() == 'false':
+                    if row["closed"].lower() == "false":
                         order = cls.__new__(cls)
-                        order.entry_price = float(row['entry_price'])
-                        order.size = float(row['size'])
-                        order.take_profit_price = float(row['take_profit_price'])
+                        order.entry_price = float(row["entry_price"])
+                        order.size = float(row["size"])
+                        order.take_profit_price = float(row["take_profit_price"])
                         order.executed = True
-                        order.tracker_id = row['tracker_id']
-                        order.timestamp = datetime.fromisoformat(row['timestamp']) if row['timestamp'] else datetime.now()
-                        order.symbol = row['symbol']
-                        order.order_type = row['order_type']
+                        order.tracker_id = row["tracker_id"]
+                        order.timestamp = (
+                            datetime.fromisoformat(row["timestamp"])
+                            if row["timestamp"]
+                            else datetime.now()
+                        )
+                        order.symbol = row["symbol"]
+                        order.order_type = row["order_type"]
                         order.closed = False
                         order.exit_price = None
                         order.exit_timestamp = None
@@ -1210,10 +1396,10 @@ class OrderTracker:
 
     @classmethod
     def disable_persistence(cls):
-        """Globally disable CSV persistence (useful for bulk/optuna operations)"""
+        """Globally disable CSV persistence (useful for bulk/optuna operations)."""
         cls._persistence_enabled = False
 
     @classmethod
     def enable_persistence(cls):
-        """Re-enable CSV persistence"""
+        """Re-enable CSV persistence."""
         cls._persistence_enabled = True

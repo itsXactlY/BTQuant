@@ -1,13 +1,7 @@
-from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex
-from backtrader.strategies.StagedConvergenceStrategy import StagedConvergenceStrategy
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
-from backtrader.strategies.QQE_Hullband_VolumeOsc import QQE_Example
-from backtrader.utils.backtest import backtest
-
 # BTQ DCA Strategy based on your enhanced indicators
-
-
 if __name__ == '__main__':
+    from backtrader.strategies.ST_RSX_ASI import STrend_RSX_AccumulativeSwingIndex
+    from backtrader.utils.backtest import backtest
     try:
         backtest(
             STrend_RSX_AccumulativeSwingIndex,

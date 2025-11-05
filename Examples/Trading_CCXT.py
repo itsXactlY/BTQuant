@@ -1,20 +1,19 @@
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK
-from backtrader import livetrading
+from backtrader.livetrading import livetrade_ccxt as livetrade
+from backtrader.strategies.Aligator_supertrend import AliG_STrend
 
-_coin = 'XRP'
-_collateral = 'USDT'
-_exchange = 'mexc'
-_account = '' # Used for JackRabbitRelay
+# CCXT Supported Exchange
+
+_coin = 'XBT'
+_collateral = 'USD'
+_exchange = 'Bitmex'
 _asset = f'{_coin}/{_collateral}'
+_amount = '11'
+_amount = float(_amount)
 
-ccxt_config = {
-    'apiKey': '',
-    'secret': '',
-    'enableRateLimit': True,
-    'rateLimit': 20,
-    'options': {
-        'defaultType': 'spot'
-    }
-}
-
-livetrading.livetrade(coin=_coin,collateral=_collateral, strategy=NRK, asset=_asset, exchange=_exchange, account=_account, config=ccxt_config)
+livetrade(
+    coin=_coin,
+    collateral=_collateral,
+    strategy=AliG_STrend,
+    exchange=_exchange,
+    asset=_asset
+)

@@ -1,52 +1,21 @@
-# This setup uses TickSampler to turn raw ticks into 1-second candles efficiently,
-# instead of relying on a fixed 1s WebSocket feed. Less CPU, better accuracy, cleaner OHLCV.
+from backtrader.livetrading import livetrade_mexc as livetrade
+from backtrader.strategies.Aligator_supertrend import AliG_STrend
 
-'''
-IMPORTANT NOTE ABOUT IMPORTED STRATEGYS IN THIS FILE - LOAD OR IMPORT ONLY THAT PARTICULAR STRATEGY U USE!
-BACKTRADER WARMING UP EVERY POSSIBLE STRATEGY WHAT IS DECLARED AS IMPORT HERE!
-CAUSING ALOT OF WARMUP TIME, MEMORY CONSUMPTION, INDICATORS, AND EVERYTHING BEYONED (TIME IS MONEY!)
-'''
-from backtrader.stores.mexc_store import MexcStore
-from backtrader.imports import dt, bt
-from backtrader.strategies.NearestNeighbors_RationalQuadraticKernel import NRK as _strategy
+# mexc.com Exchange - Raltime TickData - no fixed feed.
 
-# Setup your parameters here
 _coin = 'BTC'
 _collateral = 'USDT'
-_exchange = 'Mexc'
+_exchange = 'mexc' 
+_account = ''
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)
-_account = '' # Used for JackRabbitRelay
 
-def run():
-    cerebro = bt.Cerebro(quicknotify=True)
-    store = MexcStore(
-        coin_refer=_coin,
-        coin_target=_collateral
-        )
-
-    from_date = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=6*15)
-    data = store.getdata(start_date=from_date)
-    data._dataname = f"{_coin}{_collateral}"
-    cerebro.addstrategy(_strategy,
-                        exchange=_exchange,
-                        account=_account,
-                        asset=_asset,
-                        amount=_amount,
-                        coin=_coin,
-                        collateral=_collateral,
-                        enable_alerts=False,
-                        alert_channel=-100,
-                        backtest=False)
-    cerebro.adddata(data=data, name=data._dataname)
-    cerebro.run(live=True)
-
-if __name__ == '__main__':
-    try:
-        run()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        print("Full traceback:")
-        traceback.print_exc()
+livetrade(
+    coin=_coin,
+    collateral=_collateral,
+    strategy=AliG_STrend,
+    exchange=_exchange,
+    account=_account,
+    asset=_asset
+)

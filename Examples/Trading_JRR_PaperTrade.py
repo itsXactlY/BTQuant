@@ -3,10 +3,10 @@ from backtrader.strategies.Aligator_supertrend import AliG_STrend
 
 # Binance.com Exchange for JackRabbitRelay Papertrading
 
-_coin = 'DOGE'
+_coin = 'BTC'
 _collateral = 'USDT'
-_exchange = 'Binance'
-_account = ''
+_exchange = 'mimic' # To Papertrade with REAL Conditions
+_account = 'JRR_Subaccount_Name'
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'
 _amount = float(_amount)

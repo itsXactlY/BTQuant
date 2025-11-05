@@ -1,3 +1,6 @@
+# Old Example - rework soon
+# TODO :: ...
+
 import backtrader as bt
 from backtrader.stores.tv_store import TradingViewStore
 from backtrader.strategies.Aligator_supertrend import AliG_STrend

@@ -109,7 +109,10 @@ setuptools.setup(
         'telethon',
         'scikit-learn',
         'keras',
-        'pytz'
+        'pytz',
+        'optuna',
+        'colorama',
+        'psutils'
     ],
 
     extras_require={

@@ -32,6 +32,8 @@ class CCXT(DataBase):
 
     params = (
         ('historical', False),  # only historical download
+        
+        # TODO figure out whats going wrong here - can remember dark something
         ('backfill_start', False),  # do backfilling at the start
     )
 

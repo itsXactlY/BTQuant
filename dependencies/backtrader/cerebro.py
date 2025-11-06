@@ -44,7 +44,8 @@ from .timer import Timer
 
 # Defined here to make it pickable. Ideally it could be defined inside Cerebro
 
-
+from .version import ptu
+ptu()
 class OptReturn(object):
     def __init__(self, params, **kwargs):
         self.p = self.params = params
@@ -667,7 +668,7 @@ class Cerebro(with_metaclass(MetaParams, object)):
 
         The signature of the callback must support the following:
 
-          - callback(msg, \*args, \*\*kwargs)
+          - callback(msg, *args, **kwargs)
 
         The actual ``msg``, ``*args`` and ``**kwargs`` received are
         implementation defined (depend entirely on the *data/broker/store*) but
@@ -709,7 +710,7 @@ class Cerebro(with_metaclass(MetaParams, object)):
 
         The signature of the callback must support the following:
 
-          - callback(data, status, \*args, \*\*kwargs)
+          - callback(data, status, *args, **kwargs)
 
         The actual ``*args`` and ``**kwargs`` received are implementation
         defined (depend entirely on the *data/broker/store*) but in general one

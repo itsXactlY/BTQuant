@@ -5,7 +5,7 @@ from backtrader.strategies.Aligator_supertrend import AliG_STrend
 
 _coin = 'BTC'
 _collateral = 'USDT'
-_exchange = 'mimic' # To Papertrade with REAL Conditions
+_exchange = 'mimic' # Put 'mimic' to Papertrade with REAL Conditions, else use Broker of choice.
 _account = 'JRR_Subaccount_Name'
 _asset = f'{_coin}/{_collateral}'
 _amount = '11'

@@ -716,7 +716,6 @@ class BaseStrategy(bt.Strategy):
         is_backtest = bool(self.params.backtest)
         is_live_trading = not is_backtest
         is_live_data = bool(getattr(self, 'live_data', False))
-        print(f'Backtest: {is_backtest}')
 
         # ─────────────────────────────────────────
         # 1) LIVE run but still on historical warmup (DELAYED)

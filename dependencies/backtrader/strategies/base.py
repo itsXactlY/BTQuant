@@ -123,12 +123,15 @@ class BaseStrategy(bt.Strategy):
         
         if hasattr(self.datas[0], '_dataname'):
             symbol = self.datas[0]._dataname
-            self.active_orders = OrderTracker.load_active_orders_from_csv(
+            loaded = OrderTracker.load_active_orders_from_csv(
                 symbol=symbol,
                 backtest=self.params.backtest,
                 bulk=self.params.bulk,
                 optuna=self.params.optuna
             )
+            if loaded:
+                self.active_orders = loaded
+                self._sync_state_from_active_orders()
         
         if self.p.capture_data:
             activate_patch(debug=False)
@@ -177,6 +180,38 @@ class BaseStrategy(bt.Strategy):
         # Debug/reporting
         self.print_counter = 0
         self.live_data = False
+
+    def _sync_state_from_active_orders(self):
+        """
+        Hydrate BaseStrategy's internal position state from self.active_orders.
+
+        This makes a live session look exactly like a session where the same
+        orders had been opened via create_order() in this process:
+        - sets entry_prices / sizes
+        - sets first_entry_price and LAST executed price (entry_price)
+        - sets buy_executed, DCA flag, position_count
+        - recomputes average_entry_price + take_profit_price
+        """
+        if not self.active_orders:
+            return
+
+        try:
+            orders = sorted(
+                self.active_orders,
+                key=lambda o: getattr(o, "timestamp", datetime.min),
+            )
+        except Exception:
+            orders = list(self.active_orders)
+        self.active_orders = orders
+        self.entry_prices = [o.entry_price for o in orders]
+        self.sizes = [o.size for o in orders]
+        self.first_entry_price = orders[0].entry_price          # oldest leg
+        self.entry_price = orders[-1].entry_price               # LAST executed leg
+        self.buy_executed = True
+        self.position_count = len(orders)
+        if len(orders) > 1:
+            self.DCA = True   # multi-leg - treat as DCA position
+        self.calc_averages()
 
     def _init_metrics(self):
         """Initialize performance metrics"""
@@ -570,10 +605,7 @@ class BaseStrategy(bt.Strategy):
                         loaded_orders = OrderTracker.load_active_orders_from_csv(symbol)
                         if loaded_orders:
                             self.active_orders = loaded_orders
-                            self.buy_executed = True
-                            self.entry_prices = [order.entry_price for order in self.active_orders]
-                            self.sizes = [order.size for order in self.active_orders]
-                            self.calc_averages()
+                            self._sync_state_from_active_orders()
                             print(cgood(f"Loaded {len(loaded_orders)} orders from CSV"))
                             continue
                         else:
@@ -615,10 +647,8 @@ class BaseStrategy(bt.Strategy):
                                 order_tracker.tracker_id = str(position_info['id'])
                                 self.active_orders.append(order_tracker)
                     
-                    if self.entry_prices:
-                        self.buy_executed = True
-                        self.DCA = True
-                        self.calc_averages()
+                    if self.entry_prices or self.active_orders:
+                        self._sync_state_from_active_orders()
                         print(cgood(f"Loaded {len(self.active_orders)} positions from API"))
             
             elif self.p.exchange.lower() == 'pancakeswap':
@@ -632,10 +662,7 @@ class BaseStrategy(bt.Strategy):
                         if loaded_orders:
                             print(cgood(f"Loaded {len(loaded_orders)} orders from CSV"))
                             self.active_orders = loaded_orders
-                            self.buy_executed = True
-                            self.entry_prices = [order.entry_price for order in self.active_orders]
-                            self.sizes = [order.size for order in self.active_orders]
-                            self.calc_averages()
+                            self._sync_state_from_active_orders()
                         else:
                             print(cwarn("No active orders found, starting fresh"))
                     except Exception as e:
@@ -905,31 +932,32 @@ class BaseStrategy(bt.Strategy):
     def notify_data(self, data, status, *args, **kwargs):
         """
         Track data status so we know when we are:
-        - DELAYED  -> historical warmup in live run
-        - LIVE     -> true live trading
+        - DELAYED  -> historical warmup in live run (no new trades)
+        - LIVE     -> true live trading (respect existing positions)
         """
         if status == data.DELAYED:
+            # Historical warmup for live session
             self.live_data = False
             self._warming_up = True
 
+            if self.p.debug:
+                print("[BaseStrategy] Data DELAYED (historical warmup active)")
+
         elif status == data.LIVE:
+            # Live trading – DO NOT reset existing orders/position state,
+            # they come from exchange/CSV and should be respected.
             self.live_data = True
             self._warming_up = False
 
-            # Optional: ensure clean state at live start
-            if not self.params.backtest:
-                # Make absolutely sure we don't carry any historical "ghost" state
-                if hasattr(self, 'reset_position_state'):
-                    self.reset_position_state()
-                if hasattr(self, 'entry_prices'):
-                    self.entry_prices.clear()
-                if hasattr(self, 'sizes'):
-                    self.sizes.clear()
+            if self.p.debug:
+                print("[BaseStrategy] Data LIVE (preserving existing positions)")
 
         else:
-            # NOTSUBSCRIBED / other
+            # NOTSUBSCRIBED / other statuses
             self.live_data = False
             # keep _warming_up as-is
+            if self.p.debug:
+                print(f"[BaseStrategy] Data status: {status}")
 
     def notify_order(self, order):
         """Handle order execution notifications"""

@@ -27,6 +27,12 @@ class LaguerreFilter(bt.Indicator):
         self.l.p = (self.data.high + self.data.low)/2
 
     def prenext(self):
+        # TODO return back to old state and figure out why warmup getting ignored on this one
+        # self.l.L0[0] = self.l.p[0]
+        # self.l.L1[0] = self.l.p[-1]
+        # self.l.L2[0] = self.l.p[-2]
+        # self.l.L3[0] = self.l.p[-2]
+
         price = self.l.p[0]
         self.l.L0[0] = price
         self.l.L1[0] = price

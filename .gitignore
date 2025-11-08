@@ -16,6 +16,7 @@
 candles/
 bt/
 out/
+build
 trashpad/
 .btq_cache/
 dashboard/.btq_cache/
@@ -28,6 +29,10 @@ dependencies/MsSQL/build/
 dependencies/JackRabbit/
 dependencies/backtrader.egg-info/
 dependencies/quantstats_lumi_btquant/quantstats_lumi.egg-info/
+dependencies/ccapi/include/boost/
+dependencies/ccapi/include/rapidjson/
+
+
 
 # Logs
 TradeLog.log

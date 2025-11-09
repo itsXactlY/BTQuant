@@ -12,6 +12,7 @@ MSSQLBulkInserter::MSSQLBulkInserter(const std::string& connection_string)
     : connection_string_(connection_string) {
     SQLRETURN ret;
     ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env_);
+    ensureCoreTables();
     if (!SQL_SUCCEEDED(ret)) {
         throw std::runtime_error("Failed to allocate ODBC environment");
     }
@@ -118,7 +119,7 @@ SQL_TIMESTAMP_STRUCT MSSQLBulkInserter::toSqlTimestamp(int64_t timestamp_ms) {
     ts.hour   = tm.tm_hour;
     ts.minute = tm.tm_min;
     ts.second = tm.tm_sec;
-    ts.fraction = (timestamp_ms % 1000) * 1000000; // ns
+    ts.fraction = 0; // no fractional seconds -> no scale mismatch
     return ts;
 }
 
@@ -300,6 +301,64 @@ void MSSQLBulkInserter::bulkInsertTrades(
 }
 
 // ----------------- OHLCV BULK INSERT -------------------
+void MSSQLBulkInserter::ensureKlinesTable(const std::string& table_name) {
+    {
+        std::lock_guard<std::mutex> lock(ddl_mutex_);
+        if (known_klines_tables_.count(table_name)) return;
+    }
+
+    std::lock_guard<std::mutex> lock(ddl_mutex_);
+    if (known_klines_tables_.count(table_name)) return;
+
+    SQLHSTMT ddl_stmt = nullptr;
+    SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &ddl_stmt);
+    if (!SQL_SUCCEEDED(ret) || !ddl_stmt) {
+        std::cerr
+            << "ensureKlinesTable: SQLAllocHandle failed for table "
+            << table_name << ", skipping auto-DDL\n";
+        return; // <-- do NOT throw here
+    }
+
+    std::string uq = "UQ_" + table_name;
+    for (char& c : uq) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_')
+            c = '_';
+    }
+
+    std::string sql =
+        "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = '" + table_name + "') "
+        "BEGIN "
+        "CREATE TABLE [" + table_name + "] ("
+        "  id BIGINT IDENTITY(1,1) PRIMARY KEY,"
+        "  timestamp DATETIME2 NOT NULL,"
+        "  exchange VARCHAR(50) NOT NULL,"
+        "  symbol VARCHAR(50) NOT NULL,"
+        "  market_type VARCHAR(20) NOT NULL DEFAULT 'spot',"
+        "  timeframe VARCHAR(10) NOT NULL,"
+        "  [open] DECIMAL(20,8) NOT NULL,"
+        "  high DECIMAL(20,8) NOT NULL,"
+        "  low DECIMAL(20,8) NOT NULL,"
+        "  [close] DECIMAL(20,8) NOT NULL,"
+        "  volume DECIMAL(30,8) NOT NULL,"
+        "  created_at DATETIME2 DEFAULT SYSUTCDATETIME(),"
+        "  CONSTRAINT [" + uq + "] "
+        "    UNIQUE(timestamp, exchange, symbol, market_type, timeframe)"
+        ");"
+        "END;";
+
+    SQLRETURN r = SQLExecDirect( // TODO CRRITCIAL :: need to rework this C-style cast madness everywhere, like something std::string_view, or find more smarties on the way figuring oput
+                                 //                :: also figure out why im this plain stupid right now to copy over accept directly,.. mhh
+        ddl_stmt,
+        reinterpret_cast<SQLCHAR*>(const_cast<char*>(sql.c_str())),
+        SQL_NTS);
+    if (!SQL_SUCCEEDED(ret)) {
+        throwODBCError(SQL_HANDLE_STMT, ddl_stmt,
+                       "ensureKlinesTable EXEC");
+    }
+
+    SQLFreeHandle(SQL_HANDLE_STMT, ddl_stmt);
+    known_klines_tables_.insert(table_name);
+}
 
 void MSSQLBulkInserter::bulkInsertOHLCV(
     const std::string& table_name,
@@ -588,4 +647,88 @@ void MSSQLBulkInserter::bulkInsertOrderbooks(
     }
 
     commitTransaction();
+}
+
+void MSSQLBulkInserter::ensureCoreTables() {
+    std::lock_guard<std::mutex> lock(ddl_mutex_);
+
+    SQLHSTMT ddl_stmt = nullptr;
+    SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &ddl_stmt);
+    if (!SQL_SUCCEEDED(ret) || !ddl_stmt) {
+        std::cerr
+            << "ensureCoreTables: SQLAllocHandle failed, skipping auto-DDL\n";
+        return; // <-- do NOT throw here
+    }
+
+    auto exec = [&](const std::string& sql, const char* ctx) {
+        SQLRETURN r = SQLExecDirect(
+            ddl_stmt,
+        reinterpret_cast<SQLCHAR*>(const_cast<char*>(sql.c_str())),
+        SQL_NTS);
+        if (!SQL_SUCCEEDED(r)) {
+            // still throw here: DDL itself is broken
+            throwODBCError(SQL_HANDLE_STMT, ddl_stmt, ctx);
+        }
+    };
+
+    const std::string trades_sql =
+        "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'trades') "
+        "BEGIN "
+        "CREATE TABLE [trades] ("
+        "  id BIGINT IDENTITY(1,1) PRIMARY KEY,"
+        "  timestamp DATETIME2 NOT NULL,"
+        "  exchange VARCHAR(50) NOT NULL,"
+        "  symbol VARCHAR(50) NOT NULL,"
+        "  market_type VARCHAR(20) NOT NULL DEFAULT 'spot',"
+        "  trade_id VARCHAR(100),"
+        "  price DECIMAL(20,8) NOT NULL,"
+        "  quantity DECIMAL(30,8) NOT NULL,"
+        "  side VARCHAR(10) NOT NULL,"
+        "  is_buyer_maker BIT,"
+        "  created_at DATETIME2 DEFAULT SYSUTCDATETIME()"
+        ");"
+        "CREATE INDEX idx_trades_lookup "
+        "ON [trades](exchange, symbol, market_type, timestamp DESC);"
+        "END;";
+
+    const std::string ob_sql =
+        "IF NOT EXISTS (SELECT 1 FROM sys.tables "
+        "               WHERE name = 'orderbook_snapshots') "
+        "BEGIN "
+        "CREATE TABLE [orderbook_snapshots] ("
+        "  id BIGINT IDENTITY(1,1) PRIMARY KEY,"
+        "  timestamp DATETIME2 NOT NULL,"
+        "  exchange VARCHAR(50) NOT NULL,"
+        "  symbol VARCHAR(50) NOT NULL,"
+        "  market_type VARCHAR(20) NOT NULL DEFAULT 'spot',"
+        "  bids NVARCHAR(MAX) NOT NULL,"
+        "  asks NVARCHAR(MAX) NOT NULL,"
+        "  checksum VARCHAR(64),"
+        "  created_at DATETIME2 DEFAULT SYSUTCDATETIME()"
+        ");"
+        "CREATE INDEX idx_orderbook_lookup "
+        "ON [orderbook_snapshots](exchange, symbol, market_type, timestamp DESC);"
+        "END;";
+
+    exec(trades_sql, "ensureCoreTables trades");
+    exec(ob_sql,     "ensureCoreTables orderbook_snapshots");
+
+    SQLFreeHandle(SQL_HANDLE_STMT, ddl_stmt);
+}
+
+std::string MSSQLBulkInserter::sanitizeIdentifier(const std::string& name) {
+    std::string out;
+    out.reserve(name.size());
+    for (char c : name) {
+        if (std::isalnum(static_cast<unsigned char>(c)) ||
+            c == '_' || c == '-') {
+            out.push_back(c);
+        } else {
+            out.push_back('_');
+        }
+    }
+    if (out.empty()) {
+        throw std::runtime_error("sanitizeIdentifier: empty name");
+    }
+    return out;
 }

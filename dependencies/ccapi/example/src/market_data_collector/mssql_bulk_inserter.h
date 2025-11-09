@@ -5,7 +5,8 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
-
+#include <unordered_set>
+#include <mutex>
 #include "market_data_types.h"
 
 class MSSQLBulkInserter {
@@ -39,9 +40,16 @@ private:
     SQLHDBC dbc_{SQL_NULL_HDBC};
     SQLHSTMT stmt_{SQL_NULL_HSTMT};
     std::string connection_string_;
+    std::mutex ddl_mutex_;
+    std::unordered_set<std::string> known_klines_tables_;
+
+    void ensureCoreTables();                      // optional, for trades/orderbooks
+    void ensureKlinesTable(const std::string&);   // per-symbol klines
+    static std::string sanitizeIdentifier(const std::string& name);
 
     void resetStatement();
-    void throwODBCError(SQLSMALLINT handle_type, SQLHANDLE handle,
+    void throwODBCError(SQLSMALLINT handle_type,
+                        SQLHANDLE handle,
                         const std::string& context) const;
 
     static SQL_TIMESTAMP_STRUCT toSqlTimestamp(int64_t timestamp_ms);

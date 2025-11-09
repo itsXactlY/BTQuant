@@ -1,19 +1,61 @@
 #include "market_data_processor.h"
 
 #include <chrono>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
+#include <string_view>
 
 namespace {
 
+// wall-clock “now” in ms
 int64_t nowMs() {
     using namespace std::chrono;
     return duration_cast<milliseconds>(
-        steady_clock::now().time_since_epoch()).count();
+               system_clock::now().time_since_epoch())
+        .count();
 }
 
-} // anonymous
+// robust double parser with logging
+double safeParseDouble(const std::string& label,
+                       const std::string& s,
+                       bool& ok) {
+    ok = false;
+    if (s.empty()) {
+        return 0.0;
+    }
+    try {
+        std::size_t pos = 0;
+        double v = std::stod(s, &pos);
+        if (pos != s.size()) {
+            std::cerr << "safeParseDouble(" << label
+                      << "): trailing chars in '" << s << "'\n";
+            return 0.0;
+        }
+        ok = true;
+        return v;
+    } catch (const std::exception& e) {
+        std::cerr << "safeParseDouble(" << label
+                  << "): exception for '" << s << "': "
+                  << e.what() << "\n";
+        return 0.0;
+    }
+}
+
+// try multiple possible keys on an Element
+std::string getAny(const ccapi::Element& el,
+                   std::initializer_list<const char*> keys) {
+    const auto& m =
+        el.getNameValueMap();  // std::map<std::string_view, std::string>
+    for (const char* k : keys) {
+        auto it = m.find(std::string_view(k));
+        if (it != m.end()) return it->second;
+    }
+    return {};
+}
+
+} // anonymous namespace
 
 // ccapi logger definition (must exist in exactly one TU)
 namespace ccapi {
@@ -38,10 +80,8 @@ std::vector<std::string> MarketDataProcessor::split(
     return parts;
 }
 
-void MarketDataProcessor::processEvent(
-    const ccapi::Event& event,
-    ccapi::Session* /*session*/) {
-
+void MarketDataProcessor::processEvent(const ccapi::Event& event,
+                                       ccapi::Session* /*session*/) {
     using Type = ccapi::Event::Type;
     const auto type = event.getType();
 
@@ -49,7 +89,7 @@ void MarketDataProcessor::processEvent(
         if (type == Type::SESSION_STATUS ||
             type == Type::SUBSCRIPTION_STATUS) {
             std::cout << event.toPrettyString(2, 2) << std::endl;
-            return;  // early exit, no bool
+            return;
         }
 
         if (type == Type::SUBSCRIPTION_DATA) {
@@ -59,7 +99,8 @@ void MarketDataProcessor::processEvent(
 
                 if (mtype == MType::MARKET_DATA_EVENTS_TRADE) {
                     handleTradeMessage(msg);
-                } else if (mtype == MType::MARKET_DATA_EVENTS_MARKET_DEPTH) {
+                } else if (mtype ==
+                           MType::MARKET_DATA_EVENTS_MARKET_DEPTH) {
                     handleOrderbookMessage(msg);
                 }
             }
@@ -90,39 +131,60 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
     std::string market_type = parts.size() > 2 ? parts[2] : "spot";
 
     if (exchange.empty() || symbol.empty()) {
-        // no usable correlation id; log and bail out
-        std::cerr << "handleTradeMessage: empty exchange/symbol in correlationId: "
-                << cid << std::endl;
+        std::cerr << "handleTradeMessage: empty exchange/symbol in CID: "
+                  << cid << std::endl;
         return;
     }
 
     const auto& elements = msg.getElementList();
+    if (elements.empty()) return;
 
+    // exchange timestamp from Message
+    auto tp = msg.getTime();
+    int64_t ts_ms = std::chrono::duration_cast<
+                        std::chrono::milliseconds>(
+                        tp.time_since_epoch())
+                        .count();
     int64_t recv_time_ms = nowMs();
 
     for (const auto& el : elements) {
-        Trade t;
-        t.timestamp_ms = std::stoll(el.getValue("TIME"));
-        t.price        = std::stod(el.getValue("PRICE"));
-        t.quantity     = std::stod(el.getValue("SIZE"));
+        const auto& m = el.getNameValueMap();
 
-        // IS_BUYER_MAKER semantics: taker side
-        std::string is_bm = el.getValue("IS_BUYER_MAKER");
-        bool buyer_maker  = (is_bm == "1" || is_bm == "true");
-        t.is_buyer_maker  = buyer_maker;
-        t.side            = buyer_maker ? "sell" : "buy";
+        std::string price_s = getAny(el, {"LAST_PRICE", "PRICE"});
+        std::string qty_s   = getAny(el, {"LAST_SIZE", "SIZE"});
+        std::string is_bm_s = getAny(el, {"IS_BUYER_MAKER"});
+        std::string trade_id = getAny(el, {"TRADE_ID"});
 
-        t.exchange    = exchange;
-        t.symbol      = symbol;
-        t.market_type = market_type;
-        if (el.has("TRADE_ID")) {
-            t.trade_id = el.getValue("TRADE_ID");
+        bool ok_price = false, ok_qty = false;
+        double price = safeParseDouble("trade.price", price_s, ok_price);
+        double qty   = safeParseDouble("trade.size",  qty_s,   ok_qty);
+
+        if (!ok_price || !ok_qty) {
+            std::cerr
+                << "handleTradeMessage: bad PRICE/SIZE, element = "
+                << ccapi::toString(m) << std::endl;
+            continue;
         }
+
+        Trade t;
+        t.timestamp_ms = ts_ms;
+        t.exchange     = exchange;
+        t.symbol       = symbol;
+        t.market_type  = market_type;
+        t.price        = price;
+        t.quantity     = qty;
+        t.trade_id     = trade_id;
+
+        bool buyer_maker =
+            (is_bm_s == "1" || is_bm_s == "true");
+        t.is_buyer_maker = buyer_maker;
+        t.side           = buyer_maker ? "sell" : "buy";
 
         {
             std::lock_guard<std::mutex> lock(buffer_mutex_);
             trade_buffer_.push_back(t);
-            active_pairs_.insert(exchange + ":" + symbol + ":" + market_type);
+            active_pairs_.insert(exchange + ":" + symbol + ":" +
+                                 market_type);
             ++trades_received_;
         }
 
@@ -130,18 +192,16 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
 
         double latency =
             static_cast<double>(recv_time_ms - t.timestamp_ms);
-        // naive moving avg
         stats_.avg_latency_ms =
             0.99 * stats_.avg_latency_ms + 0.01 * latency;
     }
 
     flushTradesIfNeeded();
-    // candles are pulled in flushBuffers()
 }
 
 void MarketDataProcessor::handleOrderbookMessage(
     const ccapi::Message& msg) {
-    // Minimal: best bid/ask snapshot → JSON arrays [[price,qty]]
+
     const auto& cid_list = msg.getCorrelationIdList();
     const std::string cid = cid_list.empty() ? "" : cid_list[0];
     auto parts = split(cid, ':');
@@ -151,29 +211,92 @@ void MarketDataProcessor::handleOrderbookMessage(
     std::string market_type = parts.size() > 2 ? parts[2] : "spot";
 
     if (exchange.empty() || symbol.empty()) {
-        std::cerr << "handleOrderbookMessage: empty exchange/symbol in correlationId: "
-                << cid << std::endl;
+        std::cerr << "handleOrderbookMessage: empty exchange/symbol in CID: "
+                  << cid << std::endl;
         return;
     }
 
     const auto& elements = msg.getElementList();
     if (elements.empty()) return;
 
-    // TOFDO :: For production, i need to rebuild full depth here.
-    const auto& el = elements.front();
-    std::string bid_p = el.getValue("BEST_BID_PRICE");
-    std::string bid_q = el.getValue("BEST_BID_SIZE");
-    std::string ask_p = el.getValue("BEST_ASK_PRICE");
-    std::string ask_q = el.getValue("BEST_ASK_SIZE");
+    // Collect best bid / ask across all elements in this message
+    std::string bid_p_s, bid_q_s, ask_p_s, ask_q_s;
+
+    for (const auto& el : elements) {
+        auto bp = getAny(el, {"BID_PRICE", "BEST_BID_PRICE"});
+        if (!bp.empty()) bid_p_s = bp;
+
+        auto bq = getAny(el, {"BID_SIZE", "BEST_BID_SIZE"});
+        if (!bq.empty()) bid_q_s = bq;
+
+        auto ap = getAny(el, {"ASK_PRICE", "BEST_ASK_PRICE"});
+        if (!ap.empty()) ask_p_s = ap;
+
+        auto aq = getAny(el, {"ASK_SIZE", "BEST_ASK_SIZE"});
+        if (!aq.empty()) ask_q_s = aq;
+    }
+
+    bool have_bid = !bid_p_s.empty() && !bid_q_s.empty();
+    bool have_ask = !ask_p_s.empty() && !ask_q_s.empty();
+
+    // If we got neither side, *then* log and bail
+    if (!have_bid && !have_ask) {
+        const auto& firstMap = elements.front().getNameValueMap();
+        std::cerr << "handleOrderbookMessage: no BID/ASK in message, element = "
+                  << ccapi::toString(firstMap) << std::endl;
+        return;
+    }
+
+    bool ok_bp = true, ok_bq = true, ok_ap = true, ok_aq = true;
+    double bid_p = 0.0, bid_q = 0.0, ask_p = 0.0, ask_q = 0.0;
+
+    if (have_bid) {
+        bid_p = safeParseDouble("bid_price", bid_p_s, ok_bp);
+        bid_q = safeParseDouble("bid_size",  bid_q_s, ok_bq);
+    }
+    if (have_ask) {
+        ask_p = safeParseDouble("ask_price", ask_p_s, ok_ap);
+        ask_q = safeParseDouble("ask_size",  ask_q_s, ok_aq);
+    }
+
+    if ((have_bid && (!ok_bp || !ok_bq)) ||
+        (have_ask && (!ok_ap || !ok_aq))) {
+        const auto& firstMap = elements.front().getNameValueMap();
+        std::cerr << "handleOrderbookMessage: parse error, element = "
+                  << ccapi::toString(firstMap) << std::endl;
+        return;
+    }
+
+    // timestamp from Message
+    auto tp = msg.getTime();
+    int64_t ts_ms = std::chrono::duration_cast<
+                        std::chrono::milliseconds>(
+                        tp.time_since_epoch())
+                        .count();
 
     OrderbookSnapshot ob;
-    ob.timestamp_ms = std::stoll(el.getValue("TIME"));
+    ob.timestamp_ms = ts_ms;
     ob.exchange     = exchange;
     ob.symbol       = symbol;
     ob.market_type  = market_type;
-    ob.bids_json    = "[[" + bid_p + "," + bid_q + "]]";
-    ob.asks_json    = "[[" + ask_p + "," + ask_q + "]]";
-    ob.checksum     = ""; // TODO :: optional checksum
+
+    // Build JSON; allow one-sided updates
+    std::ostringstream bids, asks;
+    bids << "[";
+    if (have_bid) {
+        bids << "[" << bid_p << "," << bid_q << "]";
+    }
+    bids << "]";
+
+    asks << "[";
+    if (have_ask) {
+        asks << "[" << ask_p << "," << ask_q << "]";
+    }
+    asks << "]";
+
+    ob.bids_json = bids.str();
+    ob.asks_json = asks.str();
+    ob.checksum.clear();
 
     {
         std::lock_guard<std::mutex> lock(buffer_mutex_);
@@ -183,6 +306,7 @@ void MarketDataProcessor::handleOrderbookMessage(
 
     flushOrderbooksIfNeeded();
 }
+
 
 void MarketDataProcessor::flushTradesIfNeeded(bool force) {
     std::vector<Trade> batch;

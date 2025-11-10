@@ -71,3 +71,4 @@ neural_trading_system/neural_data/BTC_15m_2024-01-01_2024-04-01_neural_data.parq
 neural_trading_system/neural_data/BTC_15m_2025-01-01_2026-01-01_neural_data.parquet
 neural_trading_system/plot/BTC_15m_2023-01-01_2024-01-01_neural_data.parquet
 neural_trading_system/neural_data/BTC_1h_2023-01-01_2024-01-01_neural_data.parquet
+__pycache__

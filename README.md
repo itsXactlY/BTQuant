@@ -21,7 +21,7 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 ### ⚡ Live Trading – Custom Infrastructure
 
 #### 🚀 **Native Ingestion & Exchange Feeds**
-- **ccapi/C++ collectors** subscribe directly to Binance, OKX, Bitget, MEXC, Bybit, Coinbit, and streams—no CCXT polling or Python WebSockets.
+- **ccapi/C++ collectors** subscribe directly to Binance, OKX, Bitget, MEXC, Bybit, Coinbase and many others and streams—no CCXT polling or Python WebSockets.
 - **Custom 1-second OHLCV streams** plus full tick/orderbook capture for CEXs, and ~~Web3 subscriptions for PancakeSwap~~ (in replacement pipeline for Aster Decentral Exchange), all landing in SQL Server the moment packets arrive.
 - **Automatic schema+index management** via `MSSQLBulkInserter` keeps `dbo.trades`, `dbo.orderbook_snapshots`, and per-market klines ready for live reads.
 

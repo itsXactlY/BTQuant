@@ -103,6 +103,20 @@ Backtrader picks it up through the `bigbraincentral` feeds (`db_ohlcv_mssql.py`,
 
 ---
 
+## Visual QA & System Load
+
+Because every tick routes through Microsoft SQL Server, you can point SandDance/PowerBI straight at the warehouse and inspect ingestion quality without exporting a single CSV:
+
+![Trade heatmap](docs/image.png)
+
+Even while capturing hundreds of thousands of events per session, the ccapi + MSSQL bulk pipeline barely touches the CPUs—16 logical cores stay ~97 % idle on an overloaded dev box:
+
+![CPU load](docs/cpu_load.png)
+
+Head to the [BigBrainCentral Handbook](docs/BTQuant_BigBrainCentral_Handbook.md) for the full story, more visuals, and architectural deep dives.
+
+---
+
 ## Getting Started
 
 **Ready to experience true high-frequency trading infrastructure?**

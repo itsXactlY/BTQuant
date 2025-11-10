@@ -18,23 +18,22 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - **Independent Execution**: Eliminate broker dependencies with **custom execution engines** and complete operational control
 - **Tick-Level Precision**: **True tick-by-tick simulation** with microsecond timing accuracy for HFT strategy validation
 
-### ⚡ Live Trading - Custom Infrastructure
+### ⚡ Live Trading – Custom Infrastructure
 
-#### 🚀 **Native WebSocket Implementations** (Not CCXT)
-- **Binance**: **Custom 1-second OHLCV streams** + **native tick data feeds**
-- **Bitget**: **Direct WebSocket integration** with **sub-millisecond latency**
-- **MEXC**: **Proprietary tick data implementation** bypassing standard API limitations
-- **PancakeSwap**: **Native Web3 WebSocket feeds** with **1-second granularity**
+#### 🚀 **Native Ingestion & Exchange Feeds**
+- **ccapi/C++ collectors** subscribe directly to Binance, OKX, Bitget, MEXC, Bybit, Coinbit, and streams—no CCXT polling or Python WebSockets.
+- **Custom 1-second OHLCV streams** plus full tick/orderbook capture for CEXs, and ~~Web3 subscriptions for PancakeSwap~~ (in replacement pipeline for Aster Decentral Exchange), all landing in SQL Server the moment packets arrive.
+- **Automatic schema+index management** via `MSSQLBulkInserter` keeps `dbo.trades`, `dbo.orderbook_snapshots`, and per-market klines ready for live reads.
 
-#### ⚡ **High-Frequency Capabilities**
-- **Tick Data Supremacy**: **Direct tick feeds** that **bypass common HFT delays** found in CCXT implementations
-- **Custom Protocol Integration**: **Native exchange protocols** deliver **10x faster execution** than generic CCXT
-- **Microsecond Precision**: **Hardware-level timing** for true high-frequency trading capabilities
+#### ⚡ **High-Frequency & Microstructure Tooling**
+- **JackRabbitRelay** mirrors exchange engines for forward testing without leaving BTQuant.
+- **Sub-millisecond latency** thanks to native protocols, column-wise ODBC bulk inserts, and hardware-timed timestamps.
+- **Cross-venue synchronization** lets you replay Binance + OKX orderflow at microsecond precision for basis, latency-arb, or liquidity-routing work.
 
-#### 🎯 **Advanced Execution Logic**
-- **Precision DCA**: **Tick-aware Dollar Cost Averaging** with **microsecond entry timing**
-- **Experimental Trailing**: **Real-time trailing stops** using **live tick data** for optimal exit timing
-- **Sub-50 Line Deployment**: Deploy **institutional-grade strategies** with minimal code overhead
+#### 🎯 **Execution Logic Out of the Box**
+- **Precision DCA** and staged execution baked into `BaseStrategy`, driven by actual tick data.
+- **Experimental trailing & order management** that reacts to live depth changes, not candle approximations.
+- **Sub-50 line deployment** is realistic because Backtrader, JackRabbitRelay, QuantStats, and the DeFi bridges all consume the same warehouse—swap feeds, wire credentials, go live.
 
 ---
 

@@ -230,9 +230,9 @@ void MSSQLBulkInserter::bulkInsertTrades(
 
     const char* insert_sql =
         "INSERT INTO [dbo].[trades] ("
-        "  [timestamp], [exchange], [symbol], [market_type], [trade_id],"
-        "  [price], [quantity], [side], [is_buyer_maker]"
-        ") VALUES (?,?,?,?,?,?,?,?,?)";
+        "  [timestamp], [exchange], [symbol], [market_type],"
+        "  [trade_id], [price], [quantity], [side], [is_buyer_maker]) "
+        "VALUES (?,?,?,?,?,?,?,?,?);";
 
     ret = SQLPrepare(stmt_, (SQLCHAR*)insert_sql, SQL_NTS);
     if (!SQL_SUCCEEDED(ret)) {
@@ -243,27 +243,29 @@ void MSSQLBulkInserter::bulkInsertTrades(
     const std::size_t total = trades.size();
     const std::size_t bs    = batch_size == 0 ? total : batch_size;
 
-    // column-wise binding
-    SQLSetStmtAttr(stmt_, SQL_ATTR_PARAM_BIND_TYPE,
-                   (SQLPOINTER)SQL_PARAM_BIND_BY_COLUMN, 0);
-
     constexpr std::size_t EXCH_LEN  = 50;
     constexpr std::size_t SYM_LEN   = 50;
     constexpr std::size_t MTYPE_LEN = 20;
     constexpr std::size_t TID_LEN   = 200;   // generous trade id
     constexpr std::size_t SIDE_LEN  = 10;
 
+    SQLSetStmtAttr(stmt_, SQL_ATTR_PARAM_BIND_TYPE,
+                   (SQLPOINTER)SQL_PARAM_BIND_BY_COLUMN, 0);
+
     for (std::size_t offset = 0; offset < total; ) {
-        std::size_t n = std::min(bs, total - offset);
+        const std::size_t n = std::min(bs, total - offset);
+
+        SQLSetStmtAttr(stmt_, SQL_ATTR_PARAMSET_SIZE,
+                       (SQLPOINTER)(SQLULEN)n, 0);
 
         std::vector<SQL_TIMESTAMP_STRUCT> ts(n);
         std::vector<std::array<SQLCHAR, EXCH_LEN + 1>>  exch(n);
         std::vector<std::array<SQLCHAR, SYM_LEN + 1>>   sym(n);
         std::vector<std::array<SQLCHAR, MTYPE_LEN + 1>> mtype(n);
         std::vector<std::array<SQLCHAR, TID_LEN + 1>>   tid(n);
+        std::vector<double> price(n);
+        std::vector<double> qty(n);
         std::vector<std::array<SQLCHAR, SIDE_LEN + 1>>  side(n);
-
-        std::vector<double> price(n), qty(n);
         std::vector<SQLCHAR> buyer_maker(n);
 
         std::vector<SQLLEN> ind_ts(n), ind_exch(n), ind_sym(n),
@@ -274,7 +276,7 @@ void MSSQLBulkInserter::bulkInsertTrades(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& t = trades[offset + i];
 
-            // t.timestamp_ms holds microseconds per your recent changes
+            // t.timestamp_ms holds microseconds since epoch (UTC)
             ts[i] = ts_from_epoch_us(t.timestamp_ms);
 
             copyStrFixed(t.exchange,    exch[i]);
@@ -283,9 +285,10 @@ void MSSQLBulkInserter::bulkInsertTrades(
             copyStrFixed(t.trade_id,    tid[i]);
             copyStrFixed(t.side,        side[i]);
 
-            price[i] = t.price;
-            qty[i]   = t.quantity;
-            buyer_maker[i] = t.is_buyer_maker ? 1 : 0;
+            price[i]       = t.price;
+            qty[i]         = t.quantity;
+            buyer_maker[i] = t.is_buyer_maker ? (SQLCHAR)1 : (SQLCHAR)0;
+
             ind_ts[i]    = sizeof(SQL_TIMESTAMP_STRUCT);
             ind_exch[i]  = SQL_NTS;
             ind_sym[i]   = SQL_NTS;
@@ -297,17 +300,15 @@ void MSSQLBulkInserter::bulkInsertTrades(
             ind_bm[i]    = 0;
         }
 
-        SQLULEN paramset_size = n;
-        SQLSetStmtAttr(stmt_, SQL_ATTR_PARAMSET_SIZE,
-                       &paramset_size, 0);
-
-        // 1: timestamp
+        // 1: timestamp → DATETIME2(6)
         ret = SQLBindParameter(
             stmt_, 1, SQL_PARAM_INPUT,
             SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP,
-            27, 6,
+            0, 0, // let the driver infer from table metadata
             ts.data(), sizeof(SQL_TIMESTAMP_STRUCT),
             ind_ts.data());
+        if (!SQL_SUCCEEDED(ret))
+            throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades ts");
 
         // 2: exchange
         ret = SQLBindParameter(
@@ -337,7 +338,8 @@ void MSSQLBulkInserter::bulkInsertTrades(
             mtype[0].data(), MTYPE_LEN + 1,
             ind_mtype.data());
         if (!SQL_SUCCEEDED(ret))
-            throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades mkt");
+            throwODBCError(SQL_HANDLE_STMT, stmt_,
+                           "Bind trades market_type");
 
         // 5: trade_id
         ret = SQLBindParameter(
@@ -347,21 +349,22 @@ void MSSQLBulkInserter::bulkInsertTrades(
             tid[0].data(), TID_LEN + 1,
             ind_tid.data());
         if (!SQL_SUCCEEDED(ret))
-            throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades tid");
+            throwODBCError(SQL_HANDLE_STMT, stmt_,
+                           "Bind trades trade_id");
 
-        // 6: price
+        // 6: price (DECIMAL(20,8))
         ret = SQLBindParameter(
             stmt_, 6, SQL_PARAM_INPUT,
             SQL_C_DOUBLE, SQL_DECIMAL,
-            38, 18, price.data(), 0, ind_price.data());
+            20, 8, price.data(), 0, ind_price.data());
         if (!SQL_SUCCEEDED(ret))
             throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades price");
 
-        // 7: quantity
+        // 7: quantity (DECIMAL(30,8))
         ret = SQLBindParameter(
             stmt_, 7, SQL_PARAM_INPUT,
             SQL_C_DOUBLE, SQL_DECIMAL,
-            38, 18, qty.data(), 0, ind_qty.data());
+            30, 8, qty.data(), 0, ind_qty.data());
         if (!SQL_SUCCEEDED(ret))
             throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades qty");
 

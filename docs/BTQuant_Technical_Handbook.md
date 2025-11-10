@@ -16,6 +16,7 @@
 11. [Security, Secrets & Operational Safety](#security-secrets--operational-safety)
 12. [Troubleshooting & Performance Tuning](#troubleshooting--performance-tuning)
 13. [Further Reading & External Resources](#further-reading--external-resources)
+14. [BigBrainCentral Data Spine](#bigbraincentral-data-spine)
 
 ---
 
@@ -246,6 +247,34 @@ class MyStrategy(bt.Strategy):
 - **WebSocket drops**: Customize reconnection and heartbeat logic inside the respective `*_feed.py` to honour venue-specific rate limits.
 - **Memory pressure**: Use `fetch_all_data_sequential` for staged coin loading and enable Python's `gc.collect()` after large optimization sweeps (already imported in `backtest.py`).
 - **Plotting environments**: Matplotlib is forced to `'Agg'` in `backtest.py` for headless execution. Switch to an interactive backend locally if desired.
+
+---
+
+## BigBrainCentral Data Spine
+BigBrainCentral is BTQuant’s always-on market data backbone. Instead of exporting CSVs and hoping they stay in sync, the platform captures, stores, and serves every tick through a single SQL Server mesh.
+
+### Capture – ccapi-powered C++ collector
+- Code lives in `dependencies/ccapi/example/src/market_data_collector/`.
+- Uses ccapi + native WebSockets (Binance, OKX, Bitget, etc.) to stream trades and BBO depth with sub-millisecond latency.
+- `MSSQLBulkInserter` batches trades, orderbooks, and on-the-fly candles into `dbo.trades`, `dbo.orderbook_snapshots`, and per-symbol `[symbol]_klines` tables using DATETIME2(6) precision and transactionally safe bulk inserts.
+
+### Transform – Candle aggregation & integrity
+- `candle_aggregator.cpp` rolls raw ticks into multi-timeframe bars before they ever hit disk, preserving microsecond-open timestamps.
+- Orderbook snapshots include serialized bids/asks + checksums to validate depth integrity downstream.
+- `MarketDataProcessor` enforces serialized access to the database handles so concurrent flushes cannot corrupt the ODBC state.
+
+### Serve – Python adapters & analytics
+- `dependencies/backtrader/bigbraincentral/db_ohlcv_mssql.py` and siblings expose the warehouse as Backtrader feeds, QuantStats inputs, and JackRabbitRelay replay sources.
+- Strategies read the exact same data the collector wrote—no duplication, no “research vs live” gap.
+- Auxiliary tooling (`init_mssqldatabase.py`, `bigbraintest.py`) seeds schemas, runs integrity checks, and demonstrates cross-stack queries.
+
+### Why it matters
+- **Consistency**: backtests, forward tests, dashboards, and live bots share one dataset.
+- **Scale**: SQL Server handles billion-row history with tuned indexes; the C++ ingestion keeps up without touching the Python GIL.
+- **Auditability**: Every trade/orderbook keeps exchange IDs and timestamps for compliance and forensic replay.
+- **Extensibility**: To add a venue, wire a ccapi subscription and let the MSSQL schema generator create the tables—everything else already knows how to consume it.
+
+BigBrainCentral is the differentiator that turns BTQuant from “yet another Backtrader fork” into a full-stack quant platform with an enterprise-grade data spine.
 
 ---
 

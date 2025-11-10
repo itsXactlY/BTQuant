@@ -57,6 +57,12 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - ✅ **Native trading engine behavior** replication
 - ❌ *Not generic CCXT simulation*
 
+#### **🧠 BigBrainCentral Market Data Mesh**
+- ✅ **C++/ccapi collectors** slam **microsecond ticks** plus **full depth snapshots** straight into **Microsoft SQL Server** without Python bottlenecks
+- ✅ **MSSQLBulkInserter** streams trades, orderbooks, and aggregated klines with **zero GC stalls**, feeding both research and live systems from the same canonical truth set
+- ✅ **Backtrader BigBrainCentral adapters** (`dependencies/backtrader/bigbraincentral/*`) surface that warehouse to strategies, QuantStats, and JackRabbitRelay without ever exporting CSVs
+- ❌ *No duct-taped SQLite, no “maybe consistent” Parquet lakes—this is a real data spine*
+
 #### **DeFi Integration**
 - ✅ **Native PancakeSwap/Web3** integration with **custom DEX protocols**
 - ✅ **Real-time on-chain data** with **block-level precision**
@@ -77,6 +83,22 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 | **WebSocket Reconnect** | <100ms | 5-30s | **300x faster** |
 | **Order Execution** | <5ms | 100-500ms | **100x faster** |
 | **Data Throughput** | 100k ticks/s | 1k ticks/s | **100x higher** |
+
+---
+
+## BigBrainCentral in Plain Language
+
+**Problem**: Everybody hoards CSVs, prays their CCXT loop didn’t choke, and calls it “research data.”  
+**BTQuant fix**: a **C++ market data collector** (`dependencies/ccapi/example/src/market_data_collector`) that uses **ccapi**, **custom WebSocket routers**, and the **MSSQLBulkInserter** to ingest:
+
+- **Trades** with microsecond timestamps, buyer/seller flags, and raw exchange IDs
+- **Orderbook snapshots** (bids/asks JSON + checksum) for depth-aware execution research
+- **Windowed candles** produced by the embedded `CandleAggregator`
+
+Everything lands inside **dbo.trades**, **dbo.orderbook_snapshots**, or the auto-provisioned `symbol_klines` tables inside Microsoft SQL Server.  
+Backtrader picks it up through the `bigbraincentral` feeds (`db_ohlcv_mssql.py`, `bigbraintest.py`, `init_mssqldatabase.py`) so **backtests, forward sims, analytics jobs, and live stores** all point to the same ground-truth warehouse. No exports, no “I’ll sync it later.” The repo ships both the **ingest daemon** and the **Python bindings**, so you can prove an idea on old data and chase it live using the exact same pipes.
+
+**Result**: a single **BigBrainCentral** backbone where market data, analytics, and execution talk the same language—something the rest of the “frameworks” never even attempted.
 
 ---
 

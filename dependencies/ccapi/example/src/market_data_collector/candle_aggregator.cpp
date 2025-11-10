@@ -16,19 +16,19 @@ std::string CandleAggregator::makeKey(const std::string& exchange,
     return exchange + ":" + symbol + ":" + timeframe;
 }
 
-int64_t CandleAggregator::timeframeMillis(
-    const std::string& tf) const {
-    if (tf.empty()) return 60000;
+int64_t CandleAggregator::timeframeMillis(const std::string& tf) const {
+    if (tf.empty()) return 60'000'000; // 60s in µs
     char unit = tf.back();
     int64_t val = std::stoll(tf.substr(0, tf.size() - 1));
     switch (unit) {
-        case 's': return val * 1000;
-        case 'm': return val * 60 * 1000;
-        case 'h': return val * 60 * 60 * 1000;
-        case 'd': return val * 24 * 60 * 60 * 1000;
-        default:  return val * 60 * 1000;
+        case 's': return val * 1'000'000;
+        case 'm': return val * 60 * 1'000'000;
+        case 'h': return val * 60 * 60 * 1'000'000;
+        case 'd': return val * 24 * 60 * 60 * 1'000'000;
+        default:  return val * 60 * 1'000'000;
     }
 }
+
 
 int64_t CandleAggregator::alignTimestamp(
     int64_t timestamp_ms,

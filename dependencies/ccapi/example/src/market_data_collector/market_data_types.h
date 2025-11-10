@@ -9,26 +9,30 @@
 
 namespace MarketData {
 
-inline std::string formatTimestampMs(int64_t timestamp_ms) {
+// NOTE: All timestamps in this module are stored as *microseconds*
+// since Unix epoch (UTC). The field name `timestamp_ms` is kept for
+// backward compatibility with existing code.
+inline std::string formatTimestampMs(int64_t timestamp_us) {
     using namespace std::chrono;
-    system_clock::time_point tp{milliseconds(timestamp_ms)};
+    system_clock::time_point tp{microseconds(timestamp_us)};
     std::time_t tt = system_clock::to_time_t(tp);
-    std::tm tm{};
+    std::tm tm_utc{};  // ✅ Keep consistent naming
 #if defined(_WIN32)
-    gmtime_s(&tm, &tt);
+    gmtime_s(&tm_utc, &tt);
 #else
-    gmtime_r(&tt, &tm);
+    gmtime_r(&tt, &tm_utc);
 #endif
     char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
-    char out[40];
-    std::snprintf(out, sizeof(out), "%s.%03lld", buf,
-                  static_cast<long long>(timestamp_ms % 1000));
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_utc);
+    char out[48];
+    long long us = static_cast<long long>(timestamp_us % 1'000'000);
+    if (us < 0) us += 1'000'000;
+    std::snprintf(out, sizeof(out), "%s.%06lld", buf, us);
     return std::string(out);
 }
 
 struct Trade {
-    int64_t timestamp_ms{};
+    int64_t timestamp_ms{};   // epoch microseconds (UTC)
     std::string exchange;
     std::string symbol;
     std::string market_type;  // "spot", "perpetual", ...
@@ -58,7 +62,7 @@ struct Trade {
 };
 
 struct OHLCV {
-    int64_t timestamp_ms{};   // candle open time
+    int64_t timestamp_ms{};   // candle open time (epoch microseconds)
     std::string exchange;
     std::string symbol;
     std::string market_type;
@@ -95,7 +99,7 @@ struct OHLCV {
 };
 
 struct OrderbookSnapshot {
-    int64_t timestamp_ms{};
+    int64_t timestamp_ms{};   // epoch microseconds
     std::string exchange;
     std::string symbol;
     std::string market_type;

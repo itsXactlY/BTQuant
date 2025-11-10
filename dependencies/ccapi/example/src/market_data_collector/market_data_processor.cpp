@@ -12,7 +12,7 @@ namespace {
 // wall-clock “now” in ms
 int64_t nowMs() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(
+    return duration_cast<microseconds>(
                system_clock::now().time_since_epoch())
         .count();
 }
@@ -139,35 +139,35 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
     const auto& elements = msg.getElementList();
     if (elements.empty()) return;
 
-    // exchange timestamp from Message
+    // exchange timestamp from Message (µs)
     auto tp = msg.getTime();
-    int64_t ts_ms = std::chrono::duration_cast<
-                        std::chrono::milliseconds>(
+    int64_t ts_us = std::chrono::duration_cast<std::chrono::microseconds>(
                         tp.time_since_epoch())
                         .count();
-    int64_t recv_time_ms = nowMs();
+
+    // receive time (µs)
+    int64_t recv_time_us = nowMs(); // your nowMs() currently returns microseconds
 
     for (const auto& el : elements) {
         const auto& m = el.getNameValueMap();
 
-        std::string price_s = getAny(el, {"LAST_PRICE", "PRICE"});
-        std::string qty_s   = getAny(el, {"LAST_SIZE", "SIZE"});
-        std::string is_bm_s = getAny(el, {"IS_BUYER_MAKER"});
-        std::string trade_id = getAny(el, {"TRADE_ID"});
+        std::string price_s   = getAny(el, {"LAST_PRICE", "PRICE"});
+        std::string qty_s     = getAny(el, {"LAST_SIZE", "SIZE"});
+        std::string is_bm_s   = getAny(el, {"IS_BUYER_MAKER"});
+        std::string trade_id  = getAny(el, {"TRADE_ID"});
 
         bool ok_price = false, ok_qty = false;
         double price = safeParseDouble("trade.price", price_s, ok_price);
         double qty   = safeParseDouble("trade.size",  qty_s,   ok_qty);
 
         if (!ok_price || !ok_qty) {
-            std::cerr
-                << "handleTradeMessage: bad PRICE/SIZE, element = "
-                << ccapi::toString(m) << std::endl;
+            std::cerr << "handleTradeMessage: bad PRICE/SIZE, element = "
+                      << ccapi::toString(m) << std::endl;
             continue;
         }
 
         Trade t;
-        t.timestamp_ms = ts_ms;
+        t.timestamp_ms = ts_us;      // stores microseconds despite the name
         t.exchange     = exchange;
         t.symbol       = symbol;
         t.market_type  = market_type;
@@ -175,25 +175,23 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
         t.quantity     = qty;
         t.trade_id     = trade_id;
 
-        bool buyer_maker =
-            (is_bm_s == "1" || is_bm_s == "true");
+        bool buyer_maker = (is_bm_s == "1" || is_bm_s == "true");
         t.is_buyer_maker = buyer_maker;
         t.side           = buyer_maker ? "sell" : "buy";
 
         {
             std::lock_guard<std::mutex> lock(buffer_mutex_);
             trade_buffer_.push_back(t);
-            active_pairs_.insert(exchange + ":" + symbol + ":" +
-                                 market_type);
+            active_pairs_.insert(exchange + ":" + symbol + ":" + market_type);
             ++trades_received_;
         }
 
         candle_agg_->processTrade(t);
 
-        double latency =
-            static_cast<double>(recv_time_ms - t.timestamp_ms);
-        stats_.avg_latency_ms =
-            0.99 * stats_.avg_latency_ms + 0.01 * latency;
+        // keep stats as milliseconds
+        double latency_ms =
+            static_cast<double>(recv_time_us - t.timestamp_ms) / 1000.0;
+        stats_.avg_latency_ms = 0.99 * stats_.avg_latency_ms + 0.01 * latency_ms;
     }
 
     flushTradesIfNeeded();
@@ -267,15 +265,15 @@ void MarketDataProcessor::handleOrderbookMessage(
         return;
     }
 
-    // timestamp from Message
+    // timestamp from Message (stored internally as microseconds)
     auto tp = msg.getTime();
-    int64_t ts_ms = std::chrono::duration_cast<
-                        std::chrono::milliseconds>(
+    int64_t ts_us = std::chrono::duration_cast<
+                        std::chrono::microseconds>(
                         tp.time_since_epoch())
                         .count();
 
     OrderbookSnapshot ob;
-    ob.timestamp_ms = ts_ms;
+    ob.timestamp_ms = ts_us;
     ob.exchange     = exchange;
     ob.symbol       = symbol;
     ob.market_type  = market_type;
@@ -306,7 +304,6 @@ void MarketDataProcessor::handleOrderbookMessage(
 
     flushOrderbooksIfNeeded();
 }
-
 
 void MarketDataProcessor::flushTradesIfNeeded(bool force) {
     std::vector<Trade> batch;

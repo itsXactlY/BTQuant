@@ -1,7 +1,6 @@
 #include "mssql_bulk_inserter.h"
 
 #include <array>
-#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <mutex>
@@ -13,35 +12,10 @@ using namespace MarketData;
 
 namespace {
 
-// convert UNIX epoch microseconds -> SQL_TIMESTAMP_STRUCT (for DATETIME2(6))
-inline SQL_TIMESTAMP_STRUCT makeSqlTsFromEpochUs(int64_t epoch_us) {
-    using namespace std::chrono;
-    std::time_t sec = static_cast<std::time_t>(epoch_us / 1000000);
-    int64_t usec    = epoch_us % 1000000;
-    if (usec < 0) {
-        usec += 1000000;
-        --sec;
-    }
+constexpr SQLULEN     kTimestampColumnSize   = 27;
+constexpr SQLSMALLINT kTimestampScaleMicros  = 6;
+constexpr std::size_t kTimestampStringLength = 32;
 
-    std::tm tm_utc{};
-#if defined(_WIN32)
-    gmtime_s(&tm_utc, &sec);
-#else
-    gmtime_r(&sec, &tm_utc);
-#endif
-
-    SQL_TIMESTAMP_STRUCT ts{};
-    ts.year   = tm_utc.tm_year + 1900;
-    ts.month  = tm_utc.tm_mon + 1;
-    ts.day    = tm_utc.tm_mday;
-    ts.hour   = tm_utc.tm_hour;
-    ts.minute = tm_utc.tm_min;
-    ts.second = tm_utc.tm_sec;
-    ts.fraction = static_cast<SQLUINTEGER>(usec * 1000); // micro -> nano
-    return ts;
-}
-
-namespace {
 template <std::size_t N>
 inline void copyStrFixed(const std::string& s, std::array<SQLCHAR, N>& buf) {
     static_assert(N >= 1, "buffer must have at least 1 byte");
@@ -50,43 +24,8 @@ inline void copyStrFixed(const std::string& s, std::array<SQLCHAR, N>& buf) {
     if (len) std::memcpy(buf.data(), s.data(), len);
     buf[len] = 0;
 }
-} // namespace
 
 } // anonymous namespace
-
-//
-namespace {
-inline SQL_TIMESTAMP_STRUCT ts_from_epoch_us(int64_t epoch_us) {
-    using namespace std::chrono;
-    int64_t sec = epoch_us / 1'000'000;
-    int64_t us  = epoch_us % 1'000'000;
-    
-    // Handle negative microseconds
-    if (us < 0) {
-        us += 1'000'000;
-        --sec;
-    }
-
-    std::tm tm_utc{};
-#if defined(_WIN32)
-    time_t tt = static_cast<time_t>(sec);
-    gmtime_s(&tm_utc, &tt);
-#else
-    time_t tt = static_cast<time_t>(sec);
-    gmtime_r(&tt, &tm_utc);
-#endif
-
-    SQL_TIMESTAMP_STRUCT ts{};
-    ts.year     = tm_utc.tm_year + 1900;
-    ts.month    = tm_utc.tm_mon + 1;
-    ts.day      = tm_utc.tm_mday;
-    ts.hour     = tm_utc.tm_hour;
-    ts.minute   = tm_utc.tm_min;
-    ts.second   = tm_utc.tm_sec;
-    ts.fraction = static_cast<unsigned long>(us) * 1000UL;
-    return ts;
-}
-} // namespace
 
 MSSQLBulkInserter::MSSQLBulkInserter(const std::string& connection_string)
     : connection_string_(connection_string) {
@@ -258,7 +197,7 @@ void MSSQLBulkInserter::bulkInsertTrades(
         SQLSetStmtAttr(stmt_, SQL_ATTR_PARAMSET_SIZE,
                        (SQLPOINTER)(SQLULEN)n, 0);
 
-        std::vector<SQL_TIMESTAMP_STRUCT> ts(n);
+        std::vector<std::array<SQLCHAR, kTimestampStringLength>> ts(n);
         std::vector<std::array<SQLCHAR, EXCH_LEN + 1>>  exch(n);
         std::vector<std::array<SQLCHAR, SYM_LEN + 1>>   sym(n);
         std::vector<std::array<SQLCHAR, MTYPE_LEN + 1>> mtype(n);
@@ -276,8 +215,7 @@ void MSSQLBulkInserter::bulkInsertTrades(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& t = trades[offset + i];
 
-            // t.timestamp_ms holds microseconds since epoch (UTC)
-            ts[i] = ts_from_epoch_us(t.timestamp_ms);
+            copyStrFixed(formatTimestampMs(t.timestamp_ms), ts[i]);
 
             copyStrFixed(t.exchange,    exch[i]);
             copyStrFixed(t.symbol,      sym[i]);
@@ -289,7 +227,7 @@ void MSSQLBulkInserter::bulkInsertTrades(
             qty[i]         = t.quantity;
             buyer_maker[i] = t.is_buyer_maker ? (SQLCHAR)1 : (SQLCHAR)0;
 
-            ind_ts[i]    = sizeof(SQL_TIMESTAMP_STRUCT);
+            ind_ts[i]    = SQL_NTS;
             ind_exch[i]  = SQL_NTS;
             ind_sym[i]   = SQL_NTS;
             ind_mtype[i] = SQL_NTS;
@@ -303,9 +241,9 @@ void MSSQLBulkInserter::bulkInsertTrades(
         // 1: timestamp → DATETIME2(6)
         ret = SQLBindParameter(
             stmt_, 1, SQL_PARAM_INPUT,
-            SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP,
-            0, 0, // let the driver infer from table metadata
-            ts.data(), sizeof(SQL_TIMESTAMP_STRUCT),
+            SQL_C_CHAR, SQL_TYPE_TIMESTAMP,
+            kTimestampColumnSize, kTimestampScaleMicros,
+            ts[0].data(), kTimestampStringLength,
             ind_ts.data());
         if (!SQL_SUCCEEDED(ret))
             throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind trades ts");
@@ -488,7 +426,7 @@ void MSSQLBulkInserter::bulkInsertOHLCV(
         SQLSetStmtAttr(stmt_, SQL_ATTR_PARAMSET_SIZE,
                        (SQLPOINTER)n, 0);
 
-        std::vector<SQL_TIMESTAMP_STRUCT> ts(n);
+        std::vector<std::array<SQLCHAR, kTimestampStringLength>> ts(n);
         std::vector<std::array<SQLCHAR, STR_LEN + 1>> exch(n), sym(n),
                                                      mtype(n), tf(n);
         std::vector<double> o(n), h(n), l(n), c(n), v(n);
@@ -501,8 +439,8 @@ void MSSQLBulkInserter::bulkInsertOHLCV(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& cd = candles[offset + i];
 
-            ts[i] = ts_from_epoch_us(cd.timestamp_ms);
-            ind_ts[i] = sizeof(SQL_TIMESTAMP_STRUCT);
+            copyStrFixed(formatTimestampMs(cd.timestamp_ms), ts[i]);
+            ind_ts[i] = SQL_NTS;
 
             copyStrFixed(cd.exchange,    exch[i]);
             copyStrFixed(cd.symbol,      sym[i]);
@@ -529,8 +467,9 @@ void MSSQLBulkInserter::bulkInsertOHLCV(
         // 1: timestamp
         ret = SQLBindParameter(
             stmt_, 1, SQL_PARAM_INPUT,
-            SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP,
-            27, 6, ts.data(), sizeof(SQL_TIMESTAMP_STRUCT), ind_ts.data());
+            SQL_C_CHAR, SQL_TYPE_TIMESTAMP,
+            kTimestampColumnSize, kTimestampScaleMicros,
+            ts[0].data(), kTimestampStringLength, ind_ts.data());
         if (!SQL_SUCCEEDED(ret))
             throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind OHLCV ts");
 
@@ -661,7 +600,7 @@ void MSSQLBulkInserter::bulkInsertOrderbooks(
         SQLSetStmtAttr(stmt_, SQL_ATTR_PARAM_BIND_TYPE,
                        (SQLPOINTER)SQL_PARAM_BIND_BY_COLUMN, 0);
 
-        std::vector<SQL_TIMESTAMP_STRUCT> ts(n);
+        std::vector<std::array<SQLCHAR, kTimestampStringLength>> ts(n);
         std::vector<std::array<SQLCHAR, EXCH_LEN + 1>>   exch(n);
         std::vector<std::array<SQLCHAR, SYMBOL_LEN + 1>> sym(n);
         std::vector<std::array<SQLCHAR, MTYPE_LEN + 1>>  mtype(n);
@@ -685,8 +624,8 @@ void MSSQLBulkInserter::bulkInsertOrderbooks(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& ob = obs[offset + i];
 
-            ts[i]     = makeSqlTsFromEpochUs(ob.timestamp_ms);
-            ind_ts[i] = sizeof(SQL_TIMESTAMP_STRUCT);
+            copyStr(formatTimestampMs(ob.timestamp_ms), ts[i]);
+            ind_ts[i] = SQL_NTS;
 
             copyStr(ob.exchange,    exch[i]);
             copyStr(ob.symbol,      sym[i]);
@@ -712,9 +651,9 @@ void MSSQLBulkInserter::bulkInsertOrderbooks(
         // 1: timestamp
         ret = SQLBindParameter(
             stmt_, 1, SQL_PARAM_INPUT,
-            SQL_C_TYPE_TIMESTAMP, SQL_TYPE_TIMESTAMP,
-            27, 6,
-            ts.data(), sizeof(SQL_TIMESTAMP_STRUCT),
+            SQL_C_CHAR, SQL_TYPE_TIMESTAMP,
+            kTimestampColumnSize, kTimestampScaleMicros,
+            ts[0].data(), kTimestampStringLength,
             ind_ts.data());
         if (!SQL_SUCCEEDED(ret))
             throwODBCError(SQL_HANDLE_STMT, stmt_, "Bind ob ts");

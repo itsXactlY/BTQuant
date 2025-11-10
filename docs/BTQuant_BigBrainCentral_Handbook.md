@@ -180,3 +180,9 @@ These visualizations are not ornamental; they are a QA layer over the market dat
 ![3-D histogram by created_at](2.png)
 
 ![Orderbook density snapshot](3.png)
+
+### System Load Snapshot
+
+Even on a development workstation that is already overloaded with debugging tasks, the collector leaves sixteen logical cores ~97‑98 % idle. The `atop` capture below shows how little CPU the ccapi ingest + MSSQL bulk pipeline actually requires.
+
+![CPU load during ingestion](load.png)(session.png)

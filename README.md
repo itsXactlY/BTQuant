@@ -61,6 +61,7 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 - ✅ **C++/ccapi collectors** slam **microsecond ticks** plus **full depth snapshots** straight into **Microsoft SQL Server** without Python bottlenecks
 - ✅ **MSSQLBulkInserter** streams trades, orderbooks, and aggregated klines with **zero GC stalls**, feeding both research and live systems from the same canonical truth set
 - ✅ **Backtrader BigBrainCentral adapters** (`dependencies/backtrader/bigbraincentral/*`) surface that warehouse to strategies, QuantStats, and JackRabbitRelay without ever exporting CSVs
+- ✅ **Ridiculously low overhead** – even on an already overloaded dev workstation the collector keeps 16 cores ~97% idle (see BigBrainCentral handbook)
 - ❌ *No duct-taped SQLite, no “maybe consistent” Parquet lakes—this is a real data spine*
 
 #### **DeFi Integration**

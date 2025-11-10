@@ -3,60 +3,63 @@ from datetime import datetime, timedelta
 import pytz
 from typing import Type
 
+from typing import Type, Optional, Dict, Any
+import backtrader as bt
+
+from .ccxt_config import load_ccxt_config
+from backtrader.feeds.ccxt import CCXT
+from backtrader.brokers.ccxtbroker import CCXTBroker
+
+
 def livetrade_ccxt(
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
-    strategy: Type[bt.Strategy],
-    config: str,
+    strategy_class: str,
+    config: Optional[Dict[str, Any]] = None,
 ) -> None:
-    
-    if strategy is None:
-        raise ValueError("No strategy class provided.")
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
+        strategy_class = strategy
 
-    from backtrader.feeds.ccxt import CCXT
-    from backtrader.brokers.ccxtbroker import CCXTBroker
+    if config is None:
+        config = load_ccxt_config(exchange=exchange, account=account, default_type="spot")
 
     cerebro = bt.Cerebro()
-    
-    # Create broker with patched class
-    broker = CCXTBroker(
-        exchange,
-        currency='USDT',
-        config=config
-    )
 
     broker = CCXTBroker(exchange, collateral, config)
-    cerebro.setbroker(broker)    
+    cerebro.setbroker(broker)
+
     data = CCXT(
         exchange=exchange,
         symbol=asset,
         ohlcv_limit=500,
         config=config,
-        retries=5
+        retries=5,
     )
 
-    cerebro.setbroker(broker)
     cerebro.adddata(data, name=data._dataname)
     cerebro.addstrategy(
-                        strategy,
-                        exchange=exchange,
-                        account=account,
-                        asset=asset,
-                        coin=coin,
-                        collateral=collateral,
-                        enable_alerts=False,
-                        backtest=False)
+        strategy,
+        exchange=exchange,
+        account=account,
+        asset=asset,
+        coin=coin,
+        collateral=collateral,
+        enable_alerts=False,
+        backtest=False,
+    )
 
     try:
         cerebro.run(live=True, runonce=False, exactbars=False, stdstats=False)
     except Exception as e:
         print(f"An error occurred: {e}")
         import traceback
-        print("Full traceback:")
         traceback.print_exc()
+
 
 def livetrade_web3(
     coin: str,
@@ -87,9 +90,9 @@ def livetrade_web3(
     - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     """
 
-    if strategy_class is None:
-        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
         strategy_class = strategy
 
     from backtrader.stores import pancakeswap_store
@@ -154,9 +157,9 @@ def livetrade_binance(
     - enable_alerts (bool): Whether to enable the alert engine. Defaults to False.
     - alert_channel (str): Define where to send alerts via alert engine.
     """
-    if strategy_class is None:
-        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
         strategy_class = strategy
     
     from backtrader.stores import binance_store
@@ -230,9 +233,9 @@ def livetrade_mexc(
     - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
 
-    if strategy_class is None:
-        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
         strategy_class = strategy
 
     from backtrader.stores import mexc_store
@@ -300,18 +303,16 @@ def livetrade_bitget(
     - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
 
-    if strategy_class is None:
-        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
         strategy_class = strategy
 
-    from backtrader.stores import bitget_store
+    from backtrader.stores.bitget_store import BitgetStore
+    from backtrader.feeds.bitget_feed import BitgetData
 
     cerebro = bt.Cerebro(quicknotify=True)
-    store = bitget_store.BitgetStore(
-        coin_refer=coin,
-        coin_target=collateral
-    )
+    store = BitgetStore(symbol=coin, product="spot", debug=True)
 
     # Set the timezone to UTC+2
     tz = pytz.timezone('Europe/Berlin')
@@ -324,7 +325,7 @@ def livetrade_bitget(
     print(f"Current time (UTC+2): {current_time}")
     print(f"Fetching historical data from (UTC+2): {from_date}")
     
-    data = store.getdata(start_date=from_date)
+    data = BitgetData(store=store, start_date=from_date)
     data._dataname = f"{coin}{collateral}"
     
     cerebro.addstrategy(
@@ -348,7 +349,7 @@ def livetrade_tv(
     exchange: str,
     account: str,
     asset: str,
-    strategy: Type[bt.Strategy],
+    strategy: str,
     tv_symbol: str,
     amount: float = 0.05,
     lookback_minutes: int = 1,
@@ -357,8 +358,10 @@ def livetrade_tv(
     Live trading using TradingView as data source.
     """
     
-    if strategy is None:
-        raise ValueError("No strategy class provided.")
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
+        strategy_class = strategy
     
     from backtrader.stores.tv_store import TradingViewStore
     import datetime as dt

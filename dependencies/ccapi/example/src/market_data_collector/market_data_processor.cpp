@@ -317,6 +317,7 @@ void MarketDataProcessor::flushTradesIfNeeded(bool force) {
     if (batch.empty()) return;
 
     try {
+        std::lock_guard<std::mutex> db_lock(db_mutex_);
         db_->bulkInsertTrades(batch);
         stats_.trades_inserted += batch.size();
     } catch (const std::exception& e) {
@@ -351,6 +352,7 @@ void MarketDataProcessor::flushCandlesIfNeeded(bool force) {
 
         for (auto& kv : by_table) {
             try {
+                std::lock_guard<std::mutex> db_lock(db_mutex_);
                 db_->bulkInsertOHLCV(kv.first, kv.second);
                 stats_.candles_inserted += kv.second.size();
             } catch (const std::exception& e) {
@@ -375,6 +377,7 @@ void MarketDataProcessor::flushOrderbooksIfNeeded(bool force) {
     if (batch.empty()) return;
 
     try {
+        std::lock_guard<std::mutex> db_lock(db_mutex_);
         db_->bulkInsertOrderbooks(batch);
         stats_.orderbooks_inserted += batch.size();
     } catch (const std::exception& e) {

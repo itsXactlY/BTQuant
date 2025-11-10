@@ -46,6 +46,7 @@ private:
     std::unordered_set<std::string> active_pairs_;
 
     mutable std::mutex buffer_mutex_;
+    std::mutex db_mutex_;
     std::atomic<uint64_t> trades_received_{0};
     std::atomic<uint64_t> errors_{0};
     Stats stats_{};

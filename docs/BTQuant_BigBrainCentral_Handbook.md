@@ -177,8 +177,6 @@ These visualizations are not ornamental; they are a QA layer over the market dat
 
 ![Trade heatmap sized by quantity](image.png)
 
-![Exchange comparison grid](1.png)
-
 ![3-D histogram by created_at](2.png)
 
 ![Orderbook density snapshot](3.png)

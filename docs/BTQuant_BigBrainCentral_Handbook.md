@@ -172,3 +172,13 @@ SQL Server’s canonical schema pairs nicely with Microsoft’s **SandDance** or
 - **3‑D histograms** stacked by exchange or timeframe to inspect message bursts and missing periods visually. Sorting by `id` or `created_at` makes micro-bursts stand out.
 
 These visualizations are not ornamental; they are a QA layer over the market data spine. Because every tick is already in SQL Server, there is zero ETL—just point SandDance (or PowerBI, Grafana, etc.) at the tables and interrogate live ingestion quality in seconds.
+
+### Example Visuals
+
+![Trade heatmap sized by quantity](image.png)
+
+![Exchange comparison grid](1.png)
+
+![3-D histogram by created_at](2.png)
+
+![Orderbook density snapshot](3.png)

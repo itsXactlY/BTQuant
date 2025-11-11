@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional, List
-
 import time
 from collections import deque
+
 from backtrader.feed import DataBase
 from backtrader.utils import date2num
 from backtrader.dataseries import TimeFrame
@@ -13,7 +13,7 @@ from backtrader.dataseries import TimeFrame
 import fast_mssql
 
 @dataclass
-class MSSQLFeedConfig: # TODO :: use dontcommit
+class MSSQLFeedConfig:
     server: str = "localhost"
     database: str = "BTQ_MarketData"
     username: str = "SA"
@@ -33,9 +33,14 @@ class MSSQLFeedConfig: # TODO :: use dontcommit
         )
 
 class ReadOnlyOHLCV:
-    def __init__(self, config: MSSQLFeedConfig, mode: str = "global",
-                 global_table: str = "ohlcv", schema: str = "dbo",
-                 table_pattern: str = "{symbol}_klines") -> None:
+    def __init__(
+        self,
+        config: MSSQLFeedConfig,
+        mode: str = "global",
+        global_table: str = "ohlcv",
+        schema: str = "dbo",
+        table_pattern: str = "{symbol}_klines",
+    ) -> None:
         if mode not in ("global", "per_pair"):
             raise ValueError("mode must be 'global' or 'per_pair'")
         self.config = config
@@ -46,18 +51,21 @@ class ReadOnlyOHLCV:
         self._conn_str = config.connection_string()
 
     @staticmethod
-    def _sym_compact(symbol: str) -> str:     # BTC-USDT -> BTCUSDT
+    def _sym_compact(symbol: str) -> str:  # BTC-USDT -> BTCUSDT
         return symbol.replace("/", "").replace("-", "").replace("_", "")
 
     @staticmethod
     def _sym_underscore(symbol: str) -> str:  # BTC-USDT -> BTC_USDT
         return symbol.replace("/", "_").replace("-", "_")
 
-    def _q(self, s: str) -> str:
+    @staticmethod
+    def _qv(s: str) -> str:
         return s.replace("'", "''")
 
-    def _ident(self, s: str) -> str:
+    @staticmethod
+    def _ident(s: str) -> str:
         import re
+
         if not re.fullmatch(r"[A-Za-z0-9_]+", s):
             raise ValueError(f"invalid identifier: {s}")
         return s
@@ -66,7 +74,7 @@ class ReadOnlyOHLCV:
         q = (
             "SELECT 1 FROM sys.tables t "
             "JOIN sys.schemas s ON s.schema_id=t.schema_id "
-            f"WHERE s.name='{self._q(schema)}' AND t.name='{self._q(table)}'"
+            f"WHERE s.name='{self._qv(schema)}' AND t.name='{self._qv(table)}'"
         )
         rows = fast_mssql.fetch_data_from_db(self._conn_str, q)
         return bool(rows)
@@ -74,7 +82,6 @@ class ReadOnlyOHLCV:
     def _table_name(self, exchange: str, symbol: str) -> str:
         if self.mode == "global":
             return f"{self._ident(self.schema)}.{self._ident(self.global_table)}"
-
         ex = exchange.lower()
         cand1 = self.table_pattern.format(exchange=ex, symbol=self._sym_underscore(symbol))
         cand2 = self.table_pattern.format(exchange=ex, symbol=self._sym_compact(symbol))
@@ -82,26 +89,31 @@ class ReadOnlyOHLCV:
             return f"{self._ident(self.schema)}.{self._ident(cand1)}"
         if self._table_exists(self.schema, cand2):
             return f"{self._ident(self.schema)}.{self._ident(cand2)}"
+        # fallback to first candidate
         return f"{self._ident(self.schema)}.{self._ident(cand1)}"
 
     def get_ohlcv(
-        self, exchange: str, symbol: str, timeframe: str,
-        start: datetime, end: Optional[datetime] = None,
-        limit: Optional[int] = None, strict_gt: bool = False
+        self,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: Optional[datetime] = None,
+        limit: Optional[int] = None,
+        strict_gt: bool = False,
     ) -> List[dict]:
         if end is None:
-            end = datetime.utcnow()
-
+            end = datetime.now(timezone.utc)
         fqtn = self._table_name(exchange, symbol)
         comp = ">" if strict_gt else ">="
         top_clause = f"TOP {int(limit)} " if limit else ""
         start_str = start.strftime("%Y-%m-%d %H:%M:%S")
-        end_str   = end.strftime("%Y-%m-%d %H:%M:%S")
+        end_str = end.strftime("%Y-%m-%d %H:%M:%S")
 
         if self.mode == "global":
-            ex = self._q(exchange)
-            sym = self._q(symbol)
-            tf  = self._q(timeframe)
+            ex = self._qv(exchange)
+            sym = self._qv(symbol)
+            tf = self._qv(timeframe)
             query = (
                 f"SELECT {top_clause}"
                 f"timestamp, [open], high, low, [close], volume "
@@ -111,7 +123,7 @@ class ReadOnlyOHLCV:
                 f"ORDER BY timestamp ASC;"
             )
         else:
-            tf  = self._q(timeframe)
+            tf = self._qv(timeframe)
             query = (
                 f"SELECT {top_clause}"
                 f"timestamp, [open], high, low, [close], volume "
@@ -126,66 +138,14 @@ class ReadOnlyOHLCV:
         return [dict(zip(cols, r)) for r in rows]
 
 class ReadOnlyTradesAgg(ReadOnlyOHLCV):
-    def get_ohlcv_from_trades(
-        self,
-        exchange: str,
-        symbol: str,
-        bucket_s: int,              # 1 for 1s, 15 for 15s, 60 for 1m...
-        start: datetime,
-        end: Optional[datetime] = None,
-        limit: Optional[int] = None,
-        strict_gt: bool = False,
-    ) -> List[dict]:
-        if end is None:
-            end = datetime.utcnow()
+    @staticmethod
+    def _qv(s: str) -> str:
+        return s.replace("'", "''")
 
-        ex = self._q(exchange)
-        sym = self._q(symbol)
-        start_str = start.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # ms ok
-        end_str   = end.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-        query = f"""
-        WITH b AS (
-          SELECT
-            DATEADD(SECOND,
-                    (DATEDIFF(SECOND, '1970-01-01', [timestamp]) / {bucket_s}) * {bucket_s},
-                    '1970-01-01') AS ts,
-            [timestamp], price, quantity
-          FROM dbo.trades
-          WHERE exchange = '{ex}'
-            AND symbol = '{sym}'
-            AND [timestamp] {'>' if strict_gt else '>='} '{start_str}'
-            AND [timestamp] < '{end_str}'
-        ),
-        r AS (
-          SELECT
-            ts, [timestamp], price, quantity,
-            ROW_NUMBER() OVER (PARTITION BY ts ORDER BY [timestamp])        AS rn_asc,
-            ROW_NUMBER() OVER (PARTITION BY ts ORDER BY [timestamp] DESC)   AS rn_desc
-          FROM b
-        )
-        SELECT
-          ts AS timestamp,
-          MAX(CASE WHEN rn_asc  = 1 THEN price END) AS [open],
-          MAX(price)                                AS high,
-          MIN(price)                                AS low,
-          MAX(CASE WHEN rn_desc = 1 THEN price END) AS [close],
-          SUM(quantity)                             AS volume
-        FROM r
-        GROUP BY ts
-        ORDER BY ts ASC
-        {f'OFFSET 0 ROWS FETCH NEXT {int(limit)} ROWS ONLY' if limit else ''};
-        """
-
-        rows = fast_mssql.fetch_data_from_db(self._conn_str, query)
-        cols = ["timestamp", "open", "high", "low", "close", "volume"]
-        print(rows, cols, [dict(zip(cols, r)) for r in rows])
-        return [dict(zip(cols, r)) for r in rows]
-        
-    def _retry_fetch(self, query: str, retries: int = 4, base_delay: float = 0.05):
+    def _retry_fetch(self, sql: str, retries: int = 4, base_delay: float = 0.05):
         for i in range(retries):
             try:
-                return fast_mssql.fetch_data_from_db(self._conn_str, query)
+                return fast_mssql.fetch_data_from_db(self._conn_str, sql)
             except RuntimeError as e:
                 msg = str(e).lower()
                 if "deadlock" in msg or "1205" in msg:
@@ -193,68 +153,91 @@ class ReadOnlyTradesAgg(ReadOnlyOHLCV):
                     continue
                 raise
 
-    def get_ticks(self, exchange: str, symbol: str,
-                start: datetime, end: Optional[datetime] = None,
-                limit: Optional[int] = 5000, strict_gt: bool = False) -> List[dict]:
-        if end is None:
-            end = datetime.now(timezone.utc)
+    def get_ticks_by_id(
+        self, exchange: str, symbol: str, last_id: int, limit: int = 1000
+    ) -> list[dict]:
+        # build alias set to match different stored symbol forms
         aliases = {
-            symbol, symbol.replace('-', '/'), symbol.replace('/', '-'),
-            symbol.replace('-', ''), symbol.replace('/', ''), symbol.replace('/', '_')
+            symbol,
+            symbol.replace("-", "/"),
+            symbol.replace("/", "-"),
+            symbol.replace("/", ""),
+            symbol.replace("-", ""),
+            symbol.replace("/", "_"),
         }
-        ex = self._q(exchange.lower())
-        syms = "', '".join(self._q(s) for s in aliases)
-        comp = '>' if strict_gt else '>='
-        top = f"TOP {int(limit)} " if limit else ""
-        startstr = start.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        endstr   = end.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        query = f"""
-            SELECT {top} t.[timestamp], t.price, t.quantity
-            FROM dbo.trades AS t WITH (READPAST, ROWLOCK, INDEX(IX_trades_ex_sym_ts))
-            WHERE t.exchange='{ex}' AND t.symbol IN ('{syms}')
-            AND t.[timestamp] {comp} '{startstr}' AND t.[timestamp] < '{endstr}'
-            ORDER BY t.[timestamp] ASC;
+        syms = "', '".join(self._qv(s) for s in sorted(aliases))
+        ex = self._qv(exchange.lower())
+        sql = f"""
+            SELECT TOP ({int(limit)}) t.id, t.[timestamp], t.price, t.quantity
+            FROM dbo.trades AS t WITH (READPAST, ROWLOCK)
+            WHERE t.exchange='{ex}'
+              AND t.symbol IN ('{syms}')
+              AND t.id > {int(last_id)}
+            ORDER BY t.id ASC
+            OPTION (MAXDOP 1, OPTIMIZE FOR UNKNOWN, RECOMPILE);
         """
-        rows = self._retry_fetch(query)
-        return [{'timestamp': ts,
-                'open': price, 'high': price, 'low': price, 'close': price,
-                'volume': qty} for ts, price, qty in rows]
-
+        rows = self._retry_fetch(sql)
+        out = []
+        for rid, ts, price, qty in rows:
+            out.append(
+                {
+                    "id": int(rid),
+                    "timestamp": ts,
+                    "open": float(price),
+                    "high": float(price),
+                    "low": float(price),
+                    "close": float(price),
+                    "volume": float(qty),
+                }
+            )
+        return out
 
 class DatabaseOHLCVData(DataBase):
     params = (
-        ("db_config", None),        # MSSQLFeedConfig
-        ("exchange", None),         # "binance", "bitget", "mexc", ...
-        ("symbol", None),           # "btcusdt", "ethusdt", ...
-        ("timeframe",               TimeFrame.Seconds),
+        ("db_config", None),  # MSSQLFeedConfig
+        ("exchange", None),  # "binance", "okx", ...
+        ("symbol", None),  # "BTC-USDT", ...
+        ("timeframe", TimeFrame.Seconds),
         ("compression", 1),
-        ("fromdate", None),         # datetime
-        ("todate", None),           # optional
+
+        ("fromdate", None),  # datetime
+        ("todate", None),  # optional
+
         ("live", True),
-        ("poll_interval", 1),
-        ("mode", "global"),         # "global" | "per_pair"
+        ("poll_interval", 0.10),  # legacy fixed sleep; adaptive poll is _cur_poll
+        ("mode", "global"),  # "global" | "per_pair"
         ("global_table", "ohlcv"),
         ("schema", "dbo"),
         ("table_pattern", "{symbol}_klines"),
-        ("source", "auto"),    # "auto" | "klines" | "trades"
-        ('ticks', False),
-        ("debug", True),
+        ("source", "auto"),  # "auto" | "klines" | "trades"
+
+        # Tick mode / performance knobs
+        ("ticks", True),              # raw per-trade mode (no fixed N-second aggregation)
+        ("tick_batch_limit", 1000),   # batch size per poll to keep CPU low
+        ("min_poll", 0.05),           # fastest when busy
+        ("max_poll", 0.50),           # slowest when idle
+
+        ("debug", False),
     )
 
     _ST_HIST, _ST_LIVE, _ST_OVER = range(3)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self._klines = ReadOnlyOHLCV(
             self.p.db_config, self.p.mode, self.p.global_table, self.p.schema, self.p.table_pattern
         )
         self._trades = ReadOnlyTradesAgg(
             self.p.db_config, self.p.mode, self.p.global_table, self.p.schema, self.p.table_pattern
         )
+
         self._buffer = deque()
-        self._state  = self._ST_HIST if self.p.fromdate else (self._ST_LIVE if self.p.live else self._ST_OVER)
-        self._tf_str = self._timeframe_to_str(self.p.timeframe, self.p.compression)  # e.g. "1m", "15s"
+        self._state = self._ST_HIST if self.p.fromdate else (self._ST_LIVE if self.p.live else self._ST_OVER)
+        self._tf_str = self._timeframe_to_str(self.p.timeframe, self.p.compression)  # e.g. "1m", "1s"
         self._last_ts = None
+        self._last_id = 0  # monotonic per symbol
+        self._cur_poll = self.p.max_poll
 
     @property
     def symbol(self):
@@ -266,22 +249,24 @@ class DatabaseOHLCVData(DataBase):
 
     @staticmethod
     def _timeframe_to_str(tf, compression):
-        if tf == TimeFrame.Seconds: return f"{compression}s"
-        if tf == TimeFrame.Minutes: return f"{compression}m"
-        if tf == TimeFrame.Hours:   return f"{compression}h"
-        if tf == TimeFrame.Days:    return f"{compression}d"
+        if tf == TimeFrame.Seconds:
+            return f"{compression}s"
+        if tf == TimeFrame.Minutes:
+            return f"{compression}m"
+        if tf == TimeFrame.Hours:
+            return f"{compression}h"
+        if tf == TimeFrame.Days:
+            return f"{compression}d"
         raise ValueError("Unsupported timeframe")
 
     @staticmethod
     def _ensure_datetime(ts):
         """Coerce DB value (datetime, str, int ms) to timezone-aware UTC datetime."""
         if isinstance(ts, datetime):
-            # assume already UTC/naive; normalize to aware UTC
             return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
         if isinstance(ts, (int, float)):
             return datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc)
         if isinstance(ts, str):
-            # try ISO first, then a common fallback without fractional seconds
             try:
                 dt = datetime.fromisoformat(ts)
                 return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
@@ -297,98 +282,114 @@ class DatabaseOHLCVData(DataBase):
             return True, int(tf[:-1] or "1")
         return False, 0
 
-    # DatabaseOHLCVData
+    def _push_row(self, r: dict):
+        """Append one OHLCV row into BT buffer lines and update last timestamp."""
+        dt = self._ensure_datetime(r["timestamp"])
+        self._buffer.append(
+            [
+                date2num(dt),
+                float(r["open"]),
+                float(r["high"]),
+                float(r["low"]),
+                float(r["close"]),
+                float(r["volume"]),
+            ]
+        )
+        if self._last_ts is None or dt > self._last_ts:
+            self._last_ts = dt
+
     def _select_reader(self):
-        if self.p.ticks:
+        if getattr(self.p, "ticks", False):
             return "ticks", None
         if self.p.source == "klines":
             return "klines", None
         sec, n = self._is_seconds()
         return ("trades", n) if sec else ("klines", None)
 
-    def _fetch(self, start, end, limit, strict_gt):
-        kind, bucket = self._select_reader()
-        if kind == "ticks":
-            return self._trades.get_ticks(self.p.exchange, self.p.symbol,
-                                        start=start, end=end, limit=limit, strict_gt=strict_gt)
-        if kind == "klines":
-            return self._klines.get_ohlcv(self.p.exchange, self.p.symbol, self._tf_str,
-                                        start=start, end=end, limit=limit, strict_gt=strict_gt)
-        return self._trades.get_ohlcv_from_trades(self.p.exchange, self.p.symbol,
-                                                bucket_s=bucket or 1,
-                                                start=start, end=end, limit=limit, strict_gt=strict_gt)
+    @staticmethod
+    def _qv(s: str) -> str:
+        return s.replace("'", "''")
+
+    @staticmethod
+    def _ts_ms(dt: datetime) -> str:
+        return dt.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+
+    def _bootstrap_last_id(self):
+        dt_anchor = (self.p.fromdate or datetime.now(timezone.utc))
+        ex = self._qv(self.p.exchange.lower())
+        aliases = {
+            self.p.symbol,
+            self.p.symbol.replace("-", "/"),
+            self.p.symbol.replace("/", "-"),
+            self.p.symbol.replace("/", ""),
+            self.p.symbol.replace("-", ""),
+            self.p.symbol.replace("/", "_"),
+        }
+        syms = "', '".join(self._qv(s) for s in sorted(aliases))
+        ts = self._ts_ms(dt_anchor)
+        sql = f"""
+            SELECT TOP (1) id
+            FROM dbo.trades WITH (READPAST)
+            WHERE exchange='{ex}' AND symbol IN ('{syms}') AND [timestamp] <= '{ts}'
+            ORDER BY id DESC;
+        """
+        rows = fast_mssql.fetch_data_from_db(self._trades._conn_str, sql)
+        self._last_id = int(rows[0][0]) if rows else 0
+
+    def start(self):
+        DataBase.start(self)
+        if self.p.fromdate and self.p.fromdate.tzinfo is None:
+            self.p.fromdate = self.p.fromdate.replace(tzinfo=timezone.utc)
+        self._bootstrap_last_id()
+        self._load_history()
+        self._cur_poll = self.p.max_poll
 
     def _load_history(self):
         if not self.p.fromdate:
             return
-
-        end = self.p.todate or datetime.now(timezone.utc)
-        rows = self._fetch(self.p.fromdate, end, limit=None, strict_gt=False)
-
+        rows = self._fetch(self.p.fromdate, self.p.todate or datetime.now(timezone.utc), limit=None, strict_gt=False)
         for r in rows:
-            dt = self._ensure_datetime(r["timestamp"])
-            self._buffer.append([
-                date2num(dt),
-                float(r["open"]), float(r["high"]),
-                float(r["low"]),  float(r["close"]),
-                float(r["volume"]),
-            ])
-            self._last_ts = dt if self._last_ts is None or dt > self._last_ts else self._last_ts
+            self._push_row(r)
+
+    def _fetch(self, start, end, limit, strict_gt):
+        kind, bucket = self._select_reader()
+        if kind == "ticks":
+            lim = limit or self.p.tick_batch_limit
+            rows = self._trades.get_ticks_by_id(self.p.exchange, self.p.symbol, self._last_id, lim)
+            if rows:
+                self._last_id = rows[-1]["id"]
+            return rows
+        if kind == "klines":
+            return self._klines.get_ohlcv(
+                self.p.exchange, self.p.symbol, self._tf_str, start=start or datetime.now(timezone.utc),
+                end=end or datetime.now(timezone.utc), limit=limit, strict_gt=strict_gt
+            )
+        return []
 
     def _poll_new(self):
-        # next start strictly after last delivered bar to avoid duplicates
-        if self._last_ts is None:
-            start = self.p.fromdate or (datetime.now(timezone.utc) - timedelta(days=1))
-            strict_gt = False
-        else:
-            start = self._last_ts + timedelta(microseconds=1)
-            strict_gt = True
-
-        rows = self._fetch(start=start, end=None, limit=1000, strict_gt=strict_gt)
-        if not rows:
-            return
-
+        rows = self._fetch(None, None, self.p.tick_batch_limit, True)
         for r in rows:
-            dt = self._ensure_datetime(r["timestamp"])
-            self._buffer.append([
-                date2num(dt),
-                float(r["open"]), float(r["high"]),
-                float(r["low"]),  float(r["close"]),
-                float(r["volume"]),
-            ])
-            if self._last_ts is None or dt > self._last_ts:
-                self._last_ts = dt
-
-    def start(self):
-        DataBase.start(self)
-        self._load_history()
-        if self.p.live:
-            t0 = time.time()
-            # bootstrap up to 2s for first tick
-            while not getattr(self, "_buffer", None) and time.time() - t0 < 2.0:
-                self._poll_new()
-                if not self._buffer:
-                    time.sleep(self.p.poll_interval)
-            self.put_notification(self.LIVE)
-        elif self._state == self._ST_LIVE:
-            self.put_notification(self.LIVE)
+            self._push_row(r)
+        if rows:
+            self._cur_poll = max(self.p.min_poll, self._cur_poll * 0.5)
+        else:
+            self._cur_poll = min(self.p.max_poll, self._cur_poll * 1.25)
+        time.sleep(self._cur_poll)
 
     def _load(self):
         if self._state == self._ST_OVER:
             return False
 
-        # 1) Drain any buffered bars
         if self._buffer:
-            dtnum, o, h, l, c, v = self._buffer.popleft()
+            dtnum, o, h, _l, c, v = self._buffer.popleft()
             self.lines.datetime[0] = dtnum
             self.lines.open[0] = o
             self.lines.high[0] = h
-            self.lines.low[0] = l
+            self.lines.low[0] = _l
             self.lines.close[0] = c
             self.lines.volume[0] = v
             return True
 
-        # 2) If we just finished history and want live, flip state
         if self._state == self._ST_HIST:
             if self.p.live:
                 self._state = self._ST_LIVE
@@ -397,32 +398,23 @@ class DatabaseOHLCVData(DataBase):
             self._state = self._ST_OVER
             return False
 
-        # 3) Live polling
         if self._state == self._ST_LIVE:
             self._poll_new()
             if self._buffer:
-                # tell BT “data will be available on the next cycle”
                 return None
-            print('Poll Interval: ', self.p.poll_interval)
-            time.sleep(self.p.poll_interval)
+            if self.p.debug:
+                print("Poll Interval:", round(self._cur_poll, 3))
+            time.sleep(max(0.0, self.p.poll_interval - self._cur_poll))
             return None
 
         return False
 
-# Convenience-subclasses per Exchange
 class BinanceDBData(DatabaseOHLCVData):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("exchange", "binance")
         super().__init__(*args, **kwargs)
 
-
-class BitgetDBData(DatabaseOHLCVData):
+class OkxDBData(DatabaseOHLCVData):
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("exchange", "bitget")
-        super().__init__(*args, **kwargs)
-
-
-class MexcDBData(DatabaseOHLCVData):
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("exchange", "mexc")
+        kwargs.setdefault("exchange", "okx")
         super().__init__(*args, **kwargs)

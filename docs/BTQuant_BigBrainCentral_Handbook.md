@@ -186,6 +186,6 @@ These visualizations are not ornamental; they are a QA layer over the market dat
 Even on a development workstation that is already overloaded with debugging tasks, the collector leaves sixteen logical cores ~97‑98 % idle. The `atop` capture below shows how little CPU the ccapi ingest + MSSQL bulk pipeline actually requires.
 
 ## CPU load during ingestion
-![CPU load during ingestion](load.png)
+![CPU load during ingestion](cpu_load.png)
 ## MsSQL latency during debugging
 ![MsSQL latency during debugging](session.png)

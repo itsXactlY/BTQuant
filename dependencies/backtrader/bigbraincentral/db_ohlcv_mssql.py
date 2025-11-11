@@ -1,20 +1,3 @@
-"""
-Read-only OHLCV feed for BTQuant/Backtrader using SQL Server (fast_mssql).
-
-- ZERO writes, ZERO schema changes
-- Nur SELECTs aus bestehenden Tabellen
-- Die Datenbank wird extern gefüttert (ccapi C++, andere Collector)
-
-Unterstützte Modi:
-- mode="global":   eine gemeinsame OHLCV-Tabelle (Default: "ohlcv")
-                   Spalten: timestamp, exchange, symbol, timeframe,
-                            open, high, low, close, volume
-- mode="per_pair": eine Tabelle pro (exchange, symbol),
-                   Name aus table_pattern.format(exchange=..., symbol=...)
-                   z.B. "{symbol}_klines" -> "BTCUSDT_klines"
-                        "{exchange}_{symbol}_klines" -> "binance_BTCUSDT_klines"
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -29,16 +12,12 @@ from backtrader.dataseries import TimeFrame
 
 import fast_mssql
 
-
-# ----------------------------------------------------------------------
-# 1. Konfiguration für DB-Zugriff (nur Lesen)
-# ----------------------------------------------------------------------
 @dataclass
 class MSSQLFeedConfig:
     server: str = "localhost"
-    database: str = ""
+    database: str = "BTQ_MarketData"
     username: str = "SA"
-    password: str = ""
+    password: str = "q?}33YIToo:H%xue$Kr*"
     driver: str = "{ODBC Driver 18 for SQL Server}"
     trust_server_certificate: bool = True
 
@@ -53,13 +32,7 @@ class MSSQLFeedConfig:
             f"TrustServerCertificate={trust};"
         )
 
-
 class ReadOnlyOHLCV:
-    """
-    Minimaler read-only Wrapper um fast_mssql für OHLCV-Zugriffe.
-    Macht KEINE DDL, KEINE Inserts/Updates – nur SELECT.
-    """
-
     def __init__(
         self,
         config: MSSQLFeedConfig,
@@ -68,13 +41,6 @@ class ReadOnlyOHLCV:
         schema: str = "dbo",
         table_pattern: str = "{symbol}_klines",
     ) -> None:
-        """
-        :param mode: "global" oder "per_pair"
-        :param global_table: Tabellenname für mode="global"
-        :param schema: Schema-Name, meist "dbo"
-        :param table_pattern: Muster für per_pair-Tabellen
-                              Platzhalter: {exchange}, {symbol}
-        """
         if mode not in ("global", "per_pair"):
             raise ValueError("mode must be 'global' or 'per_pair'")
 
@@ -88,8 +54,16 @@ class ReadOnlyOHLCV:
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
-        # Groß-/Kleinschreibung erhalten (BTCUSDT), aber Trenner entfernen
         return symbol.replace("/", "").replace("-", "").replace("_", "")
+
+    def _q(self, s: str) -> str:
+        return s.replace("'", "''")
+
+    def _ident(self, s: str) -> str:
+        import re
+        if not re.fullmatch(r"[A-Za-z0-9_]+", s):
+            raise ValueError(f"invalid identifier: {s}")
+        return s
 
     def _table_name(self, exchange: str, symbol: str) -> str:
         if self.mode == "global":
@@ -109,14 +83,6 @@ class ReadOnlyOHLCV:
         end: Optional[datetime] = None,
         limit: Optional[int] = None,
     ) -> List[dict]:
-        """
-        OHLCV-Zeilen als list[dict] lesen.
-
-        Erwartete Spalten:
-          - timestamp (DATETIME/DATETIME2)
-          - open, high, low, close, volume
-          - bei mode == "global": exchange, symbol, timeframe
-        """
         if end is None:
             end = datetime.utcnow()
 
@@ -126,36 +92,43 @@ class ReadOnlyOHLCV:
         table = self._table_name(exchange, symbol)
         top_clause = f"TOP {limit}" if limit else ""
 
+        schema = self._ident(self.schema)
+        table = (self._ident(self.global_table) if self.mode == "global"
+                else self._ident(self.table_pattern.format(
+                    exchange=exchange.lower(), symbol=self._normalize_symbol(symbol))))
+        fqtn = f"{schema}.{table}"
+
+        ex = self._q(exchange)
+        sym = self._q(symbol)
+        tf = self._q(timeframe)
+        start_str = start.strftime("%Y-%m-%d %H:%M:%S")
+        end_str   = (end or datetime.utcnow()).strftime("%Y-%m-%d %H:%M:%S")
+
+        top_clause = f"TOP {int(limit)} " if limit else ""
+
         if self.mode == "global":
-            query = f"""
-                SELECT {top_clause}
-                       timestamp, [open], high, low, [close], volume
-                FROM {table}
-                WHERE exchange = '{exchange}'
-                  AND symbol = '{symbol}'
-                  AND timeframe = '{timeframe}'
-                  AND timestamp >= '{start_str}' AND timestamp < '{end_str}'
-                ORDER BY timestamp ASC;
-            """
+            query = (
+                f"SELECT {top_clause}"
+                f"timestamp, [open], high, low, [close], volume "
+                f"FROM {fqtn} "
+                f"WHERE exchange='{ex}' AND symbol='{sym}' AND timeframe='{tf}' "
+                f"AND timestamp >= '{start_str}' AND timestamp < '{end_str}' "
+                f"ORDER BY timestamp ASC;"
+            )
         else:
-            # per-pair-Tabellen brauchen i.d.R. keinen exchange/symbol-Filter
-            query = f"""
-                SELECT {top_clause}
-                       timestamp, [open], high, low, [close], volume
-                FROM {table}
-                WHERE timeframe = '{timeframe}'
-                  AND timestamp >= '{start_str}' AND timestamp < '{end_str}'
-                ORDER BY timestamp ASC;
-            """
+            query = (
+                f"SELECT {top_clause}"
+                f"timestamp, [open], high, low, [close], volume "
+                f"FROM {fqtn} "
+                f"WHERE timeframe='{tf}' "
+                f"AND timestamp >= '{start_str}' AND timestamp < '{end_str}' "
+                f"ORDER BY timestamp ASC;"
+            )
 
         rows = fast_mssql.fetch_data_from_db(self._conn_str, query)
         cols = ["timestamp", "open", "high", "low", "close", "volume"]
         return [dict(zip(cols, r)) for r in rows]
 
-
-# ----------------------------------------------------------------------
-# 2. Backtrader-Feed, der aus ReadOnlyOHLCV liest
-# ----------------------------------------------------------------------
 class DatabaseOHLCVData(DataBase):
     """
     Backtrader-Feed, der OHLCV aus SQL Server liest.
@@ -188,12 +161,12 @@ class DatabaseOHLCVData(DataBase):
         super().__init__(*args, **kwargs)
 
         if self.p.db_config is None or not isinstance(self.p.db_config, MSSQLFeedConfig):
-            raise ValueError("db_config (MSSQLFeedConfig) muss gesetzt sein")
+            raise ValueError("db_config (MSSQLFeedConfig) must be set")
 
         if not self.p.exchange:
-            raise ValueError("exchange muss gesetzt sein")
+            raise ValueError("exchange must be set")
         if not self.p.symbol:
-            raise ValueError("symbol muss gesetzt sein")
+            raise ValueError("symbol must be set")
 
         self._reader = ReadOnlyOHLCV(
             config=self.p.db_config,
@@ -208,7 +181,6 @@ class DatabaseOHLCVData(DataBase):
         self._tf_str = self._timeframe_to_str(self.p.timeframe, self.p.compression)
         self._last_ts: Optional[datetime] = None
 
-    # ---- helpers --------------------------------------------------
     @staticmethod
     def _timeframe_to_str(tf: TimeFrame, compression: int) -> str:
         if tf == TimeFrame.Seconds:
@@ -268,17 +240,18 @@ class DatabaseOHLCVData(DataBase):
 
     def _poll_new(self):
         if self._last_ts is None:
-            # fallback: fromdate oder "jetzt - 1 Tag"
             start = self.p.fromdate or (datetime.utcnow() - timedelta(days=1))
         else:
-            start = self._last_ts
+            # advance by 1 microsecond so WHERE ... >= doesn't re-hit last row
+            start = self._last_ts + timedelta(microseconds=1)
 
         rows = self._reader.get_ohlcv(
             exchange=self.p.exchange,
             symbol=self.p.symbol,
             timeframe=self._tf_str,
             start=start,
-            end=None,
+            end=None,           # up to “now”
+            limit=1000,         # safety cap per poll
         )
 
         if not rows:
@@ -288,13 +261,10 @@ class DatabaseOHLCVData(DataBase):
         for r in rows:
             dt = self._ensure_datetime(r["timestamp"])
             if self._last_ts is None or dt > self._last_ts:
-                dtnum = date2num(dt)
                 new.append([
-                    dtnum,
-                    float(r["open"]),
-                    float(r["high"]),
-                    float(r["low"]),
-                    float(r["close"]),
+                    date2num(dt),
+                    float(r["open"]), float(r["high"]),
+                    float(r["low"]),  float(r["close"]),
                     float(r["volume"]),
                 ])
                 self._last_ts = dt
@@ -302,7 +272,6 @@ class DatabaseOHLCVData(DataBase):
         for bar in new:
             self._buffer.append(bar)
 
-    # ---- Backtrader Hooks -----------------------------------------
     def start(self):
         DataBase.start(self)
 
@@ -331,7 +300,6 @@ class DatabaseOHLCVData(DataBase):
             self.lines.volume[0] = v
             return True
 
-        # 2) History leer -> evtl. in LIVE wechseln
         if self._state == self._ST_HIST:
             if self.p.live:
                 self._state = self._ST_LIVE
@@ -340,7 +308,6 @@ class DatabaseOHLCVData(DataBase):
                 self._state = self._ST_OVER
                 return False
 
-        # 3) LIVE: DB pollen
         if self._state == self._ST_LIVE:
             self._poll_new()
             if self._buffer:
@@ -351,7 +318,7 @@ class DatabaseOHLCVData(DataBase):
         return False
 
 
-# Convenience-Subklassen je Exchange
+# Convenience-subclasses per Exchange
 class BinanceDBData(DatabaseOHLCVData):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("exchange", "binance")

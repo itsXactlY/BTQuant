@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: ccapi
+Version: 1.3.3.7
+Requires-Dist: setuptools
+Requires-Dist: wheel
+Dynamic: requires-dist

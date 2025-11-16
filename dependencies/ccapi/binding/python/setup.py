@@ -18,6 +18,6 @@ setup(
   cmdclass={'install': InstallPlatlib},
   packages=[''],
   py_modules = ['ccapi'],
-  package_data={'': ['$<TARGET_FILE_NAME:ccapi_binding_python>']},
+  package_data={'': ['_ccapi_binding_python.so']},
   install_requires=['setuptools', 'wheel'],
 )

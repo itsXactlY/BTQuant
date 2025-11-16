@@ -1,0 +1,75 @@
+
+# Consider dependencies only in project.
+set(CMAKE_DEPENDS_IN_PROJECT_ONLY OFF)
+
+# The set of languages for which implicit dependencies are needed:
+set(CMAKE_DEPENDS_LANGUAGES
+  "CXX"
+  )
+# The set of files for implicit dependencies of each language:
+set(CMAKE_DEPENDS_CHECK_CXX
+  "/home/alca/projects/PubBTQuant/dependencies/ccapi/binding/python/swig_interface.i" "/home/alca/projects/PubBTQuant/dependencies/ccapi/binding/python/CMakeFiles/ccapi_binding_python.dir/swig_interfacePYTHON.stamp"
+  )
+set(CMAKE_CXX_COMPILER_ID "GNU")
+
+# Preprocessor definitions for this target.
+set(CMAKE_TARGET_DEFINITIONS_CXX
+  "CCAPI_ENABLE_EXCHANGE_ASCENDEX"
+  "CCAPI_ENABLE_EXCHANGE_BINANCE"
+  "CCAPI_ENABLE_EXCHANGE_BINANCE_COIN_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_BINANCE_MARGIN"
+  "CCAPI_ENABLE_EXCHANGE_BINANCE_US"
+  "CCAPI_ENABLE_EXCHANGE_BINANCE_USDS_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_BITFINEX"
+  "CCAPI_ENABLE_EXCHANGE_BITGET"
+  "CCAPI_ENABLE_EXCHANGE_BITGET_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_BITMART"
+  "CCAPI_ENABLE_EXCHANGE_BITMEX"
+  "CCAPI_ENABLE_EXCHANGE_BITSTAMP"
+  "CCAPI_ENABLE_EXCHANGE_BYBIT"
+  "CCAPI_ENABLE_EXCHANGE_BYBIT_DERIVATIVES"
+  "CCAPI_ENABLE_EXCHANGE_COINBASE"
+  "CCAPI_ENABLE_EXCHANGE_CRYPTOCOM"
+  "CCAPI_ENABLE_EXCHANGE_DERIBIT"
+  "CCAPI_ENABLE_EXCHANGE_ERISX"
+  "CCAPI_ENABLE_EXCHANGE_GATEIO"
+  "CCAPI_ENABLE_EXCHANGE_GATEIO_PERPETUAL_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_GEMINI"
+  "CCAPI_ENABLE_EXCHANGE_HUOBI"
+  "CCAPI_ENABLE_EXCHANGE_HUOBI_COIN_SWAP"
+  "CCAPI_ENABLE_EXCHANGE_HUOBI_USDT_SWAP"
+  "CCAPI_ENABLE_EXCHANGE_KRAKEN"
+  "CCAPI_ENABLE_EXCHANGE_KRAKEN_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_KUCOIN"
+  "CCAPI_ENABLE_EXCHANGE_KUCOIN_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_MEXC"
+  "CCAPI_ENABLE_EXCHANGE_MEXC_FUTURES"
+  "CCAPI_ENABLE_EXCHANGE_OKX"
+  "CCAPI_ENABLE_EXCHANGE_WHITEBIT"
+  "CCAPI_ENABLE_SERVICE_EXECUTION_MANAGEMENT"
+  "CCAPI_ENABLE_SERVICE_FIX"
+  "CCAPI_ENABLE_SERVICE_MARKET_DATA"
+  )
+
+# The include file search paths:
+set(CMAKE_CXX_TARGET_INCLUDE_PATH
+  "/home/alca/projects/PubBTQuant/dependencies/ccapi/include"
+  "boost"
+  "rapidjson/include"
+  "hffix/include"
+  )
+
+# The set of dependency files which are needed:
+set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_LINKED_INFO_FILES
+  )
+
+# Targets to which this target links which contain Fortran sources.
+set(CMAKE_Fortran_TARGET_FORWARD_LINKED_INFO_FILES
+  )
+
+# Fortran module output directory.
+set(CMAKE_Fortran_TARGET_MODULE_DIR "")

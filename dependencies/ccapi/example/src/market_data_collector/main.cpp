@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
         "SA",
         "q?}33YIToo:H%xue$Kr*");
 
-    cfg.timeframes = {"1m", "5m", "15m", "1h", "4h"};
+    cfg.timeframes = {"1m"}; // , "5m", "15m", "1h", "4h"
 
     cfg.exchanges = {
         {

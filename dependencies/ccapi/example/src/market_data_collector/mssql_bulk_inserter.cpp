@@ -215,7 +215,7 @@ void MSSQLBulkInserter::bulkInsertTrades(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& t = trades[offset + i];
 
-            copyStrFixed(formatTimestampMs(t.timestamp_ms), ts[i]);
+            copyStrFixed(formatTimestampMicros(t.timestamp_us), ts[i]);
 
             copyStrFixed(t.exchange,    exch[i]);
             copyStrFixed(t.symbol,      sym[i]);
@@ -439,7 +439,7 @@ void MSSQLBulkInserter::bulkInsertOHLCV(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& cd = candles[offset + i];
 
-            copyStrFixed(formatTimestampMs(cd.timestamp_ms), ts[i]);
+            copyStrFixed(formatTimestampMicros(cd.timestamp_us), ts[i]);
             ind_ts[i] = SQL_NTS;
 
             copyStrFixed(cd.exchange,    exch[i]);
@@ -624,7 +624,7 @@ void MSSQLBulkInserter::bulkInsertOrderbooks(
         for (std::size_t i = 0; i < n; ++i) {
             const auto& ob = obs[offset + i];
 
-            copyStr(formatTimestampMs(ob.timestamp_ms), ts[i]);
+            copyStr(formatTimestampMicros(ob.timestamp_us), ts[i]);
             ind_ts[i] = SQL_NTS;
 
             copyStr(ob.exchange,    exch[i]);

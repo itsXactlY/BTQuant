@@ -10,7 +10,7 @@
 namespace {
 
 // wall-clock “now” in ms
-int64_t nowMs() {
+int64_t nowMicros() {
     using namespace std::chrono;
     return duration_cast<microseconds>(
                system_clock::now().time_since_epoch())
@@ -136,6 +136,8 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
         return;
     }
 
+    const std::string key = exchange + ":" + symbol + ":" + market_type;
+
     const auto& elements = msg.getElementList();
     if (elements.empty()) return;
 
@@ -146,7 +148,7 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
                         .count();
 
     // receive time (µs)
-    int64_t recv_time_us = nowMs(); // your nowMs() currently returns microseconds
+    int64_t recv_time_us = nowMicros();
 
     for (const auto& el : elements) {
         const auto& m = el.getNameValueMap();
@@ -167,7 +169,7 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
         }
 
         Trade t;
-        t.timestamp_ms = ts_us;      // stores microseconds despite the name
+        t.timestamp_us = ts_us;      // stores microseconds despite the name
         t.exchange     = exchange;
         t.symbol       = symbol;
         t.market_type  = market_type;
@@ -185,12 +187,15 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
             active_pairs_.insert(exchange + ":" + symbol + ":" + market_type);
             ++trades_received_;
         }
-
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            pair_stats_[key].trades++;
+        }
         candle_agg_->processTrade(t);
 
         // keep stats as milliseconds
         double latency_ms =
-            static_cast<double>(recv_time_us - t.timestamp_ms) / 1000.0;
+            static_cast<double>(recv_time_us - t.timestamp_us) / 1000.0;
         stats_.avg_latency_ms = 0.99 * stats_.avg_latency_ms + 0.01 * latency_ms;
     }
 
@@ -214,96 +219,103 @@ void MarketDataProcessor::handleOrderbookMessage(
         return;
     }
 
+    const std::string key = exchange + ":" + symbol + ":" + market_type;
+
     const auto& elements = msg.getElementList();
     if (elements.empty()) return;
 
-    // Collect best bid / ask across all elements in this message
-    std::string bid_p_s, bid_q_s, ask_p_s, ask_q_s;
-
-    for (const auto& el : elements) {
-        auto bp = getAny(el, {"BID_PRICE", "BEST_BID_PRICE"});
-        if (!bp.empty()) bid_p_s = bp;
-
-        auto bq = getAny(el, {"BID_SIZE", "BEST_BID_SIZE"});
-        if (!bq.empty()) bid_q_s = bq;
-
-        auto ap = getAny(el, {"ASK_PRICE", "BEST_ASK_PRICE"});
-        if (!ap.empty()) ask_p_s = ap;
-
-        auto aq = getAny(el, {"ASK_SIZE", "BEST_ASK_SIZE"});
-        if (!aq.empty()) ask_q_s = aq;
-    }
-
-    bool have_bid = !bid_p_s.empty() && !bid_q_s.empty();
-    bool have_ask = !ask_p_s.empty() && !ask_q_s.empty();
-
-    // If we got neither side, *then* log and bail
-    if (!have_bid && !have_ask) {
-        const auto& firstMap = elements.front().getNameValueMap();
-        std::cerr << "handleOrderbookMessage: no BID/ASK in message, element = "
-                  << ccapi::toString(firstMap) << std::endl;
-        return;
-    }
-
-    bool ok_bp = true, ok_bq = true, ok_ap = true, ok_aq = true;
-    double bid_p = 0.0, bid_q = 0.0, ask_p = 0.0, ask_q = 0.0;
-
-    if (have_bid) {
-        bid_p = safeParseDouble("bid_price", bid_p_s, ok_bp);
-        bid_q = safeParseDouble("bid_size",  bid_q_s, ok_bq);
-    }
-    if (have_ask) {
-        ask_p = safeParseDouble("ask_price", ask_p_s, ok_ap);
-        ask_q = safeParseDouble("ask_size",  ask_q_s, ok_aq);
-    }
-
-    if ((have_bid && (!ok_bp || !ok_bq)) ||
-        (have_ask && (!ok_ap || !ok_aq))) {
-        const auto& firstMap = elements.front().getNameValueMap();
-        std::cerr << "handleOrderbookMessage: parse error, element = "
-                  << ccapi::toString(firstMap) << std::endl;
-        return;
-    }
-
-    // timestamp from Message (stored internally as microseconds)
+    // exchange timestamp from Message (µs)
     auto tp = msg.getTime();
     int64_t ts_us = std::chrono::duration_cast<
                         std::chrono::microseconds>(
-                        tp.time_since_epoch())
-                        .count();
+                        tp.time_since_epoch()).count();
 
-    OrderbookSnapshot ob;
-    ob.timestamp_ms = ts_us;
+    // Collect *all* levels across all elements in this message
+    struct Level { double price; double qty; };
+    std::vector<Level> bids;
+    std::vector<Level> asks;
+
+    bids.reserve(elements.size());
+    asks.reserve(elements.size());
+
+    for (const auto& el : elements) {
+        // One ccapi Element may contain both a bid and an ask
+        const auto& m = el.getNameValueMap();
+
+        auto bid_p_s = getAny(el, {"BID_PRICE", "BEST_BID_PRICE"});
+        auto bid_q_s = getAny(el, {"BID_SIZE",  "BEST_BID_SIZE"});
+        auto ask_p_s = getAny(el, {"ASK_PRICE", "BEST_ASK_PRICE"});
+        auto ask_q_s = getAny(el, {"ASK_SIZE",  "BEST_ASK_SIZE"});
+
+        bool ok = true;
+
+        if (!bid_p_s.empty() && !bid_q_s.empty()) {
+            bool okp = false, okq = false;
+            double p = safeParseDouble("bid_price", bid_p_s, okp);
+            double q = safeParseDouble("bid_size",  bid_q_s, okq);
+            if (okp && okq && q > 0.0) {
+                bids.push_back({p, q});
+            } else if (!okp || !okq) {
+                std::cerr << "handleOrderbookMessage: bad BID level, element = "
+                          << ccapi::toString(m) << std::endl;
+            }
+        }
+
+        if (!ask_p_s.empty() && !ask_q_s.empty()) {
+            bool okp = false, okq = false;
+            double p = safeParseDouble("ask_price", ask_p_s, okp);
+            double q = safeParseDouble("ask_size",  ask_q_s, okq);
+            if (okp && okq && q > 0.0) {
+                asks.push_back({p, q});
+            } else if (!okp || !okq) {
+                std::cerr << "handleOrderbookMessage: bad ASK level, element = "
+                          << ccapi::toString(m) << std::endl;
+            }
+        }
+    }
+
+    if (bids.empty() && asks.empty()) {
+        const auto& firstMap = elements.front().getNameValueMap();
+        std::cerr << "handleOrderbookMessage: no BID/ASK levels, element = "
+                  << ccapi::toString(firstMap) << std::endl;
+        return;
+    }
+
+    MarketData::OrderbookSnapshot ob;
+    ob.timestamp_us = ts_us;
     ob.exchange     = exchange;
     ob.symbol       = symbol;
     ob.market_type  = market_type;
 
-    // Build JSON; allow one-sided updates
-    std::ostringstream bids, asks;
-    bids << "[";
-    if (have_bid) {
-        bids << "[" << bid_p << "," << bid_q << "]";
-    }
-    bids << "]";
+    // Build JSON: [[price, qty], ...]
+    auto build_side_json = [](const std::vector<Level>& side) {
+        std::ostringstream oss;
+        oss << "[";
+        for (std::size_t i = 0; i < side.size(); ++i) {
+            if (i > 0) oss << ",";
+            oss << "[" << side[i].price << "," << side[i].qty << "]";
+        }
+        oss << "]";
+        return oss.str();
+    };
 
-    asks << "[";
-    if (have_ask) {
-        asks << "[" << ask_p << "," << ask_q << "]";
-    }
-    asks << "]";
-
-    ob.bids_json = bids.str();
-    ob.asks_json = asks.str();
-    ob.checksum.clear();
+    ob.bids_json = build_side_json(bids);
+    ob.asks_json = build_side_json(asks);
+    ob.checksum.clear(); // can be wired later if exchange supports it
 
     {
         std::lock_guard<std::mutex> lock(buffer_mutex_);
         orderbook_buffer_.push_back(std::move(ob));
         ++stats_.orderbooks_received;
+        active_pairs_.insert(exchange + ":" + symbol + ":" + market_type);
     }
-
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        pair_stats_[key].orderbooks++;
+    }
     flushOrderbooksIfNeeded();
 }
+
 
 void MarketDataProcessor::flushTradesIfNeeded(bool force) {
     std::vector<Trade> batch;
@@ -395,8 +407,70 @@ void MarketDataProcessor::flushBuffers() {
 
 MarketDataProcessor::Stats MarketDataProcessor::getStats() const {
     Stats out;
-    out = stats_;
-    out.trades_received = trades_received_.load();
-    out.errors          = errors_.load();
+    {
+        out = stats_;
+        out.trades_received = trades_received_.load();
+        out.errors          = errors_.load();
+    }
+
+    const int64_t now_us = nowMicros();
+    int64_t last_us = last_stats_ts_us_.exchange(now_us);
+    if (last_us > 0) {
+        double dt_sec = static_cast<double>(now_us - last_us) / 1'000'000.0;
+        if (dt_sec > 0.1) {
+            uint64_t tr = trades_received_.load();
+            uint64_t ob = stats_.orderbooks_received;
+
+            uint64_t tr_prev =
+                trades_last_window_.exchange(tr);
+            uint64_t ob_prev =
+                orderbooks_last_window_.exchange(ob);
+
+            double tr_rate = static_cast<double>(tr - tr_prev) / dt_sec;
+            double ob_rate = static_cast<double>(ob - ob_prev) / dt_sec;
+
+            out.trades_per_sec     = tr_rate;
+            out.orderbooks_per_sec = ob_rate;
+        }
+    }
+
     return out;
 }
+
+std::unordered_map<std::string, MarketDataProcessor::PairStats>
+MarketDataProcessor::getPairStats() const {
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+    return pair_stats_; // copy
+}
+
+std::string MarketDataProcessor::getStatsJson() const {
+    auto st   = getStats();
+    auto pmap = getPairStats();
+
+    std::ostringstream oss;
+    oss << "{";
+    oss << "\"trades_received\":"    << st.trades_received    << ",";
+    oss << "\"trades_inserted\":"    << st.trades_inserted    << ",";
+    oss << "\"candles_generated\":"  << st.candles_generated  << ",";
+    oss << "\"candles_inserted\":"   << st.candles_inserted   << ",";
+    oss << "\"orderbooks_received\":"<< st.orderbooks_received<< ",";
+    oss << "\"orderbooks_inserted\":"<< st.orderbooks_inserted<< ",";
+    oss << "\"errors\":"             << st.errors             << ",";
+    oss << "\"avg_latency_ms\":"     << st.avg_latency_ms     << ",";
+    oss << "\"trades_per_sec\":"     << st.trades_per_sec     << ",";
+    oss << "\"orderbooks_per_sec\":" << st.orderbooks_per_sec << ",";
+
+    oss << "\"pairs\":{";
+    bool first = true;
+    for (const auto& kv : pmap) {
+        if (!first) oss << ",";
+        first = false;
+        oss << "\"" << kv.first << "\":{"
+            << "\"trades\":"     << kv.second.trades     << ","
+            << "\"orderbooks\":" << kv.second.orderbooks
+            << "}";
+    }
+    oss << "}}";
+    return oss.str();
+}
+

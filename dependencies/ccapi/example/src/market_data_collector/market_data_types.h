@@ -9,30 +9,33 @@
 
 namespace MarketData {
 
-// NOTE: All timestamps in this module are stored as *microseconds*
-// since Unix epoch (UTC). The field name `timestamp_ms` is kept for
-// backward compatibility with existing code.
-inline std::string formatTimestampMs(int64_t timestamp_us) {
+inline std::string formatTimestampMicros(int64_t timestamp_us) {
     using namespace std::chrono;
-    system_clock::time_point tp{microseconds(timestamp_us)};
+    system_clock::time_point tp(
+        duration_cast<system_clock::duration>(microseconds(timestamp_us)));
+
     std::time_t tt = system_clock::to_time_t(tp);
-    std::tm tm_utc{};  // ✅ Keep consistent naming
+    std::tm tm_utc{};
 #if defined(_WIN32)
     gmtime_s(&tm_utc, &tt);
 #else
     gmtime_r(&tt, &tm_utc);
 #endif
-    char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_utc);
-    char out[48];
-    long long us = static_cast<long long>(timestamp_us % 1'000'000);
-    if (us < 0) us += 1'000'000;
-    std::snprintf(out, sizeof(out), "%s.%06lld", buf, us);
-    return std::string(out);
+
+    char buf[64];
+    int fractional = static_cast<int>(timestamp_us % 1'000'000);
+    std::snprintf(
+        buf, sizeof(buf),
+        "%04d-%02d-%02d %02d:%02d:%02d.%06d",
+        tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+        tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec,
+        fractional < 0 ? fractional + 1'000'000 : fractional);
+
+    return std::string(buf);
 }
 
 struct Trade {
-    int64_t timestamp_ms{};   // epoch microseconds (UTC)
+    int64_t timestamp_us{};   // epoch microseconds (UTC)
     std::string exchange;
     std::string symbol;
     std::string market_type;  // "spot", "perpetual", ...
@@ -43,7 +46,7 @@ struct Trade {
     bool is_buyer_maker{};
 
     std::string toTimestamp() const {
-        return formatTimestampMs(timestamp_ms);
+        return formatTimestampMicros(timestamp_us);
     }
 
     std::vector<std::string> toSQLValues() const {
@@ -62,7 +65,7 @@ struct Trade {
 };
 
 struct OHLCV {
-    int64_t timestamp_ms{};   // candle open time (epoch microseconds)
+    int64_t timestamp_us{};   // candle open time (epoch microseconds)
     std::string exchange;
     std::string symbol;
     std::string market_type;
@@ -75,7 +78,7 @@ struct OHLCV {
     double volume{};
 
     std::string toTimestamp() const {
-        return formatTimestampMs(timestamp_ms);
+        return formatTimestampMicros(timestamp_us);
     }
 
     std::vector<std::string> toSQLValues() const {
@@ -99,7 +102,7 @@ struct OHLCV {
 };
 
 struct OrderbookSnapshot {
-    int64_t timestamp_ms{};   // epoch microseconds
+    int64_t timestamp_us{};   // epoch microseconds
     std::string exchange;
     std::string symbol;
     std::string market_type;
@@ -109,7 +112,7 @@ struct OrderbookSnapshot {
 
     std::vector<std::string> toSQLValues() const {
         return {
-            formatTimestampMs(timestamp_ms),
+            formatTimestampMicros(timestamp_us),
             exchange,
             symbol,
             market_type,

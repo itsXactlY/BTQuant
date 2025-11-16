@@ -68,13 +68,18 @@ void MarketDataCollector::printStats() const {
     auto st = processor_->getStats();
     std::cout << "=== Market Data Stats ===\n";
     std::cout << "Trades: received=" << st.trades_received
-              << ", inserted=" << st.trades_inserted << "\n";
+              << ", inserted=" << st.trades_inserted
+              << ", rate=" << st.trades_per_sec << " /s\n";
     std::cout << "Candles: generated=" << st.candles_generated
               << ", inserted=" << st.candles_inserted << "\n";
     std::cout << "Orderbooks: received=" << st.orderbooks_received
-              << ", inserted=" << st.orderbooks_inserted << "\n";
+              << ", inserted=" << st.orderbooks_inserted
+              << ", rate=" << st.orderbooks_per_sec << " /s\n";
     std::cout << "Avg latency (ms): " << st.avg_latency_ms << "\n";
     std::cout << "Errors: " << st.errors << "\n";
+
+    // scrape-friendly JSON line for Prom/Grafana → Loki/Tempo/etc.
+    std::cout << "STATS_JSON " << processor_->getStatsJson() << "\n";
 }
 
 void MarketDataCollector::flushLoop() {

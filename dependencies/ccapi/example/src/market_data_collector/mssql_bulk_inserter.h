@@ -52,5 +52,5 @@ private:
                         SQLHANDLE handle,
                         const std::string& context) const;
 
-    static SQL_TIMESTAMP_STRUCT toSqlTimestamp(int64_t timestamp_ms);
+    static SQL_TIMESTAMP_STRUCT toSqlTimestamp(int64_t timestamp_us);
 };

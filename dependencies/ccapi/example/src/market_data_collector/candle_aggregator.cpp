@@ -17,41 +17,54 @@ std::string CandleAggregator::makeKey(const std::string& exchange,
 }
 
 int64_t CandleAggregator::timeframeMillis(const std::string& tf) const {
-    if (tf.empty()) return 60'000'000; // 60s in µs
+    // return microseconds here
+    if (tf.empty()) return 60'000'000LL;  // default 60s in µs
+
     char unit = tf.back();
     int64_t val = std::stoll(tf.substr(0, tf.size() - 1));
+
+    constexpr int64_t SECOND = 1'000'000LL;
+    constexpr int64_t MINUTE = 60LL * SECOND;
+    constexpr int64_t HOUR   = 60LL * MINUTE;
+    constexpr int64_t DAY    = 24LL * HOUR;
+
     switch (unit) {
-        case 's': return val * 1'000'000;
-        case 'm': return val * 60 * 1'000'000;
-        case 'h': return val * 60 * 60 * 1'000'000;
-        case 'd': return val * 24 * 60 * 60 * 1'000'000;
-        default:  return val * 60 * 1'000'000;
+        case 's': return val * SECOND;
+        case 'm': return val * MINUTE;
+        case 'h': return val * HOUR;
+        case 'd': return val * DAY;
+        default:  return val * MINUTE;
     }
 }
 
 
+
 int64_t CandleAggregator::alignTimestamp(
-    int64_t timestamp_ms,
+    int64_t timestamp_us,
     const std::string& timeframe) const {
     auto tf_ms = timeframeMillis(timeframe);
-    return (timestamp_ms / tf_ms) * tf_ms;
+    return (timestamp_us / tf_ms) * tf_ms;
 }
 
 void CandleAggregator::processTrade(const Trade& trade) {
     std::lock_guard<std::mutex> lock(mutex_);
-
     for (const auto& tf : timeframes_) {
-        const int64_t bucket = alignTimestamp(trade.timestamp_ms, tf);
-        const std::string key = makeKey(trade.exchange, trade.symbol, tf);
+        const int64_t bucket =
+            alignTimestamp(trade.timestamp_us, tf);
+        const std::string key =
+            makeKey(trade.exchange, trade.symbol, tf);
 
         auto& cs = active_[key];
 
-        // New candle or first trade
+        // New candle or first trade in this timeframe
         if (!cs.is_initialized) {
-            cs.open_time_ms = bucket;
-            cs.open  = cs.high = cs.low = cs.close = trade.price;
-            cs.volume = trade.quantity;
-            cs.market_type = trade.market_type;
+            cs.open_time_ms  = bucket;
+            cs.open          = trade.price;
+            cs.high          = trade.price;
+            cs.low           = trade.price;
+            cs.close         = trade.price;
+            cs.volume        = trade.quantity;
+            cs.market_type   = trade.market_type;
             cs.is_initialized = true;
             continue;
         }
@@ -59,7 +72,7 @@ void CandleAggregator::processTrade(const Trade& trade) {
         // Bucket advanced => close old candle, start a new one
         if (bucket > cs.open_time_ms) {
             OHLCV c;
-            c.timestamp_ms = cs.open_time_ms;
+            c.timestamp_us = cs.open_time_ms;
             c.exchange     = trade.exchange;
             c.symbol       = trade.symbol;
             c.market_type  = cs.market_type;
@@ -72,16 +85,16 @@ void CandleAggregator::processTrade(const Trade& trade) {
             completed_.push_back(std::move(c));
 
             cs.open_time_ms = bucket;
-            cs.open  = cs.high = cs.low = cs.close = trade.price;
-            cs.volume = trade.quantity;
-            cs.market_type = trade.market_type;
-            cs.is_initialized = true;
+            cs.open         = trade.price;
+            cs.high         = trade.price;
+            cs.low          = trade.price;
+            cs.close        = trade.price;
+            cs.volume       = trade.quantity;
         } else {
-            // Same candle
-            cs.close = trade.price;
-            cs.high  = std::max(cs.high, trade.price);
-            cs.low   = (cs.volume == 0.0 ? trade.price
-                                         : std::min(cs.low, trade.price));
+            // Same bucket: update OHLCV
+            cs.high   = std::max(cs.high, trade.price);
+            cs.low    = std::min(cs.low,  trade.price);
+            cs.close  = trade.price;
             cs.volume += trade.quantity;
         }
     }
@@ -115,7 +128,7 @@ std::vector<OHLCV> CandleAggregator::flushAll() {
         std::string sym = ex_sym.substr(pos2 + 1);
 
         OHLCV c;
-        c.timestamp_ms = cs.open_time_ms;
+        c.timestamp_us = cs.open_time_ms;
         c.exchange     = ex;
         c.symbol       = sym;
         c.market_type  = cs.market_type;

@@ -37,7 +37,7 @@ private:
     std::vector<std::string> timeframes_;
     std::mutex mutex_;
 
-    int64_t alignTimestamp(int64_t timestamp_ms,
+    int64_t alignTimestamp(int64_t timestamp_us,
                            const std::string& timeframe) const;
     int64_t timeframeMillis(const std::string& timeframe) const;
 

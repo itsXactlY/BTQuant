@@ -24,15 +24,25 @@ void ExchangeConnectionManager::subscribe(
                 std::string cid =
                     cfg.exchange_name + ":" + sym + ":" + cfg.market_type;
 
-                ccapi::Subscription s(
+                std::string options;
+                if (ch == "MARKET_DEPTH") {
+                    // 🔹 Ask ccapi for 20 levels per side, full snapshot
+                    //    whenever any of those levels change.
+                    options = "MARKET_DEPTH_MAX=20";
+                    // (No MARKET_DEPTH_RETURN_UPDATE=1 => snapshot mode)
+                } else {
+                    options.clear();
+                }
+
+                ccapi::Subscription sub(
                     cfg.exchange_name,  // exchange
                     sym,                // instrument
-                    ch,                 // field ("TRADE", "MARKET_DEPTH", ...)
-                    "",                 // options
+                    ch,                 // "TRADE" / "MARKET_DEPTH"
+                    options,
                     cid                 // correlationId
                 );
 
-                subs.push_back(std::move(s));
+                subs.push_back(std::move(sub));
             }
         }
     }
@@ -40,7 +50,6 @@ void ExchangeConnectionManager::subscribe(
     session_->subscribe(subs);
     std::cout << "Subscribed to " << subs.size() << " streams\n";
 }
-
 
 void ExchangeConnectionManager::start() {
     running_ = true;

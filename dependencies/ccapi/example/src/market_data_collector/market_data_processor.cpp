@@ -1,5 +1,5 @@
 #include "market_data_processor.h"
-
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <iostream>
@@ -205,6 +205,7 @@ void MarketDataProcessor::handleTradeMessage(const ccapi::Message& msg) {
 void MarketDataProcessor::handleOrderbookMessage(
     const ccapi::Message& msg) {
 
+    // ── 1) Decode correlation id → exchange, symbol, market_type ─────────────
     const auto& cid_list = msg.getCorrelationIdList();
     const std::string cid = cid_list.empty() ? "" : cid_list[0];
     auto parts = split(cid, ':');
@@ -219,103 +220,141 @@ void MarketDataProcessor::handleOrderbookMessage(
         return;
     }
 
-    const std::string key = exchange + ":" + symbol + ":" + market_type;
-
     const auto& elements = msg.getElementList();
-    if (elements.empty()) return;
+    if (elements.empty()) {
+        return;
+    }
 
-    // exchange timestamp from Message (µs)
-    auto tp = msg.getTime();
-    int64_t ts_us = std::chrono::duration_cast<
-                        std::chrono::microseconds>(
-                        tp.time_since_epoch()).count();
+    struct DepthLevel {
+        double price{};
+        double size{};
+    };
 
-    // Collect *all* levels across all elements in this message
-    struct Level { double price; double qty; };
-    std::vector<Level> bids;
-    std::vector<Level> asks;
+    std::vector<double> bid_prices;
+    std::vector<double> bid_sizes;
+    std::vector<double> ask_prices;
+    std::vector<double> ask_sizes;
 
-    bids.reserve(elements.size());
-    asks.reserve(elements.size());
-
+    // ── 2) Collect all BID/ASK prices & sizes from the snapshot ──────────────
     for (const auto& el : elements) {
-        // One ccapi Element may contain both a bid and an ask
-        const auto& m = el.getNameValueMap();
+        const auto& m = el.getNameValueMap();  // map<string_view,string>
+        for (const auto& kv : m) {
+            std::string_view name = kv.first;
+            const std::string& val = kv.second;
 
-        auto bid_p_s = getAny(el, {"BID_PRICE", "BEST_BID_PRICE"});
-        auto bid_q_s = getAny(el, {"BID_SIZE",  "BEST_BID_SIZE"});
-        auto ask_p_s = getAny(el, {"ASK_PRICE", "BEST_ASK_PRICE"});
-        auto ask_q_s = getAny(el, {"ASK_SIZE",  "BEST_ASK_SIZE"});
-
-        bool ok = true;
-
-        if (!bid_p_s.empty() && !bid_q_s.empty()) {
-            bool okp = false, okq = false;
-            double p = safeParseDouble("bid_price", bid_p_s, okp);
-            double q = safeParseDouble("bid_size",  bid_q_s, okq);
-            if (okp && okq && q > 0.0) {
-                bids.push_back({p, q});
-            } else if (!okp || !okq) {
-                std::cerr << "handleOrderbookMessage: bad BID level, element = "
-                          << ccapi::toString(m) << std::endl;
-            }
-        }
-
-        if (!ask_p_s.empty() && !ask_q_s.empty()) {
-            bool okp = false, okq = false;
-            double p = safeParseDouble("ask_price", ask_p_s, okp);
-            double q = safeParseDouble("ask_size",  ask_q_s, okq);
-            if (okp && okq && q > 0.0) {
-                asks.push_back({p, q});
-            } else if (!okp || !okq) {
-                std::cerr << "handleOrderbookMessage: bad ASK level, element = "
-                          << ccapi::toString(m) << std::endl;
+            bool ok = true;
+            if (name == "BID_PRICE") {
+                double p = safeParseDouble("BID_PRICE", val, ok);
+                if (ok) bid_prices.push_back(p);
+            } else if (name == "BID_SIZE") {
+                double q = safeParseDouble("BID_SIZE", val, ok);
+                if (ok) bid_sizes.push_back(q);
+            } else if (name == "ASK_PRICE") {
+                double p = safeParseDouble("ASK_PRICE", val, ok);
+                if (ok) ask_prices.push_back(p);
+            } else if (name == "ASK_SIZE") {
+                double q = safeParseDouble("ASK_SIZE", val, ok);
+                if (ok) ask_sizes.push_back(q);
             }
         }
     }
 
-    if (bids.empty() && asks.empty()) {
+    if (bid_prices.empty() && ask_prices.empty()) {
         const auto& firstMap = elements.front().getNameValueMap();
-        std::cerr << "handleOrderbookMessage: no BID/ASK levels, element = "
+        std::cerr << "handleOrderbookMessage: no BID/ASK in message, element = "
                   << ccapi::toString(firstMap) << std::endl;
         return;
     }
 
-    MarketData::OrderbookSnapshot ob;
-    ob.timestamp_us = ts_us;
+    // Pair prices and sizes by index, tolerate tiny mismatches in count
+    std::vector<DepthLevel> bids;
+    std::vector<DepthLevel> asks;
+
+    {
+        std::size_t n = std::min(bid_prices.size(), bid_sizes.size());
+        bids.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            bids.push_back(DepthLevel{bid_prices[i], bid_sizes[i]});
+        }
+        if (bid_prices.size() != bid_sizes.size()) {
+            std::cerr << "handleOrderbookMessage: BID price/size count mismatch: "
+                      << bid_prices.size() << " prices vs "
+                      << bid_sizes.size()  << " sizes for "
+                      << exchange << " " << symbol << std::endl;
+        }
+    }
+    {
+        std::size_t n = std::min(ask_prices.size(), ask_sizes.size());
+        asks.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            asks.push_back(DepthLevel{ask_prices[i], ask_sizes[i]});
+        }
+        if (ask_prices.size() != ask_sizes.size()) {
+            std::cerr << "handleOrderbookMessage: ASK price/size count mismatch: "
+                      << ask_prices.size() << " prices vs "
+                      << ask_sizes.size()  << " sizes for "
+                      << exchange << " " << symbol << std::endl;
+        }
+    }
+
+    if (bids.empty() && asks.empty()) {
+        return;
+    }
+
+    // ── 3) Sort and trim to 20 levels each side ──────────────────────────────
+    constexpr std::size_t MAX_LEVELS = 20;
+
+    std::sort(
+        bids.begin(), bids.end(),
+        [](const DepthLevel& a, const DepthLevel& b) {
+            return a.price > b.price;  // best bid first
+        });
+    std::sort(
+        asks.begin(), asks.end(),
+        [](const DepthLevel& a, const DepthLevel& b) {
+            return a.price < b.price;  // best ask first
+        });
+
+    if (bids.size() > MAX_LEVELS) bids.resize(MAX_LEVELS);
+    if (asks.size() > MAX_LEVELS) asks.resize(MAX_LEVELS);
+
+    // ── 4) Timestamp: internal = µs since epoch ──────────────────────────────
+    auto tp = msg.getTime();
+    int64_t ts_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            tp.time_since_epoch())
+            .count();
+
+    OrderbookSnapshot ob;
+    ob.timestamp_us = ts_us;   // µs since epoch (UTC)
     ob.exchange     = exchange;
     ob.symbol       = symbol;
     ob.market_type  = market_type;
 
-    // Build JSON: [[price, qty], ...]
-    auto build_side_json = [](const std::vector<Level>& side) {
+    auto buildSideJson = [](const std::vector<DepthLevel>& side) {
         std::ostringstream oss;
         oss << "[";
         for (std::size_t i = 0; i < side.size(); ++i) {
             if (i > 0) oss << ",";
-            oss << "[" << side[i].price << "," << side[i].qty << "]";
+            oss << "[" << side[i].price << "," << side[i].size << "]";
         }
         oss << "]";
         return oss.str();
     };
 
-    ob.bids_json = build_side_json(bids);
-    ob.asks_json = build_side_json(asks);
-    ob.checksum.clear(); // can be wired later if exchange supports it
+    ob.bids_json = buildSideJson(bids);
+    ob.asks_json = buildSideJson(asks);
+    ob.checksum.clear();  // reserved for later (e.g. exchange checksum)
 
+    // ── 5) Buffer + stats ────────────────────────────────────────────────────
     {
         std::lock_guard<std::mutex> lock(buffer_mutex_);
         orderbook_buffer_.push_back(std::move(ob));
         ++stats_.orderbooks_received;
-        active_pairs_.insert(exchange + ":" + symbol + ":" + market_type);
     }
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        pair_stats_[key].orderbooks++;
-    }
+
     flushOrderbooksIfNeeded();
 }
-
 
 void MarketDataProcessor::flushTradesIfNeeded(bool force) {
     std::vector<Trade> batch;

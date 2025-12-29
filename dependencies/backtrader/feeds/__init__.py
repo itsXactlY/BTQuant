@@ -31,3 +31,9 @@ except ImportError:
 
 from .rollover import RollOver
 from .chainer import Chainer
+
+# HotSpine feed for live trading
+try:
+    from .hotspine_feed import HotSpineData, HotSpineFeed, create_hotspine_data_feed, create_hotspine_feed
+except ImportError:
+    pass # HotSpine may not be available in all environments

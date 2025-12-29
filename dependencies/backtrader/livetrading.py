@@ -1,7 +1,6 @@
 import backtrader as bt
 from datetime import datetime, timedelta
 import pytz
-from typing import Type
 
 from typing import Type, Optional, Dict, Any
 import backtrader as bt
@@ -43,7 +42,7 @@ def livetrade_ccxt(
 
     cerebro.adddata(data, name=data._dataname)
     cerebro.addstrategy(
-        strategy,
+        strategy_class,
         exchange=exchange,
         account=account,
         asset=asset,
@@ -132,6 +131,174 @@ def livetrade_web3(
         print("Full traceback:")
         traceback.print_exc()
 
+
+def livetrade_hotspine(
+    symbol_id: int,
+    strategy_class,
+    shm_name: str = "/btquant_hotspine",
+    batch_mode: bool = False,
+    poll_interval: float = 0.0001,
+    **strategy_params
+) -> None:
+    """
+    Live trade a strategy using HotSpine as the data source.
+    
+    This function provides live trading capabilities using HotSpine shared memory
+    for ultra-low latency trade data while maintaining compatibility with
+    Backtrader's trading engine.
+    
+    Args:
+        symbol_id: Symbol ID to filter trades from HotSpine
+        strategy_class: Strategy class or instance
+        shm_name: Shared memory segment name (default: "/btquant_hotspine")
+        batch_mode: Whether to use batch reading for higher throughput
+        poll_interval: Polling interval in seconds
+        **strategy_params: Additional parameters to pass to the strategy
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Resolve strategy class
+    if isinstance(strategy_class, str):
+        strategy_class = strategy_class.lower()
+    elif not callable(strategy_class):
+        raise ValueError(f"Invalid strategy: {strategy_class}")
+    
+    # Create Cerebro instance for live trading
+    cerebro = bt.Cerebro()
+    cerebro.broker.set_coc(True)  # Enable cheat-on-close for live trading
+    
+    # Create HotSpine data feed
+    from backtrader.feeds.hotspine_feed import HotSpineData
+    
+    data = HotSpineData(
+        symbol_id=symbol_id,
+        shm_name=shm_name,
+        batch_mode=batch_mode,
+        poll_interval=poll_interval
+    )
+    
+    # Set data name for identification
+    data._dataname = f"hotspine_{symbol_id}"
+    data._name = f"HotSpine_{symbol_id}"
+    
+    # Add data feed to Cerebro
+    cerebro.adddata(data, name=data._dataname)
+    
+    # Add strategy with parameters
+    cerebro.addstrategy(
+        strategy_class,
+        backtest=False,
+        live=True,
+        **strategy_params
+    )
+    
+    # Configure Cerebro for live trading
+    cerebro.broker.set_cash(1000.0)  # Default starting cash
+    
+    try:
+        logger.info(f"Starting HotSpine live trading for symbol_id={symbol_id}")
+        logger.info(f"Shared memory: {shm_name}")
+        logger.info(f"Batch mode: {batch_mode}")
+        logger.info(f"Poll interval: {poll_interval}s")
+        
+        # Run live trading
+        cerebro.run(
+            live=True,
+            runonce=False,  # Live trading requires event-based processing
+            exactbars=False,  # Don't require exact bar counts for live data
+            stdstats=False,  # Disable standard stats for live trading
+            preload=False,  # Don't preload live data
+            quicknotify=True  # Enable quick notifications
+        )
+        
+    except KeyboardInterrupt:
+        logger.info("Live trading stopped by user")
+    except Exception as e:
+        logger.error(f"Live trading failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def livetrade_hotspine_multi_symbol(
+    symbol_ids: list,
+    strategy,
+    shm_name: str = "/btquant_hotspine",
+    batch_mode: bool = False,
+    poll_interval: float = 0.0001,
+    **strategy_params
+) -> None:
+    """
+    Live trade a strategy using multiple HotSpine symbols.
+    
+    Args:
+        symbol_ids: List of symbol IDs to trade
+        strategy: Strategy class or instance
+        shm_name: Shared memory segment name
+        batch_mode: Whether to use batch reading
+        poll_interval: Polling interval in seconds
+        **strategy_params: Additional parameters to pass to the strategy
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Resolve strategy class
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
+        strategy_class = strategy
+    else:
+        raise ValueError(f"Invalid strategy: {strategy}")
+    
+    # Create Cerebro instance
+    cerebro = bt.Cerebro()
+    cerebro.broker.set_coc(True)
+    
+    # Add multiple HotSpine data feeds
+    from backtrader.feeds.hotspine_feed import HotSpineData
+    
+    for symbol_id in symbol_ids:
+        data = HotSpineData(
+            symbol_id=symbol_id,
+            shm_name=shm_name,
+            batch_mode=batch_mode,
+            poll_interval=poll_interval
+        )
+        
+        data._dataname = f"hotspine_{symbol_id}"
+        data._name = f"HotSpine_{symbol_id}"
+        
+        cerebro.adddata(data, name=data._dataname)
+    
+    # Add strategy
+    cerebro.addstrategy(
+        strategy_class,
+        backtest=False,
+        live=True,
+        **strategy_params
+    )
+    
+    try:
+        logger.info(f"Starting HotSpine live trading for symbols: {symbol_ids}")
+        
+        cerebro.run(
+            live=True,
+            runonce=False,
+            exactbars=False,
+            stdstats=False,
+            preload=False,
+            quicknotify=True
+        )
+        
+    except KeyboardInterrupt:
+        logger.info("Live trading stopped by user")
+    except Exception as e:
+        logger.error(f"Live trading failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
 def livetrade_binance(
     coin: str,
     collateral: str,
@@ -161,6 +328,8 @@ def livetrade_binance(
         strategy_class = strategy.lower()
     elif callable(strategy):
         strategy_class = strategy
+    else:
+        raise ValueError(f"Invalid strategy: {strategy}")
     
     from backtrader.stores import binance_store
     
@@ -422,10 +591,12 @@ def livetrade_multiple_pairs(
 ) -> None:
     cerebro = bt.Cerebro(quicknotify=True)
     
-    if strategy_class is None:
-        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
-    else:
+    if isinstance(strategy, str):
+        strategy_class = strategy.lower()
+    elif callable(strategy):
         strategy_class = strategy
+    else:
+        raise ValueError(f"Invalid strategy: {strategy}")
     
     from backtrader.stores import bitget_store
 

@@ -8,25 +8,52 @@
 #include <unordered_map>
 #include <memory>
 #include <mutex>
+#include <chrono>
+#include <iostream>
 
 namespace py = pybind11;
 
+// ==========================
+// ODBC Manager Class
+// ==========================
+
 class ODBCManager {
 public:
-    ODBCManager(const std::string& connection_string) {
-        SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
-        SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (void*)SQL_OV_ODBC3, 0);
-
-        SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
-
-        // Connect
-        SQLRETURN ret = SQLDriverConnect(dbc, NULL, (SQLCHAR*)connection_string.c_str(), SQL_NTS,
-                                        NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
+    ODBCManager(const std::string& connection_string) 
+        : connection_string_(connection_string) {
+        
+        // Allocate environment handle
+        SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
         if (!SQL_SUCCEEDED(ret)) {
-            cleanup();
-            throw std::runtime_error("Failed to connect to database");
+            throw std::runtime_error("SQLAllocHandle ENV failed");
         }
 
+        // Set ODBC version
+        ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
+        if (!SQL_SUCCEEDED(ret)) {
+            cleanup();
+            throw std::runtime_error("SQLSetEnvAttr ODBC_VERSION failed");
+        }
+
+        // Allocate connection handle
+        ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
+        if (!SQL_SUCCEEDED(ret)) {
+            cleanup();
+            throw std::runtime_error("SQLAllocHandle DBC failed");
+        }
+
+        // Connect to database
+        ret = SQLDriverConnect(dbc, NULL, (SQLCHAR*)connection_string.c_str(), SQL_NTS,
+                              NULL, 0, NULL, SQL_DRIVER_NOPROMPT);
+        if (!SQL_SUCCEEDED(ret)) {
+            cleanup();
+            throw std::runtime_error("SQLDriverConnect failed: " + getLastError(SQL_HANDLE_DBC, dbc));
+        }
+
+        //  CRITICAL: Start with autocommit OFF for transaction control
+        SQLSetConnectAttr(dbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER);
+        
+        // Allocate statement handle
         SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
     }
 
@@ -41,15 +68,32 @@ public:
         SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
     }
 
-    // Run SELECT / query with result set
-    void executeQuery(const std::string& query) {
-        SQLRETURN ret = SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
-        if (!SQL_SUCCEEDED(ret)) {
-            throwSQLStmtError("Failed to execute query");
+    //  NEW: Transaction control methods
+    void beginTransaction() {
+        // Verify connection is healthy before starting transaction
+        if (!isHealthy()) {
+            throw std::runtime_error("Connection not healthy for transaction");
         }
+        // Already in transaction mode due to AUTOCOMMIT_OFF
     }
 
-    // Run non-query (CREATE, DROP, UPDATE, DELETE…)
+    void commitTransaction() {
+        SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, dbc, SQL_COMMIT);
+        if (!SQL_SUCCEEDED(ret)) {
+            throwSQLDBError("Commit failed");
+        }
+        // Stay in transaction mode
+        SQLSetConnectAttr(dbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER);
+    }
+
+    void rollbackTransaction() {
+        SQLRETURN ret = SQLEndTran(SQL_HANDLE_DBC, dbc, SQL_ROLLBACK);
+        if (!SQL_SUCCEEDED(ret)) {
+            throwSQLDBError("Rollback failed");
+        }
+        SQLSetConnectAttr(dbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF, SQL_IS_UINTEGER);
+    }
+
     void executeNonQuery(const std::string& query) {
         resetStatement();
         SQLRETURN ret = SQLExecDirect(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
@@ -58,14 +102,20 @@ public:
         }
     }
 
-    // Executemany-style bulk insert
-    void bulkInsert(const std::string& query, const std::vector<std::vector<std::string>>& rows) {
+    //  FIXED: True bulk insert with transaction control
+    void bulkInsert(const std::string& query, 
+                    const std::vector<std::vector<std::string>>& rows) {
+        if (rows.empty()) return;
+        
         resetStatement();
 
         SQLRETURN ret = SQLPrepare(stmt, (SQLCHAR*)query.c_str(), SQL_NTS);
         if (!SQL_SUCCEEDED(ret)) {
             throwSQLStmtError("Failed to prepare bulk insert");
         }
+
+        //  Begin transaction ONCE
+        beginTransaction();
 
         for (const auto& row : rows) {
             std::vector<SQLLEN> indicators(row.size(), SQL_NTS);
@@ -74,40 +124,41 @@ public:
             for (auto& val : row) cstrs.push_back(val.c_str());
 
             for (size_t i = 0; i < row.size(); i++) {
+                //  Handle VARCHAR(MAX) correctly with SQL_LONGVARCHAR
+                SQLSMALLINT sql_type = (row[i].size() > 8000) ? SQL_LONGVARCHAR : SQL_VARCHAR;
+                SQLULEN precision = (row[i].size() > 8000) ? 0 : row[i].size();
+
                 SQLBindParameter(stmt, (SQLUSMALLINT)(i + 1), SQL_PARAM_INPUT, SQL_C_CHAR,
-                                 SQL_VARCHAR, row[i].size(), 0,
+                                 sql_type, precision, 0,
                                  (SQLPOINTER)cstrs[i], row[i].size(), &indicators[i]);
             }
 
             ret = SQLExecute(stmt);
-            if (!SQL_SUCCEEDED(ret)) {
+            //  Only throw on real errors, not SUCCESS_WITH_INFO
+            if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
+                rollbackTransaction();
                 throwSQLStmtError("Bulk insert failed during row execution");
             }
+            
+            SQLFreeStmt(stmt, SQL_RESET_PARAMS);
         }
+
+        //  Commit ONCE at end
+        commitTransaction();
     }
 
-    std::vector<std::vector<std::string>> fetchData() {
-        // Get column count
-        SQLSMALLINT columnCount;
-        SQLNumResultCols(stmt, &columnCount);
-
-        std::vector<std::vector<std::string>> data;
-        SQLLEN indicator;
-        char buffer[1024];
-
-        while (SQL_SUCCEEDED(SQLFetch(stmt))) {
-            std::vector<std::string> row;
-            for (SQLSMALLINT i = 1; i <= columnCount; i++) {
-                SQLRETURN ret = SQLGetData(stmt, i, SQL_C_CHAR, buffer, sizeof(buffer), &indicator);
-                if (SQL_SUCCEEDED(ret) && indicator != SQL_NULL_DATA) {
-                    row.push_back(std::string(buffer));
-                } else {
-                    row.push_back("NULL");
-                }
-            }
-            data.push_back(row);
-        }
-        return data;
+    //  NEW: Health check
+    bool isHealthy() {
+        if (dbc == SQL_NULL_HANDLE) return false;
+        
+        SQLHSTMT test_stmt;
+        SQLAllocHandle(SQL_HANDLE_STMT, dbc, &test_stmt);
+        
+        SQLRETURN ret = SQLExecDirect(test_stmt, (SQLCHAR*)"SELECT 1", SQL_NTS);
+        
+        SQLFreeHandle(SQL_HANDLE_STMT, test_stmt);
+        
+        return SQL_SUCCEEDED(ret);
     }
 
     bool isConnected() {
@@ -122,6 +173,7 @@ private:
     SQLHENV env = SQL_NULL_HANDLE;
     SQLHDBC dbc = SQL_NULL_HANDLE;
     SQLHSTMT stmt = SQL_NULL_HANDLE;
+    std::string connection_string_;
 
     void cleanup() {
         if (stmt != SQL_NULL_HANDLE) {
@@ -139,14 +191,31 @@ private:
         }
     }
 
-    void throwSQLStmtError(const std::string& prefix) {
+    //  NEW: DB error handler
+    void throwSQLDBError(const std::string& prefix) {
         SQLCHAR sqlstate[6], message[SQL_MAX_MESSAGE_LENGTH];
         SQLINTEGER native_error;
         SQLSMALLINT length;
-        SQLGetDiagRec(SQL_HANDLE_STMT, stmt, 1, sqlstate, &native_error, message, sizeof(message), &length);
-        throw std::runtime_error(prefix + ": " + std::string((char*)message));
+        SQLGetDiagRec(SQL_HANDLE_DBC, dbc, 1, sqlstate, &native_error, message, sizeof(message), &length);
+        throw std::runtime_error(prefix + ": [" + std::string((char*)sqlstate) + "] " + std::string((char*)message));
+    }
+
+    std::string getLastError(SQLSMALLINT handle_type, SQLHANDLE handle) {
+        SQLCHAR sqlstate[6], message[SQL_MAX_MESSAGE_LENGTH];
+        SQLINTEGER native_error;
+        SQLSMALLINT length;
+        SQLGetDiagRec(handle_type, handle, 1, sqlstate, &native_error, message, sizeof(message), &length);
+        return std::string((char*)sqlstate) + "] " + std::string((char*)message);
+    }
+
+    void throwSQLStmtError(const std::string& prefix) {
+        throw std::runtime_error(prefix + ": " + getLastError(SQL_HANDLE_STMT, stmt));
     }
 };
+
+// ==========================
+// Connection Pool Class
+// ==========================
 
 class ConnectionPool {
 private:
@@ -158,7 +227,7 @@ public:
         std::lock_guard<std::mutex> lock(pool_mutex);
 
         auto it = connections.find(connection_string);
-        if (it != connections.end() && it->second && it->second->isConnected()) {
+        if (it != connections.end() && it->second && it->second->isHealthy()) {
             return it->second;
         }
 
@@ -203,7 +272,17 @@ std::vector<std::vector<std::string>> fetch_data_from_db(const std::string& conn
 }
 
 PYBIND11_MODULE(fast_mssql, m) {
-    m.doc() = "Fast MSSQL driver with connection pooling and bulk insert (v2)";
+    m.doc() = "Fast MSSQL driver with transaction control and connection pooling";
+
+    py::class_<ODBCManager>(m, "ODBCManager")
+        .def(py::init<const std::string&>())
+        .def("execute_non_query", &ODBCManager::executeNonQuery)
+        .def("bulk_insert", &ODBCManager::bulkInsert)
+        .def("begin_transaction", &ODBCManager::beginTransaction)
+        .def("commit_transaction", &ODBCManager::commitTransaction)
+        .def("rollback_transaction", &ODBCManager::rollbackTransaction)
+        .def("is_healthy", &ODBCManager::isHealthy)
+        .def("is_connected", &ODBCManager::isConnected);
 
     m.def("fetch_data_from_db", &fetch_data_from_db,
           "Fetch data from MSSQL database with connection pooling",
@@ -218,7 +297,7 @@ PYBIND11_MODULE(fast_mssql, m) {
                             const std::vector<std::vector<std::string>>& rows) {
         auto odbc = ConnectionPool::getConnection(conn_str);
         odbc->bulkInsert(query, rows);
-    }, "Perform bulk insert into a table");
+    }, "Perform bulk insert with transaction control");
 
     m.def("close_all_connections", &ConnectionPool::closeAll,
           "Close all pooled connections");

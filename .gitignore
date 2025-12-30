@@ -73,3 +73,4 @@ neural_trading_system/neural_data/BTC_1h_2023-01-01_2024-01-01_neural_data.parqu
 __pycache__
 dependencies/ccapi/example/src/arbitrage_scanner/nlohmann/
 TODO ::.txt
+.coverage

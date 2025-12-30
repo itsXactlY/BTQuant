@@ -1,0 +1,6 @@
+setup.py
+ccapi.egg-info/PKG-INFO
+ccapi.egg-info/SOURCES.txt
+ccapi.egg-info/dependency_links.txt
+ccapi.egg-info/requires.txt
+ccapi.egg-info/top_level.txt

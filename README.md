@@ -148,7 +148,7 @@ We welcome contributions! Please see our [Contributing Guide](docs/contributing.
 ### Development Setup
 ```bash
 # Fork and clone
-git clone https://github.com/your-username/BTQuant.git
+git clone https://github.com/itsXactlY/BTQuant.git
 cd BTQuant
 
 # Set up development environment

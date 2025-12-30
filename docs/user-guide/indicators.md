@@ -501,5 +501,6 @@ def analyze_indicator_performance(self):
 | Advanced | CyberCycle | `CyberCycle.py` | period |
 | Advanced | RSX | `RSX.py` | period |
 | Advanced | VumanchuMarketCipher_A | `VumanchuMarketCipher_A.py` | Various |
+| Advanced | VumanchuMarketCipher_B | `VumanchuMarketCipher_B.py` | Various |
 
 This comprehensive indicator library, combined with complete transparency, makes BTQuant the most powerful and auditable quantitative trading framework available.

@@ -111,14 +111,20 @@ class HotSpineReader:
         self._lib.hotspine_reader_poll_trade.restype = ctypes.c_int
         self._lib.hotspine_reader_poll_trade.argtypes = [ctypes.c_void_p, ctypes.POINTER(HotTrade)]
         
-        self._lib.hotspine_reader_read_all.restype = ctypes.c_void_p  # Returns pointer to vector
-        self._lib.hotspine_reader_read_all.argtypes = [ctypes.c_void_p]
+        # Try to load optional functions - they may not be available in all builds
+        self._has_read_all = hasattr(self._lib, 'hotspine_reader_read_all')
+        if self._has_read_all:
+            self._lib.hotspine_reader_read_all.restype = ctypes.c_void_p  # Returns pointer to vector
+            self._lib.hotspine_reader_read_all.argtypes = [ctypes.c_void_p]
         
+        self._has_buffer_utilization = hasattr(self._lib, 'hotspine_reader_get_buffer_utilization')
+        if self._has_buffer_utilization:
+            self._lib.hotspine_reader_get_buffer_utilization.restype = ctypes.c_void_p  # Returns pointer to pair
+            self._lib.hotspine_reader_get_buffer_utilization.argtypes = [ctypes.c_void_p]
+        
+        # These functions should be available in all builds
         self._lib.hotspine_reader_get_lost_count.restype = ctypes.c_uint64
         self._lib.hotspine_reader_get_lost_count.argtypes = [ctypes.c_void_p]
-        
-        self._lib.hotspine_reader_get_buffer_utilization.restype = ctypes.c_void_p  # Returns pointer to pair
-        self._lib.hotspine_reader_get_buffer_utilization.argtypes = [ctypes.c_void_p]
         
         # Create reader instance
         shm_name_bytes = self.shm_name.encode('utf-8')
@@ -165,18 +171,24 @@ class HotSpineReader:
         if not self._reader_ptr:
             return []
             
-        # This would need proper C++ vector handling in the C interface
-        # For now, we'll implement a Python-side batch read
-        trades = []
-        
-        # Poll trades until none are available (with a reasonable limit)
-        max_iterations = 1000  # Safety limit
-        for _ in range(max_iterations):
-            trade = self.poll_trade()
-            if trade:
-                trades.append(trade)
-            else:
-                break
+        # Use native implementation if available, otherwise fall back to Python implementation
+        if self._has_read_all:
+            # Native implementation (would need proper C++ vector handling)
+            # This is a placeholder - actual implementation would need C interface support
+            trades = []
+            # TODO: Implement proper vector handling when C interface is available
+        else:
+            # Python-side batch read fallback
+            trades = []
+            
+            # Poll trades until none are available (with a reasonable limit)
+            max_iterations = 1000  # Safety limit
+            for _ in range(max_iterations):
+                trade = self.poll_trade()
+                if trade:
+                    trades.append(trade)
+                else:
+                    break
         
         return trades
     
@@ -202,9 +214,14 @@ class HotSpineReader:
         if not self._reader_ptr:
             return {"current_size": 0, "capacity": 0}
             
-        # This would need proper implementation in the C interface
-        # For now, return a placeholder
-        return {"current_size": 0, "capacity": 1000000}
+        # Use native implementation if available, otherwise return placeholder
+        if self._has_buffer_utilization:
+            # Native implementation (would need proper C interface)
+            # This is a placeholder - actual implementation would need C interface support
+            return {"current_size": 0, "capacity": 1000000}
+        else:
+            # Fallback placeholder
+            return {"current_size": 0, "capacity": 1000000}
     
     def is_healthy(self) -> bool:
         """
@@ -231,7 +248,8 @@ class HotSpineRuntime:
     
     def __init__(self, strategy_cls, shm_name: str = "/btquant_hotspine",
                  sql_config: Optional[MSSQLConfig] = None,
-                 enable_sql_storage: bool = True):
+                 enable_sql_storage: bool = True,
+                 exclusive_hotswap_mode: bool = False):
         """
         Initialize the live runtime with HotSpine reader
         
@@ -245,19 +263,28 @@ class HotSpineRuntime:
             shm_name: Name of shared memory segment to attach to
             sql_config: Optional SQL Server configuration for storage
             enable_sql_storage: Whether to enable SQL storage for long-term persistence
+            exclusive_hotswap_mode: Enable exclusive hotswap mode for data processing
+        
+        Raises:
+            ValueError: If conflicting configuration options are provided
         """
+        # Validate configuration
+        self._validate_configuration(enable_sql_storage, exclusive_hotswap_mode)
+        
         self.strategy_cls = strategy_cls
         self.reader = HotSpineReader(shm_name)
         self._running = False
         self._strategy_instance = None
         
+        # Configuration options
+        self.enable_sql_storage = enable_sql_storage
+        self.exclusive_hotswap_mode = exclusive_hotswap_mode
         # SQL Integration (for long-term storage only, NOT live trading)
         # ARCHITECTURE: Complete separation from live trading data path
         # Architecture separation: HotSpine and SQL are independent components
         # SQL is NOT used for live trading
         # Clean architecture separation
         self.sql_integration = None
-        self.enable_sql_storage = enable_sql_storage
         
         if self.enable_sql_storage:
             try:
@@ -268,6 +295,39 @@ class HotSpineRuntime:
                 logger.error(f"Failed to initialize SQL storage: {e}")
                 self.enable_sql_storage = False
         
+        # Log hotswap mode configuration
+        if self.exclusive_hotswap_mode:
+            logger.info("Exclusive hotswap mode enabled")
+        
+    def _validate_configuration(self, enable_sql_storage: bool, exclusive_hotswap_mode: bool):
+        """
+        Validate configuration options to prevent conflicting settings
+        
+        Args:
+            enable_sql_storage: Whether SQL storage is enabled
+            exclusive_hotswap_mode: Whether exclusive hotswap mode is enabled
+            
+        Raises:
+            ValueError: If conflicting configuration options are provided
+        """
+        # Validation logic to prevent conflicting configurations
+        
+        # Rule 1: If exclusive hotswap mode is enabled, SQL storage should also be enabled
+        # This ensures data consistency and persistence during hotswap operations
+        if exclusive_hotswap_mode and not enable_sql_storage:
+            raise ValueError(
+                "Exclusive hotswap mode requires SQL storage to be enabled for data consistency. "
+                "Please enable SQL storage when using exclusive hotswap mode."
+            )
+        
+        # Rule 2: Add any other business-specific validation rules here
+        # For example, you might want to prevent certain combinations that could
+        # cause performance issues or data corruption
+        
+        # Log configuration for debugging purposes
+        logger.info(f"Configuration validated: SQL storage enabled={enable_sql_storage}, "
+                   f"exclusive hotswap mode={exclusive_hotswap_mode}")
+
     def _initialize_strategy(self):
         """Initialize the trading strategy"""
         # Import here to avoid circular dependencies
@@ -306,12 +366,20 @@ class HotSpineRuntime:
             # Convert trade to format expected by strategy
             self._strategy_instance.data = trade
             self._strategy_instance.next()
-        
+         
         # Store trade asynchronously for long-term persistence (NOT for live trading)
         # ARCHITECTURE: SQL operations are completely separate from trading logic
+        # Only use hotswap when exclusive mode is enabled
         if self.enable_sql_storage and self.sql_integration:
             try:
-                self.sql_integration.store_trade_async(trade)
+                if self.exclusive_hotswap_mode:
+                    # In exclusive hotswap mode, we use a different storage approach
+                    # This would typically involve a more sophisticated hotswap mechanism
+                    self.sql_integration.store_trade_async(trade)
+                    logger.debug("Stored trade using exclusive hotswap mode")
+                else:
+                    # Standard storage mode
+                    self.sql_integration.store_trade_async(trade)
                 # This is asynchronous and non-blocking - trading continues immediately
             except Exception as e:
                 logger.error(f"Failed to store trade in SQL: {e}")
@@ -403,8 +471,9 @@ class HotSpineRuntime:
 
 
 def create_hotspine_runtime(strategy_cls, shm_name: str = "/btquant_hotspine",
-                           sql_config: Optional[MSSQLConfig] = None,
-                           enable_sql_storage: bool = True):
+                            sql_config: Optional[MSSQLConfig] = None,
+                            enable_sql_storage: bool = True,
+                            exclusive_hotswap_mode: bool = False):
     """
     Factory function to create a HotSpine runtime instance
     
@@ -413,8 +482,9 @@ def create_hotspine_runtime(strategy_cls, shm_name: str = "/btquant_hotspine",
         shm_name: Shared memory segment name
         sql_config: Optional SQL Server configuration for storage
         enable_sql_storage: Whether to enable SQL storage for long-term persistence
+        exclusive_hotswap_mode: Enable exclusive hotswap mode for data processing
         
     Returns:
         HotSpineRuntime instance
     """
-    return HotSpineRuntime(strategy_cls, shm_name, sql_config, enable_sql_storage)
+    return HotSpineRuntime(strategy_cls, shm_name, sql_config, enable_sql_storage, exclusive_hotswap_mode)

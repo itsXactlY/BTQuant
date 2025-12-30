@@ -11,8 +11,11 @@ import time
 import signal
 import threading
 
+# Change to project root directory so relative paths work correctly
+os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 # Add the dependencies to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dependencies'))
+sys.path.insert(0, 'dependencies')
+sys.path.insert(0, 'dependencies/backtrader')
 
 from backtrader.hotspine.reader import HotSpineReader, HotTrade, HotSpineRuntime
 

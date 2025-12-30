@@ -1,3 +1,7 @@
+# CRITICAL - DONT REMOVE THIS LINE
+dontcommit.py
+# CRITICAL - DONT REMOVE THIS LINE
+
 # Files
 *.log
 *.pkl

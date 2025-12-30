@@ -1,0 +1,252 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily at 2 AM UTC to catch regressions
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Exclude some combinations to reduce matrix size
+          - os: windows-latest
+            python-version: '3.8'
+          - os: macos-latest
+            python-version: '3.8'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y unixodbc-dev freetds-dev
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install unixodbc freetds
+
+    - name: Install system dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install unixodbc
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: Install project in development mode
+      run: |
+        pip install -e .
+
+    - name: Run linting
+      run: |
+        flake8 backtrader tests --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 backtrader tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run type checking
+      run: |
+        mypy backtrader --ignore-missing-imports --no-strict-optional
+
+    - name: Run unit tests
+      run: |
+        pytest tests/unit/ -v --cov=backtrader --cov-report=xml --cov-report=html --cov-fail-under=85
+
+    - name: Run integration tests
+      run: |
+        pytest tests/integration/ -v --cov=backtrader --cov-append --cov-report=xml
+
+    - name: Run system tests
+      run: |
+        pytest tests/system/ -v --cov=backtrader --cov-append --cov-report=xml
+
+    - name: Run performance tests
+      run: |
+        pytest tests/performance/ -v --durations=10
+
+    - name: Run security tests
+      run: |
+        pytest tests/security/ -v
+
+    - name: Run regression tests
+      run: |
+        pytest tests/regression/ -v
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Generate test report
+      if: always()
+      run: |
+        pytest tests/ --tb=short --junitxml=test-results.xml
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
+        path: test-results.xml
+
+    - name: Upload coverage HTML report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: coverage-report-${{ matrix.os }}-${{ matrix.python-version }}
+        path: htmlcov/
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Bandit security scanner
+      run: |
+        pip install bandit
+        bandit -r backtrader -f json -o bandit-report.json || true
+
+    - name: Run Safety vulnerability scanner
+      run: |
+        pip install safety
+        safety check --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  performance-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Run performance benchmarks
+      run: |
+        pytest tests/performance/ -v --benchmark-only --benchmark-json=benchmark-results.json
+
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        name: Python Benchmark
+        tool: 'pytest'
+        output-file-path: benchmark-results.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+
+  deploy:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install build dependencies
+      run: |
+        pip install build twine
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Publish to Test PyPI
+      if: github.event_name == 'push' && contains(github.ref, 'main')
+      run: |
+        twine upload --repository testpypi dist/* -u __token__ -p ${{ secrets.TEST_PYPI_API_TOKEN }}
+
+    - name: Publish to PyPI
+      if: github.event_name == 'release' && github.event.action == 'published'
+      run: |
+        twine upload dist/* -u __token__ -p ${{ secrets.PYPI_API_TOKEN }}
+
+  nightly-regression:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 2 * * *'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Run full regression test suite
+      run: |
+        pytest tests/regression/ -v --tb=long --durations=0
+
+    - name: Run integration tests with real data (limited)
+      run: |
+        # Run a subset of integration tests with real APIs (rate limited)
+        pytest tests/integration/test_real_data_feeds.py::test_yahoo_feed_real_data -v --tb=short || true
+        pytest tests/integration/test_real_data_feeds.py::test_ccxt_feed_real_data -v --tb=short || true
+
+    - name: Create regression report
+      if: always()
+      run: |
+        echo "## Regression Test Results" > regression-report.md
+        echo "- Date: $(date)" >> regression-report.md
+        echo "- Commit: ${{ github.sha }}" >> regression-report.md
+        echo "- Status: $?" >> regression-report.md
+
+    - name: Upload regression report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: nightly-regression-report
+        path: regression-report.md

@@ -311,9 +311,10 @@ class CustomDataFeed(bt.feeds.DataBase):
         return True
 ```
 
-### Polars Integration (PANDAS Dataframe is fully deprecated. Very few dependencies will fully rewritten sooner than later)
+### Polars Integration
 
 ```python
+# PANDAS Dataframe is fully deprecated. Very few dependencies will fully rewritten sooner than later
 import polars as pl
 from backtrader.feeds.polarfeed import PolarsData
 

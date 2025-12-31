@@ -2,79 +2,60 @@
 dontcommit.py
 # CRITICAL - DONT REMOVE THIS LINE
 
-# Files
-*.log
-*.pkl
-*.pt
+# ===== Caches & bytecode =====
+**/__pycache__/
+*.py[cod]
+**/.btq_cache/
+.coverage
+
+# ===== Build & output =====
+build/
+out/
+dist/
+bt/
+candles/
+
+# ===== Data / artifacts =====
+**/neural_data/
+**/*.parquet
+**/*.feather
+**/*.h5
 *.db
 *.csv
-*.json
-*.html
+*.pkl
+*.pt
 *.joblib
-*.cpython-313.pyc
+
+# ===== Logs =====
+**/*.log
+**/*.tmp
+**/*.cache
 *.session
 .*.session-journal
 
-# Folders
-candles/
-bt/
-out/
-build
+# ===== External deps =====
+dependencies/
+third_party/
+extern/
+node_modules/
+venv/
+.venv/
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== Experiments / scratch =====
 trashpad/
-.btq_cache/
-dashboard/.btq_cache/
-neural_trading_system/.btq_cache/
-neural_trading_system/wandb/
-wandb/
-QuantStats/
-dependencies/build/
-dependencies/MsSQL/build/
-dependencies/JackRabbit/
-dependencies/backtrader.egg-info/
-dependencies/quantstats_lumi_btquant/quantstats_lumi.egg-info/
-dependencies/ccapi/include/boost/
-dependencies/ccapi/include/rapidjson/
+**/scratch/
+**/experiments/
+test/strategy_*.py
 
-
-
-# Logs
-TradeLog.log
-market_scanner.log
-debugme.log1
-screenlog.0
-
-# Misc
+# ===== Misc =====
 TODO.rst
+TODO ::.txt
 .continue
 memory_debug.py
 memory_profile_summary.png
-Example_Backtest.py
-SineWeightZeroLagQQEVolMesaAdaptive.py
-test/aaa.py
-test/IMPLEMENTATION_GUIDE.md
-test/strategy_1_neural_cycle.py
-test/strategy_2_entropy_hunter.py
-test/strategy_3_volatility_scalper.py
-test/strategy_4_momentum_fusion.py
-test/strategy_5_hurst_adaptive.py
-test/unified_tune.py
-test/unified.py
-dependencies/MsSQL/fast_mssql.egg-info/PKG-INFO
-neural_trading_system/neural_data/BTC_1h_2017-01-01_2025-01-01_neural_data.parquet
-neural_trading_system/ui/__init__.py
-neural_trading_system/ui/dashboard.py
-tests/test_dashboard.py
-neural_trading_system/neural_data/BTC_1h_2017-01-01_2024-01-01_neural_data.parquet
-neural_trading_system/backtest/exit_aware_neural_strategy.py
-neural_trading_system/backtest/indicator_deck.py
-neural_trading_system/backtest/neural_backtest_suite.py
-neural_trading_system/neural_data/BTC_15m_2023-01-01_2024-01-01_neural_data.parquet
-neural_trading_system/neural_data/BTC_15m_2017-01-01_2024-01-01_neural_data.parquet
-neural_trading_system/neural_data/BTC_15m_2024-01-01_2024-04-01_neural_data.parquet
-neural_trading_system/neural_data/BTC_15m_2025-01-01_2026-01-01_neural_data.parquet
-neural_trading_system/plot/BTC_15m_2023-01-01_2024-01-01_neural_data.parquet
-neural_trading_system/neural_data/BTC_1h_2023-01-01_2024-01-01_neural_data.parquet
-__pycache__
-dependencies/ccapi/example/src/arbitrage_scanner/nlohmann/
-TODO ::.txt
-.coverage
+Example_*.py
+**/*html

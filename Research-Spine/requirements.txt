@@ -1,0 +1,19 @@
+# Core dependencies
+backtrader==1.9.78.123
+numpy==2.4.0
+pandas==2.3.3
+scipy==1.16.3
+
+# Development dependencies
+python-dateutil==2.9.0.post0
+pytz==2025.2
+tzdata==2025.3
+six==1.17.0
+
+# Testing dependencies
+pytest==8.3.2
+pytest-cov==5.0.0
+
+# Documentation
+Sphinx==7.3.7
+sphinx-rtd-theme==2.0.0

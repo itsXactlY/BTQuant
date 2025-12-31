@@ -1,0 +1,807 @@
+"""
+Documentation System Module
+
+Handles automatic documentation of strategies, backtesting results,
+and evolutionary processes. This comprehensive system includes:
+1. Automated strategy documentation generation
+2. Evolutionary lineage tracking
+3. Performance report generation
+4. Strategy visualization tools
+5. Living archive system
+6. Integration with all other components
+"""
+
+import logging
+import json
+import os
+import hashlib
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+from pathlib import Path
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from typing import Tuple
+
+class DocumentationSystem:
+    """Main class for documenting system processes and results"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger('DocumentationSystem')
+        self.logger.info("DocumentationSystem initialized")
+        
+        # Create documentation directories if they don't exist
+        Path('documentation/reports').mkdir(parents=True, exist_ok=True)
+        Path('documentation/logs').mkdir(parents=True, exist_ok=True)
+        Path('documentation/lineage').mkdir(parents=True, exist_ok=True)
+        Path('documentation/visualizations').mkdir(parents=True, exist_ok=True)
+        Path('documentation/archive').mkdir(parents=True, exist_ok=True)
+        
+        # Initialize lineage tracking database
+        self.lineage_db = self._initialize_lineage_database()
+        
+        # Initialize living archive
+        self.archive_index = self._initialize_archive_index()
+    
+    def _initialize_lineage_database(self) -> Dict[str, Any]:
+        """Initialize the evolutionary lineage tracking database"""
+        lineage_db_path = 'documentation/lineage/lineage_database.json'
+        
+        if Path(lineage_db_path).exists():
+            try:
+                with open(lineage_db_path, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.error(f"Error loading lineage database: {e}")
+                return {
+                    'generations': [],
+                    'strategy_genealogy': {},
+                    'evolutionary_history': []
+                }
+        else:
+            return {
+                'generations': [],
+                'strategy_genealogy': {},
+                'evolutionary_history': []
+            }
+    
+    def _initialize_archive_index(self) -> Dict[str, Any]:
+        """Initialize the living archive index"""
+        archive_index_path = 'documentation/archive/archive_index.json'
+        
+        if Path(archive_index_path).exists():
+            try:
+                with open(archive_index_path, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                self.logger.error(f"Error loading archive index: {e}")
+                return {
+                    'strategies': [],
+                    'reports': [],
+                    'visualizations': [],
+                    'metadata': {
+                        'created_at': datetime.now().isoformat(),
+                        'last_updated': datetime.now().isoformat()
+                    }
+                }
+        else:
+            return {
+                'strategies': [],
+                'reports': [],
+                'visualizations': [],
+                'metadata': {
+                    'created_at': datetime.now().isoformat(),
+                    'last_updated': datetime.now().isoformat()
+                }
+            }
+    
+    def _save_lineage_database(self):
+        """Save the lineage database to file"""
+        lineage_db_path = 'documentation/lineage/lineage_database.json'
+        try:
+            with open(lineage_db_path, 'w') as f:
+                json.dump(self.lineage_db, f, indent=2)
+        except IOError as e:
+            self.logger.error(f"Error saving lineage database: {e}")
+    
+    def _save_archive_index(self):
+        """Save the archive index to file"""
+        archive_index_path = 'documentation/archive/archive_index.json'
+        try:
+            with open(archive_index_path, 'w') as f:
+                json.dump(self.archive_index, f, indent=2)
+        except IOError as e:
+            self.logger.error(f"Error saving archive index: {e}")
+    
+    def _generate_strategy_hash(self, strategy: Dict[str, Any]) -> str:
+        """Generate a unique hash for a strategy"""
+        strategy_str = json.dumps(strategy, sort_keys=True)
+        return hashlib.md5(strategy_str.encode()).hexdigest()
+    
+    def generate_comprehensive_report(self, strategy: Dict[str, Any], 
+                                    backtest_results: Dict[str, Any], 
+                                    selection_results: Dict[str, Any],
+                                    evolutionary_context: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Generate a comprehensive report for a strategy with all documentation features
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            selection_results: Evolutionary selection results
+            evolutionary_context: Optional evolutionary context information
+            
+        Returns:
+            Path to the generated report file
+        """
+        self.logger.info(f"Generating comprehensive report for strategy: {strategy.get('template', 'unknown')}")
+        
+        # Create comprehensive report data
+        report_data = {
+            'timestamp': datetime.now().isoformat(),
+            'strategy': strategy,
+            'backtest_results': backtest_results,
+            'selection_results': selection_results,
+            'evolutionary_context': evolutionary_context or {},
+            'metadata': {
+                'generated_by': 'DocumentationSystem',
+                'version': '2.0',
+                'report_type': 'comprehensive'
+            }
+        }
+        
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_id = strategy.get('id', 'unknown')
+        report_filename = f"documentation/reports/comprehensive_report_{strategy_id}_{timestamp}.json"
+        
+        # Save report as JSON
+        with open(report_filename, 'w') as f:
+            json.dump(report_data, f, indent=2)
+        
+        # Add to living archive
+        self._add_to_archive('report', report_filename, report_data)
+        
+        self.logger.info(f"Comprehensive report generated: {report_filename}")
+        return report_filename
+    
+    def generate_performance_report(self, strategy: Dict[str, Any], 
+                                   backtest_results: Dict[str, Any]) -> str:
+        """
+        Generate a focused performance report for a strategy
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            
+        Returns:
+            Path to the generated performance report file
+        """
+        self.logger.info(f"Generating performance report for strategy: {strategy.get('template', 'unknown')}")
+        
+        # Extract key performance metrics
+        performance_metrics = backtest_results.get('performance_metrics', {})
+        risk_profile = backtest_results.get('risk_profile', {})
+        
+        # Create performance report data
+        report_data = {
+            'timestamp': datetime.now().isoformat(),
+            'strategy_id': strategy.get('id', 'unknown'),
+            'strategy_template': strategy.get('template', 'unknown'),
+            'performance_metrics': performance_metrics,
+            'risk_profile': risk_profile,
+            'key_findings': self._analyze_performance(performance_metrics, risk_profile),
+            'metadata': {
+                'generated_by': 'DocumentationSystem',
+                'version': '2.0',
+                'report_type': 'performance'
+            }
+        }
+        
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_id = strategy.get('id', 'unknown')
+        report_filename = f"documentation/reports/performance_report_{strategy_id}_{timestamp}.json"
+        
+        # Save report as JSON
+        with open(report_filename, 'w') as f:
+            json.dump(report_data, f, indent=2)
+        
+        # Add to living archive
+        self._add_to_archive('report', report_filename, report_data)
+        
+        self.logger.info(f"Performance report generated: {report_filename}")
+        return report_filename
+    
+    def _analyze_performance(self, performance_metrics: Dict[str, Any], 
+                           risk_profile: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze performance metrics and generate key findings"""
+        findings = {}
+        
+        # Sharpe ratio analysis
+        sharpe_ratio = performance_metrics.get('sharpe_ratio', 0)
+        if sharpe_ratio > 2.0:
+            findings['sharpe_ratio'] = 'Excellent risk-adjusted returns'
+        elif sharpe_ratio > 1.0:
+            findings['sharpe_ratio'] = 'Good risk-adjusted returns'
+        elif sharpe_ratio > 0.5:
+            findings['sharpe_ratio'] = 'Moderate risk-adjusted returns'
+        else:
+            findings['sharpe_ratio'] = 'Poor risk-adjusted returns'
+        
+        # Drawdown analysis
+        max_drawdown = performance_metrics.get('max_drawdown', 0)
+        if max_drawdown < 0.1:
+            findings['max_drawdown'] = 'Low drawdown risk'
+        elif max_drawdown < 0.2:
+            findings['max_drawdown'] = 'Moderate drawdown risk'
+        else:
+            findings['max_drawdown'] = 'High drawdown risk'
+        
+        # Win rate analysis
+        win_rate = performance_metrics.get('win_rate', 0)
+        if win_rate > 0.6:
+            findings['win_rate'] = 'High win rate'
+        elif win_rate > 0.5:
+            findings['win_rate'] = 'Moderate win rate'
+        else:
+            findings['win_rate'] = 'Low win rate'
+        
+        return findings
+    
+    def track_evolutionary_lineage(self, generation_data: Dict[str, Any], 
+                                   parent_strategies: List[Dict[str, Any]],
+                                   child_strategies: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Track evolutionary lineage and relationships between strategies
+        
+        Args:
+            generation_data: Data about the current generation
+            parent_strategies: List of parent strategies
+            child_strategies: List of child strategies
+            
+        Returns:
+            Dictionary with lineage tracking information
+        """
+        self.logger.info(f"Tracking evolutionary lineage for generation {generation_data.get('generation_number', 'unknown')}")
+        
+        # Create generation record
+        generation_record = {
+            'generation_number': generation_data.get('generation_number', len(self.lineage_db['generations']) + 1),
+            'timestamp': datetime.now().isoformat(),
+            'parent_strategies': [],
+            'child_strategies': [],
+            'evolutionary_metrics': generation_data.get('metrics', {})
+        }
+        
+        # Process parent strategies
+        for parent in parent_strategies:
+            parent_hash = self._generate_strategy_hash(parent)
+            parent_record = {
+                'strategy_id': parent.get('id', 'unknown'),
+                'strategy_hash': parent_hash,
+                'template': parent.get('template', 'unknown'),
+                'generation': generation_data.get('generation_number', 1),
+                'metadata': {
+                    'role': 'parent',
+                    'timestamp': datetime.now().isoformat()
+                }
+            }
+            
+            generation_record['parent_strategies'].append(parent_record)
+            
+            # Update genealogy
+            if parent_hash not in self.lineage_db['strategy_genealogy']:
+                self.lineage_db['strategy_genealogy'][parent_hash] = {
+                    'strategy_id': parent.get('id', 'unknown'),
+                    'template': parent.get('template', 'unknown'),
+                    'first_seen': datetime.now().isoformat(),
+                    'children': []
+                }
+        
+        # Process child strategies
+        for child in child_strategies:
+            child_hash = self._generate_strategy_hash(child)
+            child_record = {
+                'strategy_id': child.get('id', 'unknown'),
+                'strategy_hash': child_hash,
+                'template': child.get('template', 'unknown'),
+                'generation': generation_data.get('generation_number', 1) + 1,
+                'parents': [],
+                'metadata': {
+                    'role': 'child',
+                    'timestamp': datetime.now().isoformat()
+                }
+            }
+            
+            generation_record['child_strategies'].append(child_record)
+            
+            # Update genealogy - find parents and establish relationships
+            if child_hash not in self.lineage_db['strategy_genealogy']:
+                self.lineage_db['strategy_genealogy'][child_hash] = {
+                    'strategy_id': child.get('id', 'unknown'),
+                    'template': child.get('template', 'unknown'),
+                    'first_seen': datetime.now().isoformat(),
+                    'parents': []
+                }
+            
+            # Find potential parents (this would be more sophisticated in a real implementation)
+            for parent in parent_strategies:
+                parent_hash = self._generate_strategy_hash(parent)
+                if parent_hash in self.lineage_db['strategy_genealogy']:
+                    self.lineage_db['strategy_genealogy'][parent_hash]['children'].append(child_hash)
+                    self.lineage_db['strategy_genealogy'][child_hash]['parents'].append(parent_hash)
+                    child_record['parents'].append(parent_hash)
+        
+        # Add generation to database
+        self.lineage_db['generations'].append(generation_record)
+        
+        # Add to evolutionary history
+        self.lineage_db['evolutionary_history'].append({
+            'event_type': 'generation_completed',
+            'generation_number': generation_data.get('generation_number', 1),
+            'timestamp': datetime.now().isoformat(),
+            'parent_count': len(parent_strategies),
+            'child_count': len(child_strategies),
+            'metrics': generation_data.get('metrics', {})
+        })
+        
+        # Save lineage database
+        self._save_lineage_database()
+        
+        self.logger.info(f"Evolutionary lineage tracked for {len(child_strategies)} child strategies")
+        
+        return {
+            'generation_record': generation_record,
+            'lineage_database_updated': True,
+            'parent_count': len(parent_strategies),
+            'child_count': len(child_strategies)
+        }
+    
+    def generate_evolutionary_report(self, lineage_data: Dict[str, Any]) -> str:
+        """
+        Generate a report on the evolutionary process and lineage
+        
+        Args:
+            lineage_data: Lineage data to include in the report
+            
+        Returns:
+            Path to the generated evolutionary report file
+        """
+        self.logger.info("Generating evolutionary lineage report")
+        
+        # Create evolutionary report data
+        report_data = {
+            'timestamp': datetime.now().isoformat(),
+            'lineage_data': lineage_data,
+            'generation_count': len(self.lineage_db['generations']),
+            'strategy_count': len(self.lineage_db['strategy_genealogy']),
+            'evolutionary_history': self.lineage_db['evolutionary_history'],
+            'key_metrics': self._calculate_evolutionary_metrics(),
+            'metadata': {
+                'generated_by': 'DocumentationSystem',
+                'version': '2.0',
+                'report_type': 'evolutionary_lineage'
+            }
+        }
+        
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_filename = f"documentation/reports/evolutionary_report_{timestamp}.json"
+        
+        # Save report as JSON
+        with open(report_filename, 'w') as f:
+            json.dump(report_data, f, indent=2)
+        
+        # Add to living archive
+        self._add_to_archive('report', report_filename, report_data)
+        
+        self.logger.info(f"Evolutionary report generated: {report_filename}")
+        return report_filename
+    
+    def _calculate_evolutionary_metrics(self) -> Dict[str, Any]:
+        """Calculate key metrics about the evolutionary process"""
+        if not self.lineage_db['generations']:
+            return {
+                'total_generations': 0,
+                'total_strategies': 0,
+                'avg_strategies_per_generation': 0,
+                'evolutionary_diversity': 0
+            }
+        
+        total_strategies = sum(len(gen['child_strategies']) for gen in self.lineage_db['generations'])
+        avg_strategies = total_strategies / len(self.lineage_db['generations'])
+        
+        # Calculate diversity (simple metric based on unique templates)
+        unique_templates = set()
+        for gen in self.lineage_db['generations']:
+            for child in gen['child_strategies']:
+                unique_templates.add(child['template'])
+        
+        return {
+            'total_generations': len(self.lineage_db['generations']),
+            'total_strategies': total_strategies,
+            'avg_strategies_per_generation': avg_strategies,
+            'unique_templates': len(unique_templates),
+            'evolutionary_diversity': len(unique_templates) / max(1, len(self.lineage_db['generations']))
+        }
+    
+    def create_strategy_visualization(self, strategy: Dict[str, Any], 
+                                     backtest_results: Dict[str, Any],
+                                     visualization_type: str = 'performance') -> str:
+        """
+        Create visualizations for strategy performance and characteristics
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            visualization_type: Type of visualization to create
+            
+        Returns:
+            Path to the generated visualization file
+        """
+        self.logger.info(f"Creating {visualization_type} visualization for strategy: {strategy.get('template', 'unknown')}")
+        
+        # Generate visualization filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_id = strategy.get('id', 'unknown')
+        visualization_filename = f"documentation/visualizations/{visualization_type}_viz_{strategy_id}_{timestamp}.png"
+        
+        try:
+            if visualization_type == 'performance':
+                self._create_performance_visualization(backtest_results, visualization_filename)
+            elif visualization_type == 'risk_return':
+                self._create_risk_return_visualization(backtest_results, visualization_filename)
+            elif visualization_type == 'drawdown':
+                self._create_drawdown_visualization(backtest_results, visualization_filename)
+            else:
+                self._create_performance_visualization(backtest_results, visualization_filename)
+            
+            # Add to living archive
+            self._add_to_archive('visualization', visualization_filename, {
+                'strategy_id': strategy_id,
+                'visualization_type': visualization_type,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self.logger.info(f"Visualization created: {visualization_filename}")
+            return visualization_filename
+            
+        except Exception as e:
+            self.logger.error(f"Error creating visualization: {e}")
+            return ""
+    
+    def _create_performance_visualization(self, backtest_results: Dict[str, Any], 
+                                         filename: str):
+        """Create a performance metrics visualization"""
+        metrics = backtest_results.get('performance_metrics', {})
+        
+        # Create data for visualization
+        categories = ['Sharpe Ratio', 'Win Rate', 'Total Return', 'Sortino Ratio']
+        values = [
+            metrics.get('sharpe_ratio', 0),
+            metrics.get('win_rate', 0),
+            metrics.get('total_return', 0),
+            metrics.get('sortino_ratio', 0)
+        ]
+        
+        plt.figure(figsize=(10, 6))
+        bars = plt.bar(categories, values, color=['blue', 'green', 'orange', 'red'])
+        
+        # Add value labels
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{height:.3f}',
+                    ha='center', va='bottom')
+        
+        plt.title('Strategy Performance Metrics')
+        plt.ylabel('Values')
+        plt.ylim(0, max(values) * 1.2 if max(values) > 0 else 1.2)
+        plt.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        
+        plt.savefig(filename)
+        plt.close()
+    
+    def _create_risk_return_visualization(self, backtest_results: Dict[str, Any], 
+                                         filename: str):
+        """Create a risk-return scatter plot"""
+        metrics = backtest_results.get('performance_metrics', {})
+        risk_profile = backtest_results.get('risk_profile', {})
+        
+        # Simulate multiple data points for visualization
+        np.random.seed(42)
+        returns = np.random.normal(metrics.get('total_return', 0.1), 0.02, 50)
+        risks = np.random.normal(risk_profile.get('volatility', 0.05), 0.01, 50)
+        
+        plt.figure(figsize=(10, 6))
+        plt.scatter(risks, returns, alpha=0.6, color='blue', label='Simulated Scenarios')
+        
+        # Highlight the actual strategy
+        actual_return = metrics.get('total_return', 0.1)
+        actual_risk = risk_profile.get('volatility', 0.05)
+        plt.scatter([actual_risk], [actual_return], color='red', s=100, 
+                   label='Actual Strategy', marker='*')
+        
+        plt.title('Risk-Return Profile')
+        plt.xlabel('Risk (Volatility)')
+        plt.ylabel('Return')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        plt.savefig(filename)
+        plt.close()
+    
+    def _create_drawdown_visualization(self, backtest_results: Dict[str, Any], 
+                                      filename: str):
+        """Create a drawdown visualization"""
+        metrics = backtest_results.get('performance_metrics', {})
+        
+        # Simulate drawdown curve
+        np.random.seed(42)
+        drawdowns = np.cumsum(np.random.normal(0, 0.01, 100))
+        
+        plt.figure(figsize=(12, 6))
+        plt.plot(drawdowns, color='red', linewidth=2)
+        plt.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+        
+        max_dd = metrics.get('max_drawdown', 0.15)
+        plt.axhline(y=-max_dd, color='blue', linestyle=':', 
+                   label=f'Max Drawdown: {max_dd:.2%}')
+        
+        plt.title('Strategy Drawdown Profile')
+        plt.xlabel('Time')
+        plt.ylabel('Drawdown')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        plt.savefig(filename)
+        plt.close()
+    
+    def _add_to_archive(self, item_type: str, file_path: str, metadata: Dict[str, Any]):
+        """Add an item to the living archive system"""
+        relative_path = file_path.replace('documentation/', '')
+        
+        archive_entry = {
+            'file_path': relative_path,
+            'file_type': item_type,
+            'metadata': metadata,
+            'timestamp': datetime.now().isoformat(),
+            'hash': self._generate_strategy_hash(metadata)
+        }
+        
+        if item_type == 'strategy':
+            self.archive_index['strategies'].append(archive_entry)
+        elif item_type == 'report':
+            self.archive_index['reports'].append(archive_entry)
+        elif item_type == 'visualization':
+            self.archive_index['visualizations'].append(archive_entry)
+        
+        # Update metadata
+        self.archive_index['metadata']['last_updated'] = datetime.now().isoformat()
+        
+        # Save archive index
+        self._save_archive_index()
+        
+        self.logger.debug(f"Added {item_type} to living archive: {relative_path}")
+    
+    def archive_strategy(self, strategy: Dict[str, Any], 
+                        backtest_results: Dict[str, Any],
+                        selection_results: Dict[str, Any]) -> str:
+        """
+        Archive a strategy and all its associated data in the living archive system
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            selection_results: Selection results for the strategy
+            
+        Returns:
+            Path to the archived strategy file
+        """
+        self.logger.info(f"Archiving strategy: {strategy.get('template', 'unknown')}")
+        
+        # Create comprehensive archive entry
+        archive_data = {
+            'strategy': strategy,
+            'backtest_results': backtest_results,
+            'selection_results': selection_results,
+            'timestamp': datetime.now().isoformat(),
+            'metadata': {
+                'archived_by': 'DocumentationSystem',
+                'version': '2.0',
+                'archive_type': 'complete_strategy'
+            }
+        }
+        
+        # Generate archive filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_id = strategy.get('id', 'unknown')
+        archive_filename = f"documentation/archive/strategy_archive_{strategy_id}_{timestamp}.json"
+        
+        # Save archive file
+        with open(archive_filename, 'w') as f:
+            json.dump(archive_data, f, indent=2)
+        
+        # Add to living archive index
+        self._add_to_archive('strategy', archive_filename, {
+            'strategy_id': strategy_id,
+            'template': strategy.get('template', 'unknown'),
+            'performance_score': backtest_results.get('performance_metrics', {}).get('sharpe_ratio', 0),
+            'selection_rank': selection_results.get('selection_metadata', {}).get('rank', 0)
+        })
+        
+        self.logger.info(f"Strategy archived: {archive_filename}")
+        return archive_filename
+    
+    def generate_system_integration_report(self, system_state: Dict[str, Any]) -> str:
+        """
+        Generate a comprehensive system integration report
+        
+        Args:
+            system_state: Current state of the entire system
+            
+        Returns:
+            Path to the generated integration report file
+        """
+        self.logger.info("Generating system integration report")
+        
+        # Create integration report data
+        report_data = {
+            'timestamp': datetime.now().isoformat(),
+            'system_state': system_state,
+            'documentation_stats': {
+                'total_reports': len(self.archive_index['reports']),
+                'total_strategies_archived': len(self.archive_index['strategies']),
+                'total_visualizations': len(self.archive_index['visualizations']),
+                'lineage_generations': len(self.lineage_db['generations']),
+                'lineage_strategies': len(self.lineage_db['strategy_genealogy'])
+            },
+            'integration_metrics': self._calculate_integration_metrics(system_state),
+            'metadata': {
+                'generated_by': 'DocumentationSystem',
+                'version': '2.0',
+                'report_type': 'system_integration'
+            }
+        }
+        
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_filename = f"documentation/reports/integration_report_{timestamp}.json"
+        
+        # Save report as JSON
+        with open(report_filename, 'w') as f:
+            json.dump(report_data, f, indent=2)
+        
+        # Add to living archive
+        self._add_to_archive('report', report_filename, report_data)
+        
+        self.logger.info(f"System integration report generated: {report_filename}")
+        return report_filename
+    
+    def _calculate_integration_metrics(self, system_state: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate metrics about system integration"""
+        return {
+            'component_count': len(system_state.get('components', [])),
+            'strategy_count': system_state.get('strategy_count', 0),
+            'documentation_coverage': min(
+                len(self.archive_index['strategies']) / max(1, system_state.get('strategy_count', 1)),
+                1.0
+            ),
+            'visualization_coverage': len(self.archive_index['visualizations']) / max(1, len(self.archive_index['strategies'])),
+            'lineage_completeness': len(self.lineage_db['generations']) / max(1, system_state.get('generation_count', 1))
+        }
+    
+    def get_lineage_visualization(self, output_filename: str = None) -> str:
+        """
+        Generate a visualization of the evolutionary lineage
+        
+        Args:
+            output_filename: Optional specific filename for the visualization
+            
+        Returns:
+            Path to the generated lineage visualization file
+        """
+        if output_filename is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_filename = f"documentation/visualizations/lineage_visualization_{timestamp}.png"
+        
+        try:
+            # Create a simple lineage visualization
+            generations = len(self.lineage_db['generations'])
+            strategies = len(self.lineage_db['strategy_genealogy'])
+            
+            plt.figure(figsize=(12, 8))
+            
+            # Plot generations
+            gen_numbers = list(range(1, generations + 1))
+            gen_sizes = [len(gen['child_strategies']) for gen in self.lineage_db['generations']]
+            
+            plt.subplot(2, 1, 1)
+            plt.bar(gen_numbers, gen_sizes, color='skyblue')
+            plt.title('Strategies per Generation')
+            plt.xlabel('Generation')
+            plt.ylabel('Number of Strategies')
+            plt.grid(True, alpha=0.3)
+            
+            # Plot cumulative strategies
+            cumulative_strategies = np.cumsum(gen_sizes)
+            plt.subplot(2, 1, 2)
+            plt.plot(gen_numbers, cumulative_strategies, marker='o', color='green')
+            plt.title('Cumulative Strategy Count')
+            plt.xlabel('Generation')
+            plt.ylabel('Total Strategies')
+            plt.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.savefig(output_filename)
+            plt.close()
+            
+            # Add to living archive
+            self._add_to_archive('visualization', output_filename, {
+                'visualization_type': 'lineage',
+                'generations': generations,
+                'strategies': strategies,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+            self.logger.info(f"Lineage visualization created: {output_filename}")
+            return output_filename
+            
+        except Exception as e:
+            self.logger.error(f"Error creating lineage visualization: {e}")
+            return ""
+    
+    def log_process(self, process_name: str, data: Dict[str, Any]) -> str:
+        """
+        Log a system process with associated data
+        
+        Args:
+            process_name: Name of the process being logged
+            data: Data associated with the process
+            
+        Returns:
+            Path to the generated log file
+        """
+        self.logger.info(f"Logging process: {process_name}")
+        
+        # Create log data
+        log_data = {
+            'timestamp': datetime.now().isoformat(),
+            'process_name': process_name,
+            'data': data,
+            'metadata': {
+                'logged_by': 'DocumentationSystem',
+                'version': '2.0'
+            }
+        }
+        
+        # Generate log filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_filename = f"documentation/logs/process_log_{process_name}_{timestamp}.json"
+        
+        # Save log as JSON
+        with open(log_filename, 'w') as f:
+            json.dump(log_data, f, indent=2)
+        
+        self.logger.info(f"Process logged: {log_filename}")
+        return log_filename
+    
+    def generate_report(self, strategy: Dict[str, Any], backtest_results: Dict[str, Any], 
+                       selection_results: Dict[str, Any]) -> str:
+        """
+        Generate a comprehensive report for a strategy (backward compatibility)
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            selection_results: Evolutionary selection results
+            
+        Returns:
+            Path to the generated report file
+        """
+        # Use the new comprehensive report method
+        return self.generate_comprehensive_report(strategy, backtest_results, selection_results)

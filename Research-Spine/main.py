@@ -51,11 +51,18 @@ def core_routine(strategy_generator, backtest_engine, evolutionary_selector,
         logger.info(f"\n🔄 Core Routine Iteration {iteration}")
         
         try:
-            # Step 1: Generate new strategies
-            logger.info("🧬 Step 1/6: Generating new strategies...")
-            # Use generate_strategy_population instead of generate_strategies
-            strategies = strategy_generator.generate_strategy_population('moving_average_crossover')
+            # Step 1: Generate new strategies using enhanced hybrid approach
+            logger.info("🧬 Step 1/6: Generating new strategies using hybrid LLM/template approach...")
+            
+            # Generate diverse population with both LLM and template strategies
+            strategies = strategy_generator.generate_strategy_population(
+                population_size=10,
+                strategy_types=['innovative', 'physics_based', 'template']
+            )
+            
             logger.info(f"Generated {len(strategies)} new strategies")
+            logger.info(f"   • LLM-generated: {sum(1 for s in strategies if s.get('type') == 'llm_generated')}")
+            logger.info(f"   • Template-based: {sum(1 for s in strategies if s.get('type') == 'template_based')}")
             
             # Step 2: Backtest strategies
             logger.info("📊 Step 2/6: Backtesting strategies...")
@@ -226,8 +233,8 @@ def main():
         # Initialize error handler
         error_handler = ErrorHandler()
         
-        # Initialize system components
-        strategy_generator = StrategyGenerator()
+        # Initialize system components with LLM integration
+        strategy_generator = StrategyGenerator(use_llm=True)
         backtest_engine = BacktestEngine()
         evolutionary_selector = EvolutionarySelector()
         documentation_system = DocumentationSystem()
@@ -236,6 +243,14 @@ def main():
         # Initialize financial model integration
         financial_model_integration = FinancialModelIntegration()
         data_source_manager = DataSourceManager()
+        
+        # Log system status
+        system_status = strategy_generator.get_system_status()
+        logger.info(f"🤖 Strategy Generation System Status:")
+        logger.info(f"   • LLM Enabled: {system_status['llm_enabled']}")
+        logger.info(f"   • LLM Operational: {system_status['llm_operational']}")
+        logger.info(f"   • Generation Method: {system_status['generation_method']}")
+        logger.info(f"   • System Health: {system_status['system_health']}")
 
         logger.info("System components initialized successfully")
         logger.info("Basic scaffolding is functional")

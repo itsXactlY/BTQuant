@@ -58,28 +58,27 @@ class LoggingSetup:
             # Set logging level
             numeric_level = getattr(logging, level.upper(), logging.INFO)
             
-            # Configure basic logging
-            logging.basicConfig(
-                level=numeric_level,
-                format=log_format
-            )
+            # Get root logger and clear existing handlers to prevent duplicates
+            root_logger = logging.getLogger()
+            root_logger.setLevel(numeric_level)
+            root_logger.handlers.clear()
             
             # Set up file handler
             file_handler = logging.FileHandler(log_file)
             file_handler.setLevel(numeric_level)
             file_handler.setFormatter(logging.Formatter(log_format))
+            root_logger.addHandler(file_handler)
             
             # Set up console handler if enabled
             if console_logging:
                 console_handler = logging.StreamHandler()
                 console_handler.setLevel(numeric_level)
                 console_handler.setFormatter(logging.Formatter(log_format))
-            
-            # Get root logger and add handlers
-            root_logger = logging.getLogger()
-            root_logger.addHandler(file_handler)
-            if console_logging:
                 root_logger.addHandler(console_handler)
+            
+            # Clear the LoggingSetup logger's handlers to prevent duplicate messages
+            # during the setup process
+            self.logger.handlers.clear()
             
             self.logger.info("Logging framework configured successfully")
             

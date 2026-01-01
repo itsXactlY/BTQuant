@@ -14,6 +14,13 @@ from .validation.out_of_sample_validation import OutOfSampleValidation
 from .optimization.walk_forward_optimization import WalkForwardOptimization
 from .risk_management.risk_management import RiskManagement
 
+# Import our robust JSON serialization utilities
+from utils.json_serialization import (
+    safe_json_dumps,
+    make_json_serializable,
+    JSONSerializationError
+)
+
 class BacktestEngine:
     """Main class for backtesting trading strategies"""
      

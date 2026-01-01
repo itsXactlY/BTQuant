@@ -16,6 +16,14 @@ from pathlib import Path
 import json
 import os
 
+# Import our robust JSON serialization utilities
+from utils.json_serialization import (
+    safe_json_dump,
+    safe_json_load,
+    make_json_serializable,
+    JSONSerializationError
+)
+
 
 class MiMoV2FlashModel:
     """
@@ -107,8 +115,7 @@ class MiMoV2FlashModel:
                 'features': list(data.columns)
             }
             
-            with open(self.config['data_cache_path'], 'w') as f:
-                json.dump(cache_data, f, indent=2)
+            safe_json_dump(cache_data, self.config['data_cache_path'], indent=2)
                 
             self.logger.debug("Market data cached successfully")
         except Exception as e:
@@ -325,8 +332,7 @@ class MiMoV2FlashModel:
                 'config': self.config
             }
             
-            with open(save_path, 'w') as f:
-                json.dump(model_data, f, indent=2)
+            safe_json_dump(model_data, save_path, indent=2)
                 
             self.logger.info(f"Model saved to {save_path}")
             
@@ -344,18 +350,8 @@ class MiMoV2FlashModel:
         Returns:
             JSON-serializable version of the object
         """
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, np.number):
-            return float(obj)
-        elif isinstance(obj, dict):
-            return {key: self._convert_numpy_to_json(value) for key, value in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_numpy_to_json(item) for item in obj]
-        elif isinstance(obj, tuple):
-            return tuple(self._convert_numpy_to_json(item) for item in obj)
-        else:
-            return obj
+        # Use our robust serialization utility
+        return make_json_serializable(obj)
             
     def load_model(self, file_path: Optional[str] = None) -> None:
         """
@@ -367,8 +363,7 @@ class MiMoV2FlashModel:
         load_path = file_path or self.config['model_path']
         
         try:
-            with open(load_path, 'r') as f:
-                model_data = json.load(f)
+            model_data = safe_json_load(load_path)
                 
             self.model_weights = model_data['weights']
             self.performance_metrics = model_data['performance']

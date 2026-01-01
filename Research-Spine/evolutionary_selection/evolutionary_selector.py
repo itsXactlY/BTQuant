@@ -79,6 +79,32 @@ class EvolutionarySelector:
             
             refined_strategies = refinement_result.refined_strategies
             
+            # Ensure refined_results matches the length of refined_strategies
+            # If refinement created more strategies, we need to handle the mismatch
+            if len(refined_strategies) != len(refined_results):
+                self.logger.warning("Evolutionary refinement: strategies count (%d) != results count (%d)" % (len(refined_strategies), len(refined_results)))
+                # Strategy: use available results and create fallback results for new strategies
+                original_results = refined_results.copy()
+                refined_results = []
+                for i, strategy in enumerate(refined_strategies):
+                    if i < len(original_results):
+                        # Use original result if available
+                        refined_results.append(original_results[i])
+                    else:
+                        # For new strategies, create a fallback result based on the last available result
+                        if original_results:
+                            fallback_result = original_results[-1].copy()
+                            # Add a marker to indicate this is a synthetic result
+                            fallback_result['_synthetic_result'] = True
+                            refined_results.append(fallback_result)
+                        else:
+                            # This should not happen, but handle it gracefully
+                            refined_results.append({
+                                'performance_metrics': {},
+                                'risk_profile': {},
+                                '_synthetic_result': True
+                            })
+            
             # Recalculate fitness for refined strategies
             refined_fitness_scores = []
             for i, strategy in enumerate(refined_strategies):
@@ -105,7 +131,7 @@ class EvolutionarySelector:
                 try:
                     idx = refined_strategies.index(strategy)
                     diverse_indices.append(idx)
-                except ValueError:
+                except (ValueError, IndexError):
                     continue
             
             pruned_results = [refined_results[i] for i in diverse_indices]
@@ -139,7 +165,7 @@ class EvolutionarySelector:
                         'generation': 'final'
                     }
                 })
-            except ValueError:
+            except (ValueError, IndexError):
                 # Strategy not found in original list (might be refined)
                 # Use basic metadata
                 selected_strategies.append({
@@ -260,7 +286,7 @@ class EvolutionarySelector:
             try:
                 idx = pareto_strategies.index(strategy)
                 diverse_indices.append(idx)
-            except ValueError:
+            except (ValueError, IndexError):
                 continue
         
         # Ensure we have valid indices
@@ -305,7 +331,7 @@ class EvolutionarySelector:
                         'rank': len(result['final_strategies']) + 1
                     }
                 })
-            except ValueError:
+            except (ValueError, IndexError):
                 # Strategy not found in original list (might be refined)
                 result['final_strategies'].append({
                     'strategy': strategy,

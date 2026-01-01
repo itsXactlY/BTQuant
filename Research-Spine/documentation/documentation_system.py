@@ -16,12 +16,23 @@ import json
 import os
 import hashlib
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from typing import Tuple
+
+# Import our robust JSON serialization utilities
+from utils.json_serialization import (
+    JSONEncoder,
+    make_json_serializable,
+    safe_json_dumps,
+    safe_json_dump,
+    safe_json_loads,
+    safe_json_load,
+    JSONSerializationError
+)
 
 class DocumentationSystem:
     """Main class for documenting system processes and results"""
@@ -49,10 +60,10 @@ class DocumentationSystem:
         
         if Path(lineage_db_path).exists():
             try:
-                with open(lineage_db_path, 'r') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+                return safe_json_load(lineage_db_path)
+            except (JSONSerializationError, IOError) as e:
                 self.logger.error(f"Error loading lineage database: {e}")
+                # Return default structure
                 return {
                     'generations': [],
                     'strategy_genealogy': {},
@@ -71,10 +82,10 @@ class DocumentationSystem:
         
         if Path(archive_index_path).exists():
             try:
-                with open(archive_index_path, 'r') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+                return safe_json_load(archive_index_path)
+            except (JSONSerializationError, IOError) as e:
                 self.logger.error(f"Error loading archive index: {e}")
+                # Return default structure
                 return {
                     'strategies': [],
                     'reports': [],
@@ -99,24 +110,54 @@ class DocumentationSystem:
         """Save the lineage database to file"""
         lineage_db_path = 'documentation/lineage/lineage_database.json'
         try:
-            with open(lineage_db_path, 'w') as f:
-                json.dump(self.lineage_db, f, indent=2)
-        except IOError as e:
+            safe_json_dump(self.lineage_db, lineage_db_path, indent=2)
+        except (IOError, JSONSerializationError) as e:
             self.logger.error(f"Error saving lineage database: {e}")
+            # Try to save with minimal data to prevent data loss
+            try:
+                minimal_data = {
+                    'generations': [],
+                    'strategy_genealogy': {},
+                    'evolutionary_history': []
+                }
+                safe_json_dump(minimal_data, lineage_db_path, indent=2)
+                self.logger.warning("Saved minimal lineage database to preserve file structure")
+            except Exception:
+                self.logger.critical("Failed to save even minimal lineage database")
     
     def _save_archive_index(self):
         """Save the archive index to file"""
         archive_index_path = 'documentation/archive/archive_index.json'
         try:
-            with open(archive_index_path, 'w') as f:
-                json.dump(self.archive_index, f, indent=2)
-        except IOError as e:
+            safe_json_dump(self.archive_index, archive_index_path, indent=2)
+        except (IOError, JSONSerializationError) as e:
             self.logger.error(f"Error saving archive index: {e}")
+            # Try to save with minimal data to prevent data loss
+            try:
+                minimal_data = {
+                    'strategies': [],
+                    'reports': [],
+                    'visualizations': [],
+                    'metadata': {
+                        'created_at': datetime.now().isoformat(),
+                        'last_updated': datetime.now().isoformat()
+                    }
+                }
+                safe_json_dump(minimal_data, archive_index_path, indent=2)
+                self.logger.warning("Saved minimal archive index to preserve file structure")
+            except Exception:
+                self.logger.critical("Failed to save even minimal archive index")
     
     def _generate_strategy_hash(self, strategy: Dict[str, Any]) -> str:
         """Generate a unique hash for a strategy"""
-        strategy_str = json.dumps(strategy, sort_keys=True)
-        return hashlib.md5(strategy_str.encode()).hexdigest()
+        try:
+            strategy_str = safe_json_dumps(strategy, sort_keys=True)
+            return hashlib.md5(strategy_str.encode()).hexdigest()
+        except JSONSerializationError as e:
+            self.logger.error(f"Error generating strategy hash: {e}")
+            # Fallback: use string representation
+            strategy_str = str(strategy)
+            return hashlib.md5(strategy_str.encode()).hexdigest()
     
     def generate_comprehensive_report(self, strategy: Dict[str, Any], 
                                     backtest_results: Dict[str, Any], 
@@ -156,8 +197,18 @@ class DocumentationSystem:
         report_filename = f"documentation/reports/comprehensive_report_{strategy_id}_{timestamp}.json"
         
         # Save report as JSON
-        with open(report_filename, 'w') as f:
-            json.dump(report_data, f, indent=2)
+        try:
+            safe_json_dump(report_data, report_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save system integration report: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(report_data)
+                safe_json_dump(sanitized_data, report_filename, indent=2)
+                self.logger.warning("Saved system integration report with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save system integration report even with sanitization")
+                return ""
         
         # Add to living archive
         self._add_to_archive('report', report_filename, report_data)
@@ -204,8 +255,18 @@ class DocumentationSystem:
         report_filename = f"documentation/reports/performance_report_{strategy_id}_{timestamp}.json"
         
         # Save report as JSON
-        with open(report_filename, 'w') as f:
-            json.dump(report_data, f, indent=2)
+        try:
+            safe_json_dump(report_data, report_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save performance report: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(report_data)
+                safe_json_dump(sanitized_data, report_filename, indent=2)
+                self.logger.warning("Saved performance report with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save performance report even with sanitization")
+                return ""
         
         # Add to living archive
         self._add_to_archive('report', report_filename, report_data)
@@ -390,8 +451,18 @@ class DocumentationSystem:
         report_filename = f"documentation/reports/evolutionary_report_{timestamp}.json"
         
         # Save report as JSON
-        with open(report_filename, 'w') as f:
-            json.dump(report_data, f, indent=2)
+        try:
+            safe_json_dump(report_data, report_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save comprehensive report: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(report_data)
+                safe_json_dump(sanitized_data, report_filename, indent=2)
+                self.logger.warning("Saved report with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save comprehensive report even with sanitization")
+                return ""
         
         # Add to living archive
         self._add_to_archive('report', report_filename, report_data)
@@ -563,30 +634,34 @@ class DocumentationSystem:
     
     def _add_to_archive(self, item_type: str, file_path: str, metadata: Dict[str, Any]):
         """Add an item to the living archive system"""
-        relative_path = file_path.replace('documentation/', '')
-        
-        archive_entry = {
-            'file_path': relative_path,
-            'file_type': item_type,
-            'metadata': metadata,
-            'timestamp': datetime.now().isoformat(),
-            'hash': self._generate_strategy_hash(metadata)
-        }
-        
-        if item_type == 'strategy':
-            self.archive_index['strategies'].append(archive_entry)
-        elif item_type == 'report':
-            self.archive_index['reports'].append(archive_entry)
-        elif item_type == 'visualization':
-            self.archive_index['visualizations'].append(archive_entry)
-        
-        # Update metadata
-        self.archive_index['metadata']['last_updated'] = datetime.now().isoformat()
-        
-        # Save archive index
-        self._save_archive_index()
-        
-        self.logger.debug(f"Added {item_type} to living archive: {relative_path}")
+        try:
+            relative_path = file_path.replace('documentation/', '')
+            
+            archive_entry = {
+                'file_path': relative_path,
+                'file_type': item_type,
+                'metadata': metadata,
+                'timestamp': datetime.now().isoformat(),
+                'hash': self._generate_strategy_hash(metadata)
+            }
+            
+            if item_type == 'strategy':
+                self.archive_index['strategies'].append(archive_entry)
+            elif item_type == 'report':
+                self.archive_index['reports'].append(archive_entry)
+            elif item_type == 'visualization':
+                self.archive_index['visualizations'].append(archive_entry)
+            
+            # Update metadata
+            self.archive_index['metadata']['last_updated'] = datetime.now().isoformat()
+            
+            # Save archive index
+            self._save_archive_index()
+            
+            self.logger.debug(f"Added {item_type} to living archive: {relative_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to add item to archive: {e}")
+            # Don't raise - archive failures shouldn't break the main workflow
     
     def archive_strategy(self, strategy: Dict[str, Any], 
                         backtest_results: Dict[str, Any],
@@ -623,8 +698,18 @@ class DocumentationSystem:
         archive_filename = f"documentation/archive/strategy_archive_{strategy_id}_{timestamp}.json"
         
         # Save archive file
-        with open(archive_filename, 'w') as f:
-            json.dump(archive_data, f, indent=2)
+        try:
+            safe_json_dump(archive_data, archive_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save strategy archive: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(archive_data)
+                safe_json_dump(sanitized_data, archive_filename, indent=2)
+                self.logger.warning("Saved strategy archive with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save strategy archive even with sanitization")
+                return ""
         
         # Add to living archive index
         self._add_to_archive('strategy', archive_filename, {
@@ -673,8 +758,18 @@ class DocumentationSystem:
         report_filename = f"documentation/reports/integration_report_{timestamp}.json"
         
         # Save report as JSON
-        with open(report_filename, 'w') as f:
-            json.dump(report_data, f, indent=2)
+        try:
+            safe_json_dump(report_data, report_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save evolutionary report: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(report_data)
+                safe_json_dump(sanitized_data, report_filename, indent=2)
+                self.logger.warning("Saved evolutionary report with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save evolutionary report even with sanitization")
+                return ""
         
         # Add to living archive
         self._add_to_archive('report', report_filename, report_data)
@@ -784,8 +879,18 @@ class DocumentationSystem:
         log_filename = f"documentation/logs/process_log_{process_name}_{timestamp}.json"
         
         # Save log as JSON
-        with open(log_filename, 'w') as f:
-            json.dump(log_data, f, indent=2)
+        try:
+            safe_json_dump(log_data, log_filename, indent=2)
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to save process log: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(log_data)
+                safe_json_dump(sanitized_data, log_filename, indent=2)
+                self.logger.warning("Saved process log with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save process log even with sanitization")
+                return ""
         
         self.logger.info(f"Process logged: {log_filename}")
         return log_filename
@@ -805,3 +910,107 @@ class DocumentationSystem:
         """
         # Use the new comprehensive report method
         return self.generate_comprehensive_report(strategy, backtest_results, selection_results)
+
+    def generate_strategy_documentation(self, strategy: Dict[str, Any],
+                                       backtest_results: Dict[str, Any]) -> str:
+        """
+        Generate comprehensive documentation for a strategy
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            
+        Returns:
+            Path to the generated documentation file
+        """
+        self.logger.info(f"Generating strategy documentation for strategy: {strategy.get('template', 'unknown')}")
+        
+        # Create strategy documentation data with JSON-serializable content only
+        def make_json_serializable(data):
+            """Convert data to JSON-serializable format"""
+            if isinstance(data, bool):
+                return str(data)  # Check bool first before int (since bool is subclass of int)
+            elif isinstance(data, dict):
+                return {k: make_json_serializable(v) for k, v in data.items()}
+            elif isinstance(data, list):
+                return [make_json_serializable(item) for item in data]
+            elif isinstance(data, (str, int, float)):
+                return data
+            elif isinstance(data, (datetime, date)):
+                return data.isoformat()
+            elif hasattr(data, '__dict__'):
+                return make_json_serializable(data.__dict__)
+            else:
+                return str(data)  # Fallback to string representation
+        # Create strategy documentation data
+        doc_data = {
+            'timestamp': datetime.now().isoformat(),
+            'strategy': make_json_serializable(strategy),
+            'backtest_results': make_json_serializable(backtest_results),
+            'metadata': {
+                'generated_by': 'DocumentationSystem',
+                'version': '2.0',
+                'document_type': 'strategy_documentation'
+            }
+        }
+        
+        # Generate documentation filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        strategy_id = strategy.get('id', 'unknown')
+        doc_filename = f"documentation/reports/strategy_documentation_{strategy_id}_{timestamp}.json"
+        
+        # Save documentation as JSON
+        try:
+            safe_json_dump(doc_data, doc_filename, indent=2)
+            
+            # Add to living archive
+            self._add_to_archive('report', doc_filename, doc_data)
+            
+            self.logger.info(f"Strategy documentation generated: {doc_filename}")
+            return doc_filename
+        except (IOError, JSONSerializationError) as e:
+            self.logger.error(f"Failed to generate strategy documentation: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_data = make_json_serializable(doc_data)
+                safe_json_dump(sanitized_data, doc_filename, indent=2)
+                self._add_to_archive('report', doc_filename, sanitized_data)
+                self.logger.warning("Saved strategy documentation with sanitized data")
+                return doc_filename
+            except Exception:
+                self.logger.critical("Failed to save strategy documentation even with sanitization")
+                return ""
+
+    def generate_visualizations(self, strategy: Dict[str, Any],
+                               backtest_results: Dict[str, Any]) -> List[str]:
+        """
+        Generate all visualizations for a strategy
+        
+        Args:
+            strategy: Strategy dictionary
+            backtest_results: Backtest results for the strategy
+            
+        Returns:
+            List of paths to the generated visualization files
+        """
+        self.logger.info(f"Generating visualizations for strategy: {strategy.get('template', 'unknown')}")
+        
+        visualization_files = []
+        
+        # Generate performance visualization
+        perf_viz = self.create_strategy_visualization(strategy, backtest_results, 'performance')
+        if perf_viz:
+            visualization_files.append(perf_viz)
+        
+        # Generate risk-return visualization
+        risk_viz = self.create_strategy_visualization(strategy, backtest_results, 'risk_return')
+        if risk_viz:
+            visualization_files.append(risk_viz)
+        
+        # Generate drawdown visualization
+        drawdown_viz = self.create_strategy_visualization(strategy, backtest_results, 'drawdown')
+        if drawdown_viz:
+            visualization_files.append(drawdown_viz)
+        
+        self.logger.info(f"Generated {len(visualization_files)} visualizations for strategy")
+        return visualization_files

@@ -15,6 +15,14 @@ import json
 import os
 from pathlib import Path
 
+# Import our robust JSON serialization utilities
+from utils.json_serialization import (
+    safe_json_dump,
+    safe_json_load,
+    make_json_serializable,
+    JSONSerializationError
+)
+
 
 class MarketDataConnector:
     """
@@ -57,19 +65,24 @@ class MarketDataConnector:
         self.cache = {}
         try:
             if os.path.exists(self.config['cache_path']):
-                with open(self.config['cache_path'], 'r') as f:
-                    self.cache = json.load(f)
-        except Exception as e:
+                self.cache = safe_json_load(self.config['cache_path'])
+        except (JSONSerializationError, IOError) as e:
             self.logger.error(f"Failed to load cache: {e}")
             self.cache = {}
             
     def _save_cache(self) -> None:
         """Save the data cache to disk"""
         try:
-            with open(self.config['cache_path'], 'w') as f:
-                json.dump(self.cache, f, indent=2)
-        except Exception as e:
+            safe_json_dump(self.cache, self.config['cache_path'], indent=2)
+        except (IOError, JSONSerializationError) as e:
             self.logger.error(f"Failed to save cache: {e}")
+            # Try to save with sanitized data
+            try:
+                sanitized_cache = make_json_serializable(self.cache)
+                safe_json_dump(sanitized_cache, self.config['cache_path'], indent=2)
+                self.logger.warning("Saved cache with sanitized data")
+            except Exception:
+                self.logger.critical("Failed to save cache even with sanitization")
             
     def get_historical_data(
         self, 

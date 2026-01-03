@@ -38,6 +38,83 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 
 ---
 
+## 🤖 AI-Powered Agent Development with Kilo Code
+
+BTQuant now integrates with **Kilo Code** to enable **AI agents** to build advanced trading strategies using domain-specific skills.
+
+### What Are Skills?
+
+Skills are curated domain knowledge that teach AI agents how to think about modern quantitative trading:
+
+- **Microstructure Alpha** – Extract short-horizon alpha from orderbook flow and asymmetries
+- **Cross-Venue Arbitrage** – Design latency arbs, perp-spot basis trades, and funding arbs
+- **Regime Detection** – Build adaptive meta-strategies that adjust to market conditions
+- **Deep Crypto ML** – Integrate modern deep learning (TCN, Transformers) for market prediction
+- **Portfolio Execution** – Smart routing and execution across multiple venues
+- **Robustness & Anti-Overfit** – Rigorous backtesting, stress testing, and live monitoring
+- **Architecture Patterns** – Production-grade modular strategy design
+- **HFT Debugging** – Advanced tools for microstructure and high-frequency strategy debugging
+- **Simulation & Replay** – Discrete-event simulation and scenario testing frameworks
+- **Verification & Guardrails** – Safety tests, risk limits, and kill switches
+
+### Quick Start with Kilo Code
+
+1. **Install Kilo CLI**:
+   ```bash
+   npm install -g @kilocode/cli
+   ```
+
+2. **Start in BTQuant**:
+   ```bash
+   cd /path/to/BTQuant
+   kilocode
+   ```
+
+3. **Request a Strategy**:
+   ```
+   > Using microstructure-alpha skill, design a BTCUSDT microstructure strategy 
+   > for Binance with 100-200ms signals based on queue imbalance and aggressive flow.
+   ```
+
+The agent will:
+- Read the **microstructure-alpha** skill,
+- Generate strategy skeleton code,
+- Integrate with BTQuant's orderbook and trade feeds,
+- Add risk limits and execution logic,
+- Output production-ready code.
+
+### Real-World Workflows
+
+#### Build Microstructure Alpha
+```bash
+kilocode
+> Using microstructure-alpha and portfolio-execution-routing skills, design a 
+> BTCUSDT strategy that extracts alpha from L2 orderbook imbalances and routes 
+> orders intelligently across Binance spot and futures.
+```
+
+#### Cross-Venue Arbitrage
+```bash
+kilocode --mode architect
+> Implement cross-venue basis arbitrage between Binance and OKX perps/spot using 
+> cross-venue-arbitrage, portfolio-execution-routing, and robustness-anti-overfit skills.
+```
+
+#### Regime-Aware Meta-Controller
+```bash
+kilocode
+> Build a RegimeManager that switches between microstructure, arb, and carry 
+> strategies based on market regime using regime-detection-meta and deep-crypto-ml skills.
+```
+
+### Documentation
+
+📖 **[Complete Kilo Code Integration Guide](docs/kilocode-agents.md)** – Workflows, best practices, and examples
+
+📚 **[Skills Overview](`.kilocode/skills/SKILLS_README.md`)** – Descriptions of all available skills
+
+---
+
 ## Why BTQuant Dominates
 
 ### 🏆 **Custom > Generic Every Time**
@@ -85,6 +162,8 @@ BTQuant is a comprehensive algorithmic trading framework designed for **backtest
 **Ready to experience true high-frequency trading infrastructure?**
 
 📖 **[Complete Documentation](https://github.com/itsXactlY/BTQuant/wiki)**
+
+🤖 **[AI Agent Development with Kilo Code](docs/kilocode-agents.md)** – Build strategies using AI agents
 
 💬 **[Join Our HFT Community](https://discord.gg/Y7uBxmRg3Z)** - Connect with quantitative traders using **real tick data**
 

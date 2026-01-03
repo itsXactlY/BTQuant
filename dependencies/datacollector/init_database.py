@@ -74,7 +74,7 @@ def setup():
         cursor.execute(f"ALTER DATABASE [{DB}] SET RECOVERY SIMPLE")
         cursor.execute(f"ALTER DATABASE [{DB}] SET AUTO_CREATE_STATISTICS ON")
         cursor.execute(f"ALTER DATABASE [{DB}] SET AUTO_UPDATE_STATISTICS_ASYNC ON")
-        cursor.execute(f"ALTER DATABASE [{DB}] SET TARGET_RECOVERY_TIME = 60 SECONDS")  # ✅ FIXED
+        cursor.execute(f"ALTER DATABASE [{DB}] SET TARGET_RECOVERY_TIME = 60 SECONDS")
         cursor.execute(f"ALTER DATABASE [{DB}] SET AUTO_SHRINK OFF")
         conn.close()
         

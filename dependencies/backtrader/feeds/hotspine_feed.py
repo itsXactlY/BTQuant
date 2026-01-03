@@ -10,7 +10,13 @@ from backtrader.feed import DataBase
 from datetime import datetime
 import time
 import logging
+from typing import Dict, Any
 
+# Import configuration management
+from backtrader.hotspine.config import HotSpineConfig, configure_logging
+
+# Configure logging
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -62,16 +68,33 @@ class HotSpineData(DataBase):
         
         # Set live data flag
         self._islive = True
+        
+        # Performance metrics
+        self._feed_metrics = {
+            'trades_processed': 0,
+            'processing_errors': 0,
+            'start_time': 0,
+            'last_trade_time': 0
+        }
     
     def start(self):
-        """Start the HotSpine data feed"""
+        """Start the HotSpine data feed with enhanced configuration"""
         super(HotSpineData, self).start()
         
         try:
+            # Create configuration for HotSpine reader
+            config = HotSpineConfig()
+            config.shm_name = self.p.shm_name
+            config.batch_mode = self.p.batch_mode
+            config.poll_interval = self.p.poll_interval
+            
             # Initialize HotSpine reader (local import to avoid circular imports)
             HotSpineReader = _import_hotspine_reader()
-            self.hotspine_reader = HotSpineReader(self.p.shm_name)
+            self.hotspine_reader = HotSpineReader(config)
             logger.info(f"HotSpineData: Connected to shared memory {self.p.shm_name}")
+            
+            # Initialize metrics
+            self._feed_metrics['start_time'] = time.time()
             
             # Mark as live data feed
             self.put_notification(self.LIVE)
@@ -151,7 +174,7 @@ class HotSpineData(DataBase):
     
     def _process_trade(self, trade):
         """
-        Process HotTrade and convert to Backtrader data format
+        Process HotTrade and convert to Backtrader data format with performance monitoring
         
         Args:
             trade: HotTrade object from HotSpine
@@ -160,6 +183,10 @@ class HotSpineData(DataBase):
             True if trade was processed successfully
         """
         try:
+            # Update feed metrics
+            self._feed_metrics['trades_processed'] += 1
+            self._feed_metrics['last_trade_time'] = time.time()
+            
             # Convert microseconds to seconds for datetime
             trade_time = trade.ts_exchange / 1_000_000.0
             
@@ -193,6 +220,7 @@ class HotSpineData(DataBase):
             
         except Exception as e:
             logger.error(f"HotSpineData: Error processing trade: {e}")
+            self._feed_metrics['processing_errors'] += 1
             return False
     
     def haslivedata(self):
@@ -213,6 +241,44 @@ class HotSpineData(DataBase):
         # but respect the polling interval
         time.sleep(min(self.poll_interval, limit))
         return True
+    
+    def get_feed_metrics(self) -> Dict[str, Any]:
+        """
+        Get feed performance metrics
+        
+        Returns:
+            Dictionary containing feed metrics
+        """
+        metrics = self._feed_metrics.copy()
+        
+        # Add derived metrics
+        if metrics['trades_processed'] > 0 and metrics['start_time'] > 0:
+            runtime = metrics['last_trade_time'] - metrics['start_time']
+            if runtime > 0:
+                metrics['trades_per_second'] = metrics['trades_processed'] / runtime
+            else:
+                metrics['trades_per_second'] = 0
+        else:
+            metrics['trades_per_second'] = 0
+        
+        # Add reader metrics if available
+        if self.hotspine_reader:
+            metrics['reader_metrics'] = self.hotspine_reader.get_metrics()
+        
+        return metrics
+    
+    def get_health_status(self) -> Dict[str, Any]:
+        """
+        Get feed health status
+        
+        Returns:
+            Dictionary containing health status information
+        """
+        return {
+            'feed_healthy': self.hotspine_reader.is_healthy() if self.hotspine_reader else False,
+            'trades_processed': self._feed_metrics['trades_processed'],
+            'processing_errors': self._feed_metrics['processing_errors']
+        }
 
 
 class HotSpineFeed(bt.feed.FeedBase):

@@ -18,6 +18,8 @@ import logging
 from backtrader.bigbraincentral.storage_mssql import MarketDataStorage, MSSQLConfig
 # Import HotTrade using a local definition to avoid circular import
 import ctypes
+# Import configuration management
+from backtrader.hotspine.config import HotSpineConfig
 
 class HotTrade(ctypes.Structure):
     """Python representation of a HotSpine trade structure"""
@@ -28,6 +30,7 @@ class HotTrade(ctypes.Structure):
         ("size", ctypes.c_double),         # Trade size
         ("symbol_id", ctypes.c_uint32),    # Symbol ID (hash or mapping)
         ("side", ctypes.c_uint8),         # 0=buy, 1=sell
+        ("market_type", ctypes.c_uint8),  # 0=spot, 1=futures, 2=other
     ]
 
     def __repr__(self) -> str:
@@ -59,39 +62,144 @@ class HotSpineSQLIntegration:
     2. Historical data replay capabilities
     3. Analytics and debugging support
     4. Complete separation from live trading data path
+    
+    Enhanced with:
+    - Health monitoring
+    - Enhanced error handling
+    - Performance metrics
+    - Automatic reconnection
     """
     
-    def __init__(self, sql_config: Optional[MSSQLConfig] = None):
+    def __init__(self, sql_config: Optional[MSSQLConfig] = None,
+                 config: Optional[HotSpineConfig] = None):
         """
         Initialize HotSpine SQL Integration
         
         Args:
             sql_config: SQL Server configuration. If None, uses default config.
+            config: HotSpine configuration. If None, uses default configuration.
         """
         self.sql_config = sql_config or MSSQLConfig()
+        self.config = config or HotSpineConfig()
         self.storage = MarketDataStorage(self.sql_config)
         
-        # Queue for asynchronous storage
-        self.storage_queue = queue.Queue(maxsize=10000)
+        # Queue for asynchronous storage with configurable size
+        self.storage_queue = queue.Queue(maxsize=self.config.sql_queue_size)
         self.storage_thread = None
         self.running = False
+        self._healthy = False
         
         # Statistics
         self.trades_stored = 0
         self.storage_errors = 0
         self.last_storage_time = 0
+        self._reconnect_attempts = 0
         
-        # Connect to SQL Server
+        # Performance metrics
+        self._metrics = {
+            'storage_latency_sum': 0,
+            'storage_latency_count': 0,
+            'last_storage_batch_time': 0,
+            'batches_processed': 0
+        }
+        
+        # Connect to SQL Server with error handling
         self._connect_sql()
+        
+        # Start health monitoring
+        if self.config.enable_monitoring:
+            self._start_health_monitoring()
     
     def _connect_sql(self):
-        """Establish connection to SQL Server"""
+        """Establish connection to SQL Server with error handling"""
         try:
             self.storage.connect()
+            self._healthy = True
+            self._reconnect_attempts = 0
             logger.info("HotSpine SQL Integration connected to SQL Server")
         except Exception as e:
+            self._healthy = False
             logger.error(f"Failed to connect to SQL Server: {e}")
             raise
+    
+    def _try_reconnect_sql(self) -> bool:
+        """
+        Attempt to reconnect to SQL Server
+        
+        Returns:
+            True if reconnection successful, False otherwise
+        """
+        if self._reconnect_attempts >= self.config.max_reconnect_attempts:
+            logger.error(f"Max SQL reconnection attempts ({self.config.max_reconnect_attempts}) reached")
+            return False
+        
+        self._reconnect_attempts += 1
+        logger.warning(f"Attempting to reconnect to SQL Server ({self._reconnect_attempts}/{self.config.max_reconnect_attempts})...")
+        
+        try:
+            # Close existing connection if any
+            try:
+                self.storage.disconnect()
+            except:
+                pass
+            
+            # Wait before reconnecting
+            time.sleep(self.config.reconnect_delay)
+            
+            # Reconnect
+            self._connect_sql()
+            logger.info("SQL Server reconnection successful")
+            return True
+            
+        except Exception as e:
+            logger.error(f"SQL reconnection attempt failed: {e}")
+            return False
+    
+    def _start_health_monitoring(self):
+        """Start health monitoring thread"""
+        if not self.config.enable_monitoring:
+            return
+        
+        def health_monitor():
+            while self.running:
+                try:
+                    # Check SQL connection health
+                    if not self.is_healthy():
+                        logger.warning("SQL connection health check failed")
+                        self._try_reconnect_sql()
+                    
+                    # Sleep for monitoring interval
+                    time.sleep(self.config.metrics_interval)
+                    
+                except Exception as e:
+                    logger.error(f"SQL health monitor error: {e}")
+                    time.sleep(5.0)  # Longer sleep on error
+        
+        monitor_thread = threading.Thread(
+            target=health_monitor,
+            name="SQLHealthMonitor",
+            daemon=True
+        )
+        monitor_thread.start()
+        logger.info("SQL health monitoring started")
+    
+    def is_healthy(self) -> bool:
+        """
+        Check if SQL integration is healthy
+        
+        Returns:
+            True if healthy, False otherwise
+        """
+        if not self._healthy:
+            return False
+        
+        try:
+            # Test connection by getting stats
+            _ = self.storage.get_stats()
+            return True
+        except:
+            self._healthy = False
+            return False
     
     def start_async_storage(self):
         """Start the asynchronous storage thread"""
@@ -193,13 +301,45 @@ class HotSpineSQLIntegration:
             logger.error(f"Batch storage failed: {e}")
             self.storage_errors += len(batch)
     
+    def _get_symbol_info(self, symbol_id: int) -> Optional[Dict[str, str]]:
+        """
+        Get symbol information from mapping
+        
+        Args:
+            symbol_id: Symbol ID to look up
+            
+        Returns:
+            Dictionary with symbol and market_type, or None if not found
+        """
+        if self.config.symbol_mapping and symbol_id in self.config.symbol_mapping:
+            symbol_info = self.config.symbol_mapping[symbol_id]
+            if isinstance(symbol_info, dict):
+                return symbol_info
+            # Backward compatibility: if symbol_mapping is old format (symbol_id -> symbol_name)
+            return {'symbol': symbol_info, 'market_type': 'spot'}
+        return None
+    
     def _convert_hottrade_to_dict(self, trade: HotTrade) -> Dict[str, Any]:
         """Convert HotTrade object to dictionary format for SQL storage"""
+        symbol_info = self._get_symbol_info(trade.symbol_id)
+        
+        # Determine market type - use trade.market_type if available, otherwise use symbol mapping or default
+        if trade.market_type == 0:
+            market_type = 'spot'
+        elif trade.market_type == 1:
+            market_type = 'futures'
+        else:
+            market_type = 'other'
+        
+        # Override with symbol mapping if available and different
+        if symbol_info and 'market_type' in symbol_info:
+            market_type = symbol_info['market_type']
+        
         return {
             'timestamp': trade.ts_exchange * 1000,  # Convert microseconds to milliseconds
-            'exchange': 'hotspine',  # Could be enhanced with symbol mapping
-            'symbol': f'symbol_{trade.symbol_id}',  # Placeholder - needs symbol mapping
-            'market_type': 'spot',
+            'exchange': 'hotspine',
+            'symbol': symbol_info['symbol'] if symbol_info and 'symbol' in symbol_info else f'symbol_{trade.symbol_id}',
+            'market_type': market_type,
             'trade_id': f'hotspine_{trade.ts_exchange}_{trade.symbol_id}',
             'price': float(trade.price),
             'quantity': float(trade.size),
@@ -209,7 +349,7 @@ class HotSpineSQLIntegration:
     
     def store_trade_async(self, trade: HotTrade):
         """
-        Asynchronously store a HotSpine trade to SQL database
+        Asynchronously store a HotSpine trade to SQL database with performance monitoring
         
         This method is non-blocking and returns immediately.
         The actual storage happens in a background thread.
@@ -219,10 +359,21 @@ class HotSpineSQLIntegration:
             return False
         
         try:
+            start_time = time.time()
             self.storage_queue.put_nowait(trade)
+            
+            # Update metrics
+            latency = time.time() - start_time
+            self._metrics['storage_latency_sum'] += latency
+            self._metrics['storage_latency_count'] += 1
+            
             return True
         except queue.Full:
             logger.warning("Storage queue full, dropping trade")
+            self.storage_errors += 1
+            return False
+        except Exception as e:
+            logger.error(f"Error queuing trade for storage: {e}")
             self.storage_errors += 1
             return False
     
@@ -332,12 +483,42 @@ class HotSpineSQLIntegration:
         Returns:
             Dictionary containing storage statistics
         """
-        return {
+        stats = {
             'trades_stored': self.trades_stored,
             'storage_errors': self.storage_errors,
             'queue_size': self.storage_queue.qsize(),
             'last_storage_time_ms': self.last_storage_time * 1000 if self.last_storage_time else 0,
-            'running': self.running
+            'running': self.running,
+            'healthy': self.is_healthy(),
+            'reconnect_attempts': self._reconnect_attempts
+        }
+        
+        # Add performance metrics
+        if self._metrics['storage_latency_count'] > 0:
+            stats['avg_storage_latency'] = self._metrics['storage_latency_sum'] / self._metrics['storage_latency_count']
+        else:
+            stats['avg_storage_latency'] = 0
+        
+        stats['batches_processed'] = self._metrics['batches_processed']
+        
+        return stats
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Get performance metrics
+        
+        Returns:
+            Dictionary containing performance metrics
+        """
+        return self._metrics.copy()
+    
+    def reset_metrics(self):
+        """Reset performance metrics"""
+        self._metrics = {
+            'storage_latency_sum': 0,
+            'storage_latency_count': 0,
+            'last_storage_batch_time': 0,
+            'batches_processed': 0
         }
     
     # ========================================================================
@@ -427,9 +608,24 @@ class HotSpineSQLIntegration:
             return []
 
 
-def create_hotspine_sql_integration(sql_config: Optional[MSSQLConfig] = None) -> HotSpineSQLIntegration:
+def create_hotspine_sql_integration(sql_config: Optional[MSSQLConfig] = None,
+                                    config: Optional[HotSpineConfig] = None) -> HotSpineSQLIntegration:
     """
     Factory function to create HotSpine SQL Integration instance
+    
+    Args:
+        sql_config: Optional SQL Server configuration
+        config: Optional HotSpine configuration
+        
+    Returns:
+        HotSpineSQLIntegration instance
+    """
+    return HotSpineSQLIntegration(sql_config, config)
+
+
+def create_hotspine_sql_integration_legacy(sql_config: Optional[MSSQLConfig] = None) -> HotSpineSQLIntegration:
+    """
+    Legacy factory function for backward compatibility
     
     Args:
         sql_config: Optional SQL Server configuration
@@ -437,4 +633,4 @@ def create_hotspine_sql_integration(sql_config: Optional[MSSQLConfig] = None) ->
     Returns:
         HotSpineSQLIntegration instance
     """
-    return HotSpineSQLIntegration(sql_config)
+    return HotSpineSQLIntegration(sql_config, None)

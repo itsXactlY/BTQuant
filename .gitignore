@@ -47,6 +47,7 @@ venv/
 
 # ===== Experiments / scratch =====
 trashpad/
+Research-Spine/
 **/scratch/
 **/experiments/
 test/strategy_*.py
@@ -59,3 +60,4 @@ memory_debug.py
 memory_profile_summary.png
 Example_*.py
 **/*html
+

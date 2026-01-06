@@ -30,7 +30,7 @@ PYTHON_READER_PATH = Path(__file__).parent / "python_market_data_collector/hotsp
 
 # HotSpine shared memory paths
 HOTSPINE_DIR = Path("/dev/shm")
-HOTSPINE_PREFIX = "hotspine_"
+HOTSPINE_PREFIX = "btquant_"
 
 def check_cxx_collector_available():
     """Check if C++ collector binary exists and is executable."""
@@ -375,7 +375,7 @@ def test_with_collector_running():
     from pathlib import Path
     
     hotspine_dir = Path("/dev/shm")
-    hotspine_files = list(hotspine_dir.glob("hotspine_*"))
+    hotspine_files = list(hotspine_dir.glob(f"{HOTSPINE_PREFIX}*"))
     
     print(f"  HotSpine files in /dev/shm: {len(hotspine_files)}")
     for f in hotspine_files[:5]:  # Show first 5

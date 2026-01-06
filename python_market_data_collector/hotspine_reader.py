@@ -830,8 +830,8 @@ class HotSpineReader:
                 # Read trade at current read index
                 trade = self._trades_buffer[read_index % self._header.capacity]
                 
-                # Update read index (atomic increment)
-                self._header.read_index = read_index + 1
+                # Update read index (atomic increment with wrapping)
+                self._header.read_index = (read_index + 1) % self._header.capacity
                 
                 # Update statistics
                 with self._stats_lock:
@@ -946,8 +946,8 @@ class HotSpineReader:
                 # Read orderbook at current read index
                 snapshot = self._orderbooks_buffer[read_index % capacity]
                 
-                # Update read index (atomic increment)
-                self._header.orderbook_read_index = read_index + 1
+                # Update read index (atomic increment with wrapping)
+                self._header.orderbook_read_index = (read_index + 1) % capacity
                 
                 # Update statistics
                 with self._stats_lock:
@@ -1143,6 +1143,41 @@ class HotSpineReader:
             status['buffer'] = self.get_buffer_utilization()
             status['is_healthy'] = self.is_healthy()
             return status
+
+    def get_buffers_info(self) -> Dict[str, Any]:
+        """
+        Get detailed information about all buffers.
+        
+        Returns:
+            Dictionary with buffer details
+        """
+        util = self.get_buffer_utilization()
+        return {
+            "trades": {
+                "count": util["trade_count"],
+                "capacity": util["trade_capacity"],
+                "utilization": util["trade_utilization_pct"],
+                "lost": self._header.lost_count if self._attached else 0,
+            },
+            "orderbooks": {
+                "count": util["orderbook_count"],
+                "capacity": util["orderbook_capacity"],
+                "utilization": util["orderbook_utilization_pct"],
+                "lost": getattr(self._header, 'orderbook_lost_count', 0) if self._attached else 0,
+            }
+        }
+
+    def list_available_data_types(self) -> List[str]:
+        """
+        List data types available in this HotSpine segment.
+        
+        Returns:
+            List of data type names
+        """
+        types = ["trades"]
+        if self._orderbooks_buffer is not None:
+            types.append("orderbooks")
+        return types
     
     # =========================================================================
     # Statistics Methods

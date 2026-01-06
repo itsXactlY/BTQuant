@@ -153,7 +153,7 @@ def run_python_tests():
     """Run the Python HotSpine reader tests."""
     logger.info("Running Python HotSpine reader tests...")
     
-    test_script = '''
+    test_script = f"HOTSPINE_PREFIX = '{HOTSPINE_PREFIX}'\n" + '''
 from pathlib import Path
 import sys
 import os
@@ -324,9 +324,12 @@ def test_list_available_data():
         try:
             reader = HotSpineReader()
             data_types = reader.list_available_data_types()
-            
-            # Skip this test as list_available_data_types is not implemented
-            print(f"✓ Available data types test skipped (method not implemented)")
+            print(f"✓ Available data types: {data_types}")
+            if "trades" in data_types:
+                print("  ✓ 'trades' found")
+            else:
+                print("  ✗ 'trades' NOT found")
+                return False
             print()
             return True
         except FileNotFoundError as e:

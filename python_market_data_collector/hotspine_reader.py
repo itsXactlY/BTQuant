@@ -654,12 +654,9 @@ class HotSpineReader:
         with self._lock:
             try:
                 # Construct the full path to shared memory
-                # If shm_name starts with '/', use it as-is (for compatibility)
-                # Otherwise, prepend /dev/shm/
-                if self.shm_name.startswith('/'):
-                    shm_path = self.shm_name
-                else:
-                    shm_path = f"/dev/shm/{self.shm_name}"
+                # In Linux, shm_open names like "/name" map to "/dev/shm/name"
+                clean_name = self.shm_name.lstrip('/')
+                shm_path = f"/dev/shm/{clean_name}"
                 
                 logger.info(f"Attempting to attach to shared memory at: {shm_path}")
                 

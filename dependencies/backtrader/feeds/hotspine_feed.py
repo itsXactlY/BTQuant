@@ -46,6 +46,7 @@ class HotSpineData(DataBase):
     params = (
         ('shm_name', '/btquant_hotspine'),  # Shared memory segment name
         ('symbol_id', None),              # Symbol ID to filter trades
+        ('symbol', ''),                   # Symbol string (e.g. BTC/USDT)
         ('timeframe', bt.TimeFrame.Ticks), # Timeframe (ticks for live trading)
         ('compression', 1),               # Compression (1 for raw ticks)
         ('batch_mode', False),            # Whether to use batch reading
@@ -58,6 +59,7 @@ class HotSpineData(DataBase):
         # Initialize HotSpine reader
         self.hotspine_reader = None
         self.symbol_id = self.p.symbol_id
+        self.symbol = self.p.symbol or self.p.dataname
         self.batch_mode = self.p.batch_mode
         self.poll_interval = self.p.poll_interval
         self._last_trade_time = 0
@@ -88,9 +90,12 @@ class HotSpineData(DataBase):
             config.batch_mode = self.p.batch_mode
             config.poll_interval = self.p.poll_interval
             
-            # Initialize HotSpine reader (local import to avoid circular imports)
+            # Initialize HotSpineReader (local import to avoid circular imports)
             HotSpineReader = _import_hotspine_reader()
-            self.hotspine_reader = HotSpineReader(config)
+            self.hotspine_reader = HotSpineReader(
+                shm_name=config.shm_name,
+                poll_interval=config.poll_interval
+            )
             logger.info(f"HotSpineData: Connected to shared memory {self.p.shm_name}")
             
             # Initialize metrics
@@ -132,38 +137,39 @@ class HotSpineData(DataBase):
             return False
     
     def _load_single(self):
-        """Load single trade in polling mode"""
-        trade = self.hotspine_reader.poll_trade()
-        
-        if trade:
-            # Filter by symbol if specified
-            if self.symbol_id is None or trade.symbol_id == self.symbol_id:
-                return self._process_trade(trade)
-            else:
-                # Trade doesn't match our symbol filter, try again
-                time.sleep(self.poll_interval)
-                return self._load_single()
-        else:
-            # No trade available
-            time.sleep(self.poll_interval)
-            return False
+        """Load single trade in polling mode, blocking until data is available"""
+        while True:
+            try:
+                trade = self.hotspine_reader.poll_trade()
+                
+                if trade:
+                    if self.symbol_id is None or trade.symbol_id == self.symbol_id:
+                        return self._process_trade(trade)
+                else:
+                    time.sleep(self.poll_interval)
+                    
+            except Exception as e:
+                logger.error(f"HotSpineData: Exception in _load_single: {e}")
+                time.sleep(1.0) # Wait before retry
     
     def _load_batch(self):
-        """Load trades in batch mode"""
-        if self._buffer_index >= len(self._trade_buffer):
-            # Buffer is empty, fetch new batch
+        """Load trades in batch mode, blocking until a batch is available"""
+        while self._buffer_index >= len(self._trade_buffer):
+            # Buffer is empty, try to fetch new batch
             trades = self.hotspine_reader.read_all_trades()
             
-            # Filter by symbol if specified
-            if self.symbol_id:
-                trades = [t for t in trades if t.symbol_id == self.symbol_id]
+            if trades:
+                # Filter by symbol if specified
+                if self.symbol_id:
+                    trades = [t for t in trades if t.symbol_id == self.symbol_id]
+                
+                if trades:
+                    self._trade_buffer = trades
+                    self._buffer_index = 0
+                    break
             
-            self._trade_buffer = trades
-            self._buffer_index = 0
-            
-            if not self._trade_buffer:
-                time.sleep(self.poll_interval)
-                return False
+            # No trades found, wait and try again
+            time.sleep(self.poll_interval)
         
         if self._buffer_index < len(self._trade_buffer):
             trade = self._trade_buffer[self._buffer_index]
@@ -263,7 +269,7 @@ class HotSpineData(DataBase):
         
         # Add reader metrics if available
         if self.hotspine_reader:
-            metrics['reader_metrics'] = self.hotspine_reader.get_metrics()
+            metrics['reader_metrics'] = self.hotspine_reader.get_statistics()
         
         return metrics
     
@@ -293,6 +299,7 @@ class HotSpineFeed(bt.feed.FeedBase):
     params = (
         ('shm_name', '/btquant_hotspine'),  # Shared memory segment name
         ('symbol_id', None),              # Symbol ID to filter trades
+        ('symbol', ''),                   # Symbol string
         ('batch_mode', False),            # Whether to use batch reading
         ('poll_interval', 0.0001),        # Polling interval in seconds
     )
@@ -319,6 +326,7 @@ class HotSpineFeed(bt.feed.FeedBase):
         params = {
             'shm_name': self._shm_name,
             'symbol_id': self._symbol_id,
+            'symbol': self.p.symbol,
             'batch_mode': self._batch_mode,
             'poll_interval': self._poll_interval,
         }
@@ -332,6 +340,7 @@ class HotSpineFeed(bt.feed.FeedBase):
 
 def create_hotspine_data_feed(
     symbol_id: int,
+    symbol: str = "",
     shm_name: str = "/btquant_hotspine",
     batch_mode: bool = False,
     poll_interval: float = 0.0001
@@ -341,6 +350,7 @@ def create_hotspine_data_feed(
     
     Args:
         symbol_id: Symbol ID to filter trades
+        symbol: Symbol string (e.g. BTC/USDT)
         shm_name: Shared memory segment name
         batch_mode: Whether to use batch reading
         poll_interval: Polling interval in seconds
@@ -350,6 +360,7 @@ def create_hotspine_data_feed(
     """
     return HotSpineData(
         symbol_id=symbol_id,
+        symbol=symbol,
         shm_name=shm_name,
         batch_mode=batch_mode,
         poll_interval=poll_interval
@@ -359,6 +370,7 @@ def create_hotspine_data_feed(
 def create_hotspine_feed(
     shm_name: str = "/btquant_hotspine",
     symbol_id: int = None,
+    symbol: str = "",
     batch_mode: bool = False,
     poll_interval: float = 0.0001
 ) -> HotSpineFeed:

@@ -409,19 +409,19 @@ class BaseStrategy(bt.Strategy):
 
     def _init_jrr_exchange(self):
         """Initialize standard exchange trading with JackRabbitRelay"""
-        from backtrader.brokers.jrrbroker import JrrOrderBase
+        # When using JrrBroker, we don't need a separate thread/queue in the strategy.
+        # The broker handles the JRR connection and order execution.
+        from backtrader.brokers.jrrbroker import JrrBroker
         
-        alert_manager = self._init_alert_system() if self.p.enable_alerts else None
-        time.sleep(1)
-        
+        # Check if cerebro already has JrrBroker
+        if isinstance(self.broker, JrrBroker):
+            print(cgood("Strategy using JrrBroker for live trading"))
+        else:
+            print(cwarn("Strategy not using JrrBroker. Live orders may not work via self.buy()"))
+
         self.exchange = self.p.exchange
         self.account = self.p.account
         self.asset = self.p.asset
-        self.rabbit = JrrOrderBase(alert_manager=alert_manager)
-        
-        self.order_queue = queue.Queue()
-        self.order_thread = threading.Thread(target=self.process_jrr_orders, daemon=True)
-        self.order_thread.start()
 
     def _init_pancakeswap(self):
         """Initialize PancakeSwap trading"""
@@ -439,7 +439,7 @@ class BaseStrategy(bt.Strategy):
         
         try:
             from backtrader.brokers.jrrbroker import TelegramService
-            from backtrader.dontcommit import telegram_api_hash, telegram_api_id, telegram_channel, telegram_session_file, telegram_channel_debug
+            from backtrader.dontcommit import telegram_api_hash, telegram_api_id, telegram_channel, telegram_session_file
             base_session_file = ".base.session"
             new_session_file = f"{session}_{uuid.uuid4().hex}.session"
             
@@ -489,29 +489,6 @@ class BaseStrategy(bt.Strategy):
             except Exception as e:
                 print(cerr(f"Error sending alert: {str(e)}"))
 
-    def process_jrr_orders(self):
-        """Process JRR order queue"""
-        while True:
-            order = self.order_queue.get()
-            if order is None:
-                break
-            action, params = order
-            if action == 'buy':
-                self.rabbit.send_jrr_buy_request(**params)
-            elif action == 'sell':
-                self.rabbit.send_jrr_close_request(**params)
-                self.reset_position_state()
-            self.order_queue.task_done()
-
-    def enqueue_order(self, action, **params):
-        """Add order to queue with cooldown check"""
-        with order_lock:
-            current_time = time.time()
-            if current_time - self.last_order_time >= self.order_cooldown:
-                self.order_queue.put((action, params))
-                self.last_order_time = current_time
-                return True
-        return False
 
     def process_web3orders(self):
         """Process Web3 order queue"""
@@ -689,7 +666,7 @@ class BaseStrategy(bt.Strategy):
                 
                 try:
                     for data in self.datas:
-                        symbol = data.symbol
+                        symbol = getattr(data, 'symbol', '')
                         currency = symbol.split('/')[0]
                         
                         try:

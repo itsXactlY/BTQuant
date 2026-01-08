@@ -4,8 +4,12 @@ import logging
 from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file
-from typing import Optional
+from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel
+from typing import Optional, List, Deque
+import backtrader as bt
+from backtrader.order import Order, BuyOrder, SellOrder
+from backtrader.position import Position
+import collections
 
 class MessagingService(ABC):
     @abstractmethod
@@ -112,7 +116,7 @@ async def initialize_services():
         api_id=telegram_api_id,
         api_hash=telegram_api_hash,
         session_file=telegram_session_file,
-        channel_id=telegram_channel_debug
+        channel_id=telegram_channel
     )
     await telegram_service.initialize()
     
@@ -231,3 +235,121 @@ class JrrOrderBase:
         }
         print(f"payload: {payload}")
         return self._send_jrr_request(payload)
+
+class JrrBroker(bt.BrokerBase):
+    """
+    Live component broker for JackRabbitRelay (JRR).
+    Maps Backtrader order calls to JRR webhook requests.
+    """
+    params = (
+        ('cash', 10000.0),
+        ('exchange', 'mimic'),
+        ('account', 'default'),
+        ('debug', True),
+    )
+
+    def __init__(self, alert_manager: Optional[AlertManager] = None):
+        super(JrrBroker, self).__init__()
+        self.startingcash = self.cash = self.p.cash
+        self.positions = collections.defaultdict(Position)
+        self.orders: List[Order] = []
+        self.notifs: Deque[Order] = collections.deque()
+        self.jrr = JrrOrderBase(alert_manager=alert_manager)
+        
+        if self.p.debug:
+            print(f"JrrBroker initialized (Exchange: {self.p.exchange}, Account: {self.p.account})")
+
+    def getcash(self):
+        return self.cash
+
+    def get_cash(self):
+        return self.getcash()
+
+    def getvalue(self, datas=None):
+        # In a real live scenario, this should fetch from exchange.
+        # For now, we return tracked cash.
+        return self.cash
+
+    def get_value(self, datas=None):
+        return self.getvalue(datas)
+
+    def notify(self, order):
+        self.notifs.append(order)
+
+    def get_notification(self):
+        try:
+            return self.notifs.popleft()
+        except IndexError:
+            pass
+        return None
+
+    def buy(self, owner, data, size, price=None, plimit=None,
+            exectype=None, valid=None, tradeid=0, oco=None,
+            trailamount=None, trailpercent=None,
+            **kwargs):
+        
+        # Create BT order object
+        order = BuyOrder(owner=owner, data=data, size=size, price=price, 
+                          pricelimit=plimit, exectype=exectype, valid=valid, 
+                          tradeid=tradeid)
+        
+        # Execute via JRR
+        # Note: data.symbol is used as Asset. In PubBTQuant, data._dataname is often the symbol.
+        asset = getattr(data, '_dataname', str(data))
+        
+        # Calculate USD amount if possible
+        exec_price = price if price else data.close[0]
+        usd_amount = size * exec_price if exec_price else size
+        
+        if self.p.debug:
+            print(f"JrrBroker: Sending BUY request for {asset} (Size: {size}, Approx USD: {usd_amount:.2f})")
+            
+        self.jrr.send_jrr_buy_request(
+            exchange=self.p.exchange,
+            account=self.p.account,
+            asset=asset,
+            amount=usd_amount
+        )
+        
+        # Automatically mark as completed for JRR (it's a webhook trigger)
+        order.submit()
+        order.accept()
+        # In live trading, we'd wait for execution confirmation, but JRR is fire-and-forget
+        order.execute(data.datetime[0], size, exec_price, 0, 0, 0)
+        order.completed()
+        
+        self.notify(order)
+        return order
+
+    def sell(self, owner, data, size, price=None, plimit=None,
+             exectype=None, valid=None, tradeid=0, oco=None,
+             trailamount=None, trailpercent=None,
+             **kwargs):
+        
+        # Create BT order object
+        order = SellOrder(owner=owner, data=data, size=size, price=price, 
+                           pricelimit=plimit, exectype=exectype, valid=valid, 
+                           tradeid=tradeid)
+        
+        asset = getattr(data, '_dataname', str(data))
+        exec_price = price if price else data.close[0]
+
+        if self.p.debug:
+            print(f"JrrBroker: Sending CLOSE request for {asset}")
+
+        self.jrr.send_jrr_close_request(
+            exchange=self.p.exchange,
+            account=self.p.account,
+            asset=asset
+        )
+        
+        order.submit()
+        order.accept()
+        order.execute(data.datetime[0], size, exec_price, 0, 0, 0)
+        order.completed()
+        
+        self.notify(order)
+        return order
+
+    def getposition(self, data):
+        return self.positions[data]

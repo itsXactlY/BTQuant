@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "description": "Symbol ID mappings for BTQuant HotSpine",
+  "exchanges": [
+    {
+      "name": "binance",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 1},
+        {"symbol": "ETH-USDT", "id": 2},
+        {"symbol": "SOL-USDT", "id": 3},
+        {"symbol": "XRP-USDT", "id": 4},
+        {"symbol": "ADA-USDT", "id": 5},
+        {"symbol": "AAVE-USDT", "id": 6},
+        {"symbol": "ACX-USDT", "id": 7},
+        {"symbol": "ZRX-USDT", "id": 8}
+      ]
+    },
+    {
+      "name": "coinbase",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 101},
+        {"symbol": "ETH-USDT", "id": 102},
+        {"symbol": "SOL-USDT", "id": 103}
+      ]
+    },
+    {
+      "name": "kraken",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 201},
+        {"symbol": "ETH-USDT", "id": 202},
+        {"symbol": "SOL-USDT", "id": 203}
+      ]
+    },
+    {
+      "name": "okx",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 301},
+        {"symbol": "ETH-USDT", "id": 302},
+        {"symbol": "SOL-USDT", "id": 303}
+      ]
+    },
+    {
+      "name": "bybit",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 401},
+        {"symbol": "ETH-USDT", "id": 402},
+        {"symbol": "SOL-USDT", "id": 403}
+      ]
+    },
+    {
+      "name": "gate",
+      "symbols": [
+        {"symbol": "BTC-USDT", "id": 501},
+        {"symbol": "XRP-USDT", "id": 502}
+      ]
+    }
+  ]
+}

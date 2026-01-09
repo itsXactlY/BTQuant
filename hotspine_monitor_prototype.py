@@ -18,7 +18,7 @@ Features:
 Usage:
     python hotspine_monitor_prototype.py --shm-name btquant_hotspine --output json --filter exchange=binance
 
-Author: PubBTQuant Prototype
+Author: BTQuant Prototype
 """
 
 import os
@@ -30,10 +30,8 @@ import mmap
 import ctypes
 import argparse
 import logging
-from typing import Optional, List, Dict, Any, Tuple
-from pathlib import Path
+from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
-import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

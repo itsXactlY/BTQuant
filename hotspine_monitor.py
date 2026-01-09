@@ -14,7 +14,7 @@ Usage:
     python hotspine_monitor.py --shm-name btquant_hotspine --filter "exchange=binance" --limit 100
     python hotspine_monitor.py --shm-name btquant_hotspine --aggregate-by symbol
 
-Author: PubBTQuant
+Author: BTQuant
 Version: 1.0.0
 """
 
@@ -29,7 +29,7 @@ import logging
 import signal
 from typing import Optional, List, Dict, Any, Tuple, Callable
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 import threading
 
@@ -90,7 +90,7 @@ class HotTrade(ctypes.Structure):
             "exchange": exchange,
             "symbol": symbol,
             "side": self.side_str,
-            "datetime": datetime.utcfromtimestamp(self.ts_exchange / 1_000_000).isoformat(),
+            "datetime": datetime.fromtimestamp(self.ts_exchange / 1_000_000, tz=timezone.utc).isoformat(),
         }
 
 
@@ -170,7 +170,7 @@ class HotOrderbookSnapshot(ctypes.Structure):
             "asks_count": self.asks_count,
             "mid_price": self.get_mid_price(),
             "spread": self.get_spread(),
-            "datetime": datetime.utcfromtimestamp(self.ts_exchange / 1_000_000).isoformat(),
+            "datetime": datetime.fromtimestamp(self.ts_exchange / 1_000_000, tz=timezone.utc).isoformat(),
         }
 
 
@@ -287,8 +287,17 @@ class SymbolMapper:
         self._load_default_mappings()
         
         # Load from file if provided
-        if mapping_file and os.path.exists(mapping_file):
-            self.load_from_file(mapping_file)
+        if mapping_file:
+            if os.path.exists(mapping_file):
+                self.load_from_file(mapping_file)
+            else:
+                # Try resolving relative to current directory
+                cwd_path = os.path.join(os.getcwd(), mapping_file)
+                if os.path.exists(cwd_path):
+                    self.load_from_file(cwd_path)
+                else:
+                    logger.warning(f"Symbol mapping file not found: {mapping_file} (checked: {mapping_file}, {cwd_path})")
+                    logger.info("Using only default symbol mappings")
     
     def _load_default_mappings(self):
         """Load default symbol mappings"""

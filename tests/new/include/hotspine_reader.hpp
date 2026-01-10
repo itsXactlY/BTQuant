@@ -1,4 +1,4 @@
-#pragma once
+    #pragma once
 
 #include "hotspine_layout.hpp"
 #include <string>

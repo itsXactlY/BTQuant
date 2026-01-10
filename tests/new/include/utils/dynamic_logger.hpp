@@ -91,8 +91,11 @@ public:
     void add_sink(std::shared_ptr<ILogSink> sink);
     void remove_sink(const std::string& name);
     
+    // Check if logging is enabled for a component and level
+    bool is_enabled(LogLevel level, const std::string& component) const;
+
     // Log message
-    void log(LogLevel level, 
+    void log(LogLevel level,
              const std::string& component,
              const std::string& message,
              const std::string& file = "",

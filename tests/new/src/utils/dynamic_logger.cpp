@@ -163,7 +163,28 @@ void DynamicLogger::remove_sink(const std::string& name) {
     sinks_.erase(name);
 }
 
-void DynamicLogger::log(LogLevel level, 
+bool DynamicLogger::is_enabled(LogLevel level, const std::string& component) const {
+    // Check minimum level first
+    if (level < min_level_.load()) {
+        return false;
+    }
+
+    // Check global level
+    if (level < global_level_.load()) {
+        return false;
+    }
+
+    // Check component-specific level
+    auto it = component_levels_.find(component);
+    if (it != component_levels_.end()) {
+        return level >= it->second;
+    }
+
+    // Default to global level
+    return level >= global_level_.load();
+}
+
+void DynamicLogger::log(LogLevel level,
                         const std::string& component,
                         const std::string& message,
                         const std::string& file,
@@ -175,7 +196,11 @@ void DynamicLogger::log(LogLevel level,
         std::cout << message << std::endl;
         return;
     }
-    
+
+    if (!is_enabled(level, component)) {
+        return;
+    }
+
     write_message(level, component, message, file, line, function);
 }
 

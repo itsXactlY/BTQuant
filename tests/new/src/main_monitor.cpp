@@ -12,6 +12,7 @@
 #include <csignal>
 #include <ctime>
 #include <deque>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -60,6 +61,14 @@ public:
     start_time_ = std::chrono::steady_clock::now();
     // Clear screen once at startup
     std::cout << "\033[2J" << std::flush;
+    debug_log_ = new std::ofstream("dashboard_debug.log", std::ios::trunc);
+  }
+
+  ~Dashboard() {
+    if (debug_log_) {
+      debug_log_->close();
+      delete debug_log_;
+    }
   }
 
   void add_alert(const std::string &type, const std::string &message) {
@@ -82,6 +91,8 @@ public:
 
     std::lock_guard<std::mutex> lock(mutex_);
 
+    *debug_log_ << "Attempting to add alert: " << type << " " << message << std::endl;
+
     // Cleanup old dedupe entries
     for (auto it = dedupe_cache_.begin(); it != dedupe_cache_.end();) {
       if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second)
@@ -93,14 +104,17 @@ public:
     }
 
     if (dedupe_cache_.find(key) != dedupe_cache_.end()) {
+      *debug_log_ << "Suppressed duplicate alert: " << key << std::endl;
       return; // Suppress duplicate alert
     }
 
+    *debug_log_ << "Adding alert to deque" << std::endl;
     dedupe_cache_[key] = now;
     alerts_.push_front({get_timestamp(), type, message});
     if (alerts_.size() > 15) {
       alerts_.pop_back();
     }
+    *debug_log_ << "Alerts deque size after add: " << alerts_.size() << std::endl;
   }
 
   void render() {
@@ -128,6 +142,7 @@ private:
   std::map<std::string, std::chrono::steady_clock::time_point> dedupe_cache_;
   std::mutex mutex_;
   std::chrono::steady_clock::time_point start_time_;
+  std::ofstream* debug_log_ = nullptr;
 
   // Formatting helpers
   std::string color_green(const std::string &s) {
@@ -263,6 +278,7 @@ private:
   void render_alerts(std::stringstream &ss) {
     ss << bold("Recent Alerts (Last 15):") << "\033[K\n";
     std::lock_guard<std::mutex> lock(mutex_);
+    *debug_log_ << "Rendering alerts, deque size: " << alerts_.size() << std::endl;
     if (alerts_.empty()) {
       ss << "  (No alerts detected)\033[K\n";
     } else {
@@ -391,24 +407,24 @@ int main(int argc, char *argv[]) {
 
     StopHuntDetector stop_hunt(reader);
     stop_hunt.set_threshold_pct(
-        config.get_as<double>("stop_hunt", "threshold_pct").value_or(0.5));
+        config.get_as<double>("stop_hunt", "threshold_pct").value_or(0.01));
     stop_hunt.set_min_exchanges(
-        config.get_as<int64_t>("stop_hunt", "min_exchanges").value_or(3));
+        config.get_as<int64_t>("stop_hunt", "min_exchanges").value_or(1));
 
     LiquidityImbalanceDetector liquidity(reader);
     liquidity.set_depth_ratio_threshold(
         config.get_as<double>("liquidity_imbalance", "depth_ratio_threshold")
-            .value_or(3.0));
+            .value_or(2.0));
 
     WhaleFrontRunDetector whale(reader);
     whale.set_threshold_usd(
         config.get_as<double>("whale_frontrun", "threshold_usd")
-            .value_or(100000));
+            .value_or(50000));
 
     SpreadArbitrageDetector arbitrage(reader);
     arbitrage.set_min_profit_bps(
         config.get_as<double>("spread_arbitrage", "min_profit_bps")
-            .value_or(50));
+            .value_or(10));
     arbitrage.set_fees(
         config.get_as<double>("spread_arbitrage", "maker_fee_bps").value_or(10),
         config.get_as<double>("spread_arbitrage", "taker_fee_bps")
@@ -416,11 +432,14 @@ int main(int argc, char *argv[]) {
 
     SpoofingDetector spoofing(reader);
     spoofing.set_min_cancel_count(
-        config.get_as<int64_t>("spoofing", "min_cancel_count").value_or(3));
+        config.get_as<int64_t>("spoofing", "min_cancel_count").value_or(2));
 
     std::cout << "✅ All detectors initialized\n\n";
     std::cout << "🚀 Starting monitoring loop...\n";
     std::cout << "   (Press Ctrl+C to stop)\n\n";
+
+    // Debug log
+    std::ofstream debug_log("debug.log", std::ios::trunc);
 
     // Dashboard
     Dashboard dashboard(reader, symbols);
@@ -472,30 +491,37 @@ int main(int argc, char *argv[]) {
           if (!is_monitored)
             continue;
 
+          debug_log << "Checking detectors for " << symbol << std::endl;
+
           // 1. Stop Hunt Detection
           if (auto signal = stop_hunt.detect(symbol)) {
+            debug_log << "Detected STOP HUNT for " << symbol << std::endl;
             dashboard.add_alert("STOP HUNT", signal->to_string());
           }
 
           // 2. Liquidity Imbalance Detection
           if (auto signal = liquidity.detect(symbol)) {
+            debug_log << "Detected LIQUIDITY for " << symbol << std::endl;
             dashboard.add_alert("LIQUIDITY", signal->to_string());
           }
 
           // 3. Whale Front-Run Detection
           if (auto signal = whale.detect(symbol)) {
+            debug_log << "Detected WHALE for " << symbol << std::endl;
             dashboard.add_alert("WHALE", signal->to_string());
           }
 
           // 4. Spread Arbitrage Detection
           auto arb_signals = arbitrage.detect_all(symbol);
           for (const auto &signal : arb_signals) {
+            debug_log << "Detected ARBITRAGE for " << symbol << std::endl;
             dashboard.add_alert("ARBITRAGE", signal.to_string());
           }
 
           // 5. Spoofing Detection (per exchange)
           spoofing.update_orderbook(exchange, symbol);
           if (auto signal = spoofing.detect(exchange, symbol)) {
+            debug_log << "Detected SPOOFING for " << symbol << " on " << exchange << std::endl;
             dashboard.add_alert("SPOOFING", signal->to_string());
           }
         }

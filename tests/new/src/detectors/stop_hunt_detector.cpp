@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 namespace BTQuant {
 
@@ -24,7 +25,9 @@ double StopHuntDetector::calculate_median(std::vector<double>& values) {
 std::optional<StopHuntSignal> StopHuntDetector::detect(const std::string& symbol) {
     // Get prices from all exchanges
     auto prices = reader_.get_all_exchange_prices(symbol);
-    
+
+    // std::cout << "StopHunt: Checking " << prices.size() << " exchanges for " << symbol << std::endl;
+
     if (prices.size() < min_exchanges_) {
         return std::nullopt;
     }
@@ -37,15 +40,18 @@ std::optional<StopHuntSignal> StopHuntDetector::detect(const std::string& symbol
     }
     
     double median_price = calculate_median(price_values);
+    // std::cout << "StopHunt: Median price: " << median_price << std::endl;
     if (median_price == 0.0) {
         return std::nullopt;
     }
-    
+
     // Check each exchange for deviation
     for (const auto& [exchange, price] : prices) {
         double deviation_pct = ((price - median_price) / median_price) * 100.0;
-        
+        // std::cout << "StopHunt: Exchange " << exchange << " price " << price << " deviation " << deviation_pct << "%" << std::endl;
+
         if (std::abs(deviation_pct) > threshold_pct_) {
+            std::cout << "StopHunt: Triggered for " << exchange << std::endl;
             // Found an outlier - this could be a stop hunt
             StopHuntSignal signal;
             signal.symbol = symbol;

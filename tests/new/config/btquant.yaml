@@ -15,11 +15,13 @@ monitoring:
   market_info_interval_sec: 60
   batch_size: 100
   symbols:
-    - "BTC-USDT"
-    - "ETH-USDT"
-    - "SOL-USDT"
-    - "XRP-USDT"
-    - "ADA-USDT"
+    - "ALL"
+    # Or strict list:
+    # - "BTCUSDT"
+    # - "ADAUSDT"
+    # - "ZRXUSDT"
+    # - "AAVEUSDT"
+    # - "ACXUSDT"
 
 # Cache Configuration
 cache:

@@ -206,8 +206,8 @@ int main(int argc, char* argv[]) {
         std::cout << "✅ Successfully attached to HotSpine\n";
         
         // Load symbol mappings from config
-        std::string symbol_mapping_path = config.get_as<std::string>("symbols", "discovery.fallback_file")
-            .value_or("../config/symbol_mappings.yaml");
+        std::string symbol_mapping_path = config.get_as<std::string>("symbols", "fallback_file")
+            .value_or("config/symbol_mapping.json");
         if (!reader.load_symbol_mappings(symbol_mapping_path)) {
             std::cerr << "⚠️  Warning: Failed to load symbol mappings\n";
         }

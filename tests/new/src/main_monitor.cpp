@@ -168,17 +168,20 @@ private:
     int m = (uptime % 3600) / 60;
     int s = uptime % 60;
 
-    ss << bold("╔════════════════════════════════════════════════════════════╗")
+    // ss << bold("╔════════════════════════════════════════════════════════════╗")
+    //    << "\033[K\n";
+    // ss << bold("║      BTQuant Market Manipulation Detector v2.0             ║")
+    ss << bold("      BTQuant Market Manipulation Detector v2.0             ")
        << "\033[K\n";
-    ss << bold("║      BTQuant Market Manipulation Detector v2.0             ║")
-       << "\033[K\n";
-    ss << bold("║      ") << std::left << std::setw(54)
+    // ss << bold("║      ") << std::left << std::setw(54)
+    ss << bold("      ") << std::left << std::setw(54)
        << ("Status: " + color_green("RUNNING") +
            " | Uptime: " + std::to_string(h) + "h " + std::to_string(m) + "m " +
            std::to_string(s) + "s")
-       << bold("║") << "\033[K\n";
-    ss << bold("╚════════════════════════════════════════════════════════════╝")
-       << "\033[K\n\n";
+       // << bold("║") << "\033[K\n";
+    // ss << bold("╚════════════════════════════════════════════════════════════╝")
+       // << "\033[K\n\n";
+       << "\033K\n\n";
   }
 
   void render_stats(std::stringstream &ss) {

@@ -6,92 +6,31 @@ exchanges:
   - name: "binance"
     id_range: [1, 99]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 1
-        enabled: true
-      - symbol: "ETH-USDT"
-        id: 2
-        enabled: true
-      - symbol: "SOL-USDT"
-        id: 3
-        enabled: true
-      - symbol: "XRP-USDT"
-        id: 4
-        enabled: true
-      - symbol: "ADA-USDT"
-        id: 5
-        enabled: true
-      - symbol: "AAVE-USDT"
-        id: 6
-        enabled: true
-      - symbol: "ACX-USDT"
-        id: 7
-        enabled: true
-      - symbol: "ZRX-USDT"
-        id: 8
-        enabled: true
+
         
   - name: "coinbase"
     id_range: [100, 199]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 101
-        enabled: true
-      - symbol: "ETH-USDT"
-        id: 102
-        enabled: true
-      - symbol: "SOL-USDT"
-        id: 103
-        enabled: true
+
 
   - name: "kraken"
     id_range: [200, 299]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 201
-        enabled: true
-      - symbol: "ETH-USDT"
-        id: 202
-        enabled: true
-      - symbol: "SOL-USDT"
-        id: 203
-        enabled: true
+
 
   - name: "okx"
     id_range: [300, 399]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 301
-        enabled: true
-      - symbol: "ETH-USDT"
-        id: 302
-        enabled: true
-      - symbol: "SOL-USDT"
-        id: 303
-        enabled: true
 
   - name: "bybit"
     id_range: [400, 499]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 401
-        enabled: true
-      - symbol: "ETH-USDT"
-        id: 402
-        enabled: true
-      - symbol: "SOL-USDT"
-        id: 403
-        enabled: true
+
 
   - name: "gate"
     id_range: [500, 599]
     symbols:
-      - symbol: "BTC-USDT"
-        id: 501
-        enabled: true
-      - symbol: "XRP-USDT"
-        id: 502
-        enabled: true
+
 
 # Dynamic symbol registration template
 symbol_template:

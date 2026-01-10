@@ -72,7 +72,7 @@ public:
     // Cleanup old dedupe entries
     for (auto it = dedupe_cache_.begin(); it != dedupe_cache_.end();) {
       if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second)
-              .count() > 5) {
+              .count() > 30) {  // Increased from 5 to 30 seconds
         it = dedupe_cache_.erase(it);
       } else {
         ++it;
@@ -85,7 +85,7 @@ public:
 
     dedupe_cache_[key] = now;
     alerts_.push_front({get_timestamp(), type, message});
-    if (alerts_.size() > 10) {
+    if (alerts_.size() > 15) {
       alerts_.pop_back();
     }
   }
@@ -248,7 +248,7 @@ private:
   }
 
   void render_alerts(std::stringstream &ss) {
-    ss << bold("Recent Alerts (Last 5):") << "\033[K\n";
+    ss << bold("Recent Alerts (Last 15):") << "\033[K\n";
     std::lock_guard<std::mutex> lock(mutex_);
     if (alerts_.empty()) {
       ss << "  (No alerts detected)\033[K\n";

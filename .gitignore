@@ -70,3 +70,4 @@ memory_profile_summary.png
 Example_*.py
 **/*html
 
+dependencies/datacollector/market_data_collector

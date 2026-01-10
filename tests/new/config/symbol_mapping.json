@@ -5,11 +5,12 @@
     {
       "name": "binance",
       "symbols": [
+        {"id": 10005, "exchange": "binance", "symbol": "ZRXUSDT"},
         {"id": 10004, "exchange": "binance", "symbol": "AAVEUSDT"},
         {"id": 10003, "exchange": "binance", "symbol": "ACXUSDT"},
-        {"id": 10002, "exchange": "binance", "symbol": "ZRXUSDT"},
-        {"id": 10001, "exchange": "binance", "symbol": "ADAUSDT"},
-        {"id": 10000, "exchange": "binance", "symbol": "BTCUSDT"}
+        {"id": 10002, "exchange": "binance", "symbol": "DOGEUSDT"},
+        {"id": 10001, "exchange": "binance", "symbol": "BTCUSDT"},
+        {"id": 10000, "exchange": "binance", "symbol": "ADAUSDT"}
       ]
     },
     {

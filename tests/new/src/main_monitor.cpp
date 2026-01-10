@@ -64,7 +64,20 @@ public:
 
   void add_alert(const std::string &type, const std::string &message) {
     // Spam prevention: Check if we have seen this identical message recently
-    std::string key = type + ":" + message;
+    // Extract core message without timestamp for deduplication
+    std::string core_message = message;
+    // Remove timestamp pattern if present (e.g., "[12:34:56.789]")
+    size_t timestamp_start = core_message.find('[');
+    if (timestamp_start != std::string::npos) {
+        size_t timestamp_end = core_message.find(']', timestamp_start);
+        if (timestamp_end != std::string::npos) {
+            core_message = core_message.substr(timestamp_end + 1);
+            // Remove leading/trailing whitespace
+            core_message.erase(0, core_message.find_first_not_of(" \t"));
+            core_message.erase(core_message.find_last_not_of(" \t") + 1);
+        }
+    }
+    std::string key = type + ":" + core_message;
     auto now = std::chrono::steady_clock::now();
 
     std::lock_guard<std::mutex> lock(mutex_);

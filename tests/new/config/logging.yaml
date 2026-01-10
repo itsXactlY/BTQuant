@@ -29,7 +29,13 @@ logging:
     detectors:
       level: "INFO"
     monitoring:
-      level: "DEBUG"
+      level: "INFO"
+    candle_aggregator:
+      level: "INFO"
+    market_data_processor:
+      level: "INFO"
+    exchange_connection_manager:
+      level: "WARNING"
       
   reload:
     enabled: true

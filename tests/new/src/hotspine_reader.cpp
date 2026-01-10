@@ -14,18 +14,19 @@
 
 namespace HotSpine {
 
-// Header structure at the beginning of shared memory (matches hotspine_layout.hpp)
+// Header structure at the beginning of shared memory (matches writer's SharedMemoryHeader)
 struct ShmHeader {
     uint32_t magic;
     uint32_t version;
     uint64_t capacity;
-    uint64_t used;
-    uint64_t trade_write_pos;
-    uint64_t trade_read_pos;
-    uint64_t orderbook_write_pos;
-    uint64_t orderbook_read_pos;
-    uint64_t last_update_us;
-    uint32_t checksum;
+    uint64_t write_index;        // Writer's write position
+    uint64_t read_index;         // Writer's read position
+    uint64_t lost_count;
+    uint64_t orderbook_write_index;
+    uint64_t orderbook_read_index;
+    uint64_t orderbook_lost_count;
+    uint64_t orderbook_capacity;
+    uint8_t padding[8];
 };
 
 // Trade entry in the ring buffer
@@ -178,13 +179,27 @@ bool HotSpineReader::pollTrade(HotTrade& trade) {
     if (!attached_ || !mapped_region_) {
         return false;
     }
-    
+
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     ShmHeader* header = static_cast<ShmHeader*>(mapped_region_);
-    uint64_t write_pos = header->trade_write_pos;
-    uint64_t read_pos = header->trade_read_pos;
-    
+    uint64_t write_pos = header->write_index;
+    uint64_t read_pos = header->read_index;
+
+    // Debug logging for header fields
+    static int debug_counter = 0;
+    if (++debug_counter % 1000 == 0) {  // Log every 1000 calls
+        std::cout << "[DEBUG] Header fields: magic=0x" << std::hex << header->magic
+                  << ", version=" << std::dec << header->version
+                  << ", capacity=" << header->capacity
+                  << ", write_index=" << header->write_index
+                  << ", read_index=" << header->read_index
+                  << ", lost_count=" << header->lost_count
+                  << ", orderbook_write_index=" << header->orderbook_write_index
+                  << ", orderbook_read_index=" << header->orderbook_read_index
+                  << std::endl;
+    }
+
     // Check if there's data available
     if (write_pos == read_pos) {
         return false;  // Buffer empty
@@ -195,7 +210,7 @@ bool HotSpineReader::pollTrade(HotTrade& trade) {
     
     if (entry_offset + sizeof(ShmTradeEntry) > mapped_size_) {
         std::cerr << "[SHM] Trade entry exceeds shared memory bounds" << std::endl;
-        header->trade_read_pos = write_pos;  // Skip this entry
+        header->read_index = write_pos;  // Skip this entry
         return false;
     }
     
@@ -211,7 +226,7 @@ bool HotSpineReader::pollTrade(HotTrade& trade) {
     trade.size = entry->size;
     
     // Advance read position
-    header->trade_read_pos = read_pos + 1;
+    header->read_index = read_pos + 1;
     
     return true;
 }
@@ -224,8 +239,8 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot& snapshot) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     ShmHeader* header = static_cast<ShmHeader*>(mapped_region_);
-    uint64_t write_pos = header->orderbook_write_pos;
-    uint64_t read_pos = header->orderbook_read_pos;
+    uint64_t write_pos = header->orderbook_write_index;
+    uint64_t read_pos = header->orderbook_read_index;
     
     // Check if there's data available
     if (write_pos == read_pos) {
@@ -239,7 +254,7 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot& snapshot) {
     
     if (entry_offset + sizeof(ShmOrderbookEntry) > mapped_size_) {
         std::cerr << "[SHM] Orderbook entry exceeds shared memory bounds" << std::endl;
-        header->orderbook_read_pos = write_pos;  // Skip this entry
+        header->orderbook_read_index = write_pos;  // Skip this entry
         return false;
     }
     
@@ -254,7 +269,7 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot& snapshot) {
     snapshot.asks_count = entry->asks_count;
     
     // Advance read position
-    header->orderbook_read_pos = read_pos + 1;
+    header->orderbook_read_index = read_pos + 1;
     
     return true;
 }
@@ -273,9 +288,26 @@ std::pair<uint64_t, uint64_t> HotSpineReader::get_buffer_status() const {
     if (!attached_ || !mapped_region_) {
         return {0, 0};
     }
-    
+
     ShmHeader* header = static_cast<ShmHeader*>(mapped_region_);
-    return {header->used, header->capacity};
+
+    // Calculate used count from write_index and read_index
+    // For circular buffer: used = (write_index - read_index) % capacity
+    uint64_t capacity = header->capacity;
+    uint64_t write_idx = header->write_index;
+    uint64_t read_idx = header->read_index;
+    uint64_t used = (write_idx >= read_idx) ? (write_idx - read_idx) : (capacity - read_idx + write_idx);
+
+    // Debug logging for buffer status
+    static int status_counter = 0;
+    if (++status_counter % 100 == 0) {  // Log every 100 calls
+        double usage_pct = capacity > 0 ? (static_cast<double>(used) / capacity) * 100.0 : 0.0;
+        std::cout << "[DEBUG] Buffer status: used=" << used << ", capacity=" << capacity
+                  << ", write_index=" << write_idx << ", read_index=" << read_idx
+                  << ", usage=" << usage_pct << "%" << std::endl;
+    }
+
+    return {used, capacity};
 }
 
 bool HotSpineReader::is_healthy() const {

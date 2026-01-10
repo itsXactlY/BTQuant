@@ -243,11 +243,11 @@ std::pair<uint64_t, uint64_t> HotSpineExtendedReader::get_buffer_utilization() c
     auto status = reader_->get_buffer_status();
     auto& logger = Logging::DynamicLogger::instance();
     
-    // Log buffer status for debugging
+    // Log buffer status for monitoring
     if (status.second > 0) {
         double usage_pct = (static_cast<double>(status.first) / status.second) * 100.0;
-        logger.debug("HotSpineExtendedReader", "[HotSpineExtendedReader] Buffer: " + 
-                    std::to_string(status.first) + "/" + std::to_string(status.second) + 
+        logger.info("HotSpineExtendedReader", "[HotSpineExtendedReader] Buffer: " +
+                    std::to_string(status.first) + "/" + std::to_string(status.second) +
                     " (" + std::to_string(usage_pct) + "%)");
     }
     

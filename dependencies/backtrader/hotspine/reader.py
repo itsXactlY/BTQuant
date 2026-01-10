@@ -366,7 +366,16 @@ class SymbolMapper:
         # Load default mappings
         self._load_default_mappings()
         
-        # Load from file if provided
+        # Try to load from shared memory symbol file (written by C++ HotSpineWriter)
+        shm_symbols_path = "/dev/shm/btquant_symbols.json"
+        if os.path.exists(shm_symbols_path):
+            try:
+                self.load_from_file(shm_symbols_path)
+                logger.info(f"Auto-loaded symbols from C++ writer: {shm_symbols_path}")
+            except Exception as e:
+                logger.warning(f"Failed to auto-load symbols from {shm_symbols_path}: {e}")
+        
+        # Load from file if provided (overrides defaults)
         if mapping_file and os.path.exists(mapping_file):
             self.load_from_file(mapping_file)
     

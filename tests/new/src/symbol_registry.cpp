@@ -35,8 +35,37 @@ bool SymbolRegistry::load_from_file(const std::string &filepath) {
     std::string content = buffer.str();
 
     // Regex-based JSON parsing (good enough for our use case)
-    // Using raw string with custom delimiter to handle quotes inside
-    // TODO :: rework later for productive with nlohmann
+    // 1. Try parsing flat format (used by save_to_file / shared memory)
+    // Format: {"id": 123, "exchange": "binance", "symbol": "BTCUSDT"}
+    std::regex flat_pattern(
+        R"json(\{"id"\s*:\s*(\d+),\s*"exchange"\s*:\s*"([^"]+)",\s*"symbol"\s*:\s*"([^"]+)"\})json");
+
+    std::sregex_iterator flat_begin(content.begin(), content.end(),
+                                    flat_pattern);
+    std::sregex_iterator flat_end;
+
+    int flat_matches = 0;
+    for (auto it = flat_begin; it != flat_end; ++it) {
+      uint32_t id = std::stoul((*it)[1].str());
+      std::string exchange = (*it)[2].str();
+      std::string symbol = (*it)[3].str();
+
+      SymbolInfo info{id, exchange, symbol};
+      id_to_info_[id] = info;
+      key_to_id_[make_key(exchange, symbol)] = id;
+      flat_matches++;
+    }
+
+    if (flat_matches > 0) {
+      std::cout << "Loaded " << flat_matches
+                << " symbol mappings (flat format) from " << filepath
+                << std::endl;
+      return true;
+    }
+
+    // 2. Try parsing hierarchical format (legacy config)
+    // Format: "name": "binance" ... "symbols": [{"symbol": "BTCUSDT", "id":
+    // 123}, ...]
     std::regex exchange_pattern(R"json("name"\s*:\s*"([^"]+)")json");
     std::regex symbol_pattern(
         R"json(\{"symbol"\s*:\s*"([^"]+)"\s*,\s*"id"\s*:\s*(\d+)\})json");
@@ -45,6 +74,7 @@ bool SymbolRegistry::load_from_file(const std::string &filepath) {
                                          exchange_pattern);
     std::sregex_iterator exchanges_end;
 
+    int hier_matches = 0;
     for (auto it = exchanges_begin; it != exchanges_end; ++it) {
       std::string exchange = (*it)[1].str();
 
@@ -70,13 +100,20 @@ bool SymbolRegistry::load_from_file(const std::string &filepath) {
         SymbolInfo info{id, exchange, symbol};
         id_to_info_[id] = info;
         key_to_id_[make_key(exchange, symbol)] = id;
+        hier_matches++;
       }
     }
 
-    std::cout << "Loaded " << id_to_info_.size() << " symbol mappings from "
-              << filepath << std::endl;
+    if (hier_matches > 0) {
+      std::cout << "Loaded " << hier_matches
+                << " symbol mappings (hierarchical format) from " << filepath
+                << std::endl;
+      return true;
+    }
 
-    return true;
+    std::cerr << "Warning: No symbols found in " << filepath
+              << " (checked flat and hierarchical formats)" << std::endl;
+    return false;
 
   } catch (const std::exception &e) {
     std::cerr << "Error loading symbol mappings: " << e.what() << std::endl;

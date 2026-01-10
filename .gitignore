@@ -21,6 +21,7 @@ out/
 dist/
 bt/
 candles/
+dependencies/datacollector/
 
 # ===== Data / artifacts =====
 **/neural_data/

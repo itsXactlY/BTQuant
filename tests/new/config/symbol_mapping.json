@@ -5,51 +5,37 @@
     {
       "name": "binance",
       "symbols": [
-        {"id": 10005, "exchange": "binance", "symbol": "ZRXUSDT"},
-        {"id": 10004, "exchange": "binance", "symbol": "AAVEUSDT"},
-        {"id": 10003, "exchange": "binance", "symbol": "ACXUSDT"},
-        {"id": 10002, "exchange": "binance", "symbol": "DOGEUSDT"},
-        {"id": 10001, "exchange": "binance", "symbol": "BTCUSDT"},
-        {"id": 10000, "exchange": "binance", "symbol": "ADAUSDT"}
+
       ]
     },
     {
       "name": "coinbase",
       "symbols": [
-        {"symbol": "BTCUSDT", "id": 101},
-        {"symbol": "ETHUSDT", "id": 102},
-        {"symbol": "SOLUSDT", "id": 103}
+
       ]
     },
     {
       "name": "kraken",
       "symbols": [
-        {"symbol": "BTCUSDT", "id": 201},
-        {"symbol": "ETHUSDT", "id": 202},
-        {"symbol": "SOLUSDT", "id": 203}
+
       ]
     },
     {
       "name": "okx",
       "symbols": [
-        {"symbol": "BTCUSDT", "id": 301},
-        {"symbol": "ETHUSDT", "id": 302},
-        {"symbol": "SOLUSDT", "id": 303}
+
       ]
     },
     {
       "name": "bybit",
       "symbols": [
-        {"symbol": "BTCUSDT", "id": 401},
-        {"symbol": "ETHUSDT", "id": 402},
-        {"symbol": "SOLUSDT", "id": 403}
+
       ]
     },
     {
       "name": "gate",
       "symbols": [
-        {"symbol": "BTCUSDT", "id": 501},
-        {"symbol": "XRPUSDT", "id": 502}
+
       ]
     }
   ]

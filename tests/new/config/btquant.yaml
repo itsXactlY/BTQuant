@@ -30,9 +30,7 @@ cache:
 
 # Symbol Configuration
 symbols:
-  discovery:
-    enabled: true
-    fallback_file: "config/symbol_mappings.yaml"
+  fallback_file: symbol_mapping.json
   auto_register: true
   default_quote: "USDT"
 

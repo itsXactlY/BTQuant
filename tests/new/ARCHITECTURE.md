@@ -380,7 +380,7 @@ If you have existing hardcoded symbol mappings, migrate them to `config/symbol_m
 
 ## API Reference
 
-See [API Reference Documentation](../docs/technical/api-reference.md) for detailed API documentation.
+See [API Reference Documentation](../../docs/technical/api-reference.md) for detailed API documentation.
 
 ## License
 

@@ -23,12 +23,7 @@
     {
       "name": "okx",
       "symbols": [
-        {"symbol": "AAVEUSDT", "id": 301},
-        {"symbol": "BNBUSDT", "id": 302},
-        {"symbol": "ETHUSDT", "id": 303},
-        {"symbol": "ADAUSDT", "id": 304},
-        {"symbol": "BCHUSDT", "id": 305},
-        {"symbol": "BTCUSDT", "id": 306}
+
       ]
     },
     {

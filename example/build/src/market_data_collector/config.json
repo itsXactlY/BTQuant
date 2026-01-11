@@ -77,7 +77,7 @@
         "log_level": "DEBUG"
     },
     "database_debug": {
-        "verify_connection_on_start": false,
+        "verify_connection_on_start": true,
         "test_table_creation": false,
         "log_all_queries": false,
         "log_connection_status": false,
@@ -108,6 +108,6 @@
         "track_throughput": false,
         "monitor_resource_usage": false,
         "log_performance_metrics": false,
-        "alert_on_slow_operations": false
+        "alert_on_slow_operations": true
     }
 }

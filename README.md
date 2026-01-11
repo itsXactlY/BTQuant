@@ -234,4 +234,4 @@ BTQuant is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 **BTQuant**: High-Frequency Trading Meets Simplicity. Real-Time Detection, Zero Limits, Maximum Performance.
 
-Ready to start building? Check out the [Quick Start Guide](docs/quickstart.md) or dive into [Real-Time Detection](#real-time-detection)!
+Ready to start building? Check out the [Quick Start Guide](docs/quickstart.md) or dive into [Real-Time Detection](tests/new/)!

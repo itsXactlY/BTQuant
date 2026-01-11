@@ -51,7 +51,7 @@ std::optional<StopHuntSignal> StopHuntDetector::detect(const std::string& symbol
         // std::cout << "StopHunt: Exchange " << exchange << " price " << price << " deviation " << deviation_pct << "%" << std::endl;
 
         if (std::abs(deviation_pct) > threshold_pct_) {
-            std::cout << "StopHunt: Triggered for " << exchange << std::endl;
+            // std::cout << "StopHunt: Triggered for " << exchange << std::endl;
             // Found an outlier - this could be a stop hunt
             StopHuntSignal signal;
             signal.symbol = symbol;

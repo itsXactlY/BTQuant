@@ -16,7 +16,7 @@ Key Features:
 Architecture:
     C++ Collector -> HotSpine Writer -> Shared Memory -> Python Reader -> Strategy
 
-Author: PubBTQuant
+Author: BTQuant
 Version: 1.0.0
 """
 

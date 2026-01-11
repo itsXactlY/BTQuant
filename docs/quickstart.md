@@ -2,14 +2,15 @@
 
 ## Overview
 
-This guide will help you get started with BTQuant quickly. You'll learn how to create your first strategy, run a backtest, and understand the basic workflow.
+This guide will help you get started with BTQuant quickly. You'll learn how to create your first strategy, run a backtest, set up real-time market monitoring, and detect manipulation patterns.
 
 ## Prerequisites
 
 Before starting, ensure you have:
 - [x] BTQuant installed (see [Installation Guide](installation.md))
-- [x] Python 3.12+ environment activated
+- [x] Python 3.12+ and C++17 environments set up
 - [x] Basic understanding of Python programming
+- [x] C++ market data collector running (for real-time features)
 
 ## Your First Strategy
 
@@ -209,6 +210,48 @@ Final portfolio value: $10542.34
 - **Plot**: A candlestick chart with your strategy's buy/sell signals
 - **QuantStats report**: `QuantStats/BTC_USDT_2024-01-01_12-00-00.html` with detailed performance metrics
 
+## Real-Time Market Monitoring
+
+Once you have the C++ market data collector running, you can monitor live markets for manipulation patterns.
+
+### Start the Market Data Collector
+
+First, ensure your market data collector is running:
+
+```bash
+# Terminal 1: Start market data collection
+cd dependencies/ccapi/example/build/src/market_data_collector
+./market_data_collector
+```
+
+### Run the Manipulation Detector
+
+In another terminal, start the real-time detector:
+
+```bash
+# Terminal 2: Start manipulation detection
+cd tests/new/build
+./manipulation_monitor
+```
+
+### Expected Output
+
+You should see real-time detection alerts:
+
+```
+🚨 StopHunt(symbol=BTC-USDT, exchange=binance, deviation=-1.2%, signal=LONG)
+💰 Arbitrage(buy=kraken@42150, sell=binance@42250, profit=65bps)
+🐋 WhaleDetected(symbol=ETH-USDT, size=$250000, lagging=3 exchanges)
+```
+
+### Understanding Detection Signals
+
+- **🚨 Stop Hunt**: Fake wicks designed to trigger stop-loss orders
+- **💰 Arbitrage**: Cross-exchange price discrepancies
+- **🐋 Whale Front-Run**: Large trades that may move markets
+- **🏦 Liquidity Imbalance**: Thin orderbooks signaling manipulation targets
+- **🎭 Spoofing**: Fake orders to manipulate market perception
+
 ## Using the BaseStrategy
 
 For more advanced features, you can use BTQuant's `BaseStrategy`:
@@ -401,14 +444,19 @@ results = bulk_backtest(
 ## Next Steps
 
 1. **Explore Examples**: Check the `Examples/` directory for more complete examples
-2. **Learn Strategy Development**: Read [Strategy Development Guide](strategy-development.md)
-3. **Understand Configuration**: Review [Configuration Guide](configuration.md)
-4. **Advanced Features**: Explore [API Reference](api-reference.md)
+2. **Set up Live Monitoring**: Configure your exchange connections and start real-time detection
+3. **Learn Strategy Development**: Read [Strategy Development Guide](user-guide/strategies.md)
+4. **Understand Configuration**: Review [Configuration Guide](technical/configuration.md)
+5. **Advanced Features**: Explore [API Reference](technical/api-reference.md)
+6. **Launch Dashboard**: Use the QuantStats dashboard for performance analysis
 
 ## Common Issues and Solutions
 
 ### Issue: "No data available"
 **Solution**: Check your internet connection and ensure the exchange is accessible. Try a different exchange or timeframe.
+
+### Issue: "Shared memory not found"
+**Solution**: Ensure the C++ market data collector is running first. Check `/dev/shm/btquant_hotspine` exists.
 
 ### Issue: "Module not found"
 **Solution**: Ensure you're in the correct virtual environment and BTQuant is properly installed.
@@ -416,11 +464,15 @@ results = bulk_backtest(
 ### Issue: "Permission denied"
 **Solution**: Check file permissions and ensure you have write access to the output directory.
 
+### Issue: "No detection signals"
+**Solution**: Check that multiple exchanges are configured and market data is flowing. Adjust detector thresholds if needed.
+
 ## Getting Help
 
 - **Documentation**: This quick start guide covers the basics
 - **Examples**: See `Examples/` directory for working code
+- **Manipulation Detection**: Check [Detection Quick Start](../tests/new/QUICKSTART.md)
 - **Troubleshooting**: Check [Troubleshooting Guide](troubleshooting.md)
 - **Community**: Join the BTQuant community for support
 
-You're now ready to start building your own trading strategies with BTQuant! The framework provides powerful tools for both simple and complex algorithmic trading systems.
+You're now ready to start building your own trading strategies with BTQuant! The framework provides powerful tools for both historical backtesting and real-time market analysis with manipulation detection.

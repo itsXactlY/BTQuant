@@ -1,22 +1,23 @@
-# BTQuant Manipulation Detector - Quick Start Guide
+# BTQuant Manipulation Detection - Quick Start Guide
 
 ## Prerequisites
 
-1. **Running HotSpine Market Data Collector**
-   - Make sure your C++ market data collector is running
-   - Shared memory should exist at `/dev/shm/btquant_hotspine`
+1. **Running Market Data Collector**
+    - Ensure the C++ market data collector is running and feeding data to HotSpine
+    - Shared memory segment `/dev/shm/btquant_hotspine` should be active
 
 2. **System Requirements**
-   - Linux (Ubuntu 20.04+, Arch, etc.)
-   - GCC 7+ or Clang 5+
-   - CMake 3.15+
-   - 4GB+ RAM
+    - Linux (Ubuntu 20.04+, Arch, etc.)
+    - GCC 7+ or Clang 5+ (C++17 support)
+    - CMake 3.15+
+    - 4GB+ RAM
+    - Running HotSpine market data feed
 
 ## Installation
 
 ### 1. Clone/Copy the Project
 ```bash
-cd ~/projects/PubBTQuant/dependencies/ccapi/example/
+cd ~/projects/BTQuant/dependencies/ccapi/example/
 mkdir manipulation_detector
 cd manipulation_detector
 # Copy all files here
@@ -35,23 +36,37 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 ```
 
-### 3. Configure Symbols
+### 3. Configure Detection
 
-Edit `config/symbol_mapping.json` to match your market data collector symbols.
+Edit `config/btquant.yaml` to configure detector settings:
 
-Example:
-```json
-{
-  "exchanges": [
-    {
-      "name": "binance",
-      "symbols": [
-        {"symbol": "BTC-USDT", "id": 1},
-        {"symbol": "ETH-USDT", "id": 2}
-      ]
-    }
-  ]
-}
+```yaml
+# BTQuant Detection Configuration
+shared_memory:
+  path: "/btquant_hotspine"
+  buffer_size: 65536
+
+monitoring:
+  poll_interval_ms: 1000
+
+exchanges:
+  binance:
+    enabled: true
+    base_id: 1
+  okx:
+    enabled: true
+    base_id: 301
+
+detectors:
+  stop_hunt:
+    enabled: true
+    threshold_pct: 0.5
+  liquidity_imbalance:
+    enabled: true
+    depth_ratio_threshold: 3.0
+  whale_frontrun:
+    enabled: true
+    threshold_usd: 100000
 ```
 
 ### 4. Run
@@ -106,7 +121,7 @@ arbitrage.set_min_profit_bps(30);       // 0.3% instead of 0.5%
 ls -lh /dev/shm/btquant_hotspine
 
 # If not found, start your market data collector first
-cd ~/projects/PubBTQuant/dependencies/ccapi/example/build/src/market_data_collector
+cd ~/projects/BTQuant/dependencies/ccapi/example/build/src/market_data_collector
 ./market_data_collector
 ```
 

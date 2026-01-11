@@ -294,7 +294,7 @@ class JrrBroker(bt.BrokerBase):
                           tradeid=tradeid)
         
         # Execute via JRR
-        # Note: data.symbol is used as Asset. In PubBTQuant, data._dataname is often the symbol.
+        # Note: data.symbol is used as Asset. In BTQuant, data._dataname is often the symbol.
         asset = getattr(data, '_dataname', str(data))
         
         # Calculate USD amount if possible

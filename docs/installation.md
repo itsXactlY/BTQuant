@@ -2,13 +2,15 @@
 
 ## Overview
 
-BTQuant is an institutional-grade algorithmic trading framework built on Backtrader with support for multiple exchanges, SQL Server data storage, and advanced market data ingestion. This guide will help you set up BTQuant on your system.
+BTQuant is a high-frequency algorithmic trading framework combining Python's flexibility with C++'s performance. It features real-time market manipulation detection, ultra-low latency shared memory data pipelines, and institutional-grade backtesting capabilities. This guide will help you set up the complete BTQuant system including Python components, C++ detectors, and market data collectors.
 
 ## System Requirements
 
 ### Minimum Requirements
 - **Operating System**: Linux (Ubuntu 20.04+, CentOS 8+, Arch Linux, or equivalent)
 - **Python**: 3.12 or 3.13
+- **C++ Compiler**: GCC 7+ or Clang 5+ (C++17 support required)
+- **Build System**: CMake 3.15+
 - **Memory**: 8GB RAM (16GB recommended for optimal performance)
 - **Storage**: 20GB free disk space (more if using SQL Server)
 - **Network**: Stable internet connection for data feeds
@@ -16,9 +18,11 @@ BTQuant is an institutional-grade algorithmic trading framework built on Backtra
 ### Recommended Requirements
 - **Operating System**: Linux with kernel 5.14+
 - **Python**: 3.13
+- **C++ Compiler**: GCC 9+ or Clang 10+ with full C++17 support
+- **Build System**: CMake 3.20+
 - **Memory**: 16GB RAM or more
 - **Storage**: 50GB+ SSD storage
-- **Network**: High-speed, low-latency connection
+- **Network**: High-speed, low-latency connection (for live trading)
 
 ## Prerequisites
 
@@ -29,24 +33,24 @@ Install the required system packages based on your Linux distribution:
 #### Ubuntu/Debian
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential python3-dev unixodbc-dev git
+sudo apt-get install -y build-essential python3-dev unixodbc-dev git cmake ninja-build
 ```
 
 #### CentOS/RHEL/Fedora
 ```bash
 # CentOS/RHEL
 sudo yum groupinstall -y 'Development Tools'
-sudo yum install -y python3-devel unixODBC-devel git
+sudo yum install -y python3-devel unixODBC-devel git cmake ninja-build
 
 # Fedora
 sudo dnf groupinstall -y 'Development Tools'
-sudo dnf install -y python3-devel unixODBC-devel git
+sudo dnf install -y python3-devel unixODBC-devel git cmake ninja-build
 ```
 
 #### Arch Linux
 ```bash
 sudo pacman -Syu --noconfirm
-sudo pacman -S --noconfirm base-devel pybind11 unixodbc git tk
+sudo pacman -S --noconfirm base-devel pybind11 unixodbc git tk cmake ninja
 ```
 
 ### Optional: SQL Server Setup
@@ -78,10 +82,12 @@ bash Installers/install.sh
 
 The installer will:
 - Detect your Linux distribution
-- Install system dependencies
+- Install system dependencies (Python and C++)
 - Create a Python virtual environment (`.btq`)
 - Install all required Python packages
+- Build C++ components (market data collectors and detectors)
 - Set up the Backtrader fork with extensions
+- Configure shared memory segments for HotSpine
 
 ### Method 2: Manual Installation
 
@@ -97,7 +103,7 @@ python3 -m venv .btq
 source .btq/bin/activate
 ```
 
-#### Step 3: Install Dependencies
+#### Step 3: Install Python Dependencies
 ```bash
 # Upgrade pip and install build tools
 pip install --upgrade pip setuptools wheel
@@ -115,9 +121,28 @@ cd ../MsSQL
 pip install .
 ```
 
-#### Step 4: Verify Installation
-```python
+#### Step 4: Build C++ Components
+```bash
+# Build market data collector
+cd ../../dependencies/ccapi/example
+mkdir -p build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
+
+# Build manipulation detectors
+cd ../../../tests/new
+chmod +x BUILD_AND_RUN.sh
+./BUILD_AND_RUN.sh release
+```
+
+#### Step 5: Verify Installation
+```bash
+# Test Python components
 python3 -c "import backtrader as bt; print(f'Backtrader version: {bt.__version__}')"
+
+# Test C++ components
+cd tests/new/build
+./manipulation_monitor --help
 ```
 
 ## Configuration
@@ -221,7 +246,7 @@ exchange_config = {
 
 ## Testing Your Installation
 
-### Basic Functionality Test
+### Python Components Test
 
 ```python
 from backtrader import backtest
@@ -242,6 +267,22 @@ if __name__ == '__main__':
         asset_name='BTC/USDT'
     )
     print(f"Backtest completed. Final value: ${result:.2f}")
+```
+
+### C++ Components Test
+
+```bash
+# Test market data collector
+cd dependencies/ccapi/example/build/src/market_data_collector
+./market_data_collector --test
+
+# Test manipulation detectors
+cd ../../../../tests/new/build
+./simple_monitor
+
+# Should see output like:
+# 🚨 StopHunt(symbol=BTC-USDT, exchange=binance, deviation=-1.2%, signal=LONG)
+# 💰 Arbitrage(buy=kraken@42150, sell=binance@42250, profit=65bps)
 ```
 
 ### Database Connection Test
@@ -272,19 +313,34 @@ except Exception as e:
 # Fix file permissions
 chmod +x Installers/install.sh
 chmod +x dependencies/setup.py
+chmod +x tests/new/BUILD_AND_RUN.sh
 ```
 
 #### 2. Missing Dependencies
 ```bash
 # Reinstall system dependencies
-sudo apt-get install -y build-essential python3-dev unixodbc-dev
+sudo apt-get install -y build-essential python3-dev unixodbc-dev cmake ninja-build
 
 # Reinstall Python dependencies
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-#### 3. Virtual Environment Issues
+#### 3. C++ Compilation Errors
+```bash
+# Check compiler version
+g++ --version
+
+# Update CMake
+sudo apt-get install cmake
+
+# Clean and rebuild
+cd tests/new
+rm -rf build
+./BUILD_AND_RUN.sh release
+```
+
+#### 4. Virtual Environment Issues
 ```bash
 # Recreate virtual environment
 rm -rf .btq
@@ -325,8 +381,8 @@ export MALLOC_ARENA_MAX=1
 
 If you encounter issues:
 
-1. **Check the logs**: BTQuant provides detailed logging for debugging
-2. **Review system requirements**: Ensure your system meets minimum requirements
+1. **Check the logs**: BTQuant provides detailed logging for both Python and C++ components
+2. **Review system requirements**: Ensure your system meets minimum requirements for C++ compilation
 3. **Consult documentation**: Check the troubleshooting and FAQ sections
 4. **Community support**: Join the BTQuant community for assistance
 
@@ -334,10 +390,13 @@ If you encounter issues:
 
 After successful installation:
 
-1. **Read the Quick Start Guide**: Learn how to create your first strategy
-2. **Explore Examples**: Check the `Examples/` directory for working code
-3. **Configure Data Sources**: Set up your preferred data feeds
-4. **Start Strategy Development**: Begin building your trading strategies
+1. **Read the Quick Start Guide**: Learn how to create your first strategy and run backtests
+2. **Set up Market Data**: Configure and start the C++ market data collectors
+3. **Run Detection Monitors**: Start real-time manipulation detection
+4. **Explore Examples**: Check the `Examples/` directory for working code
+5. **Configure Data Sources**: Set up your preferred data feeds and exchanges
+6. **Start Strategy Development**: Begin building your trading strategies
+7. **Launch Dashboard**: Use the QuantStats dashboard for performance analysis
 
 ## Uninstallation
 
@@ -360,5 +419,5 @@ sudo apt-get remove -y build-essential python3-dev unixodbc-dev
 For additional support and questions:
 - Check the [FAQ section](faq.md)
 - Review [troubleshooting guide](troubleshooting.md)
-- Explore [strategy development](strategy-development.md)
+- Explore [strategy development](user-guide/strategies.md)
 - Visit the BTQuant community forums

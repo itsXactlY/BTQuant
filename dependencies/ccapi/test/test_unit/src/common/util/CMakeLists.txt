@@ -1,7 +1,0 @@
-set(NAME util)
-project(${NAME})
-add_executable(${NAME} ${SOURCE_LOGGER} ccapi_util_test.cpp)
-if(NOT CCAPI_LEGACY_USE_WEBSOCKETPP)
-  add_dependencies(${NAME} boost rapidjson)
-endif()
-gtest_discover_tests(${NAME})

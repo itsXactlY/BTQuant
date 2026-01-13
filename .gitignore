@@ -71,3 +71,5 @@ Example_*.py
 **/*html
 
 dependencies/datacollector/market_data_collector
+discord_architect.py
+dependencies/BTQ_Render_Engine/

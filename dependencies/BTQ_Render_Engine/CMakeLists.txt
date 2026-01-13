@@ -8,8 +8,24 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra")
 find_package(Vulkan REQUIRED)
 find_package(X11 REQUIRED)
 
-# Add Dear ImGui
+# Add GLM
 include(FetchContent)
+FetchContent_Declare(
+  glm
+  GIT_REPOSITORY https://github.com/g-truc/glm.git
+  GIT_TAG 0.9.9.8
+)
+FetchContent_Populate(glm)
+
+# Add concurrentqueue
+FetchContent_Declare(
+  concurrentqueue
+  GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
+  GIT_TAG v1.0.4
+)
+FetchContent_Populate(concurrentqueue)
+
+# Add Dear ImGui
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
@@ -44,6 +60,8 @@ target_include_directories(dashboard_advanced PRIVATE
    ${Vulkan_INCLUDE_DIRS}
    ${X11_INCLUDE_DIR}
    ${CMAKE_CURRENT_SOURCE_DIR}/include
+   ${glm_SOURCE_DIR}
+   ${concurrentqueue_SOURCE_DIR}
    ${imgui_SOURCE_DIR}
    ${imgui_SOURCE_DIR}/backends
 )

@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra -Wunused-variable")
 
 find_package(Vulkan REQUIRED)
+find_package(glfw3 REQUIRED)
 find_package(X11 REQUIRED)
 
 # Add GLM
@@ -47,6 +48,7 @@ add_library(imgui STATIC
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp  # For compatibility, though we use X11
 )
@@ -114,6 +116,26 @@ set(EXTERNAL_SOURCES
 
 # Advanced dashboard executable
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${EXTERNAL_SOURCES})
+
+# Minimal Vulkan demo for troubleshooting
+add_executable(hotspine_vulkan_demo src/hotspine_vulkan_demo.cpp ${EXTERNAL_SOURCES})
+target_include_directories(hotspine_vulkan_demo PRIVATE
+   ${Vulkan_INCLUDE_DIRS}
+   ${X11_INCLUDE_DIR}
+   ${CMAKE_CURRENT_SOURCE_DIR}/include
+   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+   ${glm_SOURCE_DIR}
+)
+target_link_libraries(hotspine_vulkan_demo PRIVATE
+   Vulkan::Vulkan
+   ${X11_LIBRARIES}
+   pthread
+   rt
+)
+set_target_properties(hotspine_vulkan_demo PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
 
 # Integration test executable
 # add_executable(dashboard_test ${TEST_SOURCES} ${EXTERNAL_SOURCES})

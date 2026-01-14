@@ -106,23 +106,23 @@ else
 fi
 
 # Check if main dashboard was built
-if [ -f "./dashboard_advanced" ]; then
+if [ -f "./bin/dashboard_advanced" ]; then
     print_success "Main dashboard executable built successfully"
-    
+
     # Display build information
     echo ""
     echo "=== Build Summary ==="
-    echo "Dashboard executable: $(pwd)/dashboard_advanced"
-    echo "Integration test: $(pwd)/dashboard_test"
+    echo "Dashboard executable: $(pwd)/bin/dashboard_advanced"
+    echo "Integration test: $(pwd)/bin/dashboard_test"
     echo "HotSpine integration: $($HOTSPINE_AVAILABLE && echo "Available" || echo "Demo mode")"
     echo "Symbol mappings: $($SYMBOLS_AVAILABLE && echo "Available" || echo "Defaults")"
     echo ""
-    
+
     # Show file sizes
     echo "=== Executable Information ==="
-    ls -lh dashboard_advanced dashboard_test 2>/dev/null || true
+    ls -lh bin/dashboard_advanced bin/dashboard_test 2>/dev/null || true
     echo ""
-    
+
     # Performance validation
     print_status "Validating performance targets..."
     echo "Target specifications:"
@@ -132,17 +132,17 @@ if [ -f "./dashboard_advanced" ]; then
     echo "  💾 Memory-efficient data structures"
     echo "  🔄 Thread-safe concurrent data processing"
     echo ""
-    
+
     # Usage instructions
     echo "=== Usage Instructions ==="
     echo "To run the real-time dashboard:"
     echo "  cd $(pwd)"
-    echo "  ./dashboard_advanced"
+    echo "  ./bin/dashboard_advanced"
     echo ""
     echo "To run integration tests:"
-    echo "  ./dashboard_test"
+    echo "  ./bin/dashboard_test"
     echo ""
-    
+
     if [ "$HOTSPINE_AVAILABLE" = true ]; then
         echo "🔥 Live HotSpine data mode:"
         echo "  - Real-time market data from shared memory"
@@ -159,11 +159,11 @@ if [ -f "./dashboard_advanced" ]; then
         echo "  2. Ensure /dev/shm/btquant_hotspine exists"
         echo "  3. Restart the dashboard"
     fi
-    
+
     echo ""
     print_success "BTQuant Real-Time Dashboard build completed successfully!"
     echo "🎯 Ready for professional-grade financial data visualization"
-    
+
 else
     print_error "Main dashboard executable not found"
     exit 1

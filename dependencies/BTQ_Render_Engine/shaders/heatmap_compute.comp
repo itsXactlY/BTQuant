@@ -1,0 +1,244 @@
+#version 450 core
+
+/**
+ * BTQuant Advanced Heatmap Compute Shader
+ * 
+ * GPU-accelerated compute shader for real-time heatmap generation with
+ * advanced interpolation, smoothing, and visual effects processing.
+ * 
+ * Features:
+ * - Bilinear and bicubic interpolation
+ * - Real-time smoothing and filtering
+ * - Edge detection and enhancement
+ * - Temporal smoothing for animations
+ * - Color mapping with custom gradients
+ * - Performance optimized for large datasets
+ */
+
+// Local workgroup size (16x16 = 256 threads per workgroup)
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Input/Output buffers
+layout(set = 0, binding = 0, std430) restrict readonly buffer InputBuffer {
+    float values[];
+} input_data;
+
+layout(set = 0, binding = 1, std430) restrict writeonly buffer OutputBuffer {
+    vec4 colors[];
+} output_data;
+
+layout(set = 0, binding = 2, std430) restrict readonly buffer PreviousBuffer {
+    vec4 previous_colors[];
+} previous_data;
+
+// Uniform buffer
+layout(set = 0, binding = 3) uniform UniformBuffer {
+    uvec2 grid_dimensions;
+    vec2 value_range;
+    float time;
+    float delta_time;
+    float interpolation_strength;
+    float temporal_smoothing;
+    uint color_scheme_size;
+    float edge_enhancement;
+    vec2 gradient_direction;
+    float animation_speed;
+    uint processing_flags;
+    float custom_param1;
+} ubo;
+
+// Color scheme buffer
+layout(set = 0, binding = 4, std430) restrict readonly buffer ColorSchemeBuffer {
+    vec4 color_scheme[];
+};
+
+// Shared memory for local processing
+shared float local_values[18][18]; // 16x16 + 1 border on each side
+shared vec4 local_colors[16][16];
+
+// Utility functions
+float smoothstep_custom(float edge0, float edge1, float x) {
+    float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// Bicubic interpolation
+float cubic_interpolate(float p0, float p1, float p2, float p3, float t) {
+    float a = -0.5 * p0 + 1.5 * p1 - 1.5 * p2 + 0.5 * p3;
+    float b = p0 - 2.5 * p1 + 2.0 * p2 - 0.5 * p3;
+    float c = -0.5 * p0 + 0.5 * p2;
+    float d = p1;
+    
+    return a * t * t * t + b * t * t + c * t + d;
+}
+
+// Bilinear interpolation
+float bilinear_interpolate(float v00, float v10, float v01, float v11, vec2 t) {
+    float v0 = mix(v00, v10, t.x);
+    float v1 = mix(v01, v11, t.x);
+    return mix(v0, v1, t.y);
+}
+
+// Color mapping function
+vec4 map_value_to_color(float value) {
+    // Normalize value to [0, 1] range
+    float normalized = (value - ubo.value_range.x) / (ubo.value_range.y - ubo.value_range.x);
+    normalized = clamp(normalized, 0.0, 1.0);
+    
+    if (ubo.color_scheme_size <= 1) {
+        return vec4(normalized, normalized, normalized, 1.0);
+    }
+    
+    // Find the segment in the color scheme
+    float segment_size = 1.0 / float(ubo.color_scheme_size - 1);
+    uint segment = uint(normalized / segment_size);
+    segment = min(segment, ubo.color_scheme_size - 2);
+    
+    float local_t = (normalized - float(segment) * segment_size) / segment_size;
+    
+    // Smooth interpolation
+    local_t = smoothstep_custom(0.0, 1.0, local_t);
+    
+    return mix(color_scheme[segment], color_scheme[segment + 1], local_t);
+}
+
+// Edge detection using Sobel operator
+float detect_edges(uvec2 coord) {
+    if (coord.x == 0 || coord.y == 0 || 
+        coord.x >= ubo.grid_dimensions.x - 1 || 
+        coord.y >= ubo.grid_dimensions.y - 1) {
+        return 0.0;
+    }
+    
+    // Sobel X kernel
+    float gx = -1.0 * local_values[coord.x - 1][coord.y - 1] +
+                1.0 * local_values[coord.x + 1][coord.y - 1] +
+               -2.0 * local_values[coord.x - 1][coord.y] +
+                2.0 * local_values[coord.x + 1][coord.y] +
+               -1.0 * local_values[coord.x - 1][coord.y + 1] +
+                1.0 * local_values[coord.x + 1][coord.y + 1];
+    
+    // Sobel Y kernel
+    float gy = -1.0 * local_values[coord.x - 1][coord.y - 1] +
+               -2.0 * local_values[coord.x][coord.y - 1] +
+               -1.0 * local_values[coord.x + 1][coord.y - 1] +
+                1.0 * local_values[coord.x - 1][coord.y + 1] +
+                2.0 * local_values[coord.x][coord.y + 1] +
+                1.0 * local_values[coord.x + 1][coord.y + 1];
+    
+    return sqrt(gx * gx + gy * gy);
+}
+
+// Gaussian blur for smoothing
+float gaussian_blur(uvec2 coord, float sigma) {
+    float result = 0.0;
+    float weight_sum = 0.0;
+    
+    int radius = int(ceil(3.0 * sigma));
+    
+    for (int dy = -radius; dy <= radius; dy++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            ivec2 sample_coord = ivec2(coord) + ivec2(dx, dy);
+            
+            if (sample_coord.x >= 0 && sample_coord.y >= 0 &&
+                sample_coord.x < int(ubo.grid_dimensions.x) &&
+                sample_coord.y < int(ubo.grid_dimensions.y)) {
+                
+                float distance_sq = float(dx * dx + dy * dy);
+                float weight = exp(-distance_sq / (2.0 * sigma * sigma));
+                
+                uint index = uint(sample_coord.y) * ubo.grid_dimensions.x + uint(sample_coord.x);
+                result += input_data.values[index] * weight;
+                weight_sum += weight;
+            }
+        }
+    }
+    
+    return weight_sum > 0.0 ? result / weight_sum : 0.0;
+}
+
+void main() {
+    uvec2 coord = gl_GlobalInvocationID.xy;
+    
+    // Bounds check
+    if (coord.x >= ubo.grid_dimensions.x || coord.y >= ubo.grid_dimensions.y) {
+        return;
+    }
+    
+    uint index = coord.y * ubo.grid_dimensions.x + coord.x;
+    
+    // Load data into shared memory for local processing
+    uvec2 local_coord = gl_LocalInvocationID.xy;
+    
+    // Load current cell
+    local_values[local_coord.x + 1][local_coord.y + 1] = input_data.values[index];
+    
+    // Load border cells (for interpolation and edge detection)
+    if (local_coord.x == 0 && coord.x > 0) {
+        uint left_index = coord.y * ubo.grid_dimensions.x + (coord.x - 1);
+        local_values[0][local_coord.y + 1] = input_data.values[left_index];
+    }
+    
+    if (local_coord.y == 0 && coord.y > 0) {
+        uint top_index = (coord.y - 1) * ubo.grid_dimensions.x + coord.x;
+        local_values[local_coord.x + 1][0] = input_data.values[top_index];
+    }
+    
+    // Synchronize workgroup
+    barrier();
+    
+    float current_value = input_data.values[index];
+    
+    // Apply smoothing if enabled
+    if ((ubo.processing_flags & 0x1u) != 0u) {
+        current_value = gaussian_blur(coord, ubo.interpolation_strength);
+    }
+    
+    // Apply interpolation for smoother gradients
+    if ((ubo.processing_flags & 0x2u) != 0u && ubo.interpolation_strength > 0.0) {
+        // Bilinear interpolation with neighboring cells
+        float neighbors[4];
+        neighbors[0] = coord.x > 0 ? input_data.values[index - 1] : current_value;
+        neighbors[1] = coord.x < ubo.grid_dimensions.x - 1 ? input_data.values[index + 1] : current_value;
+        neighbors[2] = coord.y > 0 ? input_data.values[index - ubo.grid_dimensions.x] : current_value;
+        neighbors[3] = coord.y < ubo.grid_dimensions.y - 1 ? input_data.values[index + ubo.grid_dimensions.x] : current_value;
+        
+        float avg_neighbors = (neighbors[0] + neighbors[1] + neighbors[2] + neighbors[3]) * 0.25;
+        current_value = mix(current_value, avg_neighbors, ubo.interpolation_strength * 0.5);
+    }
+    
+    // Map value to color
+    vec4 new_color = map_value_to_color(current_value);
+    
+    // Apply edge enhancement
+    if ((ubo.processing_flags & 0x4u) != 0u && ubo.edge_enhancement > 0.0) {
+        float edge_strength = detect_edges(coord);
+        new_color.rgb += vec3(edge_strength * ubo.edge_enhancement);
+    }
+    
+    // Apply temporal smoothing for animations
+    if ((ubo.processing_flags & 0x8u) != 0u && ubo.temporal_smoothing > 0.0) {
+        vec4 previous_color = previous_data.previous_colors[index];
+        new_color = mix(previous_color, new_color, 1.0 - ubo.temporal_smoothing);
+    }
+    
+    // Apply animation effects
+    if ((ubo.processing_flags & 0x10u) != 0u) {
+        float animation_phase = sin(ubo.time * ubo.animation_speed + 
+                                   float(coord.x + coord.y) * 0.1) * 0.5 + 0.5;
+        new_color.rgb *= (0.8 + animation_phase * 0.4);
+    }
+    
+    // Apply gradient direction effects
+    if (length(ubo.gradient_direction) > 0.0) {
+        vec2 normalized_coord = vec2(coord) / vec2(ubo.grid_dimensions - 1u);
+        float gradient_factor = dot(normalized_coord, normalize(ubo.gradient_direction));
+        new_color.rgb *= (0.7 + gradient_factor * 0.6);
+    }
+    
+    // Ensure color is in valid range
+    new_color = clamp(new_color, 0.0, 1.0);
+    
+    // Store result
+    output_data.colors[index] = new_color;
+}

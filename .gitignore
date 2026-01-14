@@ -48,8 +48,6 @@ node_modules/
 venv/
 .venv/
 
-
-
 # ===== IDE =====
 .vscode/
 .idea/
@@ -72,4 +70,4 @@ Example_*.py
 
 dependencies/datacollector/market_data_collector
 discord_architect.py
-dependencies/BTQ_Render_Engine/
+

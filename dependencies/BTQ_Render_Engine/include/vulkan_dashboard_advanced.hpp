@@ -987,6 +987,15 @@ public:
     uint64_t ui_elements_rendered;
     float data_latency_ms;
   };
+
+  struct RiskMetrics {
+    double total_equity;
+    double daily_pnl;
+    double max_drawdown;
+    double sharpe_ratio;
+    double var_95; // Value at Risk
+    double current_exposure;
+  };
   PerformanceStats get_performance_stats() const;
 
 private:
@@ -1021,6 +1030,12 @@ private:
   std::deque<float> frame_times_;
   uint64_t frame_count_{0};
 
+  // Strategy and UI state
+  bool live_execution_active_ = false;
+  bool show_backtest_dialog_ = false;
+  bool show_risk_manager_ = false;
+  RiskMetrics risk_metrics_{100000.0, 1250.0, 0.05, 2.1, 1500.0, 45000.0};
+
   // Private methods
   void init_x11();
   void init_vulkan();
@@ -1031,15 +1046,22 @@ private:
   void update_components(float delta_time);
   void render_components();
   void update_performance_stats();
+  void synchronize_market_data();
   void cleanup_x11();
 
   // GUI rendering
   void render_gui();
+  void render_backtest_dialog();
+  void render_risk_manager();
 
   // Event handlers
   void on_trade_received(const RenderEngine::TradeData &trade);
   void on_orderbook_updated(const RenderEngine::OrderbookData &orderbook);
   void on_window_resize(uint32_t new_width, uint32_t new_height);
+
+  // Persistence
+  void save_layout(const std::string &filename = "dashboard_layout.json");
+  void load_layout(const std::string &filename = "dashboard_layout.json");
 };
 
 } // namespace BTQuant

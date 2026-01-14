@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 project(BTQuant_Advanced_Dashboard LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -41,6 +42,13 @@ FetchContent_Declare(
   GIT_TAG v1.89.9-docking
 )
 FetchContent_MakeAvailable(imgui)
+# Add nlohmann/json
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(json)
 
 # Build ImGui library
 add_library(imgui STATIC
@@ -196,6 +204,7 @@ target_include_directories(dashboard_advanced PRIVATE
    ${VulkanMemoryAllocator_SOURCE_DIR}/include
    ${imgui_SOURCE_DIR}
    ${imgui_SOURCE_DIR}/backends
+   ${json_SOURCE_DIR}/include
 )
 
 # target_include_directories(dashboard_test PRIVATE
@@ -208,6 +217,7 @@ target_link_libraries(dashboard_advanced PRIVATE
    ${X11_LIBRARIES}
    -lXi
    imgui
+   nlohmann_json::nlohmann_json
    pthread
    rt
 )

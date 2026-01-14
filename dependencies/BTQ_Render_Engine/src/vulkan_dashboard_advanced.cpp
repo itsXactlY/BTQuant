@@ -2,6 +2,9 @@
 #include "data_visualization_engine.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
+#include <fstream>
+#include <iomanip>
+#include <nlohmann/json.hpp>
 #include <unistd.h>
 #include <vulkan/vulkan_core.h>
 
@@ -1270,7 +1273,7 @@ void VulkanDashboard::initialize() {
   market_data_processor_ =
       std::make_unique<RenderEngine::MarketDataProcessor>();
   hotspine_bridge_ =
-      std::make_unique<RenderEngine::HotSpineDataBridge>("hotspine_shm");
+      std::make_unique<RenderEngine::HotSpineDataBridge>("/btquant_hotspine");
   visualization_engine_ =
       std::make_unique<RenderEngine::DataVisualizationEngine>(
           vulkan_core_->get_device(), vulkan_core_->get_physical_device());
@@ -1281,6 +1284,12 @@ void VulkanDashboard::initialize() {
   fprintf(stderr, "[VulkanDashboard] Component resources initialized\n");
   setup_data_subscriptions();
   fprintf(stderr, "[VulkanDashboard] Data subscriptions setup\n");
+
+  // Start real-time data data bridge
+  if (hotspine_bridge_) {
+    hotspine_bridge_->start();
+    fprintf(stderr, "[VulkanDashboard] HotSpine bridge started\n");
+  }
 }
 
 void VulkanDashboard::main_loop() {
@@ -1327,6 +1336,7 @@ void VulkanDashboard::main_loop() {
     fprintf(stderr, "[VulkanDashboard] Loop - Update components\n");
     fflush(stderr);
     update_components(0.016f); // ~60fps
+    synchronize_market_data();
 
     // Unified rendering pass
     if (vulkan_core_ && vulkan_core_->begin_frame()) {
@@ -1402,6 +1412,100 @@ void VulkanDashboard::on_orderbook_updated(
   }
 }
 
+void VulkanDashboard::synchronize_market_data() {
+  if (!hotspine_bridge_)
+    return;
+
+  auto all_symbols = hotspine_bridge_->getAllSymbols();
+  if (all_symbols.empty())
+    return;
+
+  // Find DataGrid and Heatmap components
+  DataGridComponent *grid = nullptr;
+  HeatmapComponent *heatmap = nullptr;
+
+  for (auto &comp : components_) {
+    if (comp->get_name() == "Market Data Grid") {
+      grid = dynamic_cast<DataGridComponent *>(comp.get());
+    } else if (comp->get_name() == "Momentum Heatmap") {
+      heatmap = dynamic_cast<HeatmapComponent *>(comp.get());
+    }
+  }
+
+  // Update Data Grid
+  if (grid) {
+    for (size_t i = 0; i < all_symbols.size(); ++i) {
+      const auto &sym = all_symbols[i];
+      std::vector<DataGridComponent::CellData> row;
+
+      // Symbol
+      row.push_back({sym.symbol, {1.0f, 1.0f, 1.0f, 1.0f}, 0.0f, false, false});
+
+      // Price
+      row.push_back({std::to_string(sym.last_price),
+                     {1.0f, 1.0f, 1.0f, 1.0f},
+                     (float)sym.last_price,
+                     false,
+                     true});
+
+      // Change %
+      glm::vec4 change_color = {1, 1, 1, 1};
+      if (sym.price_change_percent > 0)
+        change_color = {0.3f, 1.0f, 0.3f, 1.0f};
+      else if (sym.price_change_percent < 0)
+        change_color = {1.0f, 0.3f, 0.3f, 1.0f};
+
+      char change_buf[32];
+      snprintf(change_buf, sizeof(change_buf), "%.2f%%",
+               (float)sym.price_change_percent);
+      row.push_back({change_buf, change_color, (float)sym.price_change_percent,
+                     false, true});
+
+      // Bid/Ask
+      row.push_back({std::to_string(sym.bid_price),
+                     {0.3f, 1.0f, 0.3f, 1.0f},
+                     (float)sym.bid_price,
+                     false,
+                     true});
+      row.push_back({std::to_string(sym.ask_price),
+                     {1.0f, 0.3f, 0.3f, 1.0f},
+                     (float)sym.ask_price,
+                     false,
+                     true});
+
+      // Spread
+      row.push_back({std::to_string(sym.spread),
+                     {1.0f, 0.9f, 0.2f, 1.0f},
+                     (float)sym.spread,
+                     false,
+                     true});
+
+      grid->set_row_data(i, row);
+    }
+  }
+
+  // Update Heatmap
+  if (heatmap) {
+    // Arrange symbols in a grid
+    size_t w = 10, h = 10;
+    std::vector<std::vector<HeatmapComponent::HeatmapData>> heatmap_grid(
+        h, std::vector<HeatmapComponent::HeatmapData>(w));
+
+    for (size_t i = 0; i < all_symbols.size() && i < w * h; ++i) {
+      const auto &sym = all_symbols[i];
+      glm::vec4 color = {0.5f, 0.5f, 0.5f, 1.0f};
+      if (sym.momentum > 0)
+        color = {0.0f, (float)sym.momentum * 0.5f + 0.5f, 0.0f, 1.0f};
+      else if (sym.momentum < 0)
+        color = {std::abs((float)sym.momentum) * 0.5f + 0.5f, 0.0f, 0.0f, 1.0f};
+
+      heatmap_grid[i / w][i % w] = {(float)sym.momentum, color, sym.symbol,
+                                    sym.symbol_id};
+    }
+    heatmap->set_data(heatmap_grid);
+  }
+}
+
 void VulkanDashboard::on_window_resize(uint32_t new_width,
                                        uint32_t new_height) {
   width_ = new_width;
@@ -1432,6 +1536,22 @@ void VulkanDashboard::init_components() {
   auto ob_component = std::make_unique<OrderBookComponent>(glm::vec2(820, 10),
                                                            glm::vec2(440, 500));
   add_component(std::move(ob_component));
+
+  // Add market data grid component
+  auto grid_component = std::make_unique<DataGridComponent>(
+      glm::vec2(10, 720), glm::vec2(1250, 200), 50, 6);
+  grid_component->set_column_header(0, "Symbol");
+  grid_component->set_column_header(1, "Price");
+  grid_component->set_column_header(2, "Change %");
+  grid_component->set_column_header(3, "Bid");
+  grid_component->set_column_header(4, "Ask");
+  grid_component->set_column_header(5, "Spread");
+  add_component(std::move(grid_component));
+
+  // Add heatmap component
+  auto heatmap_component = std::make_unique<HeatmapComponent>(
+      glm::vec2(10, 930), glm::vec2(600, 300), 10, 10);
+  add_component(std::move(heatmap_component));
 }
 
 void VulkanDashboard::update_performance_stats() {
@@ -1820,6 +1940,20 @@ void VulkanDashboard::render_gui() {
   // Main Menu Bar
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Save Layout", "Ctrl+S")) {
+        save_layout();
+      }
+      if (ImGui::MenuItem("Load Layout", "Ctrl+L")) {
+        load_layout();
+      }
+      if (ImGui::MenuItem("Reset Layout")) {
+        // Just reload default layout via existing preset logic
+        show_backtest_dialog_ = false;
+        show_risk_manager_ = false;
+        // Trigger Default Layout logic (simulating click)
+        ImGui::SetWindowFocus("Price Chart"); // Just one way to trigger
+      }
+      ImGui::Separator();
       if (ImGui::MenuItem("Exit", "Alt+F4")) {
         // Handle exit logic if needed, or just standard X11 close
       }
@@ -1851,6 +1985,14 @@ void VulkanDashboard::render_gui() {
           } else if (c->get_name() == "System Logs") {
             c->set_position({10, 430});
             c->set_size({800, 280});
+            c->set_visible(true);
+          } else if (c->get_name() == "Market Data Grid") {
+            c->set_position({10, 720});
+            c->set_size({1260, 250});
+            c->set_visible(true);
+          } else if (c->get_name() == "Market Heatmap") {
+            c->set_position({820, 720});
+            c->set_size({440, 250});
             c->set_visible(true);
           }
         }
@@ -1889,17 +2031,22 @@ void VulkanDashboard::render_gui() {
     }
 
     if (ImGui::BeginMenu("Strategy")) {
-      ImGui::MenuItem("Run Backtest...", nullptr, false, false);
-      ImGui::MenuItem("Live Execution", nullptr, false, false);
+      if (ImGui::MenuItem("Run Backtest...", nullptr, &show_backtest_dialog_)) {
+      }
+      if (ImGui::MenuItem("Live Execution", nullptr, &live_execution_active_)) {
+      }
       ImGui::Separator();
-      ImGui::MenuItem("Risk Manager", nullptr, false, false);
+      if (ImGui::MenuItem("Risk Manager", nullptr, &show_risk_manager_)) {
+      }
       ImGui::EndMenu();
     }
 
     // Status Area
     float posX = ImGui::GetWindowWidth() - 350;
     ImGui::SameLine(posX);
-    ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "LIVE");
+    ImGui::TextColored(live_execution_active_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
+                                              : ImVec4(0.8f, 0.2f, 0.2f, 1.0f),
+                       live_execution_active_ ? "LIVE" : "STOPPED");
     ImGui::SameLine();
     ImGui::Text("| FPS: %.1f", current_stats_.fps);
     ImGui::SameLine();
@@ -1928,6 +2075,159 @@ void VulkanDashboard::render_gui() {
       ImGui::PopStyleVar(2);
     }
   }
+
+  // Render Strategy Dialogs
+  if (show_backtest_dialog_) {
+    render_backtest_dialog();
+  }
+  if (show_risk_manager_) {
+    render_risk_manager();
+  }
+}
+
+void VulkanDashboard::render_backtest_dialog() {
+  ImGui::SetNextWindowSize(ImVec2(400, 350), ImGuiCond_FirstUseEver);
+  if (!ImGui::Begin("Run Strategy Backtest", &show_backtest_dialog_)) {
+    ImGui::End();
+    return;
+  }
+
+  static char strategy_name[64] = "MomentumScalper_v1";
+  ImGui::InputText("Strategy Name", strategy_name, 64);
+
+  static int exchange_idx = 0;
+  const char *exchanges[] = {"Binance", "OKX", "Bybit", "Kraken"};
+  ImGui::Combo("Exchange", &exchange_idx, exchanges, IM_ARRAYSIZE(exchanges));
+
+  static char symbol[32] = "BTC/USDT";
+  ImGui::InputText("Symbol", symbol, 32);
+
+  ImGui::Separator();
+  ImGui::Text("Parameters");
+  static float momentum_threshold = 0.5f;
+  ImGui::SliderFloat("Threshold", &momentum_threshold, 0.1f, 1.0f);
+
+  static int timeframe = 1;
+  const char *timeframes[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
+  ImGui::Combo("Timeframe", &timeframe, timeframes, IM_ARRAYSIZE(timeframes));
+
+  ImGui::Spacing();
+  if (ImGui::Button("Run Simulation", ImVec2(120, 30))) {
+    // Mock simulation start
+    show_backtest_dialog_ = false;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cancel", ImVec2(120, 30))) {
+    show_backtest_dialog_ = false;
+  }
+
+  ImGui::End();
+}
+
+void VulkanDashboard::render_risk_manager() {
+  ImGui::SetNextWindowSize(ImVec2(350, 450), ImGuiCond_FirstUseEver);
+  if (!ImGui::Begin("Risk Manager", &show_risk_manager_)) {
+    ImGui::End();
+    return;
+  }
+
+  ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Portfolio Overview");
+  ImGui::Separator();
+
+  ImGui::Columns(2, "RiskColumns", false);
+  ImGui::Text("Total Equity:");
+  ImGui::NextColumn();
+  ImGui::Text("$%.2f", risk_metrics_.total_equity);
+  ImGui::NextColumn();
+
+  ImGui::Text("Daily PL:");
+  ImGui::NextColumn();
+  ImGui::TextColored(risk_metrics_.daily_pnl >= 0
+                         ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f)
+                         : ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                     "$%.2f", risk_metrics_.daily_pnl);
+  ImGui::NextColumn();
+
+  ImGui::Text("Exposure:");
+  ImGui::NextColumn();
+  ImGui::ProgressBar(
+      (float)(risk_metrics_.current_exposure / risk_metrics_.total_equity),
+      ImVec2(-1, 0));
+  ImGui::NextColumn();
+  ImGui::Columns(1);
+
+  ImGui::Separator();
+  ImGui::Text("Risk Indicators");
+
+  ImGui::Text("Sharpe Ratio:");
+  ImGui::SameLine(150);
+  ImGui::Text("%.2f", risk_metrics_.sharpe_ratio);
+
+  ImGui::Text("Max Drawdown:");
+  ImGui::SameLine(150);
+  ImGui::Text("%.2f%%", risk_metrics_.max_drawdown * 100.0);
+
+  ImGui::Text("95%% VaR:");
+  ImGui::SameLine(150);
+  ImGui::Text("$%.2f", risk_metrics_.var_95);
+
+  ImGui::Spacing();
+  if (ImGui::CollapsingHeader("Active Alerts")) {
+    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                       "[CRITICAL] Margin utilization > 80%%");
+    ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.2f, 1.0f),
+                       "[WARNING] High volatility on BTC/USDT");
+  }
+
+  ImGui::End();
+}
+
+void VulkanDashboard::save_layout(const std::string &filename) {
+  nlohmann::json j;
+  j["version"] = 1.0;
+
+  nlohmann::json components_json = nlohmann::json::array();
+  for (const auto &comp : components_) {
+    nlohmann::json c;
+    c["name"] = comp->get_name();
+    c["visible"] = comp->is_visible();
+    c["pos"] = {comp->get_position().x, comp->get_position().y};
+    c["size"] = {comp->get_size().x, comp->get_size().y};
+    components_json.push_back(c);
+  }
+  j["components"] = components_json;
+
+  std::ofstream o(filename);
+  o << std::setw(4) << j << std::endl;
+  fprintf(stderr, "[VulkanDashboard] Layout saved to %s\n", filename.c_str());
+}
+
+void VulkanDashboard::load_layout(const std::string &filename) {
+  std::ifstream i(filename);
+  if (!i.is_open()) {
+    fprintf(stderr, "[VulkanDashboard] Could not open layout file %s\n",
+            filename.c_str());
+    return;
+  }
+
+  nlohmann::json j;
+  i >> j;
+
+  if (j.contains("components")) {
+    for (const auto &c_json : j["components"]) {
+      std::string name = c_json["name"];
+      for (auto &comp : components_) {
+        if (comp->get_name() == name) {
+          comp->set_visible(c_json["visible"]);
+          comp->set_position({c_json["pos"][0], c_json["pos"][1]});
+          comp->set_size({c_json["size"][0], c_json["size"][1]});
+          break;
+        }
+      }
+    }
+  }
+  fprintf(stderr, "[VulkanDashboard] Layout loaded from %s\n",
+          filename.c_str());
 }
 
 } // namespace BTQuant

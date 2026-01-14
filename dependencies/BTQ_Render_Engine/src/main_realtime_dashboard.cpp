@@ -10,6 +10,7 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+#include <atomic>
 #include <signal.h>
 
 using namespace BTQuant::RenderEngine;

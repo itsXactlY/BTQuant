@@ -20,6 +20,11 @@
 #include <thread>
 #include <chrono>
 #include <unordered_set>
+#include <unordered_map>
+#include <queue>
+#include <vector>
+#include <functional>
+#include <condition_variable>
 
 namespace BTQuant {
 

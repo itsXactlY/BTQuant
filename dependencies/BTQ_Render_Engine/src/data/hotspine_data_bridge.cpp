@@ -4,6 +4,9 @@
 #include <cstring>
 #include <algorithm>
 #include <fstream>
+#include <thread>
+#include <mutex>
+#include <memory>
 
 namespace BTQuant {
 namespace RenderEngine {

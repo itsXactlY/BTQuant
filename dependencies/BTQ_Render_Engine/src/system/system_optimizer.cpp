@@ -7,6 +7,9 @@
 
 #include "../include/vulkan_dashboard_advanced.hpp"
 #include <thread>
+#include <mutex>
+#include <atomic>
+#include <chrono>
 #include <fstream>
 #include <regex>
 #include <sys/sysinfo.h>

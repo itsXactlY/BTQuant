@@ -11,6 +11,7 @@
 #include <numeric>
 #include <iomanip>
 #include <sstream>
+#include <unordered_set>
 
 namespace BTQuant {
 

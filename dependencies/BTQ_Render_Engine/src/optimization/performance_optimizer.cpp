@@ -10,6 +10,11 @@
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <atomic>
+#include <deque>
+#include <memory>
+#include <unordered_map>
 
 namespace BTQuant {
 

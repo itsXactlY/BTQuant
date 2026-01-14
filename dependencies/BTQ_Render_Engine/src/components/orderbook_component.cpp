@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 
 namespace BTQuant {
 

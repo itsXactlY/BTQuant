@@ -4,6 +4,10 @@
 #include <sstream>
 #include <fstream>
 #include <algorithm>
+#include <cmath>
+#include <thread>
+#include <mutex>
+#include <chrono>
 
 namespace BTQuant {
 namespace RenderEngine {

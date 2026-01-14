@@ -3,6 +3,10 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <thread>
+#include <mutex>
+#include <chrono>
+#include <unordered_map>
 
 namespace BTQuant {
 namespace RenderEngine {

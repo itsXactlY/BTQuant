@@ -578,6 +578,7 @@ public:
   virtual void initialize_vulkan_resources(VulkanCore *vulkan_core) = 0;
 
   // Layout management
+  virtual std::string get_name() const = 0;
   void set_position(const glm::vec2 &position) {
     position_ = position;
     dirty_ = true;
@@ -618,6 +619,7 @@ public:
   DataGridComponent(const glm::vec2 &position, const glm::vec2 &size,
                     size_t rows, size_t columns);
   ~DataGridComponent();
+  std::string get_name() const override { return "Market Data Grid"; }
 
   // Data management
   void set_cell_data(size_t row, size_t col, const CellData &data);
@@ -670,6 +672,7 @@ public:
 
   RealtimeChartComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~RealtimeChartComponent();
+  std::string get_name() const override { return "Price Chart"; }
 
   // Data management
   void add_data_point(float timestamp, float value, float volume = 0.0f);
@@ -730,6 +733,7 @@ public:
   HeatmapComponent(const glm::vec2 &position, const glm::vec2 &size,
                    size_t grid_width, size_t grid_height);
   ~HeatmapComponent();
+  std::string get_name() const override { return "Market Heatmap"; }
 
   // Data management
   void set_data(const std::vector<std::vector<HeatmapData>> &data);
@@ -813,6 +817,7 @@ public:
 
   OrderBookComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~OrderBookComponent();
+  std::string get_name() const override { return "Order Book"; }
 
   // Data management
   void update_orderbook(const OrderBookData &data);
@@ -889,6 +894,7 @@ public:
 
   LogDisplayComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~LogDisplayComponent();
+  std::string get_name() const override { return "System Logs"; }
 
   // Log management
   void add_log_entry(LogLevel level, const std::string &message);

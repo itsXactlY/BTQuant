@@ -1757,7 +1757,8 @@ void VulkanDashboard::init_x11() {
 
   XSelectInput(display_, window_,
                ExposureMask | StructureNotifyMask | KeyPressMask |
-                   ButtonPressMask | PointerMotionMask);
+                   KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
+                   PointerMotionMask);
 
   XStoreName(display_, window_, "BTQuant Vulkan Dashboard");
   XMapWindow(display_, window_);
@@ -1820,21 +1821,85 @@ void VulkanDashboard::render_gui() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       if (ImGui::MenuItem("Exit", "Alt+F4")) {
-        // Handle exit
-      }
-      ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("View")) {
-      if (ImGui::MenuItem("Reset Layout")) {
-        // Handle reset
+        // Handle exit logic if needed, or just standard X11 close
       }
       ImGui::EndMenu();
     }
 
-    // Status info on the right
-    float width = ImGui::GetWindowWidth();
-    ImGui::SameLine(width - 400);
-    ImGui::TextColored(ImVec4(0, 1, 0, 1), "CONNECTED");
+    if (ImGui::BeginMenu("View")) {
+      for (auto &component : components_) {
+        bool visible = component->is_visible();
+        if (ImGui::MenuItem(component->get_name().c_str(), nullptr, &visible)) {
+          component->set_visible(visible);
+        }
+      }
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Layout")) {
+      if (ImGui::MenuItem("Default Layout")) {
+        // Reset to initial layout
+        for (auto &c : components_) {
+          if (c->get_name() == "Price Chart") {
+            c->set_position({10, 40});
+            c->set_size({800, 380});
+            c->set_visible(true);
+          } else if (c->get_name() == "Order Book") {
+            c->set_position({820, 40});
+            c->set_size({440, 670});
+            c->set_visible(true);
+          } else if (c->get_name() == "System Logs") {
+            c->set_position({10, 430});
+            c->set_size({800, 280});
+            c->set_visible(true);
+          }
+        }
+      }
+      if (ImGui::MenuItem("Trading Focus")) {
+        for (auto &c : components_) {
+          if (c->get_name() == "Order Book") {
+            c->set_position({10, 40});
+            c->set_size({300, 670});
+            c->set_visible(true);
+          } else if (c->get_name() == "Price Chart") {
+            c->set_position({320, 40});
+            c->set_size({940, 670});
+            c->set_visible(true);
+          } else if (c->get_name() == "System Logs") {
+            c->set_visible(false);
+          }
+        }
+      }
+      if (ImGui::MenuItem("Market Analytics")) {
+        for (auto &c : components_) {
+          if (c->get_name() == "System Logs") {
+            c->set_position({10, 430});
+            c->set_size({1260, 280});
+            c->set_visible(true);
+          } else if (c->get_name() == "Price Chart") {
+            c->set_position({10, 40});
+            c->set_size({1260, 380});
+            c->set_visible(true);
+          } else if (c->get_name() == "Order Book") {
+            c->set_visible(false);
+          }
+        }
+      }
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Strategy")) {
+      ImGui::MenuItem("Run Backtest...", nullptr, false, false);
+      ImGui::MenuItem("Live Execution", nullptr, false, false);
+      ImGui::Separator();
+      ImGui::MenuItem("Risk Manager", nullptr, false, false);
+      ImGui::EndMenu();
+    }
+
+    // Status Area
+    float posX = ImGui::GetWindowWidth() - 350;
+    ImGui::SameLine(posX);
+    ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "LIVE");
     ImGui::SameLine();
     ImGui::Text("| FPS: %.1f", current_stats_.fps);
     ImGui::SameLine();
@@ -1843,34 +1908,24 @@ void VulkanDashboard::render_gui() {
     ImGui::EndMainMenuBar();
   }
 
-  // Dashboard Control Panel
-  ImGui::Begin("Dashboard Controls");
-  ImGui::Text("Market Data Status: Running");
-  if (ImGui::Button("Stop Market Data")) {
-    stop_market_data_processing();
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Start Market Data")) {
-    start_market_data_processing();
-  }
-
-  ImGui::Separator();
-  ImGui::Text("Visible Components:");
-  for (auto &component : components_) {
-    bool visible = component->is_visible();
-    if (ImGui::Checkbox(component->get_position().x < 400 ? "Left Panel"
-                                                          : "Right Panel",
-                        &visible)) {
-      component->set_visible(visible);
-    }
-  }
-
-  ImGui::End();
-
   // Render Component GUI Windows
   for (auto &component : components_) {
     if (component && component->is_visible()) {
+      // Set window padding/rounding for professional feel
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+
+      // Use the component's internal position and size as hints for the window
+      ImGui::SetNextWindowPos(
+          ImVec2(component->get_position().x, component->get_position().y),
+          ImGuiCond_FirstUseEver);
+      ImGui::SetNextWindowSize(
+          ImVec2(component->get_size().x, component->get_size().y),
+          ImGuiCond_FirstUseEver);
+
       component->render_gui();
+
+      ImGui::PopStyleVar(2);
     }
   }
 }

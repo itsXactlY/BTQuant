@@ -393,9 +393,9 @@ const std::unordered_set<UIComponent*>& SelectionManager::get_selected_component
     return selected_components_;
 }
 
-void SelectionManager::render_selection_indicators(VkCommandBuffer cmd) {
+void SelectionManager::render_selection_indicators([[maybe_unused]] VkCommandBuffer cmd) {
     if (selected_components_.empty()) return;
-    
+
     // Render selection indicators around selected components
 }
 
@@ -522,9 +522,9 @@ bool HotkeyManager::handle_key_event(const InputEvent& event) {
     
     // Update pressed keys state
     if (event.type == InputEventType::KeyDown) {
-        pressed_keys_.insert(event.key_code);
+        pressed_keys_.insert(event.key);
     } else {
-        pressed_keys_.erase(event.key_code);
+        pressed_keys_.erase(event.key);
     }
     
     // Check for hotkey matches
@@ -533,7 +533,7 @@ bool HotkeyManager::handle_key_event(const InputEvent& event) {
         
         if (!binding.enabled) continue;
         
-        if (binding.key_code == event.key_code && 
+        if (binding.key_code == event.key &&
             binding.modifiers == event.modifiers) {
             
             if (binding.action) {
@@ -594,8 +594,8 @@ void InteractionManager::process_x11_event(XEvent* event) {
             process_mouse_event(event);
             break;
             
-        case KeyPress:
-        case KeyRelease:
+        case XI_KeyPress:
+        case XI_KeyRelease:
             process_keyboard_event(event);
             break;
             
@@ -680,9 +680,6 @@ void InteractionManager::set_focused_component(UIComponent* component) {
     focused_component_ = component;
 }
 
-UIComponent* InteractionManager::get_focused_component() const {
-    return focused_component_;
-}
 
 void InteractionManager::process_mouse_event(XEvent* event) {
     XButtonEvent* button_event = &event->xbutton;
@@ -757,9 +754,9 @@ void InteractionManager::process_keyboard_event(XEvent* event) {
     KeySym keysym = XkbKeycodeToKeysym(display_, key_event->keycode, 0, 0);
     
     InputEvent input_event = create_input_event(
-        event->type == KeyPress ? InputEventType::KeyDown : InputEventType::KeyUp
+        event->type == XI_KeyPress ? InputEventType::KeyDown : InputEventType::KeyUp
     );
-    input_event.key_code = keysym;
+    input_event.key = keysym;
     input_event.modifiers = active_modifiers_;
     
     // Handle hotkeys
@@ -926,49 +923,49 @@ InputEvent InteractionManager::create_input_event(InputEventType type) {
 
 void InteractionManager::setup_default_hotkeys() {
     // Setup common trading dashboard hotkeys
-    
+
     // File operations
-    register_hotkey("save_layout", XK_s, static_cast<uint32_t>(KeyModifier::Ctrl),
+    hotkey_manager_.register_hotkey("save_layout", XK_s, static_cast<uint32_t>(KeyModifier::Ctrl),
                    []() { /* Save layout */ }, "Save current layout");
-    
-    register_hotkey("load_layout", XK_o, static_cast<uint32_t>(KeyModifier::Ctrl),
+
+    hotkey_manager_.register_hotkey("load_layout", XK_o, static_cast<uint32_t>(KeyModifier::Ctrl),
                    []() { /* Load layout */ }, "Load layout");
-    
+
     // View operations
-    register_hotkey("zoom_in", XK_plus, static_cast<uint32_t>(KeyModifier::Ctrl),
+    hotkey_manager_.register_hotkey("zoom_in", XK_plus, static_cast<uint32_t>(KeyModifier::Ctrl),
                    [this]() { zoom_pan_controller_.zoom(1.2f, mouse_position_); }, "Zoom in");
-    
-    register_hotkey("zoom_out", XK_minus, static_cast<uint32_t>(KeyModifier::Ctrl),
+
+    hotkey_manager_.register_hotkey("zoom_out", XK_minus, static_cast<uint32_t>(KeyModifier::Ctrl),
                    [this]() { zoom_pan_controller_.zoom(0.8f, mouse_position_); }, "Zoom out");
-    
-    register_hotkey("zoom_fit", XK_0, static_cast<uint32_t>(KeyModifier::Ctrl),
+
+    hotkey_manager_.register_hotkey("zoom_fit", XK_0, static_cast<uint32_t>(KeyModifier::Ctrl),
                    [this]() { zoom_pan_controller_.reset(); }, "Zoom to fit");
-    
+
     // Selection operations
-    register_hotkey("select_all", XK_a, static_cast<uint32_t>(KeyModifier::Ctrl),
+    hotkey_manager_.register_hotkey("select_all", XK_a, static_cast<uint32_t>(KeyModifier::Ctrl),
                    [this]() { selection_manager_.select_all(); }, "Select all");
-    
-    register_hotkey("deselect_all", XK_d, static_cast<uint32_t>(KeyModifier::Ctrl),
+
+    hotkey_manager_.register_hotkey("deselect_all", XK_d, static_cast<uint32_t>(KeyModifier::Ctrl),
                    [this]() { selection_manager_.clear_selection(); }, "Deselect all");
-    
+
     // Trading operations
-    register_hotkey("quick_buy", XK_F1, 0,
+    hotkey_manager_.register_hotkey("quick_buy", XK_F1, 0,
                    []() { /* Quick buy */ }, "Quick buy order");
-    
-    register_hotkey("quick_sell", XK_F2, 0,
+
+    hotkey_manager_.register_hotkey("quick_sell", XK_F2, 0,
                    []() { /* Quick sell */ }, "Quick sell order");
-    
-    register_hotkey("cancel_orders", XK_Escape, 0,
+
+    hotkey_manager_.register_hotkey("cancel_orders", XK_Escape, 0,
                    []() { /* Cancel all orders */ }, "Cancel all orders");
-    
+
     // View switching
-    register_hotkey("switch_to_chart", XK_1, static_cast<uint32_t>(KeyModifier::Alt),
+    hotkey_manager_.register_hotkey("switch_to_chart", XK_1, static_cast<uint32_t>(KeyModifier::Alt),
                    []() { /* Switch to chart view */ }, "Switch to chart view");
-    
-    register_hotkey("switch_to_orderbook", XK_2, static_cast<uint32_t>(KeyModifier::Alt),
+
+    hotkey_manager_.register_hotkey("switch_to_orderbook", XK_2, static_cast<uint32_t>(KeyModifier::Alt),
                    []() { /* Switch to orderbook view */ }, "Switch to orderbook view");
-    
-    register_hotkey("switch_to_trades", XK_3, static_cast<uint32_t>(KeyModifier::Alt),
+
+    hotkey_manager_.register_hotkey("switch_to_trades", XK_3, static_cast<uint32_t>(KeyModifier::Alt),
                    []() { /* Switch to trades view */ }, "Switch to trades view");
 }
 

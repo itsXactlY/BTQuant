@@ -1,6 +1,6 @@
 /**
- * BTQuant Professional Trading Interface
- * 
+ * BTQuant Professional Trading Trading Interface
+ *
  * Professional trading features including order placement, position management,
  * risk assessment, market scanning, watchlists, and trading journal integration.
  */
@@ -296,6 +296,7 @@ private:
     std::unordered_map<std::string, OrderExecution> executions_;
     std::unordered_map<std::string, std::vector<std::string>> order_executions_;
     std::unordered_map<std::string, std::unordered_set<std::string>> symbol_orders_;
+    std::unordered_map<std::string, std::string> order_symbols_; // order_id -> symbol
     
     OrderUpdateCallback order_update_callback_;
     ExecutionCallback execution_callback_;

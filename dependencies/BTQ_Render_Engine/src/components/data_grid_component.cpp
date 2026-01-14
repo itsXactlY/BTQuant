@@ -176,26 +176,25 @@ void DataGridComponent::render(VkCommandBuffer cmd) {
 
 void DataGridComponent::handle_input(const InputEvent& event) {
     switch (event.type) {
-        case InputEvent::MouseButton:
-            if (event.pressed) {
-                // Calculate which cell was clicked
-                float cell_width = size_.x / columns_;
-                float cell_height = 25.0f; // Fixed row height
-                
-                int col = static_cast<int>((event.position.x - position_.x) / cell_width);
-                int row = static_cast<int>((event.position.y - position_.y - 30.0f) / cell_height); // Account for header
-                
-                if (row == -1 && col >= 0 && col < static_cast<int>(columns_)) {
-                    // Header clicked - enable sorting
-                    enable_sorting(col, sort_column_ != col || !sort_ascending_);
-                }
+        case InputEventType::MouseButton: {
+            // Calculate which cell was clicked
+            float cell_width = size_.x / columns_;
+            float cell_height = 25.0f; // Fixed row height
+
+            int col = static_cast<int>((event.position.x - position_.x) / cell_width);
+            int row = static_cast<int>((event.position.y - position_.y - 30.0f) / cell_height); // Account for header
+
+            if (row == -1 && col >= 0 && col < static_cast<int>(columns_)) {
+                // Header clicked - enable sorting
+                enable_sorting(col, sort_column_ != col || !sort_ascending_);
             }
             break;
-            
-        case InputEvent::Scroll:
+        }
+
+        case InputEventType::Scroll:
             // TODO: Implement scrolling
             break;
-            
+
         default:
             break;
     }

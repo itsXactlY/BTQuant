@@ -64,7 +64,7 @@
 #include <fstream>
 
 // Concurrent data structures
-#include "concurrentqueue.h"
+#include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
 
 namespace BTQuant {
 
@@ -376,14 +376,95 @@ private:
 // UI Component System
 // ============================================================================
 
-struct InputEvent {
-    enum EventType { MouseMove, MouseButton, KeyDown, KeyUp, Scroll };
-    EventType type;
+enum class InputEventType {
+    MouseMove,
+    MouseButton,
+    Scroll,
+    KeyDown,
+    KeyUp,
+    TouchDown,
+    TouchMove,
+    TouchUp,
+    Gesture
+};
+
+enum class MouseButton {
+    Left = 1,
+    Middle = 2,
+    Right = 3,
+    X1 = 4,
+    X2 = 5
+};
+
+enum class KeyModifier {
+    NONE = 0,
+    Shift = 1 << 0,
+    Ctrl = 1 << 1,
+    Alt = 1 << 2,
+    Super = 1 << 3
+};
+
+struct TouchPoint {
+    int id;
     glm::vec2 position;
-    int button = 0;
+    glm::vec2 velocity;
+    float pressure = 1.0f;
+    std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+enum class GestureType {
+    Pinch,
+    Rotate,
+    Swipe,
+    Pan,
+    Tap,
+    DoubleTap,
+    LongPress
+};
+
+struct GestureEvent {
+    GestureType type;
+    glm::vec2 center;
+    float scale = 1.0f;
+    float rotation = 0.0f;
+    glm::vec2 translation{0.0f};
+    std::vector<TouchPoint> touch_points;
+    float duration = 0.0f;
+};
+
+struct InputEvent {
+    InputEventType type;
+    glm::vec2 position{0.0f};
+    glm::vec2 delta{0.0f};
+    MouseButton mouse_button = MouseButton::Left;
     int key = 0;
-    bool pressed = false;
+    uint32_t modifiers = 0;
     glm::vec2 scroll_delta{0.0f};
+    bool pressed = false;
+    TouchPoint touch;
+    GestureEvent gesture;
+    std::chrono::high_resolution_clock::time_point timestamp;
+
+    // Helper methods
+    bool has_modifier(KeyModifier mod) const {
+        return (modifiers & static_cast<uint32_t>(mod)) != 0;
+    }
+
+    bool is_mouse_event() const {
+        return type == InputEventType::MouseMove ||
+               type == InputEventType::MouseButton ||
+               type == InputEventType::Scroll;
+    }
+
+    bool is_keyboard_event() const {
+        return type == InputEventType::KeyDown || type == InputEventType::KeyUp;
+    }
+
+    bool is_touch_event() const {
+        return type == InputEventType::TouchDown ||
+               type == InputEventType::TouchMove ||
+               type == InputEventType::TouchUp;
+    }
 };
 
 class UIComponent {
@@ -565,6 +646,30 @@ private:
     glm::vec4 interpolate_color(float value);
 };
 
+// Vertex structures for order book rendering
+struct OrderBookTextVertex {
+    glm::vec2 position;
+    glm::vec2 texcoord;
+    glm::vec4 color;
+    uint32_t glyph_id;
+    float font_size;
+};
+
+struct OrderBookUniformBuffer {
+    glm::mat4 projection;
+    glm::mat4 view;
+    glm::vec2 component_size;
+    glm::vec2 component_position;
+    float row_height;
+    float max_size_for_bars;
+    float spread_highlight_intensity;
+    float time;
+    glm::vec4 bid_color;
+    glm::vec4 ask_color;
+    glm::vec4 spread_color;
+    float animation_phase;
+};
+
 // Order book visualization component
 class OrderBookComponent : public UIComponent {
 public:
@@ -614,6 +719,15 @@ private:
     VkPipeline bar_pipeline_ = VK_NULL_HANDLE;
     
     void rebuild_geometry();
+    void add_text_line(std::vector<OrderBookTextVertex>& vertices,
+                       const std::string& price, const std::string& size, const std::string& total,
+                       float y, const glm::vec4& color, float font_size);
+    void add_centered_text(std::vector<OrderBookTextVertex>& vertices,
+                           const std::string& text, float y, const glm::vec4& color, float font_size);
+    void add_text_at_position(std::vector<OrderBookTextVertex>& vertices,
+                             const std::string& text, float x, float y,
+                             const glm::vec4& color, float font_size);
+    void setup_uniform_buffer(OrderBookUniformBuffer& ubo);
     std::string format_price(double price);
     std::string format_size(double size);
 };
@@ -662,7 +776,9 @@ private:
     
     void rebuild_text_geometry();
     glm::vec4 get_log_level_color(LogLevel level);
+    std::string get_log_level_string(LogLevel level);
     std::string format_timestamp(const std::chrono::system_clock::time_point& time);
+    std::vector<LogEntry> get_filtered_entries() const;
 };
 
 // ============================================================================

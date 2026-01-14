@@ -62,8 +62,10 @@ RealtimeChartComponent::RealtimeChartComponent(const glm::vec2& position, const 
     candlestick_mode_ = false;
     line_color_ = theme_.accent_primary;
     
-    // Reserve space for data points to avoid frequent reallocations
-    data_points_.reserve(1000);
+    // Note: std::deque does not have a reserve method.
+    // Instead, we can pre-allocate by constructing with a size,
+    // but for dynamic data structures, this is not typically needed.
+    // The deque will handle memory management efficiently.
 }
 
 RealtimeChartComponent::~RealtimeChartComponent() {
@@ -193,34 +195,34 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
 
 void RealtimeChartComponent::handle_input(const InputEvent& event) {
     switch (event.type) {
-        case InputEvent::MouseMove:
+        case InputEventType::MouseMove:
             // TODO: Implement crosshair and value display on hover
             break;
-            
-        case InputEvent::Scroll:
+
+        case InputEventType::Scroll:
             // Zoom in/out on the chart
             if (event.scroll_delta.y != 0.0f) {
                 float zoom_factor = 1.0f + event.scroll_delta.y * 0.1f;
                 float range = max_y_ - min_y_;
                 float center = (max_y_ + min_y_) * 0.5f;
                 float new_range = range * zoom_factor;
-                
+
                 min_y_ = center - new_range * 0.5f;
                 max_y_ = center + new_range * 0.5f;
                 auto_scale_ = false;
                 dirty_ = true;
             }
             break;
-            
-        case InputEvent::MouseButton:
-            if (event.pressed && event.button == 2) { // Right click
+
+        case InputEventType::MouseButton:
+            if (event.pressed && event.mouse_button == MouseButton::Middle) { // Middle click
                 // Reset to auto-scale
                 auto_scale_ = true;
                 update_y_range();
                 dirty_ = true;
             }
             break;
-            
+
         default:
             break;
     }

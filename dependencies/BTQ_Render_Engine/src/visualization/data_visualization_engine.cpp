@@ -3,6 +3,8 @@
 #include <cmath>
 #include <iostream>
 #include <iomanip>
+#include <numeric>
+#include <cstring>
 
 namespace BTQuant {
 namespace RenderEngine {

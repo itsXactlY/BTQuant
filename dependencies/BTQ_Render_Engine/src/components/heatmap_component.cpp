@@ -195,7 +195,7 @@ void HeatmapComponent::render(VkCommandBuffer cmd) {
 
 void HeatmapComponent::handle_input(const InputEvent& event) {
     switch (event.type) {
-        case InputEvent::MouseMove: {
+        case InputEventType::MouseMove: {
             // Calculate which cell is being hovered
             float cell_width = size_.x / grid_width_;
             float cell_height = size_.y / grid_height_;
@@ -217,8 +217,8 @@ void HeatmapComponent::handle_input(const InputEvent& event) {
             }
             break;
         }
-        
-        case InputEvent::MouseButton:
+
+        case InputEventType::MouseButton:
             if (event.pressed) {
                 // Handle cell selection
                 float cell_width = size_.x / grid_width_;

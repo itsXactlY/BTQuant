@@ -58,6 +58,13 @@ struct PanelConfig {
 };
 
 class DashboardLayoutManager {
+private:
+    enum class LayoutMode {
+        Standard,
+        Compact,
+        Widescreen,
+        Mobile
+    };
 public:
     DashboardLayoutManager(uint32_t viewport_width, uint32_t viewport_height, const DashboardTheme& theme);
     ~DashboardLayoutManager();
@@ -116,13 +123,7 @@ private:
     float transition_duration_;
     float animation_time_;
     
-    // Layout modes
-    enum class LayoutMode {
-        Standard,
-        Compact,
-        Widescreen,
-        Mobile
-    } current_layout_mode_;
+    LayoutMode current_layout_mode_;
     
     // Private methods
     void initialize_default_layout();

@@ -22,15 +22,6 @@
 
 namespace BTQuant {
 
-// Vertex structure for order book text rendering
-struct OrderBookTextVertex {
-    glm::vec2 position;
-    glm::vec2 texcoord;
-    glm::vec4 color;
-    uint32_t glyph_id;
-    float font_size;
-};
-
 // Vertex structure for size bar rendering
 struct SizeBarVertex {
     glm::vec2 position;
@@ -38,22 +29,6 @@ struct SizeBarVertex {
     glm::vec4 color;
     float intensity;
     uint32_t level_type; // 0 = bid, 1 = ask
-};
-
-// Uniform buffer for order book rendering
-struct OrderBookUniformBuffer {
-    glm::mat4 projection;
-    glm::mat4 view;
-    glm::vec2 component_size;
-    glm::vec2 component_position;
-    float row_height;
-    float max_size_for_bars;
-    float spread_highlight_intensity;
-    float time;
-    glm::vec4 bid_color;
-    glm::vec4 ask_color;
-    glm::vec4 spread_color;
-    float animation_phase;
 };
 
 OrderBookComponent::OrderBookComponent(const glm::vec2& position, const glm::vec2& size)
@@ -162,44 +137,42 @@ void OrderBookComponent::render(VkCommandBuffer cmd) {
 
 void OrderBookComponent::handle_input(const InputEvent& event) {
     switch (event.type) {
-        case InputEvent::MouseMove: {
+        case InputEventType::MouseMove: {
             // Calculate which level is being hovered
             float row_height = 20.0f; // Fixed row height
             float header_height = 25.0f;
-            
+
             float local_y = event.position.y - position_.y - header_height;
-            
+
             if (local_y >= 0) {
                 int row = static_cast<int>(local_y / row_height);
-                
+
                 // Determine if hovering over bid or ask
                 int total_ask_rows = static_cast<int>(current_data_.asks.size());
-                
+
                 if (row < total_ask_rows) {
                     // Hovering over ask level
                     int ask_index = total_ask_rows - 1 - row; // Reverse order for asks
                     if (ask_index >= 0 && ask_index < static_cast<int>(current_data_.asks.size())) {
-                        const auto& level = current_data_.asks[ask_index];
                         // TODO: Show tooltip with level details
                     }
                 } else {
                     // Hovering over bid level
                     int bid_index = row - total_ask_rows - 1; // Account for spread row
                     if (bid_index >= 0 && bid_index < static_cast<int>(current_data_.bids.size())) {
-                        const auto& level = current_data_.bids[bid_index];
                         // TODO: Show tooltip with level details
                     }
                 }
             }
             break;
         }
-        
-        case InputEvent::MouseButton:
+
+        case InputEventType::MouseButton:
             if (event.pressed) {
                 // TODO: Handle level selection for trading interface
             }
             break;
-            
+
         default:
             break;
     }
@@ -225,7 +198,7 @@ void OrderBookComponent::rebuild_geometry() {
     float current_y = position_.y + header_height;
     
     // Render header
-    add_text_line(text_vertices, "Price", "Size", "Total", 
+    add_text_line(text_vertices, "Price", "Size", "Total",
                  current_y, theme_.text_secondary, font_size);
     current_y += header_height;
     
@@ -249,9 +222,9 @@ void OrderBookComponent::rebuild_geometry() {
         std::string price_str = format_price(level.price);
         std::string size_str = format_size(level.size);
         std::string total_str = format_size(level.total_size);
-        
-        add_text_line(text_vertices, price_str, size_str, total_str,
-                     current_y, theme_.price_down, font_size);
+         
+                add_text_line(text_vertices, price_str, size_str, total_str,
+                             current_y, theme_.price_down, font_size);
         
         current_y += row_height;
     }
@@ -260,9 +233,9 @@ void OrderBookComponent::rebuild_geometry() {
     if (current_data_.spread > 0) {
         std::string spread_str = "Spread: " + format_price(current_data_.spread);
         std::string mid_str = "Mid: " + format_price(current_data_.mid_price);
-        
+         
         add_centered_text(text_vertices, spread_str + " | " + mid_str,
-                         current_y, theme_.accent_secondary, font_size * 0.9f);
+                             current_y, theme_.accent_secondary, font_size * 0.9f);
         current_y += row_height;
     }
     
@@ -284,9 +257,9 @@ void OrderBookComponent::rebuild_geometry() {
         std::string price_str = format_price(level.price);
         std::string size_str = format_size(level.size);
         std::string total_str = format_size(level.total_size);
-        
-        add_text_line(text_vertices, price_str, size_str, total_str,
-                     current_y, theme_.price_up, font_size);
+         
+                    add_text_line(text_vertices, price_str, size_str, total_str,
+                                 current_y, theme_.price_up, font_size);
         
         current_y += row_height;
     }
@@ -308,17 +281,17 @@ std::string OrderBookComponent::format_size(double size) {
 }
 
 void OrderBookComponent::add_text_line(std::vector<OrderBookTextVertex>& vertices,
-                                      const std::string& price, const std::string& size, const std::string& total,
-                                      float y, const glm::vec4& color, float font_size) {
-    
+                                       const std::string& price, const std::string& size, const std::string& total,
+                                       float y, const glm::vec4& color, float font_size) {
+     
     float col_width = size_.x / 3.0f;
-    
+     
     // Price column (left-aligned)
     add_text_at_position(vertices, price, position_.x + 5.0f, y, color, font_size);
-    
+     
     // Size column (center-aligned)
     add_text_at_position(vertices, size, position_.x + col_width + 5.0f, y, color, font_size);
-    
+     
     // Total column (right-aligned)
     add_text_at_position(vertices, total, position_.x + 2 * col_width + 5.0f, y, color, font_size);
 }

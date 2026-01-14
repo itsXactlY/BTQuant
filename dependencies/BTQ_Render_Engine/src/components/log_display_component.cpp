@@ -61,7 +61,8 @@ LogDisplayComponent::LogDisplayComponent(const glm::vec2& position, const glm::v
     scroll_offset_ = 0.0f;
     
     // Reserve space for log entries to avoid frequent reallocations
-    log_entries_.reserve(max_entries_);
+    // Note: std::deque doesn't have a reserve() method, so we use resize() instead
+    log_entries_.resize(max_entries_);
 }
 
 LogDisplayComponent::~LogDisplayComponent() {
@@ -148,35 +149,35 @@ void LogDisplayComponent::render(VkCommandBuffer cmd) {
 
 void LogDisplayComponent::handle_input(const InputEvent& event) {
     switch (event.type) {
-        case InputEvent::Scroll: {
+        case InputEventType::Scroll: {
             // Handle scrolling
             float line_height = 16.0f;
             float scroll_delta = event.scroll_delta.y * line_height * 3.0f; // 3 lines per scroll
-            
+
             scroll_offset_ += scroll_delta;
-            
+
             // Clamp scroll offset
             float max_scroll = std::max(0.0f, static_cast<float>(get_filtered_entries().size()) * line_height - size_.y);
             scroll_offset_ = glm::clamp(scroll_offset_, 0.0f, max_scroll);
-            
+
             // Disable auto-scroll if user scrolls up
             if (scroll_offset_ > 0.1f) {
                 auto_scroll_ = false;
             } else {
                 auto_scroll_ = true;
             }
-            
+
             dirty_ = true;
             break;
         }
-        
-        case InputEvent::MouseButton:
+
+        case InputEventType::MouseButton:
             if (event.pressed) {
                 // Handle log line selection
                 float line_height = 16.0f;
                 float local_y = event.position.y - position_.y + scroll_offset_;
                 int line_index = static_cast<int>(local_y / line_height);
-                
+
                 auto filtered_entries = get_filtered_entries();
                 if (line_index >= 0 && line_index < static_cast<int>(filtered_entries.size())) {
                     // TODO: Handle log line selection
@@ -184,8 +185,8 @@ void LogDisplayComponent::handle_input(const InputEvent& event) {
                 }
             }
             break;
-            
-        case InputEvent::KeyDown:
+
+        case InputEventType::KeyDown:
             // Handle keyboard shortcuts
             if (event.key == 'C' && /* Ctrl pressed */ false) {
                 // TODO: Copy selected log entries to clipboard
@@ -193,7 +194,7 @@ void LogDisplayComponent::handle_input(const InputEvent& event) {
                 // TODO: Open search/filter dialog
             }
             break;
-            
+
         default:
             break;
     }

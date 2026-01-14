@@ -3,7 +3,7 @@ project(BTQuant_Advanced_Dashboard LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra -Wunused-variable")
 
 find_package(Vulkan REQUIRED)
 find_package(X11 REQUIRED)
@@ -62,6 +62,7 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 # Source files for main dashboard
 set(DASHBOARD_SOURCES
     src/main_advanced.cpp
+    src/vulkan_dashboard_advanced.cpp
     src/components/data_grid_component.cpp
     src/components/realtime_chart_component.cpp
     src/components/heatmap_component.cpp
@@ -84,25 +85,25 @@ set(DASHBOARD_SOURCES
 )
 
 # Source files for integration test
-set(TEST_SOURCES
-    src/test_integration.cpp
-    src/data/hotspine_data_bridge.cpp
-    src/data/market_data_processor.cpp
-    src/data/symbol_manager.cpp
-    src/monitoring/performance_monitor.cpp
-    src/config/dashboard_config.cpp
-)
+# set(TEST_SOURCES
+#     src/test_integration.cpp
+#     src/data/hotspine_data_bridge.cpp
+#     src/data/market_data_processor.cpp
+#     src/data/symbol_manager.cpp
+#     src/monitoring/performance_monitor.cpp
+#     src/config/dashboard_config.cpp
+# )
 
-# Source files for interactive features test
-set(INTERACTIVE_TEST_SOURCES
-    src/test_interactive_features.cpp
-    src/interaction/interaction_manager.cpp
-    src/ui/advanced_ui_features.cpp
-    src/optimization/performance_optimizer.cpp
-    src/analytics/trading_analytics.cpp
-    src/trading/trading_interface.cpp
-    src/system/system_optimizer.cpp
-)
+# # Source files for interactive features test
+# set(INTERACTIVE_TEST_SOURCES
+#     src/test_interactive_features.cpp
+#     src/interaction/interaction_manager.cpp
+#     src/ui/advanced_ui_features.cpp
+#     src/optimization/performance_optimizer.cpp
+#     src/analytics/trading_analytics.cpp
+#     src/trading/trading_interface.cpp
+#     src/system/system_optimizer.cpp
+# )
 
 # External dependencies
 set(EXTERNAL_SOURCES
@@ -115,52 +116,52 @@ set(EXTERNAL_SOURCES
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${EXTERNAL_SOURCES})
 
 # Integration test executable
-add_executable(dashboard_test ${TEST_SOURCES} ${EXTERNAL_SOURCES})
+# add_executable(dashboard_test ${TEST_SOURCES} ${EXTERNAL_SOURCES})
 
-# Interactive features test executable
-add_executable(test_interactive_features ${INTERACTIVE_TEST_SOURCES} ${EXTERNAL_SOURCES})
+# # Interactive features test executable
+# add_executable(test_interactive_features ${INTERACTIVE_TEST_SOURCES} ${EXTERNAL_SOURCES})
 
-# Comprehensive test suite executable
-add_executable(comprehensive_test_suite
-    tests/comprehensive_test_suite.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Comprehensive test suite executable
+# add_executable(comprehensive_test_suite
+#     tests/comprehensive_test_suite.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
-# Performance validation executable
-add_executable(performance_validation
-    tests/performance_validation.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Performance validation executable
+# add_executable(performance_validation
+#     tests/performance_validation.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
-# Functional tests executable
-add_executable(functional_tests
-    tests/functional_tests.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Functional tests executable
+# add_executable(functional_tests
+#     tests/functional_tests.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
-# Integration tests executable
-add_executable(integration_tests
-    tests/integration_tests.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Integration tests executable
+# add_executable(integration_tests
+#     tests/integration_tests.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
-# Stress tests executable
-add_executable(stress_tests
-    tests/stress_tests.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Stress tests executable
+# add_executable(stress_tests
+#     tests/stress_tests.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
-# Professional standards executable
-add_executable(professional_standards
-    tests/professional_standards.cpp
-    ${DASHBOARD_SOURCES}
-    ${EXTERNAL_SOURCES}
-)
+# # Professional standards executable
+# add_executable(professional_standards
+#     tests/professional_standards.cpp
+#     ${DASHBOARD_SOURCES}
+#     ${EXTERNAL_SOURCES}
+# )
 
 target_include_directories(dashboard_advanced PRIVATE
    ${Vulkan_INCLUDE_DIRS}
@@ -175,168 +176,169 @@ target_include_directories(dashboard_advanced PRIVATE
    ${imgui_SOURCE_DIR}/backends
 )
 
-target_include_directories(dashboard_test PRIVATE
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-)
+# target_include_directories(dashboard_test PRIVATE
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+# )
 
 target_link_libraries(dashboard_advanced PRIVATE
    Vulkan::Vulkan
    ${X11_LIBRARIES}
+   -lXi
    imgui
    pthread
    rt
 )
 
-target_link_libraries(dashboard_test PRIVATE
-   pthread
-   rt
-)
+# target_link_libraries(dashboard_test PRIVATE
+#    pthread
+#    rt
+# )
 
-target_include_directories(test_interactive_features PRIVATE
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-)
+# target_include_directories(test_interactive_features PRIVATE
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+# )
 
-target_link_libraries(test_interactive_features PRIVATE
-   pthread
-   rt
-   ${X11_LIBRARIES}
-)
+# target_link_libraries(test_interactive_features PRIVATE
+#    pthread
+#    rt
+#    ${X11_LIBRARIES}
+# )
 
 # Include directories and link libraries for comprehensive test suite
-target_include_directories(comprehensive_test_suite PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# target_include_directories(comprehensive_test_suite PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(comprehensive_test_suite PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(comprehensive_test_suite PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
-# Include directories and link libraries for performance validation
-target_include_directories(performance_validation PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# # Include directories and link libraries for performance validation
+# target_include_directories(performance_validation PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(performance_validation PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(performance_validation PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
-# Include directories and link libraries for functional tests
-target_include_directories(functional_tests PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# # Include directories and link libraries for functional tests
+# target_include_directories(functional_tests PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(functional_tests PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(functional_tests PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
-# Include directories and link libraries for integration tests
-target_include_directories(integration_tests PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# # Include directories and link libraries for integration tests
+# target_include_directories(integration_tests PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(integration_tests PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(integration_tests PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
-# Include directories and link libraries for stress tests
-target_include_directories(stress_tests PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# # Include directories and link libraries for stress tests
+# target_include_directories(stress_tests PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(stress_tests PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(stress_tests PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
-# Include directories and link libraries for professional standards
-target_include_directories(professional_standards PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-   ${concurrentqueue_SOURCE_DIR}
-   ${VulkanMemoryAllocator_SOURCE_DIR}/include
-   ${imgui_SOURCE_DIR}
-   ${imgui_SOURCE_DIR}/backends
-)
+# # Include directories and link libraries for professional standards
+# target_include_directories(professional_standards PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+#    ${concurrentqueue_SOURCE_DIR}
+#    ${VulkanMemoryAllocator_SOURCE_DIR}/include
+#    ${imgui_SOURCE_DIR}
+#    ${imgui_SOURCE_DIR}/backends
+# )
 
-target_link_libraries(professional_standards PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   imgui
-   pthread
-   rt
-)
+# target_link_libraries(professional_standards PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    imgui
+#    pthread
+#    rt
+# )
 
 # Compiler optimizations for performance (WITHOUT -fno-exceptions, -fno-rtti)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

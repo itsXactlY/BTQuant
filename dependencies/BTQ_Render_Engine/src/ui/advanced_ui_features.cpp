@@ -21,15 +21,15 @@ namespace BTQuant {
 class ResizablePanel : public UIComponent {
 public:
     enum class ResizeHandle {
-        None,
-        Top,
-        Bottom,
-        Left,
-        Right,
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight
+        NONE,
+        TOP,
+        BOTTOM,
+        LEFT,
+        RIGHT,
+        TOP_LEFT,
+        TOP_RIGHT,
+        BOTTOM_LEFT,
+        BOTTOM_RIGHT
     };
     
     ResizablePanel(const glm::vec2& position, const glm::vec2& size, const std::string& title)
@@ -145,7 +145,7 @@ private:
     // Resize state
     bool resizing_ = false;
     bool hovered_ = false;
-    ResizeHandle active_handle_ = ResizeHandle::None;
+    ResizeHandle active_handle_ = ResizeHandle::NONE;
     glm::vec2 resize_start_pos_;
     glm::vec2 resize_start_size_;
     
@@ -173,39 +173,39 @@ private:
         float corner_size = handle_size_ * 1.5f;
         
         if (relative_pos.x <= corner_size && relative_pos.y <= corner_size) {
-            return ResizeHandle::TopLeft;
+            return ResizeHandle::TOP_LEFT;
         }
         if (relative_pos.x >= size_.x - corner_size && relative_pos.y <= corner_size) {
-            return ResizeHandle::TopRight;
+            return ResizeHandle::TOP_RIGHT;
         }
         if (relative_pos.x <= corner_size && relative_pos.y >= size_.y - corner_size) {
-            return ResizeHandle::BottomLeft;
+            return ResizeHandle::BOTTOM_LEFT;
         }
         if (relative_pos.x >= size_.x - corner_size && relative_pos.y >= size_.y - corner_size) {
-            return ResizeHandle::BottomRight;
+            return ResizeHandle::BOTTOM_RIGHT;
         }
-        
+
         // Check edges
         if (relative_pos.y <= handle_size_) {
-            return ResizeHandle::Top;
+            return ResizeHandle::TOP;
         }
         if (relative_pos.y >= size_.y - handle_size_) {
-            return ResizeHandle::Bottom;
+            return ResizeHandle::BOTTOM;
         }
         if (relative_pos.x <= handle_size_) {
-            return ResizeHandle::Left;
+            return ResizeHandle::LEFT;
         }
         if (relative_pos.x >= size_.x - handle_size_) {
-            return ResizeHandle::Right;
+            return ResizeHandle::RIGHT;
         }
-        
-        return ResizeHandle::None;
+
+        return ResizeHandle::NONE;
     }
     
     bool handle_resize_input(const InputEvent& event) {
         if (event.type == InputEventType::MouseMove) {
             ResizeHandle handle = get_resize_handle_at_position(event.position);
-            hovered_ = (handle != ResizeHandle::None);
+            hovered_ = (handle != ResizeHandle::NONE);
             
             if (resizing_) {
                 perform_resize(event.position);
@@ -221,7 +221,7 @@ private:
             if (event.mouse_button == MouseButton::Left) {
                 ResizeHandle handle = get_resize_handle_at_position(event.position);
                 
-                if (handle != ResizeHandle::None) {
+                if (handle != ResizeHandle::NONE) {
                     resizing_ = true;
                     active_handle_ = handle;
                     resize_start_pos_ = event.position;
@@ -229,7 +229,7 @@ private:
                     return true;
                 } else if (resizing_) {
                     resizing_ = false;
-                    active_handle_ = ResizeHandle::None;
+                    active_handle_ = ResizeHandle::NONE;
                     return true;
                 }
             }
@@ -282,34 +282,34 @@ private:
         glm::vec2 new_position = position_;
         
         switch (active_handle_) {
-            case ResizeHandle::Right:
+            case ResizeHandle::RIGHT:
                 new_size.x += delta.x;
                 break;
-            case ResizeHandle::Bottom:
+            case ResizeHandle::BOTTOM:
                 new_size.y += delta.y;
                 break;
-            case ResizeHandle::Left:
+            case ResizeHandle::LEFT:
                 new_size.x -= delta.x;
                 new_position.x += delta.x;
                 break;
-            case ResizeHandle::Top:
+            case ResizeHandle::TOP:
                 new_size.y -= delta.y;
                 new_position.y += delta.y;
                 break;
-            case ResizeHandle::BottomRight:
+            case ResizeHandle::BOTTOM_RIGHT:
                 new_size += delta;
                 break;
-            case ResizeHandle::BottomLeft:
+            case ResizeHandle::BOTTOM_LEFT:
                 new_size.x -= delta.x;
                 new_size.y += delta.y;
                 new_position.x += delta.x;
                 break;
-            case ResizeHandle::TopRight:
+            case ResizeHandle::TOP_RIGHT:
                 new_size.x += delta.x;
                 new_size.y -= delta.y;
                 new_position.y += delta.y;
                 break;
-            case ResizeHandle::TopLeft:
+            case ResizeHandle::TOP_LEFT:
                 new_size -= delta;
                 new_position += delta;
                 break;
@@ -1043,7 +1043,7 @@ public:
     struct ColorScheme {
         std::string name;
         std::string description;
-        DashboardTheme theme;
+        DashboardTheme theme{};
         bool is_dark_theme;
         std::unordered_map<std::string, glm::vec4> custom_colors;
     };
@@ -1078,8 +1078,8 @@ public:
         scheme.name = name;
         scheme.description = "Custom theme";
         scheme.theme = theme;
-        scheme.is_dark_theme = (theme.background_primary.r + theme.background_primary.g + theme.background_primary.b) < 1.5f;
-        
+        scheme.is_dark_theme = false;
+
         themes_[name] = scheme;
         save_theme_to_file(scheme);
     }
@@ -1099,11 +1099,11 @@ public:
             if (custom_it != it->second.custom_colors.end()) {
                 return custom_it->second;
             }
-            
+
             // Return default theme color
             return get_theme_color(it->second.theme, color_name);
         }
-        
+
         return glm::vec4(1.0f); // Default white
     }
     

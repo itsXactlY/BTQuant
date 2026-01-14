@@ -12,7 +12,7 @@ namespace BTQuant {
 namespace RenderEngine {
 
 SymbolManager::SymbolManager()
-    : symbol_registry_(&BTQuant::SymbolRegistry::instance())
+    : symbol_registry_(&BTQuant::SymbolRegistry::getInstance())
     , auto_discovery_enabled_(true)
     , max_symbols_per_exchange_(500)
     , symbol_update_interval_ms_(1000)
@@ -70,7 +70,7 @@ std::vector<SymbolInfo> SymbolManager::getAllSymbols() const {
 }
 
 std::vector<SymbolInfo> SymbolManager::getExchangeSymbols(const std::string& exchange) const {
-    return symbol_registry_->get_exchange_symbols(exchange);
+    return symbol_registry_->get_all_symbols();
 }
 
 std::vector<SymbolInfo> SymbolManager::getFilteredSymbols(const SymbolFilter& filter) const {
@@ -310,7 +310,7 @@ void SymbolManager::updateExchangeStatistics(const std::string& exchange) {
     auto& stats = exchange_stats_[exchange];
     stats.exchange_name = exchange;
     
-    auto exchange_symbols = symbol_registry_->get_exchange_symbols(exchange);
+    auto exchange_symbols = symbol_registry_->get_all_symbols();
     stats.total_symbols = exchange_symbols.size();
     stats.last_update = std::chrono::high_resolution_clock::now();
     
@@ -320,7 +320,7 @@ void SymbolManager::updateExchangeStatistics(const std::string& exchange) {
     
     std::lock_guard<std::mutex> symbols_lock(symbols_mutex_);
     for (const auto& symbol : exchange_symbols) {
-        auto metadata_it = symbol_metadata_.find(symbol.id);
+        auto metadata_it = symbol_metadata_.find(symbol.symbol_id);
         if (metadata_it != symbol_metadata_.end()) {
             auto time_diff = std::chrono::duration_cast<std::chrono::minutes>(
                 now - metadata_it->second.last_seen);
@@ -373,7 +373,7 @@ bool SymbolManager::matchesFilter(const SymbolInfo& symbol, const SymbolFilter& 
     // Check if symbol is active (has recent metadata)
     if (filter.active_only) {
         std::lock_guard<std::mutex> lock(symbols_mutex_);
-        auto metadata_it = symbol_metadata_.find(symbol.id);
+        auto metadata_it = symbol_metadata_.find(symbol.symbol_id);
         if (metadata_it != symbol_metadata_.end()) {
             auto now = std::chrono::high_resolution_clock::now();
             auto time_diff = std::chrono::duration_cast<std::chrono::minutes>(

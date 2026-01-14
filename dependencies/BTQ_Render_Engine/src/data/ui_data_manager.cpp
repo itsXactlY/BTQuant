@@ -88,12 +88,45 @@ struct DataManagerMetrics {
     std::atomic<float> average_update_latency_ms{0.0f};
     std::atomic<uint32_t> active_bindings{0};
     std::atomic<uint32_t> pending_updates{0};
+
+    // Default constructor
+    DataManagerMetrics() = default;
+
+    // Copy constructor
+    DataManagerMetrics(const DataManagerMetrics& other)
+        : total_updates(other.total_updates.load()),
+          updates_per_second(other.updates_per_second.load()),
+          bytes_processed(other.bytes_processed.load()),
+          cache_hits(other.cache_hits.load()),
+          cache_misses(other.cache_misses.load()),
+          average_update_latency_ms(other.average_update_latency_ms.load()),
+          active_bindings(other.active_bindings.load()),
+          pending_updates(other.pending_updates.load()) {}
+
+    // Copy assignment operator
+    DataManagerMetrics& operator=(const DataManagerMetrics& other) {
+        if (this != &other) {
+            total_updates.store(other.total_updates.load());
+            updates_per_second.store(other.updates_per_second.load());
+            bytes_processed.store(other.bytes_processed.load());
+            cache_hits.store(other.cache_hits.load());
+            cache_misses.store(other.cache_misses.load());
+            average_update_latency_ms.store(other.average_update_latency_ms.load());
+            active_bindings.store(other.active_bindings.load());
+            pending_updates.store(other.pending_updates.load());
+        }
+        return *this;
+    }
 };
 
 class UIDataManager {
 public:
     UIDataManager(size_t max_bindings = 10000, size_t cache_size_mb = 64);
     ~UIDataManager();
+
+    // Delete copy constructor and copy assignment operator
+    UIDataManager(const UIDataManager&) = delete;
+    UIDataManager& operator=(const UIDataManager&) = delete;
     
     // Lifecycle management
     void start();

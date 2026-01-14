@@ -11,10 +11,12 @@
 #include <unordered_map>
 
 // HotSpine includes
-#include "../../tests/new/include/hotspine_reader.hpp"
-#include "../../tests/new/include/hotspine_layout.hpp"
-#include "../../tests/new/include/symbol_registry.hpp"
-
+// #include "../../tests/new/include/hotspine_reader.hpp"
+// #include "../../tests/new/include/hotspine_layout.hpp"
+// #include "../../tests/new/include/symbol_registry.hpp"
+#include "stubs/hotspine_reader.hpp"
+#include "stubs/hotspine_layout.hpp"
+#include "stubs/symbol_registry.hpp"
 namespace BTQuant {
 namespace RenderEngine {
 

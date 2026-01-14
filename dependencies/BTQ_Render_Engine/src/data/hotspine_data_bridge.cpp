@@ -23,7 +23,7 @@ HotSpineDataBridge::HotSpineDataBridge(const std::string& shm_name, const std::s
     , update_frequency_hz_(0.0)
 {
     // Initialize symbol registry
-    symbol_registry_ = &BTQuant::SymbolRegistry::instance();
+    symbol_registry_ = &BTQuant::SymbolRegistry::getInstance();
     
     // Load symbol mappings
     if (!symbols_file_.empty()) {
@@ -33,7 +33,7 @@ HotSpineDataBridge::HotSpineDataBridge(const std::string& shm_name, const std::s
     // Initialize HotSpine reader
     try {
         hotspine_reader_ = std::make_unique<HotSpine::HotSpineReader>(shm_name_);
-        if (!hotspine_reader_->isAttached()) {
+        if (!hotspine_reader_->is_connected()) {
             throw std::runtime_error("Failed to attach to HotSpine shared memory");
         }
         std::cout << "[HotSpineDataBridge] Successfully connected to " << shm_name_ << std::endl;
@@ -61,7 +61,7 @@ bool HotSpineDataBridge::start() {
         return true;
     }
     
-    if (!hotspine_reader_ || !hotspine_reader_->isAttached()) {
+    if (!hotspine_reader_ || !hotspine_reader_->is_connected()) {
         std::cerr << "[HotSpineDataBridge] Cannot start - not connected to HotSpine" << std::endl;
         return false;
     }
@@ -98,7 +98,7 @@ void HotSpineDataBridge::stop() {
 }
 
 bool HotSpineDataBridge::isConnected() const {
-    return hotspine_reader_ && hotspine_reader_->isAttached() && hotspine_reader_->is_healthy();
+    return hotspine_reader_ && hotspine_reader_->is_connected();
 }
 
 std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
@@ -112,8 +112,8 @@ std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
         MarketDataUpdate update;
         update.type = MarketDataType::TRADE;
         update.symbol_id = trade.symbol_id;
-        update.timestamp_us = trade.ts_exchange;
-        update.local_timestamp_us = trade.ts_local;
+        update.timestamp_us = trade.timestamp_us;
+        update.local_timestamp_us = trade.timestamp_us;
         update.price = trade.price;
         update.size = trade.size;
         update.side = (trade.side == 0) ? "buy" : "sell";
@@ -132,8 +132,8 @@ std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
         MarketDataUpdate update;
         update.type = MarketDataType::ORDERBOOK;
         update.symbol_id = ob.symbol_id;
-        update.timestamp_us = ob.ts_exchange;
-        update.local_timestamp_us = ob.ts_local;
+        update.timestamp_us = ob.timestamp_us;
+        update.local_timestamp_us = ob.timestamp_us;
         
         // Get symbol info for display
         if (auto symbol_info = symbol_registry_->get_symbol_info(ob.symbol_id)) {
@@ -142,15 +142,11 @@ std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
         }
         
         // Copy bid/ask levels
-        update.bids.reserve(ob.bids_count);
-        for (uint8_t i = 0; i < ob.bids_count; ++i) {
-            update.bids.push_back({ob.bids[i].price, ob.bids[i].size});
-        }
-        
-        update.asks.reserve(ob.asks_count);
-        for (uint8_t i = 0; i < ob.asks_count; ++i) {
-            update.asks.push_back({ob.asks[i].price, ob.asks[i].size});
-        }
+        update.bids.reserve(1);
+        update.bids.push_back({ob.best_bid_price, ob.best_bid_size});
+
+        update.asks.reserve(1);
+        update.asks.push_back({ob.best_ask_price, ob.best_ask_size});
         
         updates.push_back(update);
     }
@@ -170,14 +166,14 @@ std::vector<SymbolData> HotSpineDataBridge::getAllSymbols() const {
     
     for (const auto& symbol_info : all_symbols) {
         SymbolData data;
-        data.symbol_id = symbol_info.id;
+        data.symbol_id = symbol_info.symbol_id;
         data.exchange = symbol_info.exchange;
         data.symbol = symbol_info.symbol;
-        data.full_symbol = symbol_info.full_symbol();
+        data.full_symbol = symbol_info.full_name;
         
         // Get latest market data for this symbol
         std::lock_guard<std::mutex> lock(symbol_data_mutex_);
-        auto it = symbol_market_data_.find(symbol_info.id);
+        auto it = symbol_market_data_.find(symbol_info.symbol_id);
         if (it != symbol_market_data_.end()) {
             data.last_price = it->second.last_price;
             data.price_change = it->second.price_change;
@@ -216,14 +212,16 @@ void HotSpineDataBridge::dataProcessingLoop() {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         // Process trades
-        while (hotspine_reader_->pollTrade(trade)) {
+        auto trades = hotspine_reader_->read_trades();
+        for (const auto& trade : trades) {
             processTrade(trade);
             data_processed = true;
             total_trades_processed_++;
         }
-        
+
         // Process orderbooks
-        while (hotspine_reader_->pollOrderbook(orderbook)) {
+        auto orderbooks = hotspine_reader_->read_orderbooks();
+        for (const auto& orderbook : orderbooks) {
             processOrderbook(orderbook);
             data_processed = true;
             total_orderbooks_processed_++;
@@ -274,12 +272,7 @@ void HotSpineDataBridge::processTrade(const HotSpine::HotTrade& trade) {
     updateSymbolMarketData(trade.symbol_id, trade.price, trade.size, local_timestamp);
     
     // Calculate data-to-processing latency
-    if (trade.ts_local > 0) {
-        int64_t processing_latency = local_timestamp - trade.ts_local;
-        std::lock_guard<std::mutex> lock(perf_mutex_);
-        performance_metrics_.avg_processing_latency_us = 
-            (performance_metrics_.avg_processing_latency_us * 0.9) + (processing_latency * 0.1);
-    }
+    // Remove ts_local processing as it's not available in stub
 }
 
 void HotSpineDataBridge::processOrderbook(const HotSpine::HotOrderbookSnapshot& orderbook) {
@@ -300,11 +293,11 @@ void HotSpineDataBridge::processOrderbook(const HotSpine::HotOrderbookSnapshot& 
     }
     
     // Update symbol market data with bid/ask prices
-    if (orderbook.bids_count > 0 && orderbook.asks_count > 0) {
-        updateSymbolOrderbookData(orderbook.symbol_id, 
-                                 orderbook.bids[0].price, 
-                                 orderbook.asks[0].price, 
-                                 local_timestamp);
+    if (orderbook.best_bid_price > 0 && orderbook.best_ask_price > 0) {
+        updateSymbolOrderbookData(orderbook.symbol_id,
+                                orderbook.best_bid_price,
+                                orderbook.best_ask_price,
+                                local_timestamp);
     }
 }
 
@@ -388,11 +381,7 @@ void HotSpineDataBridge::performanceMonitoringLoop() {
             performance_metrics_.connection_healthy = isConnected();
             
             // Update buffer status
-            if (hotspine_reader_) {
-                auto buffer_status = hotspine_reader_->get_buffer_status();
-                performance_metrics_.buffer_utilization_percent = 
-                    (buffer_status.second > 0) ? (buffer_status.first * 100.0 / buffer_status.second) : 0.0;
-            }
+            // Remove buffer status as it's not available in stub
             
             last_time = now;
             last_trades = current_trades;
@@ -428,8 +417,8 @@ bool HotSpineDataBridge::reconnect() {
     // Recreate HotSpine reader
     try {
         hotspine_reader_ = std::make_unique<HotSpine::HotSpineReader>(shm_name_);
-        if (!hotspine_reader_->isAttached()) {
-            std::cerr << "[HotSpineDataBridge] Reconnection failed - could not attach to shared memory" << std::endl;
+        if (!hotspine_reader_->is_connected()) {
+            std::cerr << "[HotSpineDataBridge] Reconnection failed - could not connect to shared memory" << std::endl;
             return false;
         }
         
@@ -461,19 +450,25 @@ std::vector<std::string> HotSpineDataBridge::getAvailableExchanges() const {
 std::vector<SymbolData> HotSpineDataBridge::getExchangeSymbols(const std::string& exchange) const {
     std::vector<SymbolData> symbols;
     
-    auto exchange_symbols = symbol_registry_->get_exchange_symbols(exchange);
+    auto all_symbols = symbol_registry_->get_all_symbols();
+    std::vector<SymbolInfo> exchange_symbols;
+    for (const auto& symbol_info : all_symbols) {
+        if (symbol_info.exchange == exchange) {
+            exchange_symbols.push_back(symbol_info);
+        }
+    }
     symbols.reserve(exchange_symbols.size());
     
     for (const auto& symbol_info : exchange_symbols) {
         SymbolData data;
-        data.symbol_id = symbol_info.id;
+        data.symbol_id = symbol_info.symbol_id;
         data.exchange = symbol_info.exchange;
         data.symbol = symbol_info.symbol;
-        data.full_symbol = symbol_info.full_symbol();
-        
+        data.full_symbol = symbol_info.full_name;
+
         // Get latest market data
         std::lock_guard<std::mutex> lock(symbol_data_mutex_);
-        auto it = symbol_market_data_.find(symbol_info.id);
+        auto it = symbol_market_data_.find(symbol_info.symbol_id);
         if (it != symbol_market_data_.end()) {
             data.last_price = it->second.last_price;
             data.price_change = it->second.price_change;

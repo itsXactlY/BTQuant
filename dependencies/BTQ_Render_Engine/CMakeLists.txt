@@ -78,6 +78,8 @@ set(DASHBOARD_SOURCES
     src/components/heatmap_component.cpp
     src/components/orderbook_component.cpp
     src/components/log_display_component.cpp
+    src/components/depth_chart_component.cpp
+    src/components/trading_components.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/data/hotspine_data_bridge.cpp

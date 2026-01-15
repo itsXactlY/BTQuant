@@ -61,6 +61,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "indicator.hpp"
+
 // Concurrent data structures
 #include "../build/_deps/concurrentqueue-src/concurrentqueue.h"
 
@@ -75,10 +77,128 @@
 
 namespace BTQuant {
 
+template <typename T, size_t MaxSize> class RingBuffer {
+public:
+  void push_back(const T &item) {
+    if (size_ < MaxSize) {
+      data_[end_] = item;
+      end_ = (end_ + 1) % MaxSize;
+      size_++;
+    } else {
+      data_[start_] = item;
+      start_ = (start_ + 1) % MaxSize;
+      end_ = (end_ + 1) % MaxSize;
+    }
+  }
+
+  const T &operator[](size_t index) const {
+    return data_[(start_ + index) % MaxSize];
+  }
+
+  T &operator[](size_t index) { return data_[(start_ + index) % MaxSize]; }
+
+  size_t size() const { return size_; }
+  bool empty() const { return size_ == 0; }
+  void clear() {
+    start_ = 0;
+    end_ = 0;
+    size_ = 0;
+  }
+
+  const T &back() const { return data_[(end_ + MaxSize - 1) % MaxSize]; }
+  T &back() { return data_[(end_ + MaxSize - 1) % MaxSize]; }
+
+  const T &front() const { return data_[start_]; }
+  T &front() { return data_[start_]; }
+
+  void pop_front() {
+    if (size_ > 0) {
+      start_ = (start_ + 1) % MaxSize;
+      size_--;
+    }
+  }
+
+  struct Iterator {
+    RingBuffer *rb;
+    size_t index;
+    bool operator!=(const Iterator &other) const {
+      return index != other.index;
+    }
+    const T &operator*() const { return (*rb)[index]; }
+    T &operator*() { return (*rb)[index]; }
+    Iterator &operator++() {
+      index++;
+      return *this;
+    }
+  };
+
+  Iterator begin() { return {this, 0}; }
+  Iterator end() { return {this, size_}; }
+
+  struct ConstIterator {
+    const RingBuffer *rb;
+    size_t index;
+    bool operator!=(const ConstIterator &other) const {
+      return index != other.index;
+    }
+    const T &operator*() const { return (*rb)[index]; }
+    ConstIterator &operator++() {
+      index++;
+      return *this;
+    }
+  };
+
+  ConstIterator begin() const { return {this, 0}; }
+  ConstIterator end() const { return {this, size_}; }
+
+private:
+  std::array<T, MaxSize> data_;
+  size_t start_ = 0;
+  size_t end_ = 0;
+  size_t size_ = 0;
+};
+
+// ============================================================================
+// Common Vertex and Data Structures
+// ============================================================================
+
+// Vertex structure for line rendering
+struct LineVertex {
+  glm::vec2 position;
+  glm::vec2 direction;
+  float thickness;
+  glm::vec4 color;
+  float distance;
+};
+
+// Vertex structure for candlestick rendering
+struct CandlestickVertex {
+  glm::vec2 position;
+  glm::vec2 size;
+  glm::vec4 color;
+  float border_width;
+  uint32_t candle_type; // 0 = body, 1 = wick
+};
+
+struct OrderBookLevel {
+  double price;
+  double size;
+  double total_size;
+};
+
+struct OrderBookData {
+  std::vector<OrderBookLevel> bids;
+  std::vector<OrderBookLevel> asks;
+  double spread;
+  double mid_price;
+  uint64_t timestamp;
+};
+
 // Forward declarations for core rendering components
 class VulkanCore;
 class GPUMemoryManager;
 class UIComponent;
+class VulkanDashboard;
 class DataVisualizationEngine;
 class HotSpineDataBridge;
 
@@ -112,29 +232,44 @@ struct DashboardConfig {
 // Professional trading dashboard theme
 struct DashboardTheme {
   // Background colors
-  glm::vec4 background_primary{0.1f, 0.1f, 0.1f, 1.0f};
-  glm::vec4 background_secondary{0.15f, 0.15f, 0.15f, 1.0f};
-  glm::vec4 background_panel{0.12f, 0.12f, 0.12f, 1.0f};
+  glm::vec4 background_primary{0.0392f, 0.0392f, 0.0392f, 1.0f};   // #1E1E1E
+  glm::vec4 background_secondary{0.0588f, 0.0588f, 0.0588f, 1.0f}; // #252525
+  glm::vec4 background_panel{0.0784f, 0.0784f, 0.0784f, 0.95f};    // #2D2D2D
 
   // Text colors
-  glm::vec4 text_primary{0.9f, 0.9f, 0.9f, 1.0f};
-  glm::vec4 text_secondary{0.7f, 0.7f, 0.7f, 1.0f};
-  glm::vec4 text_muted{0.5f, 0.5f, 0.5f, 1.0f};
+  glm::vec4 text_primary{1.0f, 1.0f, 1.0f, 1.00f};        // High contrast white
+  glm::vec4 text_secondary{0.666f, 0.666f, 0.666f, 1.0f}; // #AAAAAA gray
+  glm::vec4 text_muted{0.4f, 0.4f, 0.4f, 1.0f};
 
   // Market data colors
-  glm::vec4 price_up{0.0f, 0.8f, 0.0f, 1.0f};
-  glm::vec4 price_down{0.8f, 0.0f, 0.0f, 1.0f};
-  glm::vec4 price_neutral{0.6f, 0.6f, 0.6f, 1.0f};
+  glm::vec4 price_up{0.0f, 1.0f, 0.65f, 1.00f};          // #10B981 Green
+  glm::vec4 price_up_bright{0.0f, 1.0f, 0.5333f, 1.00f}; // #00FF88 Bright Green
+  glm::vec4 price_down{1.0f, 0.2f, 0.3f, 1.00f};         // #EF4444 Red
+  glm::vec4 price_down_bright{1.0f, 0.2667f, 0.2667f,
+                              1.00f}; // #FF4444 Bright Red
+  glm::vec4 price_neutral{0.5333f, 0.5333f, 0.5333f, 1.00f}; // #888888 Gray
 
   // UI accent colors
-  glm::vec4 accent_primary{0.2f, 0.6f, 1.0f, 1.0f};
-  glm::vec4 accent_secondary{0.8f, 0.4f, 0.0f, 1.0f};
-  glm::vec4 border_color{0.3f, 0.3f, 0.3f, 1.0f};
+  glm::vec4 accent_primary{0.0f, 0.6588f, 1.0f, 1.00f}; // #00A8FF Electric Blue
+  glm::vec4 accent_secondary{1.0f, 0.6471f, 0.0f, 1.0f}; // #FFA500 Amber
+  glm::vec4 border_color{0.25f, 0.25f, 0.25f, 1.0f};
 
   // Status colors
-  glm::vec4 status_connected{0.0f, 0.8f, 0.0f, 1.0f};
-  glm::vec4 status_disconnected{0.8f, 0.0f, 0.0f, 1.0f};
-  glm::vec4 status_warning{0.8f, 0.8f, 0.0f, 1.0f};
+  glm::vec4 status_connected{0.0627f, 0.7255f, 0.5059f, 1.0f};
+  glm::vec4 status_disconnected{0.9373f, 0.2667f, 0.2667f, 1.0f};
+  glm::vec4 status_warning{1.0f, 0.6471f, 0.0f, 1.0f};
+
+  // Fonts (managed by dashboard)
+  ImFont *sans_font = nullptr;      // Sans-serif for labels/UI
+  ImFont *monospace_font = nullptr; // Monospace for numbers/prices
+};
+
+struct CrosshairState {
+  bool active = false;
+  double timestamp_us = 0;
+  double price = 0;
+  glm::vec2 screen_pos{0, 0};
+  UIComponent *source = nullptr;
 };
 
 // ============================================================================
@@ -247,6 +382,8 @@ struct BufferAllocation {
   VkDeviceSize size = 0;
   VkDeviceSize offset = 0;
   bool is_mapped = false;
+  uint32_t pool_id =
+      0; // 0: None, 1: Vertex, 2: Uniform, 3: Storage, 4: Staging
 };
 
 class MemoryPool {
@@ -344,6 +481,7 @@ public:
   // Resource access
   VkDevice get_device() const { return device_; }
   VkPhysicalDevice get_physical_device() const { return physical_device_; }
+  uint32_t get_current_frame_index() const { return current_frame_; }
   VkQueue get_graphics_queue() const { return graphics_queue_; }
   VkQueue get_present_queue() const { return present_queue_; }
   VkQueue get_compute_queue() const { return compute_queue_; }
@@ -364,6 +502,8 @@ public:
       const std::vector<VkVertexInputBindingDescription> &bindings,
       const std::vector<VkVertexInputAttributeDescription> &attributes,
       VkPipelineLayout layout);
+  VkPipeline create_compute_pipeline(const std::string &shader_path,
+                                     VkPipelineLayout layout);
   VkShaderModule create_shader_module(const std::vector<char> &code);
   VkPipelineLayout create_pipeline_layout(
       const std::vector<VkDescriptorSetLayout> &layouts,
@@ -562,6 +702,8 @@ public:
   UIComponent(const glm::vec2 &position, const glm::vec2 &size)
       : position_(position), size_(size) {}
 
+  void set_dashboard(VulkanDashboard *dashboard) { dashboard_ = dashboard; }
+
   virtual ~UIComponent() = default;
 
   // Core interface
@@ -573,6 +715,8 @@ public:
   // Market data event handlers
   virtual void handle_trade(const RenderEngine::TradeData &trade) {}
   virtual void handle_orderbook(const RenderEngine::OrderbookData &orderbook) {}
+  virtual void clear_data() {}
+  virtual void synchronize_crosshair(const CrosshairState &state) {}
 
   // Vulkan resource initialization - called after VulkanCore is ready
   virtual void initialize_vulkan_resources(VulkanCore *vulkan_core) = 0;
@@ -581,28 +725,33 @@ public:
   virtual std::string get_name() const = 0;
   void set_position(const glm::vec2 &position) {
     position_ = position;
-    dirty_ = true;
+    dirty_frames_ = 2;
   }
   void set_size(const glm::vec2 &size) {
     size_ = size;
-    dirty_ = true;
+    dirty_frames_ = 2;
   }
   glm::vec2 get_position() const { return position_; }
   glm::vec2 get_size() const { return size_; }
 
   // Visibility and state
   void set_visible(bool visible) { visible_ = visible; }
+  void set_minimized(bool minimized) { minimized_ = minimized; }
   bool is_visible() const { return visible_; }
-  bool is_dirty() const { return dirty_; }
-  void mark_clean() { dirty_ = false; }
+  bool is_minimized() const { return minimized_; }
+  bool is_dirty() const { return dirty_frames_ > 0; }
+  void mark_clean() { dirty_frames_ = 0; }
+  void mark_dirty() { dirty_frames_ = 2; }
 
 protected:
   glm::vec2 position_;
   glm::vec2 size_;
   bool visible_ = true;
-  bool dirty_ = true;
+  bool minimized_ = false;
+  uint32_t dirty_frames_ = 2;
   DashboardTheme theme_;
   VulkanCore *vulkan_core_ = nullptr;
+  VulkanDashboard *dashboard_ = nullptr;
 };
 
 // Data grid for displaying tabular market data
@@ -670,6 +819,11 @@ public:
     float volume = 0.0f;
   };
 
+  struct Candle {
+    float open, high, low, close, volume;
+    uint64_t timestamp_us;
+  };
+
   RealtimeChartComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~RealtimeChartComponent();
   std::string get_name() const override { return "Price Chart"; }
@@ -691,19 +845,35 @@ public:
   void handle_input(const InputEvent &event) override;
   void handle_trade(const RenderEngine::TradeData &trade) override;
   void handle_orderbook(const RenderEngine::OrderbookData &orderbook) override;
+  void clear_data() override;
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
-  std::deque<DataPoint> data_points_;
+  RingBuffer<DataPoint, 1000> data_points_;
+  RingBuffer<Candle, 200> candles_;
   float time_window_ = 60.0f;
   float min_y_ = 0.0f, max_y_ = 100.0f;
   bool auto_scale_ = true;
   bool candlestick_mode_ = false;
   glm::vec4 line_color_{1.0f, 1.0f, 1.0f, 1.0f};
 
-  // Rendering resources
-  BufferAllocation line_vertex_buffer_;
-  BufferAllocation candlestick_vertex_buffer_;
+  // Interaction and View
+  float view_zoom_ = 1.0f;
+  float view_offset_ = 0.0f;
+  bool is_dragging_ = false;
+  glm::vec2 last_mouse_pos_{0, 0};
+  bool show_crosshair_ = true;
+
+  // Rendering resources (double buffered)
+  std::array<BufferAllocation, 2> candlestick_vertex_buffers_;
+  std::array<BufferAllocation, 2> crosshair_vertex_buffers_;
+  std::array<BufferAllocation, 2> indicator_vertex_buffers_;
+  std::array<BufferAllocation, 2> line_vertex_buffers_;
+  uint32_t candlestick_vertex_count_ = 0;
+  uint32_t crosshair_vertex_count_ = 0;
+
+  std::vector<std::unique_ptr<TechnicalIndicator>> indicators_;
+  uint32_t indicator_vertex_count_ = 0;
   BufferAllocation line_ubo_buffer_;
   BufferAllocation ui_ubo_buffer_;
   VkPipeline line_pipeline_ = VK_NULL_HANDLE;
@@ -717,6 +887,9 @@ private:
 
   void rebuild_line_geometry();
   void rebuild_candlestick_geometry();
+  void rebuild_crosshair_geometry();
+  void rebuild_indicator_geometry();
+  void update_indicators();
   void update_y_range();
 };
 
@@ -763,7 +936,6 @@ private:
   VkBuffer compute_output_buffer_;
   VkDescriptorSet compute_descriptor_set_ = VK_NULL_HANDLE;
   VkPipeline compute_pipeline_ = VK_NULL_HANDLE;
-
   // Rendering resources
   BufferAllocation vertex_buffer_;
   BufferAllocation index_buffer_;
@@ -772,6 +944,136 @@ private:
   void rebuild_geometry();
   void dispatch_compute_interpolation();
   glm::vec4 interpolate_color(float value);
+};
+
+// Cumulative bid/ask depth curve visualization
+class MarketDepthChartComponent : public UIComponent {
+public:
+  MarketDepthChartComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~MarketDepthChartComponent();
+  std::string get_name() const override { return "Depth Chart"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override;
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override;
+  void handle_trade(const RenderEngine::TradeData &trade) override;
+  void handle_orderbook(const RenderEngine::OrderbookData &orderbook) override;
+  void clear_data() override;
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
+
+private:
+  OrderBookData current_data_;
+  BufferAllocation vertex_buffer_;
+  uint32_t vertex_count_ = 0;
+  VkPipeline pipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
+
+  void rebuild_geometry();
+  VulkanCore *vulkan_core_ = nullptr;
+};
+
+// Real-time trade feed (Tape)
+class TapeComponent : public UIComponent {
+public:
+  struct TapeEntry {
+    uint64_t timestamp_us;
+    double price;
+    double size;
+    bool is_buy;
+    bool is_large_trade;
+    float delta;
+  };
+
+  TapeComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~TapeComponent();
+  std::string get_name() const override { return "Time & Sales"; }
+
+  void handle_trade(const RenderEngine::TradeData &trade) override;
+  void update(float delta_time) override;
+  void clear_data() override;
+  void render(VkCommandBuffer cmd) override {}; // Mostly GUI based
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  std::deque<TapeEntry> entries_;
+  float large_trade_threshold_ = 1.0f;
+  float cumulative_delta_ = 0.0f;
+};
+
+// Order management and execution panel
+class OrderManagementComponent : public UIComponent {
+public:
+  OrderManagementComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~OrderManagementComponent();
+  std::string get_name() const override { return "Order Management"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {};
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  float quantity_ = 0.0f;
+  float price_ = 0.0f;
+  std::string order_type_ = "Limit";
+  std::string symbol_ = "BTC-USDT";
+};
+
+// Position and account performance panel
+class PositionPanelComponent : public UIComponent {
+public:
+  struct Position {
+    std::string symbol;
+    float entry_price;
+    float current_price;
+    float quantity;
+    float pnl;
+    float pnl_percent;
+  };
+
+  PositionPanelComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~PositionPanelComponent();
+  std::string get_name() const override { return "Positions & P&L"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {};
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  std::vector<Position> positions_;
+  float total_equity_ = 100000.0f;
+  float available_balance_ = 85000.0f;
+};
+
+// Collapsible top bar for market overview
+class MarketOverviewPanel : public UIComponent {
+public:
+  MarketOverviewPanel(const glm::vec2 &position, const glm::vec2 &size);
+  ~MarketOverviewPanel();
+  std::string get_name() const override { return "Market Overview"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {};
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  struct Ticker {
+    std::string symbol;
+    float price;
+    float change_pct;
+  };
+  std::vector<Ticker> tickers_;
+  float global_volume_ = 1250000000.0f;
+  float system_latency_ms_ = 0.45f;
 };
 
 // Vertex structures for order book rendering
@@ -801,20 +1103,6 @@ struct OrderBookUniformBuffer {
 // Order book visualization component
 class OrderBookComponent : public UIComponent {
 public:
-  struct OrderBookLevel {
-    double price;
-    double size;
-    double total_size;
-  };
-
-  struct OrderBookData {
-    std::vector<OrderBookLevel> bids;
-    std::vector<OrderBookLevel> asks;
-    double spread;
-    double mid_price;
-    uint64_t timestamp;
-  };
-
   OrderBookComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~OrderBookComponent();
   std::string get_name() const override { return "Order Book"; }
@@ -835,6 +1123,7 @@ public:
   void handle_input(const InputEvent &event) override;
   void handle_trade(const RenderEngine::TradeData &trade) override;
   void handle_orderbook(const RenderEngine::OrderbookData &orderbook) override;
+  void clear_data() override;
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
@@ -913,6 +1202,7 @@ public:
   void handle_input(const InputEvent &event) override;
   void handle_trade(const RenderEngine::TradeData &trade) override;
   void handle_orderbook(const RenderEngine::OrderbookData &orderbook) override;
+  void clear_data() override;
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
@@ -921,6 +1211,7 @@ private:
   bool auto_scroll_ = true;
   LogLevel min_log_level_ = Debug;
   std::string text_filter_;
+  VulkanCore *vulkan_core_ = nullptr;
   float scroll_offset_ = 0.0f;
 
   // Rendering resources
@@ -944,6 +1235,59 @@ private:
   std::vector<LogEntry> get_filtered_entries() const;
 };
 
+// Strategy control panel for managing automated strategies
+class StrategyControlComponent : public UIComponent {
+public:
+  struct StrategyInfo {
+    std::string name;
+    bool active;
+    float pnl;
+    float drawdown;
+    int orders_today;
+    std::string status;
+  };
+
+  StrategyControlComponent(const glm::vec2 &position, const glm::vec2 &size);
+  std::string get_name() const override { return "Strategy Control"; }
+  void update(float delta_time) override {}
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  std::vector<StrategyInfo> strategies_;
+};
+
+// Risk management dashboard component
+class RiskManagerComponent : public UIComponent {
+public:
+  RiskManagerComponent(const glm::vec2 &position, const glm::vec2 &size);
+  std::string get_name() const override { return "Risk Manager"; }
+  void update(float delta_time) override {}
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+};
+
+// One-click trading interface component
+class TradingInterfaceComponent : public UIComponent {
+public:
+  TradingInterfaceComponent(const glm::vec2 &position, const glm::vec2 &size);
+  std::string get_name() const override { return "Trading Interface"; }
+  void update(float delta_time) override {}
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  float quantity_ = 0.1f;
+  float price_ = 0.0f;
+  std::string order_type_ = "Limit";
+};
+
 // Redefine data structures to use those from RenderEngine
 using TradeData = RenderEngine::TradeData;
 using OrderbookData = RenderEngine::OrderbookData;
@@ -965,6 +1309,11 @@ public:
                   const DashboardConfig &config = {});
   ~VulkanDashboard();
 
+  enum class AppTheme { InstitutionalDark, BloombergTerminal, LightMode };
+  void apply_theme(AppTheme theme);
+  AppTheme current_theme() const { return current_theme_; }
+  ImFont *get_monospace_font() const { return monospace_font_; }
+
   // Lifecycle management
   void initialize();
   void main_loop();
@@ -977,6 +1326,21 @@ public:
   // Data integration
   void start_market_data_processing();
   void stop_market_data_processing();
+  void synchronize_crosshair(const CrosshairState &state);
+  const CrosshairState &get_crosshair_state() const {
+    return shared_crosshair_;
+  }
+
+  // Symbol management
+  const std::string &get_active_symbol() const { return active_symbol_; }
+  void set_active_symbol(const std::string &symbol) {
+    if (active_symbol_ == symbol)
+      return;
+    active_symbol_ = symbol;
+    for (auto &comp : components_) {
+      comp->clear_data();
+    }
+  }
 
   // Performance monitoring
   struct PerformanceStats {
@@ -1030,11 +1394,20 @@ private:
   std::deque<float> frame_times_;
   uint64_t frame_count_{0};
 
+  // Fonts
+  ImFont *monospace_font_ = nullptr;
+
   // Strategy and UI state
   bool live_execution_active_ = false;
   bool show_backtest_dialog_ = false;
   bool show_risk_manager_ = false;
+  bool show_performance_overlay_ = false;
+  AppTheme current_theme_ = AppTheme::InstitutionalDark;
   RiskMetrics risk_metrics_{100000.0, 1250.0, 0.05, 2.1, 1500.0, 45000.0};
+
+  // Active Symbol Tracking
+  std::string active_symbol_ = "BTC-USDT";
+  uint32_t active_symbol_id_ = 0;
 
   // Private methods
   void init_x11();
@@ -1047,12 +1420,17 @@ private:
   void render_components();
   void update_performance_stats();
   void synchronize_market_data();
+
+private:
+  CrosshairState shared_crosshair_;
   void cleanup_x11();
 
   // GUI rendering
   void render_gui();
   void render_backtest_dialog();
   void render_risk_manager();
+  void render_performance_overlay();
+  void render_status_bar();
 
   // Event handlers
   void on_trade_received(const RenderEngine::TradeData &trade);

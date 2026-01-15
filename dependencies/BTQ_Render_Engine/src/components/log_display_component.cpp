@@ -87,19 +87,19 @@ void LogDisplayComponent::add_log_entry(LogLevel level,
     scroll_offset_ = 0.0f; // 0 means scrolled to bottom
   }
 
-  dirty_ = true;
+  mark_dirty();
 }
 
 void LogDisplayComponent::clear_logs() {
   log_entries_.clear();
   scroll_offset_ = 0.0f;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void LogDisplayComponent::update(float delta_time) {
-  if (dirty_) {
+  if (is_dirty()) {
     rebuild_text_geometry();
-    dirty_ = false;
+    dirty_frames_--;
   }
 
   // Update any animations or smooth scrolling
@@ -182,10 +182,13 @@ void LogDisplayComponent::render_gui() {
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
 
+  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
   if (!ImGui::Begin("System Logs", &visible_)) {
+    minimized_ = true;
     ImGui::End();
     return;
   }
+  minimized_ = false;
 
   // Filtering and Controls
   if (ImGui::Button("Clear")) {
@@ -248,7 +251,7 @@ void LogDisplayComponent::handle_input(const InputEvent &event) {
       auto_scroll_ = true;
     }
 
-    dirty_ = true;
+    mark_dirty();
     break;
   }
 
@@ -454,7 +457,7 @@ void LogDisplayComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
 
   fprintf(stderr,
           "[LogDisplayComponent] Vulkan resources initialized successfully\n");
-  dirty_ = true;
+  mark_dirty();
 }
 
 void LogDisplayComponent::rebuild_text_geometry() {
@@ -660,6 +663,10 @@ LogDisplayComponent::get_filtered_entries() const {
   }
 
   return filtered;
+}
+
+void LogDisplayComponent::clear_data() {
+  clear_logs();
 }
 
 } // namespace BTQuant

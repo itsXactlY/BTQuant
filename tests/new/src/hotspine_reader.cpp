@@ -146,9 +146,13 @@ bool HotSpineReader::pollTrade(HotTrade &trade) {
               << std::endl;
   }
 
-  // Check if there's data available
-  if (write_pos == read_pos) {
-    return false; // Buffer empty
+  // Check if there's data available (and handle potential read_index exceeding
+  // write_index)
+  if (read_pos >= write_pos) {
+    if (read_pos > write_pos) {
+      header->read_index = write_pos; // Reset to write_pos to recover
+    }
+    return false; // Buffer empty or synchronized
   }
 
   // Calculate entry position (entries start after FIXED HEADER SIZE)
@@ -187,8 +191,11 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
   uint64_t read_pos = header->orderbook_read_index;
 
   // Check if there's data available
-  if (write_pos == read_pos) {
-    return false; // Buffer empty
+  if (read_pos >= write_pos) {
+    if (read_pos > write_pos) {
+      header->orderbook_read_index = write_pos; // Reset to recover
+    }
+    return false; // Buffer empty or synchronized
   }
 
   // Calculate trade buffer size to skip

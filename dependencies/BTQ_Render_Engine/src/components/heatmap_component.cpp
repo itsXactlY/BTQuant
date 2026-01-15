@@ -117,7 +117,7 @@ void HeatmapComponent::set_data(
     }
   }
 
-  dirty_ = true;
+  mark_dirty();
 }
 
 void HeatmapComponent::update_cell(size_t x, size_t y,
@@ -126,7 +126,7 @@ void HeatmapComponent::update_cell(size_t x, size_t y,
     return;
 
   heatmap_data_[y][x] = data;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void HeatmapComponent::set_color_scheme(const std::vector<glm::vec4> &colors) {
@@ -134,22 +134,22 @@ void HeatmapComponent::set_color_scheme(const std::vector<glm::vec4> &colors) {
     return;
 
   color_scheme_ = colors;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void HeatmapComponent::set_value_range(float min_val, float max_val) {
   min_value_ = min_val;
   max_value_ = max_val;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void HeatmapComponent::update(float delta_time) {
-  if (dirty_) {
+  if (is_dirty()) {
     rebuild_geometry();
     if (interpolation_enabled_) {
       dispatch_compute_interpolation();
     }
-    dirty_ = false;
+    dirty_frames_--;
   }
 
   // Update animations
@@ -210,10 +210,13 @@ void HeatmapComponent::render_gui() {
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
 
+  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
   if (!ImGui::Begin("Momentum Heatmap", &visible_)) {
+    minimized_ = true;
     ImGui::End();
     return;
   }
+  minimized_ = false;
 
   ImDrawList *draw_list = ImGui::GetWindowDrawList();
   ImVec2 origin = ImGui::GetCursorScreenPos();

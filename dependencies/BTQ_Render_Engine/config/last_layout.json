@@ -1,0 +1,97 @@
+{
+    "components": [
+        {
+            "minimized": false,
+            "name": "Market Overview",
+            "pos": [
+                0.0,
+                0.0
+            ],
+            "size": [
+                1280.0,
+                40.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Price Chart",
+            "pos": [
+                10.0,
+                40.0
+            ],
+            "size": [
+                1260.0,
+                380.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Order Book",
+            "pos": [
+                10.0,
+                40.0
+            ],
+            "size": [
+                300.0,
+                670.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Time & Sales",
+            "pos": [
+                1032.0,
+                48.0
+            ],
+            "size": [
+                240.0,
+                400.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Positions & P&L",
+            "pos": [
+                8.0,
+                464.0
+            ],
+            "size": [
+                752.0,
+                248.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Order Management",
+            "pos": [
+                776.0,
+                464.0
+            ],
+            "size": [
+                240.0,
+                248.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Strategy Control",
+            "pos": [
+                773.0,
+                377.5
+            ],
+            "size": [
+                246.0,
+                129.0
+            ],
+            "visible": true
+        }
+    ],
+    "theme": 0,
+    "version": 1.0
+}

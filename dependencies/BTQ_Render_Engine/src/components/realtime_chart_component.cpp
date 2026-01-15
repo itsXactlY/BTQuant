@@ -21,24 +21,6 @@
 
 namespace BTQuant {
 
-// Vertex structure for line rendering
-struct LineVertex {
-  glm::vec2 position;
-  glm::vec2 direction;
-  float thickness;
-  glm::vec4 color;
-  float distance;
-};
-
-// Vertex structure for candlestick rendering
-struct CandlestickVertex {
-  glm::vec2 position;
-  glm::vec2 size;
-  glm::vec4 color;
-  float border_width;
-  uint32_t candle_type; // 0 = body, 1 = wick
-};
-
 RealtimeChartComponent::RealtimeChartComponent(const glm::vec2 &position,
                                                const glm::vec2 &size)
     : UIComponent(position, size) {
@@ -51,10 +33,12 @@ RealtimeChartComponent::RealtimeChartComponent(const glm::vec2 &position,
   candlestick_mode_ = false;
   line_color_ = theme_.accent_primary;
 
-  // Note: std::deque does not have a reserve method.
-  // Instead, we can pre-allocate by constructing with a size,
-  // but for dynamic data structures, this is not typically needed.
-  // The deque will handle memory management efficiently.
+  // Initialize indicators
+  indicators_.push_back(std::make_unique<EMAIndicator>(9));
+  indicators_.push_back(std::make_unique<EMAIndicator>(21));
+  indicators_.push_back(std::make_unique<SMAIndicator>(50));
+  indicators_.push_back(std::make_unique<RSIIndicator>(14));
+  indicators_.push_back(std::make_unique<MACDIndicator>(12, 26, 9));
 }
 
 RealtimeChartComponent::~RealtimeChartComponent() {
@@ -82,8 +66,7 @@ void RealtimeChartComponent::add_data_point(float timestamp, float value,
 
   // Remove old data points outside the time window
   float cutoff_time = timestamp - time_window_;
-  while (!data_points_.empty() &&
-         data_points_.front().timestamp < cutoff_time) {
+  while (!data_points_.empty() && data_points_[0].timestamp < cutoff_time) {
     data_points_.pop_front();
   }
 
@@ -92,7 +75,7 @@ void RealtimeChartComponent::add_data_point(float timestamp, float value,
     update_y_range();
   }
 
-  dirty_ = true;
+  mark_dirty();
 }
 
 void RealtimeChartComponent::set_time_window(float seconds) {
@@ -107,32 +90,37 @@ void RealtimeChartComponent::set_time_window(float seconds) {
     }
   }
 
-  dirty_ = true;
+  mark_dirty();
 }
 
 void RealtimeChartComponent::set_y_range(float min_y, float max_y) {
   min_y_ = min_y;
   max_y_ = max_y;
   auto_scale_ = false;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void RealtimeChartComponent::enable_candlestick_mode(bool enable) {
   if (candlestick_mode_ != enable) {
     candlestick_mode_ = enable;
-    dirty_ = true;
+    mark_dirty();
   }
 }
 
 void RealtimeChartComponent::update(float delta_time) {
-  if (dirty_) {
+  if (is_dirty()) {
+    update_indicators();
     if (candlestick_mode_) {
       rebuild_candlestick_geometry();
+      rebuild_indicator_geometry();
     } else {
       rebuild_line_geometry();
     }
-    dirty_ = false;
+    dirty_frames_--;
   }
+
+  // Crosshair is rebuilt every frame if active
+  rebuild_crosshair_geometry();
 
   // Update any animations or smooth transitions
   static float animation_time = 0.0f;
@@ -143,13 +131,40 @@ void RealtimeChartComponent::update(float delta_time) {
 
 void RealtimeChartComponent::handle_trade(
     const RenderEngine::TradeData &trade) {
-  add_data_point(static_cast<float>(trade.timestamp_us % 1000000000) / 1000.0f,
-                 static_cast<float>(trade.price),
+  if (dashboard_ && trade.symbol != dashboard_->get_active_symbol())
+    return;
+
+  float ts = static_cast<float>(trade.timestamp_us % 1000000000) / 1000.0f;
+  add_data_point(ts, static_cast<float>(trade.price),
                  static_cast<float>(trade.size));
+
+  // Aggregate into 5-second candles for the visual chart
+  uint64_t candle_interval_us = 5 * 1000000;
+  uint64_t bucket =
+      trade.timestamp_us - (trade.timestamp_us % candle_interval_us);
+
+  if (candles_.empty() || candles_.back().timestamp_us != bucket) {
+    Candle new_candle;
+    new_candle.timestamp_us = bucket;
+    new_candle.open = static_cast<float>(trade.price);
+    new_candle.high = static_cast<float>(trade.price);
+    new_candle.low = static_cast<float>(trade.price);
+    new_candle.close = static_cast<float>(trade.price);
+    new_candle.volume = static_cast<float>(trade.size);
+    candles_.push_back(new_candle);
+  } else {
+    Candle &latest = candles_.back();
+    latest.high = std::max(latest.high, static_cast<float>(trade.price));
+    latest.low = std::min(latest.low, static_cast<float>(trade.price));
+    latest.close = static_cast<float>(trade.price);
+    latest.volume += static_cast<float>(trade.size);
+  }
 }
 
 void RealtimeChartComponent::handle_orderbook(
     const RenderEngine::OrderbookData &orderbook) {
+  if (dashboard_ && orderbook.symbol != dashboard_->get_active_symbol())
+    return;
   // Real-time chart usually tracks price from trades, but could also track
   // mid-price
 }
@@ -158,14 +173,14 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
   if (!visible_)
     return;
 
+  uint32_t frame_idx = vulkan_core_->get_current_frame_index();
   VkExtent2D extent = vulkan_core_->get_swapchain_extent();
 
   if (candlestick_mode_ == false) { // Line mode
-    if (line_vertex_buffer_.buffer) {
+    if (line_vertex_buffers_[frame_idx].buffer) {
       // Update Line UBO
       if (line_ubo_buffer_.mapped_ptr) {
         ChartUniformBuffer ubo{};
-        // Swap 0.0f and extent.height to match Vulkan NDC Y direction
         ubo.projection = glm::ortho(0.0f, (float)extent.width, 0.0f,
                                     (float)extent.height, -1.0f, 1.0f);
         ubo.view = glm::mat4(1.0f);
@@ -186,18 +201,18 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
                                 &line_descriptor_set_, 0, nullptr);
       }
 
-      VkBuffer buffers[] = {line_vertex_buffer_.buffer};
-      VkDeviceSize offsets[] = {line_vertex_buffer_.offset};
+      VkBuffer buffers[] = {line_vertex_buffers_[frame_idx].buffer};
+      VkDeviceSize offsets[] = {line_vertex_buffers_[frame_idx].offset};
       vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
 
-      uint32_t vertex_count =
-          static_cast<uint32_t>(line_vertex_buffer_.size / sizeof(LineVertex));
+      uint32_t vertex_count = static_cast<uint32_t>(
+          line_vertex_buffers_[frame_idx].size / sizeof(LineVertex));
       if (vertex_count > 0) {
         vkCmdDraw(cmd, vertex_count, 1, 0, 0);
       }
     }
   } else { // Candlestick mode
-    if (candlestick_vertex_buffer_.buffer) {
+    if (candlestick_vertex_buffers_[frame_idx].buffer) {
       // Update UI UBO
       if (ui_ubo_buffer_.mapped_ptr) {
         UIUniformBuffer ubo{};
@@ -233,16 +248,35 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
                                 0, nullptr);
       }
 
-      VkBuffer buffers[] = {candlestick_vertex_buffer_.buffer};
-      VkDeviceSize offsets[] = {candlestick_vertex_buffer_.offset};
-      vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
+      VkBuffer v_buffers[] = {candlestick_vertex_buffers_[frame_idx].buffer};
+      VkDeviceSize v_offsets[] = {
+          candlestick_vertex_buffers_[frame_idx].offset};
+      vkCmdBindVertexBuffers(cmd, 0, 1, v_buffers, v_offsets);
 
-      uint32_t vertex_count = static_cast<uint32_t>(
-          candlestick_vertex_buffer_.size / sizeof(CandlestickVertex));
-      if (vertex_count > 0) {
-        vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+      if (candlestick_vertex_count_ > 0) {
+        vkCmdDraw(cmd, candlestick_vertex_count_, 1, 0, 0);
       }
     }
+
+    // Indicators
+    if (indicator_vertex_buffers_[frame_idx].buffer &&
+        indicator_vertex_count_ > 0) {
+      VkBuffer ind_buffers[] = {indicator_vertex_buffers_[frame_idx].buffer};
+      VkDeviceSize ind_offsets[] = {
+          indicator_vertex_buffers_[frame_idx].offset};
+      vkCmdBindVertexBuffers(cmd, 0, 1, ind_buffers, ind_offsets);
+      vkCmdDraw(cmd, indicator_vertex_count_, 1, 0, 0);
+    }
+  }
+
+  // Crosshair
+  if (show_crosshair_ && crosshair_vertex_buffers_[frame_idx].buffer &&
+      crosshair_vertex_count_ > 0) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, line_pipeline_);
+    VkBuffer cs_buffers[] = {crosshair_vertex_buffers_[frame_idx].buffer};
+    VkDeviceSize cs_offsets[] = {crosshair_vertex_buffers_[frame_idx].offset};
+    vkCmdBindVertexBuffers(cmd, 0, 1, cs_buffers, cs_offsets);
+    vkCmdDraw(cmd, crosshair_vertex_count_, 1, 0, 0);
   }
 }
 
@@ -250,11 +284,14 @@ void RealtimeChartComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y),
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
 
   if (!ImGui::Begin("Price Chart", &visible_)) {
+    minimized_ = true;
     ImGui::End();
     return;
   }
+  minimized_ = false;
 
   if (auto_scale_) {
     ImGui::Text("Auto-scaling enabled (%.2f - %.2f)", min_y_, max_y_);
@@ -277,33 +314,61 @@ void RealtimeChartComponent::render_gui() {
 }
 
 void RealtimeChartComponent::handle_input(const InputEvent &event) {
+  glm::vec2 mouse_pos = event.position;
+  bool inside =
+      mouse_pos.x >= position_.x && mouse_pos.x <= position_.x + size_.x &&
+      mouse_pos.y >= position_.y && mouse_pos.y <= position_.y + size_.y;
+
   switch (event.type) {
   case InputEventType::MouseMove:
-    // TODO: Implement crosshair and value display on hover
+    if (inside) {
+      float rel_x = (mouse_pos.x - position_.x) / size_.x;
+      float rel_y = 1.0f - (mouse_pos.y - position_.y) / size_.y;
+
+      if (!candles_.empty()) {
+        double t_min = (double)candles_.front().timestamp_us;
+        double t_max = (double)candles_.back().timestamp_us + 5000000.0;
+        double ts = t_min + rel_x * (t_max - t_min);
+        double p = min_y_ + rel_y * (max_y_ - min_y_);
+
+        CrosshairState state;
+        state.active = true;
+        state.timestamp_us = ts;
+        state.price = p;
+        state.screen_pos = mouse_pos;
+        state.source = this;
+        if (dashboard_)
+          dashboard_->synchronize_crosshair(state);
+      }
+    }
+
+    if (is_dragging_) {
+      glm::vec2 delta = mouse_pos - last_mouse_pos_;
+      // Pan logic - for now just affecting view offset
+      view_offset_ -= delta.x * (time_window_ / size_.x);
+      mark_dirty();
+    }
+    last_mouse_pos_ = mouse_pos;
     break;
 
   case InputEventType::Scroll:
-    // Zoom in/out on the chart
-    if (event.scroll_delta.y != 0.0f) {
-      float zoom_factor = 1.0f + event.scroll_delta.y * 0.1f;
-      float range = max_y_ - min_y_;
-      float center = (max_y_ + min_y_) * 0.5f;
-      float new_range = range * zoom_factor;
-
-      min_y_ = center - new_range * 0.5f;
-      max_y_ = center + new_range * 0.5f;
-      auto_scale_ = false;
-      dirty_ = true;
+    if (inside && event.scroll_delta.y != 0.0f) {
+      float zoom_delta = 1.0f - event.scroll_delta.y * 0.1f;
+      view_zoom_ *= zoom_delta;
+      view_zoom_ = std::max(0.01f, std::min(10.0f, view_zoom_));
+      mark_dirty();
     }
     break;
 
   case InputEventType::MouseButton:
-    if (event.pressed &&
-        event.mouse_button == MouseButton::Middle) { // Middle click
-      // Reset to auto-scale
+    if (event.mouse_button == MouseButton::Left) {
+      is_dragging_ = event.pressed;
+    } else if (event.pressed && event.mouse_button == MouseButton::Middle) {
+      view_zoom_ = 1.0f;
+      view_offset_ = 0.0f;
       auto_scale_ = true;
       update_y_range();
-      dirty_ = true;
+      mark_dirty();
     }
     break;
 
@@ -387,61 +452,87 @@ void RealtimeChartComponent::rebuild_line_geometry() {
   size_t buffer_size = vertices.size() * sizeof(LineVertex);
 
   // Reallocate buffer if necessary
-  if (!line_vertex_buffer_.buffer || line_vertex_buffer_.size < buffer_size) {
-    if (line_vertex_buffer_.buffer) {
-      vulkan_core_->get_memory_manager().deallocate_buffer(line_vertex_buffer_);
+  if (!line_vertex_buffers_[0].buffer ||
+      line_vertex_buffers_[0].size < buffer_size) {
+    for (int i = 0; i < 2; ++i) {
+      if (line_vertex_buffers_[i].buffer) {
+        vulkan_core_->get_memory_manager().deallocate_buffer(
+            line_vertex_buffers_[i]);
+      }
+      line_vertex_buffers_[i] =
+          vulkan_core_->get_memory_manager().allocate_vertex_buffer(
+              buffer_size);
     }
-    line_vertex_buffer_ =
-        vulkan_core_->get_memory_manager().allocate_vertex_buffer(buffer_size);
   }
 
-  // Copy data to GPU-mapped memory
-  if (line_vertex_buffer_.mapped_ptr) {
-    memcpy(line_vertex_buffer_.mapped_ptr, vertices.data(), buffer_size);
+  // Copy data to GPU-mapped memory for both frames
+  for (int i = 0; i < 2; ++i) {
+    if (line_vertex_buffers_[i].mapped_ptr) {
+      memcpy(line_vertex_buffers_[i].mapped_ptr, vertices.data(), buffer_size);
+    }
   }
 }
 
 void RealtimeChartComponent::rebuild_candlestick_geometry() {
-  if (data_points_.empty())
+  if (candles_.empty())
     return;
 
   std::vector<CandlestickVertex> vertices;
 
-  // Group data points into time buckets for candlestick formation
-  // For simplicity, we'll create one candlestick per data point for now
-  // In a real implementation, you'd aggregate OHLC data
+  double latest_t = (double)candles_.back().timestamp_us;
+  double base_range = (double)candles_.size() * 5000000.0;
+  double t_max = latest_t + 5000000.0 + (double)view_offset_ * 1000000.0;
+  double t_min = t_max - base_range * (double)view_zoom_;
+  double t_range = t_max - t_min;
 
-  float time_min = data_points_.front().timestamp;
-  float time_max = data_points_.back().timestamp;
-  float time_range = time_max - time_min;
+  // Account for the interval of the last candle
+  float interval = 5000000.0f; // 5s in us
+  t_range += interval;
 
-  if (time_range <= 0.0f)
-    return;
+  float candle_width = (size_.x / (float)candles_.size()) / (float)view_zoom_;
+  float bar_width = candle_width * 0.8f;
 
-  float candle_width =
-      size_.x / std::max(1.0f, static_cast<float>(data_points_.size()));
-  candle_width *= 0.8f; // Leave some spacing
+  float max_volume = 0.0f;
+  for (const auto &c : candles_)
+    max_volume = std::max(max_volume, c.volume);
+  if (max_volume <= 0)
+    max_volume = 1.0f;
 
-  for (size_t i = 0; i < data_points_.size(); ++i) {
-    const auto &point = data_points_[i];
+  // LOD 2: Adaptive Stride Aggregation
+  int stride = 1;
+  if (candle_width < 1.0f) {
+    stride = (int)(1.0f / candle_width) + 1;
+  }
 
-    // Map to screen coordinates
+  for (size_t i = 0; i < candles_.size(); i += stride) {
+    const auto &c_base = candles_[i];
+
+    // Aggregate High/Low over stride
+    float high = c_base.high;
+    float low = c_base.low;
+    float open = c_base.open;
+    float close = c_base.close;
+    float volume = c_base.volume;
+
+    for (int k = 1; k < stride && (i + k) < candles_.size(); ++k) {
+      high = std::max(high, candles_[i + k].high);
+      low = std::min(low, candles_[i + k].low);
+      close = candles_[i + k].close;
+      volume += candles_[i + k].volume;
+    }
+
+    // LOD 1: Time-based Culling
+    if ((double)c_base.timestamp_us + (double)interval * stride < t_min ||
+        (double)c_base.timestamp_us > t_max) {
+      continue;
+    }
+
     float x =
-        position_.x + ((point.timestamp - time_min) / time_range) * size_.x;
-    float y = position_.y + size_.y -
-              ((point.value - min_y_) / (max_y_ - min_y_)) * size_.y;
+        position_.x +
+        (float)(((double)c_base.timestamp_us - t_min) / t_range) * size_.x +
+        candle_width * 0.5f;
 
-    // For simplicity, create a simple bar chart representation
-    // In a real implementation, you'd have OHLC data
-    float open = point.value * 0.99f; // Simulate open price
-    float high = point.value * 1.01f; // Simulate high price
-    float low = point.value * 0.98f;  // Simulate low price
-    float close = point.value;
-
-    bool is_bullish = close >= open;
-    glm::vec4 candle_color = is_bullish ? theme_.price_up : theme_.price_down;
-
-    // Map OHLC to screen coordinates
+    // Price mapping
     float y_open =
         position_.y + size_.y - ((open - min_y_) / (max_y_ - min_y_)) * size_.y;
     float y_high =
@@ -451,106 +542,319 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
     float y_close = position_.y + size_.y -
                     ((close - min_y_) / (max_y_ - min_y_)) * size_.y;
 
-    // Candlestick body
+    bool is_bullish = close >= open;
+    glm::vec4 color = is_bullish ? theme_.price_up : theme_.price_down;
+    glm::vec4 border_color =
+        is_bullish ? theme_.price_up_bright : theme_.price_down_bright;
+
     float body_top = std::min(y_open, y_close);
     float body_bottom = std::max(y_open, y_close);
-    float body_height = body_bottom - body_top;
+    if (body_bottom - body_top < 1.0f)
+      body_bottom = body_top + 1.0f;
 
-    if (body_height < 1.0f)
-      body_height = 1.0f; // Minimum height for doji
+    // Body (Type 0)
+    // For bullish candles, we can use a slightly transparent body or hollow
+    // effect
+    glm::vec4 body_fill_color = color;
+    if (is_bullish) {
+      body_fill_color.a = 0.3f; // Hollow-ish look
+    }
 
-    // Body Quad (6 vertices)
     vertices.push_back(
-        {{x - candle_width * 0.5f, body_top}, {0, 0}, candle_color, 1.0f, 0});
+        {{x - bar_width * 0.5f, body_top}, {0, 0}, body_fill_color, 1.0f, 0});
     vertices.push_back(
-        {{x + candle_width * 0.5f, body_top}, {1, 0}, candle_color, 1.0f, 0});
-    vertices.push_back({{x + candle_width * 0.5f, body_bottom},
+        {{x + bar_width * 0.5f, body_top}, {1, 0}, body_fill_color, 1.0f, 0});
+    vertices.push_back({{x + bar_width * 0.5f, body_bottom},
                         {1, 1},
-                        candle_color,
+                        body_fill_color,
                         1.0f,
                         0});
-
     vertices.push_back(
-        {{x - candle_width * 0.5f, body_top}, {0, 0}, candle_color, 1.0f, 0});
-    vertices.push_back({{x + candle_width * 0.5f, body_bottom},
+        {{x - bar_width * 0.5f, body_top}, {0, 0}, body_fill_color, 1.0f, 0});
+    vertices.push_back({{x + bar_width * 0.5f, body_bottom},
                         {1, 1},
-                        candle_color,
+                        body_fill_color,
                         1.0f,
                         0});
-    vertices.push_back({{x - candle_width * 0.5f, body_bottom},
+    vertices.push_back({{x - bar_width * 0.5f, body_bottom},
                         {0, 1},
-                        candle_color,
+                        body_fill_color,
                         1.0f,
                         0});
 
-    // Upper wick
-    if (y_high < body_top) {
-      float wick_height = body_top - y_high;
-      vertices.push_back({{x - 0.5f, y_high}, {0, 0}, candle_color, 0.0f, 1});
-      vertices.push_back({{x + 0.5f, y_high}, {1, 0}, candle_color, 0.0f, 1});
-      vertices.push_back({{x + 0.5f, body_top}, {1, 1}, candle_color, 0.0f, 1});
+    // Wick (Type 1) - Use bright border color for wicks
+    vertices.push_back({{x - 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
+    vertices.push_back({{x + 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
+    vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
+    vertices.push_back({{x - 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
+    vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
+    vertices.push_back({{x - 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
 
-      vertices.push_back({{x - 0.5f, y_high}, {0, 0}, candle_color, 0.0f, 1});
-      vertices.push_back({{x + 0.5f, body_top}, {1, 1}, candle_color, 0.0f, 1});
-      vertices.push_back({{x - 0.5f, body_top}, {0, 1}, candle_color, 0.0f, 1});
-    }
+    // Volume (Type 2) - Use gradient-like alpha
+    float vol_h = (volume / max_volume) * (size_.y * 0.20f);
+    glm::vec4 vol_color_top = color;
+    vol_color_top.a = 0.6f;
+    glm::vec4 vol_color_bottom = color;
+    vol_color_bottom.a = 0.1f;
 
-    // Lower wick
-    if (y_low > body_bottom) {
-      float wick_height = y_low - body_bottom;
-      vertices.push_back(
-          {{x - 0.5f, body_bottom}, {0, 0}, candle_color, 0.0f, 1});
-      vertices.push_back(
-          {{x + 0.5f, body_bottom}, {1, 0}, candle_color, 0.0f, 1});
-      vertices.push_back({{x + 0.5f, y_low}, {1, 1}, candle_color, 0.0f, 1});
-
-      vertices.push_back(
-          {{x - 0.5f, body_bottom}, {0, 0}, candle_color, 0.0f, 1});
-      vertices.push_back({{x + 0.5f, y_low}, {1, 1}, candle_color, 0.0f, 1});
-      vertices.push_back({{x - 0.5f, y_low}, {0, 1}, candle_color, 0.0f, 1});
-    }
-  }
-
-  if (vertices.empty()) {
-    return;
+    float vol_base = position_.y + size_.y;
+    vertices.push_back({{x - bar_width * 0.5f, vol_base - vol_h},
+                        {0, 0},
+                        vol_color_top,
+                        0.0f,
+                        2});
+    vertices.push_back({{x + bar_width * 0.5f, vol_base - vol_h},
+                        {1, 0},
+                        vol_color_top,
+                        0.0f,
+                        2});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color_bottom, 0.0f, 2});
+    vertices.push_back({{x - bar_width * 0.5f, vol_base - vol_h},
+                        {0, 0},
+                        vol_color_top,
+                        0.0f,
+                        2});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color_bottom, 0.0f, 2});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, vol_base}, {0, 1}, vol_color_bottom, 0.0f, 2});
   }
 
   size_t buffer_size = vertices.size() * sizeof(CandlestickVertex);
 
-  // Reallocate buffer if necessary
-  if (!candlestick_vertex_buffer_.buffer ||
-      candlestick_vertex_buffer_.size < buffer_size) {
-    if (candlestick_vertex_buffer_.buffer) {
-      vulkan_core_->get_memory_manager().deallocate_buffer(
-          candlestick_vertex_buffer_);
+  // Allocate for both frames
+  for (int i = 0; i < 2; ++i) {
+    if (!candlestick_vertex_buffers_[i].buffer ||
+        candlestick_vertex_buffers_[i].size < buffer_size) {
+      if (candlestick_vertex_buffers_[i].buffer) {
+        vulkan_core_->get_memory_manager().deallocate_buffer(
+            candlestick_vertex_buffers_[i]);
+      }
+      candlestick_vertex_buffers_[i] =
+          vulkan_core_->get_memory_manager().allocate_vertex_buffer(
+              std::max(buffer_size, (size_t)1024));
     }
-    candlestick_vertex_buffer_ =
-        vulkan_core_->get_memory_manager().allocate_vertex_buffer(buffer_size);
+    if (candlestick_vertex_buffers_[i].mapped_ptr) {
+      memcpy(candlestick_vertex_buffers_[i].mapped_ptr, vertices.data(),
+             buffer_size);
+    }
+  }
+  candlestick_vertex_count_ = static_cast<uint32_t>(vertices.size());
+}
+
+void RealtimeChartComponent::rebuild_crosshair_geometry() {
+  if (!dashboard_)
+    return;
+  const auto &cs = dashboard_->get_crosshair_state();
+  if (!cs.active)
+    return;
+
+  std::vector<CandlestickVertex> vertices;
+  glm::vec4 color = {0.8f, 0.8f, 0.8f, 0.6f};
+
+  // Calculate X based on timestamp if this component is time-aligned
+  if (!candles_.empty()) {
+    double latest_t = (double)candles_.back().timestamp_us;
+    double base_range = (double)candles_.size() * 5000000.0;
+    double t_max = latest_t + 5000000.0 + (double)view_offset_ * 1000000.0;
+    double t_min = t_max - base_range * (double)view_zoom_;
+    double t_range = t_max - t_min;
+
+    if (cs.timestamp_us >= t_min && cs.timestamp_us <= t_max) {
+      float rel_x = (float)((cs.timestamp_us - t_min) / (t_max - t_min));
+      float x = position_.x + rel_x * size_.x;
+
+      // Vertical line
+      vertices.push_back({{x - 0.5f, position_.y}, {0.5f, 0}, color, 1.0f, 4});
+      vertices.push_back({{x + 0.5f, position_.y}, {0.5f, 0}, color, 1.0f, 4});
+      vertices.push_back(
+          {{x + 0.5f, position_.y + size_.y}, {0.5f, 1}, color, 1.0f, 4});
+      vertices.push_back({{x - 0.5f, position_.y}, {0.5f, 0}, color, 1.0f, 4});
+      vertices.push_back(
+          {{x + 0.5f, position_.y + size_.y}, {0.5f, 1}, color, 1.0f, 4});
+      vertices.push_back(
+          {{x - 0.5f, position_.y + size_.y}, {0.5f, 1}, color, 1.0f, 4});
+    }
   }
 
-  // Copy data to GPU-mapped memory
-  if (candlestick_vertex_buffer_.mapped_ptr) {
-    memcpy(candlestick_vertex_buffer_.mapped_ptr, vertices.data(), buffer_size);
+  // Horizontal line based on price if within range
+  if (cs.price >= (double)min_y_ && cs.price <= (double)max_y_) {
+    float rel_y = (float)((cs.price - min_y_) / (max_y_ - min_y_));
+    float y = position_.y + size_.y - rel_y * size_.y;
+
+    vertices.push_back({{position_.x, y - 0.5f}, {0, 0.5f}, color, 1.0f, 4});
+    vertices.push_back(
+        {{position_.x + size_.x, y - 0.5f}, {1, 0.5f}, color, 1.0f, 4});
+    vertices.push_back(
+        {{position_.x + size_.x, y + 0.5f}, {1, 0.5f}, color, 1.0f, 4});
+    vertices.push_back({{position_.x, y - 0.5f}, {0, 0.5f}, color, 1.0f, 4});
+    vertices.push_back(
+        {{position_.x + size_.x, y + 0.5f}, {1, 0.5f}, color, 1.0f, 4});
+    vertices.push_back({{position_.x, y + 0.5f}, {0, 0.5f}, color, 1.0f, 4});
   }
+
+  if (vertices.empty())
+    return;
+
+  size_t buffer_size = vertices.size() * sizeof(CandlestickVertex);
+  if (!crosshair_vertex_buffers_[0].buffer ||
+      crosshair_vertex_buffers_[0].size < buffer_size) {
+    for (int i = 0; i < 2; ++i) {
+      if (crosshair_vertex_buffers_[i].buffer) {
+        vulkan_core_->get_memory_manager().deallocate_buffer(
+            crosshair_vertex_buffers_[i]);
+      }
+      crosshair_vertex_buffers_[i] =
+          vulkan_core_->get_memory_manager().allocate_vertex_buffer(
+              std::max(buffer_size, (size_t)512));
+    }
+  }
+  for (int i = 0; i < 2; ++i) {
+    if (crosshair_vertex_buffers_[i].mapped_ptr) {
+      memcpy(crosshair_vertex_buffers_[i].mapped_ptr, vertices.data(),
+             buffer_size);
+    }
+  }
+  crosshair_vertex_count_ = static_cast<uint32_t>(vertices.size());
+}
+
+void RealtimeChartComponent::rebuild_indicator_geometry() {
+  if (candles_.size() < 2)
+    return;
+
+  std::vector<CandlestickVertex> vertices;
+
+  double latest_t = (double)candles_.back().timestamp_us;
+  double base_range = (double)candles_.size() * 5000000.0;
+  double t_max = latest_t + 5000000.0 + (double)view_offset_ * 1000000.0;
+  double t_min = t_max - base_range * (double)view_zoom_;
+  float t_range = t_max - t_min;
+  float candle_width = (size_.x / (float)candles_.size()) / (float)view_zoom_;
+
+  // Split vertical space: 70% main chart, 15% RSI, 15% MACD
+  float main_height = size_.y * 0.7f;
+  float rsi_height = size_.y * 0.15f;
+  float macd_height = size_.y * 0.15f;
+
+  float rsi_y_base = position_.y + main_height;
+  float macd_y_base = position_.y + main_height + rsi_height;
+
+  auto draw_line_indicator = [&](TechnicalIndicator &ind, float y_base, float h,
+                                 float min_v, float max_v, glm::vec4 color) {
+    ind.reset();
+    float prev_val = 0;
+    bool prev_ready = false;
+
+    for (size_t j = 0; j < candles_.size(); ++j) {
+      ind.update(candles_[j].close);
+      if (!ind.is_ready())
+        continue;
+
+      float current_val = ind.get_value();
+      if (prev_ready) {
+        // LOD 1: Time-based Culling
+        if (!((double)candles_[j].timestamp_us + 5000000.0 < t_min ||
+              (double)candles_[j - 1].timestamp_us > t_max)) {
+
+          float x1 = position_.x +
+                     (float)(((double)candles_[j - 1].timestamp_us - t_min) /
+                             t_range) *
+                         size_.x +
+                     candle_width * 0.5f;
+          float x2 =
+              position_.x +
+              (float)(((double)candles_[j].timestamp_us - t_min) / t_range) *
+                  size_.x +
+              candle_width * 0.5f;
+
+          float y1 = y_base + h - ((prev_val - min_v) / (max_v - min_v)) * h;
+          float y2 = y_base + h - ((current_val - min_v) / (max_v - min_v)) * h;
+
+          vertices.push_back({{x1, y1 - 1.0f}, {0, 0}, color, 1.0f, 5});
+          vertices.push_back({{x2, y2 - 1.0f}, {0, 0}, color, 1.0f, 5});
+          vertices.push_back({{x2, y2 + 1.0f}, {0, 0}, color, 1.0f, 5});
+          vertices.push_back({{x1, y1 - 1.0f}, {0, 0}, color, 1.0f, 5});
+          vertices.push_back({{x2, y2 + 1.0f}, {0, 0}, color, 1.0f, 5});
+          vertices.push_back({{x1, y1 + 1.0f}, {0, 0}, color, 1.0f, 5});
+        }
+      }
+      prev_val = current_val;
+      prev_ready = true;
+    }
+  };
+
+  // 1. Overlay Indicators (on main chart)
+  EMAIndicator ema9(9);
+  draw_line_indicator(ema9, position_.y, main_height, min_y_, max_y_,
+                      {0.0f, 0.66f, 1.0f, 0.8f}); // EMA 9 (Blue)
+  EMAIndicator ema21(21);
+  draw_line_indicator(ema21, position_.y, main_height, min_y_, max_y_,
+                      {1.0f, 0.66f, 0.0f, 0.8f}); // EMA 21 (Orange)
+  SMAIndicator sma50(50);
+  draw_line_indicator(sma50, position_.y, main_height, min_y_, max_y_,
+                      {1.0f, 0.0f, 1.0f, 0.8f}); // SMA 50 (Purple)
+
+  // 2. Sub-chart Indicators
+  RSIIndicator rsi14(14);
+  draw_line_indicator(rsi14, rsi_y_base, rsi_height, 0.0f, 100.0f,
+                      {0.0f, 1.0f, 1.0f, 0.9f}); // RSI (Cyan)
+
+  MACDIndicator macd(12, 26, 9);
+  // MACD is trickier because it has 3 lines. I'll just draw the MACD line for
+  // now.
+  draw_line_indicator(macd, macd_y_base, macd_height, -0.01f * max_y_,
+                      0.01f * max_y_,
+                      {1.0f, 1.0f, 0.0f, 0.9f}); // MACD (Yellow)
+
+  if (vertices.empty())
+    return;
+
+  size_t buffer_size = vertices.size() * sizeof(CandlestickVertex);
+  if (!indicator_vertex_buffers_[0].buffer ||
+      indicator_vertex_buffers_[0].size < buffer_size) {
+    for (int i = 0; i < 2; ++i) {
+      if (indicator_vertex_buffers_[i].buffer) {
+        vulkan_core_->get_memory_manager().deallocate_buffer(
+            indicator_vertex_buffers_[i]);
+      }
+      indicator_vertex_buffers_[i] =
+          vulkan_core_->get_memory_manager().allocate_vertex_buffer(
+              std::max(buffer_size, (size_t)1024));
+    }
+  }
+  for (int i = 0; i < 2; ++i) {
+    if (indicator_vertex_buffers_[i].mapped_ptr) {
+      memcpy(indicator_vertex_buffers_[i].mapped_ptr, vertices.data(),
+             buffer_size);
+    }
+  }
+  indicator_vertex_count_ = static_cast<uint32_t>(vertices.size());
 }
 
 void RealtimeChartComponent::update_y_range() {
-  if (data_points_.empty())
+  float data_min = 1e10f;
+  float data_max = -1e10f;
+
+  if (candlestick_mode_ && !candles_.empty()) {
+    for (const auto &c : candles_) {
+      data_min = std::min(data_min, c.low);
+      data_max = std::max(data_max, c.high);
+    }
+  } else if (!data_points_.empty()) {
+    for (const auto &dp : data_points_) {
+      data_min = std::min(data_min, dp.value);
+      data_max = std::max(data_max, dp.value);
+    }
+  } else {
     return;
-
-  auto minmax = std::minmax_element(
-      data_points_.begin(), data_points_.end(),
-      [](const DataPoint &a, const DataPoint &b) { return a.value < b.value; });
-
-  float data_min = minmax.first->value;
-  float data_max = minmax.second->value;
+  }
 
   // Add some padding
   float range = data_max - data_min;
-  float padding = range * 0.1f;
+  float padding = range * 0.15f;
 
   if (range < 0.001f) {
-    // Handle case where all values are the same
     padding = std::abs(data_min) * 0.1f;
     if (padding < 0.001f)
       padding = 1.0f;
@@ -749,6 +1053,23 @@ void RealtimeChartComponent::initialize_vulkan_resources(
   fprintf(
       stderr,
       "[RealtimeChartComponent] Vulkan resources initialized successfully\n");
-  dirty_ = true;
+  mark_dirty();
 }
+void RealtimeChartComponent::update_indicators() {
+  if (candles_.empty())
+    return;
+  for (auto &indicator : indicators_) {
+    indicator->reset();
+    for (size_t i = 0; i < candles_.size(); ++i) {
+      indicator->update(candles_[i].close);
+    }
+  }
+}
+
+void RealtimeChartComponent::clear_data() {
+  data_points_.clear();
+  candles_.clear();
+  mark_dirty();
+}
+
 } // namespace BTQuant

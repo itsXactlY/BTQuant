@@ -81,7 +81,7 @@ void DataGridComponent::set_cell_data(size_t row, size_t col,
     return;
 
   grid_data_[row][col] = data;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::set_row_data(size_t row,
@@ -93,7 +93,7 @@ void DataGridComponent::set_row_data(size_t row,
   for (size_t col = 0; col < cols_to_copy; ++col) {
     grid_data_[row][col] = row_data[col];
   }
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::set_column_header(size_t col,
@@ -102,7 +102,7 @@ void DataGridComponent::set_column_header(size_t col,
     return;
 
   column_headers_[col] = header;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::set_column_width(size_t col, float width) {
@@ -110,7 +110,7 @@ void DataGridComponent::set_column_width(size_t col, float width) {
     return;
 
   column_widths_[col] = width;
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::enable_sorting(size_t column, bool ascending) {
@@ -120,19 +120,19 @@ void DataGridComponent::enable_sorting(size_t column, bool ascending) {
   sort_column_ = static_cast<int>(column);
   sort_ascending_ = ascending;
   sort_data();
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::set_filter(const std::string &filter_text) {
   // TODO: Implement filtering logic
   // For now, just mark as dirty to trigger rebuild
-  dirty_ = true;
+  mark_dirty();
 }
 
 void DataGridComponent::update(float delta_time) {
-  if (dirty_) {
+  if (is_dirty()) {
     rebuild_geometry();
-    dirty_ = false;
+    dirty_frames_--;
   }
 
   // Update any animations or highlights
@@ -194,10 +194,16 @@ void DataGridComponent::render_gui() {
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
 
+  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
   if (!ImGui::Begin("Market Data Grid", &visible_)) {
+    minimized_ = true;
     ImGui::End();
     return;
   }
+  minimized_ = false;
+
+  if (theme_.monospace_font)
+    ImGui::PushFont((ImFont *)theme_.monospace_font);
 
   if (ImGui::BeginTable("DataGridTable", (int)columns_,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -208,18 +214,35 @@ void DataGridComponent::render_gui() {
     }
     ImGui::TableHeadersRow();
 
-    for (const auto &row : grid_data_) {
+    for (size_t r = 0; r < grid_data_.size(); ++r) {
       ImGui::TableNextRow();
+      const auto &row = grid_data_[r];
       for (size_t col = 0; col < columns_; ++col) {
         ImGui::TableSetColumnIndex((int)col);
         const auto &cell = row[col];
         ImVec4 color =
             ImVec4(cell.color.r, cell.color.g, cell.color.b, cell.color.a);
-        ImGui::TextColored(color, "%s", cell.text.c_str());
+
+        if (col == 0) {
+          // The first column is the symbol. Make it selectable.
+          bool is_selected =
+              (dashboard_ && dashboard_->get_active_symbol() == cell.text);
+          if (ImGui::Selectable(cell.text.c_str(), is_selected,
+                                ImGuiSelectableFlags_SpanAllColumns)) {
+            if (dashboard_) {
+              dashboard_->set_active_symbol(cell.text);
+            }
+          }
+        } else {
+          ImGui::TextColored(color, "%s", cell.text.c_str());
+        }
       }
     }
     ImGui::EndTable();
   }
+
+  if (theme_.monospace_font)
+    ImGui::PopFont();
 
   ImGui::End();
 }

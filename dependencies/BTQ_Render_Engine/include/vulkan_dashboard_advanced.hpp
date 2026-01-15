@@ -696,13 +696,13 @@ enum class HotkeyAction {
   NONE
 };
 
-struct HotkeyBinding {
+struct DashboardHotkeyBinding {
   int key;
   uint32_t modifiers;
   HotkeyAction action;
 };
 
-class HotkeyManager {
+class DashboardHotkeyManager {
 public:
   void add_binding(int key, uint32_t modifiers, HotkeyAction action) {
     bindings_.push_back({key, modifiers, action});
@@ -717,7 +717,7 @@ public:
   void clear() { bindings_.clear(); }
 
 private:
-  std::vector<HotkeyBinding> bindings_;
+  std::vector<DashboardHotkeyBinding> bindings_;
 };
 
 struct InputEvent {
@@ -790,14 +790,14 @@ public:
 
   // New layout and command handling
   virtual void on_resize() {}
-  virtual void handle_global_command(const std::string &cmd,
-                                     const std::string &args = "") {}
+  virtual void handle_global_command(const std::string &,
+                                     const std::string & = "") {}
 
   // Market data event handlers
-  virtual void handle_trade(const RenderEngine::TradeData &trade) {}
-  virtual void handle_orderbook(const RenderEngine::OrderbookData &orderbook) {}
+  virtual void handle_trade(const RenderEngine::TradeData &) {}
+  virtual void handle_orderbook(const RenderEngine::OrderbookData &) {}
   virtual void clear_data() {}
-  virtual void synchronize_crosshair(const CrosshairState &state) {}
+  virtual void synchronize_crosshair(const CrosshairState &) {}
 
   // Vulkan resource initialization - called after VulkanCore is ready
   virtual void initialize_vulkan_resources(VulkanCore *vulkan_core) = 0;
@@ -1094,10 +1094,10 @@ public:
   void set_whale_trade_threshold(float threshold) {
     whale_trade_threshold_ = threshold;
   }
-  void render(VkCommandBuffer cmd) override {}; // Mostly GUI based
+  void render(VkCommandBuffer) override{}; // Mostly GUI based
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   std::deque<TapeEntry> entries_;
@@ -1128,11 +1128,11 @@ public:
                     double volume);
   const std::vector<WatchlistEntry> &get_entries() const { return entries_; }
 
-  void update(float delta_time) override;
+  void update(float) override;
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   std::vector<WatchlistEntry> entries_;
@@ -1217,11 +1217,11 @@ public:
   ~OrderManagementComponent();
   std::string get_name() const override { return "Order Management"; }
 
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {};
+  void update(float) override;
+  void render(VkCommandBuffer) override{};
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   float quantity_ = 0.0f;
@@ -1246,10 +1246,10 @@ public:
   ~PositionPanelComponent();
   std::string get_name() const override { return "Positions & P&L"; }
 
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {};
+  void update(float) override;
+  void render(VkCommandBuffer) override{};
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
+  void handle_input(const InputEvent &) override {}
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
@@ -1275,11 +1275,11 @@ public:
   ~MarketOverviewPanel();
   std::string get_name() const override { return "Market Overview"; }
 
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {};
+  void update(float) override;
+  void render(VkCommandBuffer) override{};
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   struct Ticker {
@@ -1477,11 +1477,11 @@ public:
 
   StrategyControlComponent(const glm::vec2 &position, const glm::vec2 &size);
   std::string get_name() const override { return "Strategy Control"; }
-  void update(float delta_time) override {}
-  void render(VkCommandBuffer cmd) override {}
+  void update(float) override {}
+  void render(VkCommandBuffer) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   std::vector<StrategyInfo> strategies_;
@@ -1492,11 +1492,11 @@ class RiskManagerComponent : public UIComponent {
 public:
   RiskManagerComponent(const glm::vec2 &position, const glm::vec2 &size);
   std::string get_name() const override { return "Risk Manager"; }
-  void update(float delta_time) override {}
-  void render(VkCommandBuffer cmd) override {}
+  void update(float) override {}
+  void render(VkCommandBuffer) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 };
 
 // Alert Center for managing price and volume alerts
@@ -1508,10 +1508,10 @@ public:
   std::string get_name() const override { return "Alert Center"; }
 
   void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {}
+  void render(VkCommandBuffer) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   AlertManager &manager_;
@@ -1536,10 +1536,10 @@ public:
   std::string get_name() const override { return "Market Screener"; }
 
   void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {}
+  void render(VkCommandBuffer) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   std::vector<ScreenerResult> results_;
@@ -1550,11 +1550,11 @@ class TradingInterfaceComponent : public UIComponent {
 public:
   TradingInterfaceComponent(const glm::vec2 &position, const glm::vec2 &size);
   std::string get_name() const override { return "Trading Interface"; }
-  void update(float delta_time) override {}
-  void render(VkCommandBuffer cmd) override {}
+  void update(float) override {}
+  void render(VkCommandBuffer) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_input(const InputEvent &) override {}
+  void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
   float quantity_ = 0.1f;
@@ -1587,7 +1587,12 @@ public:
                   const DashboardConfig &config = {});
   ~VulkanDashboard();
 
-  enum class AppTheme { InstitutionalDark, BloombergTerminal, LightMode };
+  enum class AppTheme {
+    InstitutionalDark,
+    BloombergTerminal,
+    LightMode,
+    TealStreet
+  };
   void apply_theme(AppTheme theme);
   AppTheme current_theme() const { return current_theme_; }
   ImFont *get_monospace_font() const { return monospace_font_; }
@@ -1673,7 +1678,7 @@ private:
 
   // UI components
   std::vector<std::unique_ptr<UIComponent>> components_;
-  HotkeyManager hotkey_manager_;
+  DashboardHotkeyManager hotkey_manager_;
   std::vector<std::unique_ptr<UIComponent>> chart_components_;
   WatchlistComponent *watchlist_component_ = nullptr;
   AlertManager alert_manager_;
@@ -1710,7 +1715,7 @@ private:
   bool show_performance_overlay_ = false;
   bool show_command_palette_ = false;
   char command_buffer_[128] = {0};
-  AppTheme current_theme_ = AppTheme::InstitutionalDark;
+  AppTheme current_theme_ = AppTheme::TealStreet;
   RiskMetrics risk_metrics_{100000.0, 1250.0, 0.05, 2.1, 1500.0, 45000.0};
 
   // Active Symbol Tracking

@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <imgui.h>
 
+namespace BTQuant {
+
 MarketScreenerComponent::MarketScreenerComponent(const glm::vec2 &position,
                                                  const glm::vec2 &size)
     : UIComponent(position, size) {
@@ -18,7 +20,7 @@ MarketScreenerComponent::MarketScreenerComponent(const glm::vec2 &position,
 
 MarketScreenerComponent::~MarketScreenerComponent() {}
 
-void MarketScreenerComponent::update(float delta_time) {
+void MarketScreenerComponent::update(float) {
   // In a real system, this would throttle-scan the symbol registry
 }
 
@@ -30,18 +32,29 @@ void MarketScreenerComponent::render_gui() {
     if (ImGui::BeginTable("ScreenerTable", 5,
                           ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_Sortable |
-                              ImGuiTableFlags_BordersOuter)) {
+                              ImGuiTableFlags_NoBordersInBody |
+                              ImGuiTableFlags_SizingFixedFit)) {
       ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed,
-                              85.0f);
-      ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-      ImGui::TableSetupColumn("24h Change%", ImGuiTableColumnFlags_WidthFixed,
-                              95.0f);
+                              75.0f);
+      ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 75.0f);
+      ImGui::TableSetupColumn("24h %", ImGuiTableColumnFlags_WidthFixed, 60.0f);
       ImGui::TableSetupColumn("Vol 24h", ImGuiTableColumnFlags_WidthFixed,
-                              90.0f);
+                              70.0f);
       ImGui::TableSetupColumn("Activity", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableHeadersRow();
 
-      // Handle sorting logic
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers, 20.0f);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("SYMBOL");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("PRICE");
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("CHG%");
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("VOL");
+      ImGui::TableSetColumnIndex(4);
+      ImGui::Text("ACTIVITY");
+
+      // Handle sorting logic (same as before)
       if (ImGuiTableSortSpecs *sort_specs = ImGui::TableGetSortSpecs()) {
         if (sort_specs->SpecsDirty) {
           std::sort(
@@ -68,7 +81,6 @@ void MarketScreenerComponent::render_gui() {
                     res = (a.vol_spike_ratio < b.vol_spike_ratio)   ? -1
                           : (a.vol_spike_ratio > b.vol_spike_ratio) ? 1
                                                                     : 0;
-
                   if (res != 0) {
                     if (spec->SortDirection == ImGuiSortDirection_Ascending)
                       return res < 0;
@@ -82,20 +94,24 @@ void MarketScreenerComponent::render_gui() {
       }
 
       for (const auto &res : results_) {
-        ImGui::TableNextRow();
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
 
         ImGui::TableSetColumnIndex(0);
         if (ImGui::Selectable(res.symbol.c_str(), false,
                               ImGuiSelectableFlags_SpanAllColumns)) {
-          // Selection logic would update active charts
+          // Logic for selecting symbol
         }
 
         ImGui::TableSetColumnIndex(1);
         ImGui::Text("%.2f", res.price);
 
         ImGui::TableSetColumnIndex(2);
-        ImVec4 change_color = res.change_24h >= 0 ? ImVec4(0, 1, 0.4f, 1)
-                                                  : ImVec4(1, 0.2f, 0.2f, 1);
+        ImVec4 change_color =
+            res.change_24h >= 0
+                ? ImVec4(theme_.price_up.r, theme_.price_up.g,
+                         theme_.price_up.b, 1.0f)
+                : ImVec4(theme_.price_down.r, theme_.price_down.g,
+                         theme_.price_down.b, 1.0f);
         ImGui::TextColored(change_color, "%+.2f%%", res.change_24h);
 
         ImGui::TableSetColumnIndex(3);
@@ -105,14 +121,19 @@ void MarketScreenerComponent::render_gui() {
           ImGui::Text("%.1fM", res.volume_24h / 1e6);
 
         ImGui::TableSetColumnIndex(4);
-        if (res.vol_spike_ratio > 1.5) {
-          float t = std::min(1.0f, (float)((res.vol_spike_ratio - 1.0) / 4.0));
-          ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
-                                ImVec4(1.0f, 0.5f, 0.0f, 0.8f));
-          ImGui::ProgressBar(t, ImVec2(-FLT_MIN, 0), "SPIKE");
-          ImGui::PopStyleColor();
+        if (res.vol_spike_ratio > 1.2) {
+          float t = std::min(1.0f, (float)((res.vol_spike_ratio - 1.0) / 3.0));
+          ImDrawList *draw_list = ImGui::GetWindowDrawList();
+          ImVec2 p = ImGui::GetCursorScreenPos();
+          float w = ImGui::GetColumnWidth() - 4.0f;
+          draw_list->AddRectFilled(p, ImVec2(p.x + w, p.y + 14.0f),
+                                   ImColor(40, 40, 50));
+          draw_list->AddRectFilled(p, ImVec2(p.x + w * t, p.y + 14.0f),
+                                   ImColor(0, 240, 255, 200));
+          ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
+          ImGui::TextDisabled("SPIKE %.1fx", res.vol_spike_ratio);
         } else {
-          ImGui::Text("%.1fx avg", res.vol_spike_ratio);
+          ImGui::TextDisabled("%.1fx", res.vol_spike_ratio);
         }
       }
       ImGui::EndTable();
@@ -120,3 +141,5 @@ void MarketScreenerComponent::render_gui() {
   }
   ImGui::End();
 }
+
+} // namespace BTQuant

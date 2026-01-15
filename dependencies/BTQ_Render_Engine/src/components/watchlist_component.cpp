@@ -4,6 +4,8 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+namespace BTQuant {
+
 WatchlistComponent::WatchlistComponent(const glm::vec2 &position,
                                        const glm::vec2 &size)
     : UIComponent(position, size) {
@@ -58,7 +60,7 @@ void WatchlistComponent::update_quote(const std::string &symbol, double price,
   }
 }
 
-void WatchlistComponent::update(float delta_time) {}
+void WatchlistComponent::update(float) {}
 
 void WatchlistComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
@@ -88,24 +90,45 @@ void WatchlistComponent::render_gui() {
 
     if (ImGui::BeginTable("WatchlistTable", 4,
                           ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersInnerV)) {
-      ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch);
+                              ImGuiTableFlags_NoBordersInBody |
+                              ImGuiTableFlags_SizingFixedFit)) {
+      ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed,
+                              75.0f);
       ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80.0f);
       ImGui::TableSetupColumn("Change%", ImGuiTableColumnFlags_WidthFixed,
                               65.0f);
       ImGui::TableSetupColumn("Vol 24h", ImGuiTableColumnFlags_WidthFixed,
-                              90.0f);
-      ImGui::TableHeadersRow();
+                              70.0f);
+
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers, 20.0f);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("SYMBOL");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("PRICE");
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("CHG%");
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("VOL");
 
       for (size_t i = 0; i < entries_.size(); ++i) {
         auto &entry = entries_[i];
-        ImGui::TableNextRow();
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
 
         ImGui::TableSetColumnIndex(0);
-        if (ImGui::Selectable(entry.symbol.c_str(), false,
-                              ImGuiSelectableFlags_SpanAllColumns)) {
-          // Global symbol change via dashboard would be triggered here
-          // handle_symbol_change(entry.symbol);
+        bool is_active =
+            (dashboard_ && dashboard_->get_active_symbol() ==
+                               entry.symbol); // Check dashboard_ for null
+        if (is_active)
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ImGui::GetColorU32(ImVec4(0.0f, 0.5f, 0.5f, 0.2f)));
+
+        if (ImGui::Selectable(entry.symbol.c_str(), is_active,
+                              ImGuiSelectableFlags_SpanAllColumns |
+                                  ImGuiSelectableFlags_AllowItemOverlap)) {
+          if (dashboard_)
+            dashboard_->set_active_symbol(
+                entry.symbol); // Check dashboard_ for null
         }
 
         // Context menu for removal
@@ -120,8 +143,14 @@ void WatchlistComponent::render_gui() {
         ImGui::Text("%.2f", entry.price);
 
         ImGui::TableSetColumnIndex(2);
-        ImVec4 change_color = entry.change_24h >= 0 ? ImVec4(0, 1, 0.4f, 1)
-                                                    : ImVec4(1, 0.2f, 0.2f, 1);
+        // Use a default theme if theme_ is not initialized, or use the provided
+        // theme
+        ImVec4 change_color =
+            entry.change_24h >= 0
+                ? ImVec4(theme_.price_up.r, theme_.price_up.g,
+                         theme_.price_up.b, 1.0f)
+                : ImVec4(theme_.price_down.r, theme_.price_down.g,
+                         theme_.price_down.b, 1.0f);
         ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
 
         ImGui::TableSetColumnIndex(3);
@@ -135,3 +164,5 @@ void WatchlistComponent::render_gui() {
   }
   ImGui::End();
 }
+
+} // namespace BTQuant

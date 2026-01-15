@@ -3,13 +3,15 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+namespace BTQuant {
+
 AlertComponent::AlertComponent(const glm::vec2 &position, const glm::vec2 &size,
                                AlertManager &manager)
     : UIComponent(position, size), manager_(manager) {}
 
 AlertComponent::~AlertComponent() {}
 
-void AlertComponent::update(float delta_time) {}
+void AlertComponent::update(float) {}
 
 void AlertComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
@@ -21,67 +23,79 @@ void AlertComponent::render_gui() {
         const auto &alerts = manager_.get_alerts();
         if (ImGui::BeginTable("AlertsTable", 5,
                               ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                                  ImGuiTableFlags_BordersInnerV)) {
+                                  ImGuiTableFlags_NoBordersInBody)) {
           ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed,
-                                  80.0f);
+                                  70.0f);
           ImGui::TableSetupColumn("Condition",
                                   ImGuiTableColumnFlags_WidthStretch);
           ImGui::TableSetupColumn("Target", ImGuiTableColumnFlags_WidthFixed,
-                                  80.0f);
-          ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed,
                                   70.0f);
+          ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed,
+                                  65.0f);
           ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
-                                  60.0f);
-          ImGui::TableHeadersRow();
+                                  50.0f);
+
+          ImGui::TableNextRow(ImGuiTableRowFlags_Headers, 18.0f);
+          ImGui::TableSetColumnIndex(0);
+          ImGui::Text("SYMBOL");
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("CONDITION");
+          ImGui::TableSetColumnIndex(2);
+          ImGui::Text("TARGET");
+          ImGui::TableSetColumnIndex(3);
+          ImGui::Text("STATUS");
+          ImGui::TableSetColumnIndex(4);
+          ImGui::Text("CMD");
 
           for (size_t i = 0; i < alerts.size(); ++i) {
             const auto &alert = alerts[i];
-            ImGui::TableNextRow();
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
 
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%s", alert.symbol.c_str());
 
             ImGui::TableSetColumnIndex(1);
-            const char *cond_str = "Unknown";
+            const char *cond_str = "???";
             if (alert.condition == AlertCondition::PRICE_ABOVE)
               cond_str = "Price >=";
             else if (alert.condition == AlertCondition::PRICE_BELOW)
               cond_str = "Price <=";
             else if (alert.condition == AlertCondition::VOLUME_ABOVE)
               cond_str = "Vol >=";
-            ImGui::Text("%s", cond_str);
+            ImGui::TextDisabled("%s", cond_str);
 
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("%.4f", alert.target_value);
 
             ImGui::TableSetColumnIndex(3);
             if (alert.is_triggered) {
-              ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "TRIGGERED");
+              ImGui::TextColored(ImVec4(1, 0.5f, 0, 1), "HIT");
             } else {
-              ImGui::TextColored(ImVec4(0, 1, 0, 1), "Active");
+              ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "Watching");
             }
 
             ImGui::TableSetColumnIndex(4);
-            if (ImGui::SmallButton("Delete")) {
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 0));
+            if (ImGui::SmallButton("X")) {
               manager_.remove_alert(i);
             }
+            ImGui::PopStyleVar();
           }
           ImGui::EndTable();
         }
         ImGui::EndTabItem();
       }
 
-      if (ImGui::BeginTabItem("New Alert")) {
+      if (ImGui::BeginTabItem("New")) {
         ImGui::InputText("Symbol", symbol_buffer_, sizeof(symbol_buffer_));
 
-        const char *conditions[] = {"Price Above", "Price Below",
-                                    "Volume Above"};
-        ImGui::Combo("Condition", &selected_condition_, conditions,
+        const char *conditions[] = {"Price >=", "Price <=", "Volume >="};
+        ImGui::Combo("Check", &selected_condition_, conditions,
                      IM_ARRAYSIZE(conditions));
+        ImGui::InputFloat("Value", &target_value_);
 
-        ImGui::InputFloat("Target Value", &target_value_);
-
-        if (ImGui::Button("CREATE ALERT", ImVec2(-FLT_MIN, 40))) {
+        ImGui::Spacing();
+        if (ImGui::Button("SET ALERT", ImVec2(-FLT_MIN, 28))) {
           AlertRule rule;
           rule.symbol = symbol_buffer_;
           rule.target_value = target_value_;
@@ -102,3 +116,5 @@ void AlertComponent::render_gui() {
   }
   ImGui::End();
 }
+
+} // namespace BTQuant

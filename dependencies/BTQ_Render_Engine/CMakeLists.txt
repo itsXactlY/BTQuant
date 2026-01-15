@@ -80,6 +80,9 @@ set(DASHBOARD_SOURCES
     src/components/log_display_component.cpp
     src/components/depth_chart_component.cpp
     src/components/trading_components.cpp
+    src/components/alert_component.cpp
+    src/components/watchlist_component.cpp
+    src/components/market_screener_component.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/data/hotspine_data_bridge.cpp
@@ -398,6 +401,9 @@ add_executable(multi_symbol_routing_test
     src/components/log_display_component.cpp
     src/components/depth_chart_component.cpp
     src/components/trading_components.cpp
+    src/components/alert_component.cpp
+    src/components/watchlist_component.cpp
+    src/components/market_screener_component.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/data/hotspine_data_bridge.cpp

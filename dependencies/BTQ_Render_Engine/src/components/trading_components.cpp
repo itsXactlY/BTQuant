@@ -22,40 +22,47 @@ void StrategyControlComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
   if (ImGui::Begin("Strategy Control", &visible_)) {
-    minimized_ = false;
-    if (ImGui::BeginTable("StrategyTable", 4,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-      ImGui::TableSetupColumn("Strategy");
-      ImGui::TableSetupColumn("PnL");
-      ImGui::TableSetupColumn("Status");
-      ImGui::TableSetupColumn("Action");
-      ImGui::TableHeadersRow();
+    if (ImGui::BeginTable("StrategyTable", 3,
+                          ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_SizingFixedFit)) {
+      ImGui::TableSetupColumn("Strategy", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("PnL", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+      ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed,
+                              60.0f);
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("STRATEGY");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("PnL");
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("STATUS");
 
-      for (auto &strat : strategies_) {
-        ImGui::TableNextRow();
+      for (auto &s : strategies_) {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%s", strat.name.c_str());
+        ImGui::Text("%s", s.name.c_str());
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(strat.pnl >= 0 ? ImVec4(0, 1, 0, 1)
-                                          : ImVec4(1, 0, 0, 1),
-                           "$%.2f", strat.pnl);
+        ImColor pnl_color =
+            s.pnl >= 0 ? ImColor(0.0f, 1.0f, 0.6f) : ImColor(1.0f, 0.2f, 0.3f);
+        ImGui::TextColored(pnl_color, "$%.1f", s.pnl);
 
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%s", strat.status.c_str());
+        if (s.active)
+          ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "RUNNING");
+        else
+          ImGui::TextDisabled("STOPPED");
 
-        ImGui::TableSetColumnIndex(3);
-        if (ImGui::SmallButton(strat.active ? "Stop" : "Start")) {
-          strat.active = !strat.active;
-          strat.status = strat.active ? "RUNNING" : "STOPPED";
+        ImGui::SameLine();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 0));
+        if (ImGui::SmallButton(s.active ? "Stop" : "Start")) {
+          s.active = !s.active;
         }
+        ImGui::PopStyleVar();
       }
       ImGui::EndTable();
     }
-  } else {
-    minimized_ = true;
   }
   ImGui::End();
 }
@@ -72,32 +79,38 @@ void RiskManagerComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
   if (ImGui::Begin("Risk Manager", &visible_)) {
-    minimized_ = false;
-    ImGui::Text("Portfolio Health");
-    ImGui::ProgressBar(0.85f, ImVec2(-1, 0), "85% MARGIN OK");
+    ImGui::TextColored(theme_.accent_primary, "PORTFOLIO HEALTH");
 
-    ImGui::Separator();
-
-    ImGui::Columns(2, "RiskColumns");
-    ImGui::Text("Daily Loss");
-    ImGui::NextColumn();
-    ImGui::TextColored(ImVec4(0, 1, 0, 1), "$1,250.00 / $5,000");
-    ImGui::NextColumn();
-
-    ImGui::Text("Max DD");
-    ImGui::NextColumn();
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "4.2%% / 10.0%%");
-    ImGui::NextColumn();
-    ImGui::Columns(1);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme_.price_up);
+    ImGui::ProgressBar(0.85f, ImVec2(-1, 14), "85% MARGIN OK");
+    ImGui::PopStyleColor();
 
     ImGui::Spacing();
-    if (ImGui::Button("EMERGENCY STOP (DE-LEVERAGE)", ImVec2(-1, 40))) {
+
+    if (ImGui::BeginTable("RiskStats", 2, ImGuiTableFlags_NoBordersInBody)) {
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextDisabled("Daily Loss");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextColored(theme_.price_up, "$1,250.00 / $5,000");
+
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextDisabled("Max DD");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextColored(theme_.price_down, "4.2%% / 10.0%%");
+
+      ImGui::EndTable();
+    }
+
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Button, theme_.price_down);
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
+    if (ImGui::Button("EMERGENCY STOP (DE-LEVERAGE)", ImVec2(-1, 32))) {
       // Panic logic
     }
-  } else {
-    minimized_ = true;
+    ImGui::PopStyleColor(2);
   }
   ImGui::End();
 }
@@ -114,20 +127,15 @@ void TradingInterfaceComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar;
-  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
-  if (ImGui::Begin("Trading Terminal", &visible_, flags)) {
-    minimized_ = false;
-    ImGui::PushFont(dashboard_ ? dashboard_->get_monospace_font() : nullptr);
-
+  if (ImGui::Begin("Trading Terminal", &visible_,
+                   ImGuiWindowFlags_NoScrollbar)) {
     // Advanced Order Selector
     const char *types[] = {"Limit",         "Market",  "Stop-Limit",
                            "Trailing Stop", "Iceberg", "TWAP"};
     ImGui::PushItemWidth(-1);
     if (ImGui::BeginCombo("##OrderType", order_type_.c_str())) {
       for (int n = 0; n < IM_ARRAYSIZE(types); n++) {
-        bool is_selected = (order_type_ == types[n]);
-        if (ImGui::Selectable(types[n], is_selected))
+        if (ImGui::Selectable(types[n], order_type_ == types[n]))
           order_type_ = types[n];
       }
       ImGui::EndCombo();
@@ -135,27 +143,32 @@ void TradingInterfaceComponent::render_gui() {
     ImGui::PopItemWidth();
     ImGui::Spacing();
 
-    // Context-sensitive inputs
-    ImGui::TextDisabled("QUANTITY");
-    ImGui::InputFloat("##Qty", &quantity_, 0.1f, 1.0f, "%.2f");
+    // Context-sensitive inputs - Tighter spacing
+    auto input_labeled = [&](const char *label, float *val, float step,
+                             float step_fast, const char *fmt) {
+      ImGui::TextDisabled("%s", label);
+      ImGui::SetNextItemWidth(-1.0f);
+      ImGui::InputFloat((std::string("##") + label).c_str(), val, step,
+                        step_fast, fmt);
+    };
+
+    input_labeled("QUANTITY", &quantity_, 0.1f, 1.0f, "%.2f");
 
     if (order_type_ != "Market") {
-      ImGui::TextDisabled("LIMIT PRICE");
-      ImGui::InputFloat("##Price", &price_, 0.5f, 10.0f, "%.2f");
+      input_labeled("LIMIT PRICE", &price_, 0.5f, 10.0f, "%.2f");
     }
 
     if (order_type_ == "Stop-Limit") {
-      ImGui::TextDisabled("STOP PRICE");
-      ImGui::InputFloat("##StopPrice", &stop_price_, 0.5f, 10.0f, "%.2f");
+      input_labeled("STOP PRICE", &stop_price_, 0.5f, 10.0f, "%.2f");
     } else if (order_type_ == "Trailing Stop") {
       ImGui::TextDisabled("TRAILING PERCENT (%)");
+      ImGui::SetNextItemWidth(-1.0f);
       ImGui::SliderFloat("##Trail", &trailing_pct_, 0.1f, 5.0f, "%.2f%%");
     } else if (order_type_ == "Iceberg") {
-      ImGui::TextDisabled("DISPLAY QTY");
-      ImGui::InputFloat("##DisplayQty", &iceberg_display_qty_, 0.01f, 0.1f,
-                        "%.4f");
+      input_labeled("DISPLAY QTY", &iceberg_display_qty_, 0.01f, 0.1f, "%.4f");
     } else if (order_type_ == "TWAP") {
       ImGui::TextDisabled("DURATION (MINS)");
+      ImGui::SetNextItemWidth(-1.0f);
       ImGui::SliderInt("##TWAPDur", &twap_duration_mins_, 1, 480);
     }
 
@@ -167,40 +180,44 @@ void TradingInterfaceComponent::render_gui() {
         (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) *
         0.5f;
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.6f, 0.3f, 1.0f));
-    if (ImGui::Button("BUY / LONG", ImVec2(btn_w, 45))) {
-      // EXECUTE BUY
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+
+    ImGui::PushStyleColor(
+        ImGuiCol_Button,
+        ImVec4(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b, 0.8f));
+    ImGui::PushStyleColor(
+        ImGuiCol_ButtonHovered,
+        ImVec4(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
+    if (ImGui::Button("BUY / LONG", ImVec2(btn_w, 36))) { /* EXECUTE BUY */
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
-    if (ImGui::Button("SELL / SHORT", ImVec2(btn_w, 45))) {
-      // EXECUTE SELL
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          ImVec4(theme_.price_down.r, theme_.price_down.g,
+                                 theme_.price_down.b, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(theme_.price_down.r, theme_.price_down.g,
+                                 theme_.price_down.b, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
+    if (ImGui::Button("SELL / SHORT", ImVec2(btn_w, 36))) { /* EXECUTE SELL */
     }
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(3);
 
     ImGui::Spacing();
 
-    // Emergency Controls
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.25f, 1.0f));
-    if (ImGui::Button("CANCEL ALL", ImVec2(btn_w, 30))) {
-      // CANCEL ALL
+    // Low priority controls
+    ImGui::PushStyleColor(ImGuiCol_Button, theme_.background_secondary);
+    if (ImGui::Button("CANCEL ALL", ImVec2(btn_w, 24))) { /* CANCEL ALL */
     }
-    ImGui::PopStyleColor();
-
     ImGui::SameLine();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.3f, 0.0f, 1.0f));
-    if (ImGui::Button("FLATTEN", ImVec2(btn_w, 30))) {
-      // FLATTEN
+    if (ImGui::Button("FLATTEN", ImVec2(btn_w, 24))) { /* FLATTEN */
     }
     ImGui::PopStyleColor();
 
-    ImGui::PopFont();
-  } else {
-    minimized_ = true;
+    ImGui::PopStyleVar();
   }
   ImGui::End();
 }
@@ -255,87 +272,55 @@ void TapeComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
   if (ImGui::Begin("Time & Sales", &visible_)) {
-    // Delta Header with a simple visual indicator
-    float delta_ratio = std::clamp(cumulative_delta_ / 1000.0f, -1.0f, 1.0f);
-    ImGui::Text("Cumulative Delta");
-    ImGui::SameLine(ImGui::GetWindowWidth() - 120);
-    ImGui::TextColored(cumulative_delta_ >= 0 ? ImVec4(0, 1, 0.4f, 1)
-                                              : ImVec4(1, 0.2f, 0.2f, 1),
-                       "%.2f", cumulative_delta_);
-
-    // Simple bar representation of delta pressure
-    ImDrawList *draw_list = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    float bar_w = ImGui::GetContentRegionAvail().x;
-    float center_x = p.x + bar_w * 0.5f;
-    draw_list->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + bar_w, p.y + 4),
-                             ImColor(50, 50, 60));
-    if (delta_ratio > 0)
-      draw_list->AddRectFilled(
-          ImVec2(center_x, p.y),
-          ImVec2(center_x + (bar_w * 0.5f * delta_ratio), p.y + 4),
-          ImColor(0, 255, 100));
-    else
-      draw_list->AddRectFilled(
-          ImVec2(center_x + (bar_w * 0.5f * delta_ratio), p.y),
-          ImVec2(center_x, p.y + 4), ImColor(255, 50, 50));
-
-    ImGui::Dummy(ImVec2(0, 8));
-    ImGui::Separator();
-
     if (ImGui::BeginTable("TapeTable", 3,
                           ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersInnerV)) {
-      ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 75.0f);
+                              ImGuiTableFlags_NoBordersInBody)) {
+      ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 60.0f);
       ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
-      ImGui::TableHeadersRow();
+      ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 60.0f);
 
-      for (const auto &entry : entries_) {
-        ImGui::TableNextRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("TIME");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("PRICE");
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("SIZE");
 
-        if (entry.is_whale_trade) {
-          ImGui::TableSetBgColor(
-              ImGuiTableBgTarget_RowBg0,
-              ImGui::GetColorU32(ImVec4(0.8f, 0.4f, 0.0f, 0.25f)));
-        } else if (entry.is_large_trade) {
-          ImGui::TableSetBgColor(
-              ImGuiTableBgTarget_RowBg0,
-              ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.1f, 0.15f)));
-        }
+      for (const auto &e : entries_) {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
+
+        // Format time
+        time_t t = e.timestamp_us / 1000000;
+        struct tm *tm_info = localtime(&t);
+        char time_str[16];
+        strftime(time_str, sizeof(time_str), "%H:%M:%S", tm_info);
 
         ImGui::TableSetColumnIndex(0);
-        // Format microseconds to HH:MM:SS.ms
-        uint64_t total_ms = entry.timestamp_us / 1000;
-        uint32_t ms = total_ms % 1000;
-        time_t seconds = total_ms / 1000;
-        struct tm *tm_info = gmtime(&seconds);
-        ImGui::Text("%02d:%02d:%02d.%03d", tm_info->tm_hour, tm_info->tm_min,
-                    tm_info->tm_sec, ms);
+        ImGui::TextDisabled("%s", time_str);
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(entry.is_buy ? ImVec4(0.0f, 1.0f, 0.4f, 1.0f)
-                                        : ImVec4(1.0f, 0.2f, 0.2f, 1.0f),
-                           "%.2f", entry.price);
+        ImVec4 color = e.is_buy
+                           ? ImVec4(theme_.price_up.r, theme_.price_up.g,
+                                    theme_.price_up.b, 1.0f)
+                           : ImVec4(theme_.price_down.r, theme_.price_down.g,
+                                    theme_.price_down.b, 1.0f);
+        if (e.is_whale_trade)
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, 0.2f)));
+
+        ImGui::TextColored(color, "%.2f %s", e.price,
+                           e.is_whale_trade ? "!!!" : "");
 
         ImGui::TableSetColumnIndex(2);
-        if (entry.is_whale_trade) {
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
-          ImGui::Text(">> %.4f <<", entry.size);
-          ImGui::PopStyleColor();
-        } else if (entry.is_large_trade) {
-          ImGui::Text("   %.4f !", entry.size);
-        } else {
-          ImGui::Text("   %.4f", entry.size);
-        }
+        ImGui::Text("%.4f", e.size);
       }
       ImGui::EndTable();
     }
   }
   ImGui::End();
-  ImGui::PopStyleVar();
 }
 
 // ============================================================================
@@ -428,59 +413,61 @@ void PositionPanelComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  if (ImGui::Begin("Portfolio Analytics", &visible_)) {
-    // Top Stats Bar
-    ImGui::Columns(3, "EquityStats");
+  if (ImGui::Begin("Positions & P&L", &visible_)) {
+    ImGui::Columns(3, "AccountHeader", false);
     ImGui::TextDisabled("TOTAL EQUITY");
-    ImGui::TextColored(ImVec4(1, 1, 1, 1), "$%.2f", total_equity_);
+    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
+                              theme_.accent_primary.b, 1),
+                       "$%.2f", total_equity_);
     ImGui::NextColumn();
     ImGui::TextDisabled("AVAIL. MARGIN");
-    ImGui::TextColored(ImVec4(0, 1, 0.8f, 1), "$%.2f", available_balance_);
+    ImGui::Text("$%.2f", available_balance_);
     ImGui::NextColumn();
     ImGui::TextDisabled("UNREALIZED P&L");
-    ImGui::TextColored(ImVec4(0, 1, 0, 1), "+$550.00");
+    ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "+$550.00");
     ImGui::Columns(1);
 
-    ImGui::Spacing();
     ImGui::Separator();
-    ImGui::Spacing();
 
-    // Mini Equity Curve (ImGui Fallback)
-    ImGui::TextDisabled("PERFORMANCE (EQUITY CURVE)");
-    ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0, 1, 0.5f, 1));
-    ImGui::PlotLines("##EquityCurve", equity_history_.data(),
-                     (int)equity_history_.size(), 0, nullptr, FLT_MAX, FLT_MAX,
-                     ImVec2(-1, 80));
-    ImGui::PopStyleColor();
-
-    ImGui::Spacing();
-
-    if (ImGui::BeginTable("PosTable", 5,
+    if (ImGui::BeginTable("PositionTable", 5,
                           ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersOuter)) {
-      ImGui::TableSetupColumn("Symbol");
-      ImGui::TableSetupColumn("Size");
-      ImGui::TableSetupColumn("Entry");
-      ImGui::TableSetupColumn("PnL");
-      ImGui::TableSetupColumn("PnL %");
-      ImGui::TableHeadersRow();
+                              ImGuiTableFlags_NoBordersInBody)) {
+      ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+      ImGui::TableSetupColumn("Entry", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+      ImGui::TableSetupColumn("PnL", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+      ImGui::TableSetupColumn("PnL %", ImGuiTableColumnFlags_WidthFixed, 60.0f);
 
-      for (const auto &pos : positions_) {
-        ImGui::TableNextRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("SYMBOL");
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("SIZE");
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("ENTRY");
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("PnL");
+      ImGui::TableSetColumnIndex(4);
+      ImGui::Text("PnL %");
+
+      for (const auto &p : positions_) {
+        ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%s", pos.symbol.c_str());
+        ImGui::Text("%s", p.symbol.c_str());
         ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%.4f", pos.quantity);
+        ImGui::Text("%.4f", p.quantity);
         ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%.2f", pos.entry_price);
+        ImGui::Text("%.2f", p.entry_price);
+
         ImGui::TableSetColumnIndex(3);
-        ImGui::TextColored(pos.pnl >= 0 ? ImVec4(0, 1, 0, 1)
-                                        : ImVec4(1, 0, 0, 1),
-                           "$%.2f", pos.pnl);
+        ImGui::TextColored(p.pnl >= 0 ? ImVec4(0, 1, 0.5f, 1)
+                                      : ImVec4(1, 0.2f, 0.3f, 1),
+                           "$%.2f", p.pnl);
+
         ImGui::TableSetColumnIndex(4);
-        ImGui::TextColored(pos.pnl >= 0 ? ImVec4(0, 1, 0, 1)
-                                        : ImVec4(1, 0, 0, 1),
-                           "%.2f%%", pos.pnl_percent);
+        ImGui::TextColored(p.pnl_percent >= 0 ? ImVec4(0, 1, 0.5f, 1)
+                                              : ImVec4(1, 0.2f, 0.3f, 1),
+                           "%.2f%%", p.pnl_percent);
       }
       ImGui::EndTable();
     }
@@ -511,29 +498,51 @@ void MarketOverviewPanel::render_gui() {
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
                            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                           ImGuiWindowFlags_NoScrollbar;
+                           ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_MenuBar;
 
   if (ImGui::Begin("Market Overview", &visible_, flags)) {
-    // Render tickers in a row
+    // Branding
+    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
+                              theme_.accent_primary.b, 1),
+                       "BTQUANT | INSTITUTIONAL");
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    // Render tickers in a row with TealStreet style
     for (size_t i = 0; i < tickers_.size(); ++i) {
       const auto &t = tickers_[i];
-      ImGui::Text("%s", t.symbol.c_str());
+      ImGui::TextDisabled("%s", t.symbol.c_str());
       ImGui::SameLine();
-      ImGui::TextColored(t.change_pct >= 0 ? ImVec4(0, 1, 0, 1)
-                                           : ImVec4(1, 0, 0, 1),
-                         "%.2f (%.2f%%)", t.price, t.change_pct);
+      ImColor color =
+          t.change_pct >= 0
+              ? ImColor(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b)
+              : ImColor(theme_.price_down.r, theme_.price_down.g,
+                        theme_.price_down.b);
+      ImGui::TextColored(color, "%.2f", t.price);
+      ImGui::SameLine();
+      ImGui::TextDisabled("(%+.2f%%)", t.change_pct);
 
       if (i < tickers_.size() - 1) {
         ImGui::SameLine();
-        ImGui::Text(" | ");
+        ImGui::Text(" ");
         ImGui::SameLine();
       }
     }
 
-    ImGui::SameLine(ImGui::GetWindowWidth() - 250);
-    ImGui::Text("Vol: $%.1fB", global_volume_ / 1e9f);
+    ImGui::SameLine(ImGui::GetWindowWidth() - 320);
+    ImGui::TextDisabled("VOL $%.1fB", global_volume_ / 1e9f);
     ImGui::SameLine();
-    ImGui::Text("| Latency: %.2fms", system_latency_ms_);
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+    ImGui::TextDisabled("LATENCY %.2fms", system_latency_ms_);
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "CONNECTED");
+    ImGui::SameLine();
+    ImGui::TextDisabled("CPU %02d%%", 5);
   }
   ImGui::End();
 }

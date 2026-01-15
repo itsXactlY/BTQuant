@@ -251,24 +251,51 @@ void OrderBookComponent::render_gui() {
     ImGui::PushFont((ImFont *)theme_.monospace_font);
 
   // Use monochromatic institutional styling for the table
-  if (ImGui::BeginTable("OrderBookLadder", 3,
-                        ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
-    ImGui::TableSetupColumn("BidSize", ImGuiTableColumnFlags_WidthStretch);
+  // Use monochromatic institutional styling for the table
+  ImGuiTableFlags table_flags =
+      ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+      ImGuiTableFlags_NoBordersInBody | ImGuiTableFlags_SizingFixedFit;
+
+  if (ImGui::BeginTable("OrderBookLadder", 3, table_flags)) {
+    ImGui::TableSetupColumn("BidSize", ImGuiTableColumnFlags_WidthFixed, 65.0f);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 85.0f);
-    ImGui::TableSetupColumn("AskSize", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("AskSize", ImGuiTableColumnFlags_WidthFixed, 65.0f);
 
     // Headers
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("SIZE");
     ImGui::TableSetColumnIndex(1);
     ImGui::Text("  PRICE");
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Text("SIZE");
+
+    // Calculate max size for bar scaling
+    double max_size = 0.0;
+    for (const auto &l : current_data_.bids)
+      max_size = std::max(max_size, l.size);
+    for (const auto &l : current_data_.asks)
+      max_size = std::max(max_size, l.size);
+    if (max_size < 1e-9)
+      max_size = 1.0;
 
     // Asks (Highest price at top)
     for (auto it = current_data_.asks.rbegin(); it != current_data_.asks.rend();
          ++it) {
-      ImGui::TableNextRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
+
+      // Ask Size Column with Bar
       ImGui::TableSetColumnIndex(2);
+      float bar_width = (float)(it->size / max_size) * ImGui::GetColumnWidth();
+      ImDrawList *draw_list = ImGui::GetWindowDrawList();
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      draw_list->AddRectFilled(
+          pos, ImVec2(pos.x + bar_width, pos.y + 16.0f),
+          ImGui::GetColorU32(ImVec4(theme_.price_down.r, theme_.price_down.g,
+                                    theme_.price_down.b, 0.2f)));
       ImGui::Text("%.4f", it->size);
 
+      // Price Column
       ImGui::TableSetColumnIndex(1);
       ImGui::TextColored(ImVec4(theme_.price_down.r, theme_.price_down.g,
                                 theme_.price_down.b, theme_.price_down.a),
@@ -276,23 +303,37 @@ void OrderBookComponent::render_gui() {
     }
 
     // Spread Row
-    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                           ImGui::GetColorU32(ImVec4(0.1f, 0.1f, 0.12f, 1.0f)));
+    ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+    ImGui::TableSetBgColor(
+        ImGuiTableBgTarget_RowBg0,
+        ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.10f, 1.0f)));
+
     ImGui::TableSetColumnIndex(1);
-    ImGui::TextColored(
-        ImVec4(theme_.accent_secondary.r, theme_.accent_secondary.g,
-               theme_.accent_secondary.b, theme_.accent_secondary.a),
-        "  %.2f", current_data_.mid_price);
+    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
+                              theme_.accent_primary.b, theme_.accent_primary.a),
+                       "  %.2f", current_data_.mid_price);
+
     ImGui::TableSetColumnIndex(2);
     ImGui::TextDisabled("SPR %.2f", current_data_.spread);
 
     // Bids (Highest price at top)
     for (const auto &level : current_data_.bids) {
-      ImGui::TableNextRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
+
+      // Bid Size Column with Bar (Right-aligned bar)
       ImGui::TableSetColumnIndex(0);
+      float bar_width =
+          (float)(level.size / max_size) * ImGui::GetColumnWidth();
+      ImDrawList *draw_list = ImGui::GetWindowDrawList();
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      draw_list->AddRectFilled(
+          ImVec2(pos.x + ImGui::GetColumnWidth() - bar_width, pos.y),
+          ImVec2(pos.x + ImGui::GetColumnWidth(), pos.y + 16.0f),
+          ImGui::GetColorU32(ImVec4(theme_.price_up.r, theme_.price_up.g,
+                                    theme_.price_up.b, 0.2f)));
       ImGui::Text("%.4f", level.size);
 
+      // Price Column
       ImGui::TableSetColumnIndex(1);
       ImGui::TextColored(ImVec4(theme_.price_up.r, theme_.price_up.g,
                                 theme_.price_up.b, theme_.price_up.a),

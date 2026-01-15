@@ -286,7 +286,8 @@ void RealtimeChartComponent::render_gui() {
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
 
-  if (!ImGui::Begin("Price Chart", &visible_, ImGuiWindowFlags_NoScrollbar)) {
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar;
+  if (!ImGui::Begin("Price Chart", &visible_, window_flags)) {
     ImGui::End();
     ImGui::PopStyleVar();
     return;
@@ -297,133 +298,138 @@ void RealtimeChartComponent::render_gui() {
   ImVec2 size = ImGui::GetWindowSize();
 
   // 0. In-Chart Toolbar & OHLCV Readout
-  ImGui::SetCursorPos(ImVec2(10, 5));
-  ImGui::PushStyleColor(ImGuiCol_Text,
-                        ImVec4(1.0f, 0.8f, 0.0f, 1.0f)); // Gold for symbol
-  ImGui::Text("%s", chart_symbol_.c_str());
-  ImGui::PopStyleColor();
+  float padding_top = 6.0f;
+  float padding_left = 10.0f;
+  ImGui::SetCursorPos(ImVec2(padding_left, padding_top));
+
+  // Symbol & Timeframe
+  ImGui::TextColored(theme_.accent_primary, "%s", chart_symbol_.c_str());
+  ImGui::SameLine();
+  ImGui::TextDisabled("| %s", current_timeframe_.c_str());
 
   if (!candles_.empty()) {
     const auto &last = candles_.back();
-    ImGui::SameLine(100);
-    ImGui::TextDisabled("O:");
+    ImGui::SameLine(120);
+
+    auto render_ohlc = [&](const char *label, float value,
+                           bool use_color = false) {
+      ImGui::TextDisabled("%s", label);
+      ImGui::SameLine();
+      if (use_color) {
+        ImGui::TextColored(last.close >= last.open ? theme_.price_up
+                                                   : theme_.price_down,
+                           "%.2f", value);
+      } else {
+        ImGui::Text("%.2f", value);
+      }
+      ImGui::SameLine();
+    };
+
+    render_ohlc("O", last.open);
+    render_ohlc("H", last.high);
+    render_ohlc("L", last.low);
+    render_ohlc("C", last.close, true);
+
+    // Volume
+    ImGui::TextDisabled("V");
     ImGui::SameLine();
-    ImGui::Text("%.2f", last.open);
-    ImGui::SameLine();
-    ImGui::TextDisabled("H:");
-    ImGui::SameLine();
-    ImGui::Text("%.2f", last.high);
-    ImGui::SameLine();
-    ImGui::TextDisabled("L:");
-    ImGui::SameLine();
-    ImGui::Text("%.2f", last.low);
-    ImGui::SameLine();
-    ImGui::TextDisabled("C:");
-    ImGui::SameLine();
-    ImGui::TextColored(last.close >= last.open ? ImVec4(0, 1, 0.2f, 1)
-                                               : ImVec4(1, 0.2f, 0.2f, 1),
-                       "%.2f", last.close);
-    ImGui::SameLine();
-    ImGui::TextDisabled("V:");
-    ImGui::SameLine();
-    ImGui::Text("%.2f", last.volume);
+    if (last.volume >= 1e6)
+      ImGui::Text("%.2fM", last.volume / 1e6);
+    else
+      ImGui::Text("%.2f", last.volume);
   }
 
-  // Right-side Toolbar (Buttons)
-  ImGui::SameLine(size.x - 240);
-  if (ImGui::SmallButton("1m")) {
-    current_timeframe_ = "1m";
-    mark_dirty();
-  }
-  ImGui::SameLine();
-  if (ImGui::SmallButton("5m")) {
-    current_timeframe_ = "5m";
-    mark_dirty();
-  }
-  ImGui::SameLine();
-  if (ImGui::SmallButton("15m")) {
-    current_timeframe_ = "15m";
-    mark_dirty();
-  }
-  ImGui::SameLine();
-  if (ImGui::SmallButton("Settings")) { /* TODO */
-  }
+  // Right-side Compact Toolbar
+  float btn_w = 28.0f;
+  ImGui::SetCursorPos(ImVec2(size.x - 140, padding_top - 2.0f));
 
-  // 1. Draw Grid Lines
-  float grid_color = ImGui::GetColorU32(ImGuiCol_Border, 0.2f);
-  int horizontal_lines = 6;
+  auto timeframe_btn = [&](const char *label) {
+    if (ImGui::Selectable(label, current_timeframe_ == label, 0,
+                          ImVec2(btn_w, 18))) {
+      current_timeframe_ = label;
+      mark_dirty();
+    }
+    ImGui::SameLine();
+  };
+
+  timeframe_btn("1m");
+  timeframe_btn("5m");
+  timeframe_btn("15m");
+
+  // 1. Draw Institutional Grid Lines
+  ImU32 grid_color = ImGui::GetColorU32(theme_.border_color, 0.15f);
+  float chart_height_ratio = 0.82f;
+  float chart_h = size.y * chart_height_ratio;
+
+  int horizontal_lines = 8;
   for (int i = 0; i <= horizontal_lines; ++i) {
-    float y = pos.y + (size.y * 0.85f) * (float)i / (float)horizontal_lines;
+    float y = pos.y + chart_h * (float)i / (float)horizontal_lines;
     draw_list->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + size.x - 65, y),
                        grid_color);
   }
 
-  // 2. Y-Axis Price Labels (Right-aligned)
+  // 2. Y-Axis Price Labels
   for (int i = 0; i <= horizontal_lines; ++i) {
     float price =
         max_y_ - (max_y_ - min_y_) * (float)i / (float)horizontal_lines;
     char label[32];
     snprintf(label, sizeof(label), "%.2f", price);
-    float y = pos.y + (size.y * 0.85f) * (float)i / (float)horizontal_lines;
-    draw_list->AddText(ImVec2(pos.x + size.x - 55, y - 7),
-                       ImGui::GetColorU32(ImGuiCol_Text), label);
+    float y = pos.y + chart_h * (float)i / (float)horizontal_lines;
+    draw_list->AddText(ImVec2(pos.x + size.x - 60, y - 7), theme_.text_muted,
+                       label);
   }
 
-  // 3. Current Price Tag (High Precision)
+  // 3. Current Price Pointer
   if (!candles_.empty()) {
     float last_price = candles_.back().close;
     float rel_y = (last_price - min_y_) / (max_y_ - min_y_);
-    float y = pos.y + (size.y * 0.85f) * (1.0f - rel_y);
+    float y = pos.y + chart_h * (1.0f - rel_y);
 
-    // Draw Price Pointer
-    float h = 18.0f;
-    float w = 60.0f;
-    ImVec2 tag_pos(pos.x + size.x - w, y - h * 0.5f);
+    float box_h = 18.0f;
+    float box_w = 60.0f;
+    ImVec2 tag_pos(pos.x + size.x - box_w, y - box_h * 0.5f);
 
+    ImU32 bg_color = ImGui::GetColorU32(last_price >= candles_.back().open
+                                            ? theme_.price_up
+                                            : theme_.price_down);
     draw_list->AddRectFilled(
-        tag_pos, ImVec2(tag_pos.x + w, tag_pos.y + h),
-        ImGui::GetColorU32(last_price >= candles_.back().open
-                               ? ImVec4(0, 0.6f, 0.2f, 1)
-                               : ImVec4(0.8f, 0.1f, 0.1f, 1)),
-        2.0f);
+        tag_pos, ImVec2(tag_pos.x + box_w, tag_pos.y + box_h), bg_color, 2.0f);
 
     char price_str[32];
     snprintf(price_str, sizeof(price_str), "%.2f", last_price);
-    ImVec2 text_size = ImGui::CalcTextSize(price_str);
-    draw_list->AddText(ImVec2(tag_pos.x + (w - text_size.x) * 0.5f,
-                              tag_pos.y + (h - text_size.y) * 0.5f),
-                       ImGui::GetColorU32(ImVec4(1, 1, 1, 1)), price_str);
+    ImVec2 t_size = ImGui::CalcTextSize(price_str);
+    draw_list->AddText(ImVec2(tag_pos.x + (box_w - t_size.x) * 0.5f,
+                              tag_pos.y + (box_h - t_size.y) * 0.5f),
+                       IM_COL32_WHITE, price_str);
+
+    // Horizontal price line
+    draw_list->AddLine(ImVec2(pos.x, y), ImVec2(tag_pos.x, y),
+                       ImGui::GetColorU32(bg_color, 0.3f));
   }
 
-  // 4. Volume Sub-panel Label/Marker
-  draw_list->AddLine(ImVec2(pos.x, pos.y + size.y * 0.85f),
-                     ImVec2(pos.x + size.x - 60, pos.y + size.y * 0.85f),
-                     ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f)));
-  // 5. Candle Tooltip on Hover
+  // 4. Volume Separator
+  draw_list->AddLine(ImVec2(pos.x, pos.y + chart_h),
+                     ImVec2(pos.x + size.x - 65, pos.y + chart_h),
+                     ImGui::GetColorU32(theme_.border_color, 0.4f));
+
+  // 5. Crosshair Info
   if (ImGui::IsWindowHovered()) {
     const auto &cs = dashboard_->get_crosshair_state();
-    if (cs.active) {
-      // Find closest candle to cs.timestamp_us
-      const Candle *target = nullptr;
+    if (cs.active && cs.source == this) {
+      ImGui::BeginTooltip();
+      ImGui::TextColored(theme_.accent_primary, "PRICE: %.4f", cs.price);
+      ImGui::Separator();
+
+      // Find candle for more info
       for (const auto &c : candles_) {
         if (std::abs((int64_t)c.timestamp_us - (int64_t)cs.timestamp_us) <
             2500000) {
-          target = &c;
+          ImGui::Text("Volume: %.2f", c.volume);
+          ImGui::Text("Range:  %.2f", c.high - c.low);
           break;
         }
       }
-
-      if (target) {
-        ImGui::BeginTooltip();
-        ImGui::Text("Time: %s", "00:00:00"); // TODO: Format timestamp
-        ImGui::Separator();
-        ImGui::Text("Open:  %.2f", target->open);
-        ImGui::Text("High:  %.2f", target->high);
-        ImGui::Text("Low:   %.2f", target->low);
-        ImGui::Text("Close: %.2f", target->close);
-        ImGui::Text("Vol:   %.2f", target->volume);
-        ImGui::EndTooltip();
-      }
+      ImGui::EndTooltip();
     }
   }
 
@@ -679,7 +685,7 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
       body_bottom = body_top + 1.0f;
 
     // 1. Candlestick Body Quad (with slight transparency)
-    glm::vec4 fill_color = body_color;
+    glm::vec4 fill_color = color;
     fill_color.a = is_bullish ? 0.4f : 0.8f;
 
     vertices.push_back(
@@ -744,6 +750,7 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
                         1});
 
     // 3. Side borders
+    // Left border
     vertices.push_back({{x - bar_width * 0.5f - border_thickness, body_top},
                         {0, 0},
                         border_color,
@@ -765,7 +772,7 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
                         border_color,
                         1.0f,
                         1});
-
+    // Right border
     vertices.push_back(
         {{x + bar_width * 0.5f, body_top}, {0, 0}, border_color, 1.0f, 1});
     vertices.push_back({{x + bar_width * 0.5f + border_thickness, body_top},
@@ -792,31 +799,31 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
     float wick_w = 1.0f;
     // Top wick
     vertices.push_back(
-        {{x - wick_w * 0.5f, y_high}, {0, 0}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, y_high}, {0, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, y_high}, {1, 0}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, y_high}, {1, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, body_top}, {1, 1}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, body_top}, {1, 1}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x - wick_w * 0.5f, y_high}, {0, 0}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, y_high}, {0, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, body_top}, {1, 1}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, body_top}, {1, 1}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x - wick_w * 0.5f, body_top}, {0, 1}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, body_top}, {0, 1}, border_color, 1.0f, 1});
 
     // Bottom wick
     vertices.push_back(
-        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, body_bottom}, {1, 0}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, body_bottom}, {1, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, y_low}, {1, 1}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, y_low}, {1, 1}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x + wick_w * 0.5f, y_low}, {1, 1}, wick_color, 1.0f, 1});
+        {{x + wick_w * 0.5f, y_low}, {1, 1}, border_color, 1.0f, 1});
     vertices.push_back(
-        {{x - wick_w * 0.5f, y_low}, {0, 1}, wick_color, 1.0f, 1});
+        {{x - wick_w * 0.5f, y_low}, {0, 1}, border_color, 1.0f, 1});
 
     // 4. Volume (Type 2) - Professional separate panel look at bottom
     // Volume panel takes bottom 15% height

@@ -179,46 +179,61 @@ void LogDisplayComponent::render(VkCommandBuffer cmd) {
 
 void LogDisplayComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y),
-                          ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
+                          ImGuiCond_Always); // Force layout
+  ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
-  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
-  if (!ImGui::Begin("System Logs", &visible_)) {
-    minimized_ = true;
+  if (!ImGui::Begin("System Logs", &visible_, ImGuiWindowFlags_NoCollapse)) {
     ImGui::End();
     return;
   }
-  minimized_ = false;
 
-  // Filtering and Controls
-  if (ImGui::Button("Clear")) {
+  // Institutional Controls Header
+  if (ImGui::Button("CLEAR", ImVec2(50, 18)))
     clear_logs();
-  }
   ImGui::SameLine();
-  ImGui::Checkbox("Auto-scroll", &auto_scroll_);
+  ImGui::Checkbox("AUTO", &auto_scroll_);
+  ImGui::SameLine();
+
+  // Minimalistic Search/Filter
+  ImGui::SetNextItemWidth(-1.0f);
+  if (ImGui::InputTextWithHint("##LogFilter", "Search...", filter_buffer_,
+                               sizeof(filter_buffer_))) {
+    text_filter_ = filter_buffer_;
+    mark_dirty();
+  }
 
   ImGui::Separator();
 
-  // Scrolling Region
-  const float footer_height_to_reserve =
-      ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
-  ImGui::BeginChild("ScrollingRegion", ImVec2(0, -footer_height_to_reserve),
-                    false, ImGuiWindowFlags_HorizontalScrollbar);
+  // Scrolling Region - High Density
+  ImGui::BeginChild("LogRegion", ImVec2(0, 0), false,
+                    ImGuiWindowFlags_HorizontalScrollbar);
 
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 1));
   for (const auto &entry : log_entries_) {
-    // Basic filtering
     if (entry.level < min_log_level_)
       continue;
     if (!text_filter_.empty() &&
         entry.message.find(text_filter_) == std::string::npos)
       continue;
 
-    ImVec4 color =
-        ImVec4(entry.color.r, entry.color.g, entry.color.b, entry.color.a);
+    ImU32 lvl_color = ImGui::GetColorU32(
+        ImVec4(entry.color.r, entry.color.g, entry.color.b, entry.color.a));
+
+    // Timestamp
+    ImGui::TextDisabled("[%s]", format_timestamp(entry.timestamp).c_str());
+    ImGui::SameLine();
+
+    // Level
+    const char *lvl_str = get_log_level_string(entry.level).c_str();
     ImGui::TextColored(
-        color, "[%s] [%s] %s", format_timestamp(entry.timestamp).c_str(),
-        get_log_level_string(entry.level).c_str(), entry.message.c_str());
+        ImVec4(entry.color.r, entry.color.g, entry.color.b, entry.color.a),
+        "%s", lvl_str);
+    ImGui::SameLine();
+
+    // Message
+    ImGui::TextUnformatted(entry.message.c_str());
   }
+  ImGui::PopStyleVar();
 
   if (auto_scroll_ && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
     ImGui::SetScrollHereY(1.0f);
@@ -592,13 +607,13 @@ void LogDisplayComponent::rebuild_text_geometry() {
 glm::vec4 LogDisplayComponent::get_log_level_color(LogLevel level) {
   switch (level) {
   case Debug:
-    return theme_.text_muted;
+    return glm::vec4(0.4f, 0.4f, 0.5f, 1.0f);
   case Info:
-    return theme_.text_primary;
+    return theme_.accent_primary;
   case Warning:
-    return glm::vec4(1.0f, 0.8f, 0.0f, 1.0f); // Yellow
+    return glm::vec4(0.9f, 0.5f, 0.0f, 1.0f);
   case Error:
-    return theme_.price_down; // Red
+    return theme_.price_down;
   default:
     return theme_.text_primary;
   }
@@ -665,8 +680,6 @@ LogDisplayComponent::get_filtered_entries() const {
   return filtered;
 }
 
-void LogDisplayComponent::clear_data() {
-  clear_logs();
-}
+void LogDisplayComponent::clear_data() { clear_logs(); }
 
 } // namespace BTQuant

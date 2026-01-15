@@ -200,9 +200,6 @@ PerformanceMetrics HotSpineDataBridge::getPerformanceMetrics() const {
 void HotSpineDataBridge::dataProcessingLoop() {
   std::cout << "[HotSpineDataBridge] Data processing loop started" << std::endl;
 
-  HotSpine::HotTrade trade;
-  HotSpine::HotOrderbookSnapshot orderbook;
-
   auto last_stats_time = std::chrono::high_resolution_clock::now();
   const auto stats_interval = std::chrono::seconds(5);
 

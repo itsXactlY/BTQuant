@@ -22,14 +22,7 @@
 
 namespace BTQuant {
 
-// Vertex structure for size bar rendering
-struct SizeBarVertex {
-  glm::vec2 position;
-  glm::vec2 size;
-  glm::vec4 color;
-  float intensity;
-  uint32_t level_type; // 0 = bid, 1 = ask
-};
+// OrderBookComponent implementation
 
 OrderBookComponent::OrderBookComponent(const glm::vec2 &position,
                                        const glm::vec2 &size)
@@ -175,7 +168,7 @@ void OrderBookComponent::render(VkCommandBuffer cmd) {
     vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
 
     uint32_t vertex_count =
-        static_cast<uint32_t>(bar_vertex_buffer_.size / sizeof(SizeBarVertex));
+        static_cast<uint32_t>(bar_vertex_buffer_.size / sizeof(DepthBarVertex));
     if (vertex_count > 0) {
       vkCmdDraw(cmd, vertex_count, 1, 0, 0);
     }
@@ -232,53 +225,52 @@ void OrderBookComponent::render_gui() {
     ImGui::PushFont((ImFont *)theme_.monospace_font);
 
   // Use monochromatic institutional styling for the table
-  if (ImGui::BeginTable("OrderBookLadder", 3, ImGuiTableFlags_None)) {
+  if (ImGui::BeginTable("OrderBookLadder", 3,
+                        ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
     ImGui::TableSetupColumn("BidSize", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 85.0f);
     ImGui::TableSetupColumn("AskSize", ImGuiTableColumnFlags_WidthStretch);
 
     // Headers
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    ImGui::TableSetColumnIndex(0);
-    ImGui::Text("BID");
     ImGui::TableSetColumnIndex(1);
-    ImGui::Text("PRICE");
-    ImGui::TableSetColumnIndex(2);
-    ImGui::Text("ASK");
+    ImGui::Text("  PRICE");
 
     // Asks (Highest price at top)
     for (auto it = current_data_.asks.rbegin(); it != current_data_.asks.rend();
          ++it) {
       ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("%.4f", it->size);
+
       ImGui::TableSetColumnIndex(1);
       ImGui::TextColored(ImVec4(theme_.price_down.r, theme_.price_down.g,
                                 theme_.price_down.b, theme_.price_down.a),
-                         "%.2f", it->price);
-      ImGui::TableSetColumnIndex(2);
-      ImGui::Text("%.4f", it->size);
+                         "  %.2f", it->price);
     }
 
     // Spread Row
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::Separator();
+    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                           ImGui::GetColorU32(ImVec4(0.1f, 0.1f, 0.12f, 1.0f)));
     ImGui::TableSetColumnIndex(1);
     ImGui::TextColored(
         ImVec4(theme_.accent_secondary.r, theme_.accent_secondary.g,
                theme_.accent_secondary.b, theme_.accent_secondary.a),
-        "%.2f", current_data_.spread);
+        "  %.2f", current_data_.mid_price);
     ImGui::TableSetColumnIndex(2);
-    ImGui::Separator();
+    ImGui::TextDisabled("SPR %.2f", current_data_.spread);
 
     // Bids (Highest price at top)
     for (const auto &level : current_data_.bids) {
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
       ImGui::Text("%.4f", level.size);
+
       ImGui::TableSetColumnIndex(1);
       ImGui::TextColored(ImVec4(theme_.price_up.r, theme_.price_up.g,
                                 theme_.price_up.b, theme_.price_up.a),
-                         "%.2f", level.price);
+                         "  %.2f", level.price);
     }
 
     ImGui::EndTable();
@@ -337,144 +329,133 @@ void OrderBookComponent::handle_input(const InputEvent &event) {
 
 void OrderBookComponent::rebuild_geometry() {
   std::vector<OrderBookTextVertex> text_vertices;
-  std::vector<SizeBarVertex> bar_vertices;
+  std::vector<DepthBarVertex> bar_vertices;
 
-  float row_height = 20.0f;
+  float row_height = 18.0f;
   float header_height = 25.0f;
-  float font_size = 12.0f;
+  float font_size = 11.0f;
 
-  // Calculate maximum cumulative size for bar scaling
-  double max_cumulative = 0.0;
-  if (!current_data_.bids.empty())
-    max_cumulative =
-        std::max(max_cumulative, current_data_.bids.back().total_size);
-  if (!current_data_.asks.empty())
-    max_cumulative =
-        std::max(max_cumulative, current_data_.asks.back().total_size);
-
-  if (max_cumulative <= 0)
-    max_cumulative = 1.0;
+  // Calculate maximum size for bar scaling (use 90% of column width for max
+  // size)
+  double max_size = 0.0;
+  for (const auto &level : current_data_.bids)
+    max_size = std::max(max_size, level.size);
+  for (const auto &level : current_data_.asks)
+    max_size = std::max(max_size, level.size);
+  if (max_size <= 0)
+    max_size = 1.0;
 
   float current_y = position_.y + header_height;
   float col_w = size_.x / 3.0f;
-  float price_center_x = position_.x + col_w * 1.5f;
+  float mid_x = position_.x + size_.x * 0.5f;
 
-  // Render header
-  add_text_line(text_vertices, "Bid", "Price", "Ask", current_y,
-                theme_.text_secondary, font_size);
+  // 1. Headers
+  add_text_at_position(text_vertices, "SIZE", position_.x + 10, current_y + 2,
+                       theme_.text_secondary, font_size);
+  add_centered_text(text_vertices, "PRICE", current_y + 2,
+                    theme_.text_secondary, font_size);
+  add_text_at_position(text_vertices, "SIZE", position_.x + size_.x - 40,
+                       current_y + 2, theme_.text_secondary, font_size);
   current_y += header_height;
 
-  // Render asks (Highest price at top) - Reverse for ladder feel
+  // 2. Asks (Top half, descending price)
   for (int i = static_cast<int>(current_data_.asks.size()) - 1; i >= 0; --i) {
     const auto &level = current_data_.asks[i];
-    float rel_size = static_cast<float>(level.size / max_cumulative);
-    float bar_w = (static_cast<float>(level.total_size) /
-                   static_cast<float>(max_cumulative)) *
-                  col_w;
+    float bar_w = (static_cast<float>(level.size / max_size)) * col_w * 0.95f;
 
-    // Bar to the right (Type 3)
-    glm::vec4 bar_color = theme_.price_down;
-    // Darker = more liquidity (intensity mapping)
-    bar_color.a = 0.1f + 0.4f * (static_cast<float>(level.size) /
-                                 (float)max_cumulative * 10.0f);
-    bar_color.a = std::min(0.6f, bar_color.a);
+    // Intensity mapping for liquidity heatmap
+    float intensity =
+        std::min(1.0f, static_cast<float>(level.size / max_size) * 2.0f);
+    glm::vec4 bar_color = ask_bar_color_;
+    bar_color.a *= (0.3f + 0.7f * intensity);
 
+    // Bar on the right
     bar_vertices.push_back(
-        {{price_center_x, current_y}, {0, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back(
-        {{price_center_x + bar_w, current_y}, {1, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back({{price_center_x + bar_w, current_y + row_height},
-                            {1, 1},
+        {{mid_x + col_w * 0.5f, current_y}, {0, 0}, bar_color, intensity, 1});
+    bar_vertices.push_back({{mid_x + col_w * 0.5f + bar_w, current_y},
+                            {1, 0},
                             bar_color,
-                            1.0f,
-                            3});
+                            intensity,
+                            1});
     bar_vertices.push_back(
-        {{price_center_x, current_y}, {0, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back({{price_center_x + bar_w, current_y + row_height},
-                            {1, 1},
+        {{mid_x + col_w * 0.5f + bar_w, current_y + row_height - 1},
+         {1, 1},
+         bar_color,
+         intensity,
+         1});
+    bar_vertices.push_back(
+        {{mid_x + col_w * 0.5f, current_y}, {0, 0}, bar_color, intensity, 1});
+    bar_vertices.push_back(
+        {{mid_x + col_w * 0.5f + bar_w, current_y + row_height - 1},
+         {1, 1},
+         bar_color,
+         intensity,
+         1});
+    bar_vertices.push_back({{mid_x + col_w * 0.5f, current_y + row_height - 1},
+                            {0, 1},
                             bar_color,
-                            1.0f,
-                            3});
-    bar_vertices.push_back(
-        {{price_center_x, current_y + row_height}, {0, 1}, bar_color, 1.0f, 3});
+                            intensity,
+                            1});
 
-    // Text: Price in middle, Size on right
-    add_text_at_position(text_vertices, format_price(level.price),
-                         price_center_x - font_size * 2, current_y + 2,
-                         theme_.price_down, font_size);
+    add_centered_text(text_vertices, format_price(level.price), current_y + 2,
+                      theme_.price_down, font_size);
     add_text_at_position(text_vertices, format_size(level.size),
-                         price_center_x + col_w * 0.4f, current_y + 2,
+                         position_.x + size_.x - 45, current_y + 2,
                          theme_.text_primary, font_size);
-
     current_y += row_height;
   }
 
-  // Spread Highlighting
-  if (current_data_.spread > 0) {
-    // Draw mid-price line background
-    glm::vec4 spread_bg = theme_.background_panel;
-    spread_bg.a = 0.5f;
-    bar_vertices.push_back(
-        {{position_.x, current_y}, {0, 0}, spread_bg, 1.0f, 0});
-    bar_vertices.push_back(
-        {{position_.x + size_.x, current_y}, {1, 0}, spread_bg, 1.0f, 0});
-    bar_vertices.push_back({{position_.x + size_.x, current_y + row_height},
-                            {1, 1},
-                            spread_bg,
-                            1.0f,
-                            0});
-    bar_vertices.push_back(
-        {{position_.x, current_y}, {0, 0}, spread_bg, 1.0f, 0});
-    bar_vertices.push_back({{position_.x + size_.x, current_y + row_height},
-                            {1, 1},
-                            spread_bg,
-                            1.0f,
-                            0});
-    bar_vertices.push_back(
-        {{position_.x, current_y + row_height}, {0, 1}, spread_bg, 1.0f, 0});
-
-    std::string spread_text = "SPREAD: " + format_price(current_data_.spread);
-    add_centered_text(text_vertices, spread_text, current_y + 2,
+  // 3. Spread/Mid Row
+  if (current_data_.spread >= 0) {
+    std::string spread_str = "SPREAD: " + format_price(current_data_.spread);
+    add_centered_text(text_vertices, spread_str, current_y + 2,
                       theme_.accent_secondary, font_size * 0.9f);
     current_y += row_height;
   }
 
-  // Render bids (Highest price at top)
+  // 4. Bids (Bottom half, descending price)
   for (const auto &level : current_data_.bids) {
-    float bar_w = (static_cast<float>(level.total_size) /
-                   static_cast<float>(max_cumulative)) *
-                  col_w;
+    float bar_w = (static_cast<float>(level.size / max_size)) * col_w * 0.95f;
+    float intensity =
+        std::min(1.0f, static_cast<float>(level.size / max_size) * 2.0f);
+    glm::vec4 bar_color = bid_bar_color_;
+    bar_color.a *= (0.3f + 0.7f * intensity);
 
-    // Bar to the left (Type 3)
-    glm::vec4 bar_color = theme_.price_up;
-    bar_color.a = 0.1f + 0.4f * (static_cast<float>(level.size) /
-                                 (float)max_cumulative * 10.0f);
-    bar_color.a = std::min(0.6f, bar_color.a);
-
-    bar_vertices.push_back(
-        {{price_center_x - bar_w, current_y}, {0, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back(
-        {{price_center_x, current_y}, {1, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back(
-        {{price_center_x, current_y + row_height}, {1, 1}, bar_color, 1.0f, 3});
-    bar_vertices.push_back(
-        {{price_center_x - bar_w, current_y}, {0, 0}, bar_color, 1.0f, 3});
-    bar_vertices.push_back(
-        {{price_center_x, current_y + row_height}, {1, 1}, bar_color, 1.0f, 3});
-    bar_vertices.push_back({{price_center_x - bar_w, current_y + row_height},
-                            {0, 1},
+    // Bar on the left
+    bar_vertices.push_back({{mid_x - col_w * 0.5f - bar_w, current_y},
+                            {0, 0},
                             bar_color,
-                            1.0f,
-                            3});
+                            intensity,
+                            0});
+    bar_vertices.push_back(
+        {{mid_x - col_w * 0.5f, current_y}, {1, 0}, bar_color, intensity, 0});
+    bar_vertices.push_back({{mid_x - col_w * 0.5f, current_y + row_height - 1},
+                            {1, 1},
+                            bar_color,
+                            intensity,
+                            0});
+    bar_vertices.push_back({{mid_x - col_w * 0.5f - bar_w, current_y},
+                            {0, 0},
+                            bar_color,
+                            intensity,
+                            0});
+    bar_vertices.push_back({{mid_x - col_w * 0.5f, current_y + row_height - 1},
+                            {1, 1},
+                            bar_color,
+                            intensity,
+                            0});
+    bar_vertices.push_back(
+        {{mid_x - col_w * 0.5f - bar_w, current_y + row_height - 1},
+         {0, 1},
+         bar_color,
+         intensity,
+         0});
 
-    // Text: Price in middle, Size on left
-    add_text_at_position(text_vertices, format_price(level.price),
-                         price_center_x - font_size * 2, current_y + 2,
-                         theme_.price_up, font_size);
+    add_centered_text(text_vertices, format_price(level.price), current_y + 2,
+                      theme_.price_up, font_size);
     add_text_at_position(text_vertices, format_size(level.size),
-                         price_center_x - col_w * 0.8f, current_y + 2,
-                         theme_.text_primary, font_size);
-
+                         position_.x + 10, current_y + 2, theme_.text_primary,
+                         font_size);
     current_y += row_height;
   }
 
@@ -499,7 +480,7 @@ void OrderBookComponent::rebuild_geometry() {
   }
 
   if (!bar_vertices.empty()) {
-    size_t bar_buffer_size = bar_vertices.size() * sizeof(SizeBarVertex);
+    size_t bar_buffer_size = bar_vertices.size() * sizeof(DepthBarVertex);
     if (!bar_vertex_buffer_.buffer ||
         bar_vertex_buffer_.size < bar_buffer_size) {
       if (bar_vertex_buffer_.buffer) {
@@ -728,30 +709,30 @@ void OrderBookComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
   // 4. Create Bar Pipeline
   VkVertexInputBindingDescription bar_vi_binding{};
   bar_vi_binding.binding = 0;
-  bar_vi_binding.stride = sizeof(SizeBarVertex);
+  bar_vi_binding.stride = sizeof(DepthBarVertex);
   bar_vi_binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
   std::vector<VkVertexInputAttributeDescription> bar_attrs(5);
   bar_attrs[0].location = 0;
   bar_attrs[0].binding = 0;
   bar_attrs[0].format = VK_FORMAT_R32G32_SFLOAT;
-  bar_attrs[0].offset = offsetof(SizeBarVertex, position);
+  bar_attrs[0].offset = offsetof(DepthBarVertex, position);
   bar_attrs[1].location = 1;
   bar_attrs[1].binding = 0;
   bar_attrs[1].format = VK_FORMAT_R32G32_SFLOAT;
-  bar_attrs[1].offset = offsetof(SizeBarVertex, size);
+  bar_attrs[1].offset = offsetof(DepthBarVertex, size);
   bar_attrs[2].location = 2;
   bar_attrs[2].binding = 0;
   bar_attrs[2].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-  bar_attrs[2].offset = offsetof(SizeBarVertex, color);
+  bar_attrs[2].offset = offsetof(DepthBarVertex, color);
   bar_attrs[3].location = 3;
   bar_attrs[3].binding = 0;
   bar_attrs[3].format = VK_FORMAT_R32_SFLOAT;
-  bar_attrs[3].offset = offsetof(SizeBarVertex, intensity);
+  bar_attrs[3].offset = offsetof(DepthBarVertex, intensity);
   bar_attrs[4].location = 4;
   bar_attrs[4].binding = 0;
   bar_attrs[4].format = VK_FORMAT_R32_UINT;
-  bar_attrs[4].offset = offsetof(SizeBarVertex, level_type);
+  bar_attrs[4].offset = offsetof(DepthBarVertex, level_type);
 
   std::vector<VkVertexInputBindingDescription> bar_bindings_vec = {
       bar_vi_binding};

@@ -1549,12 +1549,18 @@ void VulkanDashboard::on_trade_received(const RenderEngine::TradeData &trade) {
   for (auto &component : components_) {
     component->handle_trade(trade);
   }
+  for (auto &chart : chart_components_) {
+    chart->handle_trade(trade);
+  }
 }
 
 void VulkanDashboard::on_orderbook_updated(
     const RenderEngine::OrderbookData &orderbook) {
   for (auto &component : components_) {
     component->handle_orderbook(orderbook);
+  }
+  for (auto &chart : chart_components_) {
+    chart->handle_orderbook(orderbook);
   }
 }
 
@@ -2187,16 +2193,26 @@ void VulkanDashboard::update_components(float delta_time) {
   for (auto &component : components_) {
     component->update(delta_time);
   }
+  for (auto &chart : chart_components_) {
+    chart->update(delta_time);
+  }
 }
 
 void VulkanDashboard::render_components() {
   if (vulkan_core_) {
     VkCommandBuffer cmd = vulkan_core_->get_current_command_buffer();
 
-    // Render components
+    // Render global components
     for (auto &component : components_) {
       if (component->is_visible()) {
         component->render(cmd);
+      }
+    }
+
+    // Render workspace charts
+    for (auto &chart : chart_components_) {
+      if (chart->is_visible()) {
+        chart->render(cmd);
       }
     }
   }
@@ -2210,179 +2226,206 @@ void VulkanDashboard::cleanup_x11() {
 }
 
 void VulkanDashboard::render_gui() {
-  // Main Menu Bar
+  render_main_menu_bar();
+  render_symbol_selector();
+
+  // Render Global UI Components (Fixed positions/panels)
+  for (auto &component : components_) {
+    if (component->is_visible()) {
+      component->render_gui();
+    }
+  }
+
+  // Render Chart Workspace Components
+  for (auto &chart : chart_components_) {
+    if (chart->is_visible()) {
+      chart->render_gui();
+    }
+  }
+
+  // Status overlay and specialized dialogs
+  if (show_performance_overlay_)
+    render_performance_overlay();
+  if (show_backtest_dialog_)
+    render_backtest_dialog();
+  if (show_risk_manager_)
+    render_risk_manager();
+
+  render_status_bar();
+}
+
+void VulkanDashboard::set_active_symbol(const std::string &symbol) {
+  if (active_symbol_ == symbol)
+    return;
+  active_symbol_ = symbol;
+
+  // Notify all components that want global symbol sync
+  // (In multi-chart mode, some charts might be locked to specific symbols)
+  for (auto &comp : components_) {
+    comp->handle_global_command("SET_SYMBOL", symbol);
+    comp->clear_data();
+  }
+}
+
+void VulkanDashboard::render_main_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
-      if (ImGui::MenuItem("Save Layout", "Ctrl+S")) {
+      if (ImGui::MenuItem("Save Workspace", "Ctrl+S")) {
         save_layout();
       }
-      if (ImGui::MenuItem("Load Layout", "Ctrl+L")) {
+      if (ImGui::MenuItem("Load Workspace", "Ctrl+L")) {
         load_layout();
-      }
-      if (ImGui::MenuItem("Reset Layout")) {
-        // Just reload default layout via existing preset logic
-        show_backtest_dialog_ = false;
-        show_risk_manager_ = false;
-        // Trigger Default Layout logic (simulating click)
-        ImGui::SetWindowFocus("Price Chart"); // Just one way to trigger
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit", "Alt+F4")) {
-        // Handle exit logic if needed, or just standard X11 close
+        // Exit logic handled by X11 event loop usually
       }
       ImGui::EndMenu();
     }
 
-    if (ImGui::BeginMenu("View")) {
-      if (ImGui::BeginMenu("Themes")) {
-        if (ImGui::MenuItem("Institutional Dark", nullptr,
-                            current_theme_ == AppTheme::InstitutionalDark)) {
-          apply_theme(AppTheme::InstitutionalDark);
-        }
-        if (ImGui::MenuItem("Bloomberg Terminal", nullptr,
-                            current_theme_ == AppTheme::BloombergTerminal)) {
-          apply_theme(AppTheme::BloombergTerminal);
-        }
-        if (ImGui::MenuItem("Modern Light", nullptr,
-                            current_theme_ == AppTheme::LightMode)) {
-          apply_theme(AppTheme::LightMode);
-        }
-        ImGui::EndMenu();
+    if (ImGui::BeginMenu("Markets")) {
+      if (ImGui::MenuItem("Search Market...", "Ctrl+M")) {
+        is_symbol_selector_open_ = true;
       }
       ImGui::Separator();
-      for (auto &component : components_) {
-        bool visible = component->is_visible();
-        if (ImGui::MenuItem(component->get_name().c_str(), nullptr, &visible)) {
-          component->set_visible(visible);
+      // Quick select top markets
+      const std::vector<std::string> top_markets = {"BTC/USDT", "ETH/USDT",
+                                                    "SOL/USDT"};
+      for (const auto &m : top_markets) {
+        if (ImGui::MenuItem(m.c_str())) {
+          set_active_symbol(m);
         }
       }
       ImGui::EndMenu();
     }
 
-    if (ImGui::BeginMenu("Layout")) {
-      if (ImGui::MenuItem("Default Layout")) {
-        float h_menu = 25.0f; // Approx menu height
-        float w = (float)width_;
-        float h = (float)(height_ - h_menu);
-
-        for (auto &c : components_) {
-          if (c->get_name() == "Price Chart") {
-            c->set_position({5, h_menu + 5});
-            c->set_size({w * 0.60f - 10, h * 0.50f - 10});
-            c->set_visible(true);
-          } else if (c->get_name() == "Order Book") {
-            c->set_position({w * 0.60f + 5, h_menu + 5});
-            c->set_size({w * 0.20f - 10, h * 0.30f - 10});
-            c->set_visible(true);
-          } else if (c->get_name() == "Market Heatmap") {
-            c->set_position({w * 0.60f + 5, h_menu + h * 0.30f + 5});
-            c->set_size({w * 0.20f - 10, h * 0.20f - 10});
-            c->set_visible(true);
-          } else if (c->get_name() == "System Logs") { // Used as Tape for now
-            c->set_position({w * 0.80f + 5, h_menu + 5});
-            c->set_size({w * 0.20f - 10, h * 0.50f - 10});
-            c->set_visible(true);
-          } else if (c->get_name() == "Market Data Grid") {
-            c->set_position({5, h_menu + h * 0.50f + 5});
-            c->set_size({w * 0.60f - 10, h * 0.50f - 15});
-            c->set_visible(true);
-          }
-        }
-      }
-      if (ImGui::MenuItem("Trading Focus")) {
-        for (auto &c : components_) {
-          if (c->get_name() == "Order Book") {
-            c->set_position({10, 40});
-            c->set_size({300, 670});
-            c->set_visible(true);
-          } else if (c->get_name() == "Price Chart") {
-            c->set_position({320, 40});
-            c->set_size({940, 670});
-            c->set_visible(true);
-          } else if (c->get_name() == "System Logs") {
-            c->set_visible(false);
-          }
-        }
-      }
-      if (ImGui::MenuItem("Market Analytics")) {
-        for (auto &c : components_) {
-          if (c->get_name() == "System Logs") {
-            c->set_position({10, 430});
-            c->set_size({1260, 280});
-            c->set_visible(true);
-          } else if (c->get_name() == "Price Chart") {
-            c->set_position({10, 40});
-            c->set_size({1260, 380});
-            c->set_visible(true);
-          } else if (c->get_name() == "Order Book") {
-            c->set_visible(false);
-          }
-        }
-      }
-      ImGui::EndMenu();
-    }
-
-    if (ImGui::BeginMenu("Strategy")) {
-      if (ImGui::MenuItem("Run Backtest...", nullptr, &show_backtest_dialog_)) {
-      }
-      if (ImGui::MenuItem("Live Execution", nullptr, &live_execution_active_)) {
+    if (ImGui::BeginMenu("Charts")) {
+      if (ImGui::MenuItem("New Chart Tab", "Ctrl+N")) {
+        add_chart(active_symbol_);
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Risk Manager", nullptr, &show_risk_manager_)) {
+      if (ImGui::MenuItem("Single Chart")) {
+        handle_menu_command("LAYOUT_SINGLE");
+      }
+      if (ImGui::MenuItem("2x2 Grid")) {
+        handle_menu_command("LAYOUT_2X2");
+      }
+      if (ImGui::MenuItem("Toggle Crosshair Sync", nullptr,
+                          shared_crosshair_.active)) {
+        shared_crosshair_.active = !shared_crosshair_.active;
       }
       ImGui::EndMenu();
     }
 
-    // Status Area
-    float posX = ImGui::GetWindowWidth() - 350;
-    ImGui::SameLine(posX);
-    ImGui::TextColored(live_execution_active_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                                              : ImVec4(0.8f, 0.2f, 0.2f, 1.0f),
-                       live_execution_active_ ? "LIVE" : "STOPPED");
+    if (ImGui::BeginMenu("Window")) {
+      for (auto &comp : components_) {
+        bool visible = comp->is_visible();
+        if (ImGui::MenuItem(comp->get_name().c_str(), nullptr, &visible)) {
+          comp->set_visible(visible);
+        }
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Performance Overlay", nullptr,
+                          &show_performance_overlay_)) {
+      }
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Help")) {
+      if (ImGui::MenuItem("Quick Start Guide")) {
+      }
+      if (ImGui::MenuItem("About BTQuant")) {
+      }
+      ImGui::EndMenu();
+    }
+
+    // Right-aligned area
+    float status_width = 300.0f;
+    ImGui::SameLine(ImGui::GetWindowWidth() - status_width);
+    ImGui::TextColored(
+        ImVec4(theme_.status_connected.x, theme_.status_connected.y,
+               theme_.status_connected.z, theme_.status_connected.w),
+        "CONNECTED");
     ImGui::SameLine();
-    ImGui::Text("| FPS: %.1f", current_stats_.fps);
+    ImGui::Text("| CPU: %.1f%%", current_stats_.cpu_usage_percent);
     ImGui::SameLine();
-    ImGui::Text("| Latency: %.2fms", current_stats_.data_latency_ms);
+    ImGui::Text("| %s", active_symbol_.c_str());
 
     ImGui::EndMainMenuBar();
   }
+}
 
-  // Render Component GUI Windows
-  for (auto &component : components_) {
-    if (component && component->is_visible()) {
-      // Set window padding/rounding for professional feel
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+void VulkanDashboard::render_symbol_selector() {
+  if (!is_symbol_selector_open_)
+    return;
 
-      // Use the component's internal position and size as hints for the window
-      ImGui::SetNextWindowPos(
-          ImVec2(component->get_position().x, component->get_position().y),
-          ImGuiCond_FirstUseEver);
-      ImGui::SetNextWindowSize(
-          ImVec2(component->get_size().x, component->get_size().y),
-          ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
+  if (ImGui::Begin("Market Search", &is_symbol_selector_open_,
+                   ImGuiWindowFlags_NoCollapse)) {
+    static char filter[128] = "";
+    ImGui::InputText("Search", filter, IM_ARRAYSIZE(filter));
+    ImGui::Separator();
 
-      component->render_gui();
+    // Mock symbol list for now
+    const std::vector<std::string> symbols = {
+        "BTC/USDT", "ETH/USDT",  "SOL/USDT",  "DOT/USDT",  "MATIC/USDT",
+        "ADA/USDT", "DOGE/USDT", "AVAX/USDT", "LINK/USDT", "LTC/USDT"};
 
-      ImGui::PopStyleVar(2);
+    if (ImGui::BeginChild("SymbolList")) {
+      for (const auto &s : symbols) {
+        if (strlen(filter) > 0 && s.find(filter) == std::string::npos)
+          continue;
+
+        if (ImGui::Selectable(s.c_str(), active_symbol_ == s)) {
+          set_active_symbol(s);
+          is_symbol_selector_open_ = false;
+        }
+      }
+      ImGui::EndChild();
     }
+    ImGui::End();
+  }
+}
+
+void VulkanDashboard::handle_menu_command(const std::string &cmd,
+                                          const std::string &args) {
+  if (cmd == "LAYOUT_SINGLE") {
+    // Phase 1: Simple layout logic
+    for (auto &c : chart_components_)
+      c->set_visible(false);
+    if (!chart_components_.empty()) {
+      chart_components_[0]->set_visible(true);
+      chart_components_[0]->set_position({5, 30});
+      chart_components_[0]->set_size({(float)width_ - 10, (float)height_ - 60});
+    }
+  } else if (cmd == "LAYOUT_2X2") {
+    // TODO: Implement grid logic
+  }
+}
+
+void VulkanDashboard::add_chart(const std::string &symbol,
+                                const std::string &timeframe) {
+  // Create a new professional candlestick chart
+  auto chart = std::make_unique<RealtimeChartComponent>(
+      glm::vec2(0, 0), glm::vec2(width_, height_));
+  chart->set_dashboard(this);
+  chart->enable_candlestick_mode(true);
+  chart->set_symbol(symbol);
+  chart->set_timeframe(timeframe);
+
+  if (vulkan_core_) {
+    chart->initialize_vulkan_resources(vulkan_core_.get());
   }
 
-  // Render Strategy Dialogs
-  if (show_backtest_dialog_) {
-    render_backtest_dialog();
-  }
-  if (show_risk_manager_) {
-    render_risk_manager();
-  }
+  chart_components_.push_back(std::move(chart));
 
-  // Render Performance Overlay
-  if (show_performance_overlay_) {
-    render_performance_overlay();
-  }
+  // Auto-layout based on current chart count
+  handle_menu_command("LAYOUT_SINGLE");
+}
 
-  // Render Status Bar
-  render_status_bar();
+void VulkanDashboard::apply_layout(const WorkspaceLayout &layout) {
+  current_workspace_ = layout;
+  // TODO: Rebuild components based on layout
 }
 
 void VulkanDashboard::render_status_bar() {

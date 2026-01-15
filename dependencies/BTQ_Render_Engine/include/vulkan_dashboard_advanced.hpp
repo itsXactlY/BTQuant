@@ -697,6 +697,25 @@ struct InputEvent {
   }
 };
 
+// Workspace and Layout management
+struct ChartState {
+  std::string symbol;
+  std::string timeframe;
+  bool visible = true;
+  glm::vec2 position{0, 0};
+  glm::vec2 size{0, 0};
+  std::vector<std::string> indicators;
+};
+
+struct WorkspaceLayout {
+  std::string name;
+  std::vector<ChartState> charts;
+  bool show_orderbook = true;
+  bool show_tape = true;
+  bool show_logs = true;
+  bool show_positions = true;
+};
+
 class UIComponent {
 public:
   UIComponent(const glm::vec2 &position, const glm::vec2 &size)
@@ -712,6 +731,11 @@ public:
   virtual void render_gui() {}
   virtual void handle_input(const InputEvent &event) = 0;
 
+  // New layout and command handling
+  virtual void on_resize() {}
+  virtual void handle_global_command(const std::string &cmd,
+                                     const std::string &args = "") {}
+
   // Market data event handlers
   virtual void handle_trade(const RenderEngine::TradeData &trade) {}
   virtual void handle_orderbook(const RenderEngine::OrderbookData &orderbook) {}
@@ -725,11 +749,12 @@ public:
   virtual std::string get_name() const = 0;
   void set_position(const glm::vec2 &position) {
     position_ = position;
-    dirty_frames_ = 2;
+    mark_dirty();
   }
   void set_size(const glm::vec2 &size) {
     size_ = size;
-    dirty_frames_ = 2;
+    on_resize();
+    mark_dirty();
   }
   glm::vec2 get_position() const { return position_; }
   glm::vec2 get_size() const { return size_; }
@@ -837,6 +862,8 @@ public:
   // Display options
   void enable_candlestick_mode(bool enable);
   void set_line_color(const glm::vec4 &color) { line_color_ = color; }
+  void set_symbol(const std::string &symbol) { chart_symbol_ = symbol; }
+  void set_timeframe(const std::string &tf) { current_timeframe_ = tf; }
 
   // UIComponent interface
   void update(float delta_time) override;
@@ -856,6 +883,8 @@ private:
   bool auto_scale_ = true;
   bool candlestick_mode_ = false;
   glm::vec4 line_color_{1.0f, 1.0f, 1.0f, 1.0f};
+  std::string chart_symbol_ = "BTC/USDT";
+  std::string current_timeframe_ = "1m";
 
   // Interaction and View
   float view_zoom_ = 1.0f;
@@ -983,6 +1012,7 @@ public:
     double size;
     bool is_buy;
     bool is_large_trade;
+    bool is_whale_trade;
     float delta;
   };
 
@@ -993,6 +1023,12 @@ public:
   void handle_trade(const RenderEngine::TradeData &trade) override;
   void update(float delta_time) override;
   void clear_data() override;
+  void set_large_trade_threshold(float threshold) {
+    large_trade_threshold_ = threshold;
+  }
+  void set_whale_trade_threshold(float threshold) {
+    whale_trade_threshold_ = threshold;
+  }
   void render(VkCommandBuffer cmd) override {}; // Mostly GUI based
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
@@ -1000,7 +1036,8 @@ public:
 
 private:
   std::deque<TapeEntry> entries_;
-  float large_trade_threshold_ = 1.0f;
+  float large_trade_threshold_ = 5.0f;
+  float whale_trade_threshold_ = 50.0f;
   float cumulative_delta_ = 0.0f;
 };
 
@@ -1044,12 +1081,22 @@ public:
   void render(VkCommandBuffer cmd) override {};
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
   std::vector<Position> positions_;
+  std::vector<float> equity_history_;
   float total_equity_ = 100000.0f;
-  float available_balance_ = 85000.0f;
+  float available_balance_ = 95000.0f;
+
+  // Vulkan resources for equity curve rendering
+  BufferAllocation equity_vertex_buffer_;
+  VkPipeline equity_pipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout equity_pipeline_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout equity_descriptor_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSet equity_descriptor_set_ = VK_NULL_HANDLE;
+
+  void rebuild_equity_geometry();
 };
 
 // Collapsible top bar for market overview
@@ -1083,6 +1130,14 @@ struct OrderBookTextVertex {
   glm::vec4 color;
   uint32_t glyph_id;
   float font_size;
+};
+
+struct DepthBarVertex {
+  glm::vec2 position;
+  glm::vec2 size;
+  glm::vec4 color;
+  float intensity;
+  uint32_t level_type; // 0 = bid, 1 = ask, 2 = spread
 };
 
 struct OrderBookUniformBuffer {
@@ -1129,10 +1184,14 @@ public:
 private:
   OrderBookData current_data_;
   std::string symbol_;
-  size_t max_levels_ = 10;
+  size_t max_levels_ = 20;
   int price_precision_ = 2;
   int size_precision_ = 4;
   bool show_size_bars_ = true;
+
+  // Visual Styling
+  glm::vec4 bid_bar_color_ = {0.0f, 0.6f, 0.4f, 0.4f};
+  glm::vec4 ask_bar_color_ = {0.8f, 0.2f, 0.2f, 0.4f};
 
   // Rendering resources
   BufferAllocation text_vertex_buffer_;
@@ -1285,6 +1344,10 @@ public:
 private:
   float quantity_ = 0.1f;
   float price_ = 0.0f;
+  float stop_price_ = 0.0f;
+  float trailing_pct_ = 1.0f;
+  float iceberg_display_qty_ = 0.1f;
+  int twap_duration_mins_ = 60;
   std::string order_type_ = "Limit";
 };
 
@@ -1333,14 +1396,16 @@ public:
 
   // Symbol management
   const std::string &get_active_symbol() const { return active_symbol_; }
-  void set_active_symbol(const std::string &symbol) {
-    if (active_symbol_ == symbol)
-      return;
-    active_symbol_ = symbol;
-    for (auto &comp : components_) {
-      comp->clear_data();
-    }
-  }
+  void set_active_symbol(const std::string &symbol);
+
+  // Workspace & Menu management
+  void render_main_menu_bar();
+  void render_symbol_selector();
+  void handle_menu_command(const std::string &cmd,
+                           const std::string &args = "");
+  void apply_layout(const WorkspaceLayout &layout);
+  void add_chart(const std::string &symbol,
+                 const std::string &timeframe = "1m");
 
   // Performance monitoring
   struct PerformanceStats {
@@ -1378,6 +1443,9 @@ private:
 
   // UI components
   std::vector<std::unique_ptr<UIComponent>> components_;
+  std::vector<std::unique_ptr<UIComponent>> chart_components_;
+  WorkspaceLayout current_workspace_;
+  bool is_symbol_selector_open_ = false;
 
   // Market data integration
   std::unique_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;

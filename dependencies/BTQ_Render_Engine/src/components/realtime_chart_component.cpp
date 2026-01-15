@@ -281,36 +281,131 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
 }
 
 void RealtimeChartComponent::render_gui() {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y),
                           ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowCollapsed(minimized_, ImGuiCond_Appearing);
 
-  if (!ImGui::Begin("Price Chart", &visible_)) {
-    minimized_ = true;
+  if (!ImGui::Begin("Price Chart", &visible_, ImGuiWindowFlags_NoScrollbar)) {
     ImGui::End();
+    ImGui::PopStyleVar();
     return;
   }
-  minimized_ = false;
 
-  if (auto_scale_) {
-    ImGui::Text("Auto-scaling enabled (%.2f - %.2f)", min_y_, max_y_);
+  ImDrawList *draw_list = ImGui::GetWindowDrawList();
+  ImVec2 pos = ImGui::GetWindowPos();
+  ImVec2 size = ImGui::GetWindowSize();
+
+  // 0. In-Chart Toolbar (Top)
+  ImGui::SetCursorPos(ImVec2(10, 5));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+  ImGui::Text("%s", chart_symbol_.c_str());
+  ImGui::PopStyleColor();
+
+  ImGui::SameLine(100);
+  const char *timeframes[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
+  if (ImGui::BeginCombo("##Timeframe", current_timeframe_.c_str(),
+                        ImGuiComboFlags_None)) {
+    for (int n = 0; n < IM_ARRAYSIZE(timeframes); n++) {
+      bool is_selected = (current_timeframe_ == timeframes[n]);
+      if (ImGui::Selectable(timeframes[n], is_selected)) {
+        current_timeframe_ = timeframes[n];
+        mark_dirty();
+      }
+      if (is_selected)
+        ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
   }
 
-  // Convert deque to vector for ImGui
-  std::vector<float> values;
-  for (const auto &dp : data_points_) {
-    values.push_back(dp.value);
+  ImGui::SameLine(size.x - 220);
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.6f, 0.2f, 0.8f));
+  if (ImGui::Button("BUY", ImVec2(60, 22))) {
+    // TODO: Open quick order entry
+  }
+  ImGui::PopStyleColor();
+
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
+  if (ImGui::Button("SELL", ImVec2(60, 22))) {
+    // TODO: Open quick order entry
+  }
+  ImGui::PopStyleColor();
+
+  ImGui::SameLine();
+  if (ImGui::Button("INDICATORS")) {
+    // TODO: Open indicator settings
   }
 
-  if (!values.empty()) {
-    ImGui::PlotLines("##PricePlot", values.data(), (int)values.size(), 0,
-                     nullptr, min_y_, max_y_, ImVec2(0, size_.y - 60));
-  } else {
-    ImGui::Text("No data points yet...");
+  // 1. Draw Grid Lines
+  float grid_color = ImGui::GetColorU32(ImGuiCol_Border, 0.3f);
+  int horizontal_lines = 5;
+  for (int i = 0; i <= horizontal_lines; ++i) {
+    float y = pos.y + (size.y * 0.85f) * (float)i / (float)horizontal_lines;
+    draw_list->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + size.x - 60, y),
+                       grid_color);
+  }
+
+  // 2. Y-Axis Price Labels (Right-aligned)
+  for (int i = 0; i <= horizontal_lines; ++i) {
+    float price =
+        max_y_ - (max_y_ - min_y_) * (float)i / (float)horizontal_lines;
+    char label[32];
+    snprintf(label, sizeof(label), "%.2f", price);
+    float y = pos.y + (size.y * 0.85f) * (float)i / (float)horizontal_lines;
+    draw_list->AddText(ImVec2(pos.x + size.x - 55, y - 7),
+                       ImGui::GetColorU32(ImGuiCol_Text), label);
+  }
+
+  // 3. Current Price Tag
+  if (!candles_.empty()) {
+    float last_price = candles_.back().close;
+    float rel_y = (last_price - min_y_) / (max_y_ - min_y_);
+    float y = pos.y + (size.y * 0.85f) * (1.0f - rel_y);
+
+    draw_list->AddRectFilled(
+        ImVec2(pos.x + size.x - 60, y - 10), ImVec2(pos.x + size.x, y + 10),
+        ImGui::GetColorU32(ImVec4(0.2f, 0.6f, 1.0f, 0.8f)));
+    char price_str[32];
+    snprintf(price_str, sizeof(price_str), "%.2f", last_price);
+    draw_list->AddText(ImVec2(pos.x + size.x - 55, y - 7),
+                       ImGui::GetColorU32(ImVec4(1, 1, 1, 1)), price_str);
+  }
+
+  // 4. Volume Sub-panel Label/Marker
+  draw_list->AddLine(ImVec2(pos.x, pos.y + size.y * 0.85f),
+                     ImVec2(pos.x + size.x - 60, pos.y + size.y * 0.85f),
+                     ImGui::GetColorU32(ImVec4(0.5f, 0.5f, 0.5f, 1.0f)));
+  // 5. Candle Tooltip on Hover
+  if (ImGui::IsWindowHovered()) {
+    const auto &cs = dashboard_->get_crosshair_state();
+    if (cs.active) {
+      // Find closest candle to cs.timestamp_us
+      const Candle *target = nullptr;
+      for (const auto &c : candles_) {
+        if (std::abs((int64_t)c.timestamp_us - (int64_t)cs.timestamp_us) <
+            2500000) {
+          target = &c;
+          break;
+        }
+      }
+
+      if (target) {
+        ImGui::BeginTooltip();
+        ImGui::Text("Time: %s", "00:00:00"); // TODO: Format timestamp
+        ImGui::Separator();
+        ImGui::Text("Open:  %.2f", target->open);
+        ImGui::Text("High:  %.2f", target->high);
+        ImGui::Text("Low:   %.2f", target->low);
+        ImGui::Text("Close: %.2f", target->close);
+        ImGui::Text("Vol:   %.2f", target->volume);
+        ImGui::EndTooltip();
+      }
+    }
   }
 
   ImGui::End();
+  ImGui::PopStyleVar();
 }
 
 void RealtimeChartComponent::handle_input(const InputEvent &event) {
@@ -326,8 +421,8 @@ void RealtimeChartComponent::handle_input(const InputEvent &event) {
       float rel_y = 1.0f - (mouse_pos.y - position_.y) / size_.y;
 
       if (!candles_.empty()) {
-        double t_min = (double)candles_.front().timestamp_us;
-        double t_max = (double)candles_.back().timestamp_us + 5000000.0;
+        double t_min = candles_.front().timestamp_us;
+        double t_max = candles_.back().timestamp_us;
         double ts = t_min + rel_x * (t_max - t_min);
         double p = min_y_ + rel_y * (max_y_ - min_y_);
 
@@ -552,14 +647,15 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
     if (body_bottom - body_top < 1.0f)
       body_bottom = body_top + 1.0f;
 
-    // Body (Type 0)
-    // For bullish candles, we can use a slightly transparent body or hollow
-    // effect
+    // Body (Type 0) - Enhanced with border and professional fill
     glm::vec4 body_fill_color = color;
     if (is_bullish) {
-      body_fill_color.a = 0.3f; // Hollow-ish look
+      body_fill_color.a = 0.4f; // More opaque for bullish
+    } else {
+      body_fill_color.a = 0.8f; // More solid for bearish
     }
 
+    // 1. Candlestick Body Quad
     vertices.push_back(
         {{x - bar_width * 0.5f, body_top}, {0, 0}, body_fill_color, 1.0f, 0});
     vertices.push_back(
@@ -582,7 +678,18 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
                         1.0f,
                         0});
 
-    // Wick (Type 1) - Use bright border color for wicks
+    // 2. Candlestick Bottom Border (optional for crispness)
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {0, 1}, border_color, 0.0f, 1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_bottom}, {1, 1}, border_color, 0.0f, 1});
+    vertices.push_back({{x + bar_width * 0.5f, body_bottom + 1.0f},
+                        {1, 1},
+                        border_color,
+                        0.0f,
+                        1});
+
+    // 3. Wicks (Type 1) - One pixel wide wicks with bright color
     vertices.push_back({{x - 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
     vertices.push_back({{x + 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
     vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
@@ -590,35 +697,27 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
     vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
     vertices.push_back({{x - 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
 
-    // Volume (Type 2) - Use gradient-like alpha
-    float vol_h = (volume / max_volume) * (size_.y * 0.20f);
-    glm::vec4 vol_color_top = color;
-    vol_color_top.a = 0.6f;
-    glm::vec4 vol_color_bottom = color;
-    vol_color_bottom.a = 0.1f;
+    // 4. Volume (Type 2) - Professional separate panel look at bottom
+    // Volume panel takes bottom 15% height
+    float volume_panel_h = size_.y * 0.15f;
+    float vol_h = (volume / max_volume) *
+                  (volume_panel_h * 0.8f); // 80% usage for head-room
+    glm::vec4 vol_color = color;
+    vol_color.a = 0.5f;
 
-    float vol_base = position_.y + size_.y;
-    vertices.push_back({{x - bar_width * 0.5f, vol_base - vol_h},
-                        {0, 0},
-                        vol_color_top,
-                        0.0f,
-                        2});
-    vertices.push_back({{x + bar_width * 0.5f, vol_base - vol_h},
-                        {1, 0},
-                        vol_color_top,
-                        0.0f,
-                        2});
+    float vol_base = position_.y + size_.y - 5.0f; // 5px padding from bottom
     vertices.push_back(
-        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color_bottom, 0.0f, 2});
-    vertices.push_back({{x - bar_width * 0.5f, vol_base - vol_h},
-                        {0, 0},
-                        vol_color_top,
-                        0.0f,
-                        2});
+        {{x - bar_width * 0.5f, vol_base - vol_h}, {0, 0}, vol_color, 0.0f, 2});
     vertices.push_back(
-        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color_bottom, 0.0f, 2});
+        {{x + bar_width * 0.5f, vol_base - vol_h}, {1, 0}, vol_color, 0.0f, 2});
     vertices.push_back(
-        {{x - bar_width * 0.5f, vol_base}, {0, 1}, vol_color_bottom, 0.0f, 2});
+        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color * 0.5f, 0.0f, 2});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, vol_base - vol_h}, {0, 0}, vol_color, 0.0f, 2});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, vol_base}, {1, 1}, vol_color * 0.5f, 0.0f, 2});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, vol_base}, {0, 1}, vol_color * 0.5f, 0.0f, 2});
   }
 
   size_t buffer_size = vertices.size() * sizeof(CandlestickVertex);
@@ -732,10 +831,11 @@ void RealtimeChartComponent::rebuild_indicator_geometry() {
   float t_range = t_max - t_min;
   float candle_width = (size_.x / (float)candles_.size()) / (float)view_zoom_;
 
-  // Split vertical space: 70% main chart, 15% RSI, 15% MACD
-  float main_height = size_.y * 0.7f;
-  float rsi_height = size_.y * 0.15f;
-  float macd_height = size_.y * 0.15f;
+  // Split vertical space: 60% main chart, 12.5% RSI, 12.5% MACD, 15%
+  // Volume/Bottom
+  float main_height = size_.y * 0.60f;
+  float rsi_height = size_.y * 0.125f;
+  float macd_height = size_.y * 0.125f;
 
   float rsi_y_base = position_.y + main_height;
   float macd_y_base = position_.y + main_height + rsi_height;

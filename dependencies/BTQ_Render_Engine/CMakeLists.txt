@@ -128,24 +128,24 @@ set(EXTERNAL_SOURCES
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${EXTERNAL_SOURCES})
 
 # Minimal Vulkan demo for troubleshooting
-add_executable(hotspine_vulkan_demo src/hotspine_vulkan_demo.cpp ${EXTERNAL_SOURCES})
-target_include_directories(hotspine_vulkan_demo PRIVATE
-   ${Vulkan_INCLUDE_DIRS}
-   ${X11_INCLUDE_DIR}
-   ${CMAKE_CURRENT_SOURCE_DIR}/include
-   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
-   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
-   ${glm_SOURCE_DIR}
-)
-target_link_libraries(hotspine_vulkan_demo PRIVATE
-   Vulkan::Vulkan
-   ${X11_LIBRARIES}
-   pthread
-   rt
-)
-set_target_properties(hotspine_vulkan_demo PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
+# add_executable(hotspine_vulkan_demo src/hotspine_vulkan_demo.cpp ${EXTERNAL_SOURCES})
+# target_include_directories(hotspine_vulkan_demo PRIVATE
+#    ${Vulkan_INCLUDE_DIRS}
+#    ${X11_INCLUDE_DIR}
+#    ${CMAKE_CURRENT_SOURCE_DIR}/include
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+#    ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+#    ${glm_SOURCE_DIR}
+# )
+# target_link_libraries(hotspine_vulkan_demo PRIVATE
+#    Vulkan::Vulkan
+#    ${X11_LIBRARIES}
+#    pthread
+#    rt
+# )
+# set_target_properties(hotspine_vulkan_demo PROPERTIES
+#   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+# )
 
 # Integration test executable
 # add_executable(dashboard_test ${TEST_SOURCES} ${EXTERNAL_SOURCES})
@@ -384,6 +384,62 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 set_target_properties(dashboard_advanced PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Multi-symbol routing verification test
+add_executable(multi_symbol_routing_test
+    tests/multi_symbol_routing_test.cpp
+    src/vulkan_dashboard_advanced.cpp
+    src/components/data_grid_component.cpp
+    src/components/realtime_chart_component.cpp
+    src/components/heatmap_component.cpp
+    src/components/orderbook_component.cpp
+    src/components/log_display_component.cpp
+    src/components/depth_chart_component.cpp
+    src/components/trading_components.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/data/ui_data_manager.cpp
+    src/data/hotspine_data_bridge.cpp
+    src/data/market_data_processor.cpp
+    src/data/symbol_manager.cpp
+    src/visualization/data_visualization_engine.cpp
+    src/monitoring/performance_monitor.cpp
+    src/config/dashboard_config.cpp
+    src/interaction/interaction_manager.cpp
+    src/ui/advanced_ui_features.cpp
+    src/optimization/performance_optimizer.cpp
+    src/analytics/trading_analytics.cpp
+    src/trading/trading_interface.cpp
+    src/system/system_optimizer.cpp
+    ${EXTERNAL_SOURCES}
+)
+
+target_include_directories(multi_symbol_routing_test PRIVATE
+   ${Vulkan_INCLUDE_DIRS}
+   ${X11_INCLUDE_DIR}
+   ${CMAKE_CURRENT_SOURCE_DIR}/include
+   ${CMAKE_CURRENT_SOURCE_DIR}/../ccapi/example/src
+   ${CMAKE_CURRENT_SOURCE_DIR}/../../tests/new/include
+   ${glm_SOURCE_DIR}
+   ${concurrentqueue_SOURCE_DIR}
+   ${VulkanMemoryAllocator_SOURCE_DIR}/include
+   ${imgui_SOURCE_DIR}
+   ${imgui_SOURCE_DIR}/backends
+   ${json_SOURCE_DIR}/include
+)
+
+target_link_libraries(multi_symbol_routing_test PRIVATE
+   Vulkan::Vulkan
+   ${X11_LIBRARIES}
+   -lXi
+   imgui
+   nlohmann_json::nlohmann_json
+   pthread
+   rt
+)
+
+set_target_properties(multi_symbol_routing_test PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 

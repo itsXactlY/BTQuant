@@ -64,26 +64,52 @@ OrderBookComponent::~OrderBookComponent() {
 }
 
 void OrderBookComponent::update_orderbook(const OrderBookData &data) {
-  current_data_ = data;
+  float current_time = 0.0f;
+  // Use steady clock for reliable animation timing
+  current_time = static_cast<float>(
+                     std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::steady_clock::now().time_since_epoch())
+                         .count()) /
+                 1000.0f;
 
-  // Limit to max levels
-  if (current_data_.bids.size() > max_levels_) {
+  // Detect changes for animation
+  auto update_levs = [&](const std::vector<OrderBookLevel> &old_levels,
+                         const std::vector<OrderBookLevel> &new_levels) {
+    std::vector<OrderBookLevel> result;
+    for (const auto &nl : new_levels) {
+      OrderBookLevel level = nl;
+      level.last_update_ts = 0.0f;
+      for (const auto &ol : old_levels) {
+        if (std::abs(ol.price - nl.price) < 1e-9) {
+          if (std::abs(ol.size - nl.size) > 1e-9) {
+            level.last_update_ts = current_time;
+          } else {
+            level.last_update_ts = ol.last_update_ts;
+          }
+          break;
+        }
+      }
+      result.push_back(level);
+    }
+    return result;
+  };
+
+  current_data_.bids = update_levs(current_data_.bids, data.bids);
+  current_data_.asks = update_levs(current_data_.asks, data.asks);
+  current_data_.spread = data.spread;
+  current_data_.mid_price = data.mid_price;
+  current_data_.timestamp = data.timestamp;
+
+  // Limit and Sort
+  if (current_data_.bids.size() > max_levels_)
     current_data_.bids.resize(max_levels_);
-  }
-  if (current_data_.asks.size() > max_levels_) {
+  if (current_data_.asks.size() > max_levels_)
     current_data_.asks.resize(max_levels_);
-  }
 
-  // Sort bids (highest first) and asks (lowest first)
   std::sort(current_data_.bids.begin(), current_data_.bids.end(),
-            [](const OrderBookLevel &a, const OrderBookLevel &b) {
-              return a.price > b.price;
-            });
-
+            [](const auto &a, const auto &b) { return a.price > b.price; });
   std::sort(current_data_.asks.begin(), current_data_.asks.end(),
-            [](const OrderBookLevel &a, const OrderBookLevel &b) {
-              return a.price < b.price;
-            });
+            [](const auto &a, const auto &b) { return a.price < b.price; });
 
   mark_dirty();
 }
@@ -363,53 +389,88 @@ void OrderBookComponent::rebuild_geometry() {
     const auto &level = current_data_.asks[i];
     float bar_w = (static_cast<float>(level.size / max_size)) * col_w * 0.95f;
 
-    // Intensity mapping for liquidity heatmap
+    // Intensity mapping and Animation flash
     float intensity =
-        std::min(1.0f, static_cast<float>(level.size / max_size) * 2.0f);
+        std::min(1.0f, static_cast<float>(level.size / max_size) * 1.5f);
     glm::vec4 bar_color = ask_bar_color_;
-    bar_color.a *= (0.3f + 0.7f * intensity);
 
-    // Bar on the right
+    // Process animation flash
+    float flash = 0.0f;
+    float current_time =
+        static_cast<float>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count()) /
+        1000.0f;
+    if (level.last_update_ts > 0 &&
+        current_time - level.last_update_ts < 0.5f) {
+      flash = 1.0f - (current_time - level.last_update_ts) / 0.5f;
+    }
+    bar_color.a = (0.15f + 0.65f * intensity) + flash * 0.3f;
+    if (flash > 0)
+      bar_color += glm::vec4(flash * 0.2f);
+
+    // Render bar background (behind the Size column)
+    float bar_start_x = position_.x + size_.x - col_w;
     bar_vertices.push_back(
-        {{mid_x + col_w * 0.5f, current_y}, {0, 0}, bar_color, intensity, 1});
-    bar_vertices.push_back({{mid_x + col_w * 0.5f + bar_w, current_y},
-                            {1, 0},
+        {{bar_start_x, current_y}, {0, 0}, bar_color, intensity, 1});
+    bar_vertices.push_back(
+        {{bar_start_x + bar_w, current_y}, {1, 0}, bar_color, intensity, 1});
+    bar_vertices.push_back({{bar_start_x + bar_w, current_y + row_height - 1},
+                            {1, 1},
                             bar_color,
                             intensity,
                             1});
     bar_vertices.push_back(
-        {{mid_x + col_w * 0.5f + bar_w, current_y + row_height - 1},
-         {1, 1},
-         bar_color,
-         intensity,
-         1});
-    bar_vertices.push_back(
-        {{mid_x + col_w * 0.5f, current_y}, {0, 0}, bar_color, intensity, 1});
-    bar_vertices.push_back(
-        {{mid_x + col_w * 0.5f + bar_w, current_y + row_height - 1},
-         {1, 1},
-         bar_color,
-         intensity,
-         1});
-    bar_vertices.push_back({{mid_x + col_w * 0.5f, current_y + row_height - 1},
+        {{bar_start_x, current_y}, {0, 0}, bar_color, intensity, 1});
+    bar_vertices.push_back({{bar_start_x + bar_w, current_y + row_height - 1},
+                            {1, 1},
+                            bar_color,
+                            intensity,
+                            1});
+    bar_vertices.push_back({{bar_start_x, current_y + row_height - 1},
                             {0, 1},
                             bar_color,
                             intensity,
                             1});
 
-    add_centered_text(text_vertices, format_price(level.price), current_y + 2,
-                      theme_.price_down, font_size);
+    add_text_at_position(text_vertices, format_price(level.price),
+                         mid_x - col_w * 0.4f, current_y + 2, theme_.price_down,
+                         font_size);
     add_text_at_position(text_vertices, format_size(level.size),
-                         position_.x + size_.x - 45, current_y + 2,
+                         position_.x + size_.x - col_w + 10, current_y + 2,
                          theme_.text_primary, font_size);
     current_y += row_height;
   }
 
-  // 3. Spread/Mid Row
+  // 3. Spread/Mid Row (Enhanced Highlighting)
   if (current_data_.spread >= 0) {
-    std::string spread_str = "SPREAD: " + format_price(current_data_.spread);
-    add_centered_text(text_vertices, spread_str, current_y + 2,
-                      theme_.accent_secondary, font_size * 0.9f);
+    // Spread background
+    glm::vec4 spread_bg = {0.1f, 0.1f, 0.15f, 0.8f};
+    bar_vertices.push_back({{position_.x, current_y}, {0, 0}, spread_bg, 0, 2});
+    bar_vertices.push_back(
+        {{position_.x + size_.x, current_y}, {1, 0}, spread_bg, 0, 2});
+    bar_vertices.push_back({{position_.x + size_.x, current_y + row_height},
+                            {1, 1},
+                            spread_bg,
+                            0,
+                            2});
+    bar_vertices.push_back({{position_.x, current_y}, {0, 0}, spread_bg, 0, 2});
+    bar_vertices.push_back({{position_.x + size_.x, current_y + row_height},
+                            {1, 1},
+                            spread_bg,
+                            0,
+                            2});
+    bar_vertices.push_back(
+        {{position_.x, current_y + row_height}, {0, 1}, spread_bg, 0, 2});
+
+    add_centered_text(text_vertices,
+                      "MID: " + format_price(current_data_.mid_price),
+                      current_y + 2, theme_.accent_secondary, font_size);
+    add_text_at_position(text_vertices,
+                         "SPR: " + format_price(current_data_.spread),
+                         position_.x + size_.x - 65, current_y + 2,
+                         theme_.text_muted, font_size * 0.8f);
     current_y += row_height;
   }
 
@@ -417,42 +478,58 @@ void OrderBookComponent::rebuild_geometry() {
   for (const auto &level : current_data_.bids) {
     float bar_w = (static_cast<float>(level.size / max_size)) * col_w * 0.95f;
     float intensity =
-        std::min(1.0f, static_cast<float>(level.size / max_size) * 2.0f);
+        std::min(1.0f, static_cast<float>(level.size / max_size) * 1.5f);
     glm::vec4 bar_color = bid_bar_color_;
-    bar_color.a *= (0.3f + 0.7f * intensity);
 
-    // Bar on the left
-    bar_vertices.push_back({{mid_x - col_w * 0.5f - bar_w, current_y},
+    float flash = 0.0f;
+    float current_time =
+        static_cast<float>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count()) /
+        1000.0f;
+    if (level.last_update_ts > 0 &&
+        current_time - level.last_update_ts < 0.5f) {
+      flash = 1.0f - (current_time - level.last_update_ts) / 0.5f;
+    }
+    bar_color.a = (0.15f + 0.65f * intensity) + flash * 0.3f;
+    if (flash > 0)
+      bar_color += glm::vec4(flash * 0.2f);
+
+    // Bar on the left Size column
+    float bar_start_x = position_.x;
+    bar_vertices.push_back({{bar_start_x + col_w - bar_w, current_y},
                             {0, 0},
                             bar_color,
                             intensity,
                             0});
     bar_vertices.push_back(
-        {{mid_x - col_w * 0.5f, current_y}, {1, 0}, bar_color, intensity, 0});
-    bar_vertices.push_back({{mid_x - col_w * 0.5f, current_y + row_height - 1},
+        {{bar_start_x + col_w, current_y}, {1, 0}, bar_color, intensity, 0});
+    bar_vertices.push_back({{bar_start_x + col_w, current_y + row_height - 1},
                             {1, 1},
                             bar_color,
                             intensity,
                             0});
-    bar_vertices.push_back({{mid_x - col_w * 0.5f - bar_w, current_y},
+    bar_vertices.push_back({{bar_start_x + col_w - bar_w, current_y},
                             {0, 0},
                             bar_color,
                             intensity,
                             0});
-    bar_vertices.push_back({{mid_x - col_w * 0.5f, current_y + row_height - 1},
+    bar_vertices.push_back({{bar_start_x + col_w, current_y + row_height - 1},
                             {1, 1},
                             bar_color,
                             intensity,
                             0});
     bar_vertices.push_back(
-        {{mid_x - col_w * 0.5f - bar_w, current_y + row_height - 1},
+        {{bar_start_x + col_w - bar_w, current_y + row_height - 1},
          {0, 1},
          bar_color,
          intensity,
          0});
 
-    add_centered_text(text_vertices, format_price(level.price), current_y + 2,
-                      theme_.price_up, font_size);
+    add_text_at_position(text_vertices, format_price(level.price),
+                         mid_x - col_w * 0.4f, current_y + 2, theme_.price_up,
+                         font_size);
     add_text_at_position(text_vertices, format_size(level.size),
                          position_.x + 10, current_y + 2, theme_.text_primary,
                          font_size);
@@ -876,6 +953,8 @@ void OrderBookComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
   mark_dirty();
 }
 void OrderBookComponent::handle_trade(const RenderEngine::TradeData &trade) {
+  if (trade.symbol != target_symbol_)
+    return;
   if (dashboard_ && trade.symbol != dashboard_->get_active_symbol())
     return;
   // Order book might highlight levels where trades occurred
@@ -883,7 +962,7 @@ void OrderBookComponent::handle_trade(const RenderEngine::TradeData &trade) {
 
 void OrderBookComponent::handle_orderbook(
     const RenderEngine::OrderbookData &orderbook) {
-  if (dashboard_ && orderbook.symbol != dashboard_->get_active_symbol())
+  if (orderbook.symbol != target_symbol_)
     return;
   OrderBookData ui_data;
   ui_data.timestamp = orderbook.timestamp_us;

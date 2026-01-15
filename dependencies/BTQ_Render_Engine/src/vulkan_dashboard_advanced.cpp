@@ -79,6 +79,12 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
                        VkMemoryPropertyFlags properties, VkDeviceSize pool_size)
     : device_(device), pool_size_(pool_size), used_size_(0) {
 
+  // Phase 7 Optimization: Ensure Host Coherent memory for mapped buffers to
+  // avoid manual flushing
+  if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+    properties |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  }
+
   VkBufferCreateInfo buffer_info{};
   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   buffer_info.size = pool_size;
@@ -1360,9 +1366,119 @@ void VulkanDashboard::initialize() {
   }
 
   // Start real-time data data bridge
-  if (hotspine_bridge_) {
-    hotspine_bridge_->start();
-    fprintf(stderr, "[VulkanDashboard] HotSpine bridge started\n");
+  hotspine_bridge_->start();
+  fprintf(stderr, "[VulkanDashboard] HotSpine bridge started\n");
+}
+
+setup_hotkeys();
+fprintf(stderr, "[VulkanDashboard] Hotkeys configured\n");
+}
+
+void VulkanDashboard::setup_hotkeys() {
+  hotkey_manager_.clear();
+
+  // Layout Controls (Ctrl)
+  hotkey_manager_.add_binding(XK_s, ControlMask, HotkeyAction::SAVE_LAYOUT);
+  hotkey_manager_.add_binding(XK_l, ControlMask, HotkeyAction::LOAD_LAYOUT);
+  hotkey_manager_.add_binding(XK_l, ControlMask, HotkeyAction::LOAD_LAYOUT);
+  hotkey_manager_.add_binding(XK_r, ControlMask, HotkeyAction::RESET_LAYOUT);
+  hotkey_manager_.add_binding(XK_p, ControlMask,
+                              HotkeyAction::OPEN_COMMAND_PALETTE);
+
+  // View Controls
+  hotkey_manager_.add_binding(XK_F11, 0, HotkeyAction::TOGGLE_FULLSCREEN);
+  hotkey_manager_.add_binding(XK_F3, 0,
+                              HotkeyAction::TOGGLE_PERFORMANCE_OVERLAY);
+  hotkey_manager_.add_binding(XK_space, 0, HotkeyAction::TOGGLE_DATA_FEED);
+
+  // Timeframe Controls
+  hotkey_manager_.add_binding(XK_1, 0, HotkeyAction::TIMEFRAME_1M);
+  hotkey_manager_.add_binding(XK_3, 0, HotkeyAction::TIMEFRAME_3M);
+  hotkey_manager_.add_binding(XK_5, 0, HotkeyAction::TIMEFRAME_5M);
+  hotkey_manager_.add_binding(XK_0, 0, HotkeyAction::TIMEFRAME_15M);
+
+  // Tab Controls (Alt + 1-9)
+  hotkey_manager_.add_binding(XK_1, Mod1Mask, HotkeyAction::SWITCH_TAB_1);
+  hotkey_manager_.add_binding(XK_2, Mod1Mask, HotkeyAction::SWITCH_TAB_2);
+  hotkey_manager_.add_binding(XK_3, Mod1Mask, HotkeyAction::SWITCH_TAB_3);
+  hotkey_manager_.add_binding(XK_4, Mod1Mask, HotkeyAction::SWITCH_TAB_4);
+  hotkey_manager_.add_binding(XK_5, Mod1Mask, HotkeyAction::SWITCH_TAB_5);
+  hotkey_manager_.add_binding(XK_6, Mod1Mask, HotkeyAction::SWITCH_TAB_6);
+  hotkey_manager_.add_binding(XK_7, Mod1Mask, HotkeyAction::SWITCH_TAB_7);
+  hotkey_manager_.add_binding(XK_8, Mod1Mask, HotkeyAction::SWITCH_TAB_8);
+  hotkey_manager_.add_binding(XK_9, Mod1Mask, HotkeyAction::SWITCH_TAB_9);
+}
+
+void VulkanDashboard::handle_hotkey(HotkeyAction action) {
+  switch (action) {
+  case HotkeyAction::SAVE_LAYOUT:
+    save_layout("config/last_layout.json");
+    fprintf(stderr, "[VulkanDashboard] Layout saved via hotkey\n");
+    break;
+  case HotkeyAction::LOAD_LAYOUT:
+    load_layout("config/last_layout.json");
+    fprintf(stderr, "[VulkanDashboard] Layout loaded\n");
+    break;
+  case HotkeyAction::RESET_LAYOUT:
+    load_layout("config/default_layout.json");
+    fprintf(stderr, "[VulkanDashboard] Reset to default layout\n");
+    break;
+  case HotkeyAction::TOGGLE_FULLSCREEN:
+    fprintf(stderr, "[VulkanDashboard] Fullscreen toggle placeholder\n");
+    break;
+  case HotkeyAction::TOGGLE_PERFORMANCE_OVERLAY:
+    show_performance_overlay_ = !show_performance_overlay_;
+    break;
+  case HotkeyAction::OPEN_COMMAND_PALETTE:
+    show_command_palette_ = !show_command_palette_;
+    memset(command_buffer_, 0, sizeof(command_buffer_));
+    break;
+  case HotkeyAction::TOGGLE_DATA_FEED:
+    live_execution_active_ = !live_execution_active_;
+    fprintf(stderr, "[VulkanDashboard] Data feed %s\n",
+            live_execution_active_ ? "resumed" : "paused");
+    break;
+  case HotkeyAction::TIMEFRAME_1M:
+    handle_menu_command("TIMEFRAME_1M");
+    break;
+  case HotkeyAction::TIMEFRAME_3M:
+    handle_menu_command("TIMEFRAME_3M");
+    break;
+  case HotkeyAction::TIMEFRAME_5M:
+    handle_menu_command("TIMEFRAME_5M");
+    break;
+  case HotkeyAction::TIMEFRAME_15M:
+    handle_menu_command("TIMEFRAME_15M");
+    break;
+  case HotkeyAction::SWITCH_TAB_1:
+    active_chart_index_ = 0;
+    break;
+  case HotkeyAction::SWITCH_TAB_2:
+    active_chart_index_ = 1;
+    break;
+  case HotkeyAction::SWITCH_TAB_3:
+    active_chart_index_ = 2;
+    break;
+  case HotkeyAction::SWITCH_TAB_4:
+    active_chart_index_ = 3;
+    break;
+  case HotkeyAction::SWITCH_TAB_5:
+    active_chart_index_ = 4;
+    break;
+  case HotkeyAction::SWITCH_TAB_6:
+    active_chart_index_ = 5;
+    break;
+  case HotkeyAction::SWITCH_TAB_7:
+    active_chart_index_ = 6;
+    break;
+  case HotkeyAction::SWITCH_TAB_8:
+    active_chart_index_ = 7;
+    break;
+  case HotkeyAction::SWITCH_TAB_9:
+    active_chart_index_ = 8;
+    break;
+  default:
+    break;
   }
 }
 
@@ -1370,22 +1486,31 @@ void VulkanDashboard::main_loop() {
   fprintf(stderr, "[VulkanDashboard] Starting main loop\n");
   bool running = true;
   while (running) {
-    fprintf(stderr, "[VulkanDashboard] Loop - Handle X11 events\n");
-    fflush(stderr);
+    auto frame_start = std::chrono::high_resolution_clock::now();
+
+    // 1. Event Processing
+    auto event_start = std::chrono::high_resolution_clock::now();
     if (handle_x11_events()) {
-      running = false; // Window close requested
+      running = false;
+    }
+    auto event_end = std::chrono::high_resolution_clock::now();
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex_);
+      current_stats_.event_processing_ms =
+          std::chrono::duration<float, std::milli>(event_end - event_start)
+              .count();
     }
 
-    // Process real-time data updates
+    // 2. Data Updates
+    auto data_start = std::chrono::high_resolution_clock::now();
+    uint64_t trades_this_frame = 0;
+    uint64_t obs_this_frame = 0;
     if (hotspine_bridge_ && market_data_processor_) {
-      fprintf(stderr, "[VulkanDashboard] Loop - Get updates from bridge\n");
-      fflush(stderr);
       auto updates = hotspine_bridge_->getLatestUpdates();
       for (const auto &update : updates) {
         if (update.type == RenderEngine::MarketDataType::TRADE) {
+          trades_this_frame++;
           market_data_processor_->processTradeUpdate(update);
-
-          // Notify dashboard for UI updates
           RenderEngine::TradeData trade;
           trade.symbol = update.symbol;
           trade.timestamp_us = update.timestamp_us;
@@ -1394,25 +1519,42 @@ void VulkanDashboard::main_loop() {
           trade.is_buy = (update.side == "buy");
           on_trade_received(trade);
         } else if (update.type == RenderEngine::MarketDataType::ORDERBOOK) {
+          obs_this_frame++;
           market_data_processor_->processOrderbookUpdate(update);
-
-          // Notify dashboard for UI updates
           RenderEngine::OrderbookData ob;
           ob.symbol = update.symbol;
           ob.timestamp_us = update.timestamp_us;
           ob.bids = update.bids;
           ob.asks = update.asks;
-          // Calculate analytical fields if needed by components
-          ob.spread = update.price; // Placeholder if not in update
+          ob.spread = update.price;
           on_orderbook_updated(ob);
         }
       }
     }
-
-    update_components(0.016f); // ~60fps
     synchronize_market_data();
+    auto data_end = std::chrono::high_resolution_clock::now();
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex_);
+      current_stats_.data_bridge_update_ms =
+          std::chrono::duration<float, std::milli>(data_end - data_start)
+              .count();
+      current_stats_.trades_processed += trades_this_frame;
+      current_stats_.orderbooks_processed += obs_this_frame;
+    }
 
-    // Unified rendering pass
+    // 3. UI and Logic Updates
+    auto logic_start = std::chrono::high_resolution_clock::now();
+    update_components(0.016f); // ~60fps
+    auto logic_end = std::chrono::high_resolution_clock::now();
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex_);
+      current_stats_.geometry_rebuild_ms =
+          std::chrono::duration<float, std::milli>(logic_end - logic_start)
+              .count();
+    }
+
+    // 4. Rendering
+    auto render_start = std::chrono::high_resolution_clock::now();
     if (vulkan_core_ && vulkan_core_->begin_frame()) {
       if (vulkan_core_->prepare_frame()) {
         render_gui();
@@ -1420,6 +1562,14 @@ void VulkanDashboard::main_loop() {
         vulkan_core_->end_frame();
       }
     }
+    auto render_end = std::chrono::high_resolution_clock::now();
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex_);
+      current_stats_.render_dispatch_ms =
+          std::chrono::duration<float, std::milli>(render_end - render_start)
+              .count();
+    }
+
     update_performance_stats();
   }
 }
@@ -1450,9 +1600,24 @@ void VulkanDashboard::apply_theme(AppTheme theme) {
     theme_.background_primary = glm::vec4(0.95f, 0.95f, 0.95f, 1.00f);
     theme_.text_primary = glm::vec4(0.1f, 0.1f, 0.1f, 1.00f);
   } else {
-    // Institutional Dark (Standard)
+    // Institutional Dark (Deep Space Blue)
     ImGui::StyleColorsDark();
-    // Use values from the spec already in include/vulkan_dashboard_advanced.hpp
+    theme_.background_primary =
+        glm::vec4(0.03f, 0.05f, 0.08f, 1.00f); // Deep Navy
+    theme_.background_secondary =
+        glm::vec4(0.05f, 0.08f, 0.12f, 1.00f); // Lighter Navy
+    theme_.background_panel = glm::vec4(0.10f, 0.13f, 0.18f, 1.00f); // Panel BG
+    theme_.border_color =
+        glm::vec4(0.20f, 0.25f, 0.35f, 1.00f); // Soft Blue Border
+
+    theme_.text_primary = glm::vec4(0.95f, 0.96f, 0.98f, 1.00f); // Ice White
+    theme_.text_secondary =
+        glm::vec4(0.70f, 0.75f, 0.85f, 1.00f);                 // Soft Blue Text
+    theme_.text_muted = glm::vec4(0.40f, 0.45f, 0.55f, 1.00f); // Muted Blue
+
+    theme_.accent_primary = glm::vec4(0.00f, 0.75f, 1.00f, 1.00f); // Cyan Neon
+    theme_.accent_secondary =
+        glm::vec4(0.00f, 1.00f, 0.60f, 1.00f); // Green Neon
   }
 
   // Map our theme tokens to ImGui colors
@@ -1546,21 +1711,38 @@ VulkanDashboard::get_performance_stats() const {
 }
 
 void VulkanDashboard::on_trade_received(const RenderEngine::TradeData &trade) {
+  // 1. Process alerts
+  alert_manager_.check_alerts(trade.symbol, trade.price, trade.size);
+
+  // 2. Update watchlist
+  if (watchlist_component_) {
+    watchlist_component_->update_quote(trade.symbol, trade.price, 0.0, 0.0);
+  }
+
+  // 3. Forward to UI components
   for (auto &component : components_) {
-    component->handle_trade(trade);
+    if (component->get_target_symbol() == trade.symbol) {
+      component->handle_trade(trade);
+    }
   }
   for (auto &chart : chart_components_) {
-    chart->handle_trade(trade);
+    if (chart->get_target_symbol() == trade.symbol) {
+      chart->handle_trade(trade);
+    }
   }
 }
 
 void VulkanDashboard::on_orderbook_updated(
     const RenderEngine::OrderbookData &orderbook) {
   for (auto &component : components_) {
-    component->handle_orderbook(orderbook);
+    if (component->get_target_symbol() == orderbook.symbol) {
+      component->handle_orderbook(orderbook);
+    }
   }
   for (auto &chart : chart_components_) {
-    chart->handle_orderbook(orderbook);
+    if (chart->get_target_symbol() == orderbook.symbol) {
+      chart->handle_orderbook(orderbook);
+    }
   }
 }
 
@@ -1690,47 +1872,68 @@ void VulkanDashboard::init_components() {
   float row1_y = top_bar_h + padding;
   float row1_h = std::round((remaining_h * 0.60f) / grid) * grid;
 
-  // 2. Main Chart (60% width, 60% height)
-  float chart_w = std::round((w * 0.60f) / grid) * grid;
-  auto chart = std::make_unique<RealtimeChartComponent>(
+  // 1a. Watchlist (15% width, 60% height) - Far Left
+  float wl_w = std::round((w * 0.15f) / grid) * grid;
+  auto wl = std::make_unique<WatchlistComponent>(
       glm::vec2(padding, row1_y),
+      glm::vec2(wl_w - padding * 2, row1_h - padding));
+  watchlist_component_ = wl.get();
+  add_component(std::move(wl));
+
+  // 2. Main Chart (50% width, 60% height)
+  float chart_w = std::round((w * 0.50f) / grid) * grid;
+  auto chart = std::make_unique<RealtimeChartComponent>(
+      glm::vec2(wl_w + padding, row1_y),
       glm::vec2(chart_w - padding * 2, row1_h - padding));
   chart->enable_candlestick_mode(true);
   add_component(std::move(chart));
 
-  // 3. Order Book (20% width, 60% height)
-  float ob_w = std::round((w * 0.20f) / grid) * grid;
+  // 3. Order Book (17.5% width, 60% height)
+  float ob_w = std::round((w * 0.175f) / grid) * grid;
   auto ob = std::make_unique<OrderBookComponent>(
-      glm::vec2(chart_w + padding, row1_y),
+      glm::vec2(wl_w + chart_w + padding, row1_y),
       glm::vec2(ob_w - padding * 2, row1_h - padding));
   add_component(std::move(ob));
 
-  // 4. Time & Sales / Tape (20% width, 60% height -> actually split with Depth)
-  float tape_w = w - chart_w - ob_w;
+  // 4. Time & Sales / Tape (remaining, 60% height)
+  float tape_w = w - wl_w - chart_w - ob_w;
   auto tape = std::make_unique<TapeComponent>(
-      glm::vec2(chart_w + ob_w + padding, row1_y),
+      glm::vec2(wl_w + chart_w + ob_w + padding, row1_y),
       glm::vec2(tape_w - padding * 2, row1_h - padding));
   add_component(std::move(tape));
 
   float row2_y = row1_y + row1_h + padding;
   float row2_h = h - row2_y - padding;
 
-  // 5. Positions & P&L (60% width, bottom)
+  // 5. Positions & P&L (bottom)
   auto pos_panel = std::make_unique<PositionPanelComponent>(
-      glm::vec2(padding, row2_y), glm::vec2(chart_w - padding * 2, row2_h));
+      glm::vec2(padding, row2_y),
+      glm::vec2(wl_w + chart_w - padding * 2, row2_h));
   add_component(std::move(pos_panel));
 
-  // 6. Order Management (20% width, bottom)
+  // 6. Order Management (bottom)
   auto order_mgmt = std::make_unique<OrderManagementComponent>(
-      glm::vec2(chart_w + padding, row2_y),
-      glm::vec2(ob_w - padding * 2, row2_h));
+      glm::vec2(wl_w + chart_w + padding, row2_y),
+      glm::vec2(ob_w - padding * 2, row2_h * 0.5f - padding));
   add_component(std::move(order_mgmt));
 
-  // 7. Strategy Control (remaining 20%, bottom)
+  // 6b. Alert Center (bottom, half of the column)
+  auto alerts = std::make_unique<AlertComponent>(
+      glm::vec2(wl_w + chart_w + padding, row2_y + row2_h * 0.5f),
+      glm::vec2(ob_w - padding * 2, row2_h * 0.5f - padding), alert_manager_);
+  add_component(std::move(alerts));
+
+  // 7. Strategy Control (bottom, split)
   auto strategy = std::make_unique<StrategyControlComponent>(
-      glm::vec2(chart_w + ob_w + padding, row2_y),
-      glm::vec2(tape_w - padding * 2, row2_h));
+      glm::vec2(wl_w + chart_w + ob_w + padding, row2_y),
+      glm::vec2(tape_w - padding * 2, row2_h * 0.5f - padding));
   add_component(std::move(strategy));
+
+  // 7b. Market Screener (bottom, split)
+  auto screener = std::make_unique<MarketScreenerComponent>(
+      glm::vec2(wl_w + chart_w + ob_w + padding, row2_y + row2_h * 0.5f),
+      glm::vec2(tape_w - padding * 2, row2_h * 0.5f - padding));
+  add_component(std::move(screener));
 }
 
 void VulkanDashboard::update_performance_stats() {
@@ -1738,13 +1941,40 @@ void VulkanDashboard::update_performance_stats() {
   static auto last_time = now;
   float duration = std::chrono::duration<float>(now - last_time).count();
 
+  frame_count_++;
+
+  // Update history buffers every frame for smooth graphing
+  {
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+    event_times_.push_back(current_stats_.event_processing_ms);
+    data_times_.push_back(current_stats_.data_bridge_update_ms);
+    render_times_.push_back(current_stats_.render_dispatch_ms);
+
+    // Calculate total frame time (approximate delta from last frame)
+    static auto last_frame = now;
+    float delta =
+        std::chrono::duration<float, std::milli>(now - last_frame).count();
+    frame_times_.push_back(delta);
+    last_frame = now;
+
+    if (event_times_.size() > 100)
+      event_times_.pop_front();
+    if (data_times_.size() > 100)
+      data_times_.pop_front();
+    if (render_times_.size() > 100)
+      render_times_.pop_front();
+    if (frame_times_.size() > 100)
+      frame_times_.pop_front();
+  }
+
   if (duration >= 1.0f) {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     current_stats_.fps = frame_count_ / duration;
+    current_stats_.frame_time_ms = (duration / frame_count_) * 1000.0f;
+
     frame_count_ = 0;
     last_time = now;
   }
-  frame_count_++;
 }
 
 bool VulkanDashboard::handle_x11_events() {
@@ -1766,23 +1996,30 @@ bool VulkanDashboard::handle_x11_events() {
       }
     }
 
-    // Pass events to ImGui
     ImGuiIO &io = ImGui::GetIO();
-    // Dispatch to components
     InputEvent input_ev;
     input_ev.position = glm::vec2(io.MousePos.x, io.MousePos.y);
+    input_ev.timestamp = std::chrono::high_resolution_clock::now();
 
     if (event.type == MotionNotify) {
       input_ev.type = InputEventType::MouseMove;
       for (auto &comp : components_)
         comp->handle_input(input_ev);
     } else if (event.type == ButtonPress) {
+      if (event.xbutton.button == Button1)
+        io.MouseDown[0] = true;
+      if (event.xbutton.button == Button2)
+        io.MouseDown[2] = true;
+      if (event.xbutton.button == Button3)
+        io.MouseDown[1] = true;
+
       input_ev.type = InputEventType::MouseButton;
       input_ev.pressed = true;
       if (event.xbutton.button == Button4 || event.xbutton.button == Button5) {
         input_ev.type = InputEventType::Scroll;
         input_ev.scroll_delta = {0, event.xbutton.button == Button4 ? 1.0f
                                                                     : -1.0f};
+        io.MouseWheel += input_ev.scroll_delta.y;
       } else {
         if (event.xbutton.button == Button1)
           input_ev.mouse_button = MouseButton::Left;
@@ -1794,6 +2031,13 @@ bool VulkanDashboard::handle_x11_events() {
       for (auto &comp : components_)
         comp->handle_input(input_ev);
     } else if (event.type == ButtonRelease) {
+      if (event.xbutton.button == Button1)
+        io.MouseDown[0] = false;
+      if (event.xbutton.button == Button2)
+        io.MouseDown[2] = false;
+      if (event.xbutton.button == Button3)
+        io.MouseDown[1] = false;
+
       input_ev.type = InputEventType::MouseButton;
       input_ev.pressed = false;
       if (event.xbutton.button == Button1)
@@ -1804,68 +2048,29 @@ bool VulkanDashboard::handle_x11_events() {
         input_ev.mouse_button = MouseButton::Right;
       for (auto &comp : components_)
         comp->handle_input(input_ev);
-    }
-    if (event.type == X11_KeyPress) {
+    } else if (event.type == KeyPress) { // KeyPress is usually defined as 2
       KeySym keysym = XLookupKeysym(&event.xkey, 0);
-      bool ctrl = (event.xkey.state & ControlMask);
-      bool shift = (event.xkey.state & ShiftMask);
+      uint32_t modifiers = 0;
+      if (event.xkey.state & ControlMask)
+        modifiers |= ControlMask;
+      if (event.xkey.state & ShiftMask)
+        modifiers |= ShiftMask;
+      if (event.xkey.state & Mod1Mask)
+        modifiers |= Mod1Mask;
 
-      // Ctrl+S: Save Layout
-      if (ctrl && keysym == XK_s) {
-        save_layout("config/last_layout.json");
-        fprintf(stderr, "[VulkanDashboard] Layout saved via Ctrl+S\n");
+      HotkeyAction action = hotkey_manager_.get_action(keysym, modifiers);
+      if (action != HotkeyAction::NONE) {
+        handle_hotkey(action);
       }
-      // Ctrl+L: Load Layout
-      else if (ctrl && keysym == XK_l) {
-        load_layout("config/last_layout.json");
-        fprintf(stderr, "[VulkanDashboard] Layout loaded via Ctrl+L\n");
-      }
-      // Ctrl+R: Reset to Default Layout
-      else if (ctrl && keysym == XK_r) {
-        load_layout("config/default_layout.json");
-        fprintf(stderr,
-                "[VulkanDashboard] Reset to default layout via Ctrl+R\n");
-      }
-      // F11: Toggle Fullscreen (placeholder)
-      else if (keysym == XK_F11) {
-        fprintf(stderr, "[VulkanDashboard] F11 pressed (fullscreen toggle not "
-                        "yet implemented)\n");
-      }
-      // Space: Pause/Resume Data Feed
-      else if (keysym == XK_space && !ctrl && !shift) {
-        live_execution_active_ = !live_execution_active_;
-        fprintf(stderr, "[VulkanDashboard] Data feed %s via Space\n",
-                live_execution_active_ ? "resumed" : "paused");
-      }
-      // F3: Toggle Performance Overlay
-      else if (keysym == XK_F3) {
-        show_performance_overlay_ = !show_performance_overlay_;
-        fprintf(stderr, "[VulkanDashboard] Performance overlay %s via F3\n",
-                show_performance_overlay_ ? "enabled" : "disabled");
-      }
-    } else if (event.type == ButtonPress) {
-      if (event.xbutton.button == Button1)
-        io.MouseDown[0] = true;
-      if (event.xbutton.button == Button2)
-        io.MouseDown[2] = true;
-      if (event.xbutton.button == Button3)
-        io.MouseDown[1] = true;
-      if (event.xbutton.button == Button4)
-        io.MouseWheel += 1.0f;
-      if (event.xbutton.button == Button5)
-        io.MouseWheel -= 1.0f;
-    } else if (event.type == ButtonRelease) {
-      if (event.xbutton.button == Button1)
-        io.MouseDown[0] = false;
-      if (event.xbutton.button == Button2)
-        io.MouseDown[2] = false;
-      if (event.xbutton.button == Button3)
-        io.MouseDown[1] = false;
-    } else if (event.type == MotionNotify) {
-      io.MousePos = ImVec2((float)event.xmotion.x, (float)event.xmotion.y);
     }
   }
   return false;
+}
+else if (event.type == MotionNotify) {
+  io.MousePos = ImVec2((float)event.xmotion.x, (float)event.xmotion.y);
+}
+}
+return false;
 }
 
 void VulkanCore::init_imgui() {
@@ -2236,16 +2441,33 @@ void VulkanDashboard::render_gui() {
     }
   }
 
-  // Render Chart Workspace Components
-  for (auto &chart : chart_components_) {
-    if (chart->is_visible()) {
-      chart->render_gui();
+  // Render Chart Workspace
+  if (current_layout_mode_ == LayoutMode::Tabs) {
+    render_chart_tabs();
+  }
+
+  for (size_t i = 0; i < chart_components_.size(); ++i) {
+    auto &chart = chart_components_[i];
+    if (current_layout_mode_ == LayoutMode::Tabs) {
+      if (static_cast<int>(i) == active_chart_index_) {
+        chart->set_visible(true);
+        chart->render_gui();
+      } else {
+        chart->set_visible(false);
+      }
+    } else {
+      // Grid or Single View (handled by layout logic)
+      if (chart->is_visible()) {
+        chart->render_gui();
+      }
     }
   }
 
   // Status overlay and specialized dialogs
   if (show_performance_overlay_)
     render_performance_overlay();
+  if (show_command_palette_)
+    render_command_palette();
   if (show_backtest_dialog_)
     render_backtest_dialog();
   if (show_risk_manager_)
@@ -2259,26 +2481,48 @@ void VulkanDashboard::set_active_symbol(const std::string &symbol) {
     return;
   active_symbol_ = symbol;
 
-  // Notify all components that want global symbol sync
-  // (In multi-chart mode, some charts might be locked to specific symbols)
+  // In multi-chart or tabbed mode, change the symbol for the active view
+  if (current_layout_mode_ == LayoutMode::Tabs && !chart_components_.empty()) {
+    if (active_chart_index_ >= 0 &&
+        active_chart_index_ < static_cast<int>(chart_components_.size())) {
+      chart_components_[active_chart_index_]->set_target_symbol(symbol);
+      chart_components_[active_chart_index_]->clear_data();
+    }
+  }
+
+  // Notify global components that might want to follow the active symbol
   for (auto &comp : components_) {
-    comp->handle_global_command("SET_SYMBOL", symbol);
-    comp->clear_data();
+    // Components like OrderBook might want to follow the global search
+    // if they don't have a fixed pin. For now, we update their target.
+    if (comp->get_name() == "Order Book" ||
+        comp->get_name() == "Time & Sales") {
+      comp->set_target_symbol(symbol);
+      comp->clear_data();
+    }
   }
 }
 
 void VulkanDashboard::render_main_menu_bar() {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("New Workspace", "Ctrl+N")) {
+      }
+      if (ImGui::MenuItem("Open Workspace...", "Ctrl+O")) {
+      }
+      ImGui::Separator();
       if (ImGui::MenuItem("Save Workspace", "Ctrl+S")) {
         save_layout();
       }
-      if (ImGui::MenuItem("Load Workspace", "Ctrl+L")) {
-        load_layout();
+      if (ImGui::MenuItem("Save Layout As...")) {
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Export Data...")) {
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Settings", "Ctrl+,")) {
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit", "Alt+F4")) {
-        // Exit logic handled by X11 event loop usually
       }
       ImGui::EndMenu();
     }
@@ -2286,6 +2530,25 @@ void VulkanDashboard::render_main_menu_bar() {
     if (ImGui::BeginMenu("Markets")) {
       if (ImGui::MenuItem("Search Market...", "Ctrl+M")) {
         is_symbol_selector_open_ = true;
+      }
+      ImGui::Separator();
+      if (ImGui::BeginMenu("Exchanges")) {
+        if (ImGui::MenuItem("Binance Connectivity")) {
+        }
+        if (ImGui::MenuItem("OKX Connectivity")) {
+        }
+        if (ImGui::MenuItem("Coinbase Connectivity")) {
+        }
+        ImGui::EndMenu();
+      }
+      if (ImGui::BeginMenu("Sectors")) {
+        if (ImGui::MenuItem("Layer 1")) {
+        }
+        if (ImGui::MenuItem("DeFi Bluechips")) {
+        }
+        if (ImGui::MenuItem("AI / DePin")) {
+        }
+        ImGui::EndMenu();
       }
       ImGui::Separator();
       // Quick select top markets
@@ -2300,19 +2563,58 @@ void VulkanDashboard::render_main_menu_bar() {
     }
 
     if (ImGui::BeginMenu("Charts")) {
-      if (ImGui::MenuItem("New Chart Tab", "Ctrl+N")) {
+      if (ImGui::MenuItem("New Price Chart", "Alt+C")) {
         add_chart(active_symbol_);
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Single Chart")) {
-        handle_menu_command("LAYOUT_SINGLE");
+      if (ImGui::BeginMenu("Layout Mode")) {
+        if (ImGui::MenuItem("Single Fullscreen", nullptr,
+                            current_layout_mode_ == LayoutMode::Single)) {
+          current_layout_mode_ = LayoutMode::Single;
+          handle_menu_command("LAYOUT_SINGLE");
+        }
+        if (ImGui::MenuItem("Grid View (2x2)", nullptr,
+                            current_layout_mode_ == LayoutMode::Grid)) {
+          current_layout_mode_ = LayoutMode::Grid;
+          handle_menu_command("LAYOUT_2X2");
+        }
+        if (ImGui::MenuItem("Multitask Tabs", nullptr,
+                            current_layout_mode_ == LayoutMode::Tabs)) {
+          current_layout_mode_ = LayoutMode::Tabs;
+        }
+        ImGui::EndMenu();
       }
-      if (ImGui::MenuItem("2x2 Grid")) {
-        handle_menu_command("LAYOUT_2X2");
+      ImGui::Separator();
+      if (ImGui::MenuItem("Synchronize All Charts")) {
       }
-      if (ImGui::MenuItem("Toggle Crosshair Sync", nullptr,
-                          shared_crosshair_.active)) {
-        shared_crosshair_.active = !shared_crosshair_.active;
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Strategies")) {
+      if (ImGui::MenuItem("Strategy Manager", "Ctrl+T")) {
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Backtest Runner", "Alt+B")) {
+        show_backtest_dialog_ = true;
+      }
+      if (ImGui::MenuItem("Optimization Suite")) {
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("Live Execution Panel")) {
+      }
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Tools")) {
+      if (ImGui::MenuItem("Risk Manager")) {
+        show_risk_manager_ = true;
+      }
+      if (ImGui::MenuItem("Alerts Center")) {
+      }
+      if (ImGui::MenuItem("Market Screener")) {
+      }
+      ImGui::Separator();
+      if (ImGui::MenuItem("System Console", "`")) {
       }
       ImGui::EndMenu();
     }
@@ -2325,14 +2627,14 @@ void VulkanDashboard::render_main_menu_bar() {
         }
       }
       ImGui::Separator();
-      if (ImGui::MenuItem("Performance Overlay", nullptr,
+      if (ImGui::MenuItem("Performance Overlay", "F3",
                           &show_performance_overlay_)) {
       }
       ImGui::EndMenu();
     }
 
     if (ImGui::BeginMenu("Help")) {
-      if (ImGui::MenuItem("Quick Start Guide")) {
+      if (ImGui::MenuItem("Documentation")) {
       }
       if (ImGui::MenuItem("About BTQuant")) {
       }
@@ -2355,31 +2657,98 @@ void VulkanDashboard::render_main_menu_bar() {
   }
 }
 
+void VulkanDashboard::render_chart_tabs() {
+  if (chart_components_.empty())
+    return;
+
+  ImGui::SetNextWindowPos(ImVec2(0, 20)); // Below main menu
+  ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 30));
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse |
+      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+
+  if (ImGui::Begin("##ChartTabs", nullptr, flags)) {
+    if (ImGui::BeginMenuBar()) {
+      for (size_t i = 0; i < chart_components_.size(); ++i) {
+        std::string label = chart_components_[i]->get_target_symbol() + " [" +
+                            std::to_string(i) + "]";
+        bool active = (static_cast<int>(i) == active_chart_index_);
+
+        if (active)
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+
+        if (ImGui::MenuItem(label.c_str(), nullptr, active)) {
+          active_chart_index_ = static_cast<int>(i);
+        }
+
+        if (active)
+          ImGui::PopStyleColor();
+
+        if (i < chart_components_.size() - 1)
+          ImGui::TextDisabled("|");
+      }
+      ImGui::EndMenuBar();
+    }
+  }
+  ImGui::End();
+}
+
 void VulkanDashboard::render_symbol_selector() {
   if (!is_symbol_selector_open_)
     return;
 
-  ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_FirstUseEver);
   if (ImGui::Begin("Market Search", &is_symbol_selector_open_,
                    ImGuiWindowFlags_NoCollapse)) {
     static char filter[128] = "";
-    ImGui::InputText("Search", filter, IM_ARRAYSIZE(filter));
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::InputTextWithHint("##Search",
+                                 "Search symbols (e.g. BTC, ETH, binance...)",
+                                 filter, IM_ARRAYSIZE(filter))) {
+    }
     ImGui::Separator();
 
-    // Mock symbol list for now
-    const std::vector<std::string> symbols = {
-        "BTC/USDT", "ETH/USDT",  "SOL/USDT",  "DOT/USDT",  "MATIC/USDT",
-        "ADA/USDT", "DOGE/USDT", "AVAX/USDT", "LINK/USDT", "LTC/USDT"};
-
     if (ImGui::BeginChild("SymbolList")) {
+      std::vector<std::string> symbols;
+      if (hotspine_bridge_) {
+        auto all = hotspine_bridge_->getAllSymbols();
+        for (const auto &s : all) {
+          symbols.push_back(s.symbol);
+        }
+      }
+
+      // Fallback/Mock if bridge is empty or not connected
+      if (symbols.empty()) {
+        symbols = {"BTC/USDT",   "ETH/USDT", "SOL/USDT",  "DOT/USDT",
+                   "MATIC/USDT", "ADA/USDT", "DOGE/USDT", "AVAX/USDT",
+                   "LINK/USDT",  "LTC/USDT"};
+      }
+
       for (const auto &s : symbols) {
-        if (strlen(filter) > 0 && s.find(filter) == std::string::npos)
+        std::string lower_s = s;
+        std::transform(lower_s.begin(), lower_s.end(), lower_s.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        std::string lower_filter = filter;
+        std::transform(lower_filter.begin(), lower_filter.end(),
+                       lower_filter.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (strlen(filter) > 0 &&
+            lower_s.find(lower_filter) == std::string::npos)
           continue;
 
-        if (ImGui::Selectable(s.c_str(), active_symbol_ == s)) {
+        bool is_active = (active_symbol_ == s);
+        if (is_active)
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.8f, 0, 1));
+
+        if (ImGui::Selectable(s.c_str(), is_active)) {
           set_active_symbol(s);
           is_symbol_selector_open_ = false;
         }
+
+        if (is_active)
+          ImGui::PopStyleColor();
       }
       ImGui::EndChild();
     }
@@ -2390,16 +2759,40 @@ void VulkanDashboard::render_symbol_selector() {
 void VulkanDashboard::handle_menu_command(const std::string &cmd,
                                           const std::string &args) {
   if (cmd == "LAYOUT_SINGLE") {
-    // Phase 1: Simple layout logic
+    current_layout_mode_ = LayoutMode::Single;
     for (auto &c : chart_components_)
       c->set_visible(false);
-    if (!chart_components_.empty()) {
-      chart_components_[0]->set_visible(true);
-      chart_components_[0]->set_position({5, 30});
-      chart_components_[0]->set_size({(float)width_ - 10, (float)height_ - 60});
+    if (!chart_components_.empty() &&
+        active_chart_index_ < (int)chart_components_.size()) {
+      auto &active = chart_components_[active_chart_index_];
+      active->set_visible(true);
+      active->set_position({5, 55}); // Account for menu and tabs
+      active->set_size({(float)width_ - 10, (float)height_ - 85});
     }
   } else if (cmd == "LAYOUT_2X2") {
-    // TODO: Implement grid logic
+    current_layout_mode_ = LayoutMode::Grid;
+    float w = (float)width_ / 2.0f;
+    float h = ((float)height_ - 60.0f) / 2.0f;
+    for (size_t i = 0; i < chart_components_.size() && i < 4; ++i) {
+      chart_components_[i]->set_visible(true);
+      chart_components_[i]->set_position({(i % 2) * w, 55 + (i / 2) * h});
+      chart_components_[i]->set_size({w - 5, h - 5});
+    }
+  } else if (cmd.find("TIMEFRAME_") == 0) {
+    std::string tf = cmd.substr(10);
+    if (active_chart_index_ >= 0 &&
+        active_chart_index_ < (int)chart_components_.size()) {
+      // Dynamic cast or just use the interface if added to UIComponent
+      // For now, we know chart_components_ are RealtimeChartComponent
+      auto chart = static_cast<RealtimeChartComponent *>(
+          chart_components_[active_chart_index_].get());
+      chart->set_timeframe(tf);
+      chart->clear_data();
+      // In a real app, this would trigger a data reload from HotSpine
+      fprintf(stderr,
+              "[VulkanDashboard] Timeframe changed to %s for chart %d\n",
+              tf.c_str(), active_chart_index_);
+    }
   }
 }
 
@@ -2410,7 +2803,7 @@ void VulkanDashboard::add_chart(const std::string &symbol,
       glm::vec2(0, 0), glm::vec2(width_, height_));
   chart->set_dashboard(this);
   chart->enable_candlestick_mode(true);
-  chart->set_symbol(symbol);
+  chart->set_target_symbol(symbol);
   chart->set_timeframe(timeframe);
 
   if (vulkan_core_) {
@@ -2419,8 +2812,14 @@ void VulkanDashboard::add_chart(const std::string &symbol,
 
   chart_components_.push_back(std::move(chart));
 
-  // Auto-layout based on current chart count
-  handle_menu_command("LAYOUT_SINGLE");
+  // Switch to the newly added chart tab
+  active_chart_index_ = static_cast<int>(chart_components_.size()) - 1;
+
+  if (current_layout_mode_ == LayoutMode::Single) {
+    handle_menu_command("LAYOUT_SINGLE");
+  } else if (current_layout_mode_ == LayoutMode::Grid) {
+    handle_menu_command("LAYOUT_2X2");
+  }
 }
 
 void VulkanDashboard::apply_layout(const WorkspaceLayout &layout) {
@@ -2579,7 +2978,7 @@ void VulkanDashboard::render_risk_manager() {
 
 void VulkanDashboard::render_performance_overlay() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowBgAlpha(0.75f);
+  ImGui::SetNextWindowBgAlpha(0.85f); // Slightly darker for readability
 
   if (ImGui::Begin(
           "Performance Monitor", &show_performance_overlay_,
@@ -2589,15 +2988,60 @@ void VulkanDashboard::render_performance_overlay() {
 
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "FPS: %.1f",
                        current_stats_.fps);
-    ImGui::Text("Frame Time: %.2f ms", current_stats_.frame_time_ms);
-    ImGui::Text("Data Latency: %.2f ms", current_stats_.data_latency_ms);
-
     ImGui::Separator();
 
+    auto plot_callback = [](void *data, int idx) {
+      auto *deque = (std::deque<float> *)data;
+      return deque->empty() ? 0.0f : deque->at(idx);
+    };
+
+    // Frame Time Graph
+    {
+      std::lock_guard<std::mutex> lock(stats_mutex_);
+      if (!frame_times_.empty()) {
+        ImGui::PlotLines("Frame (ms)", plot_callback, &frame_times_,
+                         frame_times_.size(), 0, nullptr, 0.0f, 33.0f,
+                         ImVec2(250, 40));
+        ImGui::SameLine();
+        ImGui::Text("%.2f", current_stats_.frame_time_ms);
+      }
+
+      // Granular breakdowns
+      if (!event_times_.empty()) {
+        ImGui::PlotLines("Event (ms)", plot_callback, &event_times_,
+                         event_times_.size(), 0, nullptr, 0.0f, 5.0f,
+                         ImVec2(250, 30));
+        ImGui::SameLine();
+        ImGui::Text("%.2f", current_stats_.event_processing_ms);
+      }
+
+      if (!data_times_.empty()) {
+        ImGui::PlotLines("Data (ms) ", plot_callback, &data_times_,
+                         data_times_.size(), 0, nullptr, 0.0f, 5.0f,
+                         ImVec2(250, 30));
+        ImGui::SameLine();
+        ImGui::Text("%.2f", current_stats_.data_bridge_update_ms);
+      }
+
+      if (!render_times_.empty()) {
+        ImGui::PlotLines("Render(ms)", plot_callback, &render_times_,
+                         render_times_.size(), 0, nullptr, 0.0f, 16.0f,
+                         ImVec2(250, 30));
+        ImGui::SameLine();
+        ImGui::Text("%.2f", current_stats_.render_dispatch_ms);
+      }
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Throughput:");
+    ImGui::Text("Trades: %lu", current_stats_.trades_processed);
+    ImGui::Text("Books:  %lu", current_stats_.orderbooks_processed);
+
+    ImGui::Separator();
     auto mem_stats = vulkan_core_->get_memory_manager().get_memory_stats();
-    ImGui::Text("Vertex Pool: %.1f%%", mem_stats.vertex_pool_usage);
-    ImGui::Text("Uniform Pool: %.1f%%", mem_stats.uniform_pool_usage);
-    ImGui::Text("Storage Pool: %.1f%%", mem_stats.storage_pool_usage);
+    ImGui::Text("GPU Mem: V:%0.0f%% U:%0.0f%% S:%0.0f%%",
+                mem_stats.vertex_pool_usage, mem_stats.uniform_pool_usage,
+                mem_stats.storage_pool_usage);
 
     ImGui::Separator();
     ImGui::TextDisabled("Press F3 to toggle");
@@ -2607,8 +3051,31 @@ void VulkanDashboard::render_performance_overlay() {
 
 void VulkanDashboard::save_layout(const std::string &filename) {
   nlohmann::json j;
-  j["version"] = 1.0;
+  j["version"] = 2.0; // Updated version
   j["theme"] = static_cast<int>(current_theme_);
+  j["active_symbol"] = active_symbol_;
+  j["active_chart_index"] = active_chart_index_;
+  j["layout_mode"] = static_cast<int>(current_layout_mode_);
+
+  // Save Watchlist
+  if (watchlist_component_) {
+    nlohmann::json wl_json = nlohmann::json::array();
+    for (const auto &entry : watchlist_component_->get_entries()) {
+      wl_json.push_back(entry.symbol);
+    }
+    j["watchlist"] = wl_json;
+  }
+
+  // Save Alerts
+  nlohmann::json alerts_json = nlohmann::json::array();
+  for (const auto &alert : alert_manager_.get_alerts()) {
+    nlohmann::json a;
+    a["symbol"] = alert.symbol;
+    a["condition"] = static_cast<int>(alert.condition);
+    a["target"] = alert.target_value;
+    alerts_json.push_back(a);
+  }
+  j["alerts"] = alerts_json;
 
   nlohmann::json components_json = nlohmann::json::array();
   for (const auto &comp : components_) {
@@ -2642,6 +3109,37 @@ void VulkanDashboard::load_layout(const std::string &filename) {
     apply_theme(static_cast<AppTheme>(j["theme"].get<int>()));
   }
 
+  // Phase 7: Load Persistence 2.0 fields
+  if (j.contains("active_symbol")) {
+    set_active_symbol(j["active_symbol"].get<std::string>());
+  }
+  if (j.contains("active_chart_index")) {
+    active_chart_index_ = j["active_chart_index"].get<int>();
+  }
+  if (j.contains("layout_mode")) {
+    current_layout_mode_ = static_cast<LayoutMode>(j["layout_mode"].get<int>());
+  }
+
+  if (watchlist_component_ && j.contains("watchlist")) {
+    watchlist_component_->clear_symbols();
+    for (const auto &sym : j["watchlist"]) {
+      watchlist_component_->add_symbol(sym.get<std::string>());
+    }
+  }
+
+  if (j.contains("alerts")) {
+    alert_manager_.clear_alerts();
+    for (const auto &a_json : j["alerts"]) {
+      AlertRule rule;
+      rule.symbol = a_json["symbol"];
+      rule.condition =
+          static_cast<AlertCondition>(a_json["condition"].get<int>());
+      rule.target_value = a_json["target"];
+      rule.is_active = true;
+      alert_manager_.add_alert(rule);
+    }
+  }
+
   if (j.contains("components")) {
     for (const auto &c_json : j["components"]) {
       std::string name = c_json["name"];
@@ -2660,6 +3158,113 @@ void VulkanDashboard::load_layout(const std::string &filename) {
   }
   fprintf(stderr, "[VulkanDashboard] Layout loaded from %s\n",
           filename.c_str());
+}
+
+void VulkanDashboard::render_command_palette() {
+  // Center the modal
+  ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+  ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(600, 400));
+
+  if (show_command_palette_)
+    ImGui::OpenPopup("Command Palette");
+
+  if (ImGui::BeginPopupModal("Command Palette", &show_command_palette_,
+                             ImGuiWindowFlags_NoDecoration |
+                                 ImGuiWindowFlags_NoMove)) {
+
+    // Search Bar
+    ImGui::SetKeyboardFocusHere(0);
+    if (ImGui::InputText("##CommandSearch", command_buffer_,
+                         sizeof(command_buffer_),
+                         ImGuiInputTextFlags_AutoSelectAll |
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+      // Execute first match logic here if desired
+    }
+
+    ImGui::Separator();
+
+    struct Command {
+      std::string name;
+      std::string shortcut;
+      std::function<void()> action;
+    };
+
+    std::vector<Command> commands = {
+        {"Save Layout", "Ctrl+S",
+         [this]() {
+           save_layout("config/last_layout.json");
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Load Layout", "Ctrl+L",
+         [this]() {
+           load_layout("config/last_layout.json");
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Reset Layout", "Ctrl+R",
+         [this]() {
+           load_layout("config/default_layout.json");
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Toggle Performance Overlay", "F3",
+         [this]() {
+           show_performance_overlay_ = !show_performance_overlay_;
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Toggle Fullscreen", "F11",
+         [this]() {
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Toggle Theme", "",
+         [this]() {
+           apply_theme(current_theme_ == AppTheme::InstitutionalDark
+                           ? AppTheme::LightMode
+                           : AppTheme::InstitutionalDark);
+           show_command_palette_ = false;
+           ImGui::CloseCurrentPopup();
+         }},
+        {"Exit Application", "Alt+F4", [this]() { exit(0); }}};
+
+    if (watchlist_component_) {
+      commands.push_back({"Add Symbol to Watchlist...", "", [this]() {
+                            show_command_palette_ = false;
+                            ImGui::CloseCurrentPopup();
+                          }});
+    }
+
+    ImGui::BeginChild("CommandList");
+    for (const auto &cmd : commands) {
+      std::string search = command_buffer_;
+      std::string name = cmd.name;
+      bool match = true;
+      if (!search.empty()) {
+        std::string s_lower = search;
+        std::string n_lower = name;
+        std::transform(s_lower.begin(), s_lower.end(), s_lower.begin(),
+                       ::tolower);
+        std::transform(n_lower.begin(), n_lower.end(), n_lower.begin(),
+                       ::tolower);
+        if (n_lower.find(s_lower) == std::string::npos)
+          match = false;
+      }
+
+      if (match) {
+        if (ImGui::Selectable(cmd.name.c_str())) {
+          cmd.action();
+        }
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 100);
+        ImGui::TextDisabled("%s", cmd.shortcut.c_str());
+      }
+    }
+    ImGui::EndChild();
+
+    ImGui::EndPopup();
+  }
 }
 
 } // namespace BTQuant

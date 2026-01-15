@@ -131,7 +131,7 @@ void RealtimeChartComponent::update(float delta_time) {
 
 void RealtimeChartComponent::handle_trade(
     const RenderEngine::TradeData &trade) {
-  if (dashboard_ && trade.symbol != dashboard_->get_active_symbol())
+  if (trade.symbol != target_symbol_)
     return;
 
   float ts = static_cast<float>(trade.timestamp_us % 1000000000) / 1000.0f;
@@ -163,7 +163,7 @@ void RealtimeChartComponent::handle_trade(
 
 void RealtimeChartComponent::handle_orderbook(
     const RenderEngine::OrderbookData &orderbook) {
-  if (dashboard_ && orderbook.symbol != dashboard_->get_active_symbol())
+  if (orderbook.symbol != target_symbol_)
     return;
   // Real-time chart usually tracks price from trades, but could also track
   // mid-price
@@ -296,53 +296,65 @@ void RealtimeChartComponent::render_gui() {
   ImVec2 pos = ImGui::GetWindowPos();
   ImVec2 size = ImGui::GetWindowSize();
 
-  // 0. In-Chart Toolbar (Top)
+  // 0. In-Chart Toolbar & OHLCV Readout
   ImGui::SetCursorPos(ImVec2(10, 5));
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+  ImGui::PushStyleColor(ImGuiCol_Text,
+                        ImVec4(1.0f, 0.8f, 0.0f, 1.0f)); // Gold for symbol
   ImGui::Text("%s", chart_symbol_.c_str());
   ImGui::PopStyleColor();
 
-  ImGui::SameLine(100);
-  const char *timeframes[] = {"1m", "5m", "15m", "1h", "4h", "1d"};
-  if (ImGui::BeginCombo("##Timeframe", current_timeframe_.c_str(),
-                        ImGuiComboFlags_None)) {
-    for (int n = 0; n < IM_ARRAYSIZE(timeframes); n++) {
-      bool is_selected = (current_timeframe_ == timeframes[n]);
-      if (ImGui::Selectable(timeframes[n], is_selected)) {
-        current_timeframe_ = timeframes[n];
-        mark_dirty();
-      }
-      if (is_selected)
-        ImGui::SetItemDefaultFocus();
-    }
-    ImGui::EndCombo();
+  if (!candles_.empty()) {
+    const auto &last = candles_.back();
+    ImGui::SameLine(100);
+    ImGui::TextDisabled("O:");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", last.open);
+    ImGui::SameLine();
+    ImGui::TextDisabled("H:");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", last.high);
+    ImGui::SameLine();
+    ImGui::TextDisabled("L:");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", last.low);
+    ImGui::SameLine();
+    ImGui::TextDisabled("C:");
+    ImGui::SameLine();
+    ImGui::TextColored(last.close >= last.open ? ImVec4(0, 1, 0.2f, 1)
+                                               : ImVec4(1, 0.2f, 0.2f, 1),
+                       "%.2f", last.close);
+    ImGui::SameLine();
+    ImGui::TextDisabled("V:");
+    ImGui::SameLine();
+    ImGui::Text("%.2f", last.volume);
   }
 
-  ImGui::SameLine(size.x - 220);
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.6f, 0.2f, 0.8f));
-  if (ImGui::Button("BUY", ImVec2(60, 22))) {
-    // TODO: Open quick order entry
+  // Right-side Toolbar (Buttons)
+  ImGui::SameLine(size.x - 240);
+  if (ImGui::SmallButton("1m")) {
+    current_timeframe_ = "1m";
+    mark_dirty();
   }
-  ImGui::PopStyleColor();
-
   ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 0.8f));
-  if (ImGui::Button("SELL", ImVec2(60, 22))) {
-    // TODO: Open quick order entry
+  if (ImGui::SmallButton("5m")) {
+    current_timeframe_ = "5m";
+    mark_dirty();
   }
-  ImGui::PopStyleColor();
-
   ImGui::SameLine();
-  if (ImGui::Button("INDICATORS")) {
-    // TODO: Open indicator settings
+  if (ImGui::SmallButton("15m")) {
+    current_timeframe_ = "15m";
+    mark_dirty();
+  }
+  ImGui::SameLine();
+  if (ImGui::SmallButton("Settings")) { /* TODO */
   }
 
   // 1. Draw Grid Lines
-  float grid_color = ImGui::GetColorU32(ImGuiCol_Border, 0.3f);
-  int horizontal_lines = 5;
+  float grid_color = ImGui::GetColorU32(ImGuiCol_Border, 0.2f);
+  int horizontal_lines = 6;
   for (int i = 0; i <= horizontal_lines; ++i) {
     float y = pos.y + (size.y * 0.85f) * (float)i / (float)horizontal_lines;
-    draw_list->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + size.x - 60, y),
+    draw_list->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + size.x - 65, y),
                        grid_color);
   }
 
@@ -357,18 +369,29 @@ void RealtimeChartComponent::render_gui() {
                        ImGui::GetColorU32(ImGuiCol_Text), label);
   }
 
-  // 3. Current Price Tag
+  // 3. Current Price Tag (High Precision)
   if (!candles_.empty()) {
     float last_price = candles_.back().close;
     float rel_y = (last_price - min_y_) / (max_y_ - min_y_);
     float y = pos.y + (size.y * 0.85f) * (1.0f - rel_y);
 
+    // Draw Price Pointer
+    float h = 18.0f;
+    float w = 60.0f;
+    ImVec2 tag_pos(pos.x + size.x - w, y - h * 0.5f);
+
     draw_list->AddRectFilled(
-        ImVec2(pos.x + size.x - 60, y - 10), ImVec2(pos.x + size.x, y + 10),
-        ImGui::GetColorU32(ImVec4(0.2f, 0.6f, 1.0f, 0.8f)));
+        tag_pos, ImVec2(tag_pos.x + w, tag_pos.y + h),
+        ImGui::GetColorU32(last_price >= candles_.back().open
+                               ? ImVec4(0, 0.6f, 0.2f, 1)
+                               : ImVec4(0.8f, 0.1f, 0.1f, 1)),
+        2.0f);
+
     char price_str[32];
     snprintf(price_str, sizeof(price_str), "%.2f", last_price);
-    draw_list->AddText(ImVec2(pos.x + size.x - 55, y - 7),
+    ImVec2 text_size = ImGui::CalcTextSize(price_str);
+    draw_list->AddText(ImVec2(tag_pos.x + (w - text_size.x) * 0.5f,
+                              tag_pos.y + (h - text_size.y) * 0.5f),
                        ImGui::GetColorU32(ImVec4(1, 1, 1, 1)), price_str);
   }
 
@@ -448,9 +471,17 @@ void RealtimeChartComponent::handle_input(const InputEvent &event) {
 
   case InputEventType::Scroll:
     if (inside && event.scroll_delta.y != 0.0f) {
-      float zoom_delta = 1.0f - event.scroll_delta.y * 0.1f;
+      // Exponential zoom for smoother feel
+      float zoom_factor = 0.15f;
+      float zoom_delta = std::pow(1.1f, -event.scroll_delta.y * zoom_factor);
+      float old_zoom = view_zoom_;
       view_zoom_ *= zoom_delta;
-      view_zoom_ = std::max(0.01f, std::min(10.0f, view_zoom_));
+      view_zoom_ = std::max(0.005f, std::min(50.0f, view_zoom_));
+
+      // Attempt to zoom towards the mouse cursor (X-axis)
+      float rel_x = (mouse_pos.x - position_.x) / size_.x;
+      // TODO: Adjust view_offset_ to pin the zoom at rel_x
+
       mark_dirty();
     }
     break;
@@ -647,55 +678,145 @@ void RealtimeChartComponent::rebuild_candlestick_geometry() {
     if (body_bottom - body_top < 1.0f)
       body_bottom = body_top + 1.0f;
 
-    // Body (Type 0) - Enhanced with border and professional fill
-    glm::vec4 body_fill_color = color;
-    if (is_bullish) {
-      body_fill_color.a = 0.4f; // More opaque for bullish
-    } else {
-      body_fill_color.a = 0.8f; // More solid for bearish
-    }
+    // 1. Candlestick Body Quad (with slight transparency)
+    glm::vec4 fill_color = body_color;
+    fill_color.a = is_bullish ? 0.4f : 0.8f;
 
-    // 1. Candlestick Body Quad
     vertices.push_back(
-        {{x - bar_width * 0.5f, body_top}, {0, 0}, body_fill_color, 1.0f, 0});
+        {{x - bar_width * 0.5f, body_top}, {0, 0}, fill_color, 1.0f, 0});
     vertices.push_back(
-        {{x + bar_width * 0.5f, body_top}, {1, 0}, body_fill_color, 1.0f, 0});
-    vertices.push_back({{x + bar_width * 0.5f, body_bottom},
-                        {1, 1},
-                        body_fill_color,
-                        1.0f,
-                        0});
+        {{x + bar_width * 0.5f, body_top}, {1, 0}, fill_color, 1.0f, 0});
     vertices.push_back(
-        {{x - bar_width * 0.5f, body_top}, {0, 0}, body_fill_color, 1.0f, 0});
-    vertices.push_back({{x + bar_width * 0.5f, body_bottom},
-                        {1, 1},
-                        body_fill_color,
-                        1.0f,
-                        0});
-    vertices.push_back({{x - bar_width * 0.5f, body_bottom},
-                        {0, 1},
-                        body_fill_color,
-                        1.0f,
-                        0});
+        {{x + bar_width * 0.5f, body_bottom}, {1, 1}, fill_color, 1.0f, 0});
 
-    // 2. Candlestick Bottom Border (optional for crispness)
     vertices.push_back(
-        {{x - bar_width * 0.5f, body_bottom}, {0, 1}, border_color, 0.0f, 1});
+        {{x - bar_width * 0.5f, body_top}, {0, 0}, fill_color, 1.0f, 0});
     vertices.push_back(
-        {{x + bar_width * 0.5f, body_bottom}, {1, 1}, border_color, 0.0f, 1});
-    vertices.push_back({{x + bar_width * 0.5f, body_bottom + 1.0f},
+        {{x + bar_width * 0.5f, body_bottom}, {1, 1}, fill_color, 1.0f, 0});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {0, 1}, fill_color, 1.0f, 0});
+
+    // 2. Body Border (Institutional Look)
+    float border_thickness = 1.0f;
+    // Top border
+    vertices.push_back({{x - bar_width * 0.5f, body_top - border_thickness},
+                        {0, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back({{x + bar_width * 0.5f, body_top - border_thickness},
+                        {1, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_top}, {1, 1}, border_color, 1.0f, 1});
+    vertices.push_back({{x - bar_width * 0.5f, body_top - border_thickness},
+                        {0, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_top}, {1, 1}, border_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_top}, {0, 1}, border_color, 1.0f, 1});
+    // Bottom border
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {0, 0}, border_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_bottom}, {1, 0}, border_color, 1.0f, 1});
+    vertices.push_back({{x + bar_width * 0.5f, body_bottom + border_thickness},
                         {1, 1},
                         border_color,
-                        0.0f,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {0, 0}, border_color, 1.0f, 1});
+    vertices.push_back({{x + bar_width * 0.5f, body_bottom + border_thickness},
+                        {1, 1},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back({{x - bar_width * 0.5f, body_bottom + border_thickness},
+                        {0, 1},
+                        border_color,
+                        1.0f,
                         1});
 
-    // 3. Wicks (Type 1) - One pixel wide wicks with bright color
-    vertices.push_back({{x - 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
-    vertices.push_back({{x + 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
-    vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
-    vertices.push_back({{x - 0.5f, y_high}, {0.5f, 0}, border_color, 0.0f, 1});
-    vertices.push_back({{x + 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
-    vertices.push_back({{x - 0.5f, y_low}, {0.5f, 1}, border_color, 0.0f, 1});
+    // 3. Side borders
+    vertices.push_back({{x - bar_width * 0.5f - border_thickness, body_top},
+                        {0, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_top}, {1, 0}, border_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {1, 1}, border_color, 1.0f, 1});
+    vertices.push_back({{x - bar_width * 0.5f - border_thickness, body_top},
+                        {0, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x - bar_width * 0.5f, body_bottom}, {1, 1}, border_color, 1.0f, 1});
+    vertices.push_back({{x - bar_width * 0.5f - border_thickness, body_bottom},
+                        {0, 1},
+                        border_color,
+                        1.0f,
+                        1});
+
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_top}, {0, 0}, border_color, 1.0f, 1});
+    vertices.push_back({{x + bar_width * 0.5f + border_thickness, body_top},
+                        {1, 0},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back({{x + bar_width * 0.5f + border_thickness, body_bottom},
+                        {1, 1},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_top}, {0, 0}, border_color, 1.0f, 1});
+    vertices.push_back({{x + bar_width * 0.5f + border_thickness, body_bottom},
+                        {1, 1},
+                        border_color,
+                        1.0f,
+                        1});
+    vertices.push_back(
+        {{x + bar_width * 0.5f, body_bottom}, {0, 1}, border_color, 1.0f, 1});
+
+    // 4. Wicks (Type 1) - High-fidelity wicks
+    float wick_w = 1.0f;
+    // Top wick
+    vertices.push_back(
+        {{x - wick_w * 0.5f, y_high}, {0, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, y_high}, {1, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, body_top}, {1, 1}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - wick_w * 0.5f, y_high}, {0, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, body_top}, {1, 1}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - wick_w * 0.5f, body_top}, {0, 1}, wick_color, 1.0f, 1});
+
+    // Bottom wick
+    vertices.push_back(
+        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, body_bottom}, {1, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, y_low}, {1, 1}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - wick_w * 0.5f, body_bottom}, {0, 0}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x + wick_w * 0.5f, y_low}, {1, 1}, wick_color, 1.0f, 1});
+    vertices.push_back(
+        {{x - wick_w * 0.5f, y_low}, {0, 1}, wick_color, 1.0f, 1});
 
     // 4. Volume (Type 2) - Professional separate panel look at bottom
     // Volume panel takes bottom 15% height
@@ -950,18 +1071,24 @@ void RealtimeChartComponent::update_y_range() {
     return;
   }
 
-  // Add some padding
+  // Padding and Rounding for professional look
   float range = data_max - data_min;
-  float padding = range * 0.15f;
+  if (range < 1e-6f)
+    range = 1.0f;
 
-  if (range < 0.001f) {
-    padding = std::abs(data_min) * 0.1f;
-    if (padding < 0.001f)
-      padding = 1.0f;
+  float padding = range * 0.12f; // 12% padding
+  data_min -= padding;
+  data_max += padding;
+
+  // Nice rounding logic
+  float step = std::pow(10.0f, std::floor(std::log10(range)) - 1.0f);
+  if (step > 0) {
+    min_y_ = std::floor(data_min / step) * step;
+    max_y_ = std::ceil(data_max / step) * step;
+  } else {
+    min_y_ = data_min;
+    max_y_ = data_max;
   }
-
-  min_y_ = data_min - padding;
-  max_y_ = data_max + padding;
 }
 
 void RealtimeChartComponent::initialize_vulkan_resources(

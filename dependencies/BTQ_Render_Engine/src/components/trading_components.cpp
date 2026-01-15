@@ -215,6 +215,8 @@ TapeComponent::TapeComponent(const glm::vec2 &position, const glm::vec2 &size)
 TapeComponent::~TapeComponent() {}
 
 void TapeComponent::handle_trade(const RenderEngine::TradeData &trade) {
+  if (trade.symbol != target_symbol_)
+    return;
   TapeEntry entry;
   entry.timestamp_us = trade.timestamp_us;
   entry.price = trade.price;
@@ -255,16 +257,38 @@ void TapeComponent::render_gui() {
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
   if (ImGui::Begin("Time & Sales", &visible_)) {
-    // Delta Header
+    // Delta Header with a simple visual indicator
+    float delta_ratio = std::clamp(cumulative_delta_ / 1000.0f, -1.0f, 1.0f);
+    ImGui::Text("Cumulative Delta");
+    ImGui::SameLine(ImGui::GetWindowWidth() - 120);
     ImGui::TextColored(cumulative_delta_ >= 0 ? ImVec4(0, 1, 0.4f, 1)
                                               : ImVec4(1, 0.2f, 0.2f, 1),
-                       "CUMULATIVE DELTA: %.2f", cumulative_delta_);
+                       "%.2f", cumulative_delta_);
+
+    // Simple bar representation of delta pressure
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float bar_w = ImGui::GetContentRegionAvail().x;
+    float center_x = p.x + bar_w * 0.5f;
+    draw_list->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + bar_w, p.y + 4),
+                             ImColor(50, 50, 60));
+    if (delta_ratio > 0)
+      draw_list->AddRectFilled(
+          ImVec2(center_x, p.y),
+          ImVec2(center_x + (bar_w * 0.5f * delta_ratio), p.y + 4),
+          ImColor(0, 255, 100));
+    else
+      draw_list->AddRectFilled(
+          ImVec2(center_x + (bar_w * 0.5f * delta_ratio), p.y),
+          ImVec2(center_x, p.y + 4), ImColor(255, 50, 50));
+
+    ImGui::Dummy(ImVec2(0, 8));
     ImGui::Separator();
 
     if (ImGui::BeginTable("TapeTable", 3,
                           ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersOuter)) {
-      ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                              ImGuiTableFlags_BordersInnerV)) {
+      ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 75.0f);
       ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
       ImGui::TableHeadersRow();
@@ -272,33 +296,39 @@ void TapeComponent::render_gui() {
       for (const auto &entry : entries_) {
         ImGui::TableNextRow();
 
-        // Coloring logic for the whole row if it's a whale trade
         if (entry.is_whale_trade) {
           ImGui::TableSetBgColor(
               ImGuiTableBgTarget_RowBg0,
-              ImGui::GetColorU32(ImVec4(0.8f, 0.5f, 0.0f, 0.3f)));
+              ImGui::GetColorU32(ImVec4(0.8f, 0.4f, 0.0f, 0.25f)));
         } else if (entry.is_large_trade) {
           ImGui::TableSetBgColor(
               ImGuiTableBgTarget_RowBg0,
-              ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.1f, 0.2f)));
+              ImGui::GetColorU32(ImVec4(0.4f, 0.4f, 0.1f, 0.15f)));
         }
 
         ImGui::TableSetColumnIndex(0);
-        ImGui::Text("%lu", (entry.timestamp_us / 1000000) %
-                               86400); // Simple HH:MM:SS placeholder
+        // Format microseconds to HH:MM:SS.ms
+        uint64_t total_ms = entry.timestamp_us / 1000;
+        uint32_t ms = total_ms % 1000;
+        time_t seconds = total_ms / 1000;
+        struct tm *tm_info = gmtime(&seconds);
+        ImGui::Text("%02d:%02d:%02d.%03d", tm_info->tm_hour, tm_info->tm_min,
+                    tm_info->tm_sec, ms);
 
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextColored(entry.is_buy ? ImVec4(0, 1, 0.2f, 1)
-                                        : ImVec4(1, 0.1f, 0.1f, 1),
+        ImGui::TextColored(entry.is_buy ? ImVec4(0.0f, 1.0f, 0.4f, 1.0f)
+                                        : ImVec4(1.0f, 0.2f, 0.2f, 1.0f),
                            "%.2f", entry.price);
 
         ImGui::TableSetColumnIndex(2);
         if (entry.is_whale_trade) {
-          ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "%.4f (WHALE)", entry.size);
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+          ImGui::Text(">> %.4f <<", entry.size);
+          ImGui::PopStyleColor();
         } else if (entry.is_large_trade) {
-          ImGui::TextColored(ImVec4(1, 1, 0.3f, 1), "%.4f !!", entry.size);
+          ImGui::Text("   %.4f !", entry.size);
         } else {
-          ImGui::Text("%.4f", entry.size);
+          ImGui::Text("   %.4f", entry.size);
         }
       }
       ImGui::EndTable();

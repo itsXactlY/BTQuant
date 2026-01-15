@@ -47,7 +47,7 @@ void MarketDepthChartComponent::handle_trade(
 
 void MarketDepthChartComponent::handle_orderbook(
     const RenderEngine::OrderbookData &orderbook) {
-  if (dashboard_ && orderbook.symbol != dashboard_->get_active_symbol())
+  if (orderbook.symbol != target_symbol_)
     return;
 
   // Convert RenderEngine::OrderbookData to OrderBookData

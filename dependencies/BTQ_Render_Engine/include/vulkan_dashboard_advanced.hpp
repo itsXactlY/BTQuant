@@ -184,6 +184,15 @@ struct OrderBookLevel {
   double price;
   double size;
   double total_size;
+  float last_update_ts = 0.0f; // For animation
+};
+
+struct TapeEntry {
+  uint64_t timestamp_us;
+  double price;
+  double size;
+  bool is_buy;
+  bool is_whale;
 };
 
 struct OrderBookData {
@@ -663,6 +672,54 @@ struct GestureEvent {
   float duration = 0.0f;
 };
 
+enum class HotkeyAction {
+  SAVE_LAYOUT,
+  LOAD_LAYOUT,
+  RESET_LAYOUT,
+  TOGGLE_FULLSCREEN,
+  TOGGLE_DATA_FEED,
+  TOGGLE_PERFORMANCE_OVERLAY,
+  OPEN_COMMAND_PALETTE,
+  TIMEFRAME_1M,
+  TIMEFRAME_3M,
+  TIMEFRAME_5M,
+  TIMEFRAME_15M,
+  SWITCH_TAB_1,
+  SWITCH_TAB_2,
+  SWITCH_TAB_3,
+  SWITCH_TAB_4,
+  SWITCH_TAB_5,
+  SWITCH_TAB_6,
+  SWITCH_TAB_7,
+  SWITCH_TAB_8,
+  SWITCH_TAB_9,
+  NONE
+};
+
+struct HotkeyBinding {
+  int key;
+  uint32_t modifiers;
+  HotkeyAction action;
+};
+
+class HotkeyManager {
+public:
+  void add_binding(int key, uint32_t modifiers, HotkeyAction action) {
+    bindings_.push_back({key, modifiers, action});
+  }
+  HotkeyAction get_action(int key, uint32_t modifiers) const {
+    for (const auto &b : bindings_) {
+      if (b.key == key && b.modifiers == modifiers)
+        return b.action;
+    }
+    return HotkeyAction::NONE;
+  }
+  void clear() { bindings_.clear(); }
+
+private:
+  std::vector<HotkeyBinding> bindings_;
+};
+
 struct InputEvent {
   InputEventType type;
   glm::vec2 position{0.0f};
@@ -759,6 +816,13 @@ public:
   glm::vec2 get_position() const { return position_; }
   glm::vec2 get_size() const { return size_; }
 
+  // Symbol tracking
+  void set_target_symbol(const std::string &symbol) {
+    target_symbol_ = symbol;
+    mark_dirty();
+  }
+  const std::string &get_target_symbol() const { return target_symbol_; }
+
   // Visibility and state
   void set_visible(bool visible) { visible_ = visible; }
   void set_minimized(bool minimized) { minimized_ = minimized; }
@@ -777,6 +841,7 @@ protected:
   DashboardTheme theme_;
   VulkanCore *vulkan_core_ = nullptr;
   VulkanDashboard *dashboard_ = nullptr;
+  std::string target_symbol_ = "BTC-USDT";
 };
 
 // Data grid for displaying tabular market data
@@ -1039,6 +1104,110 @@ private:
   float large_trade_threshold_ = 5.0f;
   float whale_trade_threshold_ = 50.0f;
   float cumulative_delta_ = 0.0f;
+};
+
+// Real-time Watchlist for monitoring multiple instruments
+struct WatchlistEntry {
+  std::string symbol;
+  double price = 0.0;
+  double change_24h = 0.0;
+  double volume_24h = 0.0;
+  uint64_t last_update_ts = 0;
+};
+
+class WatchlistComponent : public UIComponent {
+public:
+  WatchlistComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~WatchlistComponent();
+  std::string get_name() const override { return "Watchlist"; }
+
+  void add_symbol(const std::string &symbol);
+  void remove_symbol(const std::string &symbol);
+  void clear_symbols() { entries_.clear(); }
+  void update_quote(const std::string &symbol, double price, double change,
+                    double volume);
+  const std::vector<WatchlistEntry> &get_entries() const { return entries_; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  std::vector<WatchlistEntry> entries_;
+  char search_buffer_[64] = {0};
+};
+
+// Professional Alert System for price and volume monitoring
+enum class AlertCondition {
+  PRICE_ABOVE,
+  PRICE_BELOW,
+  VOLUME_ABOVE,
+  PERCENT_CHANGE_ABOVE,
+  PERCENT_CHANGE_BELOW
+};
+
+struct AlertRule {
+  std::string symbol;
+  AlertCondition condition;
+  double target_value;
+  bool is_active = true;
+  bool is_triggered = false;
+  std::string message;
+  int trigger_count = 0;
+};
+
+class AlertManager {
+public:
+  void add_alert(const AlertRule &rule) { alerts_.push_back(rule); }
+  void remove_alert(size_t index) {
+    if (index < alerts_.size())
+      alerts_.erase(alerts_.begin() + index);
+  }
+  void clear_alerts() { alerts_.clear(); }
+
+  const std::vector<AlertRule> &get_alerts() const { return alerts_; }
+
+  void check_alerts(const std::string &symbol, double price, double volume) {
+    for (auto &a : alerts_) {
+      if (!a.is_active || a.symbol != symbol)
+        continue;
+
+      bool trigger = false;
+      switch (a.condition) {
+      case AlertCondition::PRICE_ABOVE:
+        if (price >= a.target_value)
+          trigger = true;
+        break;
+      case AlertCondition::PRICE_BELOW:
+        if (price <= a.target_value)
+          trigger = true;
+        break;
+      case AlertCondition::VOLUME_ABOVE:
+        if (volume >= a.target_value)
+          trigger = true;
+        break;
+      default:
+        break;
+      }
+
+      if (trigger && !a.is_triggered) {
+        a.is_triggered = true;
+        a.trigger_count++;
+      } else if (!trigger) {
+        a.is_triggered = false;
+      }
+    }
+  }
+
+  void clear_triggered() {
+    for (auto &a : alerts_)
+      a.is_triggered = false;
+  }
+
+private:
+  std::vector<AlertRule> alerts_;
 };
 
 // Order management and execution panel
@@ -1330,6 +1499,52 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
 };
 
+// Alert Center for managing price and volume alerts
+class AlertComponent : public UIComponent {
+public:
+  AlertComponent(const glm::vec2 &position, const glm::vec2 &size,
+                 AlertManager &manager);
+  ~AlertComponent();
+  std::string get_name() const override { return "Alert Center"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  AlertManager &manager_;
+  char symbol_buffer_[64] = {0};
+  float target_value_ = 0.0f;
+  int selected_condition_ = 0;
+};
+
+// Power Screener for identifying gainers/losers and volume spikes
+struct ScreenerResult {
+  std::string symbol;
+  double price = 0.0;
+  double change_24h = 0.0;
+  double volume_24h = 0.0;
+  double vol_spike_ratio = 1.0;
+};
+
+class MarketScreenerComponent : public UIComponent {
+public:
+  MarketScreenerComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~MarketScreenerComponent();
+  std::string get_name() const override { return "Market Screener"; }
+
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  std::vector<ScreenerResult> results_;
+};
+
 // One-click trading interface component
 class TradingInterfaceComponent : public UIComponent {
 public:
@@ -1377,8 +1592,14 @@ public:
   AppTheme current_theme() const { return current_theme_; }
   ImFont *get_monospace_font() const { return monospace_font_; }
 
+  enum class LayoutMode { Single, Grid, Tabs };
+  void set_layout_mode(LayoutMode mode) { current_layout_mode_ = mode; }
+  LayoutMode get_layout_mode() const { return current_layout_mode_; }
+
   // Lifecycle management
   void initialize();
+  void setup_hotkeys();
+  void handle_hotkey(HotkeyAction action);
   void main_loop();
   void shutdown();
 
@@ -1401,6 +1622,7 @@ public:
   // Workspace & Menu management
   void render_main_menu_bar();
   void render_symbol_selector();
+  void render_chart_tabs();
   void handle_menu_command(const std::string &cmd,
                            const std::string &args = "");
   void apply_layout(const WorkspaceLayout &layout);
@@ -1415,6 +1637,14 @@ public:
     GPUMemoryManager::MemoryStats memory_stats;
     uint64_t ui_elements_rendered;
     float data_latency_ms;
+
+    // Phase 7: Granular timings
+    float geometry_rebuild_ms;
+    float render_dispatch_ms;
+    float event_processing_ms;
+    float data_bridge_update_ms;
+    uint64_t trades_processed;
+    uint64_t orderbooks_processed;
   };
 
   struct RiskMetrics {
@@ -1443,9 +1673,14 @@ private:
 
   // UI components
   std::vector<std::unique_ptr<UIComponent>> components_;
+  HotkeyManager hotkey_manager_;
   std::vector<std::unique_ptr<UIComponent>> chart_components_;
+  WatchlistComponent *watchlist_component_ = nullptr;
+  AlertManager alert_manager_;
   WorkspaceLayout current_workspace_;
   bool is_symbol_selector_open_ = false;
+  LayoutMode current_layout_mode_ = LayoutMode::Tabs;
+  int active_chart_index_ = 0;
 
   // Market data integration
   std::unique_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
@@ -1460,6 +1695,9 @@ private:
   // Frame timing
   std::chrono::high_resolution_clock::time_point last_frame_time_;
   std::deque<float> frame_times_;
+  std::deque<float> event_times_;
+  std::deque<float> data_times_;
+  std::deque<float> render_times_;
   uint64_t frame_count_{0};
 
   // Fonts
@@ -1470,6 +1708,8 @@ private:
   bool show_backtest_dialog_ = false;
   bool show_risk_manager_ = false;
   bool show_performance_overlay_ = false;
+  bool show_command_palette_ = false;
+  char command_buffer_[128] = {0};
   AppTheme current_theme_ = AppTheme::InstitutionalDark;
   RiskMetrics risk_metrics_{100000.0, 1250.0, 0.05, 2.1, 1500.0, 45000.0};
 
@@ -1498,6 +1738,7 @@ private:
   void render_backtest_dialog();
   void render_risk_manager();
   void render_performance_overlay();
+  void render_command_palette();
   void render_status_bar();
 
   // Event handlers

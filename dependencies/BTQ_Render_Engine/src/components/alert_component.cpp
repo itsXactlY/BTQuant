@@ -20,7 +20,7 @@ void AlertComponent::render_gui() {
   if (ImGui::Begin("Alert Center", &visible_)) {
     if (ImGui::BeginTabBar("AlertTabs")) {
       if (ImGui::BeginTabItem("Active Alerts")) {
-        const auto &alerts = manager_.get_alerts();
+        auto alerts = manager_.get_alerts(); // Returns a thread-safe copy
         if (ImGui::BeginTable("AlertsTable", 5,
                               ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                                   ImGuiTableFlags_NoBordersInBody)) {
@@ -47,6 +47,7 @@ void AlertComponent::render_gui() {
           ImGui::TableSetColumnIndex(4);
           ImGui::Text("CMD");
 
+          std::lock_guard lock(data_mutex_);
           for (size_t i = 0; i < alerts.size(); ++i) {
             const auto &alert = alerts[i];
             ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
@@ -76,7 +77,7 @@ void AlertComponent::render_gui() {
 
             ImGui::TableSetColumnIndex(4);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 0));
-            if (ImGui::SmallButton("X")) {
+            if (ImGui::SmallButton(("X##" + std::to_string(i)).c_str())) {
               manager_.remove_alert(i);
             }
             ImGui::PopStyleVar();

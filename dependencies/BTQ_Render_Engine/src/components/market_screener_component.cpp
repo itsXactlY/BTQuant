@@ -48,13 +48,14 @@ void MarketScreenerComponent::render_gui() {
       ImGui::TableSetColumnIndex(1);
       ImGui::Text("PRICE");
       ImGui::TableSetColumnIndex(2);
-      ImGui::Text("CHG%");
+      ImGui::Text("CHG%%");
       ImGui::TableSetColumnIndex(3);
       ImGui::Text("VOL");
       ImGui::TableSetColumnIndex(4);
       ImGui::Text("ACTIVITY");
 
       // Handle sorting logic (same as before)
+      std::lock_guard lock(data_mutex_);
       if (ImGuiTableSortSpecs *sort_specs = ImGui::TableGetSortSpecs()) {
         if (sort_specs->SpecsDirty) {
           std::sort(
@@ -106,12 +107,9 @@ void MarketScreenerComponent::render_gui() {
         ImGui::Text("%.2f", res.price);
 
         ImGui::TableSetColumnIndex(2);
-        ImVec4 change_color =
-            res.change_24h >= 0
-                ? ImVec4(theme_.price_up.r, theme_.price_up.g,
-                         theme_.price_up.b, 1.0f)
-                : ImVec4(theme_.price_down.r, theme_.price_down.g,
-                         theme_.price_down.b, 1.0f);
+        ImVec4 change_color = res.change_24h >= 0
+                                  ? to_imvec4(theme_.price_up)
+                                  : to_imvec4(theme_.price_down);
         ImGui::TextColored(change_color, "%+.2f%%", res.change_24h);
 
         ImGui::TableSetColumnIndex(3);

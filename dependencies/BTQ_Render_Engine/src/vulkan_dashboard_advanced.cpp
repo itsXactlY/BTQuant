@@ -129,7 +129,7 @@ MemoryPool::~MemoryPool() {
 
 BufferAllocation MemoryPool::allocate(VkDeviceSize size,
                                       VkDeviceSize alignment) {
-  std::lock_guard<std::mutex> lock(allocation_mutex_);
+  std::lock_guard lock(allocation_mutex_);
 
   for (auto it = free_blocks_.begin(); it != free_blocks_.end(); ++it) {
     VkDeviceSize aligned_offset =
@@ -165,7 +165,7 @@ BufferAllocation MemoryPool::allocate(VkDeviceSize size,
 }
 
 void MemoryPool::deallocate(const BufferAllocation &allocation) {
-  std::lock_guard<std::mutex> lock(allocation_mutex_);
+  std::lock_guard lock(allocation_mutex_);
   // Simple deallocation for now, in a production system we'd merge adjacent
   // blocks
   free_blocks_.push_back({allocation.offset, allocation.size});
@@ -277,6 +277,218 @@ GPUMemoryManager::MemoryStats GPUMemoryManager::get_memory_stats() const {
   return stats;
 }
 
+void VulkanCore::create_default_sampler() {
+  VkSamplerCreateInfo sampler_info{};
+  sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+  sampler_info.magFilter = VK_FILTER_LINEAR;
+  sampler_info.minFilter = VK_FILTER_LINEAR;
+  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.anisotropyEnable = VK_FALSE;
+  sampler_info.maxAnisotropy = 1.0f;
+  sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+  sampler_info.unnormalizedCoordinates = VK_FALSE;
+  sampler_info.compareEnable = VK_FALSE;
+  sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  sampler_info.mipLodBias = 0.0f;
+  sampler_info.minLod = 0.0f;
+  sampler_info.maxLod = 0.0f;
+
+  VulkanErrorHandler::check_result(
+      vkCreateSampler(device_, &sampler_info, nullptr, &default_sampler_),
+      "vkCreateSampler (Default)");
+}
+
+VkDescriptorSet VulkanCore::create_texture_descriptor(VkImageView view) {
+  if (imgui_descriptor_pool_ == VK_NULL_HANDLE)
+    return VK_NULL_HANDLE;
+  return ImGui_ImplVulkan_AddTexture(default_sampler_, view,
+                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+// OffscreenChartRenderer Implementation
+OffscreenChartRenderer::OffscreenChartRenderer(VulkanCore *core)
+    : core_(core) {}
+
+OffscreenChartRenderer::~OffscreenChartRenderer() { cleanup(); }
+
+void OffscreenChartRenderer::cleanup() {
+  if (core_) {
+    VkDevice device = core_->get_device();
+    if (framebuffer_ != VK_NULL_HANDLE)
+      vkDestroyFramebuffer(device, framebuffer_, nullptr);
+    if (view_ != VK_NULL_HANDLE)
+      vkDestroyImageView(device, view_, nullptr);
+    if (image_ != VK_NULL_HANDLE)
+      vkDestroyImage(device, image_, nullptr);
+    if (memory_ != VK_NULL_HANDLE)
+      vkFreeMemory(device, memory_, nullptr);
+    if (render_pass_ != VK_NULL_HANDLE)
+      vkDestroyRenderPass(device, render_pass_, nullptr);
+  }
+}
+
+void OffscreenChartRenderer::resize(uint32_t width, uint32_t height) {
+  if (width == width_ && height == height_)
+    return;
+  if (width == 0 || height == 0)
+    return;
+  cleanup();
+  create_resources(width, height);
+}
+
+void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
+  width_ = width;
+  height_ = height;
+  VkDevice device = core_->get_device();
+
+  // 1. Create Render Pass
+  VkAttachmentDescription colorAttachment{};
+  colorAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+  colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  VkAttachmentReference colorAttachmentRef{};
+  colorAttachmentRef.attachment = 0;
+  colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  VkSubpassDescription subpass{};
+  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  subpass.colorAttachmentCount = 1;
+  subpass.pColorAttachments = &colorAttachmentRef;
+
+  VkSubpassDependency dependency{};
+  dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+  dependency.dstSubpass = 0;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  dependency.srcAccessMask = 0;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+  VkRenderPassCreateInfo renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  renderPassInfo.attachmentCount = 1;
+  renderPassInfo.pAttachments = &colorAttachment;
+  renderPassInfo.subpassCount = 1;
+  renderPassInfo.pSubpasses = &subpass;
+  renderPassInfo.dependencyCount = 1;
+  renderPassInfo.pDependencies = &dependency;
+
+  VulkanErrorHandler::check_result(
+      vkCreateRenderPass(device, &renderPassInfo, nullptr, &render_pass_),
+      "vkCreateRenderPass (Offscreen)");
+
+  // 2. Create Image
+  VkImageCreateInfo imageInfo{};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = width;
+  imageInfo.extent.height = height;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage =
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.flags = 0;
+
+  VulkanErrorHandler::check_result(
+      vkCreateImage(device, &imageInfo, nullptr, &image_),
+      "vkCreateImage (Offscreen)");
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, image_, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex = core_->find_memory_type(
+      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  VulkanErrorHandler::check_result(
+      vkAllocateMemory(device, &allocInfo, nullptr, &memory_),
+      "vkAllocateMemory (Offscreen)");
+
+  vkBindImageMemory(device, image_, memory_, 0);
+
+  // 3. Create Image View
+  VkImageViewCreateInfo viewInfo{};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  viewInfo.image = image_;
+  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  viewInfo.subresourceRange.baseMipLevel = 0;
+  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.baseArrayLayer = 0;
+  viewInfo.subresourceRange.layerCount = 1;
+
+  VulkanErrorHandler::check_result(
+      vkCreateImageView(device, &viewInfo, nullptr, &view_),
+      "vkCreateImageView (Offscreen)");
+
+  // 4. Create Framebuffer
+  VkFramebufferCreateInfo framebufferInfo{};
+  framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  framebufferInfo.renderPass = render_pass_;
+  framebufferInfo.attachmentCount = 1;
+  framebufferInfo.pAttachments = &view_;
+  framebufferInfo.width = width;
+  framebufferInfo.height = height;
+  framebufferInfo.layers = 1;
+
+  VulkanErrorHandler::check_result(
+      vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffer_),
+      "vkCreateFramebuffer (Offscreen)");
+
+  // 5. Create Descriptor Set for ImGui
+  descriptor_set_ = core_->create_texture_descriptor(view_);
+}
+
+void OffscreenChartRenderer::begin_render(VkCommandBuffer cmd) {
+  VkRenderPassBeginInfo renderPassInfo{};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  renderPassInfo.renderPass = render_pass_;
+  renderPassInfo.framebuffer = framebuffer_;
+  renderPassInfo.renderArea.offset = {0, 0};
+  renderPassInfo.renderArea.extent = {width_, height_};
+
+  VkClearValue clearColor = {{{0.01f, 0.01f, 0.01f, 1.0f}}};
+  renderPassInfo.clearValueCount = 1;
+  renderPassInfo.pClearValues = &clearColor;
+
+  vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+  VkViewport viewport{};
+  viewport.x = 0.0f;
+  viewport.y = 0.0f;
+  viewport.width = (float)width_;
+  viewport.height = (float)height_;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+  VkRect2D scissor{};
+  scissor.offset = {0, 0};
+  scissor.extent = {width_, height_};
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
+}
+
+void OffscreenChartRenderer::end_render(VkCommandBuffer cmd) {
+  vkCmdEndRenderPass(cmd);
+}
+
 // VulkanCore implementation
 VulkanCore::VulkanCore(const DashboardConfig &config) : config_(config) {}
 
@@ -311,6 +523,7 @@ void VulkanCore::initialize(Display *display, Window window, uint32_t width,
   create_descriptor_pool();
   create_sync_objects();
 
+  create_default_sampler();
   init_imgui();
 
   last_frame_time_ = std::chrono::high_resolution_clock::now();
@@ -964,7 +1177,7 @@ VkPipeline VulkanCore::create_graphics_pipeline(
     const std::string &vert_path, const std::string &frag_path,
     const std::vector<VkVertexInputBindingDescription> &bindings,
     const std::vector<VkVertexInputAttributeDescription> &attributes,
-    VkPipelineLayout layout) {
+    VkPipelineLayout layout, VkRenderPass render_pass) {
 
   auto vert_code = read_file(vert_path);
   auto frag_code = read_file(frag_path);
@@ -1074,7 +1287,8 @@ VkPipeline VulkanCore::create_graphics_pipeline(
   pipeline_info.pMultisampleState = &multisampling;
   pipeline_info.pColorBlendState = &color_blending;
   pipeline_info.layout = layout;
-  pipeline_info.renderPass = render_pass_;
+  pipeline_info.renderPass =
+      (render_pass != VK_NULL_HANDLE) ? render_pass : render_pass_;
   pipeline_info.subpass = 0;
   pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
 
@@ -1330,6 +1544,12 @@ void VulkanDashboard::initialize() {
   visualization_engine_ =
       std::make_unique<RenderEngine::DataVisualizationEngine>(
           vulkan_core_->get_device(), vulkan_core_->get_physical_device());
+  if (!visualization_engine_->isValid()) {
+    fprintf(stderr, "[VulkanDashboard] FATAL: DataVisualizationEngine "
+                    "failed to initialize GPU buffers. Possible OOM.\n");
+    throw VulkanException(VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                          "DataVisualizationEngine::initializeBuffers");
+  }
 
   init_components();
   fprintf(stderr, "[VulkanDashboard] Components initialized\n");
@@ -1493,7 +1713,7 @@ void VulkanDashboard::main_loop() {
     }
     auto event_end = std::chrono::high_resolution_clock::now();
     {
-      std::lock_guard<std::mutex> lock(stats_mutex_);
+      std::lock_guard lock(stats_mutex_);
       current_stats_.event_processing_ms =
           std::chrono::duration<float, std::milli>(event_end - event_start)
               .count();
@@ -1505,6 +1725,25 @@ void VulkanDashboard::main_loop() {
     uint64_t obs_this_frame = 0;
     if (hotspine_bridge_ && market_data_processor_) {
       auto updates = hotspine_bridge_->getLatestUpdates();
+
+      // LAG RECOVERY: If we have an extreme burst (e.g. >50k updates),
+      // we are likely reading stale/partially-overwritten data or will stall
+      // the UI.
+      if (updates.size() > 50000) {
+        fprintf(stderr,
+                "[VulkanDashboard] WARN: Extreme updates lag detected (%zu "
+                "updates). Flushing buffers.\n",
+                updates.size());
+        for (auto &chart : chart_components_) {
+          if (chart)
+            chart->clear_data();
+        }
+        for (auto &comp : components_) {
+          if (comp)
+            comp->clear_data();
+        }
+      }
+
       for (const auto &update : updates) {
         if (update.type == RenderEngine::MarketDataType::TRADE) {
           trades_this_frame++;
@@ -1532,7 +1771,7 @@ void VulkanDashboard::main_loop() {
     synchronize_market_data();
     auto data_end = std::chrono::high_resolution_clock::now();
     {
-      std::lock_guard<std::mutex> lock(stats_mutex_);
+      std::lock_guard lock(stats_mutex_);
       current_stats_.data_bridge_update_ms =
           std::chrono::duration<float, std::milli>(data_end - data_start)
               .count();
@@ -1545,7 +1784,7 @@ void VulkanDashboard::main_loop() {
     update_components(0.016f); // ~60fps
     auto logic_end = std::chrono::high_resolution_clock::now();
     {
-      std::lock_guard<std::mutex> lock(stats_mutex_);
+      std::lock_guard lock(stats_mutex_);
       current_stats_.geometry_rebuild_ms =
           std::chrono::duration<float, std::milli>(logic_end - logic_start)
               .count();
@@ -1562,7 +1801,7 @@ void VulkanDashboard::main_loop() {
     }
     auto render_end = std::chrono::high_resolution_clock::now();
     {
-      std::lock_guard<std::mutex> lock(stats_mutex_);
+      std::lock_guard lock(stats_mutex_);
       current_stats_.render_dispatch_ms =
           std::chrono::duration<float, std::milli>(render_end - render_start)
               .count();
@@ -1597,27 +1836,7 @@ void VulkanDashboard::apply_theme(AppTheme theme) {
     ImGui::StyleColorsLight();
     theme_.background_primary = glm::vec4(0.95f, 0.95f, 0.95f, 1.00f);
     theme_.text_primary = glm::vec4(0.1f, 0.1f, 0.1f, 1.00f);
-  } else {
-    // Institutional Dark (Deep Space Blue)
-    ImGui::StyleColorsDark();
-    theme_.background_primary =
-        glm::vec4(0.03f, 0.05f, 0.08f, 1.00f); // Deep Navy
-    theme_.background_secondary =
-        glm::vec4(0.05f, 0.08f, 0.12f, 1.00f); // Lighter Navy
-    theme_.background_panel = glm::vec4(0.10f, 0.13f, 0.18f, 1.00f); // Panel BG
-    theme_.border_color =
-        glm::vec4(0.20f, 0.25f, 0.35f, 1.00f); // Soft Blue Border
-
-    theme_.text_primary = glm::vec4(0.95f, 0.96f, 0.98f, 1.00f); // Ice White
-    theme_.text_secondary =
-        glm::vec4(0.70f, 0.75f, 0.85f, 1.00f);                 // Soft Blue Text
-    theme_.text_muted = glm::vec4(0.40f, 0.45f, 0.55f, 1.00f); // Muted Blue
-
-    theme_.accent_primary = glm::vec4(0.00f, 0.75f, 1.00f, 1.00f); // Cyan Neon
-    theme_.accent_secondary =
-        glm::vec4(0.00f, 1.00f, 0.60f, 1.00f); // Green Neon
-  }
-  else if (theme == AppTheme::TealStreet) {
+  } else if (theme == AppTheme::TealStreet) {
     // Teal Street Inspired (Deep Black & Cyan/Teal)
     ImGui::StyleColorsDark();
     theme_.background_primary =
@@ -1629,10 +1848,6 @@ void VulkanDashboard::apply_theme(AppTheme theme) {
     theme_.border_color =
         glm::vec4(0.15f, 0.20f, 0.25f, 1.00f); // Cyan-grey border
 
-    theme_.text_primary =
-        glm::vec4(0.95f, 0.98f, 1.00f, 1.00f); // White Cyan tint
-    theme_.text_secondary =
-        glm::vec4(0.50f, 0.65f, 0.75f, 1.00f); // Muted Teal-grey
     theme_.text_muted = glm::vec4(0.30f, 0.35f, 0.40f, 1.00f);
 
     theme_.accent_primary =
@@ -1747,7 +1962,7 @@ void VulkanDashboard::stop_market_data_processing() {
 
 VulkanDashboard::PerformanceStats
 VulkanDashboard::get_performance_stats() const {
-  std::lock_guard<std::mutex> lock(stats_mutex_);
+  std::lock_guard lock(stats_mutex_);
   return current_stats_;
 }
 
@@ -1985,7 +2200,7 @@ void VulkanDashboard::update_performance_stats() {
 
   // Update history buffers every frame for smooth graphing
   {
-    std::lock_guard<std::mutex> lock(stats_mutex_);
+    std::lock_guard lock(stats_mutex_);
     event_times_.push_back(current_stats_.event_processing_ms);
     data_times_.push_back(current_stats_.data_bridge_update_ms);
     render_times_.push_back(current_stats_.render_dispatch_ms);
@@ -2008,7 +2223,7 @@ void VulkanDashboard::update_performance_stats() {
   }
 
   if (duration >= 1.0f) {
-    std::lock_guard<std::mutex> lock(stats_mutex_);
+    std::lock_guard lock(stats_mutex_);
     current_stats_.fps = frame_count_ / duration;
     current_stats_.frame_time_ms = (duration / frame_count_) * 1000.0f;
 
@@ -2454,14 +2669,14 @@ void VulkanDashboard::render_components() {
 
     // Render global components
     for (auto &component : components_) {
-      if (component->is_visible()) {
+      if (component && component->is_visible()) {
         component->render(cmd);
       }
     }
 
     // Render workspace charts
     for (auto &chart : chart_components_) {
-      if (chart->is_visible()) {
+      if (chart && chart->is_visible()) {
         chart->render(cmd);
       }
     }
@@ -2892,19 +3107,21 @@ void VulkanDashboard::render_status_bar() {
 
   if (ImGui::Begin("##StatusBar", nullptr, window_flags)) {
     if (ImGui::BeginMenuBar()) {
-      ImGui::TextColored(theme_.accent_primary, " BTQ CORE ");
+      ImGui::TextColored(to_imvec4(theme_.accent_primary), " BTQ CORE ");
       ImGui::Separator();
 
-      ImGui::TextColored(live_execution_active_ ? theme_.price_up
-                                                : theme_.price_down,
+      ImGui::TextColored(to_imvec4(live_execution_active_ ? theme_.price_up
+                                                          : theme_.price_down),
                          " %s ", live_execution_active_ ? "LIVE" : "PAUSED");
       ImGui::Separator();
 
       if (vulkan_core_) {
         auto stats = vulkan_core_->get_memory_manager().get_memory_stats();
-        ImGui::TextDisabled(" GPU ");
-        ImGui::Text("%.1fMB",
-                    (float)stats.total_allocated / (1024.0f * 1024.0f));
+        VkDeviceSize total_used = stats.vertex_pool_used +
+                                  stats.uniform_pool_used +
+                                  stats.storage_pool_used;
+        ImGui::Text("GPU MEM: %.1f MB",
+                    (float)total_used / (1024.0f * 1024.0f));
         ImGui::Separator();
       }
 
@@ -2930,7 +3147,7 @@ void VulkanDashboard::render_status_bar() {
       if (timeinfo) {
         char time_buf[64];
         strftime(time_buf, sizeof(time_buf), "%H:%M:%S", timeinfo);
-        ImGui::TextColored(theme_.text_secondary, " %s ", time_buf);
+        ImGui::TextColored(to_imvec4(theme_.text_secondary), " %s ", time_buf);
       }
 
       ImGui::EndMenuBar();
@@ -3054,41 +3271,46 @@ void VulkanDashboard::render_performance_overlay() {
 
     auto plot_callback = [](void *data, int idx) {
       auto *deque = (std::deque<float> *)data;
-      return deque->empty() ? 0.0f : deque->at(idx);
+      if (!deque || deque->empty())
+        return 0.0f;
+      // Clamp index to prevent out of bounds if deque shrinks between calls
+      size_t safe_idx = static_cast<size_t>(
+          std::max(0, std::min(idx, (int)deque->size() - 1)));
+      return (*deque)[safe_idx];
     };
 
     // Frame Time Graph
     {
-      std::lock_guard<std::mutex> lock(stats_mutex_);
+      std::lock_guard lock(stats_mutex_);
       if (!frame_times_.empty()) {
-        ImGui::PlotLines("Frame (ms)", plot_callback, &frame_times_,
-                         frame_times_.size(), 0, nullptr, 0.0f, 33.0f,
-                         ImVec2(250, 40));
+        int count = static_cast<int>(frame_times_.size());
+        ImGui::PlotLines("Frame (ms)", plot_callback, &frame_times_, count, 0,
+                         nullptr, 0.0f, 33.0f, ImVec2(250, 40));
         ImGui::SameLine();
         ImGui::Text("%.2f", current_stats_.frame_time_ms);
       }
 
       // Granular breakdowns
       if (!event_times_.empty()) {
-        ImGui::PlotLines("Event (ms)", plot_callback, &event_times_,
-                         event_times_.size(), 0, nullptr, 0.0f, 5.0f,
-                         ImVec2(250, 30));
+        int count = static_cast<int>(event_times_.size());
+        ImGui::PlotLines("Event (ms)", plot_callback, &event_times_, count, 0,
+                         nullptr, 0.0f, 5.0f, ImVec2(250, 30));
         ImGui::SameLine();
         ImGui::Text("%.2f", current_stats_.event_processing_ms);
       }
 
       if (!data_times_.empty()) {
-        ImGui::PlotLines("Data (ms) ", plot_callback, &data_times_,
-                         data_times_.size(), 0, nullptr, 0.0f, 5.0f,
-                         ImVec2(250, 30));
+        int count = static_cast<int>(data_times_.size());
+        ImGui::PlotLines("Data (ms) ", plot_callback, &data_times_, count, 0,
+                         nullptr, 0.0f, 5.0f, ImVec2(250, 30));
         ImGui::SameLine();
         ImGui::Text("%.2f", current_stats_.data_bridge_update_ms);
       }
 
       if (!render_times_.empty()) {
-        ImGui::PlotLines("Render(ms)", plot_callback, &render_times_,
-                         render_times_.size(), 0, nullptr, 0.0f, 16.0f,
-                         ImVec2(250, 30));
+        int count = static_cast<int>(render_times_.size());
+        ImGui::PlotLines("Render(ms)", plot_callback, &render_times_, count, 0,
+                         nullptr, 0.0f, 16.0f, ImVec2(250, 30));
         ImGui::SameLine();
         ImGui::Text("%.2f", current_stats_.render_dispatch_ms);
       }

@@ -100,7 +100,7 @@ bool HotSpineDataBridge::isConnected() const {
 }
 
 std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
-  std::lock_guard<std::mutex> lock(data_mutex_);
+  std::lock_guard lock(data_mutex_);
 
   std::vector<MarketDataUpdate> updates;
   updates.reserve(trade_buffer_.size() + orderbook_buffer_.size());
@@ -171,7 +171,7 @@ std::vector<SymbolData> HotSpineDataBridge::getAllSymbols() const {
     data.full_symbol = symbol_info.full_symbol();
 
     // Get latest market data for this symbol
-    std::lock_guard<std::mutex> lock(symbol_data_mutex_);
+    std::lock_guard lock(symbol_data_mutex_);
     auto it = symbol_market_data_.find(symbol_info.id);
     if (it != symbol_market_data_.end()) {
       data.last_price = it->second.last_price;
@@ -193,7 +193,7 @@ std::vector<SymbolData> HotSpineDataBridge::getAllSymbols() const {
 }
 
 PerformanceMetrics HotSpineDataBridge::getPerformanceMetrics() const {
-  std::lock_guard<std::mutex> lock(perf_mutex_);
+  std::lock_guard lock(perf_mutex_);
   return performance_metrics_;
 }
 
@@ -233,7 +233,7 @@ void HotSpineDataBridge::dataProcessingLoop() {
       auto latency = std::chrono::duration_cast<std::chrono::microseconds>(
           end_time - start_time);
 
-      std::lock_guard<std::mutex> lock(perf_mutex_);
+      std::lock_guard lock(perf_mutex_);
       data_latency_us_ = latency.count();
     }
 
@@ -261,7 +261,7 @@ void HotSpineDataBridge::processTrade(const HotSpine::HotTrade &trade) {
 
   // Add to trade buffer
   {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     trade_buffer_.push_back(trade);
 
     // Limit buffer size to prevent memory growth
@@ -289,7 +289,7 @@ void HotSpineDataBridge::processOrderbook(
 
   // Add to orderbook buffer
   {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     orderbook_buffer_.push_back(orderbook);
 
     // Limit buffer size
@@ -312,7 +312,7 @@ void HotSpineDataBridge::processOrderbook(
 void HotSpineDataBridge::updateSymbolMarketData(uint32_t symbol_id,
                                                 double price, double size,
                                                 uint64_t timestamp) {
-  std::lock_guard<std::mutex> lock(symbol_data_mutex_);
+  std::lock_guard lock(symbol_data_mutex_);
 
   auto &data = symbol_market_data_[symbol_id];
 
@@ -358,7 +358,7 @@ void HotSpineDataBridge::updateSymbolOrderbookData(uint32_t symbol_id,
                                                    double bid_price,
                                                    double ask_price,
                                                    uint64_t timestamp) {
-  std::lock_guard<std::mutex> lock(symbol_data_mutex_);
+  std::lock_guard lock(symbol_data_mutex_);
 
   auto &data = symbol_market_data_[symbol_id];
   data.bid_price = bid_price;
@@ -393,7 +393,7 @@ void HotSpineDataBridge::performanceMonitoringLoop() {
       double orderbooks_per_sec =
           (current_orderbooks - last_orderbooks) * 1000.0 / elapsed.count();
 
-      std::lock_guard<std::mutex> lock(perf_mutex_);
+      std::lock_guard lock(perf_mutex_);
       performance_metrics_.trades_per_second = trades_per_sec;
       performance_metrics_.orderbooks_per_second = orderbooks_per_sec;
       performance_metrics_.total_trades_processed = current_trades;
@@ -414,7 +414,7 @@ void HotSpineDataBridge::performanceMonitoringLoop() {
 }
 
 void HotSpineDataBridge::printStatistics() {
-  std::lock_guard<std::mutex> lock(perf_mutex_);
+  std::lock_guard lock(perf_mutex_);
 
   std::cout << "[HotSpineDataBridge] Statistics:" << std::endl;
   std::cout << "  Trades processed: "
@@ -503,7 +503,7 @@ HotSpineDataBridge::getExchangeSymbols(const std::string &exchange) const {
     data.full_symbol = symbol_info.full_symbol();
 
     // Get latest market data
-    std::lock_guard<std::mutex> lock(symbol_data_mutex_);
+    std::lock_guard lock(symbol_data_mutex_);
     auto it = symbol_market_data_.find(symbol_info.id);
     if (it != symbol_market_data_.end()) {
       data.last_price = it->second.last_price;

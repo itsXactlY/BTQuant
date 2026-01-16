@@ -64,6 +64,7 @@ OrderBookComponent::~OrderBookComponent() {
 }
 
 void OrderBookComponent::update_orderbook(const OrderBookData &data) {
+  std::lock_guard lock(data_mutex_);
   float current_time = 0.0f;
   // Use steady clock for reliable animation timing
   current_time = static_cast<float>(
@@ -138,6 +139,8 @@ void OrderBookComponent::render(VkCommandBuffer cmd) {
   if (!visible_)
     return;
 
+  std::lock_guard lock(data_mutex_);
+
   // 1. Update UBOs
   VkExtent2D extent = vulkan_core_->get_swapchain_extent();
 
@@ -168,7 +171,7 @@ void OrderBookComponent::render(VkCommandBuffer cmd) {
   }
 
   // 1. Render size bars
-  if (bar_vertex_buffer_.buffer) {
+  if (bar_vertex_buffer_.buffer && bar_pipeline_ != VK_NULL_HANDLE) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, bar_pipeline_);
 
     struct {
@@ -201,7 +204,7 @@ void OrderBookComponent::render(VkCommandBuffer cmd) {
   }
 
   // 2. Render text labels
-  if (text_vertex_buffer_.buffer) {
+  if (text_vertex_buffer_.buffer && text_pipeline_ != VK_NULL_HANDLE) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, text_pipeline_);
 
     struct {
@@ -247,6 +250,8 @@ void OrderBookComponent::render_gui() {
   }
   minimized_ = false;
 
+  std::lock_guard lock(data_mutex_);
+
   if (theme_.monospace_font)
     ImGui::PushFont((ImFont *)theme_.monospace_font);
 
@@ -289,17 +294,16 @@ void OrderBookComponent::render_gui() {
       float bar_width = (float)(it->size / max_size) * ImGui::GetColumnWidth();
       ImDrawList *draw_list = ImGui::GetWindowDrawList();
       ImVec2 pos = ImGui::GetCursorScreenPos();
-      draw_list->AddRectFilled(
-          pos, ImVec2(pos.x + bar_width, pos.y + 16.0f),
-          ImGui::GetColorU32(ImVec4(theme_.price_down.r, theme_.price_down.g,
-                                    theme_.price_down.b, 0.2f)));
+      ImU32 ask_bar_color = to_imu32(theme_.price_down);
+      ask_bar_color =
+          (ask_bar_color & 0x00FFFFFF) | (static_cast<ImU32>(0.2f * 255) << 24);
+      draw_list->AddRectFilled(pos, ImVec2(pos.x + bar_width, pos.y + 16.0f),
+                               ask_bar_color);
       ImGui::Text("%.4f", it->size);
 
       // Price Column
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(ImVec4(theme_.price_down.r, theme_.price_down.g,
-                                theme_.price_down.b, theme_.price_down.a),
-                         "  %.2f", it->price);
+      ImGui::TextColored(to_imvec4(theme_.price_down), "  %.2f", it->price);
     }
 
     // Spread Row
@@ -309,9 +313,8 @@ void OrderBookComponent::render_gui() {
         ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.10f, 1.0f)));
 
     ImGui::TableSetColumnIndex(1);
-    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
-                              theme_.accent_primary.b, theme_.accent_primary.a),
-                       "  %.2f", current_data_.mid_price);
+    ImGui::TextColored(to_imvec4(theme_.accent_primary), "  %.2f",
+                       current_data_.mid_price);
 
     ImGui::TableSetColumnIndex(2);
     ImGui::TextDisabled("SPR %.2f", current_data_.spread);
@@ -326,18 +329,18 @@ void OrderBookComponent::render_gui() {
           (float)(level.size / max_size) * ImGui::GetColumnWidth();
       ImDrawList *draw_list = ImGui::GetWindowDrawList();
       ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImU32 bid_bar_color = to_imu32(theme_.price_up);
+      bid_bar_color =
+          (bid_bar_color & 0x00FFFFFF) | (static_cast<ImU32>(0.2f * 255) << 24);
       draw_list->AddRectFilled(
           ImVec2(pos.x + ImGui::GetColumnWidth() - bar_width, pos.y),
           ImVec2(pos.x + ImGui::GetColumnWidth(), pos.y + 16.0f),
-          ImGui::GetColorU32(ImVec4(theme_.price_up.r, theme_.price_up.g,
-                                    theme_.price_up.b, 0.2f)));
+          bid_bar_color);
       ImGui::Text("%.4f", level.size);
 
       // Price Column
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(ImVec4(theme_.price_up.r, theme_.price_up.g,
-                                theme_.price_up.b, theme_.price_up.a),
-                         "  %.2f", level.price);
+      ImGui::TextColored(to_imvec4(theme_.price_up), "  %.2f", level.price);
     }
 
     ImGui::EndTable();
@@ -1029,10 +1032,12 @@ void OrderBookComponent::handle_orderbook(
         {orderbook.asks[i].price, orderbook.asks[i].size, cumulative_ask});
   }
 
+  std::lock_guard lock(data_mutex_);
   update_orderbook(ui_data);
 }
 
 void OrderBookComponent::clear_data() {
+  std::lock_guard lock(data_mutex_);
   current_data_.bids.clear();
   current_data_.asks.clear();
   current_data_.spread = 0.0;

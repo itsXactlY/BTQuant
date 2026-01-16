@@ -100,27 +100,27 @@ public:
   }
 
   CPUInfo get_cpu_info() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return cpu_info_;
   }
 
   MemoryInfo get_memory_info() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return memory_info_;
   }
 
   GPUInfo get_gpu_info() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return gpu_info_;
   }
 
   NetworkInfo get_network_info() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return network_info_;
   }
 
   DiskInfo get_disk_info() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return disk_info_;
   }
 
@@ -274,7 +274,7 @@ private:
         uint64_t idle_diff = (idle + iowait) - prev_cpu_idle_;
 
         if (total_diff > 0) {
-          std::lock_guard<std::mutex> lock(data_mutex_);
+          std::lock_guard lock(data_mutex_);
           cpu_info_.usage_percent =
               100.0 * (total_diff - idle_diff) / total_diff;
           cpu_info_.idle_percent = 100.0 * idle_diff / total_diff;
@@ -296,7 +296,7 @@ private:
         if (line.find("cpu MHz") != std::string::npos) {
           size_t colon_pos = line.find(':');
           if (colon_pos != std::string::npos) {
-            std::lock_guard<std::mutex> lock(data_mutex_);
+            std::lock_guard lock(data_mutex_);
             cpu_info_.frequency_mhz = std::stod(line.substr(colon_pos + 1));
             break;
           }
@@ -309,7 +309,7 @@ private:
     if (temp_file.is_open()) {
       int temp_millidegrees;
       temp_file >> temp_millidegrees;
-      std::lock_guard<std::mutex> lock(data_mutex_);
+      std::lock_guard lock(data_mutex_);
       cpu_info_.temperature_celsius = temp_millidegrees / 1000.0;
     }
   }
@@ -343,7 +343,7 @@ private:
       }
     }
 
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     memory_info_.total_bytes = mem_values["MemTotal"];
     memory_info_.available_bytes = mem_values["MemAvailable"];
     memory_info_.cached_bytes = mem_values["Cached"];
@@ -392,7 +392,7 @@ private:
         }
 
         if (values.size() >= 8) {
-          std::lock_guard<std::mutex> lock(data_mutex_);
+          std::lock_guard lock(data_mutex_);
           gpu_info_.name = values[0];
           gpu_info_.usage_percent = std::stod(values[1]);
           gpu_info_.memory_used_bytes =
@@ -469,12 +469,12 @@ private:
       double tx_mbps = (tx_diff * 8.0 * 1000.0) / (time_diff * 1024.0 * 1024.0);
       double total_mbps = rx_mbps + tx_mbps;
 
-      std::lock_guard<std::mutex> lock(data_mutex_);
+      std::lock_guard lock(data_mutex_);
       network_info_.bandwidth_utilization_percent =
           std::min(100.0, (total_mbps / 1000.0) * 100.0);
     }
 
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     network_info_.bytes_received = total_rx_bytes;
     network_info_.bytes_sent = total_tx_bytes;
     network_info_.packets_received = total_rx_packets;
@@ -531,14 +531,14 @@ private:
       uint64_t read_diff = total_read_bytes - prev_disk_reads_;
       uint64_t write_diff = total_write_bytes - prev_disk_writes_;
 
-      std::lock_guard<std::mutex> lock(data_mutex_);
+      std::lock_guard lock(data_mutex_);
       disk_info_.read_speed_mbps =
           (read_diff * 1000.0) / (time_diff * 1024.0 * 1024.0);
       disk_info_.write_speed_mbps =
           (write_diff * 1000.0) / (time_diff * 1024.0 * 1024.0);
     }
 
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     disk_info_.reads_completed = total_reads;
     disk_info_.writes_completed = total_writes;
     disk_info_.bytes_read = total_read_bytes;
@@ -680,7 +680,7 @@ public:
     if (!monitoring_enabled_)
       return;
 
-    std::lock_guard<std::mutex> lock(allocations_mutex_);
+    std::lock_guard lock(allocations_mutex_);
 
     AllocationInfo info;
     info.size = size;
@@ -697,7 +697,7 @@ public:
     if (!monitoring_enabled_)
       return;
 
-    std::lock_guard<std::mutex> lock(allocations_mutex_);
+    std::lock_guard lock(allocations_mutex_);
 
     auto it = allocations_.find(ptr);
     if (it != allocations_.end()) {
@@ -707,7 +707,7 @@ public:
   }
 
   LeakReport generate_leak_report() {
-    std::lock_guard<std::mutex> lock(allocations_mutex_);
+    std::lock_guard lock(allocations_mutex_);
 
     LeakReport report;
     report.allocation_count = allocations_.size();
@@ -756,7 +756,7 @@ public:
   bool is_monitoring_enabled() const { return monitoring_enabled_; }
 
   void reset_statistics() {
-    std::lock_guard<std::mutex> lock(allocations_mutex_);
+    std::lock_guard lock(allocations_mutex_);
     allocations_.clear();
     total_allocated_ = 0;
     total_deallocated_ = 0;

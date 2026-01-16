@@ -80,6 +80,7 @@ void DataGridComponent::set_cell_data(size_t row, size_t col,
   if (row >= rows_ || col >= columns_)
     return;
 
+  std::lock_guard lock(data_mutex_);
   grid_data_[row][col] = data;
   mark_dirty();
 }
@@ -89,6 +90,7 @@ void DataGridComponent::set_row_data(size_t row,
   if (row >= rows_)
     return;
 
+  std::lock_guard lock(data_mutex_);
   size_t cols_to_copy = std::min(row_data.size(), columns_);
   for (size_t col = 0; col < cols_to_copy; ++col) {
     grid_data_[row][col] = row_data[col];
@@ -150,9 +152,10 @@ void DataGridComponent::update(float delta_time) {
 }
 
 void DataGridComponent::render(VkCommandBuffer cmd) {
-  if (!visible_ || !vertex_buffer_.buffer)
+  if (!visible_ || !vertex_buffer_.buffer || pipeline_ == VK_NULL_HANDLE)
     return;
 
+  std::lock_guard lock(data_mutex_);
   // Bind pipeline and resources
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
 
@@ -205,6 +208,7 @@ void DataGridComponent::render_gui() {
   if (theme_.monospace_font)
     ImGui::PushFont((ImFont *)theme_.monospace_font);
 
+  std::lock_guard lock(data_mutex_);
   if (ImGui::BeginTable("DataGridTable", (int)columns_,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable |

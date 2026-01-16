@@ -271,7 +271,7 @@ void UIDataManager::stop() {
 
 uint32_t UIDataManager::create_binding(uint32_t data_source_id, UIComponent* component,
                                       BindingType type, UpdatePriority priority) {
-    std::lock_guard<std::mutex> lock(bindings_mutex_);
+    std::lock_guard lock(bindings_mutex_);
     
     if (bindings_.size() >= max_bindings_) {
         cleanup_inactive_bindings();
@@ -300,7 +300,7 @@ uint32_t UIDataManager::create_binding(uint32_t data_source_id, UIComponent* com
 }
 
 void UIDataManager::remove_binding(uint32_t binding_id) {
-    std::lock_guard<std::mutex> lock(bindings_mutex_);
+    std::lock_guard lock(bindings_mutex_);
     
     auto it = bindings_.find(binding_id);
     if (it != bindings_.end()) {
@@ -320,7 +320,7 @@ void UIDataManager::queue_update(uint32_t data_source_id, const std::vector<uint
     update.data = data;
     
     {
-        std::lock_guard<std::mutex> lock(update_queue_mutex_);
+        std::lock_guard lock(update_queue_mutex_);
         update_queue_.push(update);
         metrics_.pending_updates++;
     }
@@ -330,7 +330,7 @@ void UIDataManager::queue_update(uint32_t data_source_id, const std::vector<uint
 
 void UIDataManager::queue_update_batch(const std::vector<DataUpdate>& updates) {
     {
-        std::lock_guard<std::mutex> lock(update_queue_mutex_);
+        std::lock_guard lock(update_queue_mutex_);
         for (const auto& update : updates) {
             update_queue_.push(update);
         }
@@ -341,19 +341,19 @@ void UIDataManager::queue_update_batch(const std::vector<DataUpdate>& updates) {
 }
 
 void UIDataManager::start_streaming(uint32_t data_source_id, std::chrono::milliseconds interval) {
-    std::lock_guard<std::mutex> lock(streaming_mutex_);
+    std::lock_guard lock(streaming_mutex_);
     streaming_intervals_[data_source_id] = interval;
     last_stream_updates_[data_source_id] = std::chrono::steady_clock::now();
 }
 
 void UIDataManager::stop_streaming(uint32_t data_source_id) {
-    std::lock_guard<std::mutex> lock(streaming_mutex_);
+    std::lock_guard lock(streaming_mutex_);
     streaming_intervals_.erase(data_source_id);
     last_stream_updates_.erase(data_source_id);
 }
 
 void UIDataManager::cache_data(uint32_t data_id, const std::vector<uint8_t>& data) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::lock_guard lock(cache_mutex_);
     
     // Check if we need to evict entries
     size_t data_size = data.size();
@@ -379,7 +379,7 @@ void UIDataManager::cache_data(uint32_t data_id, const std::vector<uint8_t>& dat
 }
 
 bool UIDataManager::get_cached_data(uint32_t data_id, std::vector<uint8_t>& data) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::lock_guard lock(cache_mutex_);
     
     auto it = data_cache_.find(data_id);
     if (it != data_cache_.end()) {
@@ -431,7 +431,7 @@ void UIDataManager::update_worker_thread() {
         float latency_ms = std::chrono::duration<float, std::milli>(end_time - start_time).count();
         
         {
-            std::lock_guard<std::mutex> metrics_lock(metrics_mutex_);
+            std::lock_guard metrics_lock(metrics_mutex_);
             update_latencies_.push_back(latency_ms);
             if (update_latencies_.size() > 1000) {
                 update_latencies_.erase(update_latencies_.begin());
@@ -461,7 +461,7 @@ void UIDataManager::metrics_worker_thread() {
             
             // Calculate average latency
             {
-                std::lock_guard<std::mutex> lock(metrics_mutex_);
+                std::lock_guard lock(metrics_mutex_);
                 if (!update_latencies_.empty()) {
                     float sum = 0.0f;
                     for (float latency : update_latencies_) {
@@ -475,7 +475,7 @@ void UIDataManager::metrics_worker_thread() {
 }
 
 void UIDataManager::process_streaming_updates() {
-    std::lock_guard<std::mutex> lock(streaming_mutex_);
+    std::lock_guard lock(streaming_mutex_);
     
     auto now = std::chrono::steady_clock::now();
     
@@ -499,7 +499,7 @@ bool UIDataManager::validate_update(const DataUpdate& update) {
     if (update.data.empty()) return false;
     
     // Check if data source exists in bindings
-    std::lock_guard<std::mutex> lock(bindings_mutex_);
+    std::lock_guard lock(bindings_mutex_);
     for (const auto& [binding_id, binding] : bindings_) {
         if (binding.data_source_id == update.data_id && binding.is_active) {
             return true;
@@ -510,7 +510,7 @@ bool UIDataManager::validate_update(const DataUpdate& update) {
 }
 
 void UIDataManager::apply_update_to_bindings(const DataUpdate& update) {
-    std::lock_guard<std::mutex> lock(bindings_mutex_);
+    std::lock_guard lock(bindings_mutex_);
     
     for (auto& [binding_id, binding] : bindings_) {
         if (binding.data_source_id == update.data_id && binding.is_active) {
@@ -567,7 +567,7 @@ void UIDataManager::cleanup_inactive_bindings() {
 }
 
 void UIDataManager::clear_cache() {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
+    std::lock_guard lock(cache_mutex_);
     data_cache_.clear();
     current_cache_size_ = 0;
 }
@@ -580,7 +580,7 @@ void UIDataManager::reset_metrics() {
     metrics_.cache_misses = 0;
     metrics_.average_update_latency_ms = 0.0f;
     
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     update_latencies_.clear();
 }
 

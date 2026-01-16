@@ -23,7 +23,7 @@ void MarketDataProcessor::processTradeUpdate(const MarketDataUpdate& update) {
         return;
     }
     
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     auto& symbol_data = symbol_analytics_[update.symbol_id];
     
@@ -60,7 +60,7 @@ void MarketDataProcessor::processOrderbookUpdate(const MarketDataUpdate& update)
         return;
     }
     
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     auto& symbol_data = symbol_analytics_[update.symbol_id];
     
@@ -103,7 +103,7 @@ void MarketDataProcessor::processOrderbookUpdate(const MarketDataUpdate& update)
 }
 
 SymbolAnalytics MarketDataProcessor::getSymbolAnalytics(uint32_t symbol_id) const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     auto it = symbol_analytics_.find(symbol_id);
     if (it != symbol_analytics_.end()) {
@@ -114,7 +114,7 @@ SymbolAnalytics MarketDataProcessor::getSymbolAnalytics(uint32_t symbol_id) cons
 }
 
 std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     std::vector<uint32_t> symbols;
     symbols.reserve(symbol_analytics_.size());
@@ -127,17 +127,17 @@ std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
 }
 
 ProcessorPerformanceMetrics MarketDataProcessor::getPerformanceMetrics() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     return performance_metrics_;
 }
 
 void MarketDataProcessor::clearSymbolData(uint32_t symbol_id) {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     symbol_analytics_.erase(symbol_id);
 }
 
 void MarketDataProcessor::clearAllData() {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     symbol_analytics_.clear();
     performance_metrics_ = ProcessorPerformanceMetrics{};
 }
@@ -381,7 +381,7 @@ double MarketDataProcessor::calculateVolumeInWindow(const std::vector<TradeData>
 }
 
 std::vector<SymbolRanking> MarketDataProcessor::getRankings(RankingCriteria criteria, size_t limit) const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     std::vector<SymbolRanking> rankings;
     rankings.reserve(symbol_analytics_.size());
@@ -432,7 +432,7 @@ std::vector<SymbolRanking> MarketDataProcessor::getRankings(RankingCriteria crit
 }
 
 MarketSummary MarketDataProcessor::getMarketSummary() const {
-    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::lock_guard lock(data_mutex_);
     
     MarketSummary summary;
     summary.total_symbols = symbol_analytics_.size();

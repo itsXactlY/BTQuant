@@ -80,10 +80,10 @@ void RiskManagerComponent::render_gui() {
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
   if (ImGui::Begin("Risk Manager", &visible_)) {
-    ImGui::TextColored(theme_.accent_primary, "PORTFOLIO HEALTH");
+    ImGui::TextColored(to_imvec4(theme_.accent_primary), "PORTFOLIO HEALTH");
 
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme_.price_up);
-    ImGui::ProgressBar(0.85f, ImVec2(-1, 14), "85% MARGIN OK");
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, to_imvec4(theme_.price_up));
+    ImGui::ProgressBar(0.72f, ImVec2(-1, 14), "OK");
     ImGui::PopStyleColor();
 
     ImGui::Spacing();
@@ -93,19 +93,19 @@ void RiskManagerComponent::render_gui() {
       ImGui::TableSetColumnIndex(0);
       ImGui::TextDisabled("Daily Loss");
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(theme_.price_up, "$1,250.00 / $5,000");
+      ImGui::TextColored(to_imvec4(theme_.price_up), "$1,250.00 / $5,000");
 
       ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
       ImGui::TableSetColumnIndex(0);
       ImGui::TextDisabled("Max DD");
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(theme_.price_down, "4.2%% / 10.0%%");
+      ImGui::TextColored(to_imvec4(theme_.price_down), "4.2%% / 10.0%%");
 
       ImGui::EndTable();
     }
 
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Button, theme_.price_down);
+    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_down));
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
     if (ImGui::Button("EMERGENCY STOP (DE-LEVERAGE)", ImVec2(-1, 32))) {
       // Panic logic
@@ -161,7 +161,7 @@ void TradingInterfaceComponent::render_gui() {
     if (order_type_ == "Stop-Limit") {
       input_labeled("STOP PRICE", &stop_price_, 0.5f, 10.0f, "%.2f");
     } else if (order_type_ == "Trailing Stop") {
-      ImGui::TextDisabled("TRAILING PERCENT (%)");
+      ImGui::TextDisabled("TRAILING PERCENT (%%)");
       ImGui::SetNextItemWidth(-1.0f);
       ImGui::SliderFloat("##Trail", &trailing_pct_, 0.1f, 5.0f, "%.2f%%");
     } else if (order_type_ == "Iceberg") {
@@ -182,12 +182,9 @@ void TradingInterfaceComponent::render_gui() {
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 
-    ImGui::PushStyleColor(
-        ImGuiCol_Button,
-        ImVec4(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b, 0.8f));
-    ImGui::PushStyleColor(
-        ImGuiCol_ButtonHovered,
-        ImVec4(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_up));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          to_imvec4(theme_.price_up)); // Could be brightened
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
     if (ImGui::Button("BUY / LONG", ImVec2(btn_w, 36))) { /* EXECUTE BUY */
     }
@@ -195,12 +192,9 @@ void TradingInterfaceComponent::render_gui() {
 
     ImGui::SameLine();
 
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImVec4(theme_.price_down.r, theme_.price_down.g,
-                                 theme_.price_down.b, 0.8f));
+    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_down));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(theme_.price_down.r, theme_.price_down.g,
-                                 theme_.price_down.b, 1.0f));
+                          to_imvec4(theme_.price_down)); // Could be brightened
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
     if (ImGui::Button("SELL / SHORT", ImVec2(btn_w, 36))) { /* EXECUTE SELL */
     }
@@ -209,7 +203,8 @@ void TradingInterfaceComponent::render_gui() {
     ImGui::Spacing();
 
     // Low priority controls
-    ImGui::PushStyleColor(ImGuiCol_Button, theme_.background_secondary);
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          to_imvec4(theme_.background_secondary));
     if (ImGui::Button("CANCEL ALL", ImVec2(btn_w, 24))) { /* CANCEL ALL */
     }
     ImGui::SameLine();
@@ -234,6 +229,8 @@ TapeComponent::~TapeComponent() {}
 void TapeComponent::handle_trade(const RenderEngine::TradeData &trade) {
   if (trade.symbol != target_symbol_)
     return;
+
+  std::lock_guard lock(data_mutex_);
   TapeEntry entry;
   entry.timestamp_us = trade.timestamp_us;
   entry.price = trade.price;
@@ -260,9 +257,10 @@ void TapeComponent::handle_trade(const RenderEngine::TradeData &trade) {
   mark_dirty();
 }
 
-void TapeComponent::update(float delta_time) {}
+void TapeComponent::update(float) {}
 
 void TapeComponent::clear_data() {
+  std::lock_guard lock(data_mutex_);
   entries_.clear();
   cumulative_delta_ = 0.0f;
   mark_dirty();
@@ -288,14 +286,16 @@ void TapeComponent::render_gui() {
       ImGui::TableSetColumnIndex(2);
       ImGui::Text("SIZE");
 
+      std::lock_guard lock(data_mutex_);
       for (const auto &e : entries_) {
         ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
 
         // Format time
         time_t t = e.timestamp_us / 1000000;
         struct tm *tm_info = localtime(&t);
-        char time_str[16];
-        strftime(time_str, sizeof(time_str), "%H:%M:%S", tm_info);
+        char time_str[16] = "00:00:00";
+        if (tm_info)
+          strftime(time_str, sizeof(time_str), "%H:%M:%S", tm_info);
 
         ImGui::TableSetColumnIndex(0);
         ImGui::TextDisabled("%s", time_str);
@@ -333,7 +333,7 @@ OrderManagementComponent::OrderManagementComponent(const glm::vec2 &position,
 
 OrderManagementComponent::~OrderManagementComponent() {}
 
-void OrderManagementComponent::update(float delta_time) {}
+void OrderManagementComponent::update(float) {}
 
 void OrderManagementComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
@@ -423,7 +423,7 @@ void PositionPanelComponent::render_gui() {
     ImGui::TextDisabled("AVAIL. MARGIN");
     ImGui::Text("$%.2f", available_balance_);
     ImGui::NextColumn();
-    ImGui::TextDisabled("UNREALIZED P&L");
+    ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "UNREALIZED P&L");
     ImGui::TextColored(ImVec4(0, 1, 0.5f, 1), "+$550.00");
     ImGui::Columns(1);
 
@@ -448,7 +448,7 @@ void PositionPanelComponent::render_gui() {
       ImGui::TableSetColumnIndex(3);
       ImGui::Text("PnL");
       ImGui::TableSetColumnIndex(4);
-      ImGui::Text("PnL %");
+      ImGui::Text("PnL %%");
 
       for (const auto &p : positions_) {
         ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
@@ -490,7 +490,7 @@ MarketOverviewPanel::MarketOverviewPanel(const glm::vec2 &position,
 
 MarketOverviewPanel::~MarketOverviewPanel() {}
 
-void MarketOverviewPanel::update(float delta_time) {}
+void MarketOverviewPanel::update(float) {}
 
 void MarketOverviewPanel::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);

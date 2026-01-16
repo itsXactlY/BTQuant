@@ -56,7 +56,7 @@ void PerformanceMonitor::stopMonitoring() {
 }
 
 void PerformanceMonitor::updateFrameMetrics(double fps, double frame_time_ms) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     current_metrics_.fps = fps;
     current_metrics_.frame_time_ms = frame_time_ms;
@@ -79,7 +79,7 @@ void PerformanceMonitor::updateFrameMetrics(double fps, double frame_time_ms) {
 }
 
 void PerformanceMonitor::updateDataLatency(double data_to_display_latency_us) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     current_metrics_.data_to_display_latency_us = data_to_display_latency_us;
     double latency_ms = data_to_display_latency_us / 1000.0;
@@ -97,7 +97,7 @@ void PerformanceMonitor::updateDataLatency(double data_to_display_latency_us) {
 }
 
 void PerformanceMonitor::updateMemoryUsage(double memory_mb) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     current_metrics_.memory_usage_mb = memory_mb;
     
@@ -114,7 +114,7 @@ void PerformanceMonitor::updateMemoryUsage(double memory_mb) {
 }
 
 void PerformanceMonitor::updateNetworkStatus(bool connected, double latency_ms, double throughput_mbps) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     current_metrics_.network_connected = connected;
     current_metrics_.network_latency_ms = latency_ms;
@@ -130,7 +130,7 @@ void PerformanceMonitor::updateNetworkStatus(bool connected, double latency_ms, 
 
 void PerformanceMonitor::updateSystemHealth(double cpu_usage_percent, double gpu_usage_percent, 
                                            double temperature_celsius) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     current_metrics_.cpu_usage_percent = cpu_usage_percent;
     current_metrics_.gpu_usage_percent = gpu_usage_percent;
@@ -151,12 +151,12 @@ void PerformanceMonitor::updateSystemHealth(double cpu_usage_percent, double gpu
 }
 
 SystemMetrics PerformanceMonitor::getCurrentMetrics() const {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     return current_metrics_;
 }
 
 PerformanceStatistics PerformanceMonitor::getStatistics() const {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     PerformanceStatistics stats;
     
@@ -205,22 +205,22 @@ PerformanceStatistics PerformanceMonitor::getStatistics() const {
 }
 
 std::vector<MetricSample> PerformanceMonitor::getFPSHistory() const {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     return fps_history_;
 }
 
 std::vector<MetricSample> PerformanceMonitor::getLatencyHistory() const {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     return latency_history_;
 }
 
 std::vector<MetricSample> PerformanceMonitor::getMemoryHistory() const {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     return memory_history_;
 }
 
 std::vector<PerformanceAlert> PerformanceMonitor::getRecentAlerts(size_t max_count) const {
-    std::lock_guard<std::mutex> lock(alerts_mutex_);
+    std::lock_guard lock(alerts_mutex_);
     
     std::vector<PerformanceAlert> recent_alerts;
     size_t start_idx = alerts_.size() > max_count ? alerts_.size() - max_count : 0;
@@ -233,7 +233,7 @@ std::vector<PerformanceAlert> PerformanceMonitor::getRecentAlerts(size_t max_cou
 }
 
 void PerformanceMonitor::clearAlerts() {
-    std::lock_guard<std::mutex> lock(alerts_mutex_);
+    std::lock_guard lock(alerts_mutex_);
     alerts_.clear();
 }
 
@@ -319,7 +319,7 @@ void PerformanceMonitor::setMonitoringInterval(uint32_t interval_ms) {
 }
 
 void PerformanceMonitor::setHistorySize(size_t size) {
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     
     history_size_ = std::max(size_t(10), std::min(size, size_t(3600)));  // 10 to 3600 samples
     
@@ -366,7 +366,7 @@ void PerformanceMonitor::collectSystemMetrics() {
     // In a real implementation, this would collect actual system metrics
     // For now, we'll update the timestamp to show the monitor is active
     
-    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    std::lock_guard lock(metrics_mutex_);
     current_metrics_.last_update = std::chrono::high_resolution_clock::now();
     
     // TODO: Implement actual system metric collection
@@ -378,7 +378,7 @@ void PerformanceMonitor::collectSystemMetrics() {
 }
 
 void PerformanceMonitor::triggerAlert(AlertType type, const std::string& message) {
-    std::lock_guard<std::mutex> lock(alerts_mutex_);
+    std::lock_guard lock(alerts_mutex_);
     
     PerformanceAlert alert;
     alert.type = type;

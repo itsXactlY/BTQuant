@@ -106,7 +106,7 @@ void WatchlistComponent::render_gui() {
       ImGui::TableSetColumnIndex(1);
       ImGui::Text("PRICE");
       ImGui::TableSetColumnIndex(2);
-      ImGui::Text("CHG%");
+      ImGui::Text("CHG%%");
       ImGui::TableSetColumnIndex(3);
       ImGui::Text("VOL");
 
@@ -145,12 +145,9 @@ void WatchlistComponent::render_gui() {
         ImGui::TableSetColumnIndex(2);
         // Use a default theme if theme_ is not initialized, or use the provided
         // theme
-        ImVec4 change_color =
-            entry.change_24h >= 0
-                ? ImVec4(theme_.price_up.r, theme_.price_up.g,
-                         theme_.price_up.b, 1.0f)
-                : ImVec4(theme_.price_down.r, theme_.price_down.g,
-                         theme_.price_down.b, 1.0f);
+        ImVec4 change_color = entry.change_24h >= 0
+                                  ? to_imvec4(theme_.price_up)
+                                  : to_imvec4(theme_.price_down);
         ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
 
         ImGui::TableSetColumnIndex(3);

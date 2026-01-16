@@ -121,7 +121,7 @@ std::optional<uint32_t> SymbolManager::getSymbolId(const std::string& exchange, 
 
 uint32_t SymbolManager::registerSymbol(const std::string& exchange, const std::string& symbol, 
                                       const SymbolMetadata& metadata) {
-    std::lock_guard<std::mutex> lock(symbols_mutex_);
+    std::lock_guard lock(symbols_mutex_);
     
     // Register with symbol registry
     uint32_t symbol_id = symbol_registry_->register_symbol(exchange, symbol);
@@ -139,7 +139,7 @@ uint32_t SymbolManager::registerSymbol(const std::string& exchange, const std::s
 }
 
 bool SymbolManager::updateSymbolMetadata(uint32_t symbol_id, const SymbolMetadata& metadata) {
-    std::lock_guard<std::mutex> lock(symbols_mutex_);
+    std::lock_guard lock(symbols_mutex_);
     
     auto it = symbol_metadata_.find(symbol_id);
     if (it != symbol_metadata_.end()) {
@@ -151,7 +151,7 @@ bool SymbolManager::updateSymbolMetadata(uint32_t symbol_id, const SymbolMetadat
 }
 
 std::optional<SymbolMetadata> SymbolManager::getSymbolMetadata(uint32_t symbol_id) const {
-    std::lock_guard<std::mutex> lock(symbols_mutex_);
+    std::lock_guard lock(symbols_mutex_);
     
     auto it = symbol_metadata_.find(symbol_id);
     if (it != symbol_metadata_.end()) {
@@ -162,7 +162,7 @@ std::optional<SymbolMetadata> SymbolManager::getSymbolMetadata(uint32_t symbol_i
 }
 
 ExchangeStatistics SymbolManager::getExchangeStatistics(const std::string& exchange) const {
-    std::lock_guard<std::mutex> lock(stats_mutex_);
+    std::lock_guard lock(stats_mutex_);
     
     auto it = exchange_stats_.find(exchange);
     if (it != exchange_stats_.end()) {
@@ -173,7 +173,7 @@ ExchangeStatistics SymbolManager::getExchangeStatistics(const std::string& excha
 }
 
 std::vector<ExchangeStatistics> SymbolManager::getAllExchangeStatistics() const {
-    std::lock_guard<std::mutex> lock(stats_mutex_);
+    std::lock_guard lock(stats_mutex_);
     
     std::vector<ExchangeStatistics> stats;
     stats.reserve(exchange_stats_.size());
@@ -205,7 +205,7 @@ bool SymbolManager::reloadSymbolMappings() {
 }
 
 void SymbolManager::setExchangeFilter(const std::string& exchange, const ExchangeFilter& filter) {
-    std::lock_guard<std::mutex> lock(filters_mutex_);
+    std::lock_guard lock(filters_mutex_);
     exchange_filters_[exchange] = filter;
     
     std::cout << "[SymbolManager] Set filter for exchange " << exchange 
@@ -213,7 +213,7 @@ void SymbolManager::setExchangeFilter(const std::string& exchange, const Exchang
 }
 
 std::optional<ExchangeFilter> SymbolManager::getExchangeFilter(const std::string& exchange) const {
-    std::lock_guard<std::mutex> lock(filters_mutex_);
+    std::lock_guard lock(filters_mutex_);
     
     auto it = exchange_filters_.find(exchange);
     if (it != exchange_filters_.end()) {
@@ -256,7 +256,7 @@ SymbolManagerStatistics SymbolManager::getStatistics() const {
     stats.symbols_per_exchange = exchange_counts;
     
     // Get metadata statistics
-    std::lock_guard<std::mutex> lock(symbols_mutex_);
+    std::lock_guard lock(symbols_mutex_);
     stats.symbols_with_metadata = symbol_metadata_.size();
     
     return stats;
@@ -305,7 +305,7 @@ void SymbolManager::discoverNewSymbols() {
 }
 
 void SymbolManager::updateExchangeStatistics(const std::string& exchange) {
-    std::lock_guard<std::mutex> lock(stats_mutex_);
+    std::lock_guard lock(stats_mutex_);
     
     auto& stats = exchange_stats_[exchange];
     stats.exchange_name = exchange;
@@ -318,7 +318,7 @@ void SymbolManager::updateExchangeStatistics(const std::string& exchange) {
     stats.active_symbols = 0;
     auto now = std::chrono::high_resolution_clock::now();
     
-    std::lock_guard<std::mutex> symbols_lock(symbols_mutex_);
+    std::lock_guard symbols_lock(symbols_mutex_);
     for (const auto& symbol : exchange_symbols) {
         auto metadata_it = symbol_metadata_.find(symbol.symbol_id);
         if (metadata_it != symbol_metadata_.end()) {
@@ -372,7 +372,7 @@ bool SymbolManager::matchesFilter(const SymbolInfo& symbol, const SymbolFilter& 
     
     // Check if symbol is active (has recent metadata)
     if (filter.active_only) {
-        std::lock_guard<std::mutex> lock(symbols_mutex_);
+        std::lock_guard lock(symbols_mutex_);
         auto metadata_it = symbol_metadata_.find(symbol.symbol_id);
         if (metadata_it != symbol_metadata_.end()) {
             auto now = std::chrono::high_resolution_clock::now();
@@ -429,7 +429,7 @@ void SymbolManager::initializeExchangeFilters() {
         filter.max_symbols = max_symbols_per_exchange_;
         filter.priority_symbols = {"BTC", "ETH", "USDT", "BNB"};  // High priority symbols
         
-        std::lock_guard<std::mutex> lock(filters_mutex_);
+        std::lock_guard lock(filters_mutex_);
         exchange_filters_[exchange] = filter;
     }
 }

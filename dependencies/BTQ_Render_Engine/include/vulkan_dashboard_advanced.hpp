@@ -203,6 +203,14 @@ struct OrderBookData {
   uint64_t timestamp;
 };
 
+// Helper for ImGui color conversion
+inline ImVec4 to_imvec4(const glm::vec4 &v) {
+  return ImVec4(v.x, v.y, v.z, v.w);
+}
+inline ImU32 to_imu32(const glm::vec4 &v) {
+  return ImGui::GetColorU32(to_imvec4(v));
+}
+
 // Forward declarations for core rendering components
 class VulkanCore;
 class GPUMemoryManager;
@@ -510,7 +518,7 @@ public:
       const std::string &vert_path, const std::string &frag_path,
       const std::vector<VkVertexInputBindingDescription> &bindings,
       const std::vector<VkVertexInputAttributeDescription> &attributes,
-      VkPipelineLayout layout);
+      VkPipelineLayout layout, VkRenderPass render_pass = VK_NULL_HANDLE);
   VkPipeline create_compute_pipeline(const std::string &shader_path,
                                      VkPipelineLayout layout);
   VkShaderModule create_shader_module(const std::vector<char> &code);
@@ -519,6 +527,13 @@ public:
       const std::vector<VkPushConstantRange> &push_constants);
 
   void recreate_swapchain(uint32_t width, uint32_t height);
+
+  uint32_t find_memory_type(uint32_t type_filter,
+                            VkMemoryPropertyFlags properties);
+
+  // Offscreen rendering support
+  VkSampler get_default_sampler() const { return default_sampler_; }
+  VkDescriptorSet create_texture_descriptor(VkImageView view);
 
 private:
   DashboardConfig config_;
@@ -608,8 +623,6 @@ private:
                                  VkImageTiling tiling,
                                  VkFormatFeatureFlags features);
   VkFormat find_depth_format();
-  uint32_t find_memory_type(uint32_t type_filter,
-                            VkMemoryPropertyFlags properties);
 
   // Cleanup helpers
   void cleanup_swapchain();
@@ -618,6 +631,9 @@ private:
   VkDescriptorPool imgui_descriptor_pool_ = VK_NULL_HANDLE;
   void init_imgui();
   void cleanup_imgui();
+
+  VkSampler default_sampler_ = VK_NULL_HANDLE;
+  void create_default_sampler();
 
 public:
   void create_placeholder_texture(VkImage &image, VkDeviceMemory &memory,
@@ -878,6 +894,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   size_t rows_, columns_;
   std::vector<std::vector<CellData>> grid_data_;
   std::vector<std::string> column_headers_;
@@ -898,6 +915,47 @@ private:
 
   void rebuild_geometry();
   void sort_data();
+};
+
+// Offscreen renderer for high-performance charting
+struct CandleInstance {
+  float open;
+  float high;
+  float low;
+  float close;
+  float timestamp_offset;
+};
+
+// Offscreen renderer for high-performance charting
+class OffscreenChartRenderer {
+public:
+  OffscreenChartRenderer(VulkanCore *core);
+  ~OffscreenChartRenderer();
+
+  void resize(uint32_t width, uint32_t height);
+  void begin_render(VkCommandBuffer cmd);
+  void end_render(VkCommandBuffer cmd);
+
+  VkDescriptorSet get_descriptor_set() const { return descriptor_set_; }
+  VkRenderPass get_render_pass() const { return render_pass_; }
+  VkExtent2D get_extent() const { return {width_, height_}; }
+  VkImage get_image() const { return image_; }
+  VkImageView get_image_view() const { return view_; }
+
+private:
+  void cleanup();
+  void create_resources(uint32_t width, uint32_t height);
+
+  VulkanCore *core_;
+  uint32_t width_ = 0;
+  uint32_t height_ = 0;
+
+  VkImage image_ = VK_NULL_HANDLE;
+  VkDeviceMemory memory_ = VK_NULL_HANDLE;
+  VkImageView view_ = VK_NULL_HANDLE;
+  VkFramebuffer framebuffer_ = VK_NULL_HANDLE;
+  VkRenderPass render_pass_ = VK_NULL_HANDLE;
+  VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
 };
 
 // Real-time price chart component
@@ -941,6 +999,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   RingBuffer<DataPoint, 1000> data_points_;
   RingBuffer<Candle, 200> candles_;
   float time_window_ = 60.0f;
@@ -978,6 +1037,14 @@ private:
   VkDescriptorSetLayout ui_layout_ = VK_NULL_HANDLE;
   VkDescriptorSet line_descriptor_set_ = VK_NULL_HANDLE;
   VkDescriptorSet ui_descriptor_set_ = VK_NULL_HANDLE;
+
+  std::unique_ptr<OffscreenChartRenderer> offscreen_renderer_;
+
+  // Instanced Rendering Resources
+  BufferAllocation candle_instance_buffer_;
+  BufferAllocation candle_base_geo_buffer_;
+  VkPipeline instanced_candle_pipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout instanced_candle_layout_ = VK_NULL_HANDLE;
 
   void rebuild_line_geometry();
   void rebuild_candlestick_geometry();
@@ -1019,6 +1086,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   size_t grid_width_, grid_height_;
   std::vector<std::vector<HeatmapData>> heatmap_data_;
   std::vector<glm::vec4> color_scheme_;
@@ -1026,14 +1094,25 @@ private:
   float min_value_ = -1.0f, max_value_ = 1.0f;
 
   // Compute shader resources for interpolation
-  VkBuffer compute_input_buffer_;
-  VkBuffer compute_output_buffer_;
+  BufferAllocation compute_input_buffer_;
+  BufferAllocation compute_output_buffer_;
+  BufferAllocation compute_previous_buffer_;
+  BufferAllocation compute_ubo_buffer_;
+  BufferAllocation color_scheme_buffer_;
+
+  VkDescriptorSetLayout compute_layout_ = VK_NULL_HANDLE;
   VkDescriptorSet compute_descriptor_set_ = VK_NULL_HANDLE;
+  VkPipelineLayout compute_pipeline_layout_ = VK_NULL_HANDLE;
   VkPipeline compute_pipeline_ = VK_NULL_HANDLE;
+
   // Rendering resources
   BufferAllocation vertex_buffer_;
   BufferAllocation index_buffer_;
+  VkDescriptorSetLayout render_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSet render_descriptor_set_ = VK_NULL_HANDLE;
+  VkPipelineLayout render_pipeline_layout_ = VK_NULL_HANDLE;
   VkPipeline render_pipeline_ = VK_NULL_HANDLE;
+  BufferAllocation render_ubo_buffer_;
 
   void rebuild_geometry();
   void dispatch_compute_interpolation();
@@ -1057,6 +1136,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   OrderBookData current_data_;
   BufferAllocation vertex_buffer_;
   uint32_t vertex_count_ = 0;
@@ -1104,6 +1184,7 @@ private:
   float large_trade_threshold_ = 5.0f;
   float whale_trade_threshold_ = 50.0f;
   float cumulative_delta_ = 0.0f;
+  mutable std::recursive_mutex data_mutex_;
 };
 
 // Real-time Watchlist for monitoring multiple instruments
@@ -1160,16 +1241,28 @@ struct AlertRule {
 
 class AlertManager {
 public:
-  void add_alert(const AlertRule &rule) { alerts_.push_back(rule); }
+  void add_alert(const AlertRule &rule) {
+    std::lock_guard lock(mutex_);
+    alerts_.push_back(rule);
+  }
   void remove_alert(size_t index) {
+    std::lock_guard lock(mutex_);
     if (index < alerts_.size())
       alerts_.erase(alerts_.begin() + index);
   }
-  void clear_alerts() { alerts_.clear(); }
+  void clear_alerts() {
+    std::lock_guard lock(mutex_);
+    alerts_.clear();
+  }
 
-  const std::vector<AlertRule> &get_alerts() const { return alerts_; }
+  // Returns a copy for thread safety in UI
+  std::vector<AlertRule> get_alerts() const {
+    std::lock_guard lock(mutex_);
+    return alerts_;
+  }
 
   void check_alerts(const std::string &symbol, double price, double volume) {
+    std::lock_guard lock(mutex_);
     for (auto &a : alerts_) {
       if (!a.is_active || a.symbol != symbol)
         continue;
@@ -1207,6 +1300,7 @@ public:
   }
 
 private:
+  mutable std::recursive_mutex mutex_;
   std::vector<AlertRule> alerts_;
 };
 
@@ -1351,6 +1445,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   OrderBookData current_data_;
   std::string symbol_;
   size_t max_levels_ = 20;
@@ -1441,6 +1536,8 @@ private:
   std::string text_filter_;
   VulkanCore *vulkan_core_ = nullptr;
   float scroll_offset_ = 0.0f;
+  char filter_buffer_[256] = {0};
+  mutable std::recursive_mutex data_mutex_;
 
   // Rendering resources
   BufferAllocation text_vertex_buffer_;
@@ -1514,6 +1611,7 @@ public:
   void initialize_vulkan_resources(VulkanCore *) override {}
 
 private:
+  mutable std::recursive_mutex data_mutex_;
   AlertManager &manager_;
   char symbol_buffer_[64] = {0};
   float target_value_ = 0.0f;
@@ -1543,6 +1641,7 @@ public:
 
 private:
   std::vector<ScreenerResult> results_;
+  mutable std::recursive_mutex data_mutex_;
 };
 
 // One-click trading interface component

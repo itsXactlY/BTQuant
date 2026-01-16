@@ -489,7 +489,8 @@ public:
 
   // Frame rendering
   bool begin_frame();
-  bool prepare_frame();
+  void begin_command_buffer();
+  void begin_main_render_pass();
   void end_frame();
   VkCommandBuffer get_current_command_buffer() const {
     return current_command_buffer_;
@@ -1795,6 +1796,7 @@ private:
   mutable std::mutex stats_mutex_;
   PerformanceStats current_stats_;
   std::chrono::high_resolution_clock::time_point last_stats_update_;
+  void render_offscreen_components();
 
   // Frame timing
   std::chrono::high_resolution_clock::time_point last_frame_time_;

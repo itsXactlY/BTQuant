@@ -642,7 +642,7 @@ bool VulkanCore::begin_frame() {
   return true;
 }
 
-bool VulkanCore::prepare_frame() {
+void VulkanCore::begin_command_buffer() {
   vkResetCommandBuffer(command_buffers_[current_frame_], 0);
 
   VkCommandBufferBeginInfo begin_info{};
@@ -653,7 +653,10 @@ bool VulkanCore::prepare_frame() {
   VulkanErrorHandler::check_result(
       vkBeginCommandBuffer(command_buffers_[current_frame_], &begin_info),
       "vkBeginCommandBuffer");
+  current_command_buffer_ = command_buffers_[current_frame_];
+}
 
+void VulkanCore::begin_main_render_pass() {
   VkRenderPassBeginInfo render_pass_info{};
   render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   render_pass_info.renderPass = render_pass_;
@@ -661,16 +664,29 @@ bool VulkanCore::prepare_frame() {
   render_pass_info.renderArea.offset = {0, 0};
   render_pass_info.renderArea.extent = swapchain_extent_;
 
-  VkClearValue clear_color = {
-      {{0.05f, 0.05f, 0.07f, 1.0f}}}; // Deep dark background
-  render_pass_info.clearValueCount = 1;
-  render_pass_info.pClearValues = &clear_color;
+  std::array<VkClearValue, 2> clear_values{};
+  clear_values[0].color = {{0.01f, 0.01f, 0.01f, 1.0f}};
+  clear_values[1].depthStencil = {1.0f, 0};
 
-  vkCmdBeginRenderPass(command_buffers_[current_frame_], &render_pass_info,
+  render_pass_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
+  render_pass_info.pClearValues = clear_values.data();
+
+  vkCmdBeginRenderPass(current_command_buffer_, &render_pass_info,
                        VK_SUBPASS_CONTENTS_INLINE);
 
-  current_command_buffer_ = command_buffers_[current_frame_];
-  return true;
+  VkViewport viewport{};
+  viewport.x = 0.0f;
+  viewport.y = 0.0f;
+  viewport.width = (float)swapchain_extent_.width;
+  viewport.height = (float)swapchain_extent_.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(current_command_buffer_, 0, 1, &viewport);
+
+  VkRect2D scissor{};
+  scissor.offset = {0, 0};
+  scissor.extent = swapchain_extent_;
+  vkCmdSetScissor(current_command_buffer_, 0, 1, &scissor);
 }
 
 void VulkanCore::end_frame() {
@@ -1793,11 +1809,17 @@ void VulkanDashboard::main_loop() {
     // 4. Rendering
     auto render_start = std::chrono::high_resolution_clock::now();
     if (vulkan_core_ && vulkan_core_->begin_frame()) {
-      if (vulkan_core_->prepare_frame()) {
-        render_gui();
-        render_components();
-        vulkan_core_->end_frame();
-      }
+      vulkan_core_->begin_command_buffer();
+
+      // 4a. Offscreen rendering (e.g. charts)
+      render_offscreen_components();
+
+      // 4b. Main render pass (UI and overlays)
+      vulkan_core_->begin_main_render_pass();
+      render_gui();
+      render_components();
+
+      vulkan_core_->end_frame();
     }
     auto render_end = std::chrono::high_resolution_clock::now();
     {
@@ -2667,14 +2689,23 @@ void VulkanDashboard::render_components() {
   if (vulkan_core_) {
     VkCommandBuffer cmd = vulkan_core_->get_current_command_buffer();
 
-    // Render global components
+    // Render global components that use the main render pass
     for (auto &component : components_) {
       if (component && component->is_visible()) {
-        component->render(cmd);
+        // Skip components that manage their own offscreen passes
+        if (component->get_name() != "Price Chart") {
+          component->render(cmd);
+        }
       }
     }
+  }
+}
 
-    // Render workspace charts
+void VulkanDashboard::render_offscreen_components() {
+  if (vulkan_core_) {
+    VkCommandBuffer cmd = vulkan_core_->get_current_command_buffer();
+
+    // Render workspace charts (they manage their own offscreen render passes)
     for (auto &chart : chart_components_) {
       if (chart && chart->is_visible()) {
         chart->render(cmd);

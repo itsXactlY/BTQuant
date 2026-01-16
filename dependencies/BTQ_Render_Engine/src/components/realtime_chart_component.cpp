@@ -1039,7 +1039,8 @@ void RealtimeChartComponent::initialize_vulkan_resources(
       line_binding};
   line_pipeline_ = vulkan_core_->create_graphics_pipeline(
       "shaders/chart_lines.vert.spv", "shaders/chart_lines.frag.spv",
-      line_bindings_vec, line_attrs, line_pipeline_layout_);
+      line_bindings_vec, line_attrs, line_pipeline_layout_,
+      offscreen_renderer_->get_render_pass());
 
   // 4. Create Candlestick Pipeline
   VkVertexInputBindingDescription candle_binding{};
@@ -1073,7 +1074,8 @@ void RealtimeChartComponent::initialize_vulkan_resources(
       candle_binding};
   candlestick_pipeline_ = vulkan_core_->create_graphics_pipeline(
       "shaders/ui_vertex.vert.spv", "shaders/ui_fragment.frag.spv",
-      candle_bindings_vec, candle_attrs, ui_pipeline_layout_);
+      candle_bindings_vec, candle_attrs, ui_pipeline_layout_,
+      offscreen_renderer_->get_render_pass());
 
   // 5. Create Instanced Candle Pipeline
   VkVertexInputBindingDescription base_binding{};

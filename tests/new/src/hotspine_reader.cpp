@@ -148,6 +148,10 @@ bool HotSpineReader::pollTrade(HotTrade &trade) {
 
   // Check if there's data available (and handle potential read_index exceeding
   // write_index)
+  if (header->capacity == 0) {
+    return false;
+  }
+
   if (read_pos >= write_pos) {
     if (read_pos > write_pos) {
       header->read_index = write_pos; // Reset to write_pos to recover
@@ -191,6 +195,10 @@ bool HotSpineReader::pollOrderbook(HotOrderbookSnapshot &snapshot) {
   uint64_t read_pos = header->orderbook_read_index;
 
   // Check if there's data available
+  if (header->orderbook_capacity == 0) {
+    return false;
+  }
+
   if (read_pos >= write_pos) {
     if (read_pos > write_pos) {
       header->orderbook_read_index = write_pos; // Reset to recover

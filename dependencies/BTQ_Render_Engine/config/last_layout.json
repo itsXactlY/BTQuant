@@ -31,14 +31,27 @@
         },
         {
             "minimized": false,
-            "name": "Price Chart",
+            "name": "Positions & P&L",
             "pos": [
-                10.0,
-                40.0
+                8.0,
+                464.0
             ],
             "size": [
-                1260.0,
-                380.0
+                752.0,
+                248.0
+            ],
+            "visible": true
+        },
+        {
+            "minimized": false,
+            "name": "Price Chart",
+            "pos": [
+                418.0,
+                701.0
+            ],
+            "size": [
+                492.0,
+                242.0
             ],
             "visible": true
         },
@@ -70,19 +83,6 @@
         },
         {
             "minimized": false,
-            "name": "Positions & P&L",
-            "pos": [
-                8.0,
-                464.0
-            ],
-            "size": [
-                752.0,
-                248.0
-            ],
-            "visible": true
-        },
-        {
-            "minimized": false,
             "name": "Order Management",
             "pos": [
                 776.0,
@@ -99,32 +99,6 @@
             "name": "Alert Center",
             "pos": [
                 840.0,
-                588.0
-            ],
-            "size": [
-                208.0,
-                116.0
-            ],
-            "visible": true
-        },
-        {
-            "minimized": false,
-            "name": "Strategy Control",
-            "pos": [
-                773.0,
-                377.5
-            ],
-            "size": [
-                246.0,
-                129.0
-            ],
-            "visible": true
-        },
-        {
-            "minimized": false,
-            "name": "Market Screener",
-            "pos": [
-                1064.0,
                 588.0
             ],
             "size": [

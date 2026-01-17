@@ -7,7 +7,6 @@
 
 #include "../include/interaction_manager.hpp"
 #include "../../include/vulkan_dashboard_advanced.hpp"
-#include <X11/XKBlib.h>
 #include <X11/keysym.h>
 #include <algorithm>
 #include <cmath>
@@ -884,7 +883,7 @@ void InteractionManager::dispatch_event_to_component(UIComponent *component,
 void InteractionManager::setup_xinput2() {
   // Setup XI2 for multi-touch support
   int major = 2, minor = 2;
-  if (XIQueryVersion(display_, &major, &minor) != Success) {
+  if (XIQueryVersion(display_, &major, &minor) != X11_Success) {
     std::cerr << "XI2 not available\n";
     return;
   }

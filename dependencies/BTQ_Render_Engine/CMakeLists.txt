@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 project(BTQuant_Advanced_Dashboard LANGUAGES CXX)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra -Wunused-variable")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native -Wall -Wextra -Wunused-variable -Wno-error")
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
@@ -15,38 +16,36 @@ include(FetchContent)
 FetchContent_Declare(
   glm
   GIT_REPOSITORY https://github.com/g-truc/glm.git
-  GIT_TAG 0.9.9.8
+  GIT_TAG 1.0.1
 )
-FetchContent_Populate(glm)
+FetchContent_MakeAvailable(glm)
 
-# Add concurrentqueue
 FetchContent_Declare(
   concurrentqueue
   GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git
   GIT_TAG v1.0.4
 )
-FetchContent_Populate(concurrentqueue)
+FetchContent_MakeAvailable(concurrentqueue)
 
-# Add VMA (Vulkan Memory Allocator)
 FetchContent_Declare(
   VulkanMemoryAllocator
   GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-  GIT_TAG v3.0.1
+  GIT_TAG v3.3.0
 )
-FetchContent_Populate(VulkanMemoryAllocator)
+FetchContent_MakeAvailable(VulkanMemoryAllocator)
 
 # Add Dear ImGui
 FetchContent_Declare(
   imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.89.9-docking
+  GIT_TAG v1.91.6-docking
 )
 FetchContent_MakeAvailable(imgui)
 # Add nlohmann/json
 FetchContent_Declare(
   json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.11.2
+  GIT_TAG v3.11.3
 )
 FetchContent_MakeAvailable(json)
 
@@ -73,6 +72,9 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 set(DASHBOARD_SOURCES
     src/main_advanced.cpp
     src/vulkan_dashboard_advanced.cpp
+    src/DashboardLayer.cpp
+    src/CandlePipeline.cpp
+    src/OffscreenChartRenderer.cpp
     src/components/data_grid_component.cpp
     src/components/realtime_chart_component.cpp
     src/components/heatmap_component.cpp

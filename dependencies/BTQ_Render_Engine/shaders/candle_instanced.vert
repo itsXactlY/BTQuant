@@ -1,63 +1,73 @@
 #version 450
 
-layout(location = 0) in vec2 inPos;
-layout(location = 1) in vec2 inUV; // Used to identify body vs wick
+struct CandleData {
+    float x;
+    float open;
+    float high;
+    float low;
+    float close;
+    uint color;
+};
 
-// Instance data
-layout(location = 2) in vec4 inCandleData; // open, high, low, close
-layout(location = 3) in float inTimestampOffset;
+layout(std430, binding = 0) readonly buffer CandleBuffer {
+    CandleData candles[];
+} data;
 
-layout(binding = 0) uniform UBO {
+layout(push_constant) uniform PushConstants {
     mat4 projection;
-    mat4 view;
-    vec2 viewport_size;
-    vec2 chart_bounds_min; // [t_min, price_min]
-    vec2 chart_bounds_max; // [t_max, price_max]
-} ubo;
+    vec2 chart_min;      // camera.offset_x, camera.offset_y
+    vec2 chart_max;      // offset + (range / scale)
+    float candle_width;  // 10.0 * scale_x
+} pc;
 
 layout(location = 0) out vec4 outColor;
-layout(location = 1) out float outIsBullish;
+
+const vec2 quad_pos[6] = vec2[](
+    vec2(-0.5, 0.0), vec2(0.5, 0.0), vec2(0.5, 1.0),
+    vec2(-0.5, 0.0), vec2(0.5, 1.0), vec2(-0.5, 1.0)
+);
 
 void main() {
-    float open = inCandleData.x;
-    float high = inCandleData.y;
-    float low = inCandleData.z;
-    float close = inCandleData.w;
+    CandleData candle = data.candles[gl_InstanceIndex];
+    vec2 range = pc.chart_max - pc.chart_min;
     
-    bool isBullish = close >= open;
-    outIsBullish = isBullish ? 1.0 : 0.0;
+    // 1. Transform World Time/Price to [0, 1] relative to current view
+    float norm_x = (candle.x - pc.chart_min.x) / range.x;
     
-    // Calculate color based on type
-    vec4 bullish_color = vec4(0.0, 1.0, 0.6, 1.0); // Teal Street Green
-    vec4 bearish_color = vec4(1.0, 0.2, 0.3, 1.0); // Teal Street Red
-    outColor = isBullish ? bullish_color : bearish_color;
-
-    // Mapping logic
-    float x_range = ubo.chart_bounds_max.x - ubo.chart_bounds_min.x;
-    float y_range = ubo.chart_bounds_max.y - ubo.chart_bounds_min.y;
+    // 2. Identify vertex role (0-5: Body, 6-11: Wick)
+    bool is_wick = gl_VertexIndex >= 6;
+    vec2 local_pos = quad_pos[gl_VertexIndex % 6];
     
-    float x = (inTimestampOffset / x_range) * ubo.viewport_size.x;
+    float world_y_start, world_y_end, pixel_width;
     
-    float candle_width = 5.0; // Base width in pixels, should probably be a uniform
-    float half_width = candle_width * 0.5;
-    
-    float final_x = x;
-    float final_y = 0.0;
-    
-    if (inUV.x > 0.5) { // Wick
-        final_x = x + (inPos.x - 0.5) * (half_width * 0.2);
-        final_y = ( (low + inPos.y * (high - low)) - ubo.chart_bounds_min.y) / y_range * ubo.viewport_size.y;
-    } else { // Body
-        float body_min = min(open, close);
-        float body_max = max(open, close);
-        final_x = x + (inPos.x - 0.5) * half_width;
-        final_y = ( (body_min + inPos.y * (body_max - body_min)) - ubo.chart_bounds_min.y) / y_range * ubo.viewport_size.y;
-        
-        // Add minimal height for flat candles
-        if (abs(body_max - body_min) < 0.0001) {
-             // ...
-        }
+    if (is_wick) {
+        world_y_start = candle.low;
+        world_y_end = candle.high;
+        pixel_width = pc.candle_width * 0.15; // Thin wick
+    } else {
+        world_y_start = min(candle.open, candle.close);
+        world_y_end = max(candle.open, candle.close);
+        pixel_width = pc.candle_width;
     }
     
-    gl_Position = ubo.projection * vec4(final_x, final_y, 0.0, 1.0);
+    // 3. Project to pixels (0 to 1280 or whatever)
+    // Here we assume the projection matrix handles 0..Width to -1..1
+    float centerX = norm_x * 1280.0; // Simulated width mapping
+    float finalX = centerX + (local_pos.x * pixel_width);
+    
+    // Transform Y
+    float norm_y_start = (world_y_start - pc.chart_min.y) / range.y;
+    float norm_y_end = (world_y_end - pc.chart_min.y) / range.y;
+    float finalY = mix(norm_y_start, norm_y_end, local_pos.y) * 720.0; // Simulated height mapping
+
+    // 4. Final Position
+    gl_Position = pc.projection * vec4(finalX, finalY, 0.0, 1.0);
+    
+    // 5. Output Color
+    outColor = vec4(
+        float(candle.color & 0xFF) / 255.0,
+        float((candle.color >> 8) & 0xFF) / 255.0,
+        float((candle.color >> 16) & 0xFF) / 255.0,
+        float((candle.color >> 24) & 0xFF) / 255.0
+    );
 }

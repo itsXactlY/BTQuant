@@ -182,7 +182,7 @@ void RealtimeChartComponent::render(VkCommandBuffer cmd) {
   offscreen_renderer_->begin_render(cmd);
 
   uint32_t frame_idx = vulkan_core_->get_current_frame_index();
-  VkExtent2D extent = offscreen_renderer_->get_extent();
+  VkExtent2D extent = offscreen_renderer_->GetExtent();
 
   if (extent.width == 0 || extent.height == 0) {
     offscreen_renderer_->end_render(cmd);
@@ -341,10 +341,10 @@ void RealtimeChartComponent::render_gui() {
   }
 
   // Draw the offscreen chart texture
-  if (offscreen_renderer_ && offscreen_renderer_->get_descriptor_set()) {
-    draw_list->AddImage((ImTextureID)offscreen_renderer_->get_descriptor_set(),
-                        pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                        ImVec2(0, 0), ImVec2(1, 1));
+  if (offscreen_renderer_ && offscreen_renderer_->GetDescriptor()) {
+    draw_list->AddImage((ImTextureID)offscreen_renderer_->GetDescriptor(), pos,
+                        ImVec2(pos.x + size.x, pos.y + size.y), ImVec2(0, 0),
+                        ImVec2(1, 1));
   }
 
   // 0. In-Chart Toolbar & OHLCV Readout
@@ -1040,7 +1040,7 @@ void RealtimeChartComponent::initialize_vulkan_resources(
   line_pipeline_ = vulkan_core_->create_graphics_pipeline(
       "shaders/chart_lines.vert.spv", "shaders/chart_lines.frag.spv",
       line_bindings_vec, line_attrs, line_pipeline_layout_,
-      offscreen_renderer_->get_render_pass());
+      offscreen_renderer_->GetRenderPass());
 
   // 4. Create Candlestick Pipeline
   VkVertexInputBindingDescription candle_binding{};
@@ -1075,7 +1075,7 @@ void RealtimeChartComponent::initialize_vulkan_resources(
   candlestick_pipeline_ = vulkan_core_->create_graphics_pipeline(
       "shaders/ui_vertex.vert.spv", "shaders/ui_fragment.frag.spv",
       candle_bindings_vec, candle_attrs, ui_pipeline_layout_,
-      offscreen_renderer_->get_render_pass());
+      offscreen_renderer_->GetRenderPass());
 
   // 5. Create Instanced Candle Pipeline
   VkVertexInputBindingDescription base_binding{};
@@ -1115,7 +1115,7 @@ void RealtimeChartComponent::initialize_vulkan_resources(
   instanced_candle_pipeline_ = vulkan_core_->create_graphics_pipeline(
       "shaders/candle_instanced.vert.spv", "shaders/candle_instanced.frag.spv",
       inst_bindings, inst_attrs, instanced_candle_layout_,
-      offscreen_renderer_->get_render_pass());
+      offscreen_renderer_->GetRenderPass());
 
   // 6. Allocate and Update Descriptor Sets
   line_ubo_buffer_ = vulkan_core_->get_memory_manager().allocate_uniform_buffer(

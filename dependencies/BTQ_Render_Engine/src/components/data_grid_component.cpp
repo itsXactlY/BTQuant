@@ -125,7 +125,7 @@ void DataGridComponent::enable_sorting(size_t column, bool ascending) {
   mark_dirty();
 }
 
-void DataGridComponent::set_filter(const std::string &filter_text) {
+void DataGridComponent::set_filter(const std::string &) {
   // TODO: Implement filtering logic
   // For now, just mark as dirty to trigger rebuild
   mark_dirty();
@@ -409,7 +409,7 @@ void DataGridComponent::sort_data() {
       });
 }
 
-void DataGridComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
+void DataGridComponent::initialize_vulkan_resources(VulkanCore *) {
   // TODO: Create pipelines, buffers, etc.
   // For now, just set the pointer
 }

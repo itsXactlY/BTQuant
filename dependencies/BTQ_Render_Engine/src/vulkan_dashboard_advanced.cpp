@@ -1,13 +1,9 @@
 #include "vulkan_dashboard_advanced.hpp"
-#include "CandlePipeline.h"
 #include "DashboardLayer.h"
-#include "OffscreenChartRenderer.h"
 #include "data_visualization_engine.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "interaction_manager.hpp"
 #include "market_data_processor.hpp"
-#include "performance_monitor.hpp"
-#include "symbol_manager.hpp"
 #include <unistd.h>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -22,19 +18,18 @@ const std::vector<const char *> validation_layers = {
 // VulkanErrorHandler implementations
 VkDebugUtilsMessengerEXT VulkanErrorHandler::debug_messenger_ = VK_NULL_HANDLE;
 
-void VulkanErrorHandler::setup_debug_messenger(VkInstance instance) {
+void VulkanErrorHandler::setup_debug_messenger(VkInstance) {
   // Stub
 }
 
-void VulkanErrorHandler::cleanup_debug_messenger(VkInstance instance) {
+void VulkanErrorHandler::cleanup_debug_messenger(VkInstance) {
   // Stub
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanErrorHandler::debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
     VkDebugUtilsMessageTypeFlagsEXT message_type,
-    const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-    void *user_data) {
+    const VkDebugUtilsMessengerCallbackDataEXT *callback_data, void *) {
 
   // Log Vulkan validation messages
   ::std::string severity_str;
@@ -720,6 +715,7 @@ void VulkanCore::create_swapchain(uint32_t width, uint32_t height) {
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device_, surface_,
                                             &capabilities);
 
+  // uint32_t color =
   uint32_t format_count;
   vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device_, surface_,
                                        &format_count, nullptr);
@@ -1365,7 +1361,19 @@ VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
           height);
 }
 
-VulkanDashboard::~VulkanDashboard() {}
+VulkanDashboard::~VulkanDashboard() {
+  if (vulkan_core_) {
+    vkDeviceWaitIdle(vulkan_core_->get_device());
+  }
+
+  // Destroy components BEFORE VulkanCore to ensure pipelines are destroyed
+  // correctly
+  dashboard_layer_.reset();
+  chart_components_.clear();
+  components_.clear();
+
+  // vulkan_core_ will be destroyed naturally by its unique_ptr afterwards
+}
 
 void VulkanDashboard::initialize() {
   fprintf(stderr, "[VulkanDashboard] Starting initialization...\n");
@@ -1547,7 +1555,7 @@ void VulkanDashboard::main_loop() {
   fprintf(stderr, "[VulkanDashboard] Starting main loop\n");
   bool running = true;
   while (running) {
-    auto frame_start = std::chrono::high_resolution_clock::now();
+    // auto frame_start = std::chrono::high_resolution_clock::now();
 
     // 1. Event Processing
     auto event_start = std::chrono::high_resolution_clock::now();
@@ -1641,12 +1649,14 @@ void VulkanDashboard::main_loop() {
     if (vulkan_core_ && vulkan_core_->begin_frame()) {
       vulkan_core_->begin_command_buffer();
 
-      // 4a. Offscreen rendering (e.g. charts)
+      // 4a. Main GUI logic (ImGui) - might trigger resizing
+      render_gui();
+
+      // 4b. Offscreen rendering (using potentially resized resources)
       render_offscreen_components();
 
-      // 4b. Main render pass (UI and overlays)
+      // 4c. Main render pass (Vulkan UI and overlays)
       vulkan_core_->begin_main_render_pass();
-      render_gui();
       render_components();
 
       vulkan_core_->end_frame();

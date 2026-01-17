@@ -37,6 +37,7 @@ void OffscreenChartRenderer::resize(uint32_t width, uint32_t height) {
   if (width == 0 || height == 0)
     return;
 
+  vkDeviceWaitIdle(core_->get_device());
   cleanup();
   create_resources(width, height);
 }
@@ -84,8 +85,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
 
   VkSubpassDependency dependencies[] = {dependency, samplingDependency};
 
-  VkRenderPassCreateInfo renderPassInfo{
-      VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+  VkRenderPassCreateInfo renderPassInfo = {};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
   renderPassInfo.attachmentCount = 1;
   renderPassInfo.pAttachments = &colorAttachment;
   renderPassInfo.subpassCount = 1;
@@ -99,7 +100,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
   }
 
   // 2. Create Image
-  VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+  VkImageCreateInfo imageInfo = {};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
   imageInfo.extent.width = width;
   imageInfo.extent.height = height;
@@ -121,7 +123,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(device, image_, &memRequirements);
 
-  VkMemoryAllocateInfo allocInfo{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+  VkMemoryAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
   allocInfo.memoryTypeIndex = core_->find_memory_type(
       memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -133,7 +136,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
   vkBindImageMemory(device, image_, memory_, 0);
 
   // 3. Create Image View
-  VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  VkImageViewCreateInfo viewInfo = {};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = image_;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -146,8 +150,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
   }
 
   // 4. Create Framebuffer
-  VkFramebufferCreateInfo framebufferInfo{
-      VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+  VkFramebufferCreateInfo framebufferInfo = {};
+  framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
   framebufferInfo.renderPass = render_pass_;
   framebufferInfo.attachmentCount = 1;
   framebufferInfo.pAttachments = &view_;
@@ -165,8 +169,8 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
 }
 
 void OffscreenChartRenderer::begin_render(VkCommandBuffer cmd) {
-  VkRenderPassBeginInfo renderPassInfo{
-      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+  VkRenderPassBeginInfo renderPassInfo = {};
+  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;
   renderPassInfo.framebuffer = framebuffer_;
   renderPassInfo.renderArea.extent = {width_, height_};

@@ -31,19 +31,6 @@
         },
         {
             "minimized": false,
-            "name": "Positions & P&L",
-            "pos": [
-                8.0,
-                464.0
-            ],
-            "size": [
-                752.0,
-                248.0
-            ],
-            "visible": true
-        },
-        {
-            "minimized": false,
             "name": "Price Chart",
             "pos": [
                 418.0,
@@ -80,19 +67,6 @@
                 400.0
             ],
             "visible": false
-        },
-        {
-            "minimized": false,
-            "name": "Order Management",
-            "pos": [
-                776.0,
-                464.0
-            ],
-            "size": [
-                240.0,
-                248.0
-            ],
-            "visible": true
         },
         {
             "minimized": false,

@@ -30,8 +30,8 @@ void CandlePipeline::create_pipeline(VkRenderPass renderPass) {
   binding.descriptorCount = 1;
   binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-  VkDescriptorSetLayoutCreateInfo dsInfo{
-      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  VkDescriptorSetLayoutCreateInfo dsInfo = {};
+  dsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
   dsInfo.bindingCount = 1;
   dsInfo.pBindings = &binding;
   vkCreateDescriptorSetLayout(device, &dsInfo, nullptr, &ds_layout_);
@@ -42,8 +42,8 @@ void CandlePipeline::create_pipeline(VkRenderPass renderPass) {
   pushRange.size = sizeof(PushConstants);
   pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-  VkPipelineLayoutCreateInfo plInfo{
-      VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  VkPipelineLayoutCreateInfo plInfo = {};
+  plInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   plInfo.setLayoutCount = 1;
   plInfo.pSetLayouts = &ds_layout_;
   plInfo.pushConstantRangeCount = 1;
@@ -61,8 +61,8 @@ void CandlePipeline::create_pipeline(VkRenderPass renderPass) {
       bindings, attributes, layout_, renderPass);
 
   // 4. Descriptor Set Allocation
-  VkDescriptorSetAllocateInfo allocInfo{
-      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  VkDescriptorSetAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.descriptorPool = core_->get_descriptor_pool();
   allocInfo.descriptorSetCount = 1;
   allocInfo.pSetLayouts = &ds_layout_;
@@ -85,7 +85,8 @@ void CandlePipeline::update_buffer(const std::vector<CandleData> &candles) {
     // Update descriptor set
     VkDescriptorBufferInfo bufferInfo{
         storage_buffer_.buffer, storage_buffer_.offset, storage_buffer_.size};
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = descriptor_set_;
     write.dstBinding = 0;
     write.descriptorCount = 1;

@@ -10,7 +10,7 @@ DashboardLayer::DashboardLayer(VulkanCore *core) : core_(core) {
   // manually For now we assume a default pass or let chart_renderer handle it
 }
 
-void DashboardLayer::OnUpdate(float delta_time) {
+void DashboardLayer::OnUpdate(float) {
   if (!candle_pipeline_ && chart_renderer_->GetRenderPass() != VK_NULL_HANDLE) {
     candle_pipeline_ = std::make_unique<CandlePipeline>(
         core_, chart_renderer_->GetRenderPass());
@@ -135,7 +135,7 @@ void DashboardLayer::DrawChartWindow() {
   ImGui::End();
 }
 
-void DashboardLayer::HandleInputs(const glm::vec2 &window_pos,
+void DashboardLayer::HandleInputs(const glm::vec2 &,
                                   const glm::vec2 &window_size) {
   if (!ImGui::IsWindowHovered())
     return;
@@ -166,8 +166,8 @@ void DashboardLayer::HandleInputs(const glm::vec2 &window_pos,
 void DashboardLayer::FetchData(const std::string &symbol) {
   // Simulation: Create dummy candles for the selected symbol
   current_candles_.clear();
-  uint32_t color =
-      (symbol == "BTC-USDT") ? 0xFF00FF00 : 0xFF0000FF; // Green vs Red
+  // uint32_t color =
+  //    (symbol == "BTC-USDT") ? 0xFF00FF00 : 0xFF0000FF; // Green vs Red
 
   for (int i = 0; i < 500; ++i) {
     float base_price = (symbol == "BTC-USDT") ? 45000.0f : 2400.0f;

@@ -717,8 +717,6 @@ void RealtimeChartComponent::rebuild_crosshair_geometry() {
     double base_range = (double)candles_.size() * 5000000.0;
     double t_max = latest_t + 5000000.0 + (double)view_offset_ * 1000000.0;
     double t_min = t_max - base_range * (double)view_zoom_;
-    double t_range = t_max - t_min;
-
     if (cs.timestamp_us >= t_min && cs.timestamp_us <= t_max) {
       float rel_x = (float)((cs.timestamp_us - t_min) / (t_max - t_min));
       float x = position_.x + rel_x * size_.x;

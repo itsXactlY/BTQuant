@@ -117,7 +117,7 @@ void LogDisplayComponent::handle_trade(const RenderEngine::TradeData &trade) {
 }
 
 void LogDisplayComponent::handle_orderbook(
-    const RenderEngine::OrderbookData &orderbook) {
+    const RenderEngine::OrderbookData &) {
   // We don't log every orderbook update to avoid spam
   // But we could log significant spread changes or imbalances
 }
@@ -215,9 +215,6 @@ void LogDisplayComponent::render_gui() {
     if (!text_filter_.empty() &&
         entry.message.find(text_filter_) == std::string::npos)
       continue;
-
-    ImU32 lvl_color = ImGui::GetColorU32(
-        ImVec4(entry.color.r, entry.color.g, entry.color.b, entry.color.a));
 
     // Timestamp
     ImGui::TextDisabled("[%s]", format_timestamp(entry.timestamp).c_str());

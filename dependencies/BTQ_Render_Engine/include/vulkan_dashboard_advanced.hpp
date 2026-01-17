@@ -3,18 +3,11 @@
 // ============================================================================
 // Standard Library & Third-Party Includes
 // ============================================================================
-#include <atomic>
 #include <chrono>
 #include <deque>
-#include <fstream>
-#include <functional>
-#include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
-#include <queue>
-#include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 // Math library
@@ -64,13 +57,10 @@
 #include <concurrentqueue.h>
 
 // ImGui
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
 
 // BTQuant Components
 // BTQuant Components
-#include "CandlePipeline.h"
 #include "DashboardLayer.h"
 #include "OffscreenChartRenderer.h"
 #include "hotspine_data_bridge.hpp"

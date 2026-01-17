@@ -39,8 +39,7 @@ MarketDepthChartComponent::~MarketDepthChartComponent() {
   }
 }
 
-void MarketDepthChartComponent::handle_trade(
-    const RenderEngine::TradeData &trade) {
+void MarketDepthChartComponent::handle_trade(const RenderEngine::TradeData &) {
   // Depth chart doesn't typically react to individual trades directly,
   // but could show trade markers.
 }
@@ -65,14 +64,14 @@ void MarketDepthChartComponent::handle_orderbook(
   mark_dirty();
 }
 
-void MarketDepthChartComponent::update(float delta_time) {
+void MarketDepthChartComponent::update(float) {
   if (is_dirty()) {
     rebuild_geometry();
     dirty_frames_--;
   }
 }
 
-void MarketDepthChartComponent::render(VkCommandBuffer cmd) {
+void MarketDepthChartComponent::render(VkCommandBuffer) {
   if (!visible_ || vertex_count_ == 0)
     return;
 
@@ -97,7 +96,7 @@ void MarketDepthChartComponent::render_gui() {
   ImGui::End();
 }
 
-void MarketDepthChartComponent::handle_input(const InputEvent &event) {
+void MarketDepthChartComponent::handle_input(const InputEvent &) {
   // Tooltip logic based on mouse position
 }
 

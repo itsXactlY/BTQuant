@@ -396,6 +396,9 @@ set_target_properties(dashboard_advanced PROPERTIES
 add_executable(multi_symbol_routing_test
     tests/multi_symbol_routing_test.cpp
     src/vulkan_dashboard_advanced.cpp
+    src/DashboardLayer.cpp
+    src/CandlePipeline.cpp
+    src/OffscreenChartRenderer.cpp
     src/components/data_grid_component.cpp
     src/components/realtime_chart_component.cpp
     src/components/heatmap_component.cpp

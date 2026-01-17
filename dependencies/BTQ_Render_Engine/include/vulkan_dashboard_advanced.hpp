@@ -22,51 +22,11 @@
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <vulkan/vulkan.h>
 
-// X11 includes
-#include <X11/XKBlib.h>
-// X11 includes
+// X11 includes (protected by vulkan_base_types.hpp)
 #include <X11/XKBlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XInput2.h>
-
-// Protect against X11 macro pollution (AFTER all X11 includes)
-#ifdef Status
-#undef Status
-#endif
-
-#ifdef Success
-#ifndef X11_Success
-#define X11_Success 0
-#endif
-#undef Success
-#endif
-
-#ifdef Bool
-#undef Bool
-#endif
-
-#ifdef None
-#undef None
-#endif
-
-#ifdef Always
-#undef Always
-#endif
-
-#ifdef KeyPress
-#undef KeyPress
-#endif
-
-#ifdef KeyRelease
-#undef KeyRelease
-#endif
-#ifdef KeyRelease
-#undef KeyRelease
-#endif
-// Redefine X11 constants with different names to avoid conflicts
-#define X11_KeyPress 2
-#define X11_KeyRelease 3
 
 // Concurrent data structures
 #include <concurrentqueue.h>

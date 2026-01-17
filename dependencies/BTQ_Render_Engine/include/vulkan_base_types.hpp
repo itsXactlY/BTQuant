@@ -18,16 +18,28 @@
 // Protect against X11 macro pollution
 #ifdef Status
 #undef Status
+typedef int Status;
 #endif
+
 #ifdef Success
 #undef Success
+const int Success = 0;
 #endif
+
 #ifdef Bool
 #undef Bool
+typedef int Bool;
 #endif
+
 #ifdef None
 #undef None
+const long None = 0L;
 #endif
+
+// Redefine X11 constants with different names to avoid conflicts
+#define X11_KeyPress 2
+#define X11_KeyRelease 3
+#define X11_Success 0
 
 namespace BTQuant {
 

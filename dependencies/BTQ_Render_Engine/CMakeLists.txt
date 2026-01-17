@@ -89,6 +89,7 @@ set(DASHBOARD_SOURCES
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/data/hotspine_data_bridge.cpp
+    src/MarketDataBridge.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/visualization/data_visualization_engine.cpp

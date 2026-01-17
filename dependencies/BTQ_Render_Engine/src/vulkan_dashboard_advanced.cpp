@@ -5,6 +5,7 @@
 #include "imgui_impl_vulkan.h"
 #include "interaction_manager.hpp"
 #include "market_data_processor.hpp"
+#include <fstream>
 #include <set>
 #include <unistd.h>
 #include <vector>

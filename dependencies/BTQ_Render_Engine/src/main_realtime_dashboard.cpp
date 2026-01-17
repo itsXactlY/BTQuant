@@ -7,23 +7,15 @@
 #include <thread>
 #include <vector>
 
-// X11 includes with protection
+// X11 includes (protected by vulkan_base_types.hpp included via
+// DashboardOrchestrator.hpp)
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#ifdef Status
-#undef Status
-#endif
-#ifdef Success
-#undef Success
-#endif
-#ifdef Bool
-#undef Bool
-#endif
-#ifdef None
-#undef None
-#endif
 
+#include "CandlePipeline.h"
 #include "DashboardOrchestrator.hpp"
+#include "MarketDataBridge.hpp"
+#include "OffscreenChartRenderer.h"
 #include "dashboard_config.hpp"
 #include "data_visualization_engine.hpp"
 #include "hotspine_data_bridge.hpp"
@@ -140,9 +132,61 @@ public:
         // Initialize Dashboard Orchestrator
         orchestrator_ = std::make_unique<BTQuant::DashboardOrchestrator>(
             vulkan_dashboard_->get_core());
+
+        // Initialize bridge
+        if (hotspine_bridge_) {
+          market_bridge_ =
+              std::make_unique<MarketDataBridge>(hotspine_bridge_->getReader());
+        }
+
+        // Initialize Offscreen Components
+        chart_renderer_ = std::make_unique<OffscreenChartRenderer>(
+            vulkan_dashboard_->get_core());
+        chart_renderer_->create_resources(
+            800, 600); // Default size, should resize with window ideally
+
+        candle_pipeline_ = std::make_unique<CandlePipeline>(
+            vulkan_dashboard_->get_core(), chart_renderer_->GetRenderPass());
+
         vulkan_dashboard_->set_on_gui_callback([this]() {
           if (orchestrator_) {
             orchestrator_->Draw("Advanced Market Chart");
+          }
+
+          // Draw Integrated Chart and DOM
+          if (chart_renderer_) {
+            ImGui::Begin("Live HotSpine Chart");
+
+            // Display the texture
+            ImVec2 size = ImGui::GetContentRegionAvail();
+            if (size.x > 0 && size.y > 0) {
+              // Resize check? For now fix strict size or logic to resize
+              // renderer Note: Resizing renderer requires recreating resources
+              // which is heavy (wait idle). Doing it every frame if size
+              // changes is bad. We will just display whatever we have scaled.
+              ImGui::Image((ImTextureID)chart_renderer_->GetDescriptor(), size);
+
+              // Draw DOM overlay
+              if (market_bridge_) {
+                market_bridge_->DrawDOM(
+                    ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(),
+                    ImVec2(200, size.y)); // DOM on left/overlay?
+                // Adjust position to be over the image
+                market_bridge_->DrawDOM(ImGui::GetWindowDrawList(),
+                                        ImGui::GetItemRectMin(),
+                                        ImVec2(200, size.y));
+              }
+
+              // Handle Input (Zoom/Pan) - Simplistic
+              if (ImGui::IsItemHovered()) {
+                float wheel = ImGui::GetIO().MouseWheel;
+                if (wheel != 0) {
+                  // Logic to zoom view...
+                }
+              }
+            }
+
+            ImGui::End();
           }
         });
 
@@ -226,12 +270,39 @@ public:
       if (vulkan_dashboard_) {
         auto frame_start = std::chrono::high_resolution_clock::now();
 
-        if (!vulkan_dashboard_->run_frame()) {
-          running_ = false;
-        }
-
         if (orchestrator_) {
           orchestrator_->UpdateData();
+        }
+
+        // Bridge Update
+        if (market_bridge_) {
+          market_bridge_->Update();
+
+          // Simple auto-scroll view logic if no input
+          // market_bridge_->UpdateViewRect(...);
+        }
+
+        // Render Offscreen Chart
+        if (chart_renderer_ && candle_pipeline_ && market_bridge_) {
+          VkCommandBuffer cmd =
+              vulkan_dashboard_->get_core()->begin_single_time_commands();
+          chart_renderer_->begin_render(cmd);
+
+          CandlePipeline::PushConstants pc = {};
+          pc.projection = glm::mat4(1.0f); // Identity, we do NDC in bridge
+          pc.chart_min = glm::vec2(-1, -1);
+          pc.chart_max = glm::vec2(1, 1);
+          pc.candle_width = 0.01f; // Adjust based on zoom
+          pc.padding = 0;
+
+          candle_pipeline_->Render(cmd, market_bridge_->GetRenderData(), pc);
+
+          chart_renderer_->end_render(cmd);
+          vulkan_dashboard_->get_core()->end_single_time_commands(cmd);
+        }
+
+        if (!vulkan_dashboard_->run_frame()) {
+          running_ = false;
         }
 
         auto frame_end = std::chrono::high_resolution_clock::now();
@@ -317,6 +388,11 @@ private:
   std::unique_ptr<BTQuant::VulkanDashboard> vulkan_dashboard_;
   std::unique_ptr<DataVisualizationEngine> data_viz_engine_;
   std::unique_ptr<BTQuant::DashboardOrchestrator> orchestrator_;
+
+  // Custom Integration Components
+  std::unique_ptr<MarketDataBridge> market_bridge_;
+  std::unique_ptr<OffscreenChartRenderer> chart_renderer_;
+  std::unique_ptr<CandlePipeline> candle_pipeline_;
 
   // State
   std::atomic<bool> running_;

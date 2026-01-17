@@ -11,6 +11,7 @@ public:
   ~OffscreenChartRenderer();
 
   void resize(uint32_t width, uint32_t height);
+  void create_resources(uint32_t width, uint32_t height);
   void begin_render(VkCommandBuffer cmd);
   void end_render(VkCommandBuffer cmd);
 
@@ -22,7 +23,6 @@ public:
 
 private:
   void cleanup();
-  void create_resources(uint32_t width, uint32_t height);
 
   VulkanCore *core_ = nullptr;
   uint32_t width_ = 0;

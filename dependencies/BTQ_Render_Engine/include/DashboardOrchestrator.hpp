@@ -60,7 +60,16 @@ private:
   uint32_t height_ = 720;
 
   // Interaction state
-  bool is_dragging_ = false;
+  bool is_panning_ = false;
+  glm::vec2 pan_velocity_{0.0f};
+  double zoom_accel_ = 0.0;
+
+  // Double buffering support (implicit in storage buffer logic for now)
+  // but we can track frame indices.
+  uint32_t last_update_frame_ = 0;
+
+  // Performance / Backpressure
+  uint32_t max_polls_per_update_ = 1000;
 };
 
 } // namespace BTQuant

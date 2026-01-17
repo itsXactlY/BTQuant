@@ -180,6 +180,11 @@ public:
   bool reconnect();
 
   /**
+   * Get the underlying HotSpineReader
+   */
+  HotSpine::HotSpineReader *getReader() const { return hotspine_reader_.get(); }
+
+  /**
    * Reload symbol mappings from file
    */
   void reloadSymbolMappings();

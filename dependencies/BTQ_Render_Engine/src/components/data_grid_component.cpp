@@ -63,10 +63,11 @@ DataGridComponent::DataGridComponent(const glm::vec2 &position,
   for (size_t row = 0; row < rows_; ++row) {
     for (size_t col = 0; col < columns_; ++col) {
       grid_data_[row][col] = {.text = "",
-                              .color = theme_.text_primary,
+                              .value = 0.0f,
+                              .color = to_glm(theme_.text_primary),
                               .numeric_value = 0.0f,
-                              .highlight = false,
-                              .is_numeric = false};
+                              .is_numeric = false,
+                              .highlight = false};
     }
   }
 }
@@ -91,7 +92,7 @@ void DataGridComponent::set_row_data(size_t row,
     return;
 
   std::lock_guard lock(data_mutex_);
-  size_t cols_to_copy = std::min(row_data.size(), columns_);
+  size_t cols_to_copy = std::min(row_data.size(), (size_t)columns_);
   for (size_t col = 0; col < cols_to_copy; ++col) {
     grid_data_[row][col] = row_data[col];
   }
@@ -295,19 +296,21 @@ void DataGridComponent::rebuild_geometry() {
     float y = position_.y;
 
     // Header cell background
-    vertices.push_back(
-        {{x, y}, {0.0f, 0.0f}, theme_.background_secondary, vertex_index});
+    vertices.push_back({{x, y},
+                        {0.0f, 0.0f},
+                        to_glm(theme_.background_secondary),
+                        vertex_index});
     vertices.push_back({{x + cell_width, y},
                         {1.0f, 0.0f},
-                        theme_.background_secondary,
+                        to_glm(theme_.background_secondary),
                         vertex_index});
     vertices.push_back({{x + cell_width, y + header_height},
                         {1.0f, 1.0f},
-                        theme_.background_secondary,
+                        to_glm(theme_.background_secondary),
                         vertex_index});
     vertices.push_back({{x, y + header_height},
                         {0.0f, 1.0f},
-                        theme_.background_secondary,
+                        to_glm(theme_.background_secondary),
                         vertex_index});
 
     // Header cell indices
@@ -324,11 +327,11 @@ void DataGridComponent::rebuild_geometry() {
       float y = position_.y + header_height + row * cell_height;
 
       const auto &cell_data = grid_data_[row][col];
-      glm::vec4 bg_color =
-          (row % 2 == 0) ? theme_.background_panel : theme_.background_primary;
+      glm::vec4 bg_color = (row % 2 == 0) ? to_glm(theme_.background_panel)
+                                          : to_glm(theme_.background_primary);
 
       if (cell_data.highlight) {
-        bg_color = glm::mix(bg_color, theme_.accent_primary, 0.3f);
+        bg_color = glm::mix(bg_color, to_glm(theme_.accent_primary), 0.3f);
       }
 
       // Data cell background
@@ -351,7 +354,7 @@ void DataGridComponent::rebuild_geometry() {
   }
 
   // Generate grid lines
-  glm::vec4 line_color = theme_.border_color;
+  glm::vec4 line_color = to_glm(theme_.border_color);
 
   // Vertical lines
   for (size_t col = 0; col <= columns_; ++col) {

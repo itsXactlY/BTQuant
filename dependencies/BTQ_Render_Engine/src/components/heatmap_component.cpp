@@ -93,7 +93,7 @@ HeatmapComponent::HeatmapComponent(const glm::vec2 &position,
     for (size_t x = 0; x < grid_width_; ++x) {
       heatmap_data_[y][x] = {
           .value = 0.0f,
-          .color = theme_.text_muted,
+          .color = to_glm(theme_.text_muted),
           .label = "SYM" + std::to_string(y * grid_width_ + x),
           .symbol_id = static_cast<uint32_t>(y * grid_width_ + x)};
     }
@@ -430,7 +430,7 @@ void HeatmapComponent::dispatch_compute_interpolation() {
 
 glm::vec4 HeatmapComponent::interpolate_color(float value) {
   if (color_scheme_.empty()) {
-    return theme_.text_primary;
+    return to_glm(theme_.text_primary);
   }
 
   // Normalize value to [0, 1] range
@@ -598,18 +598,26 @@ void HeatmapComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
   std::vector<VkWriteDescriptorSet> writes(5);
   std::vector<VkDescriptorBufferInfo> buffer_infos(5);
 
-  buffer_infos[0] = {compute_input_buffer_.buffer, compute_input_buffer_.offset,
-                     compute_input_buffer_.size};
-  buffer_infos[1] = {compute_output_buffer_.buffer,
-                     compute_output_buffer_.offset,
-                     compute_output_buffer_.size};
-  buffer_infos[2] = {compute_previous_buffer_.buffer,
-                     compute_previous_buffer_.offset,
-                     compute_previous_buffer_.size};
-  buffer_infos[3] = {compute_ubo_buffer_.buffer, compute_ubo_buffer_.offset,
-                     compute_ubo_buffer_.size};
-  buffer_infos[4] = {color_scheme_buffer_.buffer, color_scheme_buffer_.offset,
-                     color_scheme_buffer_.size};
+  buffer_infos[0].buffer = compute_input_buffer_.buffer;
+  buffer_infos[0].offset = compute_input_buffer_.offset;
+  buffer_infos[0].range = compute_input_buffer_.size;
+
+  buffer_infos[1].buffer = compute_output_buffer_.buffer;
+  buffer_infos[1].offset = compute_output_buffer_.offset;
+  buffer_infos[1].range = compute_output_buffer_.size;
+
+  buffer_infos[2].buffer = compute_previous_buffer_.buffer;
+  buffer_infos[2].offset = compute_previous_buffer_.offset;
+  buffer_infos[2].range = compute_previous_buffer_.size;
+
+  buffer_infos[3].buffer = compute_ubo_buffer_.buffer;
+  buffer_infos[3].offset = compute_ubo_buffer_.offset;
+  buffer_infos[3].range = compute_ubo_buffer_.size;
+  VkDescriptorBufferInfo color_scheme_buffer_info{};
+  color_scheme_buffer_info.buffer = color_scheme_buffer_.buffer;
+  color_scheme_buffer_info.offset = color_scheme_buffer_.offset;
+  color_scheme_buffer_info.range = color_scheme_buffer_.size;
+  buffer_infos[4] = color_scheme_buffer_info;
 
   for (int i = 0; i < 5; ++i) {
     writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

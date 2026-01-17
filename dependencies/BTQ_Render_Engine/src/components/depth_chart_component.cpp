@@ -120,9 +120,11 @@ void MarketDepthChartComponent::rebuild_geometry() {
 
   double max_depth = 0;
   if (!current_data_.bids.empty())
-    max_depth = std::max(max_depth, current_data_.bids.back().total_size);
+    max_depth =
+        std::max(max_depth, (double)current_data_.bids.back().total_size);
   if (!current_data_.asks.empty())
-    max_depth = std::max(max_depth, current_data_.asks.back().total_size);
+    max_depth =
+        std::max(max_depth, (double)current_data_.asks.back().total_size);
 
   float y_base = position_.y + size_.y;
 
@@ -133,7 +135,7 @@ void MarketDepthChartComponent::rebuild_geometry() {
     float x = position_.x + x_rel * size_.x;
     float depth_h = (level.total_size / max_depth) * size_.y;
 
-    glm::vec4 color = theme_.price_up;
+    glm::vec4 color = to_glm(theme_.price_up);
     color.a = 0.4f;
 
     // Triangle 1

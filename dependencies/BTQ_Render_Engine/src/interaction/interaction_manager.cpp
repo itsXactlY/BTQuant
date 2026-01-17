@@ -763,7 +763,7 @@ void InteractionManager::process_keyboard_event(XEvent *event) {
   // Update modifiers
   active_modifiers_ = x11_modifiers_to_internal(key_event->state);
 
-  KeySym keysym = XkbKeycodeToKeysym(display_, key_event->keycode, 0, 0);
+  KeySym keysym = XKeycodeToKeysym(display_, key_event->keycode, 0);
 
   InputEvent input_event =
       create_input_event(event->type == XI_KeyPress ? InputEventType::KeyDown

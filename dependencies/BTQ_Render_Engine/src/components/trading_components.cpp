@@ -80,9 +80,9 @@ void RiskManagerComponent::render_gui() {
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
 
   if (ImGui::Begin("Risk Manager", &visible_)) {
-    ImGui::TextColored(to_imvec4(theme_.accent_primary), "PORTFOLIO HEALTH");
+    ImGui::TextColored(theme_.accent_primary, "PORTFOLIO HEALTH");
 
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, to_imvec4(theme_.price_up));
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, theme_.price_up);
     ImGui::ProgressBar(0.72f, ImVec2(-1, 14), "OK");
     ImGui::PopStyleColor();
 
@@ -93,19 +93,19 @@ void RiskManagerComponent::render_gui() {
       ImGui::TableSetColumnIndex(0);
       ImGui::TextDisabled("Daily Loss");
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(to_imvec4(theme_.price_up), "$1,250.00 / $5,000");
+      ImGui::TextColored(theme_.price_up, "$1,250.00 / $5,000");
 
       ImGui::TableNextRow(ImGuiTableRowFlags_None, 18.0f);
       ImGui::TableSetColumnIndex(0);
       ImGui::TextDisabled("Max DD");
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(to_imvec4(theme_.price_down), "4.2%% / 10.0%%");
+      ImGui::TextColored(theme_.price_down, "4.2%% / 10.0%%");
 
       ImGui::EndTable();
     }
 
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_down));
+    ImGui::PushStyleColor(ImGuiCol_Button, theme_.price_down);
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
     if (ImGui::Button("EMERGENCY STOP (DE-LEVERAGE)", ImVec2(-1, 32))) {
       // Panic logic
@@ -182,19 +182,25 @@ void TradingInterfaceComponent::render_gui() {
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
 
-    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_up));
+    ImGui::PushStyleColor(ImGuiCol_Button, theme_.price_up);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          to_imvec4(theme_.price_up)); // Could be brightened
+                          ImVec4(theme_.price_up.x, theme_.price_up.y,
+                                 theme_.price_up.z,
+                                 1.0f)); // Could be brightened
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
-    if (ImGui::Button("BUY / LONG", ImVec2(btn_w, 36))) { /* EXECUTE BUY */
+    if (ImGui::Button("BUY LMT", ImVec2(btn_w, 28))) { /* EXECUTE BUY */
     }
     ImGui::PopStyleColor(3);
 
     ImGui::SameLine();
 
-    ImGui::PushStyleColor(ImGuiCol_Button, to_imvec4(theme_.price_down));
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          ImVec4(theme_.price_down.x, theme_.price_down.y,
+                                 theme_.price_down.z, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          to_imvec4(theme_.price_down)); // Could be brightened
+                          ImVec4(theme_.price_down.x, theme_.price_down.y,
+                                 theme_.price_down.z,
+                                 1.0f)); // Could be brightened
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32_WHITE);
     if (ImGui::Button("SELL / SHORT", ImVec2(btn_w, 36))) { /* EXECUTE SELL */
     }
@@ -203,8 +209,7 @@ void TradingInterfaceComponent::render_gui() {
     ImGui::Spacing();
 
     // Low priority controls
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          to_imvec4(theme_.background_secondary));
+    ImGui::PushStyleColor(ImGuiCol_Button, theme_.background_secondary);
     if (ImGui::Button("CANCEL ALL", ImVec2(btn_w, 24))) { /* CANCEL ALL */
     }
     ImGui::SameLine();
@@ -302,10 +307,10 @@ void TapeComponent::render_gui() {
 
         ImGui::TableSetColumnIndex(1);
         ImVec4 color = e.is_buy
-                           ? ImVec4(theme_.price_up.r, theme_.price_up.g,
-                                    theme_.price_up.b, 1.0f)
-                           : ImVec4(theme_.price_down.r, theme_.price_down.g,
-                                    theme_.price_down.b, 1.0f);
+                           ? ImVec4(theme_.price_up.x, theme_.price_up.y,
+                                    theme_.price_up.z, 1.0f)
+                           : ImVec4(theme_.price_down.x, theme_.price_down.y,
+                                    theme_.price_down.z, 1.0f);
         if (e.is_whale_trade)
           ImGui::TableSetBgColor(
               ImGuiTableBgTarget_RowBg0,
@@ -416,8 +421,8 @@ void PositionPanelComponent::render_gui() {
   if (ImGui::Begin("Positions & P&L", &visible_)) {
     ImGui::Columns(3, "AccountHeader", false);
     ImGui::TextDisabled("TOTAL EQUITY");
-    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
-                              theme_.accent_primary.b, 1),
+    ImGui::TextColored(ImVec4(theme_.accent_primary.x, theme_.accent_primary.y,
+                              theme_.accent_primary.z, 1),
                        "$%.2f", total_equity_);
     ImGui::NextColumn();
     ImGui::TextDisabled("AVAIL. MARGIN");
@@ -503,8 +508,8 @@ void MarketOverviewPanel::render_gui() {
 
   if (ImGui::Begin("Market Overview", &visible_, flags)) {
     // Branding
-    ImGui::TextColored(ImVec4(theme_.accent_primary.r, theme_.accent_primary.g,
-                              theme_.accent_primary.b, 1),
+    ImGui::TextColored(ImVec4(theme_.accent_primary.x, theme_.accent_primary.y,
+                              theme_.accent_primary.z, 1),
                        "BTQUANT | INSTITUTIONAL");
     ImGui::SameLine();
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -517,9 +522,9 @@ void MarketOverviewPanel::render_gui() {
       ImGui::SameLine();
       ImColor color =
           t.change_pct >= 0
-              ? ImColor(theme_.price_up.r, theme_.price_up.g, theme_.price_up.b)
-              : ImColor(theme_.price_down.r, theme_.price_down.g,
-                        theme_.price_down.b);
+              ? ImColor(theme_.price_up.x, theme_.price_up.y, theme_.price_up.z)
+              : ImColor(theme_.price_down.x, theme_.price_down.y,
+                        theme_.price_down.z);
       ImGui::TextColored(color, "%.2f", t.price);
       ImGui::SameLine();
       ImGui::TextDisabled("(%+.2f%%)", t.change_pct);

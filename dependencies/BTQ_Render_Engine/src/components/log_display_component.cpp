@@ -23,14 +23,6 @@
 namespace BTQuant {
 
 // Vertex structure for log text rendering
-struct LogTextVertex {
-  glm::vec2 position;
-  glm::vec2 texcoord;
-  glm::vec4 color;
-  uint32_t glyph_id;
-  float font_size;
-  uint32_t log_level;
-};
 
 LogDisplayComponent::LogDisplayComponent(const glm::vec2 &position,
                                          const glm::vec2 &size)
@@ -39,7 +31,7 @@ LogDisplayComponent::LogDisplayComponent(const glm::vec2 &position,
   // Initialize with default settings
   max_entries_ = 1000;
   auto_scroll_ = true;
-  min_log_level_ = Debug;
+  min_log_level_ = LogLevel::Debug;
   text_filter_ = "";
   scroll_offset_ = 0.0f;
 
@@ -113,7 +105,7 @@ void LogDisplayComponent::handle_trade(const RenderEngine::TradeData &trade) {
   char buffer[128];
   snprintf(buffer, sizeof(buffer), "TRADE: %s %.4f @ %.2f",
            trade.is_buy ? "BUY " : "SELL", trade.size, trade.price);
-  add_log_entry(trade.is_buy ? Info : Warning, buffer);
+  add_log_entry(trade.is_buy ? LogLevel::Info : LogLevel::Warning, buffer);
 }
 
 void LogDisplayComponent::handle_orderbook(
@@ -246,7 +238,7 @@ void LogDisplayComponent::handle_input(const InputEvent &event) {
     // Handle scrolling
     float line_height = 16.0f;
     float scroll_delta =
-        event.scroll_delta.y * line_height * 3.0f; // 3 lines per scroll
+        event.scroll_delta * line_height * 3.0f; // 3 lines per scroll
 
     scroll_offset_ += scroll_delta;
 
@@ -525,11 +517,11 @@ void LogDisplayComponent::rebuild_text_geometry() {
       // Determine color based on position in the line
       glm::vec4 char_color = entry.color;
       if (char_idx < timestamp_str.length()) {
-        char_color = theme_.text_muted; // Timestamp in muted color
+        char_color = to_glm(theme_.text_muted); // Timestamp in muted color
       } else if (char_idx < timestamp_str.length() + level_str.length() + 3) {
         char_color = entry.color; // Log level in level color
       } else {
-        char_color = theme_.text_primary; // Message in primary color
+        char_color = to_glm(theme_.text_primary); // Message in primary color
       }
 
       // Create quad for character
@@ -602,29 +594,30 @@ void LogDisplayComponent::rebuild_text_geometry() {
 }
 
 glm::vec4 LogDisplayComponent::get_log_level_color(LogLevel level) {
+  auto to_glm = [](const ImVec4 &v) { return glm::vec4(v.x, v.y, v.z, v.w); };
   switch (level) {
-  case Debug:
+  case LogLevel::Debug:
     return glm::vec4(0.4f, 0.4f, 0.5f, 1.0f);
-  case Info:
-    return theme_.accent_primary;
-  case Warning:
+  case LogLevel::Info:
+    return to_glm(theme_.accent_primary);
+  case LogLevel::Warning:
     return glm::vec4(0.9f, 0.5f, 0.0f, 1.0f);
-  case Error:
-    return theme_.price_down;
+  case LogLevel::Error:
+    return to_glm(theme_.price_down);
   default:
-    return theme_.text_primary;
+    return to_glm(theme_.text_primary);
   }
 }
 
 std::string LogDisplayComponent::get_log_level_string(LogLevel level) {
   switch (level) {
-  case Debug:
+  case LogLevel::Debug:
     return "DEBUG";
-  case Info:
+  case LogLevel::Info:
     return "INFO ";
-  case Warning:
+  case LogLevel::Warning:
     return "WARN ";
-  case Error:
+  case LogLevel::Error:
     return "ERROR";
   default:
     return "UNKN ";

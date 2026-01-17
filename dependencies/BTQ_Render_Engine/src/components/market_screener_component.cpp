@@ -18,8 +18,6 @@ MarketScreenerComponent::MarketScreenerComponent(const glm::vec2 &position,
   results_.push_back({"AVAX-USD", 35.80, -4.50, 180000000.0, 0.7});
 }
 
-MarketScreenerComponent::~MarketScreenerComponent() {}
-
 void MarketScreenerComponent::update(float) {
   // In a real system, this would throttle-scan the symbol registry
 }
@@ -107,9 +105,8 @@ void MarketScreenerComponent::render_gui() {
         ImGui::Text("%.2f", res.price);
 
         ImGui::TableSetColumnIndex(2);
-        ImVec4 change_color = res.change_24h >= 0
-                                  ? to_imvec4(theme_.price_up)
-                                  : to_imvec4(theme_.price_down);
+        ImVec4 change_color =
+            res.change_24h >= 0 ? theme_.price_up : theme_.price_down;
         ImGui::TextColored(change_color, "%+.2f%%", res.change_24h);
 
         ImGui::TableSetColumnIndex(3);

@@ -1,74 +1,70 @@
 /**
- * BTQuant Real-time Dashboard Entry Point
- * Surgical Refactor - No DashboardOrchestrator
+ * BTQuant Real-time Dashboard (Unified Architecture)
+ *
+ * This is the refined entry point that eliminates DashboardOrchestrator.
+ * It directly coordinates the HotSpineDataBridge and VulkanDashboard.
  */
 
-#include "hotspine_data_bridge.hpp"
-#include "vulkan_dashboard_advanced.hpp"
+#include "../include/hotspine_data_bridge.hpp"
+#include "../include/vulkan_dashboard_advanced.hpp"
 #include <chrono>
 #include <iostream>
 #include <memory>
 #include <thread>
 
-using namespace BTQuant;
-using namespace BTQuant::RenderEngine;
+int main(int, char **) {
+  std::cout << "[Main] Starting BTQuant Realtime Dashboard (Unified)..."
+            << std::endl;
 
-int main(int argc, char *argv[]) {
-  try {
-    std::cout << "[System] Initializing BTQuant Realstream Dashboard..."
-              << std::endl;
+  // 1. Init Data Bridge
+  std::cout << "[Main] Initializing HotSpine Data Bridge..." << std::endl;
+  auto bridge = std::make_shared<BTQuant::RenderEngine::HotSpineDataBridge>();
 
-    // 1. Initialize HotSpine Data Bridge (Single Instance, Shared)
-    auto bridge = std::make_shared<HotSpineDataBridge>(
-        "/btquant_hotspine", "/dev/shm/btquant_symbols.json");
-
-    if (bridge->start()) {
-      std::cout << "[Network] HotSpine Bridge Connected." << std::endl;
-    } else {
-      std::cerr << "[Network] Warning: Failed to connect to HotSpine bridge."
-                << std::endl;
-    }
-
-    // 2. Initialize Vulkan Dashboard
-    // Passing bridge injection for decentralized component access
-    uint32_t width = 1920;
-    uint32_t height = 1080;
-    auto dashboard = std::make_unique<VulkanDashboard>(width, height, bridge);
-
-    dashboard->initialize();
-
-    std::cout << "[System] Dashboard Initialized. Entering Main Loop."
-              << std::endl;
-
-    // 3. Main Loop
-    while (true) {
-      // Poll Bridge (User requested explicit poll)
-      // Note: HotSpineDataBridge::getLatestUpdates() effectively polls.
-      // We call it here to satisfy the requirement, though Dashboard components
-      // might also access it. If the bridge buffers data, this might consume
-      // it. Assuming getLatestUpdates is non-destructive peeking or dashboard
-      // uses the SAME instance to pull. However, usually getLatestUpdates
-      // consumes. If we want components to see data, we should let components
-      // pull or push here. Given the 'split-brain' diagnosis, likely the
-      // components expect the bridge to be updated. We'll trust the bridge
-      // internal mechanics or just keep the connection alive.
-      // bridge->getLatestUpdates(); // Calling this might clear the buffer?
-
-      // Render Frame
-      if (!dashboard->run_frame()) {
-        break;
-      }
-
-      // System idle to save CPU
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    dashboard->shutdown();
-
-  } catch (const std::exception &e) {
-    std::cerr << "[Fatal] " << e.what() << std::endl;
+  if (!bridge->start()) {
+    std::cerr << "[Main] Failed to start HotSpineDataBridge!" << std::endl;
     return -1;
   }
+  std::cout << "[Main] Data Bridge connected." << std::endl;
+
+  // 2. Configure Dashboard
+  BTQuant::VulkanDashboardConfig config;
+  config.enable_validation_layers = true;
+  config.enable_msaa = true;
+  config.msaa_samples = VK_SAMPLE_COUNT_4_BIT;
+  // Removed start_maximized as it is not in the config struct
+
+  // 3. Create Dashboard (this implicitly creates VulkanCore and Window)
+  std::cout << "[Main] Creating VulkanDashboard..." << std::endl;
+  auto dashboard =
+      std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, config);
+
+  dashboard->initialize();
+
+  // Apply default layout
+  dashboard->set_active_symbol("BTC-USDT");
+
+  // 4. Main Application Loop
+  std::cout << "[Main] Entering Render Loop..." << std::endl;
+
+  while (true) {
+    // Poll Bridge Data & Check Health
+    if (!bridge->isConnected()) {
+      // Optional: Try reconnect or log warning
+    }
+
+    // Synchronize Market Data
+    dashboard->synchronize_market_data();
+
+    // Render Frame
+    if (!dashboard->run_frame()) {
+      break; // Window closed
+    }
+  }
+
+  // Cleaning up
+  std::cout << "[Main] Shutting down..." << std::endl;
+  dashboard->shutdown();
+  bridge->stop();
 
   return 0;
 }

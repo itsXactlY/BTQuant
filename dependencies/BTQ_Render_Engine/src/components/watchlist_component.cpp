@@ -145,9 +145,8 @@ void WatchlistComponent::render_gui() {
         ImGui::TableSetColumnIndex(2);
         // Use a default theme if theme_ is not initialized, or use the provided
         // theme
-        ImVec4 change_color = entry.change_24h >= 0
-                                  ? to_imvec4(theme_.price_up)
-                                  : to_imvec4(theme_.price_down);
+        ImVec4 change_color =
+            entry.change_24h >= 0 ? theme_.price_up : theme_.price_down;
         ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
 
         ImGui::TableSetColumnIndex(3);

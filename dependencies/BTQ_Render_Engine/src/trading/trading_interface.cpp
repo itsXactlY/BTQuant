@@ -9,6 +9,7 @@
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <numeric>
 #include <sstream>

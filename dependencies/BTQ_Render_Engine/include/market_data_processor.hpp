@@ -2,7 +2,6 @@
 
 #include "hotspine_data_bridge.hpp"
 #include <chrono>
-#include <deque>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -13,6 +12,7 @@ namespace RenderEngine {
 // Trade data for analytics
 struct TradeData {
   std::string symbol;
+  uint32_t symbol_id = 0;
   uint64_t timestamp_us;
   double price;
   double size;
@@ -22,6 +22,7 @@ struct TradeData {
 // Orderbook data for analytics
 struct OrderbookData {
   std::string symbol;
+  uint32_t symbol_id = 0;
   uint64_t timestamp_us;
   std::vector<PriceLevel> bids;
   std::vector<PriceLevel> asks;

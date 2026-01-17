@@ -74,32 +74,38 @@ void OrderBookComponent::update_orderbook(const OrderBookData &data) {
                  1000.0f;
 
   // Detect changes for animation
-  auto update_levs = [&](const std::vector<OrderBookLevel> &old_levels,
-                         const std::vector<OrderBookLevel> &new_levels) {
-    std::vector<OrderBookLevel> result;
-    for (const auto &nl : new_levels) {
-      OrderBookLevel level = nl;
-      level.last_update_ts = 0.0f;
-      for (const auto &ol : old_levels) {
-        if (std::abs(ol.price - nl.price) < 1e-9) {
-          if (std::abs(ol.size - nl.size) > 1e-9) {
-            level.last_update_ts = current_time;
-          } else {
-            level.last_update_ts = ol.last_update_ts;
+  auto update_levs =
+      [&](const std::vector<OrderBookLevel> &old_levels,
+          const std::vector<RenderEngine::PriceLevel> &new_levels) {
+        std::vector<OrderBookLevel> result;
+        for (const auto &nl : new_levels) {
+          OrderBookLevel level;
+          level.price = nl.price;
+          level.size = nl.size;
+          level.last_update_ts = 0.0f;
+          for (const auto &ol : old_levels) {
+            if (std::abs(ol.price - nl.price) < 1e-9) {
+              if (std::abs(ol.size - nl.size) > 1e-9) {
+                level.last_update_ts = current_time;
+              } else {
+                level.last_update_ts = ol.last_update_ts;
+              }
+              break;
+            }
           }
-          break;
+          result.push_back(level);
         }
-      }
-      result.push_back(level);
-    }
-    return result;
-  };
+        return result;
+      };
 
   current_data_.bids = update_levs(current_data_.bids, data.bids);
   current_data_.asks = update_levs(current_data_.asks, data.asks);
   current_data_.spread = data.spread;
-  current_data_.mid_price = data.mid_price;
-  current_data_.timestamp = data.timestamp;
+  current_data_.mid_price =
+      (data.bids.empty() || data.asks.empty())
+          ? 0.0
+          : (data.bids[0].price + data.asks[0].price) * 0.5;
+  current_data_.timestamp = data.timestamp_us;
 
   // Limit and Sort
   if (current_data_.bids.size() > max_levels_)
@@ -294,7 +300,7 @@ void OrderBookComponent::render_gui() {
       float bar_width = (float)(it->size / max_size) * ImGui::GetColumnWidth();
       ImDrawList *draw_list = ImGui::GetWindowDrawList();
       ImVec2 pos = ImGui::GetCursorScreenPos();
-      ImU32 ask_bar_color = to_imu32(theme_.price_down);
+      ImU32 ask_bar_color = ImGui::GetColorU32(theme_.price_down);
       ask_bar_color =
           (ask_bar_color & 0x00FFFFFF) | (static_cast<ImU32>(0.2f * 255) << 24);
       draw_list->AddRectFilled(pos, ImVec2(pos.x + bar_width, pos.y + 16.0f),
@@ -303,7 +309,7 @@ void OrderBookComponent::render_gui() {
 
       // Price Column
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(to_imvec4(theme_.price_down), "  %.2f", it->price);
+      ImGui::TextColored(theme_.price_down, "  %.2f", it->price);
     }
 
     // Spread Row
@@ -313,7 +319,7 @@ void OrderBookComponent::render_gui() {
         ImGui::GetColorU32(ImVec4(0.08f, 0.08f, 0.10f, 1.0f)));
 
     ImGui::TableSetColumnIndex(1);
-    ImGui::TextColored(to_imvec4(theme_.accent_primary), "  %.2f",
+    ImGui::TextColored(theme_.accent_primary, "  %.2f",
                        current_data_.mid_price);
 
     ImGui::TableSetColumnIndex(2);
@@ -329,7 +335,7 @@ void OrderBookComponent::render_gui() {
           (float)(level.size / max_size) * ImGui::GetColumnWidth();
       ImDrawList *draw_list = ImGui::GetWindowDrawList();
       ImVec2 pos = ImGui::GetCursorScreenPos();
-      ImU32 bid_bar_color = to_imu32(theme_.price_up);
+      ImU32 bid_bar_color = ImGui::GetColorU32(theme_.price_up);
       bid_bar_color =
           (bid_bar_color & 0x00FFFFFF) | (static_cast<ImU32>(0.2f * 255) << 24);
       draw_list->AddRectFilled(
@@ -340,7 +346,7 @@ void OrderBookComponent::render_gui() {
 
       // Price Column
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(to_imvec4(theme_.price_up), "  %.2f", level.price);
+      ImGui::TextColored(theme_.price_up, "  %.2f", level.price);
     }
 
     ImGui::EndTable();
@@ -421,11 +427,11 @@ void OrderBookComponent::rebuild_geometry() {
 
   // 1. Headers
   add_text_at_position(text_vertices, "SIZE", position_.x + 10, current_y + 2,
-                       theme_.text_secondary, font_size);
+                       to_glm(theme_.text_secondary), font_size);
   add_centered_text(text_vertices, "PRICE", current_y + 2,
-                    theme_.text_secondary, font_size);
+                    to_glm(theme_.text_secondary), font_size);
   add_text_at_position(text_vertices, "SIZE", position_.x + size_.x - 40,
-                       current_y + 2, theme_.text_secondary, font_size);
+                       current_y + 2, to_glm(theme_.text_secondary), font_size);
   current_y += header_height;
 
   // 2. Asks (Top half, descending price)
@@ -479,11 +485,11 @@ void OrderBookComponent::rebuild_geometry() {
                             1});
 
     add_text_at_position(text_vertices, format_price(level.price),
-                         mid_x - col_w * 0.4f, current_y + 2, theme_.price_down,
-                         font_size);
+                         mid_x - col_w * 0.4f, current_y + 2,
+                         to_glm(theme_.price_down), font_size);
     add_text_at_position(text_vertices, format_size(level.size),
                          position_.x + size_.x - col_w + 10, current_y + 2,
-                         theme_.text_primary, font_size);
+                         to_glm(theme_.text_primary), font_size);
     current_y += row_height;
   }
 
@@ -508,13 +514,13 @@ void OrderBookComponent::rebuild_geometry() {
     bar_vertices.push_back(
         {{position_.x, current_y + row_height}, {0, 1}, spread_bg, 0, 2});
 
-    add_centered_text(text_vertices,
-                      "MID: " + format_price(current_data_.mid_price),
-                      current_y + 2, theme_.accent_secondary, font_size);
+    add_centered_text(
+        text_vertices, "MID: " + format_price(current_data_.mid_price),
+        current_y + 2, to_glm(theme_.accent_secondary), font_size);
     add_text_at_position(text_vertices,
                          "SPR: " + format_price(current_data_.spread),
                          position_.x + size_.x - 65, current_y + 2,
-                         theme_.text_muted, font_size * 0.8f);
+                         to_glm(theme_.text_muted), font_size * 0.8f);
     current_y += row_height;
   }
 
@@ -572,11 +578,11 @@ void OrderBookComponent::rebuild_geometry() {
          0});
 
     add_text_at_position(text_vertices, format_price(level.price),
-                         mid_x - col_w * 0.4f, current_y + 2, theme_.price_up,
-                         font_size);
+                         mid_x - col_w * 0.4f, current_y + 2,
+                         to_glm(theme_.price_up), font_size);
     add_text_at_position(text_vertices, format_size(level.size),
-                         position_.x + 10, current_y + 2, theme_.text_primary,
-                         font_size);
+                         position_.x + 10, current_y + 2,
+                         to_glm(theme_.text_primary), font_size);
     current_y += row_height;
   }
 
@@ -728,9 +734,9 @@ void OrderBookComponent::setup_uniform_buffer(OrderBookUniformBuffer &ubo) {
                      .count()) /
              1000.0f;
 
-  ubo.bid_color = theme_.price_up;
-  ubo.ask_color = theme_.price_down;
-  ubo.spread_color = theme_.accent_secondary;
+  ubo.bid_color = to_glm(theme_.price_up);
+  ubo.ask_color = to_glm(theme_.price_down);
+  ubo.spread_color = to_glm(theme_.accent_secondary);
   ubo.animation_phase = std::sin(ubo.time * 2.0f) * 0.5f + 0.5f;
 }
 
@@ -997,7 +1003,7 @@ void OrderBookComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
   mark_dirty();
 }
 void OrderBookComponent::handle_trade(const RenderEngine::TradeData &trade) {
-  if (trade.symbol != target_symbol_)
+  if (trade.symbol != symbol_)
     return;
   if (dashboard_ && trade.symbol != dashboard_->get_active_symbol())
     return;
@@ -1006,30 +1012,25 @@ void OrderBookComponent::handle_trade(const RenderEngine::TradeData &trade) {
 
 void OrderBookComponent::handle_orderbook(
     const RenderEngine::OrderbookData &orderbook) {
-  if (orderbook.symbol != target_symbol_)
+  if (orderbook.symbol != symbol_)
     return;
   OrderBookData ui_data;
-  ui_data.timestamp = orderbook.timestamp_us;
+  ui_data.timestamp_us = orderbook.timestamp_us;
   ui_data.spread = orderbook.spread;
-  ui_data.mid_price =
-      (orderbook.bids.empty() || orderbook.asks.empty())
-          ? 0.0
-          : (orderbook.bids[0].price + orderbook.asks[0].price) / 2.0;
+  // mid_price not stored in OrderbookData struct
 
-  size_t bid_limit = std::min(orderbook.bids.size(), max_levels_);
+  size_t bid_limit = std::min(orderbook.bids.size(), (size_t)max_levels_);
   double cumulative_bid = 0.0;
   for (size_t i = 0; i < bid_limit; ++i) {
     cumulative_bid += orderbook.bids[i].size;
-    ui_data.bids.push_back(
-        {orderbook.bids[i].price, orderbook.bids[i].size, cumulative_bid});
+    ui_data.bids.push_back({orderbook.bids[i].price, orderbook.bids[i].size});
   }
 
-  size_t ask_limit = std::min(orderbook.asks.size(), max_levels_);
+  size_t ask_limit = std::min(orderbook.asks.size(), (size_t)max_levels_);
   double cumulative_ask = 0.0;
   for (size_t i = 0; i < ask_limit; ++i) {
     cumulative_ask += orderbook.asks[i].size;
-    ui_data.asks.push_back(
-        {orderbook.asks[i].price, orderbook.asks[i].size, cumulative_ask});
+    ui_data.asks.push_back({orderbook.asks[i].price, orderbook.asks[i].size});
   }
 
   std::lock_guard lock(data_mutex_);

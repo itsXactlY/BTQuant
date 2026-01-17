@@ -25,9 +25,15 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/XInput2.h>
 
+// Internal includes - these MUST come before any clashing macros are undefined
+#include "CandlePipeline.h"
+#include "DashboardLayer.h"
+#include "OffscreenChartRenderer.h"
+#include "hotspine_data_bridge.hpp"
+#include "market_data_processor.hpp"
+#include "vulkan_base_types.hpp"
+
 // Undefine ONLY the most clashing X11 macros.
-// DO NOT undefine ButtonPress, MotionNotify, etc. as they are needed by
-// InteractionManager.
 #ifdef None
 #undef None
 #endif
@@ -46,14 +52,6 @@
 
 // ImGui
 #include "imgui.h"
-
-// Internal includes
-#include "CandlePipeline.h"
-#include "DashboardLayer.h"
-#include "OffscreenChartRenderer.h"
-#include "hotspine_data_bridge.hpp"
-#include "market_data_processor.hpp"
-#include "vulkan_base_types.hpp"
 
 namespace BTQuant {
 
@@ -133,7 +131,7 @@ struct InputEvent {
   int key;
   int modifiers;
   bool pressed;
-  MouseButton mouse_button; // Matches InteractionManager usage
+  MouseButton mouse_button;
   TouchPoint touch_point;
   GestureEvent gesture_event;
   std::chrono::high_resolution_clock::time_point timestamp;
@@ -151,6 +149,23 @@ struct OrderBookTextVertex {
   glm::vec2 position;
   glm::vec2 texcoord;
   glm::vec4 color;
+};
+
+struct OrderBookUniformBuffer {
+  glm::mat4 projection;
+  glm::mat4 view;
+  glm::vec2 component_size;
+  glm::vec2 component_position;
+  float row_height;
+  float max_size_for_bars;
+  float spread_highlight_intensity;
+};
+
+struct UIUniformBuffer {
+  glm::mat4 projection;
+  glm::mat4 view;
+  glm::mat4 model;
+  glm::vec2 viewport_size;
 };
 
 struct HeatmapData {
@@ -174,6 +189,40 @@ struct WatchlistEntry {
   uint64_t last_update_ts;
 };
 
+struct TapeEntry {
+  uint64_t timestamp_us;
+  double price;
+  double size;
+  bool is_buy;
+  bool is_large_trade;
+  bool is_whale_trade;
+  float delta;
+};
+
+struct PositionData {
+  std::string symbol;
+  float quantity;
+  float entry_price;
+  float pnl;
+  float pnl_percent;
+  float liquidation_price;
+};
+
+struct TickerData {
+  std::string symbol;
+  float price;
+  float change_pct;
+};
+
+struct StrategyData {
+  std::string name;
+  bool active;
+  float pnl;
+  float draw_down;
+  int trades;
+  std::string status;
+};
+
 struct DashboardTheme {
   ImVec4 background_main;
   ImVec4 background_panel;
@@ -186,12 +235,6 @@ struct DashboardTheme {
   ImVec4 border_color;
 };
 
-struct VulkanDashboardConfig {
-  bool enable_validation_layers = false;
-  bool enable_msaa = true;
-  VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
-};
-
 // ============================================================================
 // Base Class
 // ============================================================================
@@ -199,7 +242,8 @@ struct VulkanDashboardConfig {
 class UIComponent {
 public:
   UIComponent(const glm::vec2 &position, const glm::vec2 &size)
-      : position_(position), size_(size) {}
+      : position_(position), size_(size), visible_(true), is_dirty_(true),
+        vulkan_core_(nullptr) {}
   virtual ~UIComponent() = default;
 
   virtual void initialize_vulkan_resources(VulkanCore *vulkan_core) = 0;
@@ -214,14 +258,25 @@ public:
   handle_orderbook(const BTQuant::RenderEngine::OrderbookData &data) {}
   virtual void clear_data() {}
 
-  void set_position(const glm::vec2 &pos) { position_ = pos; }
-  void set_size(const glm::vec2 &s) { size_ = s; }
+  void set_position(const glm::vec2 &pos) {
+    position_ = pos;
+    mark_dirty();
+  }
+  void set_size(const glm::vec2 &s) {
+    size_ = s;
+    mark_dirty();
+  }
   virtual void set_target_symbol(const std::string &symbol) {}
+
+  void set_visible(bool v) { visible_ = v; }
+  bool is_visible() const { return visible_; }
 
 protected:
   glm::vec2 position_;
   glm::vec2 size_;
-  bool is_dirty_ = true;
+  bool visible_;
+  bool is_dirty_;
+  VulkanCore *vulkan_core_;
   void mark_dirty() { is_dirty_ = true; }
 };
 
@@ -301,34 +356,115 @@ inline glm::vec4 to_glm(const ImVec4 &v) {
 }
 
 // ============================================================================
-// UI Components
+// Component Classes
 // ============================================================================
 
-class RealtimeChartComponent : public UIComponent {
+class HeatmapComponent : public UIComponent {
 public:
-  RealtimeChartComponent(
-      const glm::vec2 &position, const glm::vec2 &size,
-      std::shared_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge =
-          nullptr);
-  ~RealtimeChartComponent() override;
+  HeatmapComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~HeatmapComponent() override;
 
   void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override;
   void render_gui() override;
   void handle_input(const InputEvent &event) override;
-  void handle_trade(const BTQuant::RenderEngine::TradeData &trade) override;
+
+  void set_range(float min_val, float max_val);
   void clear_data() override;
 
 private:
-  std::shared_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge_;
-  std::recursive_mutex data_mutex_;
-  std::vector<BTQuant::RenderEngine::TradeData> raw_trades_;
-  std::vector<BTQuant::RenderEngine::TradeData> raw_candles_;
+  void rebuild_geometry() {}
+  void dispatch_compute_interpolation() {}
+  void interpolate_color() {}
 
-  VkPipeline candle_pipeline_ = VK_NULL_HANDLE;
-  float view_zoom_ = 1.0f;
-  glm::vec2 view_offset_ = {0.0f, 0.0f};
+  struct {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+    VkDescriptorSet descriptor_set;
+    VkDescriptorSetLayout descriptor_set_layout;
+  } compute_;
+
+  struct {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+    VkDescriptorSet descriptor_set;
+    VkDescriptorSetLayout descriptor_set_layout;
+  } render_;
+
+  std::vector<HeatmapData> heatmap_data_;
+};
+
+class DataGridComponent : public UIComponent {
+public:
+  DataGridComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~DataGridComponent() override;
+
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override;
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override;
+
+  void set_cell(int row, int col, const std::string &value);
+  void clear_data() override;
+
+private:
+  struct CellData {
+    std::string text;
+    double numeric_value;
+    bool is_numeric;
+    bool highlight;
+    ImVec4 color;
+  };
+
+  int rows_;
+  int columns_;
+  std::vector<std::vector<CellData>> grid_data_;
+  DashboardTheme theme_;
+};
+
+class LogDisplayComponent : public UIComponent {
+public:
+  LogDisplayComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~LogDisplayComponent() override;
+
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override;
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override;
+
+  void add_log(LogLevel level, const std::string &message);
+  void clear_logs();
+  void clear_data() override { clear_logs(); }
+
+  void handle_trade(const BTQuant::RenderEngine::TradeData &trade) override;
+
+private:
+  struct LogEntry {
+    LogLevel level;
+    std::string message;
+    std::string timestamp;
+  };
+
+  std::deque<LogEntry> log_entries_;
+  size_t max_entries_;
+  LogLevel min_log_level_;
+  std::string text_filter_;
+  bool auto_scroll_;
+  float scroll_offset_;
+  DashboardTheme theme_;
+
+  VkPipeline text_pipeline_ = VK_NULL_HANDLE;
+  VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+  VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
+};
+
+struct OrderBookLevel {
+  double price;
+  double size;
+  float last_update_ts;
 };
 
 class OrderBookComponent : public UIComponent {
@@ -336,40 +472,29 @@ public:
   OrderBookComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~OrderBookComponent() override;
 
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override;
   void render_gui() override;
   void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
-  void handle_orderbook(
-      const BTQuant::RenderEngine::OrderbookData &orderbook) override;
-  void clear_data() override;
-
-  void update_orderbook(const OrderBookData &orderbook);
+  void handle_orderbook(const OrderbookData &data) override;
+  void set_target_symbol(const std::string &symbol) override {
+    target_symbol_ = symbol;
+  }
+  void set_precision(int price_precision, int size_precision);
 
 private:
-  void rebuild_geometry();
+  void update_orderbook(const OrderBookData &data);
   void setup_uniform_buffer(OrderBookUniformBuffer &ubo);
-  std::string format_price(double price);
-  std::string format_size(double size);
-  void add_text_line(std::vector<OrderBookTextVertex> &vertices,
-                     const std::string &price, const std::string &size,
-                     const std::string &total, float y, const glm::vec4 &color,
-                     float font_size);
-  void add_centered_text(std::vector<OrderBookTextVertex> &vertices,
-                         const std::string &text, float y,
-                         const glm::vec4 &color, float font_size);
   void add_text_at_position(std::vector<OrderBookTextVertex> &vertices,
                             const std::string &text, float x, float y,
-                            const glm::vec4 &color, float font_size);
+                            const glm::vec4 &color, float size);
+  void add_centered_text(std::vector<OrderBookTextVertex> &vertices,
+                         const std::string &text, float y,
+                         const glm::vec4 &color, float size);
 
-  struct OrderBookLevel {
-    double price;
-    double size;
-    float last_update_ts;
-  };
-
+  std::string target_symbol_;
   struct {
     std::vector<OrderBookLevel> bids;
     std::vector<OrderBookLevel> asks;
@@ -378,12 +503,10 @@ private:
     uint64_t timestamp;
   } current_data_;
 
-  BufferAllocation bar_vertex_buffer_;
-  BufferAllocation text_vertex_buffer_;
-  BufferAllocation bar_ubo_buffer_;
-  BufferAllocation text_ubo_buffer_;
-  BufferAllocation font_metrics_buffer_;
+  std::mutex data_mutex_;
+  DashboardTheme theme_;
 
+  // Vulkan resources
   VkPipeline bar_pipeline_ = VK_NULL_HANDLE;
   VkPipeline text_pipeline_ = VK_NULL_HANDLE;
   VkPipelineLayout bar_pipeline_layout_ = VK_NULL_HANDLE;
@@ -393,316 +516,28 @@ private:
   VkDescriptorSet bar_descriptor_set_ = VK_NULL_HANDLE;
   VkDescriptorSet text_descriptor_set_ = VK_NULL_HANDLE;
 
-  VkSampler font_sampler_ = VK_NULL_HANDLE;
-  VkImageView font_image_view_ = VK_NULL_HANDLE;
-  VkImage font_image_ = VK_NULL_HANDLE;
-  VkDeviceMemory font_memory_ = VK_NULL_HANDLE;
-
-  std::string symbol_ = "BTC-USDT";
-  std::mutex data_mutex_;
-  size_t max_levels_ = 50;
-  DashboardTheme theme_;
-};
-
-class HeatmapComponent : public UIComponent {
-public:
-  HeatmapComponent(const glm::vec2 &position, const glm::vec2 &size,
-                   size_t grid_width = 100, size_t grid_height = 100);
-  ~HeatmapComponent() override;
-
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override;
-  void render_gui() override;
-  void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
-
-  void handle_trade(const BTQuant::RenderEngine::TradeData &trade) override;
-  void handle_orderbook(
-      const BTQuant::RenderEngine::OrderbookData &orderbook) override;
-
-  void set_data(const std::vector<std::vector<HeatmapData>> &data);
-  void update_cell(size_t x, size_t y, const HeatmapData &data);
-  void set_color_scheme(const std::vector<glm::vec4> &scheme);
-  void set_value_range(float min_val, float max_val);
-
-private:
-  void rebuild_geometry();
-  void dispatch_compute_interpolation();
-  glm::vec4 interpolate_color(float value);
-
-  BufferAllocation vertex_buffer_;
-  BufferAllocation index_buffer_;
-  BufferAllocation compute_input_buffer_;
-  BufferAllocation compute_output_buffer_;
-  BufferAllocation compute_previous_buffer_;
-  BufferAllocation compute_ubo_buffer_;
-  BufferAllocation color_scheme_buffer_;
-  BufferAllocation render_ubo_buffer_;
-
-  VkPipeline render_pipeline_ = VK_NULL_HANDLE;
-  VkPipeline compute_pipeline_ = VK_NULL_HANDLE;
-  VkPipelineLayout render_pipeline_layout_ = VK_NULL_HANDLE;
-  VkPipelineLayout compute_pipeline_layout_ = VK_NULL_HANDLE;
-
-  VkDescriptorSetLayout render_layout_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout compute_layout_ = VK_NULL_HANDLE;
-
-  VkDescriptorSet render_descriptor_set_ = VK_NULL_HANDLE;
-  VkDescriptorSet compute_descriptor_set_ = VK_NULL_HANDLE;
-
-  std::vector<float> grid_data_;
-  int grid_width_ = 100;
-  int grid_height_ = 100;
-  std::mutex data_mutex_;
-  std::vector<std::vector<HeatmapData>> heatmap_data_;
-
-  std::vector<glm::vec4> color_scheme_;
-  float min_value_ = 0.0f;
-  float max_value_ = 1.0f;
-  bool interpolation_enabled_ = true;
-};
-
-class DataGridComponent : public UIComponent {
-public:
-  struct CellData {
-    std::string text;
-    glm::vec4 text_color = {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec4 bg_color = {0.0f, 0.0f, 0.0f, 0.0f};
-    double numeric_value = 0.0;
-    bool is_numeric = false;
-    bool highlight = false;
-  };
-
-  DataGridComponent(const glm::vec2 &position, const glm::vec2 &size, int rows,
-                    int cols);
-  ~DataGridComponent() override;
-
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override;
-  void render_gui() override;
-  void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
-
-  void set_cell(int row, int col, const CellData &data);
-  void set_column_name(int col, const std::string &name);
-
-private:
-  void rebuild_geometry();
-  void sort_data();
-
-  std::vector<std::vector<CellData>> cells_;
-  std::vector<std::string> column_names_;
-  std::vector<float> column_widths_;
-  int rows_ = 0;
-  int columns_ = 0;
-  std::mutex data_mutex_;
-
-  int sort_column_ = -1;
-  bool sort_ascending_ = true;
-  VulkanDashboard *dashboard_ = nullptr;
-
-  BufferAllocation vertex_buffer_;
-  BufferAllocation index_buffer_;
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
-};
-
-class MarketDepthChartComponent : public UIComponent {
-public:
-  MarketDepthChartComponent(const glm::vec2 &position, const glm::vec2 &size);
-  ~MarketDepthChartComponent() override;
-
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override;
-  void render_gui() override;
-  void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
-  void
-  handle_orderbook(const BTQuant::RenderEngine::OrderbookData &data) override;
-  void clear_data() override;
-  void handle_trade(const BTQuant::RenderEngine::TradeData &trade) override;
-
-private:
-  void rebuild_geometry();
-  uint32_t vertex_count_ = 0;
-  std::string target_symbol_ = "BTC-USDT";
-
-  BufferAllocation vertex_buffer_;
-  BufferAllocation index_buffer_;
-  BufferAllocation compute_input_buffer_;
-  BufferAllocation compute_output_buffer_;
-  BufferAllocation compute_previous_buffer_;
-  BufferAllocation compute_ubo_buffer_;
-  BufferAllocation color_scheme_buffer_;
-  BufferAllocation render_ubo_buffer_;
-
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
-  VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
-  VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
-  VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
-
-  struct CurrentData {
-    struct Level {
-      float price;
-      float size;
-      float total_size;
-    };
-    std::vector<Level> bids;
-    std::vector<Level> asks;
-  } current_data_;
-
-  std::mutex data_mutex_;
-};
-
-// ============================================================================
-// Alert System
-// ============================================================================
-
-enum class AlertCondition {
-  PRICE_ABOVE,
-  PRICE_BELOW,
-  VOLUME_ABOVE,
-  VOLUME_BELOW
-};
-
-struct AlertRule {
-  std::string symbol;
-  AlertCondition condition;
-  float target_value;
-  bool is_triggered = false;
-  std::chrono::system_clock::time_point created_at;
-  std::chrono::system_clock::time_point triggered_at;
-};
-
-class AlertManager {
-public:
-  void add_alert(const AlertRule &rule) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    alerts_.push_back(rule);
-  }
-
-  void remove_alert(size_t index) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (index < alerts_.size()) {
-      alerts_.erase(alerts_.begin() + index);
-    }
-  }
-
-  std::vector<AlertRule> get_alerts() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return alerts_;
-  }
-
-  // Basic check function - logic would be more complex in real app
-  void check_alerts(const std::string &symbol, double price, double volume) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    for (auto &alert : alerts_) {
-      if (alert.symbol == symbol && !alert.is_triggered) {
-        bool triggered = false;
-        switch (alert.condition) {
-        case AlertCondition::PRICE_ABOVE:
-          triggered = (price >= alert.target_value);
-          break;
-        case AlertCondition::PRICE_BELOW:
-          triggered = (price <= alert.target_value);
-          break;
-        case AlertCondition::VOLUME_ABOVE:
-          triggered = (volume >= alert.target_value);
-          break;
-        default:
-          break;
-        }
-        if (triggered) {
-          alert.is_triggered = true;
-          alert.triggered_at = std::chrono::system_clock::now();
-        }
-      }
-    }
-  }
-
-private:
-  std::vector<AlertRule> alerts_;
-  mutable std::mutex mutex_;
-};
-
-class AlertComponent : public UIComponent {
-public:
-  AlertComponent(const glm::vec2 &position, const glm::vec2 &size,
-                 AlertManager &manager);
-
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override {}
-  void render_gui() override;
-  void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
-
-private:
-  AlertManager &manager_;
-  std::mutex data_mutex_;
-  char symbol_buffer_[32] = "BTC-USDT";
-  int selected_condition_ = 0;
-  float target_value_ = 0.0f;
-};
-
-class LogDisplayComponent : public UIComponent {
-public:
-  struct LogEntry {
-    LogLevel level;
-    std::string message;
-    std::chrono::system_clock::time_point timestamp;
-    glm::vec4 color;
-  };
-
-  LogDisplayComponent(const glm::vec2 &position, const glm::vec2 &size);
-  ~LogDisplayComponent() override;
-
-  void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override;
-  void render_gui() override;
-  void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
-
-  void add_log_entry(LogLevel level, const std::string &message);
-  void handle_orderbook(const BTQuant::RenderEngine::OrderbookData &) override;
-  void handle_trade(const BTQuant::RenderEngine::TradeData &trade) override;
-  void clear_data() override;
-
-private:
-  void rebuild_text_geometry();
-  void clear_logs();
-  std::vector<LogEntry> get_filtered_entries() const;
-  glm::vec4 get_log_level_color(LogLevel level);
-  std::string get_log_level_string(LogLevel level);
-  std::string
-  format_timestamp(const std::chrono::system_clock::time_point &time);
-
-  std::deque<LogEntry> log_entries_;
-  std::mutex data_mutex_;
-
-  size_t max_entries_ = 1000;
-  bool auto_scroll_ = true;
-  float scroll_offset_ = 0.0f;
-  LogLevel min_log_level_ = LogLevel::Debug;
-  char filter_buffer_[256] = "";
-
-  VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
-  VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
-  VkPipeline pipeline_ = VK_NULL_HANDLE;
-  VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
-
+  BufferAllocation bar_vertex_buffer_;
+  BufferAllocation text_vertex_buffer_;
+  BufferAllocation bar_ubo_buffer_;
+  BufferAllocation text_ubo_buffer_;
   BufferAllocation font_metrics_buffer_;
+
+  VkImage font_image_ = VK_NULL_HANDLE;
+  VkImageView font_image_view_ = VK_NULL_HANDLE;
+  VkDeviceMemory font_memory_ = VK_NULL_HANDLE;
   VkSampler font_sampler_ = VK_NULL_HANDLE;
 };
 
 class MarketScreenerComponent : public UIComponent {
 public:
   MarketScreenerComponent(const glm::vec2 &position, const glm::vec2 &size);
-  ~MarketScreenerComponent() override;
+  ~MarketScreenerComponent() override = default;
 
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
   void update(float delta_time) override;
-  void render(VkCommandBuffer cmd) override;
+  void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
-  void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
+  void handle_input(const InputEvent &event) override {}
 
 private:
   std::vector<ScreenerResult> results_;
@@ -710,186 +545,231 @@ private:
   DashboardTheme theme_;
 };
 
-class WatchlistComponent : public UIComponent {
+class RealtimeChartComponent : public UIComponent {
 public:
-  WatchlistComponent(const glm::vec2 &position, const glm::vec2 &size);
-  ~WatchlistComponent() override;
+  RealtimeChartComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~RealtimeChartComponent() override;
 
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override;
   void render_gui() override;
   void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
+
+  void handle_trade(const TradeData &trade) override;
+  void handle_orderbook(const OrderbookData &data) override;
+  void clear_data() override;
+
+private:
+  void update_textures();
+
+  std::string symbol_;
+  std::vector<CandleData> raw_candles_;
+  std::recursive_mutex data_mutex_;
+
+  VkDescriptorSet chart_texture_set_ = VK_NULL_HANDLE;
+  VkDescriptorSet depth_texture_set_ = VK_NULL_HANDLE;
+
+  // Offscreen rendering state
+  uint32_t chart_width_ = 0;
+  uint32_t chart_height_ = 0;
+
+  // Pipeline from Orchestrator
+  CandlePipeline *candle_pipeline_ = nullptr;
+
+  // Zoom and pan state
+  float view_zoom_ = 1.0f;
+  float view_offset_ = 0.0f;
+};
+
+class WatchlistComponent : public UIComponent {
+public:
+  WatchlistComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~WatchlistComponent() override = default;
+
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void update(float delta_time) override;
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
 
   void add_symbol(const std::string &symbol);
-  void remove_symbol(const std::string &symbol);
-  void update_quote(const std::string &symbol, double price, double change_24h,
-                    double volume_24h);
+  void update_quote(const std::string &symbol, double price, double change);
 
 private:
   std::vector<WatchlistEntry> entries_;
-  VulkanDashboard *dashboard_ = nullptr;
   std::mutex data_mutex_;
+  VulkanDashboard *dashboard_ = nullptr;
+};
+
+enum class AlertCondition { GreaterThan, LessThan, CrossAbove, CrossBelow };
+
+struct AlertRule {
+  std::string symbol;
+  std::string field;
+  AlertCondition condition;
+  double value;
+  bool active;
+};
+
+class AlertManager {
+public:
+  void add_rule(const AlertRule &rule);
+  void check_alerts(const std::string &symbol, double price);
+};
+
+class AlertComponent : public UIComponent {
+public:
+  AlertComponent(const glm::vec2 &position, const glm::vec2 &size);
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void update(float delta_time) override {}
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
 };
 
 class RiskManagerComponent : public UIComponent {
 public:
   RiskManagerComponent(const glm::vec2 &position, const glm::vec2 &size);
-
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
   void update(float delta_time) override {}
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+
+private:
+  DashboardTheme theme_;
 };
 
 class TradingInterfaceComponent : public UIComponent {
 public:
   TradingInterfaceComponent(const glm::vec2 &position, const glm::vec2 &size);
-
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
   void update(float delta_time) override {}
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
-
-private:
-  std::string order_type_ = "Limit";
-  float quantity_ = 0.0f;
-  float price_ = 0.0f;
-  float stop_price_ = 0.0f;
-  float trailing_pct_ = 0.0f;
-  float iceberg_display_qty_ = 0.0f;
-  int twap_duration_mins_ = 60;
 };
 
 class TapeComponent : public UIComponent {
 public:
   TapeComponent(const glm::vec2 &position, const glm::vec2 &size);
-
-  void update(float delta_time) override {}
+  ~TapeComponent() override;
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void handle_trade(const RenderEngine::TradeData &trade) override;
+  void clear_data() override;
 
 private:
-  struct TapeEntry {
-    uint64_t timestamp_us;
-    double price;
-    double size;
-    bool is_buy;
-    bool is_large_trade;
-    bool is_whale_trade;
-    float delta;
-  };
-
+  std::string target_symbol_;
   std::deque<TapeEntry> entries_;
-  std::mutex data_mutex_;
-  std::string target_symbol_ = "BTC-USDT";
-  float large_trade_threshold_ = 5.0f;
-  float whale_trade_threshold_ = 50.0f;
   float cumulative_delta_ = 0.0f;
+  float large_trade_threshold_ = 5.0f;
+  float whale_trade_threshold_ = 25.0f;
+  std::mutex data_mutex_;
+  DashboardTheme theme_;
 };
 
 class OrderManagementComponent : public UIComponent {
 public:
   OrderManagementComponent(const glm::vec2 &position, const glm::vec2 &size);
-
-  void update(float delta_time) override {}
+  ~OrderManagementComponent() override;
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
-
-private:
-  std::string symbol_ = "BTC-USDT";
-  float quantity_ = 0.0f;
-  float price_ = 0.0f;
 };
 
 class PositionPanelComponent : public UIComponent {
 public:
   PositionPanelComponent(const glm::vec2 &position, const glm::vec2 &size);
   ~PositionPanelComponent() override;
-
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
   void rebuild_equity_geometry();
 
 private:
-  struct Position {
-    std::string symbol;
-    float entry_price;
-    float mark_price;
-    float quantity;
-    float pnl;
-    float pnl_percent;
-  };
-
-  std::vector<Position> positions_;
+  std::vector<PositionData> positions_;
   std::vector<float> equity_history_;
-
-  BufferAllocation equity_vertex_buffer_; // For custom graph
-
-  float total_equity_ = 105423.50f;
-  float available_balance_ = 45220.10f;
+  float total_equity_ = 100000.0f;
+  float available_balance_ = 85000.0f;
+  DashboardTheme theme_;
+  BufferAllocation equity_vertex_buffer_;
 };
 
 class MarketOverviewPanel : public UIComponent {
 public:
   MarketOverviewPanel(const glm::vec2 &position, const glm::vec2 &size);
   ~MarketOverviewPanel() override;
-
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override {}
   void render_gui() override;
   void handle_input(const InputEvent &event) override {}
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
 
 private:
-  struct Ticker {
-    std::string symbol;
-    float price;
-    float change_pct;
-  };
-  std::vector<Ticker> tickers_;
-  float global_volume_ = 45200000000.0f;
-  float system_latency_ms_ = 12.4f;
+  std::vector<TickerData> tickers_;
+  float global_volume_ = 1500000000.0f;
+  float system_latency_ms_ = 1.25f;
+  DashboardTheme theme_;
 };
 
-struct WatchlistEntry {
-  std::string symbol;
-  double price = 0.0;
-  double change_24h = 0.0;
-  double volume_24h = 0.0;
-  uint64_t last_update_ts = 0;
-};
-
-class WatchlistComponent : public UIComponent {
+class StrategyControlComponent : public UIComponent {
 public:
-  WatchlistComponent(const glm::vec2 &position, const glm::vec2 &size);
-  ~WatchlistComponent() override;
+  StrategyControlComponent(const glm::vec2 &position, const glm::vec2 &size);
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override {}
+  void update(float delta_time) override {}
+  void render(VkCommandBuffer cmd) override {}
+  void render_gui() override;
+  void handle_input(const InputEvent &event) override {}
 
+private:
+  std::vector<StrategyData> strategies_;
+};
+
+class MarketDepthChartComponent : public UIComponent {
+public:
+  struct CurrentData {
+    struct Level {
+      double price;
+      double size;
+    };
+    std::vector<Level> bids;
+    std::vector<Level> asks;
+  };
+
+  MarketDepthChartComponent(const glm::vec2 &position, const glm::vec2 &size);
+  ~MarketDepthChartComponent() override;
+
+  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
   void update(float delta_time) override;
   void render(VkCommandBuffer cmd) override;
   void render_gui() override;
   void handle_input(const InputEvent &event) override;
-  void initialize_vulkan_resources(VulkanCore *vulkan_core) override;
 
-  void add_symbol(const std::string &symbol);
-  void remove_symbol(const std::string &symbol);
-  void update_quote(const std::string &symbol, double price, double change,
-                    double volume);
+  void handle_orderbook(const OrderbookData &data) override;
+  void set_target_symbol(const std::string &symbol) override {
+    target_symbol_ = symbol;
+  }
 
 private:
-  std::vector<WatchlistEntry> entries_;
-  VulkanDashboard *dashboard_ = nullptr;
+  void rebuild_geometry();
+
+  std::string target_symbol_;
+  CurrentData current_data_;
   std::mutex data_mutex_;
+  DashboardTheme theme_;
+
+  BufferAllocation vertex_buffer_;
+  uint32_t vertex_count_ = 0;
 };
 
 } // namespace BTQuant

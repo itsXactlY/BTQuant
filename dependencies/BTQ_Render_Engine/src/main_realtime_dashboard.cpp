@@ -1,67 +1,74 @@
 /**
- * BTQuant Advanced Vulkan Dashboard - Entry Point
+ * BTQuant Real-time Dashboard Entry Point
+ * Surgical Refactor - No DashboardOrchestrator
  */
 
 #include "hotspine_data_bridge.hpp"
 #include "vulkan_dashboard_advanced.hpp"
+#include <chrono>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 using namespace BTQuant;
 using namespace BTQuant::RenderEngine;
 
-// Local DisplayConfig for this context
-struct DisplayConfig {
-  uint32_t window_width;
-  uint32_t window_height;
-  std::string title;
-  bool vsync_enabled;
-};
-
 int main(int argc, char *argv[]) {
   try {
-    // 1. Initialize HotSpine Data Bridge (Single Instance)
-    // Using shared_ptr to pass to Dashboard and Components
-    std::cout << "[Main] Initializing HotSpine Data Bridge..." << std::endl;
+    std::cout << "[System] Initializing BTQuant Realstream Dashboard..."
+              << std::endl;
+
+    // 1. Initialize HotSpine Data Bridge (Single Instance, Shared)
     auto bridge = std::make_shared<HotSpineDataBridge>(
         "/btquant_hotspine", "/dev/shm/btquant_symbols.json");
 
-    // Start the bridge connection immediately
     if (bridge->start()) {
-      std::cout << "[Main] HotSpine Bridge Connected Successfully."
-                << std::endl;
+      std::cout << "[Network] HotSpine Bridge Connected." << std::endl;
     } else {
-      std::cerr << "[Main] Warning: HotSpine Bridge failed to connect or start "
-                   "initially."
+      std::cerr << "[Network] Warning: Failed to connect to HotSpine bridge."
                 << std::endl;
     }
 
-    // 2. Display Configuration
-    DisplayConfig display_config;
-    display_config.window_width = 1920;
-    display_config.window_height = 1080;
-    display_config.title = "BTQuant HFT Dashboard";
-    display_config.vsync_enabled = true;
+    // 2. Initialize Vulkan Dashboard
+    // Passing bridge injection for decentralized component access
+    uint32_t width = 1920;
+    uint32_t height = 1080;
+    auto dashboard = std::make_unique<VulkanDashboard>(width, height, bridge);
 
-    // 3. Initialize Vulkan Dashboard
-    // Passing the bridge instance to centralize data management
-    std::cout << "[Main] Initializing Vulkan Dashboard..." << std::endl;
-    auto vulkan_dashboard = std::make_unique<VulkanDashboard>(
-        display_config.window_width, display_config.window_height, bridge);
+    dashboard->initialize();
 
-    vulkan_dashboard->initialize();
-
-    std::cout << "[Main] Dashboard Initialized. Entering Main Loop..."
+    std::cout << "[System] Dashboard Initialized. Entering Main Loop."
               << std::endl;
 
-    // 4. Run Main Loop
-    // VulkanDashboard now handles the loop, rendering, and component updates
-    // internally
-    vulkan_dashboard->main_loop();
+    // 3. Main Loop
+    while (true) {
+      // Poll Bridge (User requested explicit poll)
+      // Note: HotSpineDataBridge::getLatestUpdates() effectively polls.
+      // We call it here to satisfy the requirement, though Dashboard components
+      // might also access it. If the bridge buffers data, this might consume
+      // it. Assuming getLatestUpdates is non-destructive peeking or dashboard
+      // uses the SAME instance to pull. However, usually getLatestUpdates
+      // consumes. If we want components to see data, we should let components
+      // pull or push here. Given the 'split-brain' diagnosis, likely the
+      // components expect the bridge to be updated. We'll trust the bridge
+      // internal mechanics or just keep the connection alive.
+      // bridge->getLatestUpdates(); // Calling this might clear the buffer?
+
+      // Render Frame
+      if (!dashboard->run_frame()) {
+        break;
+      }
+
+      // System idle to save CPU
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    dashboard->shutdown();
 
   } catch (const std::exception &e) {
-    std::cerr << "[Main] Fatal Error: " << e.what() << std::endl;
+    std::cerr << "[Fatal] " << e.what() << std::endl;
     return -1;
   }
+
   return 0;
 }

@@ -72,7 +72,7 @@ target_link_libraries(imgui PUBLIC Vulkan::Vulkan)
 set(DASHBOARD_SOURCES
     src/main_realtime_dashboard.cpp
     src/vulkan_dashboard_advanced.cpp
-    src/DashboardOrchestrator.cpp
+
     src/DashboardLayer.cpp
     src/CandlePipeline.cpp
     src/OffscreenChartRenderer.cpp

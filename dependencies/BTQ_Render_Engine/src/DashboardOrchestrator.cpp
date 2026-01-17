@@ -4,7 +4,6 @@
 #include "hotspine_data_bridge.hpp"
 #include "imgui.h"
 #include <algorithm>
-#include <iostream>
 #include <limits>
 
 namespace BTQuant {
@@ -14,7 +13,7 @@ DashboardOrchestrator::DashboardOrchestrator(VulkanCore *core) : core_(core) {}
 DashboardOrchestrator::~DashboardOrchestrator() {}
 
 void DashboardOrchestrator::SetBridge(
-    std::unique_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge) {
+    std::shared_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge) {
   bridge_ = std::move(bridge);
 }
 

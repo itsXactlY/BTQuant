@@ -1,8 +1,5 @@
 #include "hotspine_data_bridge.hpp"
-#include <algorithm>
 #include <chrono>
-#include <cstring>
-#include <fstream>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -56,7 +53,7 @@ bool HotSpineDataBridge::start() {
     return true;
   }
 
-  if (!hotspine_reader_ || !hotspine_reader_->isAttached()) {
+  if (!isConnected()) {
     std::cerr << "[HotSpineDataBridge] Cannot start - not connected to HotSpine"
               << std::endl;
     return false;

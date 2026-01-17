@@ -1357,9 +1357,12 @@ uint32_t VulkanCore::find_memory_type(uint32_t type_filter,
 // VulkanDashboard implementation
 
 // VulkanDashboard implementation
-VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                 const VulkanDashboardConfig &config)
-    : config_(config), width_(width), height_(height) {
+VulkanDashboard::VulkanDashboard(
+    uint32_t width, uint32_t height,
+    std::shared_ptr<RenderEngine::HotSpineDataBridge> bridge,
+    const VulkanDashboardConfig &config)
+    : config_(config), width_(width), height_(height),
+      hotspine_bridge_(bridge) {
   fprintf(stderr, "[VulkanDashboard] Creating dashboard %dx%d\n", width,
           height);
 }
@@ -1390,8 +1393,8 @@ void VulkanDashboard::initialize() {
   // Initialize data components
   market_data_processor_ =
       std::make_unique<RenderEngine::MarketDataProcessor>();
-  hotspine_bridge_ =
-      std::make_unique<RenderEngine::HotSpineDataBridge>("/btquant_hotspine");
+  // Bridge is injected via constructor
+  // hotspine_bridge_ = ...
   visualization_engine_ =
       std::make_unique<RenderEngine::DataVisualizationEngine>(
           vulkan_core_->get_device(), vulkan_core_->get_physical_device());
@@ -2012,7 +2015,8 @@ void VulkanDashboard::init_components() {
 
   // --- CENTER COLUMN ---
   auto main_chart = std::make_unique<RealtimeChartComponent>(
-      glm::vec2(left_w, workspace_y), glm::vec2(center_w, workspace_h));
+      glm::vec2(left_w, workspace_y), glm::vec2(center_w, workspace_h),
+      hotspine_bridge_);
   main_chart->enable_candlestick_mode(true);
   add_component(std::move(main_chart));
 
@@ -2216,6 +2220,7 @@ void VulkanCore::init_imgui() {
   (void)io;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
   // Theme will be applied by VulkanDashboard after initialization
 
@@ -2560,6 +2565,8 @@ void VulkanDashboard::cleanup_x11() {
 }
 
 void VulkanDashboard::render_gui() {
+  ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+
   if (dashboard_layer_) {
     dashboard_layer_->OnUIRender();
   }
@@ -2937,7 +2944,7 @@ void VulkanDashboard::add_chart(const std::string &symbol,
                                 const std::string &timeframe) {
   // Create a new professional candlestick chart
   auto chart = std::make_unique<RealtimeChartComponent>(
-      glm::vec2(0, 0), glm::vec2(width_, height_));
+      glm::vec2(0, 0), glm::vec2(width_, height_), hotspine_bridge_);
   chart->set_dashboard(this);
   chart->enable_candlestick_mode(true);
   chart->set_target_symbol(symbol);

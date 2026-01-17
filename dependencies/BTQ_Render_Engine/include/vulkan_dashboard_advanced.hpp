@@ -601,7 +601,9 @@ public:
     uint64_t timestamp_us;
   };
 
-  RealtimeChartComponent(const glm::vec2 &position, const glm::vec2 &size);
+  RealtimeChartComponent(
+      const glm::vec2 &position, const glm::vec2 &size,
+      std::shared_ptr<RenderEngine::HotSpineDataBridge> bridge);
   ~RealtimeChartComponent();
   std::string get_name() const override { return "Price Chart"; }
 
@@ -668,7 +670,9 @@ private:
   VkDescriptorSet ui_descriptor_set_ = VK_NULL_HANDLE;
 
   std::unique_ptr<OffscreenChartRenderer> offscreen_renderer_;
+  std::shared_ptr<RenderEngine::HotSpineDataBridge> bridge_;
 
+  std::unique_ptr<class CandlePipeline> candle_pipeline_;
   // Instanced Rendering Resources
   BufferAllocation candle_instance_buffer_;
   BufferAllocation candle_base_geo_buffer_;
@@ -1312,6 +1316,7 @@ class HotSpineDataBridge;
 class VulkanDashboard {
 public:
   VulkanDashboard(uint32_t width, uint32_t height,
+                  std::shared_ptr<RenderEngine::HotSpineDataBridge> bridge,
                   const VulkanDashboardConfig &config = {});
   ~VulkanDashboard();
 
@@ -1423,7 +1428,7 @@ private:
 
   // Market data integration
   std::unique_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
-  std::unique_ptr<RenderEngine::HotSpineDataBridge> hotspine_bridge_;
+  std::shared_ptr<RenderEngine::HotSpineDataBridge> hotspine_bridge_;
   std::unique_ptr<RenderEngine::DataVisualizationEngine> visualization_engine_;
 
   // Performance monitoring

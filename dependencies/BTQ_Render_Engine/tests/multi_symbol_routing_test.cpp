@@ -1,6 +1,8 @@
+#include "../include/hotspine_data_bridge.hpp"
 #include "../include/vulkan_dashboard_advanced.hpp"
 #include <cassert>
 #include <iostream>
+#include <memory>
 
 using namespace BTQuant;
 
@@ -30,7 +32,11 @@ public:
 int main() {
   std::cout << "[INFO] Starting Multi-Symbol Routing Test..." << std::endl;
 
-  VulkanDashboard dashboard(1280, 720);
+  // Create a dummy bridge for testing
+  auto bridge = std::make_shared<RenderEngine::HotSpineDataBridge>(
+      "/test_shm", "test_symbols.json");
+
+  VulkanDashboard dashboard(1280, 720, bridge);
 
   // Create components with different target symbols
   auto comp1_ptr = new MockComponent("BTC_Comp", "BTC-USDT");

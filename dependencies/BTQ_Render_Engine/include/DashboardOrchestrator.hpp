@@ -33,7 +33,7 @@ public:
 
   // Dependency Injection / Ownership Transfer
   void
-  SetBridge(std::unique_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge);
+  SetBridge(std::shared_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge);
   void SetRenderer(std::unique_ptr<OffscreenChartRenderer> renderer);
   void SetPipeline(std::unique_ptr<CandlePipeline> pipeline);
 
@@ -47,7 +47,7 @@ private:
   VulkanCore *core_;
 
   // Components owned by Orchestrator
-  std::unique_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge_;
+  std::shared_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge_;
   std::unique_ptr<OffscreenChartRenderer> renderer_;
   std::unique_ptr<CandlePipeline> pipeline_;
 

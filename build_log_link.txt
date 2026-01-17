@@ -1,0 +1,109 @@
+[ 18%] Built target imgui
+[ 20%] Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::RealtimeChartComponent::update(float)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:84:43: Warnung: unverwendeter Parameter »delta_time« [-Wunused-parameter]
+   84 | void RealtimeChartComponent::update(float delta_time) {
+      |                                     ~~~~~~^~~~~~~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::RealtimeChartComponent::handle_input(const BTQuant::InputEvent&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:207:61: Warnung: unverwendeter Parameter »event« [-Wunused-parameter]
+  207 | void RealtimeChartComponent::handle_input(const InputEvent &event) {
+      |                                           ~~~~~~~~~~~~~~~~~~^~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::RealtimeChartComponent::handle_orderbook(const BTQuant::RenderEngine::OrderbookData&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:212:40: Warnung: unverwendeter Parameter »ob« [-Wunused-parameter]
+  212 |     const RenderEngine::OrderbookData &ob) {
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »void BTQuant::RealtimeChartComponent::add_data_point(float, float, float)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:216:51: Warnung: unverwendeter Parameter »timestamp« [-Wunused-parameter]
+  216 | void RealtimeChartComponent::add_data_point(float timestamp, float value,
+      |                                             ~~~~~~^~~~~~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:216:68: Warnung: unverwendeter Parameter »value« [-Wunused-parameter]
+  216 | void RealtimeChartComponent::add_data_point(float timestamp, float value,
+      |                                                              ~~~~~~^~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:217:51: Warnung: unverwendeter Parameter »volume« [-Wunused-parameter]
+  217 |                                             float volume) {
+      |                                             ~~~~~~^~~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »void BTQuant::HeatmapComponent::set_data(const std::vector<std::vector<HeatmapData> >&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:242:50: Warnung: unverwendeter Parameter »data« [-Wunused-parameter]
+  242 |     const std::vector<std::vector<HeatmapData>> &data) {}
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »void BTQuant::HeatmapComponent::update_cell(size_t, size_t, const HeatmapData&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:243:43: Warnung: unverwendeter Parameter »x« [-Wunused-parameter]
+  243 | void HeatmapComponent::update_cell(size_t x, size_t y,
+      |                                    ~~~~~~~^
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:243:53: Warnung: unverwendeter Parameter »y« [-Wunused-parameter]
+  243 | void HeatmapComponent::update_cell(size_t x, size_t y,
+      |                                              ~~~~~~~^
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:244:55: Warnung: unverwendeter Parameter »data« [-Wunused-parameter]
+  244 |                                    const HeatmapData &data) {}
+      |                                    ~~~~~~~~~~~~~~~~~~~^~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »void BTQuant::HeatmapComponent::set_color_scheme(const std::vector<glm::vec<4, float, glm::packed_highp> >&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:245:71: Warnung: unverwendeter Parameter »colors« [-Wunused-parameter]
+  245 | void HeatmapComponent::set_color_scheme(const std::vector<glm::vec4> &colors) {}
+      |                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »void BTQuant::HeatmapComponent::set_value_range(float, float)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:246:46: Warnung: unverwendeter Parameter »min« [-Wunused-parameter]
+  246 | void HeatmapComponent::set_value_range(float min, float max) {}
+      |                                        ~~~~~~^~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:246:57: Warnung: unverwendeter Parameter »max« [-Wunused-parameter]
+  246 | void HeatmapComponent::set_value_range(float min, float max) {}
+      |                                                   ~~~~~~^~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::HeatmapComponent::update(float)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:247:37: Warnung: unverwendeter Parameter »delta« [-Wunused-parameter]
+  247 | void HeatmapComponent::update(float delta) {}
+      |                               ~~~~~~^~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::HeatmapComponent::render(VkCommandBuffer)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:248:47: Warnung: unverwendeter Parameter »cmd« [-Wunused-parameter]
+  248 | void HeatmapComponent::render(VkCommandBuffer cmd) {}
+      |                               ~~~~~~~~~~~~~~~~^~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::HeatmapComponent::handle_input(const BTQuant::InputEvent&)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:250:55: Warnung: unverwendeter Parameter »event« [-Wunused-parameter]
+  250 | void HeatmapComponent::handle_input(const InputEvent &event) {}
+      |                                     ~~~~~~~~~~~~~~~~~~^~~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »virtual void BTQuant::HeatmapComponent::initialize_vulkan_resources(BTQuant::VulkanCore*)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:251:64: Warnung: unverwendeter Parameter »core« [-Wunused-parameter]
+  251 | void HeatmapComponent::initialize_vulkan_resources(VulkanCore *core) {}
+      |                                                    ~~~~~~~~~~~~^~~~
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp: In member function »glm::vec4 BTQuant::HeatmapComponent::interpolate_color(float)«:
+/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_chart_component.cpp:254:53: Warnung: unverwendeter Parameter »val« [-Wunused-parameter]
+  254 | glm::vec4 HeatmapComponent::interpolate_color(float val) {
+      |                                               ~~~~~~^~~
+[ 23%] Linking CXX executable bin/dashboard_advanced
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::handle_input(BTQuant::InputEvent const&)':
+heatmap_component.cpp:(.text+0x0): multiple definition of `BTQuant::HeatmapComponent::handle_input(BTQuant::InputEvent const&)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::render(VkCommandBuffer_T*)':
+heatmap_component.cpp:(.text+0x10): multiple definition of `BTQuant::HeatmapComponent::render(VkCommandBuffer_T*)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::render_gui()':
+heatmap_component.cpp:(.text+0x480): multiple definition of `BTQuant::HeatmapComponent::render_gui()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x20): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::~HeatmapComponent()':
+heatmap_component.cpp:(.text+0x980): multiple definition of `BTQuant::HeatmapComponent::~HeatmapComponent()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x210): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::~HeatmapComponent()':
+heatmap_component.cpp:(.text+0x980): multiple definition of `BTQuant::HeatmapComponent::~HeatmapComponent()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x210): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::~HeatmapComponent()':
+heatmap_component.cpp:(.text+0xa90): multiple definition of `BTQuant::HeatmapComponent::~HeatmapComponent()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x320): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::initialize_vulkan_resources(BTQuant::VulkanCore*)':
+heatmap_component.cpp:(.text+0xac0): multiple definition of `BTQuant::HeatmapComponent::initialize_vulkan_resources(BTQuant::VulkanCore*)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::HeatmapComponent(glm::vec<2, float, (glm::qualifier)0> const&, glm::vec<2, float, (glm::qualifier)0> const&, unsigned long, unsigned long)':
+heatmap_component.cpp:(.text+0x15b0): multiple definition of `BTQuant::HeatmapComponent::HeatmapComponent(glm::vec<2, float, (glm::qualifier)0> const&, glm::vec<2, float, (glm::qualifier)0> const&, unsigned long, unsigned long)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10f0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::HeatmapComponent(glm::vec<2, float, (glm::qualifier)0> const&, glm::vec<2, float, (glm::qualifier)0> const&, unsigned long, unsigned long)':
+heatmap_component.cpp:(.text+0x15b0): multiple definition of `BTQuant::HeatmapComponent::HeatmapComponent(glm::vec<2, float, (glm::qualifier)0> const&, glm::vec<2, float, (glm::qualifier)0> const&, unsigned long, unsigned long)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10f0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::set_data(std::vector<std::vector<BTQuant::HeatmapComponent::HeatmapData, std::allocator<BTQuant::HeatmapComponent::HeatmapData> >, std::allocator<std::vector<BTQuant::HeatmapComponent::HeatmapData, std::allocator<BTQuant::HeatmapComponent::HeatmapData> > > > const&)':
+heatmap_component.cpp:(.text+0x2580): multiple definition of `BTQuant::HeatmapComponent::set_data(std::vector<std::vector<BTQuant::HeatmapComponent::HeatmapData, std::allocator<BTQuant::HeatmapComponent::HeatmapData> >, std::allocator<std::vector<BTQuant::HeatmapComponent::HeatmapData, std::allocator<BTQuant::HeatmapComponent::HeatmapData> > > > const&)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x10): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::update_cell(unsigned long, unsigned long, BTQuant::HeatmapComponent::HeatmapData const&)':
+heatmap_component.cpp:(.text+0x2890): multiple definition of `BTQuant::HeatmapComponent::update_cell(unsigned long, unsigned long, BTQuant::HeatmapComponent::HeatmapData const&)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x13b0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::set_color_scheme(std::vector<glm::vec<4, float, (glm::qualifier)0>, std::allocator<glm::vec<4, float, (glm::qualifier)0> > > const&)':
+heatmap_component.cpp:(.text+0x2ae0): multiple definition of `BTQuant::HeatmapComponent::set_color_scheme(std::vector<glm::vec<4, float, (glm::qualifier)0>, std::allocator<glm::vec<4, float, (glm::qualifier)0> > > const&)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x13c0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::set_value_range(float, float)':
+heatmap_component.cpp:(.text+0x2ca0): multiple definition of `BTQuant::HeatmapComponent::set_value_range(float, float)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x13d0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::rebuild_geometry()':
+heatmap_component.cpp:(.text+0x2cc0): multiple definition of `BTQuant::HeatmapComponent::rebuild_geometry()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x20): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::dispatch_compute_interpolation()':
+heatmap_component.cpp:(.text+0x3130): multiple definition of `BTQuant::HeatmapComponent::dispatch_compute_interpolation()'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x13e0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::update(float)':
+heatmap_component.cpp:(.text+0x34a0): multiple definition of `BTQuant::HeatmapComponent::update(float)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x0): first defined here
+/usr/bin/ld: CMakeFiles/dashboard_advanced.dir/src/components/heatmap_component.cpp.o: in function `BTQuant::HeatmapComponent::interpolate_color(float)':
+heatmap_component.cpp:(.text+0x3510): multiple definition of `BTQuant::HeatmapComponent::interpolate_color(float)'; CMakeFiles/dashboard_advanced.dir/src/components/realtime_chart_component.cpp.o:realtime_chart_component.cpp:(.text+0x13f0): first defined here
+collect2: Fehler: ld gab 1 als Ende-Status zurück
+make[3]: *** [CMakeFiles/dashboard_advanced.dir/build.make:636: bin/dashboard_advanced] Fehler 1
+make[2]: *** [CMakeFiles/Makefile2:235: CMakeFiles/dashboard_advanced.dir/all] Fehler 2
+make[1]: *** [CMakeFiles/Makefile2:242: CMakeFiles/dashboard_advanced.dir/rule] Fehler 2
+make: *** [Makefile:202: dashboard_advanced] Fehler 2

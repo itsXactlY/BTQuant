@@ -16,35 +16,50 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <functional>
+
 // Platform-specific Vulkan includes
 #define VK_USE_PLATFORM_XLIB_KHR
 #include <vulkan/vulkan.h>
 
-// X11 includes with macro protection
+// X11 includes
+#include <X11/XKBlib.h>
+// X11 includes
 #include <X11/XKBlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XInput2.h>
 
-// Protect against X11 macro pollution
+// Protect against X11 macro pollution (AFTER all X11 includes)
 #ifdef Status
 #undef Status
 #endif
+
 #ifdef Success
+#ifndef X11_Success
 #define X11_Success 0
+#endif
 #undef Success
 #endif
+
 #ifdef Bool
 #undef Bool
 #endif
+
 #ifdef None
 #undef None
 #endif
+
 #ifdef Always
 #undef Always
 #endif
+
 #ifdef KeyPress
 #undef KeyPress
+#endif
+
+#ifdef KeyRelease
+#undef KeyRelease
 #endif
 #ifdef KeyRelease
 #undef KeyRelease
@@ -206,7 +221,8 @@ inline ImU32 to_imu32(const glm::vec4 &v) {
   return ImGui::GetColorU32(to_imvec4(v));
 }
 
-// DashboardConfig and VulkanCore core classes are now in vulkan_base_types.hpp
+// VulkanDashboardConfig and VulkanCore core classes are now in
+// vulkan_base_types.hpp
 
 // Professional trading dashboard theme
 struct DashboardTheme {
@@ -1336,7 +1352,7 @@ class HotSpineDataBridge;
 class VulkanDashboard {
 public:
   VulkanDashboard(uint32_t width, uint32_t height,
-                  const DashboardConfig &config = {});
+                  const VulkanDashboardConfig &config = {});
   ~VulkanDashboard();
 
   enum class AppTheme {
@@ -1357,8 +1373,11 @@ public:
   void initialize();
   void setup_hotkeys();
   void handle_hotkey(HotkeyAction action);
+  bool run_frame(); // Process a single frame
   void main_loop();
   void shutdown();
+
+  VulkanCore *get_core() const { return vulkan_core_.get(); }
 
   // Component management
   void add_component(std::unique_ptr<UIComponent> component);
@@ -1371,6 +1390,9 @@ public:
   const CrosshairState &get_crosshair_state() const {
     return shared_crosshair_;
   }
+
+  // Custom UI Injection
+  void set_on_gui_callback(std::function<void()> cb) { on_gui_callback_ = cb; }
 
   // Symbol management
   const ::std::string &get_active_symbol() const { return active_symbol_; }
@@ -1416,7 +1438,7 @@ public:
 
 private:
   // Configuration
-  DashboardConfig config_;
+  VulkanDashboardConfig config_;
   DashboardTheme theme_;
   uint32_t width_, height_;
 
@@ -1489,6 +1511,8 @@ private:
   void render_components();
   void update_performance_stats();
   void synchronize_market_data();
+
+  std::function<void()> on_gui_callback_;
 
 private:
   CrosshairState shared_crosshair_;

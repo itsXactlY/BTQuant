@@ -2,8 +2,10 @@
 #include "DashboardLayer.h"
 #include "data_visualization_engine.hpp"
 #include "hotspine_data_bridge.hpp"
+#include "imgui_impl_vulkan.h"
 #include "interaction_manager.hpp"
 #include "market_data_processor.hpp"
+#include <set>
 #include <unistd.h>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -192,7 +194,7 @@ uint32_t MemoryPool::find_memory_type(VkPhysicalDevice physical_device,
 // GPUMemoryManager implementation
 GPUMemoryManager::GPUMemoryManager(VkDevice device,
                                    VkPhysicalDevice physical_device,
-                                   const DashboardConfig &config)
+                                   const VulkanDashboardConfig &config)
     : device_(device) {
 
   vertex_pool_ = std::make_unique<MemoryPool>(
@@ -309,7 +311,7 @@ VkDescriptorSet VulkanCore::create_texture_descriptor(VkImageView view) {
 }
 
 // VulkanCore implementation
-VulkanCore::VulkanCore(const DashboardConfig &config) : config_(config) {}
+VulkanCore::VulkanCore(const VulkanDashboardConfig &config) : config_(config) {}
 
 VulkanCore::~VulkanCore() { cleanup(); }
 
@@ -1355,7 +1357,7 @@ uint32_t VulkanCore::find_memory_type(uint32_t type_filter,
 
 // VulkanDashboard implementation
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                 const DashboardConfig &config)
+                                 const VulkanDashboardConfig &config)
     : config_(config), width_(width), height_(height) {
   fprintf(stderr, "[VulkanDashboard] Creating dashboard %dx%d\n", width,
           height);
@@ -1553,124 +1555,112 @@ void VulkanDashboard::handle_hotkey(HotkeyAction action) {
 
 void VulkanDashboard::main_loop() {
   fprintf(stderr, "[VulkanDashboard] Starting main loop\n");
-  bool running = true;
-  while (running) {
-    // auto frame_start = std::chrono::high_resolution_clock::now();
+  while (run_frame())
+    ;
+}
 
-    // 1. Event Processing
-    auto event_start = std::chrono::high_resolution_clock::now();
-    if (handle_x11_events()) {
-      running = false;
-    }
-    auto event_end = std::chrono::high_resolution_clock::now();
-    {
-      std::lock_guard lock(stats_mutex_);
-      current_stats_.event_processing_ms =
-          std::chrono::duration<float, std::milli>(event_end - event_start)
-              .count();
-    }
-
-    // 2. Data Updates
-    auto data_start = std::chrono::high_resolution_clock::now();
-    uint64_t trades_this_frame = 0;
-    uint64_t obs_this_frame = 0;
-    if (hotspine_bridge_ && market_data_processor_) {
-      auto updates = hotspine_bridge_->getLatestUpdates();
-
-      // LAG RECOVERY: If we have an extreme burst (e.g. >50k updates),
-      // we are likely reading stale/partially-overwritten data or will stall
-      // the UI.
-      if (updates.size() > 50000) {
-        fprintf(stderr,
-                "[VulkanDashboard] WARN: Extreme updates lag detected (%zu "
-                "updates). Flushing buffers.\n",
-                updates.size());
-        for (auto &chart : chart_components_) {
-          if (chart)
-            chart->clear_data();
-        }
-        for (auto &comp : components_) {
-          if (comp)
-            comp->clear_data();
-        }
-      }
-
-      for (const auto &update : updates) {
-        if (update.type == RenderEngine::MarketDataType::TRADE) {
-          trades_this_frame++;
-          market_data_processor_->processTradeUpdate(update);
-          RenderEngine::TradeData trade;
-          trade.symbol = update.symbol;
-          trade.timestamp_us = update.timestamp_us;
-          trade.price = update.price;
-          trade.size = update.size;
-          trade.is_buy = (update.side == "buy");
-          on_trade_received(trade);
-        } else if (update.type == RenderEngine::MarketDataType::ORDERBOOK) {
-          obs_this_frame++;
-          market_data_processor_->processOrderbookUpdate(update);
-          RenderEngine::OrderbookData ob;
-          ob.symbol = update.symbol;
-          ob.timestamp_us = update.timestamp_us;
-          ob.bids = update.bids;
-          ob.asks = update.asks;
-          ob.spread = update.price;
-          on_orderbook_updated(ob);
-        }
-      }
-    }
-    synchronize_market_data();
-    auto data_end = std::chrono::high_resolution_clock::now();
-    {
-      std::lock_guard lock(stats_mutex_);
-      current_stats_.data_bridge_update_ms =
-          std::chrono::duration<float, std::milli>(data_end - data_start)
-              .count();
-      current_stats_.trades_processed += trades_this_frame;
-      current_stats_.orderbooks_processed += obs_this_frame;
-    }
-
-    // 3. UI and Logic Updates
-    auto logic_start = std::chrono::high_resolution_clock::now();
-    update_components(0.016f); // ~60fps
-    if (dashboard_layer_) {
-      dashboard_layer_->OnUpdate(0.016f);
-    }
-    auto logic_end = std::chrono::high_resolution_clock::now();
-    {
-      std::lock_guard lock(stats_mutex_);
-      current_stats_.geometry_rebuild_ms =
-          std::chrono::duration<float, std::milli>(logic_end - logic_start)
-              .count();
-    }
-
-    // 4. Rendering
-    auto render_start = std::chrono::high_resolution_clock::now();
-    if (vulkan_core_ && vulkan_core_->begin_frame()) {
-      vulkan_core_->begin_command_buffer();
-
-      // 4a. Main GUI logic (ImGui) - might trigger resizing
-      render_gui();
-
-      // 4b. Offscreen rendering (using potentially resized resources)
-      render_offscreen_components();
-
-      // 4c. Main render pass (Vulkan UI and overlays)
-      vulkan_core_->begin_main_render_pass();
-      render_components();
-
-      vulkan_core_->end_frame();
-    }
-    auto render_end = std::chrono::high_resolution_clock::now();
-    {
-      std::lock_guard lock(stats_mutex_);
-      current_stats_.render_dispatch_ms =
-          std::chrono::duration<float, std::milli>(render_end - render_start)
-              .count();
-    }
-
-    update_performance_stats();
+bool VulkanDashboard::run_frame() {
+  // 1. Event Processing
+  auto event_start = std::chrono::high_resolution_clock::now();
+  if (handle_x11_events()) {
+    return false; // Requesting shutdown
   }
+  auto event_end = std::chrono::high_resolution_clock::now();
+  {
+    std::lock_guard lock(stats_mutex_);
+    current_stats_.event_processing_ms =
+        std::chrono::duration<float, std::milli>(event_end - event_start)
+            .count();
+  }
+
+  // 2. Data Updates
+  auto data_start = std::chrono::high_resolution_clock::now();
+  uint64_t trades_this_frame = 0;
+  uint64_t obs_this_frame = 0;
+  if (hotspine_bridge_ && market_data_processor_) {
+    auto updates = hotspine_bridge_->getLatestUpdates();
+
+    if (updates.size() > 50000) {
+      fprintf(stderr,
+              "[VulkanDashboard] WARN: Extreme updates lag detected (%zu "
+              "updates). Flushing buffers.\n",
+              updates.size());
+      for (auto &chart : chart_components_)
+        if (chart)
+          chart->clear_data();
+      for (auto &comp : components_)
+        if (comp)
+          comp->clear_data();
+    }
+
+    for (const auto &update : updates) {
+      if (update.type == RenderEngine::MarketDataType::TRADE) {
+        trades_this_frame++;
+        market_data_processor_->processTradeUpdate(update);
+        RenderEngine::TradeData trade;
+        trade.symbol = update.symbol;
+        trade.timestamp_us = update.timestamp_us;
+        trade.price = update.price;
+        trade.size = update.size;
+        trade.is_buy = (update.side == "buy");
+        on_trade_received(trade);
+      } else if (update.type == RenderEngine::MarketDataType::ORDERBOOK) {
+        obs_this_frame++;
+        market_data_processor_->processOrderbookUpdate(update);
+        RenderEngine::OrderbookData ob;
+        ob.symbol = update.symbol;
+        ob.timestamp_us = update.timestamp_us;
+        ob.bids = update.bids;
+        ob.asks = update.asks;
+        ob.spread = update.price;
+        on_orderbook_updated(ob);
+      }
+    }
+  }
+  synchronize_market_data();
+  auto data_end = std::chrono::high_resolution_clock::now();
+  {
+    std::lock_guard lock(stats_mutex_);
+    current_stats_.data_bridge_update_ms =
+        std::chrono::duration<float, std::milli>(data_end - data_start).count();
+    current_stats_.trades_processed += trades_this_frame;
+    current_stats_.orderbooks_processed += obs_this_frame;
+  }
+
+  // 3. UI and Logic Updates
+  auto logic_start = std::chrono::high_resolution_clock::now();
+  update_components(0.016f); // ~60fps
+  if (dashboard_layer_) {
+    dashboard_layer_->OnUpdate(0.016f);
+  }
+  auto logic_end = std::chrono::high_resolution_clock::now();
+  {
+    std::lock_guard lock(stats_mutex_);
+    current_stats_.geometry_rebuild_ms =
+        std::chrono::duration<float, std::milli>(logic_end - logic_start)
+            .count();
+  }
+
+  // 4. Rendering
+  auto render_start = std::chrono::high_resolution_clock::now();
+  if (vulkan_core_ && vulkan_core_->begin_frame()) {
+    vulkan_core_->begin_command_buffer();
+    render_gui();
+    render_offscreen_components();
+    vulkan_core_->begin_main_render_pass();
+    render_components();
+    vulkan_core_->end_frame();
+  }
+  auto render_end = std::chrono::high_resolution_clock::now();
+  {
+    std::lock_guard lock(stats_mutex_);
+    current_stats_.render_dispatch_ms =
+        std::chrono::duration<float, std::milli>(render_end - render_start)
+            .count();
+  }
+
+  update_performance_stats();
+  return true;
 }
 
 void VulkanDashboard::apply_theme(AppTheme theme) {
@@ -2616,6 +2606,10 @@ void VulkanDashboard::render_gui() {
     render_risk_manager();
 
   render_status_bar();
+
+  if (on_gui_callback_) {
+    on_gui_callback_();
+  }
 }
 
 void VulkanDashboard::set_active_symbol(const std::string &symbol) {

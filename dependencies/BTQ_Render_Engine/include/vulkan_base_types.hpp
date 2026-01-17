@@ -33,7 +33,7 @@ namespace BTQuant {
 
 class VulkanDashboard;
 
-struct DashboardConfig {
+struct VulkanDashboardConfig {
   // Vulkan configuration
   bool enable_validation_layers = false;
   bool enable_msaa = true;
@@ -144,7 +144,7 @@ private:
 class GPUMemoryManager {
 public:
   GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
-                   const DashboardConfig &config);
+                   const VulkanDashboardConfig &config);
   ~GPUMemoryManager();
 
   // Specialized allocators for different buffer types
@@ -176,7 +176,7 @@ private:
 
 class VulkanCore {
 public:
-  VulkanCore(const DashboardConfig &config);
+  VulkanCore(const VulkanDashboardConfig &config);
   ~VulkanCore();
 
   // Initialization and cleanup
@@ -242,7 +242,7 @@ public:
                                   VkImageView &view, VkSampler &sampler);
 
 private:
-  DashboardConfig config_;
+  VulkanDashboardConfig config_;
 
   // Core Vulkan objects
   VkInstance instance_ = VK_NULL_HANDLE;

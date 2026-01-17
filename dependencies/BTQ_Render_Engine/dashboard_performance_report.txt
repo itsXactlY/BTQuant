@@ -1,10 +1,10 @@
 === Performance Monitor Report ===
-Generated: 2026-01-17 14:48:28
-Uptime: 14 seconds
+Generated: 2026-01-17 15:00:45
+Uptime: 20 seconds
 
 Current Metrics:
-  FPS: 48.20
-  Frame Time: 0.60 ms
+  FPS: 54.72
+  Frame Time: 0.00 ms
   Data Latency: 0.00 ms
   Memory Usage: 0.00 MB
   CPU Usage: 0.00%
@@ -13,19 +13,19 @@ Current Metrics:
   Network: Disconnected
 
 Performance Statistics:
-  FPS - Avg: 60.87, Min: 43.94, Max: 101.19, StdDev: 7.73
+  FPS - Avg: 61.14, Min: 41.89, Max: 117.16, StdDev: 8.82
   Latency - Avg: 0.00 ms, Min: 0.00 ms, Max: 0.00 ms
   Latency - P95: 0.00 ms, P99: 0.00 ms
   Memory - Avg: 0.00 MB, Peak: 0.00 MB
 
 Recent Alerts:
-  [14:48:26] HIGH_LATENCY: High frame time: 14.398000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 14.579000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 18.331000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 16.397000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 14.619000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 22.584000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 12.136000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 14.739000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 18.492000ms
-  [14:48:26] HIGH_LATENCY: High frame time: 20.572000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 19.430000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 13.498000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 20.035000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 12.922000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 23.692000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 16.313000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 19.002000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 16.424000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 14.025000ms
+  [15:00:43] HIGH_LATENCY: High frame time: 18.107000ms

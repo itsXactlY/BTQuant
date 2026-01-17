@@ -1,75 +1,74 @@
 #pragma once
 
-#include "../../../tests/new/include/hotspine_reader.hpp"
-#include "CandlePipeline.h"
-#include "ChartMath.hpp"
-#include "OffscreenChartRenderer.h"
 #include "vulkan_base_types.hpp"
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <imgui.h>
-#include <iostream>
 #include <memory>
 #include <vector>
+#include <vulkan/vulkan.h>
+
+// Forward declarations
+namespace BTQuant {
+class OffscreenChartRenderer;
+struct CandleData;
+class CandlePipeline;
+namespace RenderEngine {
+class HotSpineDataBridge;
+}
+} // namespace BTQuant
+namespace HotSpine {
+// Legacy/Stub forward declarations if needed
+}
 
 namespace BTQuant {
 
-/**
- * DashboardOrchestrator - The "Glue" class binding Backend, Renderer, and UI.
- *
- * Responsibilities:
- * - Owns Rendering Pipeline and Data Reader.
- * - Polls HotSpine for real-time market data.
- * - Aggregates trades into candles.
- * - Manages ViewPort (Zoom/Pan) and coordinate mapping.
- * - Orchestrates offscreen rendering to a texture displayed in ImGui.
- */
+struct OrchestratorCamera {
+  float zoom = 1.0f;
+  float pan_x = 0.0f;
+};
+
 class DashboardOrchestrator {
 public:
-  explicit DashboardOrchestrator(VulkanCore *core);
+  DashboardOrchestrator(VulkanCore *core);
   ~DashboardOrchestrator();
 
-  // Data Pump: Poll shared memory and update GPU buffers
-  void UpdateData();
+  // Dependency Injection / Ownership Transfer
+  void
+  SetBridge(std::unique_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge);
+  void SetRenderer(std::unique_ptr<OffscreenChartRenderer> renderer);
+  void SetPipeline(std::unique_ptr<CandlePipeline> pipeline);
 
-  // Interaction Logic: Handle Zoom and Pan via ImGuiIO
-  void HandleInput();
-
-  // Render Bridge: Execute pipeline and draw to ImGui
-  void Draw(const char *windowName);
-
-  // Sync window dimensions
-  void Resize(uint32_t width, uint32_t height);
+  void Update();
+  void Draw(VkCommandBuffer cmd); // Vulkan Pass
+  void RenderUI();                // ImGui Pass
 
 private:
-  void ProcessNewTrades();
-  void UpdateCandle(const HotSpine::HotTrade &trade);
+  void CalculateViewPort();
 
   VulkanCore *core_;
+
+  // Components owned by Orchestrator
+  std::unique_ptr<BTQuant::RenderEngine::HotSpineDataBridge> bridge_;
   std::unique_ptr<OffscreenChartRenderer> renderer_;
   std::unique_ptr<CandlePipeline> pipeline_;
-  std::unique_ptr<HotSpine::HotSpineReader> reader_;
 
-  ViewPort viewport_;
+  // Data
   std::vector<CandleData> candles_;
+  OrchestratorCamera camera_;
 
-  // OHLC State
-  double candle_interval_us_ = 60.0 * 1000000.0; // 1 minute default
+  // Auto-scroll state
+  bool auto_scroll_ = true;
 
-  uint32_t width_ = 1280;
-  uint32_t height_ = 720;
+  // Aggregation state
+  struct Aggregator {
+    long long current_minute = -1;
+    float open = 0, high = 0, low = 0, close = 0;
+    bool active = false;
+  } agg_;
 
-  // Interaction state
-  bool is_panning_ = false;
-  glm::vec2 pan_velocity_{0.0f};
-  double zoom_accel_ = 0.0;
-
-  // Double buffering support (implicit in storage buffer logic for now)
-  // but we can track frame indices.
-  uint32_t last_update_frame_ = 0;
-
-  // Performance / Backpressure
-  uint32_t max_polls_per_update_ = 1000;
+  struct ViewPort {
+    float minTime, maxTime;
+    float minPrice, maxPrice;
+  } viewport_;
 };
 
 } // namespace BTQuant

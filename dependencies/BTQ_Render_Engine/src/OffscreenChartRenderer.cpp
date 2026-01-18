@@ -169,6 +169,10 @@ void OffscreenChartRenderer::create_resources(uint32_t width, uint32_t height) {
 }
 
 void OffscreenChartRenderer::begin_render(VkCommandBuffer cmd) {
+  if (cmd == VK_NULL_HANDLE || render_pass_ == VK_NULL_HANDLE ||
+      framebuffer_ == VK_NULL_HANDLE)
+    return;
+
   VkRenderPassBeginInfo renderPassInfo = {};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;
@@ -189,6 +193,10 @@ void OffscreenChartRenderer::begin_render(VkCommandBuffer cmd) {
 }
 
 void OffscreenChartRenderer::end_render(VkCommandBuffer cmd) {
+  if (cmd == VK_NULL_HANDLE || render_pass_ == VK_NULL_HANDLE ||
+      framebuffer_ == VK_NULL_HANDLE)
+    return;
+
   vkCmdEndRenderPass(cmd);
 }
 

@@ -10,6 +10,7 @@
 #include <X11/keysym.h>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace BTQuant {
 

@@ -31,16 +31,27 @@ VulkanDashboard::VulkanDashboard(
 VulkanDashboard::~VulkanDashboard() { shutdown(); }
 
 void VulkanDashboard::initialize() {
+  if (ImGui::GetCurrentContext() == nullptr) {
+    std::cout << "[VulkanDashboard] Creating ImGui Context..." << std::endl;
+    ImGui::CreateContext();
+  }
+
+  std::cout << "[VulkanDashboard] Initializing X11..." << std::endl;
   init_x11();
+  std::cout << "[VulkanDashboard] Initializing Vulkan..." << std::endl;
   init_vulkan();
 
   // Initialize ImGui specifically here if not done in VulkanCore
   // We assume VulkanCore handles basic ImGui context, but we need to configure
   // Docking
+  std::cout << "[VulkanDashboard] Configuring ImGui..." << std::endl;
+
   ImGuiIO &io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+  std::cout << "[VulkanDashboard] Initializing Components..." << std::endl;
   init_components();
+  std::cout << "[VulkanDashboard] Initialization Complete." << std::endl;
 }
 
 void VulkanDashboard::init_x11() {
@@ -163,12 +174,13 @@ void VulkanDashboard::render_frame() {
   // 3. ImGui Docking Setup
   VkCommandBuffer cmd = vulkan_core_->get_current_command_buffer();
 
+  // ImGui Required Boilerplate
+  ImGui::NewFrame();
+
   // Create the DockSpace
   ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
   ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f),
                    ImGuiDockNodeFlags_PassthruCentralNode);
-  // ImGui::DockSpaceOverViewport(ImGui::GetMainViewport(),
-  // ImGuiDockNodeFlags_PassthruCentralNode);
 
   // 4. Render All Components
   for (auto &comp : components_) {
@@ -176,7 +188,8 @@ void VulkanDashboard::render_frame() {
     comp->render_gui();
   }
 
-  // 5. End Frame (ImGui Render + Submit)
+  // 5. Finalize ImGui and End Frame
+  ImGui::Render();
   vulkan_core_->end_frame();
 }
 

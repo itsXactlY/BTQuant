@@ -29,6 +29,11 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
                        VkMemoryPropertyFlags properties, VkDeviceSize pool_size)
     : device_(device), pool_size_(pool_size), used_size_(0) {
 
+  if (device == VK_NULL_HANDLE) {
+    throw std::runtime_error(
+        "Cannot create MemoryPool with VK_NULL_HANDLE device");
+  }
+
   // Create Pool Buffer
   VkBufferCreateInfo bufferInfo{};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -130,6 +135,10 @@ GPUMemoryManager::GPUMemoryManager(VkDevice device,
                                    VkPhysicalDevice physical_device,
                                    const VulkanDashboardConfig &config)
     : device_(device) {
+  if (device == VK_NULL_HANDLE) {
+    throw std::runtime_error(
+        "GPUMemoryManager initialized with VK_NULL_HANDLE device");
+  }
   // Initialize memory pools
   vertex_pool_ = std::make_unique<MemoryPool>(
       device, physical_device,

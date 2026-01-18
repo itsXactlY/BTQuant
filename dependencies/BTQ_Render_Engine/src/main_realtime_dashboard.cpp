@@ -7,10 +7,8 @@
 
 #include "../include/hotspine_data_bridge.hpp"
 #include "../include/vulkan_dashboard_advanced.hpp"
-#include <chrono>
 #include <iostream>
 #include <memory>
-#include <thread>
 
 int main(int, char **) {
   std::cout << "[Main] Starting BTQuant Realtime Dashboard (Unified)..."
@@ -28,7 +26,7 @@ int main(int, char **) {
 
   // 2. Configure Dashboard
   BTQuant::VulkanDashboardConfig config;
-  config.enable_validation_layers = true;
+  config.enable_validation_layers = false;
   config.enable_msaa = true;
   config.msaa_samples = VK_SAMPLE_COUNT_4_BIT;
   // Removed start_maximized as it is not in the config struct

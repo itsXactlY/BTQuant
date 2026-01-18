@@ -103,10 +103,13 @@ void CandlePipeline::update_buffer(const std::vector<CandleData> &candles) {
 void CandlePipeline::Render(VkCommandBuffer cmd,
                             const std::vector<CandleData> &candles,
                             const PushConstants &pc) {
-  if (candles.empty())
+  if (candles.empty() || pipeline_ == VK_NULL_HANDLE || cmd == VK_NULL_HANDLE)
     return;
 
   update_buffer(candles);
+
+  if (storage_buffer_.buffer == VK_NULL_HANDLE)
+    return;
 
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
   vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1,

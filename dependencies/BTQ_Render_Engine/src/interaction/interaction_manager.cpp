@@ -10,7 +10,6 @@
 #include <X11/keysym.h>
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 
 namespace BTQuant {
 
@@ -46,7 +45,7 @@ void ContextMenu::hide() {
   selected_item_ = -1;
 }
 
-void ContextMenu::render(VkCommandBuffer cmd) {
+void ContextMenu::render(VkCommandBuffer /*cmd*/) {
   if (!visible_)
     return;
 
@@ -135,7 +134,7 @@ void TooltipManager::update(float delta_time) {
   }
 }
 
-void TooltipManager::render(VkCommandBuffer cmd) {
+void TooltipManager::render(VkCommandBuffer /*cmd*/) {
   if (!visible_)
     return;
 
@@ -198,7 +197,7 @@ void DragDropManager::unregister_drop_target(UIComponent *component) {
   drop_targets_.erase(component);
 }
 
-void DragDropManager::render(VkCommandBuffer cmd) {
+void DragDropManager::render(VkCommandBuffer /*cmd*/) {
   if (!dragging_)
     return;
 
@@ -209,7 +208,7 @@ void DragDropManager::render_drag_visual() {
   // Render drag visual feedback
 }
 
-UIComponent *DragDropManager::find_drop_target(const glm::vec2 &position) {
+UIComponent *DragDropManager::find_drop_target(const glm::vec2 & /*position*/) {
   // Find component at position that accepts drops
   return nullptr; // Placeholder
 }
@@ -242,7 +241,7 @@ void GestureRecognizer::set_gesture_callback(GestureType type,
   gesture_callbacks_[type] = callback;
 }
 
-void GestureRecognizer::update(float delta_time) { detect_gestures(); }
+void GestureRecognizer::update(float /*delta_time*/) { detect_gestures(); }
 
 void GestureRecognizer::detect_gestures() {
   if (active_touches_.size() >= 2) {
@@ -544,7 +543,9 @@ bool HotkeyManager::handle_key_event(const InputEvent &event) {
     if (!binding.enabled)
       continue;
 
-    if (binding.key_code == event.key && binding.modifiers == event.modifiers) {
+    if (static_cast<uint32_t>(binding.key_code) ==
+            static_cast<uint32_t>(event.key) &&
+        binding.modifiers == event.modifiers) {
 
       if (binding.action) {
         binding.action();
@@ -623,8 +624,8 @@ void InteractionManager::update(float delta_time) {
   gesture_recognizer_.update(delta_time);
 
   // Update context menus
-  for (auto &menu : context_menus_) {
-    // Context menus don't need regular updates
+  for (auto const &menu : context_menus_) {
+    (void)menu;
   }
 }
 

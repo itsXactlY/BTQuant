@@ -101,6 +101,8 @@ set(DASHBOARD_SOURCES
     src/analytics/trading_analytics.cpp
     src/trading/trading_interface.cpp
     src/system/system_optimizer.cpp
+    src/system/GPUMemoryManager.cpp
+    src/system/VulkanCore.cpp
 )
 
 
@@ -109,6 +111,7 @@ set(EXTERNAL_SOURCES
     ../../tests/new/src/hotspine_reader.cpp
     ../../tests/new/src/symbol_registry.cpp
     ../../tests/new/src/utils/dynamic_logger.cpp
+    ../../tests/new/src/utils/alert_manager.cpp
 )
 
 # Advanced dashboard executable

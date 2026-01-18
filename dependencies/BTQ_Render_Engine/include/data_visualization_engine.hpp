@@ -74,7 +74,7 @@ struct OrderbookLevelGPU {
 
 // Chart point for input data
 struct ChartPoint {
-  uint64_t timestamp_us;
+  uint64_t timestamp;
   double price;
   double volume;
 };

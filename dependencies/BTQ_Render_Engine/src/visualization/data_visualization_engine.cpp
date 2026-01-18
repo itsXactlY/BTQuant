@@ -301,7 +301,7 @@ void DataVisualizationEngine::updateChartData(
     const auto &point = points[i];
     ChartPointGPU gpu_point{};
 
-    gpu_point.timestamp = point.timestamp_us;
+    gpu_point.timestamp = point.timestamp;
     gpu_point.price = static_cast<float>(point.price);
     gpu_point.volume = static_cast<float>(point.volume);
 

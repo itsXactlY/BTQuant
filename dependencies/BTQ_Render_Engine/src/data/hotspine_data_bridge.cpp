@@ -107,8 +107,8 @@ std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
     MarketDataUpdate update;
     update.type = MarketDataType::TRADE;
     update.symbol_id = trade.symbol_id;
-    update.timestamp_us = trade.ts_exchange;
-    update.local_timestamp_us = trade.ts_local;
+    update.timestamp = trade.ts_exchange;
+    update.local_timestamp = trade.ts_local;
     update.price = trade.price;
     update.size = trade.size;
     update.side = (trade.side == 0) ? "buy" : "sell";
@@ -127,8 +127,8 @@ std::vector<MarketDataUpdate> HotSpineDataBridge::getLatestUpdates() {
     MarketDataUpdate update;
     update.type = MarketDataType::ORDERBOOK;
     update.symbol_id = ob.symbol_id;
-    update.timestamp_us = ob.ts_exchange;
-    update.local_timestamp_us = ob.ts_local;
+    update.timestamp = ob.ts_exchange;
+    update.local_timestamp = ob.ts_local;
 
     // Get symbol info for display
     if (auto symbol_info = symbol_registry_->get_symbol_info(ob.symbol_id)) {

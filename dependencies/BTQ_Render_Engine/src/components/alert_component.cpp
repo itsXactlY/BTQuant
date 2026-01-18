@@ -1,5 +1,4 @@
 #include "vulkan_dashboard_advanced.hpp"
-#include <algorithm>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -116,6 +115,26 @@ void AlertComponent::render_gui() {
     }
   }
   ImGui::End();
+}
+
+void AlertManager::add_rule(const AlertRule &rule) {
+  (void)rule;
+  // Implementation
+}
+
+void AlertManager::check_alerts(const std::string &symbol, double price) {
+  (void)symbol;
+  (void)price;
+  // Implementation
+}
+
+std::vector<AlertRule> AlertManager::get_alerts() {
+  return {}; // Placeholder
+}
+
+void AlertManager::remove_alert(size_t index) {
+  (void)index;
+  // Implementation
 }
 
 } // namespace BTQuant

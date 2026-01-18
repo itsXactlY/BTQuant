@@ -129,6 +129,7 @@ public:
 
   VkDeviceSize get_total_size() const { return pool_size_; }
   VkDeviceSize get_used_size() const { return used_size_; }
+  VkBuffer get_pool_buffer() const { return pool_buffer_; }
   float get_usage_percentage() const {
     return static_cast<float>(used_size_) / pool_size_;
   }

@@ -13,7 +13,7 @@ namespace RenderEngine {
 struct TradeData {
   std::string symbol;
   uint32_t symbol_id = 0;
-  uint64_t timestamp_us;
+  uint64_t timestamp;
   double price;
   double size;
   bool is_buy;
@@ -23,7 +23,7 @@ struct TradeData {
 struct OrderbookData {
   std::string symbol;
   uint32_t symbol_id = 0;
-  uint64_t timestamp_us;
+  uint64_t timestamp;
   std::vector<PriceLevel> bids;
   std::vector<PriceLevel> asks;
   double spread;

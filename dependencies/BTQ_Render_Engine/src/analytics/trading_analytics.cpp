@@ -331,8 +331,8 @@ public:
 
     // Aggregate volume by price level
     for (const auto &trade : trades) {
-      if (trade.timestamp_us >= profile.start_time &&
-          trade.timestamp_us <= profile.end_time) {
+      if (trade.timestamp >= profile.start_time &&
+          trade.timestamp <= profile.end_time) {
         int level_index =
             static_cast<int>((trade.price - min_price) / tick_size_);
         if (level_index >= 0 && level_index < num_levels) {
@@ -493,7 +493,7 @@ public:
   MarketDepthSnapshot
   create_depth_snapshot(const RenderEngine::OrderbookData &orderbook) {
     MarketDepthSnapshot snapshot;
-    snapshot.timestamp = orderbook.timestamp_us;
+    snapshot.timestamp = orderbook.timestamp;
     snapshot.mid_price =
         (orderbook.bids.empty() || orderbook.asks.empty())
             ? 0.0

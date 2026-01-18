@@ -24,7 +24,6 @@
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
-#include <cmath>
 
 namespace BTQuant {
 

@@ -15,7 +15,6 @@
  */
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
-#include <algorithm>
 #include <cmath>
 
 namespace BTQuant {
@@ -161,7 +160,7 @@ void HeatmapComponent::set_value_range(float min_val, float max_val) {
   mark_dirty();
 }
 
-void HeatmapComponent::update(float delta_time) {
+void HeatmapComponent::update(float /*delta_time*/) {
   std::lock_guard lock(data_mutex_);
   if (is_dirty()) {
     rebuild_geometry();
@@ -632,4 +631,11 @@ void HeatmapComponent::initialize_vulkan_resources(VulkanCore *vulkan_core) {
                          static_cast<uint32_t>(writes.size()), writes.data(), 0,
                          nullptr);
 }
+
+void HeatmapComponent::clear_data() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  heatmap_data_.clear();
+  // Clear GPU resources if needed, though they are usually overwritten
+}
+
 } // namespace BTQuant

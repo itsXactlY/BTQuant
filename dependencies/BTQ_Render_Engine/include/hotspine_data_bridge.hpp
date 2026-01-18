@@ -33,8 +33,8 @@ struct MarketDataUpdate {
   uint32_t symbol_id;
   std::string exchange;
   std::string symbol;
-  uint64_t timestamp_us;
-  uint64_t local_timestamp_us;
+  uint64_t timestamp;
+  uint64_t local_timestamp;
 
   // Trade data
   double price = 0.0;

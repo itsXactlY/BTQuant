@@ -15,8 +15,8 @@
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
-#include <iomanip>
-#include <sstream>
+#include <mutex>
+#include <vector>
 
 namespace BTQuant {
 
@@ -64,10 +64,10 @@ DataGridComponent::DataGridComponent(const glm::vec2 &position,
     for (size_t col = 0; col < columns_; ++col) {
       grid_data_[row][col] = {.text = "",
                               .value = 0.0f,
-                              .color = to_glm(theme_.text_primary),
                               .numeric_value = 0.0f,
                               .is_numeric = false,
-                              .highlight = false};
+                              .highlight = false,
+                              .color = to_glm(theme_.text_primary)};
     }
   }
 }
@@ -139,8 +139,7 @@ void DataGridComponent::update(float delta_time) {
   }
 
   // Update any animations or highlights
-  static float highlight_time = 0.0f;
-  highlight_time += delta_time;
+  // (Removed unused highlight_time logic)
 
   // Fade out highlights over time
   for (auto &row : grid_data_) {
@@ -296,21 +295,19 @@ void DataGridComponent::rebuild_geometry() {
     float y = position_.y;
 
     // Header cell background
-    vertices.push_back({{x, y},
-                        {0.0f, 0.0f},
-                        to_glm(theme_.background_secondary),
-                        vertex_index});
+    vertices.push_back(
+        {{x, y}, {0.0f, 0.0f}, to_glm(theme_.background_panel), vertex_index});
     vertices.push_back({{x + cell_width, y},
                         {1.0f, 0.0f},
-                        to_glm(theme_.background_secondary),
+                        to_glm(theme_.background_panel),
                         vertex_index});
     vertices.push_back({{x + cell_width, y + header_height},
                         {1.0f, 1.0f},
-                        to_glm(theme_.background_secondary),
+                        to_glm(theme_.background_panel),
                         vertex_index});
     vertices.push_back({{x, y + header_height},
                         {0.0f, 1.0f},
-                        to_glm(theme_.background_secondary),
+                        to_glm(theme_.background_panel),
                         vertex_index});
 
     // Header cell indices
@@ -412,9 +409,17 @@ void DataGridComponent::sort_data() {
       });
 }
 
-void DataGridComponent::initialize_vulkan_resources(VulkanCore *) {
+void DataGridComponent::initialize_vulkan_resources(
+    VulkanCore * /*vulkan_core*/) {
   // TODO: Create pipelines, buffers, etc.
   // For now, just set the pointer
+}
+
+void DataGridComponent::clear_data() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  grid_data_.clear();
+  grid_data_.resize(rows_, std::vector<CellData>(columns_));
+  mark_dirty();
 }
 
 } // namespace BTQuant

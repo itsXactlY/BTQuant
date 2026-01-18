@@ -138,7 +138,7 @@ void VulkanDashboard::synchronize_market_data() {
         RenderEngine::TradeData trade;
         trade.price = update.price;
         trade.size = update.size;
-        trade.timestamp_us = update.timestamp_us;
+        trade.timestamp = update.timestamp;
         trade.is_buy = (update.side == "buy");
         trade.symbol_id = update.symbol_id;
 

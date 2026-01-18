@@ -167,8 +167,8 @@ private:
   // Rendering resources
   BufferAllocation panel_vertex_buffer_;
   BufferAllocation handle_vertex_buffer_;
-  VkPipeline panel_pipeline_ = VK_NULL_HANDLE;
-  VkPipeline handle_pipeline_ = VK_NULL_HANDLE;
+  VkPipeline [[maybe_unused]] panel_pipeline_ = VK_NULL_HANDLE;
+  VkPipeline [[maybe_unused]] handle_pipeline_ = VK_NULL_HANDLE;
 
   ResizeHandle get_resize_handle_at_position(const glm::vec2 &pos) {
     glm::vec2 relative_pos = pos - position_;
@@ -353,7 +353,7 @@ private:
                      std::round(size.y / grid_size_) * grid_size_);
   }
 
-  void update_cursor_for_handle(ResizeHandle handle) {
+  void update_cursor_for_handle([[maybe_unused]] ResizeHandle handle) {
     // Update system cursor based on resize handle
     // Implementation would set appropriate cursor
   }
@@ -376,19 +376,19 @@ private:
     }
   }
 
-  void render_panel_background(VkCommandBuffer cmd) {
+  void render_panel_background([[maybe_unused]] VkCommandBuffer cmd) {
     // Render panel background with theme colors
   }
 
-  void render_title_bar(VkCommandBuffer cmd) {
+  void render_title_bar([[maybe_unused]] VkCommandBuffer cmd) {
     // Render title bar with title text
   }
 
-  void render_resize_handles(VkCommandBuffer cmd) {
+  void render_resize_handles([[maybe_unused]] VkCommandBuffer cmd) {
     // Render resize handles at panel edges
   }
 
-  void render_snap_guides(VkCommandBuffer cmd) {
+  void render_snap_guides([[maybe_unused]] VkCommandBuffer cmd) {
     // Render grid snap guides during resize
   }
 };
@@ -474,7 +474,8 @@ private:
   std::string presets_directory_;
   std::unordered_map<std::string, LayoutPreset> presets_;
 
-  void create_directory_if_not_exists(const std::string &path) {
+  void
+  create_directory_if_not_exists([[maybe_unused]] const std::string &path) {
     // Implementation would create directory
   }
 
@@ -514,7 +515,7 @@ private:
     return layout;
   }
 
-  bool deserialize_layout(const Json::Value &layout_data) {
+  bool deserialize_layout([[maybe_unused]] const Json::Value &layout_data) {
     // Deserialize and recreate layout from JSON data
     return true;
   }
@@ -762,8 +763,9 @@ private:
   }
 
   template <typename T>
-  std::string get_field_value(const T &item,
-                              const std::string &field_name) const {
+  std::string
+  get_field_value([[maybe_unused]] const T &item,
+                  [[maybe_unused]] const std::string &field_name) const {
     // Implementation would extract field value based on field name
     // This is a placeholder
     return "";
@@ -833,8 +835,9 @@ private:
     }
   }
 
-  bool matches_date_filter(const std::string &value,
-                           const FilterCriteria &filter) const {
+  bool
+  matches_date_filter([[maybe_unused]] const std::string &value,
+                      [[maybe_unused]] const FilterCriteria &filter) const {
     // Implementation for date comparison
     return false;
   }
@@ -990,7 +993,8 @@ private:
     return results;
   }
 
-  std::vector<SearchResult> search_help(const std::string &query) {
+  std::vector<SearchResult>
+  search_help([[maybe_unused]] const std::string &query) {
     std::vector<SearchResult> results;
 
     // Search help content (implementation would search help database)
@@ -1119,8 +1123,9 @@ public:
         return custom_it->second;
       }
 
-      // Return default theme color
-      return get_theme_color(it->second.theme, color_name);
+      // Return default theme color, convert ImVec4 to glm::vec4
+      ImVec4 c = get_theme_color(it->second.theme, color_name);
+      return glm::vec4(c.x, c.y, c.z, c.w);
     }
 
     return glm::vec4(1.0f); // Default white
@@ -1153,25 +1158,25 @@ private:
     scheme.description = "Professional dark theme for trading";
     scheme.is_dark_theme = true;
 
-    scheme.theme.background_primary = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
-    scheme.theme.background_secondary = glm::vec4(0.15f, 0.15f, 0.15f, 1.0f);
-    scheme.theme.background_panel = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+    scheme.theme.background_primary = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
+    scheme.theme.background_secondary = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+    scheme.theme.background_panel = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);
 
-    scheme.theme.text_primary = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
-    scheme.theme.text_secondary = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
-    scheme.theme.text_muted = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+    scheme.theme.text_primary = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+    scheme.theme.text_secondary = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+    scheme.theme.text_muted = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-    scheme.theme.price_up = glm::vec4(0.0f, 0.8f, 0.0f, 1.0f);
-    scheme.theme.price_down = glm::vec4(0.8f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.price_neutral = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+    scheme.theme.price_up = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.price_down = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.price_neutral = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
 
-    scheme.theme.accent_primary = glm::vec4(0.2f, 0.6f, 1.0f, 1.0f);
-    scheme.theme.accent_secondary = glm::vec4(0.8f, 0.4f, 0.0f, 1.0f);
-    scheme.theme.border_color = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
+    scheme.theme.accent_primary = ImVec4(0.2f, 0.6f, 1.0f, 1.0f);
+    scheme.theme.accent_secondary = ImVec4(0.8f, 0.4f, 0.0f, 1.0f);
+    scheme.theme.border_color = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
 
-    scheme.theme.status_connected = glm::vec4(0.0f, 0.8f, 0.0f, 1.0f);
-    scheme.theme.status_disconnected = glm::vec4(0.8f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.status_warning = glm::vec4(0.8f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.status_connected = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.status_disconnected = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.status_warning = ImVec4(0.8f, 0.8f, 0.0f, 1.0f);
 
     themes_[scheme.name] = scheme;
   }
@@ -1182,25 +1187,25 @@ private:
     scheme.description = "Professional light theme for trading";
     scheme.is_dark_theme = false;
 
-    scheme.theme.background_primary = glm::vec4(0.95f, 0.95f, 0.95f, 1.0f);
-    scheme.theme.background_secondary = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
-    scheme.theme.background_panel = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    scheme.theme.background_primary = ImVec4(0.95f, 0.95f, 0.95f, 1.0f);
+    scheme.theme.background_secondary = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+    scheme.theme.background_panel = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    scheme.theme.text_primary = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
-    scheme.theme.text_secondary = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
-    scheme.theme.text_muted = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+    scheme.theme.text_primary = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
+    scheme.theme.text_secondary = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
+    scheme.theme.text_muted = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-    scheme.theme.price_up = glm::vec4(0.0f, 0.6f, 0.0f, 1.0f);
-    scheme.theme.price_down = glm::vec4(0.8f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.price_neutral = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f);
+    scheme.theme.price_up = ImVec4(0.0f, 0.6f, 0.0f, 1.0f);
+    scheme.theme.price_down = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.price_neutral = ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
 
-    scheme.theme.accent_primary = glm::vec4(0.0f, 0.4f, 0.8f, 1.0f);
-    scheme.theme.accent_secondary = glm::vec4(0.6f, 0.3f, 0.0f, 1.0f);
-    scheme.theme.border_color = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+    scheme.theme.accent_primary = ImVec4(0.0f, 0.4f, 0.8f, 1.0f);
+    scheme.theme.accent_secondary = ImVec4(0.6f, 0.3f, 0.0f, 1.0f);
+    scheme.theme.border_color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
 
-    scheme.theme.status_connected = glm::vec4(0.0f, 0.6f, 0.0f, 1.0f);
-    scheme.theme.status_disconnected = glm::vec4(0.8f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.status_warning = glm::vec4(0.8f, 0.6f, 0.0f, 1.0f);
+    scheme.theme.status_connected = ImVec4(0.0f, 0.6f, 0.0f, 1.0f);
+    scheme.theme.status_disconnected = ImVec4(0.8f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.status_warning = ImVec4(0.8f, 0.6f, 0.0f, 1.0f);
 
     themes_[scheme.name] = scheme;
   }
@@ -1211,25 +1216,25 @@ private:
     scheme.description = "High contrast theme for accessibility";
     scheme.is_dark_theme = true;
 
-    scheme.theme.background_primary = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.background_secondary = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
-    scheme.theme.background_panel = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
+    scheme.theme.background_primary = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.background_secondary = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
+    scheme.theme.background_panel = ImVec4(0.05f, 0.05f, 0.05f, 1.0f);
 
-    scheme.theme.text_primary = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    scheme.theme.text_secondary = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
-    scheme.theme.text_muted = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+    scheme.theme.text_primary = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+    scheme.theme.text_secondary = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
+    scheme.theme.text_muted = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
 
-    scheme.theme.price_up = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.price_down = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.price_neutral = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    scheme.theme.price_up = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.price_down = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.price_neutral = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
-    scheme.theme.accent_primary = glm::vec4(0.0f, 0.8f, 1.0f, 1.0f);
-    scheme.theme.accent_secondary = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f);
-    scheme.theme.border_color = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+    scheme.theme.accent_primary = ImVec4(0.0f, 0.8f, 1.0f, 1.0f);
+    scheme.theme.accent_secondary = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
+    scheme.theme.border_color = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-    scheme.theme.status_connected = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.status_disconnected = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.status_warning = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_connected = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_disconnected = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.status_warning = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 
     themes_[scheme.name] = scheme;
   }
@@ -1240,27 +1245,25 @@ private:
     scheme.description = "Bloomberg Terminal inspired theme";
     scheme.is_dark_theme = true;
 
-    scheme.theme.background_primary = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.background_secondary = glm::vec4(0.05f, 0.05f, 0.1f, 1.0f);
-    scheme.theme.background_panel = glm::vec4(0.0f, 0.0f, 0.05f, 1.0f);
+    scheme.theme.background_primary = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.background_secondary = ImVec4(0.05f, 0.05f, 0.1f, 1.0f);
+    scheme.theme.background_panel = ImVec4(0.0f, 0.0f, 0.05f, 1.0f);
 
-    scheme.theme.text_primary =
-        glm::vec4(1.0f, 0.6f, 0.0f, 1.0f); // Orange text
-    scheme.theme.text_secondary =
-        glm::vec4(0.8f, 0.8f, 0.0f, 1.0f); // Yellow text
-    scheme.theme.text_muted = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);
+    scheme.theme.text_primary = ImVec4(1.0f, 0.6f, 0.0f, 1.0f);   // Orange text
+    scheme.theme.text_secondary = ImVec4(0.8f, 0.8f, 0.0f, 1.0f); // Yellow text
+    scheme.theme.text_muted = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
-    scheme.theme.price_up = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.price_down = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.price_neutral = glm::vec4(1.0f, 0.6f, 0.0f, 1.0f);
+    scheme.theme.price_up = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.price_down = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.price_neutral = ImVec4(1.0f, 0.6f, 0.0f, 1.0f);
 
-    scheme.theme.accent_primary = glm::vec4(1.0f, 0.6f, 0.0f, 1.0f);
-    scheme.theme.accent_secondary = glm::vec4(0.8f, 0.8f, 0.0f, 1.0f);
-    scheme.theme.border_color = glm::vec4(0.3f, 0.3f, 0.0f, 1.0f);
+    scheme.theme.accent_primary = ImVec4(1.0f, 0.6f, 0.0f, 1.0f);
+    scheme.theme.accent_secondary = ImVec4(0.8f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.border_color = ImVec4(0.3f, 0.3f, 0.0f, 1.0f);
 
-    scheme.theme.status_connected = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.status_disconnected = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.status_warning = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_connected = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_disconnected = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.status_warning = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 
     themes_[scheme.name] = scheme;
   }
@@ -1271,41 +1274,41 @@ private:
     scheme.description = "Matrix-inspired green theme";
     scheme.is_dark_theme = true;
 
-    scheme.theme.background_primary = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.background_secondary = glm::vec4(0.0f, 0.05f, 0.0f, 1.0f);
-    scheme.theme.background_panel = glm::vec4(0.0f, 0.02f, 0.0f, 1.0f);
+    scheme.theme.background_primary = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.background_secondary = ImVec4(0.0f, 0.05f, 0.0f, 1.0f);
+    scheme.theme.background_panel = ImVec4(0.0f, 0.02f, 0.0f, 1.0f);
 
-    scheme.theme.text_primary = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.text_secondary = glm::vec4(0.0f, 0.8f, 0.0f, 1.0f);
-    scheme.theme.text_muted = glm::vec4(0.0f, 0.5f, 0.0f, 1.0f);
+    scheme.theme.text_primary = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.text_secondary = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.text_muted = ImVec4(0.0f, 0.5f, 0.0f, 1.0f);
 
-    scheme.theme.price_up = glm::vec4(0.0f, 1.0f, 0.5f, 1.0f);
-    scheme.theme.price_down = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.price_neutral = glm::vec4(0.0f, 0.8f, 0.0f, 1.0f);
+    scheme.theme.price_up = ImVec4(0.0f, 1.0f, 0.5f, 1.0f);
+    scheme.theme.price_down = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.price_neutral = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
 
-    scheme.theme.accent_primary = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.accent_secondary = glm::vec4(0.0f, 0.8f, 0.8f, 1.0f);
-    scheme.theme.border_color = glm::vec4(0.0f, 0.3f, 0.0f, 1.0f);
+    scheme.theme.accent_primary = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.accent_secondary = ImVec4(0.0f, 0.8f, 0.8f, 1.0f);
+    scheme.theme.border_color = ImVec4(0.0f, 0.3f, 0.0f, 1.0f);
 
-    scheme.theme.status_connected = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-    scheme.theme.status_disconnected = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    scheme.theme.status_warning = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_connected = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+    scheme.theme.status_disconnected = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+    scheme.theme.status_warning = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
 
     themes_[scheme.name] = scheme;
   }
 
-  void apply_theme(const ColorScheme &scheme) {
+  void apply_theme([[maybe_unused]] const ColorScheme &scheme) {
     // Apply theme to all UI components
     // This would update the global theme and notify all components
   }
 
-  void apply_custom_color(const std::string &color_name,
-                          const glm::vec4 &color) {
+  void apply_custom_color([[maybe_unused]] const std::string &color_name,
+                          [[maybe_unused]] const glm::vec4 &color) {
     // Apply custom color override
   }
 
-  glm::vec4 get_theme_color(const DashboardTheme &theme,
-                            const std::string &color_name) const {
+  ImVec4 get_theme_color(const DashboardTheme &theme,
+                         const std::string &color_name) const {
     // Map color name to theme color
     if (color_name == "background_primary")
       return theme.background_primary;
@@ -1338,7 +1341,7 @@ private:
     if (color_name == "status_warning")
       return theme.status_warning;
 
-    return glm::vec4(1.0f); // Default
+    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default
   }
 
   void save_theme_to_file(const ColorScheme &scheme) {
@@ -1388,6 +1391,15 @@ private:
     builder["indentation"] = "  ";
     std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
     writer->write(root, &file);
+  }
+
+  Json::Value color_to_json(const ImVec4 &color) {
+    Json::Value json_color;
+    json_color["r"] = color.x;
+    json_color["g"] = color.y;
+    json_color["b"] = color.z;
+    json_color["a"] = color.w;
+    return json_color;
   }
 
   Json::Value color_to_json(const glm::vec4 &color) {

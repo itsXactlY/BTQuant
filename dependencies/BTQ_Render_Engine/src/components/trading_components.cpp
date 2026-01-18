@@ -1,5 +1,4 @@
 #include "../../include/vulkan_dashboard_advanced.hpp"
-#include <cfloat>
 #include <cstdlib>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -237,7 +236,7 @@ void TapeComponent::handle_trade(const RenderEngine::TradeData &trade) {
 
   std::lock_guard lock(data_mutex_);
   TapeEntry entry;
-  entry.timestamp_us = trade.timestamp_us;
+  entry.timestamp = trade.timestamp;
   entry.price = trade.price;
   entry.size = trade.size;
   entry.is_buy = trade.is_buy;
@@ -295,12 +294,9 @@ void TapeComponent::render_gui() {
       for (const auto &e : entries_) {
         ImGui::TableNextRow(ImGuiTableRowFlags_None, 16.0f);
 
-        // Format time
-        time_t t = e.timestamp_us / 1000000;
-        struct tm *tm_info = localtime(&t);
-        char time_str[16] = "00:00:00";
-        if (tm_info)
-          strftime(time_str, sizeof(time_str), "%H:%M:%S", tm_info);
+        // Display time
+        char time_str[32];
+        snprintf(time_str, sizeof(time_str), "%lu", e.timestamp);
 
         ImGui::TableSetColumnIndex(0);
         ImGui::TextDisabled("%s", time_str);

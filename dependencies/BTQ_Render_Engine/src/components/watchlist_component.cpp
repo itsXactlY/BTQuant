@@ -16,8 +16,6 @@ WatchlistComponent::WatchlistComponent(const glm::vec2 &position,
   add_symbol("XRP-USD");
 }
 
-WatchlistComponent::~WatchlistComponent() {}
-
 void WatchlistComponent::add_symbol(const std::string &symbol) {
   std::string upper_symbol = symbol;
   std::transform(upper_symbol.begin(), upper_symbol.end(), upper_symbol.begin(),

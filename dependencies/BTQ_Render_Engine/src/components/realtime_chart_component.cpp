@@ -143,61 +143,48 @@ void RealtimeChartComponent::handle_trade(
   std::lock_guard<std::recursive_mutex> lock(data_mutex_);
 
   // Aggregate trades into candles (1 Minute fixed for now)
-  uint64_t interval = 60 * 1000000; // 1 min in microseconds
-  uint64_t candle_ts = (trade.timestamp_us / interval) * interval;
+  // uint64_t candle_ts = trade.timestamp / 60000000 * 60000000; // Original
+  // 1-minute aggregation
 
-  if (raw_candles_.empty() || raw_candles_.back().timestamp_us != candle_ts) {
-    // New Candle
-    Candle new_c;
-    new_c.timestamp_us = candle_ts;
+  // Use trade.timestamp directly for x-axis
+  if (raw_candles_.empty() ||
+      (uint64_t)raw_candles_.back().x != trade.timestamp) {
+    CandleData new_c;
+    new_c.x = (float)trade.timestamp;
     new_c.open = (float)trade.price;
     new_c.high = (float)trade.price;
     new_c.low = (float)trade.price;
     new_c.close = (float)trade.price;
-    new_c.volume = (float)trade.size;
+    new_c.color = 0xFFFFFFFF; // White
+    // new_c.volume = 0.0f; // Initialize volume if it were still present
     raw_candles_.push_back(new_c);
   } else {
-    // Update existing
-    auto &c = raw_candles_.back();
-    c.high = std::max(c.high, (float)trade.price);
-    c.low = std::min(c.low, (float)trade.price);
-    c.close = (float)trade.price;
-    c.volume += (float)trade.size;
+    auto &last = raw_candles_.back();
+    last.high = std::max(last.high, (float)trade.price);
+    last.low = std::min(last.low, (float)trade.price);
+    last.close = (float)trade.price;
   }
+  // Volume update should apply to the last candle, whether new or existing
+  // raw_candles_.back().volume += (float)trade.size; // Removed as per
+  // instruction
 
   // Prune old candles if necessary
   if (raw_candles_.size() > 1000) {
-    raw_candles_.pop_front();
+    raw_candles_.erase(raw_candles_.begin());
   }
 }
 
 void RealtimeChartComponent::handle_orderbook(
-    const RenderEngine::OrderbookData &data) {
+    const RenderEngine::OrderbookData & /*data*/) {
   // Optional: Visualize orderbook depth on chart
 }
 
 void RealtimeChartComponent::clear_data() {
   std::lock_guard<std::recursive_mutex> lock(data_mutex_);
   raw_candles_.clear();
-  candles_.clear();
 }
 
-void RealtimeChartComponent::add_data_point(float time, float price,
-                                            float volume) {
-  // Stub
-}
-
-void RealtimeChartComponent::set_time_window(float seconds) {
-  // Stub
-}
-
-void RealtimeChartComponent::set_y_range(float min_y, float max_y) {
-  // Stub
-}
-
-void RealtimeChartComponent::enable_candlestick_mode(bool enable) {
-  // Stub
-}
+// Stubs removed as they are no longer in the header
 
 // Required overrides
 void RealtimeChartComponent::update(float delta_time) { (void)delta_time; }

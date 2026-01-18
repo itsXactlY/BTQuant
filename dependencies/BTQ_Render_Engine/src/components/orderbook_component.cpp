@@ -105,7 +105,7 @@ void OrderBookComponent::update_orderbook(const OrderBookData &data) {
       (data.bids.empty() || data.asks.empty())
           ? 0.0
           : (data.bids[0].price + data.asks[0].price) * 0.5;
-  current_data_.timestamp = data.timestamp_us;
+  current_data_.timestamp = data.timestamp;
 
   // Limit and Sort
   if (current_data_.bids.size() > max_levels_)
@@ -1015,7 +1015,7 @@ void OrderBookComponent::handle_orderbook(
   if (orderbook.symbol != symbol_)
     return;
   OrderBookData ui_data;
-  ui_data.timestamp_us = orderbook.timestamp_us;
+  ui_data.timestamp = orderbook.timestamp;
   ui_data.spread = orderbook.spread;
   // mid_price not stored in OrderbookData struct
 

@@ -2,6 +2,8 @@
 #include "../include/market_data_processor.hpp"
 // #include "imgui_impl_vulkan.h" // Removed as wrapped by VulkanCore
 
+#include "imgui_impl_vulkan.h"
+#include <X11/Xutil.h>
 #include <iostream>
 #include <stdexcept>
 
@@ -66,10 +68,12 @@ void VulkanDashboard::init_x11() {
   attrs.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask |
                      ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                      StructureNotifyMask;
+  attrs.background_pixel = BlackPixel(display_, screen);
+  attrs.border_pixel = BlackPixel(display_, screen);
 
-  window_ =
-      XCreateWindow(display_, root, 0, 0, width_, height_, 0, CopyFromParent,
-                    InputOutput, CopyFromParent, CWEventMask, &attrs);
+  window_ = XCreateWindow(display_, root, 0, 0, width_, height_, 0,
+                          CopyFromParent, InputOutput, CopyFromParent,
+                          CWEventMask | CWBackPixel | CWBorderPixel, &attrs);
 
   XSetStandardProperties(display_, window_, "BTQuant Unified Dashboard",
                          "BTQuant", None, nullptr, 0, nullptr);
@@ -79,6 +83,15 @@ void VulkanDashboard::init_x11() {
   XSetWMProtocols(display_, window_, &wm_delete_window_, 1);
 
   XMapWindow(display_, window_);
+
+  // Wait for MapNotify event to ensure window is visible
+  XEvent ev;
+  while (true) {
+    XNextEvent(display_, &ev);
+    if (ev.type == MapNotify)
+      break;
+  }
+
   XFlush(display_);
 }
 
@@ -118,8 +131,11 @@ void VulkanDashboard::cleanup_x11() {
 
 bool VulkanDashboard::run_frame() {
   handle_x11_events();
-  if (!is_running_)
+  if (!is_running_) {
+    std::cout << "[VulkanDashboard] is_running_ is false, exiting run_frame"
+              << std::endl;
     return false;
+  }
 
   render_frame();
   return true;
@@ -127,12 +143,44 @@ bool VulkanDashboard::run_frame() {
 
 void VulkanDashboard::handle_x11_events() {
   XEvent event;
+  ImGuiIO &io = ImGui::GetIO();
   while (XPending(display_) > 0) {
     XNextEvent(display_, &event);
     if (event.type == ClientMessage) {
       if ((Atom)event.xclient.data.l[0] == wm_delete_window_) {
+        std::cout << "[VulkanDashboard] Received WM_DELETE_WINDOW" << std::endl;
         is_running_ = false;
       }
+    } else if (event.type == DestroyNotify) {
+      is_running_ = false;
+    } else if (event.type == ConfigureNotify) {
+      if ((uint32_t)event.xconfigure.width != width_ ||
+          (uint32_t)event.xconfigure.height != height_) {
+        width_ = event.xconfigure.width;
+        height_ = event.xconfigure.height;
+        io.DisplaySize = ImVec2((float)width_, (float)height_);
+        vulkan_core_->recreate_swapchain(width_, height_);
+      }
+    } else if (event.type == MotionNotify) {
+      io.AddMousePosEvent((float)event.xmotion.x, (float)event.xmotion.y);
+    } else if (event.type == ButtonPress) {
+      if (event.xbutton.button == Button1)
+        io.AddMouseButtonEvent(0, true);
+      if (event.xbutton.button == Button2)
+        io.AddMouseButtonEvent(2, true);
+      if (event.xbutton.button == Button3)
+        io.AddMouseButtonEvent(1, true);
+      if (event.xbutton.button == Button4)
+        io.AddMouseWheelEvent(0.0f, 1.0f);
+      if (event.xbutton.button == Button5)
+        io.AddMouseWheelEvent(0.0f, -1.0f);
+    } else if (event.type == ButtonRelease) {
+      if (event.xbutton.button == Button1)
+        io.AddMouseButtonEvent(0, false);
+      if (event.xbutton.button == Button2)
+        io.AddMouseButtonEvent(2, false);
+      if (event.xbutton.button == Button3)
+        io.AddMouseButtonEvent(1, false);
     }
   }
 }
@@ -165,7 +213,20 @@ void VulkanDashboard::synchronize_market_data() {
 void VulkanDashboard::render_frame() {
   // 1. Begin Vulkan Frame
   if (!vulkan_core_->begin_frame()) {
+    static int fail_count = 0;
+    if (fail_count++ % 60 == 0) {
+      std::cout << "[VulkanDashboard] begin_frame failed (OUT_OF_DATE), "
+                   "recreating swapchain..."
+                << std::endl;
+    }
+    vulkan_core_->recreate_swapchain(width_, height_);
     return;
+  }
+
+  static int frame_count = 0;
+  if (frame_count++ % 60 == 0) {
+    std::cout << "[VulkanDashboard] Rendering frame " << frame_count << "..."
+              << std::endl;
   }
 
   // 2. Begin Main Render Pass (Clear screen)
@@ -175,6 +236,7 @@ void VulkanDashboard::render_frame() {
   VkCommandBuffer cmd = vulkan_core_->get_current_command_buffer();
 
   // ImGui Required Boilerplate
+  ImGui_ImplVulkan_NewFrame();
   ImGui::NewFrame();
 
   // Create the DockSpace
@@ -183,6 +245,9 @@ void VulkanDashboard::render_frame() {
                    ImGuiDockNodeFlags_PassthruCentralNode);
 
   // 4. Render All Components
+  fprintf(stderr, "[DEBUG] Frame %d: Render All Components (count=%zu)\n",
+          frame_count, components_.size());
+  ImGui::ShowDemoWindow();
   for (auto &comp : components_) {
     comp->render(cmd);
     comp->render_gui();

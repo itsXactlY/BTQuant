@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace BTQuant {
 
@@ -49,6 +50,12 @@ void RealtimeChartComponent::render_gui() {
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   if (ImGui::Begin("Realtime Chart", nullptr, 0)) {
+    static bool printed_init = false;
+    if (!printed_init) {
+      std::cout << "[RealtimeChartComponent] Main Window Begin succeeded"
+                << std::endl;
+      printed_init = true;
+    }
 
     // 1. Handling Input (Zoom/Pan)
     if (ImGui::IsWindowHovered()) {

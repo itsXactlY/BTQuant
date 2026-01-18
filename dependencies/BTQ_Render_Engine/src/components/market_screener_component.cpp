@@ -1,5 +1,4 @@
 #include "vulkan_dashboard_advanced.hpp"
-#include <algorithm>
 #include <imgui.h>
 
 namespace BTQuant {
@@ -18,8 +17,17 @@ MarketScreenerComponent::MarketScreenerComponent(const glm::vec2 &position,
   results_.push_back({"AVAX-USD", 35.80, -4.50, 180000000.0, 0.7});
 }
 
+MarketScreenerComponent::~MarketScreenerComponent() {}
+
 void MarketScreenerComponent::update(float) {
   // In a real system, this would throttle-scan the symbol registry
+}
+
+void MarketScreenerComponent::initialize_vulkan_resources(VulkanCore *) {}
+
+void MarketScreenerComponent::clear_data() {
+  std::lock_guard lock(data_mutex_);
+  results_.clear();
 }
 
 void MarketScreenerComponent::render_gui() {

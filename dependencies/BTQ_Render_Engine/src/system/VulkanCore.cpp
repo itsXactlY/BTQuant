@@ -1,5 +1,6 @@
-#define VK_USE_PLATFORM_XLIB_KHR
+// #define VK_USE_PLATFORM_XLIB_KHR
 #include "../../include/vulkan_base_types.hpp"
+#include "backends/imgui_impl_glfw.h"
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #include <algorithm>
@@ -13,11 +14,11 @@ VulkanCore::VulkanCore(const VulkanDashboardConfig &config) : config_(config) {}
 
 VulkanCore::~VulkanCore() { cleanup(); }
 
-void VulkanCore::initialize(Display *display, Window window, uint32_t width,
+void VulkanCore::initialize(GLFWwindow *window, uint32_t width,
                             uint32_t height) {
   // Basic Vulkan initialization logic
   create_instance();
-  create_surface(display, window);
+  create_surface(window);
   select_physical_device();
   create_logical_device();
 
@@ -38,112 +39,72 @@ void VulkanCore::initialize(Display *display, Window window, uint32_t width,
   create_default_sampler();
 }
 
-void VulkanCore::init_vulkan_components() {
-  // Additional initialization if needed
-}
-
 void VulkanCore::cleanup() {
-  if (device_ != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(device_);
-    // cleanup_imgui();
-    // cleanup_swapchain();
+  cleanup_swapchain();
+  cleanup_imgui();
 
-    memory_manager_.reset();
+  vkDestroySampler(device_, default_sampler_, nullptr);
+  vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
 
-    if (descriptor_pool_ != VK_NULL_HANDLE) {
-      vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
-      descriptor_pool_ = VK_NULL_HANDLE;
-    }
-
-    if (command_pool_ != VK_NULL_HANDLE) {
-      vkDestroyCommandPool(device_, command_pool_, nullptr);
-      command_pool_ = VK_NULL_HANDLE;
-    }
-
-    vkDestroyDevice(device_, nullptr);
-    device_ = VK_NULL_HANDLE;
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
+    vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
+    vkDestroyFence(device_, in_flight_fences_[i], nullptr);
   }
 
-  if (surface_ != VK_NULL_HANDLE && instance_ != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(instance_, surface_, nullptr);
-    surface_ = VK_NULL_HANDLE;
-  }
+  vkDestroyCommandPool(device_, command_pool_, nullptr);
 
-  if (instance_ != VK_NULL_HANDLE) {
-    vkDestroyInstance(instance_, nullptr);
-    instance_ = VK_NULL_HANDLE;
-  }
+  vkDestroyDevice(device_, nullptr);
+  vkDestroySurfaceKHR(instance_, surface_, nullptr);
+  vkDestroyInstance(instance_, nullptr);
 }
 
-bool VulkanCore::begin_frame() {
-  if (command_buffers_.empty()) {
-    create_command_buffers();
-  }
+void VulkanCore::RecreateSwapchain() {
+  recreate_swapchain(swapchain_extent_.width, swapchain_extent_.height);
+}
 
+VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
   vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE,
                   UINT64_MAX);
 
-  VkResult result =
-      vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
-                            image_available_semaphores_[current_frame_],
-                            VK_NULL_HANDLE, &current_image_index_);
+  VkResult result = vkAcquireNextImageKHR(
+      device_, swapchain_, UINT64_MAX,
+      image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &imageIndex);
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    std::cout << "[VulkanCore] vkAcquireNextImageKHR returned OUT_OF_DATE"
-              << std::endl;
-    return false;
-  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-    std::cerr << "[VulkanCore] vkAcquireNextImageKHR failed with " << result
-              << std::endl;
-    throw std::runtime_error("failed to acquire swapchain image!");
+  if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
+    vkResetFences(device_, 1, &in_flight_fences_[current_frame_]);
+    current_command_buffer_ = command_buffers_[current_frame_];
+    vkResetCommandBuffer(current_command_buffer_, 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(current_command_buffer_, &beginInfo);
   }
 
-  vkResetFences(device_, 1, &in_flight_fences_[current_frame_]);
-
-  current_command_buffer_ = command_buffers_[current_frame_];
-  vkResetCommandBuffer(current_command_buffer_, 0);
-
-  VkCommandBufferBeginInfo beginInfo{};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-  if (vkBeginCommandBuffer(current_command_buffer_, &beginInfo) != VK_SUCCESS) {
-    throw std::runtime_error("failed to begin recording command buffer!");
-  }
-
-  return true;
+  return result;
 }
-void VulkanCore::begin_main_render_pass() {
+
+void VulkanCore::RecordCommandBuffer(uint32_t imageIndex,
+                                     ImDrawData *drawData) {
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;
-  renderPassInfo.framebuffer = framebuffers_[current_image_index_];
+  renderPassInfo.framebuffer = framebuffers_[imageIndex];
   renderPassInfo.renderArea.offset = {0, 0};
   renderPassInfo.renderArea.extent = swapchain_extent_;
 
-  VkClearValue clearColor = {{{0.0f, 1.0f, 0.0f, 1.0f}}}; // Vibrant Green
-  renderPassInfo.clearValueCount = 1;
-  renderPassInfo.pClearValues = &clearColor;
+  std::array<VkClearValue, 2> clearValues{};
+  clearValues[0].color = {{0.01f, 0.01f, 0.01f, 1.0f}};
+  clearValues[1].depthStencil = {1.0f, 0};
+
+  renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+  renderPassInfo.pClearValues = clearValues.data();
 
   vkCmdBeginRenderPass(current_command_buffer_, &renderPassInfo,
                        VK_SUBPASS_CONTENTS_INLINE);
-}
 
-void VulkanCore::end_frame() {
-  // Render ImGui if initialized
-  ImDrawData *draw_data = ImGui::GetDrawData();
-  if (draw_data) {
-    if (draw_data->CmdListsCount > 0) {
-      static int log_limit = 0;
-      if (log_limit++ < 10) {
-        fprintf(stderr,
-                "[VulkanCore] Rendering ImGui with %d cmd lists, Pos=(%.1f, "
-                "%.1f), Size=(%.1f, %.1f)\n",
-                draw_data->CmdListsCount, draw_data->DisplayPos.x,
-                draw_data->DisplayPos.y, draw_data->DisplaySize.x,
-                draw_data->DisplaySize.y);
-      }
-      ImGui_ImplVulkan_RenderDrawData(draw_data, current_command_buffer_);
-    }
+  if (drawData) {
+    ImGui_ImplVulkan_RenderDrawData(drawData, current_command_buffer_);
   }
 
   vkCmdEndRenderPass(current_command_buffer_);
@@ -151,7 +112,9 @@ void VulkanCore::end_frame() {
   if (vkEndCommandBuffer(current_command_buffer_) != VK_SUCCESS) {
     throw std::runtime_error("failed to record command buffer!");
   }
+}
 
+VkResult VulkanCore::PresentFrame(uint32_t imageIndex) {
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -177,23 +140,23 @@ void VulkanCore::end_frame() {
 
   VkPresentInfoKHR presentInfo{};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
   presentInfo.waitSemaphoreCount = 1;
   presentInfo.pWaitSemaphores = signalSemaphores;
 
   VkSwapchainKHR swapChains[] = {swapchain_};
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = swapChains;
-  presentInfo.pImageIndices = &current_image_index_;
+  presentInfo.pImageIndices = &imageIndex;
 
-  VkResult result = vkQueuePresentKHR(graphics_queue_, &presentInfo);
-  if (result != VK_SUCCESS) {
-    std::cout << "[VulkanCore] vkQueuePresentKHR returned " << result
-              << std::endl;
-  }
+  VkResult result = vkQueuePresentKHR(present_queue_, &presentInfo);
 
   current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
+
+  return result;
 }
+
+void VulkanCore::begin_main_render_pass() {}
+void VulkanCore::end_frame() {}
 
 static std::string resolve_shader_path(const std::string &path) {
   // 1. Try directly (as relative or absolute)
@@ -629,13 +592,8 @@ void VulkanCore::create_logical_device() {
   present_queue_family_ = graphicsFamily;
 }
 
-void VulkanCore::create_surface(Display *display, Window window) {
-  VkXlibSurfaceCreateInfoKHR createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
-  createInfo.dpy = display;
-  createInfo.window = window;
-
-  if (vkCreateXlibSurfaceKHR(instance_, &createInfo, nullptr, &surface_) !=
+void VulkanCore::create_surface(GLFWwindow *window) {
+  if (glfwCreateWindowSurface(instance_, window, nullptr, &surface_) !=
       VK_SUCCESS) {
     throw std::runtime_error("failed to create window surface!");
   }
@@ -933,31 +891,47 @@ void VulkanCore::cleanup_swapchain() {
   }
 }
 void VulkanCore::init_imgui() {
+  std::cout << "[VulkanCore] init_imgui: Instance=" << instance_
+            << " Device=" << device_ << " PhysDevice=" << physical_device_
+            << std::endl;
+  std::cout << "[VulkanCore] init_imgui: DescPool=" << descriptor_pool_
+            << " RenderPass=" << render_pass_ << std::endl;
+
   ImGui_ImplVulkan_InitInfo init_info = {};
+  init_info.ApiVersion = VK_API_VERSION_1_2;
   init_info.Instance = instance_;
   init_info.PhysicalDevice = physical_device_;
   init_info.Device = device_;
   init_info.QueueFamily = graphics_queue_family_;
   init_info.Queue = graphics_queue_;
   init_info.DescriptorPool = descriptor_pool_;
-  init_info.RenderPass = render_pass_;
+  init_info.PipelineInfoMain.RenderPass = render_pass_;
+  init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.MinImageCount = 2;
   init_info.ImageCount = static_cast<uint32_t>(swapchain_images_.size());
-  init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
   init_info.CheckVkResultFn = [](VkResult err) {
     if (err == 0)
       return;
     std::cerr << "[ImGui][Vulkan] Error: " << err << std::endl;
   };
 
-  ImGui_ImplVulkan_Init(&init_info);
+  // Initialize Glfw Backend
+  // Note: We need access to the window pointer here ideally, but
+  // ImGui_ImplGlfw_InitForVulkan should have been called in VulkanDashboard or
+  // we need to pass it here. Actually, standard practice is to Init GLFW
+  // backend in Dashboard, and Vulkan backend here. But let's assume valid GLFW
+  // context is set current or passed. Wait, I need the window for
+  // ImGui_ImplGlfw_InitForVulkan. I will refactor init_imgui to take
+  // GLFWwindow* or assert it's initialized before. For now, let's just
+  // initialize the Vulkan part here, and ensuring GLFW part is done in
+  // Dashboard.
 
-  // Upload Fonts
-  {
-    VkCommandBuffer commandBuffer = begin_single_time_commands();
-    ImGui_ImplVulkan_CreateFontsTexture();
-    end_single_time_commands(commandBuffer);
+  if (!ImGui_ImplVulkan_Init(&init_info)) {
+    throw std::runtime_error("failed to initialize ImGui Vulkan backend!");
   }
+
+  // Fonts are uploaded automatically by ImGui_ImplVulkan_NewFrame() the first
+  // time.
 }
 
 void VulkanCore::cleanup_imgui() { ImGui_ImplVulkan_Shutdown(); }
@@ -986,7 +960,16 @@ void VulkanCore::create_default_sampler() {
 std::vector<const char *> VulkanCore::get_required_extensions() {
   std::vector<const char *> extensions;
   extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-  extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+
+  uint32_t glfwExtensionCount = 0;
+  const char **glfwExtensions =
+      glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+  for (uint32_t i = 0; i < glfwExtensionCount; i++) {
+    extensions.push_back(glfwExtensions[i]);
+  }
+
+  // Duplicate check might be needed but usually GLFW returns the correct
+  // surface extensions. references: VK_KHR_XLIB_SURFACE_EXTENSION_NAME removed.
   if (config_.enable_validation_layers) {
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }

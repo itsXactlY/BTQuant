@@ -17,6 +17,10 @@ StrategyControlComponent::StrategyControlComponent(const glm::vec2 &position,
                  {"Trend Follower", true, 4500.22f, 0.04f, 12, "RUNNING"}};
 }
 
+void StrategyControlComponent::update(float) {}
+void StrategyControlComponent::clear_data() {}
+void StrategyControlComponent::initialize_vulkan_resources(VulkanCore *) {}
+
 void StrategyControlComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
@@ -74,6 +78,10 @@ RiskManagerComponent::RiskManagerComponent(const glm::vec2 &position,
                                            const glm::vec2 &size)
     : UIComponent(position, size) {}
 
+void RiskManagerComponent::update(float) {}
+void RiskManagerComponent::clear_data() {}
+void RiskManagerComponent::initialize_vulkan_resources(VulkanCore *) {}
+
 void RiskManagerComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
@@ -121,6 +129,10 @@ void RiskManagerComponent::render_gui() {
 TradingInterfaceComponent::TradingInterfaceComponent(const glm::vec2 &position,
                                                      const glm::vec2 &size)
     : UIComponent(position, size) {}
+
+void TradingInterfaceComponent::update(float) {}
+void TradingInterfaceComponent::clear_data() {}
+void TradingInterfaceComponent::initialize_vulkan_resources(VulkanCore *) {}
 
 void TradingInterfaceComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
@@ -230,6 +242,8 @@ TapeComponent::TapeComponent(const glm::vec2 &position, const glm::vec2 &size)
 
 TapeComponent::~TapeComponent() {}
 
+void TapeComponent::initialize_vulkan_resources(VulkanCore *) {}
+
 void TapeComponent::handle_trade(const RenderEngine::TradeData &trade) {
   if (trade.symbol != target_symbol_)
     return;
@@ -334,6 +348,9 @@ OrderManagementComponent::OrderManagementComponent(const glm::vec2 &position,
 
 OrderManagementComponent::~OrderManagementComponent() {}
 
+void OrderManagementComponent::initialize_vulkan_resources(VulkanCore *) {}
+void OrderManagementComponent::clear_data() {}
+
 void OrderManagementComponent::update(float) {}
 
 void OrderManagementComponent::render_gui() {
@@ -408,6 +425,12 @@ void PositionPanelComponent::update(float delta_time) {
     timer = 0;
     mark_dirty();
   }
+}
+
+void PositionPanelComponent::clear_data() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  positions_.clear();
+  equity_history_.clear();
 }
 
 void PositionPanelComponent::render_gui() {
@@ -492,6 +515,13 @@ MarketOverviewPanel::MarketOverviewPanel(const glm::vec2 &position,
 MarketOverviewPanel::~MarketOverviewPanel() {}
 
 void MarketOverviewPanel::update(float) {}
+
+void MarketOverviewPanel::clear_data() {
+  std::lock_guard lock(data_mutex_);
+  tickers_.clear();
+}
+
+void MarketOverviewPanel::initialize_vulkan_resources(VulkanCore *) {}
 
 void MarketOverviewPanel::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);

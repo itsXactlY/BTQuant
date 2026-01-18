@@ -1,66 +1,51 @@
-/**
- * BTQuant Real-time Dashboard (Unified Architecture)
- *
- * This is the refined entry point that eliminates DashboardOrchestrator.
- * It directly coordinates the HotSpineDataBridge and VulkanDashboard.
- */
-
-#include "../include/hotspine_data_bridge.hpp"
-#include "../include/vulkan_dashboard_advanced.hpp"
+#include "hotspine_data_bridge.hpp"
+#include "vulkan_dashboard_advanced.hpp"
 #include <iostream>
 #include <memory>
 
-int main(int, char **) {
-  std::cout << "[Main] Starting BTQuant Realtime Dashboard (Unified)..."
-            << std::endl;
+/**
+ * BTQuant Terminal Entry Point
+ *
+ * Performance Architecture:
+ * - SHM Data Ingestion: HotSpineDataBridge (Polled Frequency)
+ * - Renderer: Vulkan with Dear ImGui/ImPlot (Uncapped Framerate)
+ */
+int main(int argc, char **argv) {
+  (void)argc;
+  (void)argv;
+  std::cout << "[Main] BTQuant Multi-Asset Terminal starting..." << std::endl;
 
-  // 1. Init Data Bridge
-  std::cout << "[Main] Initializing HotSpine Data Bridge..." << std::endl;
-  auto bridge = std::make_shared<BTQuant::RenderEngine::HotSpineDataBridge>();
-
+  // 1. Data Layer Initialization
+  auto bridge =
+      std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   if (!bridge->start()) {
-    std::cerr << "[Main] Failed to start HotSpineDataBridge!" << std::endl;
+    std::cerr << "[Main] Critical: Failed to attach to SHM Segment."
+              << std::endl;
     return -1;
   }
-  std::cout << "[Main] Data Bridge connected." << std::endl;
 
-  // 2. Configure Dashboard
-  BTQuant::VulkanDashboardConfig config;
-  config.enable_validation_layers = false;
-  config.enable_msaa = true;
-  config.msaa_samples = VK_SAMPLE_COUNT_4_BIT;
-  // Removed start_maximized as it is not in the config struct
-
-  // 3. Create Dashboard (this implicitly creates VulkanCore and Window)
-  std::cout << "[Main] Creating VulkanDashboard..." << std::endl;
+  // 2. Rendering Layer Initialization
+  BTQuant::VulkanDashboardConfig config{};
   auto dashboard =
       std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, config);
 
+  // ImPlot Context MUST exist for components
   dashboard->initialize();
 
-  // Apply default layout
-  dashboard->set_active_symbol("BTC-USDT");
+  // 3. Application Execution Loop
+  while (!dashboard->should_close()) {
+    // 1. Event Handling (X11 & Internal)
+    dashboard->handle_events();
 
-  // 4. Main Application Loop
-  std::cout << "[Main] Entering Render Loop..." << std::endl;
+    // 2. High-frequency polling of market data updates
+    bridge->poll();
 
-  while (true) {
-    // Poll Bridge Data & Check Health
-    if (!bridge->isConnected()) {
-      // Optional: Try reconnect or log warning
-    }
-
-    // Synchronize Market Data
-    dashboard->synchronize_market_data();
-
-    // Render Frame
-    if (!dashboard->run_frame()) {
-      break; // Window closed
-    }
+    // 3. Immediate Frame Composition
+    dashboard->render_frame();
   }
 
-  // Cleaning up
-  std::cout << "[Main] Shutting down..." << std::endl;
+  // 4. Shutdown
+  std::cout << "[Main] Shutting down Terminal." << std::endl;
   dashboard->shutdown();
   bridge->stop();
 

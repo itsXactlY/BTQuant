@@ -16,6 +16,8 @@ WatchlistComponent::WatchlistComponent(const glm::vec2 &position,
   add_symbol("XRP-USD");
 }
 
+WatchlistComponent::~WatchlistComponent() {}
+
 void WatchlistComponent::add_symbol(const std::string &symbol) {
   std::string upper_symbol = symbol;
   std::transform(upper_symbol.begin(), upper_symbol.end(), upper_symbol.begin(),
@@ -59,6 +61,13 @@ void WatchlistComponent::update_quote(const std::string &symbol, double price,
 }
 
 void WatchlistComponent::update(float) {}
+
+void WatchlistComponent::initialize_vulkan_resources(VulkanCore *) {}
+
+void WatchlistComponent::clear_data() {
+  std::lock_guard lock(data_mutex_);
+  entries_.clear();
+}
 
 void WatchlistComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
@@ -123,7 +132,7 @@ void WatchlistComponent::render_gui() {
 
         if (ImGui::Selectable(entry.symbol.c_str(), is_active,
                               ImGuiSelectableFlags_SpanAllColumns |
-                                  ImGuiSelectableFlags_AllowItemOverlap)) {
+                                  ImGuiSelectableFlags_AllowOverlap)) {
           if (dashboard_)
             dashboard_->set_active_symbol(
                 entry.symbol); // Check dashboard_ for null

@@ -3,11 +3,30 @@
 #include "hotspine_data_bridge.hpp"
 #include <chrono>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 #include <vulkan/vulkan.h>
 
 namespace BTQuant {
 namespace RenderEngine {
+
+struct PriceLevel {
+  double price;
+  double size;
+};
+
+struct SymbolData {
+  uint32_t symbol_id;
+  double last_price;
+  double price_change;
+  double price_change_percent;
+  double volume_24h;
+  double bid_price;
+  double ask_price;
+  double spread;
+  double momentum;
+  uint64_t last_update_time;
+};
 
 // GPU data structures for efficient rendering
 struct ColorRGBA {

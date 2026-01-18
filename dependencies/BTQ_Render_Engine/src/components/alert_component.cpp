@@ -12,6 +12,13 @@ AlertComponent::~AlertComponent() {}
 
 void AlertComponent::update(float) {}
 
+void AlertComponent::initialize_vulkan_resources(VulkanCore *) {}
+
+void AlertComponent::clear_data() {
+  std::lock_guard lock(data_mutex_);
+  alerts_.clear();
+}
+
 void AlertComponent::render_gui() {
   ImGui::SetNextWindowPos(ImVec2(position_.x, position_.y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(size_.x, size_.y), ImGuiCond_Always);
@@ -117,7 +124,7 @@ void AlertComponent::render_gui() {
   ImGui::End();
 }
 
-void AlertManager::add_rule(const AlertRule &rule) {
+void AlertManager::add_alert(const AlertRule &rule) {
   (void)rule;
   // Implementation
 }

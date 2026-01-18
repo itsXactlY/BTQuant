@@ -11,35 +11,12 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include <X11/Xlib.h>
-
-// Protect against X11 macro pollution
-#ifdef Status
-#undef Status
-typedef int Status;
-#endif
-
-#ifdef Success
-#undef Success
-const int Success = 0;
-#endif
-
-#ifdef Bool
-#undef Bool
-typedef int Bool;
-#endif
-
-#ifdef None
-#undef None
-const long None = 0L;
-#endif
-
-// Redefine X11 constants with different names to avoid conflicts
-#define X11_KeyPress 2
-#define X11_KeyRelease 3
-#define X11_Success 0
+struct ImDrawData;
 
 namespace BTQuant {
 
@@ -193,14 +170,14 @@ public:
   ~VulkanCore();
 
   // Initialization and cleanup
-  void initialize(Display *display, Window window, uint32_t width,
-                  uint32_t height);
-  void init_vulkan_components();
-  void cleanup();
+  void initialize(GLFWwindow *window, uint32_t width, uint32_t height);
+  // Robust Frame Rendering API (User Requested)
+  VkResult PrepareFrame(uint32_t &imageIndex);
+  VkResult PresentFrame(uint32_t imageIndex);
+  void RecordCommandBuffer(uint32_t imageIndex, ImDrawData *drawData);
+  void RecreateSwapchain(); // Uses internal width_/height_
 
-  // Frame rendering
-  bool begin_frame();
-  void begin_command_buffer();
+  // Legacy/Internal frame rendering
   void begin_main_render_pass();
   void end_frame();
   VkCommandBuffer get_current_command_buffer() const {
@@ -321,7 +298,7 @@ private:
   void create_instance();
   void select_physical_device();
   void create_logical_device();
-  void create_surface(Display *display, Window window);
+  void create_surface(GLFWwindow *window);
   void create_swapchain(uint32_t width, uint32_t height);
   void create_image_views();
   void create_render_pass();
@@ -344,6 +321,7 @@ private:
   VkFormat find_depth_format();
 
   // Cleanup helpers
+  void cleanup();
   void cleanup_swapchain();
 
   // ImGui resources

@@ -1157,6 +1157,7 @@ class VulkanDashboard {
 public:
   VulkanDashboard(uint32_t width, uint32_t height,
                   std::shared_ptr<HotSpineDataBridge> bridge,
+                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig &config);
   ~VulkanDashboard();
   void initialize();
@@ -1175,6 +1176,7 @@ private:
   uint32_t width_, height_;
   VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
+  std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
   std::unique_ptr<QuantWorkspaceComponent> m_workspace;

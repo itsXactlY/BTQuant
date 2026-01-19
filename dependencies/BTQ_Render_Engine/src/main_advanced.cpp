@@ -30,8 +30,14 @@ int main(int argc, char *argv[]) {
     VulkanDashboardConfig config;
     config.enable_msaa = false;
     config.enable_validation_layers = false;
-    auto hotspine_bridge = std::make_shared<HotSpineDataBridge>(config);
-    auto dashboard = std::make_unique<VulkanDashboard>(1280, 720, hotspine_bridge, config);
+    auto hotspine_bridge = std::make_shared<HotSpineDataBridge>();
+    auto market_data_processor = std::make_shared<RenderEngine::MarketDataProcessor>();
+    
+    // Set processor for data aggregation
+    hotspine_bridge->setMarketDataProcessor(market_data_processor);
+    
+    auto dashboard = std::make_unique<VulkanDashboard>(1280, 720, hotspine_bridge,
+                                                     market_data_processor, config);
 
     // Initialize and run
     dashboard->initialize();

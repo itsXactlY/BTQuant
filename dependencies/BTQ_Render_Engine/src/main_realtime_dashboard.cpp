@@ -1,6 +1,7 @@
 #include "hotspine_data_bridge.hpp"
 #include "implot.h"
 #include "vulkan_dashboard_advanced.hpp"
+#include "market_data_processor.hpp"
 #include <iostream>
 #include <memory>
 
@@ -23,10 +24,13 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  // 2. Rendering Layer Initialization
+  // 2. Market Data Processor
+  auto processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
+  bridge->setMarketDataProcessor(processor);
+
+  // 3. Rendering Layer Initialization
   BTQuant::VulkanDashboardConfig config{};
-  auto dashboard =
-      std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, processor, config);
 
   dashboard->initialize();
 

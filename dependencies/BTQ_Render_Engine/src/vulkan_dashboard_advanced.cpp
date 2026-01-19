@@ -9,10 +9,11 @@
 namespace BTQuant {
 
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                 std::shared_ptr<HotSpineDataBridge> bridge,
-                                 const VulkanDashboardConfig &config)
+                                  std::shared_ptr<HotSpineDataBridge> bridge,
+                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                                  const VulkanDashboardConfig &config)
     : width_(width), height_(height), hotspine_bridge_(bridge),
-      config_(config) {}
+      market_data_processor_(processor), config_(config) {}
 
 VulkanDashboard::~VulkanDashboard() { shutdown(); }
 
@@ -46,7 +47,7 @@ void VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   // Replaces all obsolete discrete components with the unified QuantWorkspace
-  m_workspace = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_);
+  m_workspace = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
 }
 
 void VulkanDashboard::render_frame() {

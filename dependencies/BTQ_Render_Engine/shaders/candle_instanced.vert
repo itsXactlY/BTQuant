@@ -18,6 +18,9 @@ layout(push_constant) uniform PushConstants {
     vec2 chart_min;      // camera.offset_x, camera.offset_y
     vec2 chart_max;      // offset + (range / scale)
     float candle_width;  // 10.0 * scale_x
+    uint chart_offset;   // Offset in the global buffer
+    vec2 viewport_size;  // Width and height of the plot in pixels
+    vec2 viewport_offset; // X and Y position of the plot in the swapchain
 } pc;
 
 layout(location = 0) out vec4 outColor;
@@ -28,7 +31,7 @@ const vec2 quad_pos[6] = vec2[](
 );
 
 void main() {
-    CandleData candle = data.candles[gl_InstanceIndex];
+    CandleData candle = data.candles[pc.chart_offset + gl_InstanceIndex];
     vec2 range = pc.chart_max - pc.chart_min;
     
     // 1. Transform World Time/Price to [0, 1] relative to current view
@@ -50,15 +53,16 @@ void main() {
         pixel_width = pc.candle_width;
     }
     
-    // 3. Project to pixels (0 to 1280 or whatever)
-    // Here we assume the projection matrix handles 0..Width to -1..1
-    float centerX = norm_x * 1280.0; // Simulated width mapping
+    // 3. Project to pixels
+    float centerX = pc.viewport_offset.x + (norm_x * pc.viewport_size.x);
     float finalX = centerX + (local_pos.x * pixel_width);
     
-    // Transform Y
+    // Transform Y (invert Y since Vulkan is Y-down but plots are Y-up)
     float norm_y_start = (world_y_start - pc.chart_min.y) / range.y;
     float norm_y_end = (world_y_end - pc.chart_min.y) / range.y;
-    float finalY = mix(norm_y_start, norm_y_end, local_pos.y) * 720.0; // Simulated height mapping
+    
+    // Invert norm_y for screenspace
+    float finalY = pc.viewport_offset.y + ((1.0 - mix(norm_y_start, norm_y_end, local_pos.y)) * pc.viewport_size.y);
 
     // 4. Final Position
     gl_Position = pc.projection * vec4(finalX, finalY, 0.0, 1.0);

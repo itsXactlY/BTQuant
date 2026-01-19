@@ -1,6 +1,6 @@
 #pragma once
 
-#include "hotspine_data_bridge.hpp"
+#include "vulkan_base_types.hpp"
 #include <chrono>
 #include <mutex>
 #include <unordered_map>
@@ -66,6 +66,17 @@ struct HeatmapDataGPU {
   ColorRGBA color;
   float grid_x;
   float grid_y;
+  float padding[2]; // Align to 16 bytes
+};
+
+// Candle data structure for GPU instanced rendering
+struct CandleDataGPU {
+  float x;
+  float open;
+  float high;
+  float low;
+  float close;
+  uint32_t color;
   float padding[2]; // Align to 16 bytes
 };
 
@@ -160,12 +171,13 @@ public:
   void updateHeatmapData(const std::vector<SymbolData> &symbols);
 
   /**
-   * Update chart data for a specific symbol
-   * @param symbol_id Symbol ID for the chart
-   * @param points Vector of chart points (price/time data)
+   * Update chart data for a specific chart chart_id using candle data
+   * @param chart_id Unique chart instance ID
+   * @param candles Vector of OHLCV candles
    */
-  void updateChartData(uint32_t symbol_id,
-                       const std::vector<ChartPoint> &points);
+  void updateChartData(uint32_t chart_id,
+                       const std::vector<OHLCVCandle> &candles,
+                       double base_x = 0.0);
 
   /**
    * Update orderbook data for a specific symbol
@@ -190,6 +202,7 @@ public:
   VkBuffer getHeatmapBuffer() const;
   VkBuffer getChartBuffer() const;
   VkBuffer getOrderbookBuffer() const;
+  VkBuffer getIndicatorBuffer() const;
 
   /**
    * Configuration
@@ -199,6 +212,8 @@ public:
   void setMaxOrderbookLevels(size_t max_levels) {
     max_orderbook_levels_ = max_levels;
   }
+
+  size_t getSymbolIndex(uint32_t symbol_id);
 
 private:
   // Vulkan objects
@@ -222,21 +237,25 @@ private:
   VkBuffer orderbook_buffer_;
   VkDeviceMemory orderbook_memory_;
 
+  VkBuffer indicator_buffer_;
+  VkDeviceMemory indicator_memory_;
+
   // Configuration
   size_t max_symbols_;
   size_t max_chart_points_;
   size_t max_orderbook_levels_;
   bool initialized_ = false;
 
-  // Symbol mapping
+  // Chart mapping (chart_id to GPU buffer slot)
   mutable std::mutex mapping_mutex_;
-  std::unordered_map<uint32_t, size_t> symbol_id_to_index_;
-  size_t next_symbol_index_ = 0;
+  std::unordered_map<uint32_t, size_t> chart_id_to_index_;
+  size_t next_chart_index_ = 0;
 
   // Performance tracking
   mutable std::mutex perf_mutex_;
   VisualizationPerformanceMetrics performance_metrics_;
 
+private:
   // Private methods
   bool initializeBuffers();
   bool createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
@@ -246,9 +265,6 @@ private:
                           VkMemoryPropertyFlags properties);
   void transferDataToGPU(const void *data, size_t size, VkBuffer dst_buffer,
                          size_t offset = 0);
-
-  // Mapping helper
-  size_t getSymbolIndex(uint32_t symbol_id);
 
   // Color calculation methods
   ColorRGBA calculatePriceChangeColor(float change_percent);

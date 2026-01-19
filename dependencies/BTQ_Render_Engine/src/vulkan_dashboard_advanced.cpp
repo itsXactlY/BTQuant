@@ -34,6 +34,11 @@ void VulkanDashboard::initialize() {
   // 2. HW Layer Init
   init_window();
   init_vulkan();
+
+  // Initialize Viz Engine
+  m_viz_engine = std::make_shared<RenderEngine::DataVisualizationEngine>(
+      m_vulkanCore->get_device(), m_vulkanCore->get_physical_device());
+
   std::cout << "[VulkanDashboard] Vulkan initialized." << std::endl;
 
   // Initialize Glfw ImGui Backend
@@ -50,8 +55,9 @@ void VulkanDashboard::init_components() {
   // Replaces all obsolete discrete components with the unified QuantWorkspace
   m_workspace = std::make_unique<QuantWorkspaceComponent>(
       hotspine_bridge_, market_data_processor_);
-  m_workspace = std::make_unique<QuantWorkspaceComponent>(
-      hotspine_bridge_, market_data_processor_);
+  m_workspace->set_viz_engine(
+      m_viz_engine); // Need to add setter or update constructor
+
   m_system_resource_monitor =
       std::make_unique<SystemResourceUtilizationComponent>(
           hotspine_bridge_, market_data_processor_, performance_monitor_);
@@ -80,11 +86,6 @@ void VulkanDashboard::render_frame() {
     m_workspace->render_gui();
   }
 
-  if (m_workspace) {
-    m_workspace->update(ImGui::GetIO().DeltaTime);
-    m_workspace->render_gui();
-  }
-
   if (m_system_resource_monitor) {
     m_system_resource_monitor->update(ImGui::GetIO().DeltaTime);
     m_system_resource_monitor->render_gui();
@@ -92,7 +93,16 @@ void VulkanDashboard::render_frame() {
 
   // 5. Render & Present
   ImGui::Render();
-  m_vulkanCore->RecordCommandBuffer(m_currentImageIndex, ImGui::GetDrawData());
+
+  // Custom Render Lambda for high-performance components
+  auto customRender = [this](VkCommandBuffer cmd) {
+    if (m_workspace) {
+      m_workspace->render(cmd);
+    }
+  };
+
+  m_vulkanCore->RecordCommandBuffer(m_currentImageIndex, ImGui::GetDrawData(),
+                                    customRender);
 
   result = m_vulkanCore->PresentFrame(m_currentImageIndex);
 

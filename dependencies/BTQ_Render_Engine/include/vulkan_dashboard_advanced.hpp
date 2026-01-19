@@ -1,5 +1,6 @@
 #pragma once
 
+#include "data_visualization_engine.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "performance_monitor.hpp"
@@ -730,6 +731,7 @@ struct UIComponent {
   virtual void initialize_vulkan_resources(VulkanCore *) {}
   virtual void update(float dt) = 0;
   virtual void render_gui() = 0;
+  virtual void render(VkCommandBuffer) {}
   virtual void clear_data() {}
   void mark_dirty() { dirty_frames_ = 3; }
   bool is_dirty() const { return dirty_frames_ > 0; }
@@ -1183,6 +1185,7 @@ private:
   std::shared_ptr<RenderEngine::PerformanceMonitor> performance_monitor_;
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
+  std::shared_ptr<RenderEngine::DataVisualizationEngine> m_viz_engine;
   std::unique_ptr<QuantWorkspaceComponent> m_workspace;
   std::unique_ptr<SystemResourceUtilizationComponent> m_system_resource_monitor;
   uint32_t m_currentImageIndex = 0;

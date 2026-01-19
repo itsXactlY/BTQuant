@@ -102,6 +102,15 @@ public:
     return m_instruments;
   }
 
+  uint32_t GetSymbolId(const std::string &symbol) {
+    std::lock_guard<std::mutex> lock(m_map_mutex);
+    auto it = m_instruments.find(symbol);
+    if (it != m_instruments.end()) {
+      return it->second->symbol_id;
+    }
+    return 0;
+  }
+
   // Set MarketDataProcessor for OHLCV aggregation
   void setMarketDataProcessor(
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {

@@ -49,6 +49,7 @@ set(DASHBOARD_SOURCES
     src/config/dashboard_config.cpp
     src/data/market_data_processor.cpp
     src/monitoring/performance_monitor.cpp
+    src/visualization/data_visualization_engine.cpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})

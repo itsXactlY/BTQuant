@@ -1,0 +1,111 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Candle {
+    float x;
+    float open;
+    float high;
+    float low;
+    float close;
+    uint color;
+    float padding[2];
+};
+
+struct WAEData {
+    float up;
+    float down;
+    float explosion;
+    float dead_zone;
+};
+
+layout(std430, binding = 0) readonly buffer InputCandles {
+    Candle candles[];
+};
+
+layout(std430, binding = 1) writeonly buffer OutputWAE {
+    WAEData wae[];
+};
+
+layout(push_constant) uniform Params {
+    uint count;
+    uint sens;    // Sensitivity (period3 in C++)
+    uint fast;    // Fast EMA period
+    uint slow;    // Slow EMA period
+    uint channel; // Bollinger period
+    float mult;   // Bollinger Multiplier
+    uint chart_offset;
+} p;
+
+// Simple EMA helper for small windows (limited by performance)
+// For large histories, we should pass pre-calculated EMAs or use multi-pass
+float calculate_ema(uint idx, uint period) {
+    if (idx < period) return candles[p.chart_offset + idx].close;
+    
+    float alpha = 2.0 / (float(period) + 1.0);
+    float val = candles[p.chart_offset + idx - period + 1].close;
+    for (uint i = idx - period + 2; i <= idx; ++i) {
+        val = (candles[p.chart_offset + i].close - val) * alpha + val;
+    }
+    return val;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= p.count) return;
+
+    if (idx < 1) {
+        wae[p.chart_offset + idx].up = 0;
+        wae[p.chart_offset + idx].down = 0;
+        wae[p.chart_offset + idx].explosion = 0;
+        wae[p.chart_offset + idx].dead_zone = 0;
+        return;
+    }
+
+    // 1. MACD Approximation (using moving window for EMA)
+    float fast_ema_curr = calculate_ema(idx, p.fast);
+    float fast_ema_prev = calculate_ema(idx - 1, p.fast);
+    float slow_ema_curr = calculate_ema(idx, p.slow);
+    float slow_ema_prev = calculate_ema(idx - 1, p.slow);
+
+    float macd_curr = fast_ema_curr - slow_ema_curr;
+    float macd_prev = fast_ema_prev - slow_ema_prev;
+
+    // 2. Trend Calculations
+    float t1 = (macd_curr - macd_prev) * float(p.sens);
+    wae[p.chart_offset + idx].up = (t1 >= 0) ? t1 : 0.0;
+    wae[p.chart_offset + idx].down = (t1 < 0) ? -t1 : 0.0;
+
+    // 3. Bollinger Bands (Explosion)
+    if (idx >= p.channel) {
+        float sum = 0;
+        for (uint i = 0; i < p.channel; ++i) {
+            sum += candles[p.chart_offset + idx - i].close;
+        }
+        float sma = sum / float(p.channel);
+        float variance = 0;
+        for (uint i = 0; i < p.channel; ++i) {
+            float diff = candles[p.chart_offset + idx - i].close - sma;
+            variance += diff * diff;
+        }
+        float std_dev = sqrt(variance / float(p.channel));
+        wae[p.chart_offset + idx].explosion = (p.mult * std_dev) * 2.0; 
+    } else {
+        wae[p.chart_offset + idx].explosion = 0;
+    }
+
+    // 4. Dead Zone (Simplified ATR)
+    float atr_sum = 0;
+    uint atr_period = 50;
+    uint start_atr = (idx >= atr_period) ? (idx - atr_period + 1) : 0;
+    uint actual_atr_count = idx - start_atr + 1;
+    
+    for (uint i = start_atr; i <= idx; ++i) {
+        float high = candles[p.chart_offset + i].high;
+        float low = candles[p.chart_offset + i].low;
+        float prev_close = (i > 0) ? candles[p.chart_offset + i - 1].close : candles[p.chart_offset + i].close;
+        float tr = max(high - low, max(abs(high - prev_close), abs(low - prev_close)));
+        atr_sum += tr;
+    }
+    wae[p.chart_offset + idx].dead_zone = (atr_sum / float(actual_atr_count)) * 3.7;
+}

@@ -1,6 +1,8 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <deque>      // Added
+#include <functional> // Added
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -19,6 +21,47 @@
 struct ImDrawData;
 
 namespace BTQuant {
+namespace RenderEngine {
+// Time frame definitions for OHLCV aggregation
+enum class TimeFrame {
+  TF_1MIN,  // 1 minute
+  TF_5MIN,  // 5 minutes
+  TF_15MIN, // 15 minutes
+  TF_1HOUR, // 1 hour
+  TF_4HOUR, // 4 hours
+  TF_1DAY   // 1 day
+};
+
+struct OHLCVCandle {
+  uint64_t timestamp; // Start time of the candle in microseconds
+  double open;
+  double high;
+  double low;
+  double close;
+  double volume;
+  uint64_t trade_count;
+};
+
+// Indicator result structure for GPU
+struct WAEDataGPU {
+  float up;
+  float down;
+  float explosion;
+  float dead_zone;
+};
+
+// Push constants for WAE compute shader
+struct WAEPushConstants {
+  uint32_t count;
+  uint32_t sens;    // Sensitivity
+  uint32_t fast;    // Fast EMA period
+  uint32_t slow;    // Slow EMA period
+  uint32_t channel; // Bollinger period
+  float mult;       // Bollinger Multiplier
+  uint32_t chart_offset;
+  uint32_t padding[1];
+};
+} // namespace RenderEngine
 
 // Spine health metrics structure
 struct SpineHealthMetrics {
@@ -215,7 +258,9 @@ public:
   // Robust Frame Rendering API (User Requested)
   VkResult PrepareFrame(uint32_t &imageIndex);
   VkResult PresentFrame(uint32_t imageIndex);
-  void RecordCommandBuffer(uint32_t imageIndex, ImDrawData *drawData);
+  void RecordCommandBuffer(
+      uint32_t imageIndex, ImDrawData *drawData,
+      const std::function<void(VkCommandBuffer)> &customRender = nullptr);
   void RecreateSwapchain(); // Uses internal width_/height_
 
   // Legacy/Internal frame rendering

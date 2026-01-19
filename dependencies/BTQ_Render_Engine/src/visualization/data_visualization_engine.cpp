@@ -1,10 +1,14 @@
 #include "data_visualization_engine.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <stdexcept>
+#include <vector>
+#include <vulkan/vulkan_core.h>
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -49,11 +53,12 @@ bool DataVisualizationEngine::initializeBuffers() {
   // Calculate buffer sizes
   size_t grid_size = max_symbols_ * sizeof(GridDataGPU);
   size_t heatmap_size = max_symbols_ * sizeof(HeatmapDataGPU);
-  size_t chart_size = max_symbols_ * max_chart_points_ * sizeof(ChartPointGPU);
+  size_t chart_size = max_symbols_ * max_chart_points_ * sizeof(CandleDataGPU);
   size_t orderbook_size =
       max_symbols_ * max_orderbook_levels_ * sizeof(OrderbookLevelGPU);
-  size_t staging_size =
-      std::max({grid_size, heatmap_size, chart_size, orderbook_size});
+  size_t indicator_size = max_symbols_ * max_chart_points_ * sizeof(WAEDataGPU);
+  size_t staging_size = std::max(
+      {grid_size, heatmap_size, chart_size, orderbook_size, indicator_size});
 
   // Create staging buffer for CPU->GPU transfers
   if (!createBuffer(staging_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -104,11 +109,23 @@ bool DataVisualizationEngine::initializeBuffers() {
     return false;
   }
 
+  if (!createBuffer(indicator_size,
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indicator_buffer_,
+                    indicator_memory_)) {
+    std::cerr << "[DataVisualizationEngine] Failed to create indicator buffer"
+              << std::endl;
+    return false;
+  }
+
   std::cout << "[DataVisualizationEngine] Created GPU buffers:" << std::endl;
   std::cout << "  Grid: " << (grid_size / 1024) << " KB" << std::endl;
   std::cout << "  Heatmap: " << (heatmap_size / 1024) << " KB" << std::endl;
   std::cout << "  Chart: " << (chart_size / 1024) << " KB" << std::endl;
   std::cout << "  Orderbook: " << (orderbook_size / 1024) << " KB" << std::endl;
+  std::cout << "  Indicator: " << (indicator_size / 1024) << " KB" << std::endl;
   std::cout << "  Staging: " << (staging_size / 1024) << " KB" << std::endl;
 
   return true;
@@ -274,63 +291,48 @@ void DataVisualizationEngine::updateHeatmapData(
 }
 
 void DataVisualizationEngine::updateChartData(
-    uint32_t symbol_id, const std::vector<ChartPoint> &points) {
-  if (points.empty() || points.size() > max_chart_points_) {
+    uint32_t chart_id, const std::vector<OHLCVCandle> &candles, double base_x) {
+  if (candles.empty() || candles.size() > max_chart_points_) {
     return;
   }
 
   auto start_time = std::chrono::high_resolution_clock::now();
 
-  // Prepare chart data for GPU
-  std::vector<ChartPointGPU> chart_data;
-  chart_data.reserve(points.size());
+  // Prepare candle data for GPU instanced rendering
+  std::vector<CandleDataGPU> chart_data;
+  chart_data.reserve(candles.size());
 
-  // Find price range for normalization
-  float min_price = std::numeric_limits<float>::max();
-  float max_price = std::numeric_limits<float>::lowest();
-  for (const auto &point : points) {
-    min_price = std::min(min_price, static_cast<float>(point.price));
-    max_price = std::max(max_price, static_cast<float>(point.price));
-  }
+  for (size_t i = 0; i < candles.size(); ++i) {
+    const auto &candle = candles[i];
+    CandleDataGPU gpu_candle{};
 
-  float price_range = max_price - min_price;
-  if (price_range == 0.0f)
-    price_range = 1.0f;
+    // Use relative X to maintain float precision on GPU
+    gpu_candle.x = static_cast<float>((candle.timestamp / 1000000.0) - base_x);
+    gpu_candle.open = static_cast<float>(candle.open);
+    gpu_candle.high = static_cast<float>(candle.high);
+    gpu_candle.low = static_cast<float>(candle.low);
+    gpu_candle.close = static_cast<float>(candle.close);
 
-  for (size_t i = 0; i < points.size(); ++i) {
-    const auto &point = points[i];
-    ChartPointGPU gpu_point{};
-
-    gpu_point.timestamp = point.timestamp;
-    gpu_point.price = static_cast<float>(point.price);
-    gpu_point.volume = static_cast<float>(point.volume);
-
-    // Normalized coordinates for rendering
-    gpu_point.x = static_cast<float>(i) / static_cast<float>(points.size() - 1);
-    gpu_point.y = (gpu_point.price - min_price) / price_range;
-
-    // Color based on price movement
-    if (i > 0) {
-      float prev_price = static_cast<float>(points[i - 1].price);
-      float change_percent =
-          ((gpu_point.price - prev_price) / prev_price) * 100.0f;
-      gpu_point.color = calculatePriceChangeColor(change_percent);
+    // Color based on candle direction
+    if (candle.close >= candle.open) {
+      // Green (ABGR format for GPU)
+      gpu_candle.color = 0xFF00CC00;
     } else {
-      gpu_point.color = {0.5f, 0.5f, 0.5f,
-                         1.0f}; // Neutral color for first point
+      // Red
+      gpu_candle.color = 0xFF0000CC;
     }
 
-    chart_data.push_back(gpu_point);
+    chart_data.push_back(gpu_candle);
   }
 
   // Transfer to GPU (offset by mapped index for multiple charts)
-  size_t mapped_idx = getSymbolIndex(symbol_id);
+  size_t mapped_idx = getSymbolIndex(chart_id);
   if (mapped_idx >= max_symbols_)
     return;
 
-  size_t offset = mapped_idx * max_chart_points_ * sizeof(ChartPointGPU);
+  size_t offset = mapped_idx * max_chart_points_ * sizeof(CandleDataGPU);
   transferDataToGPU(chart_data.data(),
-                    chart_data.size() * sizeof(ChartPointGPU), chart_buffer_,
+                    chart_data.size() * sizeof(CandleDataGPU), chart_buffer_,
                     offset);
 
   auto end_time = std::chrono::high_resolution_clock::now();
@@ -341,10 +343,6 @@ void DataVisualizationEngine::updateChartData(
   std::lock_guard lock(perf_mutex_);
   performance_metrics_.chart_update_count++;
   performance_metrics_.chart_update_latency_us = duration.count();
-
-  std::cout << "[DataVisualizationEngine] Updated chart data for symbol "
-            << symbol_id << " with " << points.size() << " points in "
-            << duration.count() << " µs" << std::endl;
 }
 
 void DataVisualizationEngine::updateOrderbookData(
@@ -441,6 +439,10 @@ VkBuffer DataVisualizationEngine::getChartBuffer() const {
 
 VkBuffer DataVisualizationEngine::getOrderbookBuffer() const {
   return orderbook_buffer_;
+}
+
+VkBuffer DataVisualizationEngine::getIndicatorBuffer() const {
+  return indicator_buffer_;
 }
 
 bool DataVisualizationEngine::createBuffer(VkDeviceSize size,
@@ -597,18 +599,18 @@ ColorRGBA DataVisualizationEngine::calculateHeatmapColor(float intensity) {
   return color;
 }
 
-size_t DataVisualizationEngine::getSymbolIndex(uint32_t symbol_id) {
+size_t DataVisualizationEngine::getSymbolIndex(uint32_t chart_id) {
   std::lock_guard<std::mutex> lock(mapping_mutex_);
 
-  auto it = symbol_id_to_index_.find(symbol_id);
-  if (it != symbol_id_to_index_.end()) {
+  auto it = chart_id_to_index_.find(chart_id);
+  if (it != chart_id_to_index_.end()) {
     return it->second;
   }
 
   // Assign next available slot
-  if (next_symbol_index_ < max_symbols_) {
-    size_t idx = next_symbol_index_++;
-    symbol_id_to_index_[symbol_id] = idx;
+  if (next_chart_index_ < max_symbols_) {
+    size_t idx = next_chart_index_++;
+    chart_id_to_index_[chart_id] = idx;
     return idx;
   }
 
@@ -664,6 +666,15 @@ void DataVisualizationEngine::cleanup() {
     if (orderbook_memory_ != VK_NULL_HANDLE) {
       vkFreeMemory(device_, orderbook_memory_, nullptr);
       orderbook_memory_ = VK_NULL_HANDLE;
+    }
+
+    if (indicator_buffer_ != VK_NULL_HANDLE) {
+      vkDestroyBuffer(device_, indicator_buffer_, nullptr);
+      indicator_buffer_ = VK_NULL_HANDLE;
+    }
+    if (indicator_memory_ != VK_NULL_HANDLE) {
+      vkFreeMemory(device_, indicator_memory_, nullptr);
+      indicator_memory_ = VK_NULL_HANDLE;
     }
 
     if (command_pool_ != VK_NULL_HANDLE) {

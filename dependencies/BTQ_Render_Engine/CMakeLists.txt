@@ -94,3 +94,63 @@ target_compile_definitions(dashboard_advanced PRIVATE IMGUI_ENABLE_DOCKING)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(dashboard_advanced PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)
 endif()
+
+# Integration Test Target
+add_executable(test_integration src/test_integration.cpp ${LIB_SOURCES}
+    src/data/market_data_processor.cpp
+    src/monitoring/performance_monitor.cpp
+    src/config/dashboard_config.cpp
+    src/data/symbol_manager.cpp
+    src/data/symbol_registry.cpp
+)
+
+target_include_directories(test_integration PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/stubs
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_integration PRIVATE
+    Vulkan::Vulkan
+    Threads::Threads
+    glfw
+    X11
+    Xi
+    dl
+    pthread
+)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(test_integration PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)
+endif()
+
+# Market Data Processor Quick Test
+add_executable(test_market_data src/test_market_data.cpp
+    src/data/market_data_processor.cpp
+)
+
+target_include_directories(test_market_data PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/stubs
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_market_data PRIVATE
+    Vulkan::Vulkan
+    Threads::Threads
+    pthread
+)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(test_market_data PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)
+endif()

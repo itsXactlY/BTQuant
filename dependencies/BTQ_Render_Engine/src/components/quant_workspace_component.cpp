@@ -349,7 +349,8 @@ void QuantWorkspaceComponent::render_instrument_chart(
     }
 
     // Plot indicators
-    indicator_renderer_->render_indicators(symbol, timeframe, indicators);
+    indicator_renderer_->render_indicators(inst.symbol_id, timeframe,
+                                           indicators);
 
     ImPlot::EndPlot();
   }

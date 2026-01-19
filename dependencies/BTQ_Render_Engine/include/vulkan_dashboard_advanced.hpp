@@ -1154,7 +1154,6 @@ struct MarketDepthChartComponent : public UIComponent {
 using DepthChartComponent = MarketDepthChartComponent;
 
 class QuantWorkspaceComponent;
-class ArchitectureVisualizationComponent;
 class SystemResourceUtilizationComponent;
 
 class VulkanDashboard {
@@ -1185,8 +1184,6 @@ private:
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
   std::unique_ptr<QuantWorkspaceComponent> m_workspace;
-  std::unique_ptr<ArchitectureVisualizationComponent>
-      m_architecture_visualization;
   std::unique_ptr<SystemResourceUtilizationComponent> m_system_resource_monitor;
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;

@@ -70,60 +70,56 @@ void IndicatorRenderer::cleanup_vulkan_resources() {
 }
 
 void IndicatorRenderer::render_indicators(
-    const std::string &symbol, RenderEngine::TimeFrame timeframe,
+    uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
     const std::vector<IndicatorParams> &indicators) {
   // For now, use ImPlot to render indicators on CPU
   // In a real implementation, this would use GPU rendering
 
-  for (const auto &params : indicators) {
-    if (!params.visible) {
+  for (const auto &indicator : indicators) {
+    if (!indicator.visible)
       continue;
-    }
 
-    switch (params.type) {
+    switch (indicator.type) {
     case IndicatorType::SMA_10:
     case IndicatorType::SMA_20:
     case IndicatorType::SMA_50:
-      render_sma(symbol, timeframe, params);
+      render_sma(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::EMA_10:
     case IndicatorType::EMA_20:
     case IndicatorType::EMA_50:
-      render_ema(symbol, timeframe, params);
+      render_ema(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::RSI_14:
-      render_rsi(symbol, timeframe, params);
+      render_rsi(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::MACD:
-      render_macd(symbol, timeframe, params);
+    case IndicatorType::MACD_SIGNAL:
+    case IndicatorType::MACD_HISTOGRAM:
+      render_macd(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::BOLLINGER_MID:
-      render_bollinger(symbol, timeframe, params);
+    case IndicatorType::BOLLINGER_UPPER:
+    case IndicatorType::BOLLINGER_LOWER:
+      render_bollinger(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::STOCHASTIC_K:
-      render_stochastic(symbol, timeframe, params);
+    case IndicatorType::STOCHASTIC_D:
+      render_stochastic(symbol_id, timeframe, indicator);
       break;
-
     case IndicatorType::WADDAH_ATTAR_EXPLOSION:
-      render_waddah_attar_explosion(symbol, timeframe, params);
+      render_waddah_attar_explosion(symbol_id, timeframe, indicator);
       break;
-
     default:
       break;
     }
   }
 }
 
-void IndicatorRenderer::render_sma(const std::string &symbol,
+void IndicatorRenderer::render_sma(uint32_t symbol_id,
                                    RenderEngine::TimeFrame timeframe,
                                    const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period1)) {
     return;
   }
@@ -157,11 +153,10 @@ void IndicatorRenderer::render_sma(const std::string &symbol,
   ImPlot::PopStyleColor();
 }
 
-void IndicatorRenderer::render_ema(const std::string &symbol,
+void IndicatorRenderer::render_ema(uint32_t symbol_id,
                                    RenderEngine::TimeFrame timeframe,
                                    const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period1)) {
     return;
   }
@@ -190,11 +185,10 @@ void IndicatorRenderer::render_ema(const std::string &symbol,
   ImPlot::PopStyleColor();
 }
 
-void IndicatorRenderer::render_rsi(const std::string &symbol,
+void IndicatorRenderer::render_rsi(uint32_t symbol_id,
                                    RenderEngine::TimeFrame timeframe,
                                    const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period1 + 1)) {
     return;
   }
@@ -256,11 +250,10 @@ void IndicatorRenderer::render_rsi(const std::string &symbol,
   ImPlot::PopStyleColor();
 }
 
-void IndicatorRenderer::render_macd(const std::string &symbol,
+void IndicatorRenderer::render_macd(uint32_t symbol_id,
                                     RenderEngine::TimeFrame timeframe,
                                     const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period2 + params.period3)) {
     return;
   }
@@ -338,11 +331,10 @@ void IndicatorRenderer::render_macd(const std::string &symbol,
   ImPlot::PopStyleColor();
 }
 
-void IndicatorRenderer::render_bollinger(const std::string &symbol,
+void IndicatorRenderer::render_bollinger(uint32_t symbol_id,
                                          RenderEngine::TimeFrame timeframe,
                                          const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period1)) {
     return;
   }
@@ -395,11 +387,10 @@ void IndicatorRenderer::render_bollinger(const std::string &symbol,
   ImPlot::PopStyleColor();
 }
 
-void IndicatorRenderer::render_stochastic(const std::string &symbol,
+void IndicatorRenderer::render_stochastic(uint32_t symbol_id,
                                           RenderEngine::TimeFrame timeframe,
                                           const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(params.period1 + params.period2)) {
     return;
   }
@@ -466,10 +457,9 @@ void IndicatorRenderer::render_stochastic(const std::string &symbol,
 }
 
 void IndicatorRenderer::render_waddah_attar_explosion(
-    const std::string &symbol, RenderEngine::TimeFrame timeframe,
+    uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
     const IndicatorParams &params) {
-  auto candles =
-      processor_->getCandles(0, timeframe); // TODO: Get actual symbol ID
+  auto candles = processor_->getCandles(symbol_id, timeframe);
   if (candles.size() < static_cast<size_t>(std::max(
                            {params.period1, params.period2, params.period3})) +
                            1) {

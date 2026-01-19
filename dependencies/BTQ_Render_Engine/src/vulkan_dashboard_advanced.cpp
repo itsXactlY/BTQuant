@@ -1,7 +1,6 @@
 #include "vulkan_dashboard_advanced.hpp"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
-#include "components/architecture_visualization_component.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/system_resource_utilization_component.hpp"
 #include "imgui.h"
@@ -51,9 +50,8 @@ void VulkanDashboard::init_components() {
   // Replaces all obsolete discrete components with the unified QuantWorkspace
   m_workspace = std::make_unique<QuantWorkspaceComponent>(
       hotspine_bridge_, market_data_processor_);
-  m_architecture_visualization =
-      std::make_unique<ArchitectureVisualizationComponent>(
-          hotspine_bridge_, market_data_processor_, performance_monitor_);
+  m_workspace = std::make_unique<QuantWorkspaceComponent>(
+      hotspine_bridge_, market_data_processor_);
   m_system_resource_monitor =
       std::make_unique<SystemResourceUtilizationComponent>(
           hotspine_bridge_, market_data_processor_, performance_monitor_);
@@ -82,9 +80,9 @@ void VulkanDashboard::render_frame() {
     m_workspace->render_gui();
   }
 
-  if (m_architecture_visualization) {
-    m_architecture_visualization->update(ImGui::GetIO().DeltaTime);
-    m_architecture_visualization->render_gui();
+  if (m_workspace) {
+    m_workspace->update(ImGui::GetIO().DeltaTime);
+    m_workspace->render_gui();
   }
 
   if (m_system_resource_monitor) {

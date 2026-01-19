@@ -42,7 +42,6 @@ set(DASHBOARD_SOURCES
     src/components/quant_workspace_component.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
-    src/components/architecture_visualization_component.cpp
     src/components/system_resource_utilization_component.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp

@@ -45,8 +45,7 @@ public:
       VulkanCore *vulkan_core,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  void render_indicators(const std::string &symbol,
-                         RenderEngine::TimeFrame timeframe,
+  void render_indicators(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                          const std::vector<IndicatorParams> &indicators);
 
   void initialize_vulkan_resources();
@@ -59,21 +58,19 @@ private:
 
   std::vector<IndicatorParams> default_indicators_;
 
-  void render_sma(const std::string &symbol, RenderEngine::TimeFrame timeframe,
+  void render_sma(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                   const IndicatorParams &params);
-  void render_ema(const std::string &symbol, RenderEngine::TimeFrame timeframe,
+  void render_ema(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                   const IndicatorParams &params);
-  void render_rsi(const std::string &symbol, RenderEngine::TimeFrame timeframe,
+  void render_rsi(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                   const IndicatorParams &params);
-  void render_macd(const std::string &symbol, RenderEngine::TimeFrame timeframe,
+  void render_macd(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                    const IndicatorParams &params);
-  void render_bollinger(const std::string &symbol,
-                        RenderEngine::TimeFrame timeframe,
+  void render_bollinger(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                         const IndicatorParams &params);
-  void render_stochastic(const std::string &symbol,
-                         RenderEngine::TimeFrame timeframe,
+  void render_stochastic(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
                          const IndicatorParams &params);
-  void render_waddah_attar_explosion(const std::string &symbol,
+  void render_waddah_attar_explosion(uint32_t symbol_id,
                                      RenderEngine::TimeFrame timeframe,
                                      const IndicatorParams &params);
 };

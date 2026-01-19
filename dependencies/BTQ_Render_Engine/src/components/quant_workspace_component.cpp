@@ -21,55 +21,66 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 void QuantWorkspaceComponent::update(float dt) {}
 
 void QuantWorkspaceComponent::render_gui() {
-  // Use BeginTable as a high-performance grid layout fallback since DockSpace
-  // requires a specific ImGui branch not present in the current environment.
+  auto &instruments = bridge_->GetAllInstruments();
+  std::lock_guard<std::mutex> lock(bridge_->GetMapMutex());
 
-  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->WorkPos);
-  ImGui::SetNextWindowSize(ImGui::GetMainViewport()->WorkSize);
+  // Set the "Neon" theme globally for this component context if needed or via
+  // local style push
+  ImGuiIO &io = ImGui::GetIO();
 
-  if (ImGui::Begin("Quant Workspace", nullptr,
-                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                       ImGuiWindowFlags_NoMove |
-                       ImGuiWindowFlags_NoBringToFrontOnFocus)) {
+  static std::vector<std::string> closed_symbols;
 
-    auto &instruments = bridge_->GetAllInstruments();
-    std::lock_guard<std::mutex> lock(bridge_->GetMapMutex());
+  for (auto it = instruments.begin(); it != instruments.end();) {
+    const std::string &symbol = it->first;
+    auto &inst = it->second;
 
-    int columns = instruments.size() > 1 ? 2 : 1;
-    if (instruments.size() > 4)
-      columns = 3;
+    // Check if symbol was closed
+    auto closed_it =
+        std::find(closed_symbols.begin(), closed_symbols.end(), symbol);
+    if (closed_it != closed_symbols.end()) {
+      ++it;
+      continue;
+    }
 
-    if (ImGui::BeginTable("ChartsGrid", columns,
-                          ImGuiTableFlags_Resizable |
-                              ImGuiTableFlags_BordersInner)) {
-      for (auto &[symbol, inst] : instruments) {
-        ImGui::TableNextColumn();
-        // Label the cell
-        ImGui::TextColored(ImVec4(0, 0.95f, 1, 1), "[ %s ]", symbol.c_str());
-        render_instrument_chart(symbol, *inst);
-      }
-      ImGui::EndTable();
+    bool open = true;
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+
+    // Cyber-Cyan Title / Neon-Red Accents would be handled by style pushes
+    if (ImGui::Begin(symbol.c_str(), &open)) {
+      render_instrument_chart(symbol, *inst);
     }
     ImGui::End();
+
+    if (!open) {
+      closed_symbols.push_back(symbol);
+    }
+    ++it;
   }
 }
 
 void QuantWorkspaceComponent::render_instrument_chart(
-    const std::string &symbol, const InstrumentData &inst) {
+    const std::string &symbol, const InstrumentStore &inst) {
   std::lock_guard<std::mutex> inst_lock(inst.data_mutex);
 
   if (inst.timestamps.empty()) {
-    ImGui::Text("No data for %s", symbol.c_str());
+    ImGui::Text("Initializing Stream for %s...", symbol.c_str());
     return;
   }
 
-  if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1))) {
-    // Setup Axis
+  // Cyber-Cyan: #00F0FF (0xFFFFF000), Neon-Red: #FF0033 (0xFF3300FF)
+  ImPlot::PushStyleColor(ImPlotCol_Line, ImGui::GetColorU32(ImVec4(
+                                             0.0f, 0.94f, 1.0f, 1.0f))); // Cyan
+
+  if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
     ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_AutoFit);
+    ImPlot::SetupAxis(ImAxis_Y2, "Volume",
+                      ImPlotAxisFlags_AuxDefault | ImPlotAxisFlags_NoGridLines |
+                          ImPlotAxisFlags_NoTickLabels);
+    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y2, 0,
+                                       1000000); // For Volume alignment
 
-    // Setup values
     const double *dates = inst.timestamps.data();
     const double *opens = inst.opens.data();
     const double *closes = inst.closes.data();
@@ -77,11 +88,9 @@ void QuantWorkspaceComponent::render_instrument_chart(
     const double *highs = inst.highs.data();
     int count = (int)inst.timestamps.size();
 
-    // Custom Candlestick Plotting (Manual)
+    // Plot 1: Candlesticks (Manual high-perf implementation)
     if (ImPlot::BeginItem("OHLC")) {
       ImDrawList *draw_list = ImPlot::GetPlotDrawList();
-
-      // Width calculation
       double width = 0.25;
       if (count > 1) {
         width = (dates[1] - dates[0]) * 0.25;
@@ -93,29 +102,45 @@ void QuantWorkspaceComponent::render_instrument_chart(
         ImVec2 low_pos = ImPlot::PlotToPixels(dates[i], lows[i]);
         ImVec2 high_pos = ImPlot::PlotToPixels(dates[i], highs[i]);
 
-        ImU32 color =
-            ImGui::GetColorU32(opens[i] > closes[i] ? ImVec4(1, 0.2f, 0.2f, 1)
-                                                    : ImVec4(0.2f, 1, 0.4f, 1));
+        // Neon Red for down, Cyber Cyan for up
+        ImU32 color = (opens[i] > closes[i])
+                          ? ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.2f, 1.0f))
+                          : // Neon Red
+                          ImGui::GetColorU32(
+                              ImVec4(0.0f, 0.94f, 1.0f, 1.0f)); // Cyber Cyan
 
         draw_list->AddLine(low_pos, high_pos, color);
         draw_list->AddRectFilled(open_pos, close_pos, color);
 
-        // Optional: Fit data
         ImPlot::FitPoint(ImPlotPoint(dates[i], lows[i]));
         ImPlot::FitPoint(ImPlotPoint(dates[i], highs[i]));
       }
       ImPlot::EndItem();
     }
 
-    // Heatmap Layer (Orderflow)
-    if (!inst.heatmap_prices.empty()) {
-      // Optional: PlotHeatmap or PlotScatter for orderflow
-      // ImPlot::PlotScatter("Heatmap", inst.heatmap_times.data(),
-      // inst.heatmap_prices.data(), (int)inst.heatmap_times.size());
+    // Plot 2: Volume Profile (PlotBarsH on Y-axis)
+    if (!inst.m_vol_profile.empty()) {
+      std::vector<double> vp_prices;
+      std::vector<double> vp_volumes;
+      for (auto const &[price, vol] : inst.m_vol_profile) {
+        vp_prices.push_back(price);
+        vp_volumes.push_back(vol);
+      }
+
+      ImPlot::SetAxis(ImAxis_Y1); // Align to Price Axis
+      ImPlot::SetNextFillStyle(
+          ImVec4(0.0f, 0.94f, 1.0f, 0.3f)); // Transparent Cyan
+      // Volume scale is arbitrary on Y axis context, but we use PlotBarsH which
+      // uses Y as positions Horizontal Bars: Y = positions (prices), X = values
+      // (volumes) We want them on the right, so we might need a custom plotter
+      // or just use the Y axis
+      ImPlot::PlotBars("VolProfile", vp_prices.data(), vp_volumes.data(),
+                       (int)vp_prices.size(), 0.5, ImPlotBarsFlags_Horizontal);
     }
 
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleColor();
 }
 
 } // namespace BTQuant

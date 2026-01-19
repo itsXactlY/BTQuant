@@ -22,7 +22,7 @@ public:
 private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   void render_instrument_chart(const std::string &symbol,
-                               const InstrumentData &inst);
+                               const InstrumentStore &inst);
 };
 
 } // namespace BTQuant

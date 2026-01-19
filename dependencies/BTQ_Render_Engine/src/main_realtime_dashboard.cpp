@@ -1,4 +1,5 @@
 #include "hotspine_data_bridge.hpp"
+#include "implot.h"
 #include "vulkan_dashboard_advanced.hpp"
 #include <iostream>
 #include <memory>
@@ -23,25 +24,20 @@ int main(int argc, char **argv) {
   }
 
   // 2. Rendering Layer Initialization
-  // VulkanCore is initialized internally by VulkanDashboard
   BTQuant::VulkanDashboardConfig config{};
   auto dashboard =
       std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, config);
 
-  // Initialize Dashboard and its internal components (including
-  // QuantWorkspaceComponent)
   dashboard->initialize();
 
+  // 2b. ImPlot Context (Must be after ImGui initialization in
+  // dashboard->initialize)
+  ImPlot::CreateContext();
+
   // 3. Execution Loop
-  std::cout << "[Main] Entering real-time monitoring loop..." << std::endl;
   while (!dashboard->should_close()) {
-    // Poll for internal UI events/X11
     dashboard->handle_events();
-
-    // Poll for high-frequency market data (Shared Memory or Simulation)
     bridge->poll();
-
-    // Render Frame (ImGui + ImPlot + Vulkan)
     dashboard->render_frame();
   }
 

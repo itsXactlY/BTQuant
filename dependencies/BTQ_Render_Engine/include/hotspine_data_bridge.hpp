@@ -59,16 +59,21 @@ struct SharedMemoryHeader {
   uint8_t padding[8];
 };
 
-struct InstrumentData {
+struct InstrumentStore {
   std::string symbol;
   std::string exchange;
   uint32_t symbol_id = 0;
 
-  // Time-Series Data (Optimized for ImPlot)
-  std::vector<double> timestamps, opens, highs, lows, closes, volumes;
+  // Structure of Arrays (SoA) for ImPlot compatibility & high-throughput
+  std::vector<double> timestamps;
+  std::vector<double> opens;
+  std::vector<double> highs;
+  std::vector<double> lows;
+  std::vector<double> closes;
+  std::vector<double> volumes;
 
-  // Heatmap/Orderflow Data
-  std::vector<double> heatmap_prices, heatmap_times, heatmap_volumes;
+  // Volume Profile (Price -> Cumulative Volume)
+  std::map<double, double> m_vol_profile;
 
   // Latest Snapshot for Heatmap/Orderbook
   HotOrderbookSnapshot latest_snapshot;
@@ -76,7 +81,7 @@ struct InstrumentData {
   // Thread-safe access for the UI thread
   mutable std::mutex data_mutex;
 
-  InstrumentData() = default;
+  InstrumentStore() = default;
 };
 
 // ============================================================================
@@ -92,7 +97,7 @@ public:
   void stop();
   void poll(); // Called by the Market Data Thread
 
-  std::map<std::string, std::shared_ptr<InstrumentData>> &GetAllInstruments() {
+  std::map<std::string, std::shared_ptr<InstrumentStore>> &GetAllInstruments() {
     return m_instruments;
   }
 
@@ -115,7 +120,7 @@ private:
 
   std::atomic<bool> m_running{false};
 
-  std::map<std::string, std::shared_ptr<InstrumentData>> m_instruments;
+  std::map<std::string, std::shared_ptr<InstrumentStore>> m_instruments;
   std::mutex m_map_mutex;
 
   // Ring Buffer Pointers
@@ -132,7 +137,7 @@ private:
   void init_simulation();
 
   // Helper to map symbol ID to object (lazy if needed)
-  std::shared_ptr<InstrumentData> get_instrument(uint32_t symbol_id);
+  std::shared_ptr<InstrumentStore> get_instrument(uint32_t symbol_id);
 };
 
 } // namespace BTQuant

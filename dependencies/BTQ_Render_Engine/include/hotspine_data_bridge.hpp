@@ -163,8 +163,6 @@ private:
   uint64_t m_last_book_read_idx = 0;
 
   void poll_shm();
-  void poll_simulated();
-  void init_simulation();
 
   // Helper to map symbol ID to object (lazy if needed)
   std::shared_ptr<InstrumentStore> get_instrument(uint32_t symbol_id);

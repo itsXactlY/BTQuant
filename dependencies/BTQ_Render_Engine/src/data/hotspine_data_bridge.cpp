@@ -37,7 +37,7 @@ bool HotSpineDataBridge::start() {
     std::cerr << "[HotSpineDataBridge] Failed to open SHM: " << m_shm_path
               << ". Falling back to simulation." << std::endl;
     m_is_simulated = true;
-    init_simulation();
+    // init_simulation();
     return true;
   }
 
@@ -46,7 +46,7 @@ bool HotSpineDataBridge::start() {
   if (fstat(m_shm_fd, &st) == -1) {
     std::cerr << "[HotSpineDataBridge] fstat failed" << std::endl;
     m_is_simulated = true;
-    init_simulation();
+    // init_simulation();
     return true;
   }
   m_shm_size = st.st_size;
@@ -56,7 +56,7 @@ bool HotSpineDataBridge::start() {
   if (m_shm_ptr == MAP_FAILED) {
     std::cerr << "[HotSpineDataBridge] mmap failed" << std::endl;
     m_is_simulated = true;
-    init_simulation();
+    // init_simulation();
     return true;
   }
 
@@ -66,7 +66,7 @@ bool HotSpineDataBridge::start() {
               << m_header->magic << std::dec << ". Using simulation."
               << std::endl;
     m_is_simulated = true;
-    init_simulation();
+    // init_simulation();
     return true;
   }
 
@@ -90,11 +90,11 @@ void HotSpineDataBridge::poll() {
   if (!m_running)
     return;
 
-  if (m_is_simulated) {
-    poll_simulated();
-  } else {
+  // if (m_is_simulated) {
+  //   poll_simulated();
+  // } else {
     poll_shm();
-  }
+  // }
 }
 
 std::shared_ptr<InstrumentStore>

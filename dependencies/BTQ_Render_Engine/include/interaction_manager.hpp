@@ -8,6 +8,8 @@
  */
 
 #include "vulkan_dashboard_advanced.hpp"
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #include <functional>
 #include <unordered_set>
 

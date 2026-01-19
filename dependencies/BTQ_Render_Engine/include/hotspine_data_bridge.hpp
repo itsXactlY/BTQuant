@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vulkan_base_types.hpp"
 #include <array>
 #include <atomic>
 #include <map>
@@ -108,6 +109,26 @@ public:
   }
 
   std::mutex &GetMapMutex() { return m_map_mutex; }
+
+  // Spine health metrics retrieval
+  SpineHealthMetrics get_spine_health_metrics() const {
+    SpineHealthMetrics metrics;
+    if (m_header) {
+      if (m_header->capacity > 0)
+        metrics.trade_buffer_utilization =
+            (double)m_header->write_index / m_header->capacity * 100.0;
+      if (m_header->orderbook_capacity > 0)
+        metrics.orderbook_buffer_utilization =
+            (double)m_header->orderbook_write_index /
+            m_header->orderbook_capacity * 100.0;
+      metrics.lost_trades = m_header->lost_count;
+      metrics.lost_orderbooks = m_header->orderbook_lost_count;
+      metrics.hotspine_connected = m_header->magic == 0x42545155; // "BTQU"
+      metrics.data_bridge_active = m_running;
+      metrics.last_update = std::chrono::high_resolution_clock::now();
+    }
+    return metrics;
+  }
 
 private:
   // MarketDataProcessor for OHLCV aggregation

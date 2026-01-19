@@ -42,11 +42,14 @@ set(DASHBOARD_SOURCES
     src/components/quant_workspace_component.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
+    src/components/architecture_visualization_component.cpp
+    src/components/system_resource_utilization_component.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
     src/config/dashboard_config.cpp
     src/data/market_data_processor.cpp
+    src/monitoring/performance_monitor.cpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})

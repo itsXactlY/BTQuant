@@ -20,6 +20,47 @@ struct ImDrawData;
 
 namespace BTQuant {
 
+// Spine health metrics structure
+struct SpineHealthMetrics {
+  double trade_buffer_utilization = 0.0;
+  double orderbook_buffer_utilization = 0.0;
+  uint64_t lost_trades = 0;
+  uint64_t lost_orderbooks = 0;
+
+  bool hotspine_connected = false;
+  bool data_bridge_active = false;
+  bool market_processor_active = false;
+  bool visualization_engine_active = false;
+
+  uint32_t data_bridge_errors = 0;
+  uint32_t market_processor_errors = 0;
+  uint32_t visualization_errors = 0;
+  uint32_t total_errors = 0;
+
+  double health_score = 100.0;
+
+  std::chrono::high_resolution_clock::time_point last_update;
+};
+
+// Latency breakdown structure
+struct LatencyBreakdown {
+  double data_processing_us = 0.0;
+  double gpu_transfer_us = 0.0;
+  double display_update_us = 0.0;
+  double network_latency_ms = 0.0;
+  double total_latency_us = 0.0;
+};
+
+// Resource utilization per component
+struct ComponentResourceUtilization {
+  std::string component_name;
+  double cpu_usage = 0.0;
+  double gpu_usage = 0.0;
+  double memory_usage_mb = 0.0;
+  double temperature_celsius = 0.0;
+  double throughput_mbps = 0.0;
+};
+
 class VulkanDashboard;
 
 struct VulkanDashboardConfig {

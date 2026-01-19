@@ -163,4 +163,23 @@ private:
   EMAIndicator fast_ema_, slow_ema_, signal_ema_;
 };
 
+class ATRIndicator : public TechnicalIndicator {
+public:
+  ATRIndicator(int period) : period_(period) {}
+
+  void update(float value) override {
+    // This simple ATR expects OHLC but we only get single 'value' here
+    // We need to modify TechnicalIndicator or this specific one to take OHLC
+  }
+  // ...
+  float get_value() const override { return current_atr_; }
+  bool is_ready() const override { return count_ >= period_; }
+  void reset() override {}
+
+private:
+  int period_;
+  float current_atr_ = 0;
+  int count_ = 0;
+};
+
 } // namespace BTQuant

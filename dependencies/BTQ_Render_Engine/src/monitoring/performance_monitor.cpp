@@ -27,6 +27,10 @@ PerformanceMonitor::PerformanceMonitor()
     fps_history_.reserve(history_size_);
     latency_history_.reserve(history_size_);
     memory_history_.reserve(history_size_);
+    health_score_history_.reserve(history_size_);
+    data_processing_latency_history_.reserve(history_size_);
+    gpu_transfer_latency_history_.reserve(history_size_);
+    display_update_latency_history_.reserve(history_size_);
     
     std::cout << "[PerformanceMonitor] Initialized with " << history_size_ << " sample history" << std::endl;
 }
@@ -128,7 +132,7 @@ void PerformanceMonitor::updateNetworkStatus(bool connected, double latency_ms, 
     }
 }
 
-void PerformanceMonitor::updateSystemHealth(double cpu_usage_percent, double gpu_usage_percent, 
+void PerformanceMonitor::updateSystemHealth(double cpu_usage_percent, double gpu_usage_percent,
                                            double temperature_celsius) {
     std::lock_guard lock(metrics_mutex_);
     
@@ -150,6 +154,125 @@ void PerformanceMonitor::updateSystemHealth(double cpu_usage_percent, double gpu
     }
 }
 
+void PerformanceMonitor::updateSpineHealth(const SpineHealthMetrics& health_metrics) {
+    std::lock_guard lock(metrics_mutex_);
+    
+    current_metrics_.spine_health = health_metrics;
+    
+    // Update health score history
+    health_score_history_.push_back({std::chrono::high_resolution_clock::now(), health_metrics.health_score});
+    if (health_score_history_.size() > history_size_) {
+        health_score_history_.erase(health_score_history_.begin());
+    }
+    
+    // Check for spine health alerts
+    if (health_metrics.health_score < 30) {
+        triggerAlert(AlertType::HIGH_LATENCY, "Critical spine health: " + std::to_string(health_metrics.health_score) + "/100");
+    } else if (health_metrics.health_score < 50) {
+        triggerAlert(AlertType::HIGH_LATENCY, "Poor spine health: " + std::to_string(health_metrics.health_score) + "/100");
+    }
+}
+
+void PerformanceMonitor::updateLatencyBreakdown(const LatencyBreakdown& latency_breakdown) {
+    std::lock_guard lock(metrics_mutex_);
+    
+    current_metrics_.latency_breakdown = latency_breakdown;
+    
+    // Update latency history
+    data_processing_latency_history_.push_back({std::chrono::high_resolution_clock::now(), latency_breakdown.data_processing_us});
+    if (data_processing_latency_history_.size() > history_size_) {
+        data_processing_latency_history_.erase(data_processing_latency_history_.begin());
+    }
+    
+    gpu_transfer_latency_history_.push_back({std::chrono::high_resolution_clock::now(), latency_breakdown.gpu_transfer_us});
+    if (gpu_transfer_latency_history_.size() > history_size_) {
+        gpu_transfer_latency_history_.erase(gpu_transfer_latency_history_.begin());
+    }
+    
+    display_update_latency_history_.push_back({std::chrono::high_resolution_clock::now(), latency_breakdown.display_update_us});
+    if (display_update_latency_history_.size() > history_size_) {
+        display_update_latency_history_.erase(display_update_latency_history_.begin());
+    }
+}
+
+void PerformanceMonitor::updateComponentResourceUtilization(const std::vector<ComponentResourceUtilization>& resource_utilization) {
+    std::lock_guard lock(metrics_mutex_);
+    
+    current_metrics_.resource_utilization = resource_utilization;
+}
+
+SpineHealthMetrics PerformanceMonitor::getSpineHealthMetrics() const {
+    std::lock_guard lock(metrics_mutex_);
+    return current_metrics_.spine_health;
+}
+
+LatencyBreakdown PerformanceMonitor::getLatencyBreakdown() const {
+    std::lock_guard lock(metrics_mutex_);
+    return current_metrics_.latency_breakdown;
+}
+
+std::vector<ComponentResourceUtilization> PerformanceMonitor::getComponentResourceUtilization() const {
+    std::lock_guard lock(metrics_mutex_);
+    return current_metrics_.resource_utilization;
+}
+
+double PerformanceMonitor::calculateHealthScore() const {
+    std::lock_guard lock(metrics_mutex_);
+    
+    const auto& health = current_metrics_.spine_health;
+    const auto& latency = current_metrics_.latency_breakdown;
+    
+    double score = 100.0;
+    
+    // Connection status
+    if (!health.hotspine_connected) score -= 40;
+    if (!health.data_bridge_active) score -= 20;
+    if (!health.market_processor_active) score -= 20;
+    if (!health.visualization_engine_active) score -= 20;
+    
+    // Buffer utilization
+    if (health.trade_buffer_utilization > 80) score -= 30;
+    else if (health.trade_buffer_utilization > 60) score -= 15;
+    else if (health.trade_buffer_utilization > 40) score -= 5;
+    
+    if (health.orderbook_buffer_utilization > 80) score -= 30;
+    else if (health.orderbook_buffer_utilization > 60) score -= 15;
+    else if (health.orderbook_buffer_utilization > 40) score -= 5;
+    
+    // Error count
+    score -= health.total_errors * 10;
+    
+    // Lost data
+    score -= health.lost_trades * 5;
+    score -= health.lost_orderbooks * 5;
+    
+    // Latency
+    if (latency.total_latency_us > 1000) score -= 30;
+    else if (latency.total_latency_us > 500) score -= 15;
+    else if (latency.total_latency_us > 200) score -= 5;
+    
+    return std::max(0.0, std::min(100.0, score));
+}
+
+std::vector<MetricSample> PerformanceMonitor::getHealthScoreHistory() const {
+    std::lock_guard lock(metrics_mutex_);
+    return health_score_history_;
+}
+
+std::vector<MetricSample> PerformanceMonitor::getDataProcessingLatencyHistory() const {
+    std::lock_guard lock(metrics_mutex_);
+    return data_processing_latency_history_;
+}
+
+std::vector<MetricSample> PerformanceMonitor::getGPUTransferLatencyHistory() const {
+    std::lock_guard lock(metrics_mutex_);
+    return gpu_transfer_latency_history_;
+}
+
+std::vector<MetricSample> PerformanceMonitor::getDisplayUpdateLatencyHistory() const {
+    std::lock_guard lock(metrics_mutex_);
+    return display_update_latency_history_;
+}
 SystemMetrics PerformanceMonitor::getCurrentMetrics() const {
     std::lock_guard lock(metrics_mutex_);
     return current_metrics_;
@@ -196,6 +319,48 @@ PerformanceStatistics PerformanceMonitor::getStatistics() const {
         
         stats.avg_memory_mb = calculateAverage(memory_values);
         stats.peak_memory_mb = *std::max_element(memory_values.begin(), memory_values.end());
+    }
+    
+    // Calculate health score statistics
+    if (!health_score_history_.empty()) {
+        std::vector<double> health_values;
+        for (const auto& sample : health_score_history_) {
+            health_values.push_back(sample.value);
+        }
+        
+        stats.avg_health_score = calculateAverage(health_values);
+        stats.min_health_score = *std::min_element(health_values.begin(), health_values.end());
+        stats.max_health_score = *std::max_element(health_values.begin(), health_values.end());
+    }
+    
+    // Calculate data processing latency statistics
+    if (!data_processing_latency_history_.empty()) {
+        std::vector<double> latency_values;
+        for (const auto& sample : data_processing_latency_history_) {
+            latency_values.push_back(sample.value);
+        }
+        
+        stats.avg_data_processing_us = calculateAverage(latency_values);
+    }
+    
+    // Calculate GPU transfer latency statistics
+    if (!gpu_transfer_latency_history_.empty()) {
+        std::vector<double> latency_values;
+        for (const auto& sample : gpu_transfer_latency_history_) {
+            latency_values.push_back(sample.value);
+        }
+        
+        stats.avg_gpu_transfer_us = calculateAverage(latency_values);
+    }
+    
+    // Calculate display update latency statistics
+    if (!display_update_latency_history_.empty()) {
+        std::vector<double> latency_values;
+        for (const auto& sample : display_update_latency_history_) {
+            latency_values.push_back(sample.value);
+        }
+        
+        stats.avg_display_update_us = calculateAverage(latency_values);
     }
     
     stats.uptime_seconds = std::chrono::duration_cast<std::chrono::seconds>(
@@ -262,16 +427,61 @@ std::string PerformanceMonitor::generateReport() const {
         report << "    Latency: " << metrics.network_latency_ms << " ms" << std::endl;
         report << "    Throughput: " << metrics.network_throughput_mbps << " Mbps" << std::endl;
     }
+    
+    // Spine health metrics
+    report << std::endl;
+    report << "Spine Health Metrics:" << std::endl;
+    report << "  Health Score: " << std::fixed << std::setprecision(1) << metrics.spine_health.health_score << "/100" << std::endl;
+    report << "  HotSpine: " << (metrics.spine_health.hotspine_connected ? "Connected" : "Disconnected") << std::endl;
+    report << "  Data Bridge: " << (metrics.spine_health.data_bridge_active ? "Active" : "Inactive") << std::endl;
+    report << "  Market Processor: " << (metrics.spine_health.market_processor_active ? "Active" : "Inactive") << std::endl;
+    report << "  Visualization Engine: " << (metrics.spine_health.visualization_engine_active ? "Active" : "Inactive") << std::endl;
+    report << "  Trade Buffer: " << metrics.spine_health.trade_buffer_utilization << "%" << std::endl;
+    report << "  Orderbook Buffer: " << metrics.spine_health.orderbook_buffer_utilization << "%" << std::endl;
+    report << "  Errors: " << metrics.spine_health.total_errors << std::endl;
+    report << "  Lost Trades: " << metrics.spine_health.lost_trades << std::endl;
+    report << "  Lost Orderbooks: " << metrics.spine_health.lost_orderbooks << std::endl;
+    
+    // Latency breakdown
+    report << std::endl;
+    report << "Latency Breakdown (μs):" << std::endl;
+    report << "  Total Latency: " << std::fixed << std::setprecision(2) << metrics.latency_breakdown.total_latency_us << " μs" << std::endl;
+    report << "  Data Processing: " << metrics.latency_breakdown.data_processing_us << " μs" << std::endl;
+    report << "  GPU Transfer: " << metrics.latency_breakdown.gpu_transfer_us << " μs" << std::endl;
+    report << "  Display Update: " << metrics.latency_breakdown.display_update_us << " μs" << std::endl;
+    report << "  Network: " << metrics.latency_breakdown.network_latency_ms << " ms" << std::endl;
+    
+    // Resource utilization
+    report << std::endl;
+    report << "Component Resource Utilization:" << std::endl;
+    for (const auto& component : metrics.resource_utilization) {
+        report << "  " << component.component_name << ":" << std::endl;
+        report << "    CPU: " << std::fixed << std::setprecision(1) << component.cpu_usage << "%" << std::endl;
+        report << "    GPU: " << component.gpu_usage << "%" << std::endl;
+        report << "    Memory: " << component.memory_usage_mb << " MB" << std::endl;
+        if (component.temperature_celsius > 0) {
+            report << "    Temperature: " << component.temperature_celsius << "°C" << std::endl;
+        }
+        if (component.throughput_mbps > 0) {
+            report << "    Throughput: " << component.throughput_mbps << " Mbps" << std::endl;
+        }
+    }
+    
     report << std::endl;
     
     // Statistics
     report << "Performance Statistics:" << std::endl;
-    report << "  FPS - Avg: " << stats.avg_fps << ", Min: " << stats.min_fps 
+    report << "  FPS - Avg: " << stats.avg_fps << ", Min: " << stats.min_fps
            << ", Max: " << stats.max_fps << ", StdDev: " << stats.fps_std_dev << std::endl;
-    report << "  Latency - Avg: " << stats.avg_latency_ms << " ms, Min: " << stats.min_latency_ms 
+    report << "  Latency - Avg: " << stats.avg_latency_ms << " ms, Min: " << stats.min_latency_ms
            << " ms, Max: " << stats.max_latency_ms << " ms" << std::endl;
     report << "  Latency - P95: " << stats.latency_p95_ms << " ms, P99: " << stats.latency_p99_ms << " ms" << std::endl;
     report << "  Memory - Avg: " << stats.avg_memory_mb << " MB, Peak: " << stats.peak_memory_mb << " MB" << std::endl;
+    report << "  Health Score - Avg: " << std::fixed << std::setprecision(1) << stats.avg_health_score
+           << ", Min: " << stats.min_health_score << ", Max: " << stats.max_health_score << std::endl;
+    report << "  Data Processing Latency - Avg: " << stats.avg_data_processing_us << " μs" << std::endl;
+    report << "  GPU Transfer Latency - Avg: " << stats.avg_gpu_transfer_us << " μs" << std::endl;
+    report << "  Display Update Latency - Avg: " << stats.avg_display_update_us << " μs" << std::endl;
     report << std::endl;
     
     // Recent alerts
@@ -332,6 +542,21 @@ void PerformanceMonitor::setHistorySize(size_t size) {
     }
     if (memory_history_.size() > history_size_) {
         memory_history_.erase(memory_history_.begin(), memory_history_.end() - history_size_);
+    }
+    if (health_score_history_.size() > history_size_) {
+        health_score_history_.erase(health_score_history_.begin(), health_score_history_.end() - history_size_);
+    }
+    if (data_processing_latency_history_.size() > history_size_) {
+        data_processing_latency_history_.erase(data_processing_latency_history_.begin(),
+                                              data_processing_latency_history_.end() - history_size_);
+    }
+    if (gpu_transfer_latency_history_.size() > history_size_) {
+        gpu_transfer_latency_history_.erase(gpu_transfer_latency_history_.begin(),
+                                           gpu_transfer_latency_history_.end() - history_size_);
+    }
+    if (display_update_latency_history_.size() > history_size_) {
+        display_update_latency_history_.erase(display_update_latency_history_.begin(),
+                                             display_update_latency_history_.end() - history_size_);
     }
     
     std::cout << "[PerformanceMonitor] Set history size to " << history_size_ << " samples" << std::endl;

@@ -1,8 +1,9 @@
 #pragma once
 
 #include "hotspine_data_bridge.hpp"
-#include "vulkan_base_types.hpp"
 #include "market_data_processor.hpp"
+#include "performance_monitor.hpp"
+#include "vulkan_base_types.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -1153,6 +1154,9 @@ struct MarketDepthChartComponent : public UIComponent {
 using DepthChartComponent = MarketDepthChartComponent;
 
 class QuantWorkspaceComponent;
+class ArchitectureVisualizationComponent;
+class SystemResourceUtilizationComponent;
+
 class VulkanDashboard {
 public:
   VulkanDashboard(uint32_t width, uint32_t height,
@@ -1177,9 +1181,13 @@ private:
   VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
+  std::shared_ptr<RenderEngine::PerformanceMonitor> performance_monitor_;
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
   std::unique_ptr<QuantWorkspaceComponent> m_workspace;
+  std::unique_ptr<ArchitectureVisualizationComponent>
+      m_architecture_visualization;
+  std::unique_ptr<SystemResourceUtilizationComponent> m_system_resource_monitor;
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;
   bool m_windowResized = false;

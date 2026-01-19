@@ -1,17 +1,19 @@
 #include "vulkan_dashboard_advanced.hpp"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+#include "components/architecture_visualization_component.hpp"
 #include "components/quant_workspace_component.hpp"
+#include "components/system_resource_utilization_component.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include <iostream>
 
 namespace BTQuant {
 
-VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                  std::shared_ptr<HotSpineDataBridge> bridge,
-                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                                  const VulkanDashboardConfig &config)
+VulkanDashboard::VulkanDashboard(
+    uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    const VulkanDashboardConfig &config)
     : width_(width), height_(height), hotspine_bridge_(bridge),
       market_data_processor_(processor), config_(config) {}
 
@@ -47,7 +49,14 @@ void VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   // Replaces all obsolete discrete components with the unified QuantWorkspace
-  m_workspace = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
+  m_workspace = std::make_unique<QuantWorkspaceComponent>(
+      hotspine_bridge_, market_data_processor_);
+  m_architecture_visualization =
+      std::make_unique<ArchitectureVisualizationComponent>(
+          hotspine_bridge_, market_data_processor_, performance_monitor_);
+  m_system_resource_monitor =
+      std::make_unique<SystemResourceUtilizationComponent>(
+          hotspine_bridge_, market_data_processor_, performance_monitor_);
 }
 
 void VulkanDashboard::render_frame() {
@@ -71,6 +80,16 @@ void VulkanDashboard::render_frame() {
   if (m_workspace) {
     m_workspace->update(ImGui::GetIO().DeltaTime);
     m_workspace->render_gui();
+  }
+
+  if (m_architecture_visualization) {
+    m_architecture_visualization->update(ImGui::GetIO().DeltaTime);
+    m_architecture_visualization->render_gui();
+  }
+
+  if (m_system_resource_monitor) {
+    m_system_resource_monitor->update(ImGui::GetIO().DeltaTime);
+    m_system_resource_monitor->render_gui();
   }
 
   // 5. Render & Present

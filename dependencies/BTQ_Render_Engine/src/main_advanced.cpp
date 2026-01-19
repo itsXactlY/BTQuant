@@ -27,14 +27,18 @@ int main(int argc, char *argv[]) {
 
   try {
     // Create dashboard with default configuration
-    DashboardConfig config;
+    VulkanDashboardConfig config;
     config.enable_msaa = false;
     config.enable_validation_layers = false;
-    auto dashboard = std::make_unique<VulkanDashboard>(1280, 720, config);
+    auto hotspine_bridge = std::make_shared<HotSpineDataBridge>(config);
+    auto dashboard = std::make_unique<VulkanDashboard>(1280, 720, hotspine_bridge, config);
 
     // Initialize and run
     dashboard->initialize();
-    dashboard->main_loop();
+    while (!dashboard->should_close()) {
+        dashboard->handle_events();
+        dashboard->render_frame();
+    }
     dashboard->shutdown();
 
     fprintf(stderr, "\n[Main] Dashboard shutdown complete\n");

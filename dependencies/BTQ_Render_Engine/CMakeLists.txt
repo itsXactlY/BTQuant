@@ -42,6 +42,7 @@ set(DASHBOARD_SOURCES
     src/components/quant_workspace_component.cpp
     src/data/ui_data_manager.cpp
     src/data/symbol_manager.cpp
+    src/data/symbol_registry.cpp
     src/components/data_grid_component.cpp
     src/components/heatmap_component.cpp
     src/components/log_display_component.cpp
@@ -50,6 +51,9 @@ set(DASHBOARD_SOURCES
     src/components/alert_component.cpp
     src/components/watchlist_component.cpp
     src/components/market_screener_component.cpp
+    src/components/technical_indicators_component.cpp
+    src/components/keyboard_shortcuts_component.cpp
+    src/components/theme_customization_component.cpp
     src/analytics/trading_analytics.cpp
     src/layout/dashboard_layout_manager.cpp
     src/monitoring/performance_monitor.cpp
@@ -57,6 +61,7 @@ set(DASHBOARD_SOURCES
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
     src/config/dashboard_config.cpp
+    src/data/market_data_processor.cpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})

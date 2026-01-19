@@ -1,11 +1,14 @@
 #include "imgui_internal.h"
 #include "vulkan_dashboard_advanced.hpp"
+#include "stubs/symbol_registry.hpp"
 #include <algorithm>
 
 namespace BTQuant {
 
 DashboardLayer::DashboardLayer(VulkanCore *core) : core_(core) {
   chart_renderer_ = std::make_unique<OffscreenChartRenderer>(core);
+  // Load symbol registry from shared memory file
+  SymbolRegistry::instance().load_from_file("/dev/shm/btquant_symbols.json");
   // Note: RenderPass is created inside chart_renderer after first resize or
   // manually For now we assume a default pass or let chart_renderer handle it
 }
@@ -57,11 +60,37 @@ void DashboardLayer::SetupDockspace() {
 
 void DashboardLayer::DrawSymbolSelector() {
   ImGui::Begin("Symbol Selector");
-  const char *symbols[] = {"BTC-USDT", "ETH-USDT", "SOL-USDT", "XRP-USDT"};
+  
+  // Get all symbols from registry
+  static std::vector<std::string> symbol_list;
+  static bool symbols_loaded = false;
+  
+  if (!symbols_loaded) {
+    auto all_symbols = SymbolRegistry::instance().get_all_symbols();
+    symbol_list.reserve(all_symbols.size());
+    for (const auto &symbol_info : all_symbols) {
+      symbol_list.push_back(symbol_info.symbol);
+    }
+    
+    // Fallback to default symbols if no symbols loaded
+    if (symbol_list.empty()) {
+      symbol_list = {"BTC-USDT", "ETH-USDT", "SOL-USDT", "XRP-USDT"};
+    }
+    
+    symbols_loaded = true;
+  }
+  
   static int current_idx = 0;
+  
+  // Create c-style array for ImGui Combo
+  std::vector<const char*> symbol_names;
+  symbol_names.reserve(symbol_list.size());
+  for (const auto &sym : symbol_list) {
+    symbol_names.push_back(sym.c_str());
+  }
 
-  if (ImGui::Combo("Symbol", &current_idx, symbols, IM_ARRAYSIZE(symbols))) {
-    current_symbol_ = symbols[current_idx];
+  if (ImGui::Combo("Symbol", &current_idx, symbol_names.data(), symbol_names.size())) {
+    current_symbol_ = symbol_list[current_idx];
     FetchData(current_symbol_);
   }
 
@@ -166,11 +195,19 @@ void DashboardLayer::HandleInputs(const glm::vec2 &,
 void DashboardLayer::FetchData(const std::string &symbol) {
   // Simulation: Create dummy candles for the selected symbol
   current_candles_.clear();
-  // uint32_t color =
-  //    (symbol == "BTC-USDT") ? 0xFF00FF00 : 0xFF0000FF; // Green vs Red
 
   for (int i = 0; i < 500; ++i) {
-    float base_price = (symbol == "BTC-USDT") ? 45000.0f : 2400.0f;
+    float base_price = 2400.0f; // Default base price
+    if (symbol.find("BTC") != std::string::npos) {
+      base_price = 45000.0f;
+    } else if (symbol.find("ETH") != std::string::npos) {
+      base_price = 2400.0f;
+    } else if (symbol.find("SOL") != std::string::npos) {
+      base_price = 100.0f;
+    } else if (symbol.find("XRP") != std::string::npos) {
+      base_price = 0.6f;
+    }
+
     float noise = static_cast<float>(rand() % 1000) / 10.0f;
 
     CandleData c;
@@ -188,7 +225,11 @@ void DashboardLayer::FetchData(const std::string &symbol) {
   // Adjust chart range to fit data
   data_min_ = {0.0f, 0.0f};
   data_max_ = {500.0f, 60000.0f};
-  chart_range_ = {500.0f, (symbol == "BTC-USDT") ? 60000.0f : 5000.0f};
+  if (symbol.find("BTC") != std::string::npos) {
+    chart_range_ = {500.0f, 60000.0f};
+  } else {
+    chart_range_ = {500.0f, 5000.0f};
+  }
 }
 
 } // namespace BTQuant

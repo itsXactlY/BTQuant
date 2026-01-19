@@ -41,6 +41,9 @@ void MarketDataProcessor::processTradeUpdate(const MarketDataUpdate &update) {
                                         vwap_window_size_);
   }
 
+  // Update OHLCV candles
+  updateCandles(symbol_data, trade);
+
   // Update analytics
   updateVWAP(symbol_data);
   updateMomentum(symbol_data);
@@ -499,6 +502,124 @@ MarketSummary MarketDataProcessor::getMarketSummary() const {
   summary.last_update = performance_metrics_.last_update_time;
 
   return summary;
+}
+
+uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
+  switch (timeframe) {
+    case TimeFrame::TF_1MIN:
+      return 60 * 1000000ULL;  // 1 minute in microseconds
+    case TimeFrame::TF_5MIN:
+      return 5 * 60 * 1000000ULL;  // 5 minutes
+    case TimeFrame::TF_15MIN:
+      return 15 * 60 * 1000000ULL;  // 15 minutes
+    case TimeFrame::TF_1HOUR:
+      return 60 * 60 * 1000000ULL;  // 1 hour
+    case TimeFrame::TF_4HOUR:
+      return 4 * 60 * 60 * 1000000ULL;  // 4 hours
+    case TimeFrame::TF_1DAY:
+      return 24 * 60 * 60 * 1000000ULL;  // 1 day
+    default:
+      return 60 * 1000000ULL;  // Default to 1 minute
+  }
+}
+
+std::vector<OHLCVCandle> MarketDataProcessor::getCandles(uint32_t symbol_id, TimeFrame timeframe) const {
+  std::lock_guard lock(data_mutex_);
+
+  auto it = symbol_analytics_.find(symbol_id);
+  if (it != symbol_analytics_.end()) {
+    const auto& candles_it = it->second.candles.find(timeframe);
+    if (candles_it != it->second.candles.end()) {
+      return candles_it->second;
+    }
+  }
+
+  return std::vector<OHLCVCandle>();
+}
+
+std::optional<OHLCVCandle> MarketDataProcessor::getCurrentCandle(uint32_t symbol_id, TimeFrame timeframe) const {
+  std::lock_guard lock(data_mutex_);
+
+  auto it = symbol_analytics_.find(symbol_id);
+  if (it != symbol_analytics_.end()) {
+    const auto& current_it = it->second.current_candles.find(timeframe);
+    if (current_it != it->second.current_candles.end()) {
+      return current_it->second;
+    }
+  }
+
+  return std::nullopt;
+}
+
+OHLCVCandle MarketDataProcessor::createNewCandle(uint64_t timestamp, double price, double size) const {
+  OHLCVCandle candle;
+  candle.timestamp = timestamp;
+  candle.open = price;
+  candle.high = price;
+  candle.low = price;
+  candle.close = price;
+  candle.volume = size;
+  candle.trade_count = 1;
+  return candle;
+}
+
+bool MarketDataProcessor::isTradeInCurrentCandle(const OHLCVCandle &candle, uint64_t trade_timestamp,
+                                                 TimeFrame timeframe) const {
+  uint64_t duration = getTimeFrameDuration(timeframe);
+  return trade_timestamp < candle.timestamp + duration;
+}
+
+void MarketDataProcessor::updateCandle(OHLCVCandle &candle, double price, double size) const {
+  if (price > candle.high) {
+    candle.high = price;
+  }
+  if (price < candle.low) {
+    candle.low = price;
+  }
+  candle.close = price;
+  candle.volume += size;
+  candle.trade_count++;
+}
+
+void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade) {
+  // Process all time frames
+  std::vector<TimeFrame> timeframes = {
+      TimeFrame::TF_1MIN,
+      TimeFrame::TF_5MIN,
+      TimeFrame::TF_15MIN,
+      TimeFrame::TF_1HOUR,
+      TimeFrame::TF_4HOUR,
+      TimeFrame::TF_1DAY
+  };
+
+  for (TimeFrame tf : timeframes) {
+    uint64_t duration = getTimeFrameDuration(tf);
+    uint64_t candle_start = (trade.timestamp / duration) * duration;
+
+    auto current_candle_it = symbol_data.current_candles.find(tf);
+
+    // Check if we have a current candle for this time frame
+    if (current_candle_it != symbol_data.current_candles.end()) {
+      // Check if trade falls into the current candle
+      if (isTradeInCurrentCandle(current_candle_it->second, trade.timestamp, tf)) {
+        // Update existing candle
+        updateCandle(current_candle_it->second, trade.price, trade.size);
+      } else {
+        // Finalize current candle and start new one
+        symbol_data.candles[tf].push_back(current_candle_it->second);
+        // Maintain reasonable candle history size
+        if (symbol_data.candles[tf].size() > 10000) {
+          symbol_data.candles[tf].erase(symbol_data.candles[tf].begin(),
+                                       symbol_data.candles[tf].begin() + (symbol_data.candles[tf].size() - 5000));
+        }
+        // Create new candle
+        symbol_data.current_candles[tf] = createNewCandle(candle_start, trade.price, trade.size);
+      }
+    } else {
+      // No current candle - create new one
+      symbol_data.current_candles[tf] = createNewCandle(candle_start, trade.price, trade.size);
+    }
+  }
 }
 
 } // namespace RenderEngine

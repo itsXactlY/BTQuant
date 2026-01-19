@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <filesystem>
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -11,7 +12,12 @@ DashboardConfig::DashboardConfig()
     : config_file_("dashboard_config.yaml")
     , auto_save_enabled_(true)
     , config_version_(1)
+    , layouts_dir_("layouts")
+    , current_layout_("default")
 {
+    // Create layouts directory if it doesn't exist
+    std::filesystem::create_directories(layouts_dir_);
+    
     // Initialize default configuration
     initializeDefaults();
     std::cout << "[DashboardConfig] Initialized with default settings" << std::endl;
@@ -156,6 +162,7 @@ bool DashboardConfig::saveConfiguration() const {
         file << "show_tooltips=" << (user_preferences_.show_tooltips ? "true" : "false") << std::endl;
         file << "animation_speed=" << user_preferences_.animation_speed << std::endl;
         file << "update_frequency_hz=" << user_preferences_.update_frequency_hz << std::endl;
+        file << "current_layout=" << current_layout_ << std::endl;
         
         file.close();
         std::cout << "[DashboardConfig] Saved configuration to: " << config_file_ << std::endl;
@@ -230,40 +237,210 @@ std::vector<std::string> DashboardConfig::getAvailableThemes() const {
     return {"dark", "light", "blue", "green", "custom"};
 }
 
+void DashboardConfig::applyDarkTheme() {
+    theme_config_.name = "dark";
+    theme_config_.background_color = {0.1f, 0.1f, 0.1f, 1.0f};
+    theme_config_.text_color = {0.9f, 0.9f, 0.9f, 1.0f};
+    theme_config_.accent_color = {0.2f, 0.6f, 1.0f, 1.0f};
+    theme_config_.positive_color = {0.0f, 0.8f, 0.0f, 1.0f};
+    theme_config_.negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
+    theme_config_.neutral_color = {0.5f, 0.5f, 0.5f, 1.0f};
+    theme_config_.grid_line_color = {0.3f, 0.3f, 0.3f, 1.0f};
+}
+
+void DashboardConfig::applyLightTheme() {
+    theme_config_.name = "light";
+    theme_config_.background_color = {0.95f, 0.95f, 0.95f, 1.0f};
+    theme_config_.text_color = {0.1f, 0.1f, 0.1f, 1.0f};
+    theme_config_.accent_color = {0.0f, 0.4f, 0.8f, 1.0f};
+    theme_config_.positive_color = {0.0f, 0.6f, 0.0f, 1.0f};
+    theme_config_.negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
+    theme_config_.neutral_color = {0.4f, 0.4f, 0.4f, 1.0f};
+    theme_config_.grid_line_color = {0.7f, 0.7f, 0.7f, 1.0f};
+}
+
+void DashboardConfig::applyBlueTheme() {
+    theme_config_.name = "blue";
+    theme_config_.background_color = {0.05f, 0.1f, 0.2f, 1.0f};
+    theme_config_.text_color = {0.8f, 0.9f, 1.0f, 1.0f};
+    theme_config_.accent_color = {0.3f, 0.7f, 1.0f, 1.0f};
+    theme_config_.positive_color = {0.0f, 0.8f, 0.4f, 1.0f};
+    theme_config_.negative_color = {1.0f, 0.3f, 0.3f, 1.0f};
+    theme_config_.neutral_color = {0.5f, 0.6f, 0.7f, 1.0f};
+    theme_config_.grid_line_color = {0.2f, 0.3f, 0.4f, 1.0f};
+}
+
+void DashboardConfig::applyGreenTheme() {
+    theme_config_.name = "green";
+    theme_config_.background_color = {0.05f, 0.15f, 0.1f, 1.0f};
+    theme_config_.text_color = {0.8f, 0.95f, 0.8f, 1.0f};
+    theme_config_.accent_color = {0.2f, 0.8f, 0.4f, 1.0f};
+    theme_config_.positive_color = {0.3f, 0.9f, 0.3f, 1.0f};
+    theme_config_.negative_color = {0.9f, 0.3f, 0.3f, 1.0f};
+    theme_config_.neutral_color = {0.5f, 0.6f, 0.5f, 1.0f};
+    theme_config_.grid_line_color = {0.2f, 0.3f, 0.2f, 1.0f};
+}
+
 bool DashboardConfig::applyTheme(const std::string& theme_name) {
     if (theme_name == "dark") {
-        theme_config_.name = "dark";
-        theme_config_.background_color = {0.1f, 0.1f, 0.1f, 1.0f};
-        theme_config_.text_color = {0.9f, 0.9f, 0.9f, 1.0f};
-        theme_config_.accent_color = {0.2f, 0.6f, 1.0f, 1.0f};
-        theme_config_.positive_color = {0.0f, 0.8f, 0.0f, 1.0f};
-        theme_config_.negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
-        theme_config_.neutral_color = {0.5f, 0.5f, 0.5f, 1.0f};
-        theme_config_.grid_line_color = {0.3f, 0.3f, 0.3f, 1.0f};
+        applyDarkTheme();
     } else if (theme_name == "light") {
-        theme_config_.name = "light";
-        theme_config_.background_color = {0.95f, 0.95f, 0.95f, 1.0f};
-        theme_config_.text_color = {0.1f, 0.1f, 0.1f, 1.0f};
-        theme_config_.accent_color = {0.0f, 0.4f, 0.8f, 1.0f};
-        theme_config_.positive_color = {0.0f, 0.6f, 0.0f, 1.0f};
-        theme_config_.negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
-        theme_config_.neutral_color = {0.4f, 0.4f, 0.4f, 1.0f};
-        theme_config_.grid_line_color = {0.7f, 0.7f, 0.7f, 1.0f};
+        applyLightTheme();
     } else if (theme_name == "blue") {
-        theme_config_.name = "blue";
-        theme_config_.background_color = {0.05f, 0.1f, 0.2f, 1.0f};
-        theme_config_.text_color = {0.8f, 0.9f, 1.0f, 1.0f};
-        theme_config_.accent_color = {0.3f, 0.7f, 1.0f, 1.0f};
-        theme_config_.positive_color = {0.0f, 0.8f, 0.4f, 1.0f};
-        theme_config_.negative_color = {1.0f, 0.3f, 0.3f, 1.0f};
-        theme_config_.neutral_color = {0.5f, 0.6f, 0.7f, 1.0f};
-        theme_config_.grid_line_color = {0.2f, 0.3f, 0.4f, 1.0f};
+        applyBlueTheme();
+    } else if (theme_name == "green") {
+        applyGreenTheme();
+    } else if (theme_name == "custom") {
+        theme_config_.name = "custom";
+        // Keep existing colors when applying custom theme
     } else {
         return false;  // Unknown theme
     }
     
     std::cout << "[DashboardConfig] Applied theme: " << theme_name << std::endl;
     return true;
+}
+
+bool DashboardConfig::saveLayout(const std::string& layout_name) {
+    try {
+        std::string file_path = getLayoutFilePath(layout_name);
+        std::ofstream file(file_path);
+        
+        if (!file.is_open()) {
+            std::cerr << "[DashboardConfig] Failed to open layout file for writing: " << file_path << std::endl;
+            return false;
+        }
+        
+        // Save current layout configuration
+        file << "# BTQuant Dashboard Layout Configuration" << std::endl;
+        file << "# Generated automatically - edit with care" << std::endl;
+        file << "version=" << config_version_ << std::endl;
+        file << std::endl;
+        
+        file << "[layout]" << std::endl;
+        file << "name=" << layout_name << std::endl;
+        file << "grid_columns=" << layout_config_.grid_columns << std::endl;
+        file << "grid_rows=" << layout_config_.grid_rows << std::endl;
+        file << "show_grid=" << (layout_config_.show_grid ? "true" : "false") << std::endl;
+        file << "show_heatmap=" << (layout_config_.show_heatmap ? "true" : "false") << std::endl;
+        file << "show_charts=" << (layout_config_.show_charts ? "true" : "false") << std::endl;
+        file << "show_orderbook=" << (layout_config_.show_orderbook ? "true" : "false") << std::endl;
+        file << "show_logs=" << (layout_config_.show_logs ? "true" : "false") << std::endl;
+        file << "show_performance=" << (layout_config_.show_performance ? "true" : "false") << std::endl;
+        file << "panel_spacing=" << layout_config_.panel_spacing << std::endl;
+        file << "panel_padding=" << layout_config_.panel_padding << std::endl;
+        
+        file.close();
+        current_layout_ = layout_name;
+        std::cout << "[DashboardConfig] Saved layout: " << layout_name << " to " << file_path << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[DashboardConfig] Error saving layout: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool DashboardConfig::loadLayout(const std::string& layout_name) {
+    try {
+        std::string file_path = getLayoutFilePath(layout_name);
+        std::ifstream file(file_path);
+        
+        if (!file.is_open()) {
+            std::cerr << "[DashboardConfig] Layout file not found: " << file_path << std::endl;
+            return false;
+        }
+        
+        std::string line;
+        std::string current_section;
+        
+        while (std::getline(file, line)) {
+            // Remove comments and trim whitespace
+            size_t comment_pos = line.find('#');
+            if (comment_pos != std::string::npos) {
+                line = line.substr(0, comment_pos);
+            }
+            
+            line = trim(line);
+            if (line.empty()) continue;
+            
+            // Check for section headers
+            if (line.front() == '[' && line.back() == ']') {
+                current_section = line.substr(1, line.length() - 2);
+                continue;
+            }
+            
+            // Parse key-value pairs
+            size_t equals_pos = line.find('=');
+            if (equals_pos != std::string::npos) {
+                std::string key = trim(line.substr(0, equals_pos));
+                std::string value = trim(line.substr(equals_pos + 1));
+                
+                parseConfigValue(current_section, key, value);
+            }
+        }
+        
+        file.close();
+        current_layout_ = layout_name;
+        std::cout << "[DashboardConfig] Loaded layout: " << layout_name << " from " << file_path << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[DashboardConfig] Error loading layout: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::vector<std::string> DashboardConfig::getAvailableLayouts() const {
+    std::vector<std::string> layouts;
+    try {
+        if (std::filesystem::exists(layouts_dir_)) {
+            for (const auto& entry : std::filesystem::directory_iterator(layouts_dir_)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".yaml") {
+                    std::string filename = entry.path().filename().string();
+                    layouts.push_back(filename.substr(0, filename.size() - 5)); // Remove .yaml extension
+                }
+            }
+        }
+        
+        // Always include default layout if it doesn't exist
+        if (layouts.empty()) {
+            layouts.push_back("default");
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[DashboardConfig] Error loading available layouts: " << e.what() << std::endl;
+        layouts.push_back("default");
+    }
+    
+    return layouts;
+}
+
+bool DashboardConfig::deleteLayout(const std::string& layout_name) {
+    if (layout_name == "default") {
+        std::cerr << "[DashboardConfig] Cannot delete default layout" << std::endl;
+        return false;
+    }
+    
+    try {
+        std::string file_path = getLayoutFilePath(layout_name);
+        if (std::filesystem::exists(file_path)) {
+            std::filesystem::remove(file_path);
+            std::cout << "[DashboardConfig] Deleted layout: " << layout_name << std::endl;
+            return true;
+        } else {
+            std::cerr << "[DashboardConfig] Layout file not found: " << file_path << std::endl;
+            return false;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "[DashboardConfig] Error deleting layout: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::string DashboardConfig::getLayoutFilePath(const std::string& layout_name) const {
+    return layouts_dir_ + "/" + layout_name + ".yaml";
 }
 
 void DashboardConfig::initializeDefaults() {

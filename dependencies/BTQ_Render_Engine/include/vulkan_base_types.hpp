@@ -276,6 +276,7 @@ private:
 
   // Descriptor pools
   VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
+  VkDescriptorPool imgui_descriptor_pool_ = VK_NULL_HANDLE;
 
   // Synchronization
   std::vector<VkSemaphore> image_available_semaphores_;
@@ -325,7 +326,6 @@ private:
   void cleanup_swapchain();
 
   // ImGui resources
-  VkDescriptorPool imgui_descriptor_pool_ = VK_NULL_HANDLE;
   void init_imgui();
   void cleanup_imgui();
 

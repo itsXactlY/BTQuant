@@ -2,6 +2,7 @@
 
 #include "hotspine_data_bridge.hpp"
 #include "vulkan_base_types.hpp"
+#include "market_data_processor.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -22,25 +23,9 @@ namespace BTQuant {
 
 // Global RenderEngine namespace for data structures
 namespace RenderEngine {
-struct TradeData {
-  std::string symbol;
-  uint32_t symbol_id = 0;
-  uint64_t timestamp;
-  double price;
-  double size;
-  bool is_buy;
-};
 struct OrderBookLevel {
   double price;
   double size;
-};
-struct OrderbookData {
-  std::string symbol;
-  uint32_t symbol_id = 0;
-  uint64_t timestamp;
-  std::vector<OrderBookLevel> bids;
-  std::vector<OrderBookLevel> asks;
-  double spread;
 };
 } // namespace RenderEngine
 

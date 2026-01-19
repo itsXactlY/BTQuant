@@ -32,11 +32,16 @@ void VulkanDashboard::initialize() {
   // 2. HW Layer Init
   init_window();
   init_vulkan();
+  std::cout << "[VulkanDashboard] Vulkan initialized." << std::endl;
 
   // Initialize Glfw ImGui Backend
+  std::cout << "[VulkanDashboard] Initializing ImGui GLFW Backend..."
+            << std::endl;
   ImGui_ImplGlfw_InitForVulkan(window_, true);
+  std::cout << "[VulkanDashboard] ImGui GLFW Backend initialized." << std::endl;
 
   init_components();
+  std::cout << "[VulkanDashboard] Components initialized." << std::endl;
 }
 
 void VulkanDashboard::init_components() {
@@ -60,8 +65,6 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
-  // ImGui::DockSpaceOverViewport(ImGui::GetMainViewport()); // Not available in
-  // this ImGui version
 
   // 4. Draw Components (QuantWorkspace)
   if (m_workspace) {
@@ -88,9 +91,29 @@ void VulkanDashboard::render_frame() {
 }
 
 void VulkanDashboard::shutdown() {
+  static bool already_shutdown = false;
+  if (already_shutdown) {
+    return;
+  }
+  
+  already_shutdown = true;
+  
   std::cout << "[VulkanDashboard] Terminating Rendering Engine..." << std::endl;
-  ImPlot::DestroyContext();
-  ImGui::DestroyContext();
+  
+  // Shutdown ImGui backends in correct order
+  if (ImGui::GetCurrentContext() != nullptr) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.BackendRendererUserData != nullptr) {
+      ImGui_ImplVulkan_Shutdown();
+    }
+    
+    if (io.BackendPlatformUserData != nullptr) {
+      ImGui_ImplGlfw_Shutdown();
+    }
+    
+    ImPlot::DestroyContext();
+    ImGui::DestroyContext();
+  }
 
   if (window_) {
     glfwDestroyWindow(window_);

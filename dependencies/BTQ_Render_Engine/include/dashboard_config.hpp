@@ -37,7 +37,7 @@ struct ThemeConfig {
     ColorRGBA negative_color = {0.8f, 0.0f, 0.0f, 1.0f};
     ColorRGBA neutral_color = {0.5f, 0.5f, 0.5f, 1.0f};
     ColorRGBA grid_line_color = {0.3f, 0.3f, 0.3f, 1.0f};
-    uint32_t font_size = 14;
+    int font_size = 14;
     float line_height = 1.2f;
 };
 
@@ -149,6 +149,14 @@ public:
     bool applyTheme(const std::string& theme_name);
     
     /**
+     * Layout management
+     */
+    bool saveLayout(const std::string& layout_name);
+    bool loadLayout(const std::string& layout_name);
+    std::vector<std::string> getAvailableLayouts() const;
+    bool deleteLayout(const std::string& layout_name);
+    
+    /**
      * Get configuration file path
      */
     const std::string& getConfigFile() const { return config_file_; }
@@ -167,12 +175,25 @@ private:
     bool auto_save_enabled_;
     uint32_t config_version_;
     
+    // Layout management
+    std::string layouts_dir_;
+    std::string current_layout_;
+    
     // Private methods
     void initializeDefaults();
     void parseConfigValue(const std::string& section, const std::string& key, const std::string& value);
     ColorRGBA parseColor(const std::string& color_str) const;
     std::string colorToString(const ColorRGBA& color) const;
     std::string trim(const std::string& str) const;
+    
+    // Theme helpers
+    void applyDarkTheme();
+    void applyLightTheme();
+    void applyBlueTheme();
+    void applyGreenTheme();
+    
+    // Layout helpers
+    std::string getLayoutFilePath(const std::string& layout_name) const;
 };
 
 } // namespace RenderEngine

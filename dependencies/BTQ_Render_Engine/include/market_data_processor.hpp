@@ -1,13 +1,30 @@
 #pragma once
 
 #include "hotspine_data_bridge.hpp"
+#include "data_visualization_engine.hpp"  // For PriceLevel
 #include <chrono>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+#include <optional>
 
 namespace BTQuant {
 namespace RenderEngine {
+
+// Market data update type
+enum class MarketDataType { TRADE, ORDERBOOK };
+
+// Market data update structure
+struct MarketDataUpdate {
+  MarketDataType type;
+  uint32_t symbol_id;
+  uint64_t timestamp;
+  double price;
+  double size;
+  std::string side;
+  std::vector<PriceLevel> bids;
+  std::vector<PriceLevel> asks;
+};
 
 // Trade data for analytics
 struct TradeData {
@@ -34,11 +51,36 @@ struct OrderbookData {
   double imbalance; // (bid_depth - ask_depth) / total_depth
 };
 
+// OHLCV Candle Data for Charting
+struct OHLCVCandle {
+  uint64_t timestamp;  // Start time of the candle in microseconds
+  double open;
+  double high;
+  double low;
+  double close;
+  double volume;
+  uint64_t trade_count;
+};
+
+// Time frame definitions for OHLCV aggregation
+enum class TimeFrame {
+  TF_1MIN,    // 1 minute
+  TF_5MIN,    // 5 minutes
+  TF_15MIN,   // 15 minutes
+  TF_1HOUR,   // 1 hour
+  TF_4HOUR,   // 4 hours
+  TF_1DAY     // 1 day
+};
+
 // Comprehensive symbol analytics
 struct SymbolAnalytics {
   // Basic data
   uint32_t symbol_id = 0;
   uint64_t last_update_time = 0;
+
+  // OHLCV candle data for multiple time frames
+  std::unordered_map<TimeFrame, std::vector<OHLCVCandle>> candles;
+  std::unordered_map<TimeFrame, OHLCVCandle> current_candles; // In-progress candles
 
   // Trade analytics
   std::vector<TradeData> recent_trades;
@@ -125,6 +167,7 @@ struct MarketSummary {
  * - Spread analysis and market depth
  * - Trading volume patterns
  * - Market microstructure metrics
+ * - OHLCV candle aggregation for multiple time frames
  */
 class MarketDataProcessor {
 public:
@@ -178,10 +221,33 @@ public:
                                          size_t limit = 0) const;
 
   /**
+   * Get OHLCV candles for a symbol and time frame
+   * @param symbol_id Symbol ID to get candles for
+   * @param timeframe Time frame of the candles
+   * @return Vector of OHLCV candles
+   */
+  std::vector<OHLCVCandle> getCandles(uint32_t symbol_id, TimeFrame timeframe) const;
+
+  /**
+   * Get current (in-progress) candle for a symbol and time frame
+   * @param symbol_id Symbol ID to get current candle for
+   * @param timeframe Time frame of the candle
+   * @return Current OHLCV candle if available, empty optional otherwise
+   */
+  std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id, TimeFrame timeframe) const;
+
+  /**
    * Get market summary statistics
    * @return Market-wide summary data
    */
   MarketSummary getMarketSummary() const;
+
+  /**
+   * Helper method to convert time frame to microseconds
+   * @param timeframe Time frame to convert
+   * @return Duration in microseconds
+   */
+  static uint64_t getTimeFrameDuration(TimeFrame timeframe);
 
   /**
    * Clear analytics data for a specific symbol
@@ -222,6 +288,13 @@ private:
   void updateTradingMetrics(SymbolAnalytics &symbol_data,
                             const TradeData &trade);
   void updateSpreadAnalysis(SymbolAnalytics &symbol_data);
+  
+  // OHLCV aggregation methods
+  void updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade);
+  OHLCVCandle createNewCandle(uint64_t timestamp, double price, double size) const;
+  bool isTradeInCurrentCandle(const OHLCVCandle &candle, uint64_t trade_timestamp,
+                              TimeFrame timeframe) const;
+  void updateCandle(OHLCVCandle &candle, double price, double size) const;
 
   // Helper methods
   double calculateMarketDepth(const std::vector<PriceLevel> &levels) const;

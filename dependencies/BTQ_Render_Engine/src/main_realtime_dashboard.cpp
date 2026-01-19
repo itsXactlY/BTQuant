@@ -33,15 +33,25 @@ int main(int argc, char **argv) {
   dashboard->initialize();
 
   // 3. Application Execution Loop
+  int frame_count = 0;
   while (!dashboard->should_close()) {
+    if (frame_count++ < 5)
+      std::cout << "[Main] Frame " << frame_count << " start" << std::endl;
+
     // 1. Event Handling (X11 & Internal)
     dashboard->handle_events();
+    if (frame_count < 5)
+      std::cout << "[Main] handle_events done" << std::endl;
 
     // 2. High-frequency polling of market data updates
     bridge->poll();
+    if (frame_count < 5)
+      std::cout << "[Main] poll done" << std::endl;
 
     // 3. Immediate Frame Composition
     dashboard->render_frame();
+    if (frame_count < 5)
+      std::cout << "[Main] render_frame done" << std::endl;
   }
 
   // 4. Shutdown

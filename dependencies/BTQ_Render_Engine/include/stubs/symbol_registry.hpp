@@ -1,7 +1,7 @@
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -15,86 +15,43 @@ struct SymbolInfo {
   std::string exchange;
   std::string symbol;
   std::string full_name;
+
+  std::string full_symbol() const { return exchange + "/" + symbol; }
 };
 
 class SymbolRegistry {
 public:
-  static SymbolRegistry &instance() {
-    static SymbolRegistry inst;
-    return inst;
-  }
+  static SymbolRegistry &instance();
 
-  bool load_from_file(const std::string &filename) {
-    (void)filename;
-    return true;
-  }
+  // Load symbol mappings from JSON file
+  bool load_from_file(const std::string &filepath);
 
-  bool save_to_file(const std::string &filename) const {
-    (void)filename;
-    return true;
-  }
-
+  // Register a symbol manually
   uint32_t register_symbol(const std::string &exchange,
-                           const std::string &symbol) {
-    static uint32_t next_id = 1;
-    std::string key = exchange + ":" + symbol;
-    if (symbol_map_.find(key) != symbol_map_.end()) {
-      return symbol_map_[key];
-    }
-    uint32_t id = next_id++;
-    symbol_map_[key] = id;
-    SymbolInfo info{id, id, exchange, symbol, exchange + ":" + symbol};
-    symbols_[id] = info;
-    return id;
-  }
+                           const std::string &symbol,
+                           uint32_t id = 0); // 0 = auto-assign
 
+  // Lookup functions
+  std::optional<SymbolInfo> get_symbol_info(uint32_t id) const;
   std::optional<uint32_t> get_symbol_id(const std::string &exchange,
-                                        const std::string &symbol) const {
-    std::string key = exchange + ":" + symbol;
-    auto it = symbol_map_.find(key);
-    if (it != symbol_map_.end()) {
-      return it->second;
-    }
-    return std::nullopt;
-  }
+                                        const std::string &symbol) const;
 
-  std::optional<SymbolInfo> get_symbol_info(uint32_t symbol_id) const {
-    auto it = symbols_.find(symbol_id);
-    if (it != symbols_.end()) {
-      return it->second;
-    }
-    return std::nullopt;
-  }
-
-  std::vector<SymbolInfo> get_all_symbols() const {
-    std::vector<SymbolInfo> result;
-    for (const auto &[id, info] : symbols_) {
-      result.push_back(info);
-    }
-    return result;
-  }
-
+  // Get all symbols for an exchange
   std::vector<SymbolInfo>
-  get_exchange_symbols(const std::string &exchange) const {
-    std::vector<SymbolInfo> result;
-    for (const auto &[id, info] : symbols_) {
-      if (info.exchange == exchange) {
-        result.push_back(info);
-      }
-    }
-    return result;
-  }
+  get_exchange_symbols(const std::string &exchange) const;
 
-  std::vector<std::string> get_exchanges() const {
-    std::vector<std::string> exchanges;
-    for (const auto &[id, info] : symbols_) {
-      if (std::find(exchanges.begin(), exchanges.end(), info.exchange) ==
-          exchanges.end()) {
-        exchanges.push_back(info.exchange);
-      }
-    }
-    return exchanges;
-  }
+  // Get all registered exchanges
+  std::vector<std::string> get_exchanges() const;
+
+  // Check if symbol exists
+  bool has_symbol(uint32_t id) const;
+  bool has_symbol(const std::string &exchange, const std::string &symbol) const;
+
+  // Save all symbol mappings to JSON file
+  bool save_to_file(const std::string &filepath) const;
+
+  // Get all registered symbols
+  std::vector<SymbolInfo> get_all_symbols() const;
 
 private:
   SymbolRegistry() = default;
@@ -102,8 +59,14 @@ private:
   SymbolRegistry(const SymbolRegistry &) = delete;
   SymbolRegistry &operator=(const SymbolRegistry &) = delete;
 
-  std::unordered_map<std::string, uint32_t> symbol_map_;
-  std::unordered_map<uint32_t, SymbolInfo> symbols_;
+  mutable std::mutex mutex_;
+  std::unordered_map<uint32_t, SymbolInfo> id_to_info_;
+  std::unordered_map<std::string, uint32_t>
+      key_to_id_; // "exchange:symbol" -> id
+  uint32_t next_auto_id_ = 10000;
+
+  std::string make_key(const std::string &exchange,
+                       const std::string &symbol) const;
 };
 
 } // namespace BTQuant

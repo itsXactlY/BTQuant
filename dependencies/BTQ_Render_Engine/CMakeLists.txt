@@ -17,7 +17,7 @@ FetchContent_Declare(concurrentqueue GIT_REPOSITORY https://github.com/cameron31
 FetchContent_MakeAvailable(glm json concurrentqueue)
 
 # Path Configuration
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui-1.92.5)
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
 set(IMPLOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
 
 # Explicit Source Listing (Senior HFT Requirement)
@@ -68,11 +68,8 @@ add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})
 
 target_include_directories(dashboard_advanced PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/stubs
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
@@ -81,10 +78,7 @@ target_include_directories(dashboard_advanced PRIVATE
 
 target_link_libraries(dashboard_advanced PRIVATE
     Vulkan::Vulkan
-    Threads::Threads
     glfw
-    X11
-    Xi
     dl
     pthread
 )

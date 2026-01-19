@@ -1,8 +1,8 @@
 // #define VK_USE_PLATFORM_XLIB_KHR
 #include "../../include/vulkan_base_types.hpp"
 #include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
-#include "imgui_impl_vulkan.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -283,7 +283,8 @@ VkPipeline VulkanCore::create_graphics_pipeline(
   rasterizer.depthBiasEnable = VK_FALSE;
 
   VkPipelineMultisampleStateCreateInfo multisampling{};
-  multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   if (config_.enable_msaa) {
     multisampling.sampleShadingEnable = VK_TRUE;
     multisampling.rasterizationSamples = get_max_usable_sample_count();
@@ -295,7 +296,8 @@ VkPipeline VulkanCore::create_graphics_pipeline(
 
   // Depth stencil state
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
-  depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   depthStencil.depthTestEnable = VK_TRUE;
   depthStencil.depthWriteEnable = VK_TRUE;
   depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
@@ -373,7 +375,7 @@ VkPipeline VulkanCore::create_compute_pipeline(const std::string &shader_path,
 
   VkPipeline computePipeline;
   if (vkCreateComputePipelines(device_, VK_NULL_HANDLE, 1, &pipelineInfo,
-                                nullptr, &computePipeline) != VK_SUCCESS) {
+                               nullptr, &computePipeline) != VK_SUCCESS) {
     throw std::runtime_error("failed to create compute pipeline!");
   }
 
@@ -585,7 +587,8 @@ void VulkanCore::create_logical_device() {
       presentFamily = i;
     }
 
-    if ((queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) && computeFamily == -1) {
+    if ((queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) &&
+        computeFamily == -1) {
       computeFamily = i;
     }
 
@@ -654,7 +657,8 @@ void VulkanCore::create_logical_device() {
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
-  createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+  createInfo.queueCreateInfoCount =
+      static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pEnabledFeatures = &deviceFeatures;
 
   std::vector<const char *> deviceExtensions = {
@@ -676,8 +680,8 @@ void VulkanCore::create_logical_device() {
   present_queue_family_ = presentFamily;
   compute_queue_family_ = computeFamily;
 
-  std::cout << "[VulkanCore] Queue families - Graphics: " << graphics_queue_family_
-            << ", Compute: " << compute_queue_family_
+  std::cout << "[VulkanCore] Queue families - Graphics: "
+            << graphics_queue_family_ << ", Compute: " << compute_queue_family_
             << ", Present: " << present_queue_family_ << std::endl;
 }
 
@@ -861,13 +865,15 @@ void VulkanCore::create_render_pass() {
   // Depth attachment
   VkAttachmentDescription depthAttachment{};
   depthAttachment.format = find_depth_format();
-  depthAttachment.samples = config_.enable_msaa ? get_max_usable_sample_count() : VK_SAMPLE_COUNT_1_BIT;
+  depthAttachment.samples = config_.enable_msaa ? get_max_usable_sample_count()
+                                                : VK_SAMPLE_COUNT_1_BIT;
   depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+  depthAttachment.finalLayout =
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
   attachments.push_back(depthAttachment);
 
   // Subpass setup
@@ -881,7 +887,7 @@ void VulkanCore::create_render_pass() {
     colorRef.attachment = 0;
     colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachmentRefs.push_back(colorRef);
-    
+
     VkAttachmentReference resolveRef{};
     resolveRef.attachment = 1;
     resolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -894,7 +900,8 @@ void VulkanCore::create_render_pass() {
     colorAttachmentRefs.push_back(colorRef);
   }
 
-  subpass.colorAttachmentCount = static_cast<uint32_t>(colorAttachmentRefs.size());
+  subpass.colorAttachmentCount =
+      static_cast<uint32_t>(colorAttachmentRefs.size());
   subpass.pColorAttachments = colorAttachmentRefs.data();
 
   VkAttachmentReference depthAttachmentRef{};
@@ -907,10 +914,13 @@ void VulkanCore::create_render_pass() {
   VkSubpassDependency dependency{};
   dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
   dependency.dstSubpass = 0;
-  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
   dependency.srcAccessMask = 0;
-  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
   dependencies.push_back(dependency);
 
   VkRenderPassCreateInfo renderPassInfo{};
@@ -922,25 +932,28 @@ void VulkanCore::create_render_pass() {
   renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
   renderPassInfo.pDependencies = dependencies.data();
 
-  if (vkCreateRenderPass(device_, &renderPassInfo, nullptr, &render_pass_) != VK_SUCCESS) {
+  if (vkCreateRenderPass(device_, &renderPassInfo, nullptr, &render_pass_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to create render pass!");
   }
 
-  std::cout << "[VulkanCore] Render pass created with " << (config_.enable_msaa ? "MSAA" : "no MSAA") << " and depth buffer" << std::endl;
+  std::cout << "[VulkanCore] Render pass created with "
+            << (config_.enable_msaa ? "MSAA" : "no MSAA") << " and depth buffer"
+            << std::endl;
 }
 void VulkanCore::create_framebuffers() {
   framebuffers_.resize(swapchain_image_views_.size());
 
   for (size_t i = 0; i < swapchain_image_views_.size(); i++) {
     std::vector<VkImageView> attachments;
-    
+
     if (config_.enable_msaa) {
       attachments.push_back(msaa_color_image_view_);
       attachments.push_back(swapchain_image_views_[i]);
     } else {
       attachments.push_back(swapchain_image_views_[i]);
     }
-    
+
     attachments.push_back(depth_image_view_);
 
     VkFramebufferCreateInfo framebufferInfo{};
@@ -958,7 +971,9 @@ void VulkanCore::create_framebuffers() {
     }
   }
 
-  std::cout << "[VulkanCore] Framebuffers created with " << (config_.enable_msaa ? "MSAA" : "no MSAA") << " and depth buffer" << std::endl;
+  std::cout << "[VulkanCore] Framebuffers created with "
+            << (config_.enable_msaa ? "MSAA" : "no MSAA") << " and depth buffer"
+            << std::endl;
 }
 void VulkanCore::create_command_pool() {
   VkCommandPoolCreateInfo poolInfo{};
@@ -1127,7 +1142,9 @@ void VulkanCore::init_imgui() {
   init_info.Queue = graphics_queue_;
   init_info.DescriptorPool = imgui_descriptor_pool_; // Use the dedicated pool
   init_info.PipelineInfoMain.RenderPass = render_pass_;
-  init_info.PipelineInfoMain.MSAASamples = config_.enable_msaa ? get_max_usable_sample_count() : VK_SAMPLE_COUNT_1_BIT;
+  init_info.PipelineInfoMain.MSAASamples = config_.enable_msaa
+                                               ? get_max_usable_sample_count()
+                                               : VK_SAMPLE_COUNT_1_BIT;
   init_info.MinImageCount = 2;
   init_info.ImageCount = static_cast<uint32_t>(swapchain_images_.size());
   init_info.CheckVkResultFn = [](VkResult err) {
@@ -1160,8 +1177,8 @@ void VulkanCore::init_imgui() {
 }
 
 void VulkanCore::cleanup_imgui() {
-  // Do not call ImGui_ImplVulkan_Shutdown() here - it's called from VulkanDashboard::shutdown()
-  // to ensure correct shutdown order
+  // Do not call ImGui_ImplVulkan_Shutdown() here - it's called from
+  // VulkanDashboard::shutdown() to ensure correct shutdown order
 }
 
 void VulkanCore::create_default_sampler() {
@@ -1209,24 +1226,28 @@ bool VulkanCore::is_device_suitable(VkPhysicalDevice device) {
   // Check if device supports required extensions and features
   VkPhysicalDeviceFeatures deviceFeatures;
   vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-  
+
   // Check if device supports geometry shaders, tessellation, etc. (if needed)
   // For now, check if device supports depth testing and MSAA
   if (!deviceFeatures.depthClamp) {
-    std::cout << "[VulkanCore] Device does not support required depth features" << std::endl;
+    std::cout << "[VulkanCore] Device does not support required depth features"
+              << std::endl;
     return false;
   }
 
   // Check MSAA support
   VkPhysicalDeviceProperties physicalDeviceProperties;
   vkGetPhysicalDeviceProperties(device, &physicalDeviceProperties);
-  
-  VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
-                             physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-  
-  bool msaaSupported = counts & VK_SAMPLE_COUNT_4_BIT; // Check for at least 4x MSAA
+
+  VkSampleCountFlags counts =
+      physicalDeviceProperties.limits.framebufferColorSampleCounts &
+      physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+
+  bool msaaSupported =
+      counts & VK_SAMPLE_COUNT_4_BIT; // Check for at least 4x MSAA
   if (config_.enable_msaa && !msaaSupported) {
-    std::cout << "[VulkanCore] Device does not support MSAA (4x samples)" << std::endl;
+    std::cout << "[VulkanCore] Device does not support MSAA (4x samples)"
+              << std::endl;
     return false;
   }
 
@@ -1236,40 +1257,45 @@ VkSampleCountFlagBits VulkanCore::get_max_usable_sample_count() {
   VkPhysicalDeviceProperties physicalDeviceProperties;
   vkGetPhysicalDeviceProperties(physical_device_, &physicalDeviceProperties);
 
-  VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
-                             physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-  
-  if (counts & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
-  if (counts & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
-  if (counts & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
-  
+  VkSampleCountFlags counts =
+      physicalDeviceProperties.limits.framebufferColorSampleCounts &
+      physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+
+  if (counts & VK_SAMPLE_COUNT_8_BIT)
+    return VK_SAMPLE_COUNT_8_BIT;
+  if (counts & VK_SAMPLE_COUNT_4_BIT)
+    return VK_SAMPLE_COUNT_4_BIT;
+  if (counts & VK_SAMPLE_COUNT_2_BIT)
+    return VK_SAMPLE_COUNT_2_BIT;
+
   return VK_SAMPLE_COUNT_1_BIT;
 }
 
-VkFormat VulkanCore::find_supported_format(
-    const std::vector<VkFormat> &candidates,
-    VkImageTiling tiling,
-    VkFormatFeatureFlags features) {
+VkFormat
+VulkanCore::find_supported_format(const std::vector<VkFormat> &candidates,
+                                  VkImageTiling tiling,
+                                  VkFormatFeatureFlags features) {
   for (VkFormat format : candidates) {
     VkFormatProperties props;
     vkGetPhysicalDeviceFormatProperties(physical_device_, format, &props);
-    
-    if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+
+    if (tiling == VK_IMAGE_TILING_LINEAR &&
+        (props.linearTilingFeatures & features) == features) {
       return format;
-    } else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+    } else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+               (props.optimalTilingFeatures & features) == features) {
       return format;
     }
   }
-  
+
   throw std::runtime_error("failed to find supported format!");
 }
 
 VkFormat VulkanCore::find_depth_format() {
   return find_supported_format(
-    {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-    VK_IMAGE_TILING_OPTIMAL,
-    VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-  );
+      {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT,
+       VK_FORMAT_D24_UNORM_S8_UINT},
+      VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
 void VulkanCore::create_msaa_resources() {
@@ -1285,7 +1311,8 @@ void VulkanCore::create_msaa_resources() {
     return;
   }
 
-  std::cout << "[VulkanCore] Creating MSAA resources with " << msaaSamples << " samples" << std::endl;
+  std::cout << "[VulkanCore] Creating MSAA resources with " << msaaSamples
+            << " samples" << std::endl;
 
   // Create MSAA color image
   VkImageCreateInfo imageInfo{};
@@ -1304,7 +1331,8 @@ void VulkanCore::create_msaa_resources() {
   imageInfo.samples = msaaSamples;
   imageInfo.flags = 0;
 
-  if (vkCreateImage(device_, &imageInfo, nullptr, &msaa_color_image_) != VK_SUCCESS) {
+  if (vkCreateImage(device_, &imageInfo, nullptr, &msaa_color_image_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to create MSAA color image!");
   }
 
@@ -1315,9 +1343,11 @@ void VulkanCore::create_msaa_resources() {
   VkMemoryAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  allocInfo.memoryTypeIndex = find_memory_type(
+      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-  if (vkAllocateMemory(device_, &allocInfo, nullptr, &msaa_color_memory_) != VK_SUCCESS) {
+  if (vkAllocateMemory(device_, &allocInfo, nullptr, &msaa_color_memory_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to allocate MSAA color image memory!");
   }
 
@@ -1339,14 +1369,16 @@ void VulkanCore::create_msaa_resources() {
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  if (vkCreateImageView(device_, &viewInfo, nullptr, &msaa_color_image_view_) != VK_SUCCESS) {
+  if (vkCreateImageView(device_, &viewInfo, nullptr, &msaa_color_image_view_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to create MSAA color image view!");
   }
 }
 
 void VulkanCore::create_depth_resources() {
   VkFormat depthFormat = find_depth_format();
-  std::cout << "[VulkanCore] Creating depth buffer with format: " << depthFormat << std::endl;
+  std::cout << "[VulkanCore] Creating depth buffer with format: " << depthFormat
+            << std::endl;
 
   // Create depth image
   VkImageCreateInfo imageInfo{};
@@ -1362,10 +1394,12 @@ void VulkanCore::create_depth_resources() {
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.samples = config_.enable_msaa ? get_max_usable_sample_count() : VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.samples = config_.enable_msaa ? get_max_usable_sample_count()
+                                          : VK_SAMPLE_COUNT_1_BIT;
   imageInfo.flags = 0;
 
-  if (vkCreateImage(device_, &imageInfo, nullptr, &depth_image_) != VK_SUCCESS) {
+  if (vkCreateImage(device_, &imageInfo, nullptr, &depth_image_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to create depth image!");
   }
 
@@ -1376,9 +1410,11 @@ void VulkanCore::create_depth_resources() {
   VkMemoryAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = find_memory_type(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  allocInfo.memoryTypeIndex = find_memory_type(
+      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-  if (vkAllocateMemory(device_, &allocInfo, nullptr, &depth_memory_) != VK_SUCCESS) {
+  if (vkAllocateMemory(device_, &allocInfo, nullptr, &depth_memory_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to allocate depth image memory!");
   }
 
@@ -1395,7 +1431,8 @@ void VulkanCore::create_depth_resources() {
   viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
   viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
   viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-  if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
+  if (depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+      depthFormat == VK_FORMAT_D24_UNORM_S8_UINT) {
     viewInfo.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
   }
   viewInfo.subresourceRange.baseMipLevel = 0;
@@ -1403,7 +1440,8 @@ void VulkanCore::create_depth_resources() {
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  if (vkCreateImageView(device_, &viewInfo, nullptr, &depth_image_view_) != VK_SUCCESS) {
+  if (vkCreateImageView(device_, &viewInfo, nullptr, &depth_image_view_) !=
+      VK_SUCCESS) {
     throw std::runtime_error("failed to create depth image view!");
   }
 }

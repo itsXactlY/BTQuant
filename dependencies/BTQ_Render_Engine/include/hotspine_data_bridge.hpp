@@ -59,21 +59,16 @@ struct SharedMemoryHeader {
   uint8_t padding[8];
 };
 
-// ============================================================================
-// HFT Instrument Storage (Optimized for ImPlot)
-// ============================================================================
-
-struct MarketInstrument {
+struct InstrumentData {
   std::string symbol;
   std::string exchange;
   uint32_t symbol_id = 0;
 
-  // Ring Buffer Storage for Time-Series
-  static constexpr size_t HISTORY_CAPACITY = 10000;
-  std::vector<double> timestamps;
-  std::vector<double> opens, highs, lows, closes, volumes;
-  size_t write_idx = 0;
-  size_t size = 0;
+  // Time-Series Data (Optimized for ImPlot)
+  std::vector<double> timestamps, opens, highs, lows, closes, volumes;
+
+  // Heatmap/Orderflow Data
+  std::vector<double> heatmap_prices, heatmap_times, heatmap_volumes;
 
   // Latest Snapshot for Heatmap/Orderbook
   HotOrderbookSnapshot latest_snapshot;
@@ -81,34 +76,7 @@ struct MarketInstrument {
   // Thread-safe access for the UI thread
   mutable std::mutex data_mutex;
 
-  MarketInstrument() {
-    timestamps.resize(HISTORY_CAPACITY);
-    opens.resize(HISTORY_CAPACITY);
-    highs.resize(HISTORY_CAPACITY);
-    lows.resize(HISTORY_CAPACITY);
-    closes.resize(HISTORY_CAPACITY);
-    volumes.resize(HISTORY_CAPACITY);
-  }
-
-  void push_trade(const HotTrade &trade) {
-    std::lock_guard<std::mutex> lock(data_mutex);
-
-    timestamps[write_idx] = (double)trade.ts_exchange / 1000000.0;
-    opens[write_idx] = trade.price;
-    highs[write_idx] = trade.price;
-    lows[write_idx] = trade.price;
-    closes[write_idx] = trade.price;
-    volumes[write_idx] = trade.size;
-
-    write_idx = (write_idx + 1) % HISTORY_CAPACITY;
-    if (size < HISTORY_CAPACITY)
-      size++;
-  }
-
-  void update_book(const HotOrderbookSnapshot &snap) {
-    std::lock_guard<std::mutex> lock(data_mutex);
-    latest_snapshot = snap;
-  }
+  InstrumentData() = default;
 };
 
 // ============================================================================
@@ -124,15 +92,17 @@ public:
   void stop();
   void poll(); // Called by the Market Data Thread
 
-  std::map<std::string, std::shared_ptr<MarketInstrument>> GetInstruments() {
-    std::lock_guard<std::mutex> lock(m_map_mutex);
+  std::map<std::string, std::shared_ptr<InstrumentData>> &GetAllInstruments() {
     return m_instruments;
   }
 
   // Set MarketDataProcessor for OHLCV aggregation
-  void setMarketDataProcessor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
+  void setMarketDataProcessor(
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
     m_data_processor = processor;
   }
+
+  std::mutex &GetMapMutex() { return m_map_mutex; }
 
 private:
   // MarketDataProcessor for OHLCV aggregation
@@ -145,8 +115,7 @@ private:
 
   std::atomic<bool> m_running{false};
 
-  std::map<std::string, std::shared_ptr<MarketInstrument>> m_instruments;
-  std::map<uint32_t, std::shared_ptr<MarketInstrument>> m_id_map;
+  std::map<std::string, std::shared_ptr<InstrumentData>> m_instruments;
   std::mutex m_map_mutex;
 
   // Ring Buffer Pointers
@@ -163,7 +132,7 @@ private:
   void init_simulation();
 
   // Helper to map symbol ID to object (lazy if needed)
-  std::shared_ptr<MarketInstrument> get_instrument(uint32_t symbol_id);
+  std::shared_ptr<InstrumentData> get_instrument(uint32_t symbol_id);
 };
 
 } // namespace BTQuant

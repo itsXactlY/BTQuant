@@ -1,8 +1,8 @@
 #include "vulkan_dashboard_advanced.hpp"
 #include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
 #include "components/quant_workspace_component.hpp"
 #include "imgui.h"
-#include "imgui_impl_vulkan.h"
 #include "implot.h"
 #include <iostream>
 
@@ -95,22 +95,22 @@ void VulkanDashboard::shutdown() {
   if (already_shutdown) {
     return;
   }
-  
+
   already_shutdown = true;
-  
+
   std::cout << "[VulkanDashboard] Terminating Rendering Engine..." << std::endl;
-  
+
   // Shutdown ImGui backends in correct order
   if (ImGui::GetCurrentContext() != nullptr) {
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     if (io.BackendRendererUserData != nullptr) {
       ImGui_ImplVulkan_Shutdown();
     }
-    
+
     if (io.BackendPlatformUserData != nullptr) {
       ImGui_ImplGlfw_Shutdown();
     }
-    
+
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
   }

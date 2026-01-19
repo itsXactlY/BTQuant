@@ -1,4 +1,4 @@
-#include "stubs/symbol_registry.hpp"
+#include "symbol_registry.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>

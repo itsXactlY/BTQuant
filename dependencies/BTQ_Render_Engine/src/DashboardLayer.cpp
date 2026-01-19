@@ -1,6 +1,6 @@
 #include "imgui_internal.h"
+#include "symbol_registry.hpp"
 #include "vulkan_dashboard_advanced.hpp"
-#include "stubs/symbol_registry.hpp"
 #include <algorithm>
 
 namespace BTQuant {
@@ -60,36 +60,37 @@ void DashboardLayer::SetupDockspace() {
 
 void DashboardLayer::DrawSymbolSelector() {
   ImGui::Begin("Symbol Selector");
-  
+
   // Get all symbols from registry
   static std::vector<std::string> symbol_list;
   static bool symbols_loaded = false;
-  
+
   if (!symbols_loaded) {
     auto all_symbols = SymbolRegistry::instance().get_all_symbols();
     symbol_list.reserve(all_symbols.size());
     for (const auto &symbol_info : all_symbols) {
       symbol_list.push_back(symbol_info.symbol);
     }
-    
+
     // Fallback to default symbols if no symbols loaded
     if (symbol_list.empty()) {
       symbol_list = {"BTC-USDT", "ETH-USDT", "SOL-USDT", "XRP-USDT"};
     }
-    
+
     symbols_loaded = true;
   }
-  
+
   static int current_idx = 0;
-  
+
   // Create c-style array for ImGui Combo
-  std::vector<const char*> symbol_names;
+  std::vector<const char *> symbol_names;
   symbol_names.reserve(symbol_list.size());
   for (const auto &sym : symbol_list) {
     symbol_names.push_back(sym.c_str());
   }
 
-  if (ImGui::Combo("Symbol", &current_idx, symbol_names.data(), symbol_names.size())) {
+  if (ImGui::Combo("Symbol", &current_idx, symbol_names.data(),
+                   symbol_names.size())) {
     current_symbol_ = symbol_list[current_idx];
     FetchData(current_symbol_);
   }

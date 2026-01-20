@@ -189,32 +189,33 @@ void HotSpineDataBridge::poll_shm() {
       continue; // Skip unknown symbols
     }
 
+    // Retrieve symbol_info for the trade's symbol_id for validation
+    auto symbol_info =
+        SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+    if (!symbol_info) {
+      m_last_read_idx++;
+      continue; // Should not happen if get_instrument returned a valid inst
+    }
+
     {
       std::lock_guard<std::mutex> lock(inst->data_mutex);
       double ts = (double)trade.ts_exchange / 1000000.0;
 
-      // SoA Update
-      inst->timestamps.push_back(ts);
-      inst->opens.push_back(trade.price);
-      inst->highs.push_back(trade.price);
-      inst->lows.push_back(trade.price);
-      inst->closes.push_back(trade.price);
-      inst->volumes.push_back(trade.size);
+      // CRITICAL: Validate trade belongs to this instrument
+      static int mismatch_count = 0;
+      if (inst->symbol != symbol_info->symbol && mismatch_count++ < 5) {
+        std::cout << "[ERROR] Symbol mismatch! InstrumentStore=" << inst->symbol
+                  << " but trade is for " << symbol_info->symbol << std::endl;
+      }
+
+      // Use aggregator instead of naive approach
+      inst->add_trade(ts, static_cast<float>(trade.price),
+                      static_cast<float>(trade.size));
 
       // Volume Profile Accumulation (Price rounded to 0.5 tick)
       double tick_size = 0.5;
       double rounded_price = std::round(trade.price / tick_size) * tick_size;
       inst->m_vol_profile[rounded_price] += trade.size;
-
-      // Keep a reasonable history (HFT density management)
-      if (inst->timestamps.size() > 10000) {
-        inst->timestamps.erase(inst->timestamps.begin());
-        inst->opens.erase(inst->opens.begin());
-        inst->highs.erase(inst->highs.begin());
-        inst->lows.erase(inst->lows.begin());
-        inst->closes.erase(inst->closes.begin());
-        inst->volumes.erase(inst->volumes.begin());
-      }
     }
 
     m_last_read_idx++;

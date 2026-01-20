@@ -45,7 +45,7 @@ public:
   void update_chart_size(uint32_t chart_id, const ImVec2 &size);
 
   const std::unordered_map<uint32_t, ChartInstance> &get_charts() const;
-  std::vector<ChartInstance> get_visible_charts() const;
+  std::vector<const ChartInstance *> get_visible_charts() const;
   std::vector<ChartInstance>
   get_charts_for_symbol(const std::string &symbol) const;
 

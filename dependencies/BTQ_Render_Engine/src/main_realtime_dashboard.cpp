@@ -11,13 +11,17 @@
  * Goal: Wire up HotSpineDataBridge -> QuantWorkspaceComponent -> ImPlot ->
  * VulkanDashboard.
  */
-int main(int argc, char **argv) {
-  (void)argc;
-  (void)argv;
-
+int main() {
+  std::cout << "=================================================="
+            << std::endl;
   std::cout << "[Main] BTQuant Real-Time Terminal Starting..." << std::endl;
+  std::cout << "[Main] BUILD TIMESTAMP: " << __DATE__ << " " << __TIME__
+            << std::endl;
+  std::cout << "[Main] AUTO-FIT ENABLED FOR CHARTS" << std::endl;
+  std::cout << "=================================================="
+            << std::endl;
 
-  // 1. Data Layer Initialization (Shared Ptr)
+  // 1. Initialize Data Bridge
   auto bridge =
       std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   if (!bridge->start()) {

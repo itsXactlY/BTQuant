@@ -1,5 +1,6 @@
 #pragma once
 
+#include "timeframe.hpp" // TimeFrame enum
 #include <array>
 #include <atomic>
 #include <map>
@@ -9,6 +10,10 @@
 #include <vector>
 
 namespace BTQuant {
+
+// Forward declarations
+class CandleAggregator;
+
 namespace RenderEngine {
 class MarketDataProcessor;
 } // namespace RenderEngine
@@ -64,7 +69,12 @@ struct InstrumentStore {
   std::string exchange;
   uint32_t symbol_id = 0;
 
+  // Candle aggregator for all timeframes
+  std::unique_ptr<class CandleAggregator> aggregator;
+  RenderEngine::TimeFrame active_timeframe = RenderEngine::TimeFrame::TF_1MIN;
+
   // Structure of Arrays (SoA) for ImPlot compatibility & high-throughput
+  // These are populated on-demand from aggregator for the active timeframe
   std::vector<double> timestamps;
   std::vector<double> opens;
   std::vector<double> highs;
@@ -81,7 +91,17 @@ struct InstrumentStore {
   // Thread-safe access for the UI thread
   mutable std::mutex data_mutex;
 
-  InstrumentStore() = default;
+  InstrumentStore();
+  ~InstrumentStore();
+
+  // Add trade to aggregator and refresh candles
+  void add_trade(double timestamp, float price, float size);
+
+  // Set active timeframe and refresh
+  void set_timeframe(RenderEngine::TimeFrame tf);
+
+  // Refresh candle arrays from aggregator
+  void refresh_candles();
 };
 
 // ============================================================================

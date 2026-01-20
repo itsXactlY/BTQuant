@@ -85,11 +85,11 @@ ChartManager::get_charts() const {
   return charts_;
 }
 
-std::vector<ChartInstance> ChartManager::get_visible_charts() const {
-  std::vector<ChartInstance> visible_charts;
+std::vector<const ChartInstance *> ChartManager::get_visible_charts() const {
+  std::vector<const ChartInstance *> visible_charts;
   for (const auto &[id, chart] : charts_) {
     if (chart.visible) {
-      visible_charts.push_back(chart);
+      visible_charts.push_back(&chart);
     }
   }
   return visible_charts;

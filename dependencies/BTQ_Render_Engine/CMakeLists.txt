@@ -39,6 +39,8 @@ set(DASHBOARD_SOURCES
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp
+    src/data/candle_aggregator.cpp
+    src/data/instrument_store.cpp
     src/components/quant_workspace_component.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp

@@ -19,32 +19,6 @@
         ],
         "channels": ["TRADE", "MARKET_DEPTH"],
         "market_type": "spot"
-        },
-        {
-        "name": "bybit",
-        "symbols": [
-            "DOGEUSDT",
-            "ADAUSDT",
-            "BTCUSDT",
-            "BNBUSDT",
-            "ETHUSDT",
-            "SOLUSDT"
-        ],
-            "channels": ["TRADE", "MARKET_DEPTH"],
-            "market_type": "spot"
-        },
-        {
-        "name": "okx",
-        "symbols": [
-            "DOGE-USDT",
-            "ADA-USDT",
-            "BTC-USDT",
-            "BNB-USDT",
-            "ETH-USDT",
-            "SOL-USDT"
-        ],
-            "channels": ["TRADE", "MARKET_DEPTH"],
-            "market_type": "spot"
         }
     ],
     "trade_buffer_size": 1000,

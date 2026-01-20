@@ -65,7 +65,8 @@ void QuantWorkspaceComponent::render_gui() {
   }
 
   // Render all visible charts
-  for (const auto &chart : chart_manager_->get_visible_charts()) {
+  for (const auto *chart_ptr : chart_manager_->get_visible_charts()) {
+    const auto &chart = *chart_ptr;
     auto it = instruments.find(chart.symbol);
     if (it != instruments.end()) {
       bool open = true;
@@ -293,7 +294,7 @@ void QuantWorkspaceComponent::render_instrument_chart(
                                              0.0f, 0.94f, 1.0f, 1.0f))); // Cyan
 
   if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
-    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
 
     // Enable auto-fit for price axis
@@ -305,12 +306,6 @@ void QuantWorkspaceComponent::render_instrument_chart(
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y2, 0,
                                        1000000); // For Volume alignment
 
-    // Setup automatic axis limits based on data
-    if (!chart.dates.empty()) {
-      ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
-                              chart.dates.back(), ImPlotCond_Always);
-    }
-
     const double *dates = chart.dates.data();
     const float *opens = chart.opens.data();
     const float *closes = chart.closes.data();
@@ -318,46 +313,68 @@ void QuantWorkspaceComponent::render_instrument_chart(
     const float *highs = chart.highs.data();
     int count = (int)chart.dates.size();
 
-    // Debug: Log rendering data
+    // Log actual data ranges
     static int log_counter = 0;
-    if (log_counter++ % 60 == 0) { // Log once per ~60 frames
-      std::cout << "[Render] " << symbol << " count=" << count;
-      if (count > 0) {
-        std::cout << " first_date=" << dates[0] << " O=" << opens[0]
-                  << " H=" << highs[0] << " L=" << lows[0]
-                  << " C=" << closes[0];
-      }
-      std::cout << std::endl;
+    if (log_counter++ % 60 == 0 && count > 0) { // Log once per ~60 frames
+      std::cout << "[DATA] " << symbol << " count=" << count << " date_range=["
+                << dates[0] << " to " << dates[count - 1] << "]"
+                << " price_range=[" << *std::min_element(lows, lows + count)
+                << " to " << *std::max_element(highs, highs + count) << "]"
+                << std::endl;
     }
 
-    // Plot 1: Candlesticks (Manual high-perf implementation)
-    if (count > 0 && ImPlot::BeginItem("OHLC")) {
-      ImDrawList *draw_list = ImPlot::GetPlotDrawList();
-      double width = 0.25;
-      if (count > 1) {
-        width = (dates[1] - dates[0]) * 0.25;
+    // Plot 1: Candlesticks (Manual rendering - FIXED)
+    if (count > 0) {
+      std::cout << "[Render] " << symbol << " drawing " << count
+                << " candles manually" << std::endl;
+
+      // CRITICAL: Fit points FIRST to establish plot bounds
+      if (ImPlot::BeginItem("OHLC")) {
+        // Register all data points with ImPlot for proper axis bounds
+        for (int i = 0; i < count; ++i) {
+          ImPlot::FitPoint(ImPlotPoint(dates[i], lows[i]));
+          ImPlot::FitPoint(ImPlotPoint(dates[i], highs[i]));
+        }
+
+        // Now draw after bounds are established
+        ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+        double candle_width = 0.6; // Fixed width for visibility
+        if (count > 1) {
+          candle_width = (dates[1] - dates[0]) * 0.6;
+        }
+
+        for (int i = 0; i < count; ++i) {
+          // Convert plot coordinates to screen pixels
+          ImVec2 high_px = ImPlot::PlotToPixels(dates[i], highs[i]);
+          ImVec2 low_px = ImPlot::PlotToPixels(dates[i], lows[i]);
+          ImVec2 open_px =
+              ImPlot::PlotToPixels(dates[i] - candle_width / 2, opens[i]);
+          ImVec2 close_px =
+              ImPlot::PlotToPixels(dates[i] + candle_width / 2, closes[i]);
+
+          // Color: green for up, red for down
+          bool bullish = closes[i] >= opens[i];
+          ImU32 color = bullish ? IM_COL32(0, 240, 255, 255) // Cyan for up
+                                : IM_COL32(255, 0, 50, 255); // Red for down
+
+          // Draw wick (high-low line)
+          draw_list->AddLine(ImVec2(high_px.x, high_px.y),
+                             ImVec2(low_px.x, low_px.y), color, 1.0f);
+
+          // Draw body (open-close rectangle)
+          draw_list->AddRectFilled(ImVec2(open_px.x, open_px.y),
+                                   ImVec2(close_px.x, close_px.y), color);
+        }
+
+        ImPlot::EndItem();
+        std::cout << "[Render] Drew " << count << " candles for " << symbol
+                  << std::endl;
+      } else {
+        std::cout << "[Render] BeginItem FAILED for " << symbol << std::endl;
       }
-
-      for (int i = 0; i < count; ++i) {
-        ImVec2 open_pos = ImPlot::PlotToPixels(dates[i] - width, opens[i]);
-        ImVec2 close_pos = ImPlot::PlotToPixels(dates[i] + width, closes[i]);
-        ImVec2 low_pos = ImPlot::PlotToPixels(dates[i], lows[i]);
-        ImVec2 high_pos = ImPlot::PlotToPixels(dates[i], highs[i]);
-
-        // Neon Red for down, Cyber Cyan for up
-        ImU32 color = (opens[i] > closes[i])
-                          ? ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.2f, 1.0f))
-                          : // Neon Red
-                          ImGui::GetColorU32(
-                              ImVec4(0.0f, 0.94f, 1.0f, 1.0f)); // Cyber Cyan
-
-        draw_list->AddLine(low_pos, high_pos, color);
-        draw_list->AddRectFilled(open_pos, close_pos, color);
-
-        ImPlot::FitPoint(ImPlotPoint(dates[i], lows[i]));
-        ImPlot::FitPoint(ImPlotPoint(dates[i], highs[i]));
-      }
-      ImPlot::EndItem();
+    } else {
+      std::cout << "[Render] No candles to draw for " << symbol << " (count=0)"
+                << std::endl;
     }
 
     // Plot 2: Volume Profile (PlotBarsH on Y-axis)

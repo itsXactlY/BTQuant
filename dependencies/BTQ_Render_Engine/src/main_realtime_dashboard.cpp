@@ -39,10 +39,17 @@ int main(int argc, char **argv) {
 
   // 2b. ImPlot Context (Must be after ImGui initialization in
   // dashboard->initialize)
+  std::cout << "[Main] Creating ImPlot context..." << std::endl;
   ImPlot::CreateContext();
+  std::cout << "[Main] ImPlot context created" << std::endl;
 
-  // 3. Execution Loop
+  //.3. Execution Loop
+  std::cout << "[Main] Starting main loop..." << std::endl;
+  int frame_count = 0;
   while (!dashboard->should_close()) {
+    if (frame_count++ % 60 == 0) {
+      std::cout << "[Main] Frame " << frame_count << std::endl;
+    }
     dashboard->handle_events();
     bridge->poll();
     dashboard->render_frame();

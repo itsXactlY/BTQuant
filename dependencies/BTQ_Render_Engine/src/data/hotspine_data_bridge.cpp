@@ -116,30 +116,29 @@ std::shared_ptr<InstrumentStore>
 HotSpineDataBridge::get_instrument(uint32_t symbol_id) {
   std::lock_guard<std::mutex> lock(m_map_mutex);
 
-  // Search by ID
+  // Search by ID first
   for (auto &[sym, inst] : m_instruments) {
     if (inst->symbol_id == symbol_id)
       return inst;
   }
 
-  // Dynamic Discovery
-  char buf[64];
-  snprintf(buf, sizeof(buf), "Unknown-%u", symbol_id);
-  std::string sym = buf;
-  std::string exchange = "UNKNOWN";
-
-  // Get symbol information from registry
+  // Check if symbol is in registry - ONLY create if known
   auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-  if (symbol_info) {
-    sym = symbol_info->symbol;
-    exchange = symbol_info->exchange;
+  if (!symbol_info) {
+    // Unknown symbol - ignore it
+    return nullptr;
   }
 
+  // Create instrument for KNOWN symbol
   auto inst = std::make_shared<InstrumentStore>();
-  inst->symbol = sym;
-  inst->exchange = exchange;
+  inst->symbol = symbol_info->symbol;
+  inst->exchange = symbol_info->exchange;
   inst->symbol_id = symbol_id;
-  m_instruments[sym] = inst;
+  m_instruments[inst->symbol] = inst;
+
+  std::cout << "[HotSpineDataBridge] Discovered: " << inst->symbol
+            << " (ID=" << symbol_id << ", Exchange=" << inst->exchange << ")"
+            << std::endl;
 
   return inst;
 }
@@ -158,6 +157,9 @@ void HotSpineDataBridge::poll_shm() {
     const HotTrade &trade = m_trades[m_last_read_idx % capacity];
 
     auto inst = get_instrument(trade.symbol_id);
+    if (!inst)
+      continue; // Skip unknown symbols
+
     {
       std::lock_guard<std::mutex> lock(inst->data_mutex);
       double ts = (double)trade.ts_exchange / 1000000.0;
@@ -199,6 +201,9 @@ void HotSpineDataBridge::poll_shm() {
         m_books[m_last_book_read_idx % book_capacity];
 
     auto inst = get_instrument(snap.symbol_id);
+    if (!inst)
+      continue; // Skip unknown symbols
+
     {
       std::lock_guard<std::mutex> lock(inst->data_mutex);
       inst->latest_snapshot = snap;

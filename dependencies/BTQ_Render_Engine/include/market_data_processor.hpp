@@ -1,16 +1,16 @@
 #pragma once
 
 #include "hotspine_data_bridge.hpp"
+#include <atomic>
 #include <chrono>
+#include <functional>
+#include <future>
 #include <mutex>
+#include <optional>
+#include <queue>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
-#include <optional>
-#include <shared_mutex>
-#include <future>
-#include <atomic>
-#include <functional>
-#include <queue>
 
 // Price level for order book data
 struct PriceLevel {
@@ -63,7 +63,7 @@ struct OrderbookData {
 
 // OHLCV Candle Data for Charting
 struct OHLCVCandle {
-  uint64_t timestamp;  // Start time of the candle in microseconds
+  uint64_t timestamp; // Start time of the candle in microseconds
   double open;
   double high;
   double low;
@@ -74,16 +74,18 @@ struct OHLCVCandle {
 
 // Time frame definitions for OHLCV aggregation
 enum class TimeFrame {
-  TF_1MIN,    // 1 minute
-  TF_5MIN,    // 5 minutes
-  TF_15MIN,   // 15 minutes
-  TF_1HOUR,   // 1 hour
-  TF_4HOUR,   // 4 hours
-  TF_1DAY,    // 1 day
-  TF_1SEC,    // 1 second (for sub-second charts)
-  TF_5SEC,    // 5 seconds
-  TF_15SEC,   // 15 seconds
-  TF_30SEC    // 30 seconds
+  TF_1MIN,  // 1 minute
+  TF_5MIN,  // 5 minutes
+  TF_15MIN, // 15 minutes
+  TF_1HOUR, // 1 hour
+  TF_4HOUR, // 4 hours
+  TF_1DAY,  // 1 day
+  TF_1SEC,  // 1 second (for sub-second charts)
+  TF_5SEC,  // 5 seconds
+  TF_15SEC, // 15 seconds
+  TF_30SEC, // 30 seconds
+  TF_500MS, // 500 milliseconds
+  TF_100MS  // 100 milliseconds
 };
 
 // Indicator cache entry
@@ -106,7 +108,8 @@ struct SymbolAnalytics {
 
   // OHLCV candle data for multiple time frames
   std::unordered_map<TimeFrame, std::vector<OHLCVCandle>> candles;
-  std::unordered_map<TimeFrame, OHLCVCandle> current_candles; // In-progress candles
+  std::unordered_map<TimeFrame, OHLCVCandle>
+      current_candles; // In-progress candles
 
   // Trade analytics
   std::vector<TradeData> recent_trades;
@@ -219,6 +222,13 @@ public:
   void processTradeUpdate(const MarketDataUpdate &update);
 
   /**
+   * Process multiple trade updates in a single batch (synchronous)
+   * Designed for high-performance initial loading and HFT bursts.
+   * @param updates Vector of market data updates
+   */
+  void processTradeUpdates(const std::vector<MarketDataUpdate> &updates);
+
+  /**
    * Process an orderbook update (asynchronous)
    * @param update Market data update containing orderbook information
    */
@@ -250,7 +260,7 @@ public:
    * @return Vector of ranked symbols
    */
   std::vector<SymbolRanking> getRankings(RankingCriteria criteria,
-                                          size_t limit = 0) const;
+                                         size_t limit = 0) const;
 
   /**
    * Get OHLCV candles for a symbol and time frame (cached, thread-safe)
@@ -258,7 +268,8 @@ public:
    * @param timeframe Time frame of the candles
    * @return Vector of OHLCV candles
    */
-  std::vector<OHLCVCandle> getCandles(uint32_t symbol_id, TimeFrame timeframe) const;
+  std::vector<OHLCVCandle> getCandles(uint32_t symbol_id,
+                                      TimeFrame timeframe) const;
 
   /**
    * Get current (in-progress) candle for a symbol and time frame (thread-safe)
@@ -266,7 +277,8 @@ public:
    * @param timeframe Time frame of the candle
    * @return Current OHLCV candle if available, empty optional otherwise
    */
-  std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id, TimeFrame timeframe) const;
+  std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id,
+                                              TimeFrame timeframe) const;
 
   /**
    * Get market summary statistics (thread-safe)
@@ -302,7 +314,8 @@ public:
   /**
    * Indicator cache methods
    */
-  void clearIndicatorCache(uint32_t symbol_id, const std::string &indicator_name);
+  void clearIndicatorCache(uint32_t symbol_id,
+                           const std::string &indicator_name);
   void clearAllIndicatorCaches();
 
   /**
@@ -333,25 +346,26 @@ private:
     std::atomic<std::chrono::high_resolution_clock::time_point::rep>
         last_update_time{0};
     std::atomic<double> processing_latency_us{0.0};
-    
+
     ProcessorPerformanceMetrics toNonAtomic() const {
       ProcessorPerformanceMetrics result;
       result.total_trades_processed = total_trades_processed.load();
       result.total_orderbooks_processed = total_orderbooks_processed.load();
       result.last_update_time = std::chrono::high_resolution_clock::time_point(
-          std::chrono::high_resolution_clock::duration(last_update_time.load()));
+          std::chrono::high_resolution_clock::duration(
+              last_update_time.load()));
       result.processing_latency_us = processing_latency_us.load();
       return result;
     }
-    
-    void fromNonAtomic(const ProcessorPerformanceMetrics& other) {
+
+    void fromNonAtomic(const ProcessorPerformanceMetrics &other) {
       total_trades_processed.store(other.total_trades_processed);
       total_orderbooks_processed.store(other.total_orderbooks_processed);
       last_update_time.store(other.last_update_time.time_since_epoch().count());
       processing_latency_us.store(other.processing_latency_us);
     }
   };
-  
+
   AtomicPerformanceMetrics performance_metrics_;
 
   // Thread pool for parallel processing
@@ -368,18 +382,20 @@ private:
   void updateTradingMetrics(SymbolAnalytics &symbol_data,
                             const TradeData &trade);
   void updateSpreadAnalysis(SymbolAnalytics &symbol_data);
-  
+
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade);
-  OHLCVCandle createNewCandle(uint64_t timestamp, double price, double size) const;
-  bool isTradeInCurrentCandle(const OHLCVCandle &candle, uint64_t trade_timestamp,
+  OHLCVCandle createNewCandle(uint64_t timestamp, double price,
+                              double size) const;
+  bool isTradeInCurrentCandle(const OHLCVCandle &candle,
+                              uint64_t trade_timestamp,
                               TimeFrame timeframe) const;
   void updateCandle(OHLCVCandle &candle, double price, double size) const;
 
   // Helper methods
   double calculateMarketDepth(const std::vector<PriceLevel> &levels) const;
   double calculateVolumeInWindow(const std::vector<TradeData> &trades,
-                                  uint64_t window_us) const;
+                                 uint64_t window_us) const;
 
   // Worker thread function
   void workerThread();

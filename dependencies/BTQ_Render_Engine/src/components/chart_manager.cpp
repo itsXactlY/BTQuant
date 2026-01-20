@@ -2,6 +2,10 @@
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
+#include "imgui.h"
+#include <iostream>
+#include <unordered_map>
+#include <vector>
 
 namespace BTQuant {
 
@@ -10,10 +14,14 @@ ChartManager::ChartManager(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge), processor_(processor), next_chart_id_(0) {}
 
-uint32_t ChartManager::create_chart(const std::string &symbol,
+uint32_t ChartManager::create_chart(const std::string &symbol_name,
+                                    const std::string &exchange_name,
+                                    uint32_t symbol_id,
                                     RenderEngine::TimeFrame timeframe) {
   ChartInstance chart;
-  chart.symbol = symbol;
+  chart.symbol_name = symbol_name;
+  chart.exchange_name = exchange_name;
+  chart.symbol_id = symbol_id;
   chart.timeframe = timeframe;
   chart.chart_id = next_chart_id_++;
   chart.visible = true;
@@ -77,20 +85,21 @@ std::vector<ChartInstance> ChartManager::get_visible_charts() const {
 }
 
 std::vector<ChartInstance>
-ChartManager::get_charts_for_symbol(const std::string &symbol) const {
+ChartManager::get_charts_for_symbol(const std::string &symbol_name) const {
   std::vector<ChartInstance> symbol_charts;
   for (const auto &[id, chart] : charts_) {
-    if (chart.symbol == symbol) {
+    if (chart.symbol_name == symbol_name) {
       symbol_charts.push_back(chart);
     }
   }
   return symbol_charts;
 }
 
-uint32_t ChartManager::getSymbolId(const std::string &symbol) const {
+std::optional<uint32_t>
+ChartManager::getSymbolId(const std::string &symbol_name) const {
   std::lock_guard<std::mutex> lock(id_map_mutex_);
 
-  auto it = symbol_id_map_.find(symbol);
+  auto it = symbol_id_map_.find(symbol_name);
   if (it != symbol_id_map_.end()) {
     return it->second;
   }
@@ -98,25 +107,25 @@ uint32_t ChartManager::getSymbolId(const std::string &symbol) const {
   // Query SymbolRegistry for the actual ID used by HotSpine
   auto all_symbols = SymbolRegistry::instance().get_all_symbols();
   for (const auto &info : all_symbols) {
-    if (info.symbol == symbol) {
-      symbol_id_map_[symbol] = info.id;
+    if (info.symbol == symbol_name) {
+      symbol_id_map_[symbol_name] = info.id;
       return info.id;
     }
   }
 
-  return 0; // Unknown symbol
+  return std::nullopt; // Unknown symbol
 }
 
 void ChartManager::update() {
   auto active_symbol_ids = bridge_->getActiveSymbols();
 
   for (uint32_t symbol_id : active_symbol_ids) {
-    std::string symbol = bridge_->getSymbolName(symbol_id);
+    std::string symbol_str = bridge_->getSymbolName(symbol_id);
 
     bool has_chart = false;
     uint32_t chart_id = 0;
     for (const auto &[id, chart] : charts_) {
-      if (chart.symbol == symbol) {
+      if (chart.symbol_name == symbol_str && chart.symbol_id == symbol_id) {
         has_chart = true;
         chart_id = id;
         break;
@@ -124,7 +133,14 @@ void ChartManager::update() {
     }
 
     if (!has_chart) {
-      chart_id = create_chart(symbol, RenderEngine::TimeFrame::TF_1MIN);
+      std::string exchange = "Unknown";
+      auto info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+      if (info) {
+        exchange = info->exchange;
+      }
+
+      chart_id = create_chart(symbol_str, exchange, symbol_id,
+                              RenderEngine::TimeFrame::TF_1MIN);
     }
 
     populate_chart_data(chart_id);
@@ -137,38 +153,93 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     return;
 
   auto &chart = it->second;
-
-  uint32_t symbol_id = getSymbolId(chart.symbol);
-  if (symbol_id == 0) {
-    return;
-  }
+  uint32_t symbol_id = chart.symbol_id;
 
   auto candles = processor_->getCandles(symbol_id, chart.timeframe);
   if (candles.empty()) {
     return;
   }
 
-  chart.dates.clear();
-  chart.opens.clear();
-  chart.highs.clear();
-  chart.lows.clear();
-  chart.closes.clear();
-  chart.volumes.clear();
+  // Incremental Update Logic: Only append or update the latest candle
+  if (chart.dates.empty()) {
+    chart.dates.reserve(candles.size());
+    chart.opens.reserve(candles.size());
+    chart.highs.reserve(candles.size());
+    chart.lows.reserve(candles.size());
+    chart.closes.reserve(candles.size());
+    chart.volumes.reserve(candles.size());
 
-  chart.dates.reserve(candles.size());
-  chart.opens.reserve(candles.size());
-  chart.highs.reserve(candles.size());
-  chart.lows.reserve(candles.size());
-  chart.closes.reserve(candles.size());
-  chart.volumes.reserve(candles.size());
+    for (const auto &candle : candles) {
+      chart.dates.push_back(static_cast<double>(candle.timestamp) / 1000000.0);
+      chart.opens.push_back(static_cast<float>(candle.open));
+      chart.highs.push_back(static_cast<float>(candle.high));
+      chart.lows.push_back(static_cast<float>(candle.low));
+      chart.closes.push_back(static_cast<float>(candle.close));
+      chart.volumes.push_back(static_cast<float>(candle.volume));
+    }
+  } else {
+    double last_stored_ts = chart.dates.back();
+    size_t start_idx = 0;
+    bool found_overlap = false;
 
-  for (const auto &candle : candles) {
-    chart.dates.push_back(static_cast<double>(candle.timestamp) / 1000000.0);
-    chart.opens.push_back(static_cast<float>(candle.open));
-    chart.highs.push_back(static_cast<float>(candle.high));
-    chart.lows.push_back(static_cast<float>(candle.low));
-    chart.closes.push_back(static_cast<float>(candle.close));
-    chart.volumes.push_back(static_cast<float>(candle.volume));
+    // Search from the end for the last matching candle
+    for (int i = (int)candles.size() - 1; i >= 0; --i) {
+      double candle_ts = static_cast<double>(candles[i].timestamp) / 1000000.0;
+      if (std::abs(candle_ts - last_stored_ts) < 0.000001) {
+        // Update the last candle as it might still be aggregating
+        chart.opens.back() = static_cast<float>(candles[i].open);
+        chart.highs.back() = static_cast<float>(candles[i].high);
+        chart.lows.back() = static_cast<float>(candles[i].low);
+        chart.closes.back() = static_cast<float>(candles[i].close);
+        chart.volumes.back() = static_cast<float>(candles[i].volume);
+        start_idx = i + 1;
+        found_overlap = true;
+        break;
+      }
+    }
+
+    if (!found_overlap) {
+      // Data gap or reset, clear and re-populate
+      chart.dates.clear();
+      chart.opens.clear();
+      chart.highs.clear();
+      chart.lows.clear();
+      chart.closes.clear();
+      chart.volumes.clear();
+      for (const auto &candle : candles) {
+        chart.dates.push_back(static_cast<double>(candle.timestamp) /
+                              1000000.0);
+        chart.opens.push_back(static_cast<float>(candle.open));
+        chart.highs.push_back(static_cast<float>(candle.high));
+        chart.lows.push_back(static_cast<float>(candle.low));
+        chart.closes.push_back(static_cast<float>(candle.close));
+        chart.volumes.push_back(static_cast<float>(candle.volume));
+      }
+    } else {
+      // Append ONLY new candles
+      for (size_t i = start_idx; i < candles.size(); ++i) {
+        chart.dates.push_back(static_cast<double>(candles[i].timestamp) /
+                              1000000.0);
+        chart.opens.push_back(static_cast<float>(candles[i].open));
+        chart.highs.push_back(static_cast<float>(candles[i].high));
+        chart.lows.push_back(static_cast<float>(candles[i].low));
+        chart.closes.push_back(static_cast<float>(candles[i].close));
+        chart.volumes.push_back(static_cast<float>(candles[i].volume));
+      }
+    }
+
+    // Maintain history limit
+    if (chart.dates.size() > 20000) {
+      size_t erase_count = chart.dates.size() - 10000;
+      chart.dates.erase(chart.dates.begin(), chart.dates.begin() + erase_count);
+      chart.opens.erase(chart.opens.begin(), chart.opens.begin() + erase_count);
+      chart.highs.erase(chart.highs.begin(), chart.highs.begin() + erase_count);
+      chart.lows.erase(chart.lows.begin(), chart.lows.begin() + erase_count);
+      chart.closes.erase(chart.closes.begin(),
+                         chart.closes.begin() + erase_count);
+      chart.volumes.erase(chart.volumes.begin(),
+                          chart.volumes.begin() + erase_count);
+    }
   }
 }
 

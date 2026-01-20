@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     auto frame_begin = std::chrono::steady_clock::now();
 
     dashboard->handle_events();
-    bridge->poll();
+    bridge->sync();
     dashboard->render_frame();
 
     // FPS cap
@@ -69,6 +69,8 @@ int main(int argc, char **argv) {
   std::cout << "[Main] Terminal shutdown initiated." << std::endl;
   dashboard->shutdown();
   bridge->stop();
+
+  ImPlot::DestroyContext();
 
   return 0;
 }

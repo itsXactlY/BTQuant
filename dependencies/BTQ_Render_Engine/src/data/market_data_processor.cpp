@@ -1,26 +1,22 @@
 #include "market_data_processor.hpp"
 #include <algorithm>
 #include <cmath>
-#include <future>
 #include <iostream>
 #include <numeric>
-#include <thread>
-
+#include <unordered_set>
+#include <vector>
 namespace BTQuant {
 namespace RenderEngine {
 
 MarketDataProcessor::MarketDataProcessor()
-    : vwap_window_size_(100), momentum_window_size_(20),
-      volatility_window_size_(50), spread_analysis_window_(10),
+    : vwap_window_size_(5000), momentum_window_size_(500),
+      volatility_window_size_(1000), spread_analysis_window_(1000),
       parallel_processing_enabled_(true), stop_workers_(false) {
   // Create worker threads
   const size_t num_threads = std::max(std::thread::hardware_concurrency(), 2u);
   for (size_t i = 0; i < num_threads; ++i) {
     worker_threads_.emplace_back([this]() { workerThread(); });
   }
-
-  std::cout << "[MarketDataProcessor] Initialized with " << num_threads
-            << " worker threads" << std::endl;
 }
 
 MarketDataProcessor::~MarketDataProcessor() {
@@ -116,6 +112,63 @@ void MarketDataProcessor::processTradeUpdate(const MarketDataUpdate &update) {
     performance_metrics_.last_update_time =
         std::chrono::high_resolution_clock::now().time_since_epoch().count();
   });
+}
+
+void MarketDataProcessor::processTradeUpdates(
+    const std::vector<MarketDataUpdate> &updates) {
+  if (updates.empty())
+    return;
+
+  std::unique_lock<std::shared_mutex> lock(data_mutex_);
+  std::unordered_set<uint32_t> symbols_in_batch;
+
+  for (const auto &update : updates) {
+    if (update.type != MarketDataType::TRADE)
+      continue;
+
+    auto &symbol_data = symbol_analytics_[update.symbol_id];
+    symbol_data.symbol_id = update.symbol_id;
+    symbols_in_batch.insert(update.symbol_id);
+
+    // Update basic trade data
+    TradeData trade;
+    trade.timestamp = update.timestamp;
+    trade.price = update.price;
+    trade.size = update.size;
+    trade.is_buy = (update.side == "buy");
+
+    symbol_data.recent_trades.push_back(trade);
+
+    // Maintain window size
+    if (symbol_data.recent_trades.size() > vwap_window_size_ * 2) {
+      symbol_data.recent_trades.erase(symbol_data.recent_trades.begin(),
+                                      symbol_data.recent_trades.begin() +
+                                          vwap_window_size_);
+    }
+
+    // Update OHLCV candles
+    updateCandles(symbol_data, trade);
+
+    // Basic metrics update is cheap
+    updateTradingMetrics(symbol_data, trade);
+
+    // Update performance metrics
+    performance_metrics_.total_trades_processed++;
+  }
+
+  for (uint32_t symbol_id : symbols_in_batch) {
+    auto &symbol_data = symbol_analytics_[symbol_id];
+    updateVWAP(symbol_data);
+    updateMomentum(symbol_data);
+    updateVolatility(symbol_data);
+
+    // Clear indicator caches once per symbol
+    auto cache_it = indicator_caches_.find(symbol_id);
+    if (cache_it != indicator_caches_.end()) {
+      std::lock_guard<std::mutex> cache_lock(cache_it->second.mutex);
+      cache_it->second.cache.clear();
+    }
+  }
 }
 
 void MarketDataProcessor::processOrderbookUpdate(
@@ -240,7 +293,8 @@ bool MarketDataProcessor::isParallelProcessingEnabled() const {
 }
 
 void MarketDataProcessor::setVWAPWindow(size_t window_size) {
-  vwap_window_size_ = std::max(size_t(10), std::min(window_size, size_t(1000)));
+  vwap_window_size_ =
+      std::max(size_t(10), std::min(window_size, size_t(100000)));
 }
 
 void MarketDataProcessor::setMomentumWindow(size_t window_size) {
@@ -620,6 +674,10 @@ uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
     return 60 * 60 * 1000000ULL; // 1 hour
   case TimeFrame::TF_4HOUR:
     return 4 * 60 * 60 * 1000000ULL; // 4 hours
+  case TimeFrame::TF_500MS:
+    return 500000ULL; // 500ms
+  case TimeFrame::TF_100MS:
+    return 100000ULL; // 100ms
   case TimeFrame::TF_1DAY:
     return 24 * 60 * 60 * 1000000ULL; // 1 day
   default:
@@ -703,11 +761,11 @@ void MarketDataProcessor::updateCandle(OHLCVCandle &candle, double price,
 void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
                                         const TradeData &trade) {
   // Process all time frames including sub-second
-  std::vector<TimeFrame> timeframes = {TimeFrame::TF_1SEC,  TimeFrame::TF_5SEC,
-                                       TimeFrame::TF_15SEC, TimeFrame::TF_30SEC,
-                                       TimeFrame::TF_1MIN,  TimeFrame::TF_5MIN,
-                                       TimeFrame::TF_15MIN, TimeFrame::TF_1HOUR,
-                                       TimeFrame::TF_4HOUR, TimeFrame::TF_1DAY};
+  static const std::vector<TimeFrame> timeframes = {
+      TimeFrame::TF_1SEC,  TimeFrame::TF_5SEC,  TimeFrame::TF_15SEC,
+      TimeFrame::TF_30SEC, TimeFrame::TF_1MIN,  TimeFrame::TF_5MIN,
+      TimeFrame::TF_15MIN, TimeFrame::TF_1HOUR, TimeFrame::TF_4HOUR,
+      TimeFrame::TF_1DAY,  TimeFrame::TF_500MS, TimeFrame::TF_100MS};
 
   for (TimeFrame tf : timeframes) {
     uint64_t duration = getTimeFrameDuration(tf);
@@ -715,29 +773,23 @@ void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
 
     auto current_candle_it = symbol_data.current_candles.find(tf);
 
-    // Check if we have a current candle for this time frame
     if (current_candle_it != symbol_data.current_candles.end()) {
-      // Check if trade falls into the current candle
       if (isTradeInCurrentCandle(current_candle_it->second, trade.timestamp,
                                  tf)) {
-        // Update existing candle
         updateCandle(current_candle_it->second, trade.price, trade.size);
       } else {
-        // Finalize current candle and start new one
+        // Finalize old candle
         symbol_data.candles[tf].push_back(current_candle_it->second);
-        // Maintain reasonable candle history size
-        if (symbol_data.candles[tf].size() > 10000) {
-          symbol_data.candles[tf].erase(
-              symbol_data.candles[tf].begin(),
-              symbol_data.candles[tf].begin() +
-                  (symbol_data.candles[tf].size() - 5000));
+        if (symbol_data.candles[tf].size() > 20000) {
+          symbol_data.candles[tf].erase(symbol_data.candles[tf].begin(),
+                                        symbol_data.candles[tf].begin() +
+                                            10000);
         }
-        // Create new candle
+        // Start new candle
         symbol_data.current_candles[tf] =
             createNewCandle(candle_start, trade.price, trade.size);
       }
     } else {
-      // No current candle - create new one
       symbol_data.current_candles[tf] =
           createNewCandle(candle_start, trade.price, trade.size);
     }

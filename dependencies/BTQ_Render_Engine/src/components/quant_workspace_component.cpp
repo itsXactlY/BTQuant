@@ -58,12 +58,14 @@ void QuantWorkspaceComponent::render_gui() {
     bool open = true;
     ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
 
-    if (ImGui::Begin((chart.symbol + " - " +
-                      std::to_string(static_cast<int>(chart.timeframe)))
-                         .c_str(),
-                     &open)) {
+    // Unique title with symbol, exchange, and ID to prevent ImGui collisions
+    std::string title = chart.symbol_name + " [" + chart.exchange_name + "] (" +
+                        std::to_string(static_cast<int>(chart.timeframe)) +
+                        ")###chart_" + std::to_string(chart.chart_id);
+
+    if (ImGui::Begin(title.c_str(), &open)) {
       // Render chart without direct access to InstrumentStore
-      render_instrument_chart(chart.symbol, chart.timeframe, chart);
+      render_instrument_chart(chart.symbol_name, chart.timeframe, chart);
     }
     ImGui::End();
 
@@ -79,9 +81,10 @@ void QuantWorkspaceComponent::render_chart_controls() {
 
   if (ImGui::Begin("Chart Controls", &show_chart_controls_)) {
     // Timeframe selector
-    const char *timeframes[] = {
-        "1 Second",  "5 Seconds",  "15 Seconds", "30 Seconds", "1 Minute",
-        "5 Minutes", "15 Minutes", "1 Hour",     "4 Hours",    "1 Day"};
+    const char *timeframes[] = {"1 Minute",   "5 Minutes", "15 Minutes",
+                                "1 Hour",     "4 Hours",   "1 Day",
+                                "1 Second",   "5 Seconds", "15 Seconds",
+                                "30 Seconds", "500ms",     "100ms"};
     int selected = static_cast<int>(selected_timeframe_);
     if (ImGui::Combo("Timeframe", &selected, timeframes,
                      IM_ARRAYSIZE(timeframes))) {
@@ -92,8 +95,12 @@ void QuantWorkspaceComponent::render_chart_controls() {
 
     // Create chart button
     if (ImGui::Button("Create New Chart")) {
-      // For now, create chart for BTC-USDT (default symbol)
-      chart_manager_->create_chart("BTC-USDT", selected_timeframe_);
+      // Find ID for BTC-USDT (default)
+      auto id_opt = chart_manager_->getSymbolId("BTC-USDT");
+      uint32_t btc_id =
+          id_opt ? *id_opt : 10007; // 10007 is binance BTCUSDT in registry
+      chart_manager_->create_chart("BTC-USDT", "Binance", btc_id,
+                                   selected_timeframe_);
     }
 
     ImGui::Separator();
@@ -102,8 +109,9 @@ void QuantWorkspaceComponent::render_chart_controls() {
     ImGui::Text("Active Charts: %zu", chart_manager_->get_charts().size());
     for (const auto &[id, chart] : chart_manager_->get_charts()) {
       std::string chart_label =
-          chart.symbol + " (" +
-          std::to_string(static_cast<int>(chart.timeframe)) + ")";
+          chart.symbol_name + " [" + chart.exchange_name + "] (" +
+          std::to_string(static_cast<int>(chart.timeframe)) + ")###cb_" +
+          std::to_string(chart.chart_id);
       if (ImGui::Checkbox(chart_label.c_str(),
                           &const_cast<ChartInstance &>(chart).visible)) {
         chart_manager_->toggle_chart_visibility(id);
@@ -150,9 +158,24 @@ void QuantWorkspaceComponent::render_instrument_chart(
     const ChartInstance &chart) {
 
   if (chart.dates.empty()) {
-    ImGui::Text("Initializing Stream for %s...", symbol.c_str());
+    ImGui::Text("Initializing Stream for %s [%s]...", symbol.c_str(),
+                chart.exchange_name.c_str());
+    ImGui::Text("Symbol ID: %u", chart.symbol_id);
     return;
   }
+
+  // Diagnostic Overlay
+  ImGui::SetCursorPos(ImVec2(10, 30));
+  ImGui::BeginGroup();
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1)); // yellow
+  ImGui::Text("Candles: %zu", chart.dates.size());
+  if (!chart.dates.empty()) {
+    double last_ts = chart.dates.back();
+    ImGui::Text("Last TS: %.2f", last_ts);
+    ImGui::Text("Last Price: %.2f", chart.closes.back());
+  }
+  ImGui::PopStyleColor();
+  ImGui::EndGroup();
 
   // Get indicator configuration for this symbol
   auto &indicator_config = indicator_configs_[symbol];
@@ -274,7 +297,9 @@ void QuantWorkspaceComponent::render_instrument_chart(
   ImPlot::PushStyleColor(ImPlotCol_Line, ImGui::GetColorU32(ImVec4(
                                              0.0f, 0.94f, 1.0f, 1.0f))); // Cyan
 
-  if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
+  std::string plot_id = symbol + "##" + std::to_string(chart.chart_id);
+  if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
+                        ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
 
@@ -290,35 +315,102 @@ void QuantWorkspaceComponent::render_instrument_chart(
     int count = (int)chart.dates.size();
 
     if (count > 0) {
-      // DEAD SIMPLE: Just plot lines for each OHLC component
-      std::vector<double> opens_d(count), highs_d(count), lows_d(count),
-          closes_d(count);
+      // 1. Determine Visible Range for Culling (Optimization)
+      ImPlotRect limits = ImPlot::GetPlotLimits();
+      double x_min = limits.X.Min;
+      double x_max = limits.X.Max;
+
+      // Professional Candlestick Rendering (Batched)
+      std::vector<double> up_wick_x, up_wick_y;
+      std::vector<double> down_wick_x, down_wick_y;
+      std::vector<double> up_b_x, up_b_y1, up_b_y2;
+      std::vector<double> down_b_x, down_b_y1, down_b_y2;
+
+      // Heuristic for candle width based on timeframe
+      double candle_width = 30.0;
+      if (timeframe == RenderEngine::TimeFrame::TF_100MS)
+        candle_width = 0.08;
+      else if (timeframe == RenderEngine::TimeFrame::TF_500MS)
+        candle_width = 0.4;
+      else if (timeframe == RenderEngine::TimeFrame::TF_1SEC)
+        candle_width = 0.8;
+      else if (timeframe == RenderEngine::TimeFrame::TF_5SEC)
+        candle_width = 4.0;
+      else if (timeframe == RenderEngine::TimeFrame::TF_1MIN)
+        candle_width = 45.0;
+      else if (timeframe == RenderEngine::TimeFrame::TF_5MIN)
+        candle_width = 225.0;
+      else if (timeframe == RenderEngine::TimeFrame::TF_1DAY)
+        candle_width = 64800.0;
+
       for (int i = 0; i < count; ++i) {
-        opens_d[i] = chart.opens[i];
-        highs_d[i] = chart.highs[i];
-        lows_d[i] = chart.lows[i];
-        closes_d[i] = chart.closes[i];
+        double x = chart.dates[i];
+
+        // Simple Culling: Skip candles outside the view (with some padding)
+        if (x < x_min - candle_width || x > x_max + candle_width)
+          continue;
+
+        if (chart.closes[i] >= chart.opens[i]) {
+          // Bullish Wick
+          up_wick_x.push_back(x);
+          up_wick_x.push_back(x);
+          up_wick_y.push_back(chart.highs[i]);
+          up_wick_y.push_back(chart.lows[i]);
+
+          // Bullish Body
+          up_b_x.push_back(x);
+          up_b_y1.push_back(chart.opens[i]);
+          up_b_y2.push_back(chart.closes[i]);
+        } else {
+          // Bearish Wick
+          down_wick_x.push_back(x);
+          down_wick_x.push_back(x);
+          down_wick_y.push_back(chart.highs[i]);
+          down_wick_y.push_back(chart.lows[i]);
+
+          // Bearish Body
+          down_b_x.push_back(x);
+          down_b_y1.push_back(chart.opens[i]);
+          down_b_y2.push_back(chart.closes[i]);
+        }
       }
 
-      // Plot all OHLC as separate lines
-      ImPlot::SetNextLineStyle(ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
-      ImPlot::PlotLine("Open", chart.dates.data(), opens_d.data(), count);
+      // Draw Wicks (Neon Style)
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
+      if (!up_wick_x.empty()) {
+        ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.4f, 1.0f));
+        ImPlot::PlotLine("##UpWicks", up_wick_x.data(), up_wick_y.data(),
+                         (int)up_wick_x.size(), ImPlotLineFlags_Segments);
+      }
+      if (!down_wick_x.empty()) {
+        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.2f, 1.0f));
+        ImPlot::PlotLine("##DownWicks", down_wick_x.data(), down_wick_y.data(),
+                         (int)down_wick_x.size(), ImPlotLineFlags_Segments);
+      }
+      ImPlot::PopStyleVar();
 
-      ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-      ImPlot::PlotLine("High", chart.dates.data(), highs_d.data(), count);
-
-      ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-      ImPlot::PlotLine("Low", chart.dates.data(), lows_d.data(), count);
-
-      ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), 2.0f);
-      ImPlot::PlotLine("Close", chart.dates.data(), closes_d.data(), count);
+      // Draw Bodies (Using PlotBars for robustness and performance)
+      if (!up_b_x.empty()) {
+        ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.4f, 0.6f));
+        ImPlot::PlotBars("##UpBodies", up_b_x.data(), up_b_y1.data(),
+                         up_b_y2.data(), (int)up_b_x.size(),
+                         candle_width * 0.82);
+      }
+      if (!down_b_x.empty()) {
+        ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.2f, 0.6f));
+        ImPlot::PlotBars("##DownBodies", down_b_x.data(), down_b_y1.data(),
+                         down_b_y2.data(), (int)down_b_x.size(),
+                         candle_width * 0.82);
+      }
     }
-    // Plot indicators
-    indicator_renderer_->render_indicators(symbol, timeframe, indicators);
-
-    ImPlot::EndPlot();
   }
-  ImPlot::PopStyleColor();
+
+  // Plot indicators
+  indicator_renderer_->render_indicators(symbol, timeframe, indicators);
+
+  ImPlot::EndPlot();
+}
+ImPlot::PopStyleColor();
 }
 
 void QuantWorkspaceComponent::clear_data() {

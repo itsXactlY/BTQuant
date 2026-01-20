@@ -95,7 +95,7 @@ public:
 
   bool start();
   void stop();
-  void poll(); // Called by the Market Data Thread
+  void sync(); // Performs real-time synchronization
 
   // Direkter Zugriff auf MarketDataProcessor für alle Datenoperationen
   void setMarketDataProcessor(
@@ -128,7 +128,7 @@ private:
   uint64_t m_last_read_idx = 0;
   uint64_t m_last_book_read_idx = 0;
 
-  void poll_shm();
+  void sync_shm();
 };
 
 } // namespace BTQuant

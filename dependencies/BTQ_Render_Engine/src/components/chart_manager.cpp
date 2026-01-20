@@ -133,4 +133,44 @@ void ChartManager::update() {
   }
 }
 
+void ChartManager::populate_chart_data(uint32_t chart_id) {
+  auto it = charts_.find(chart_id);
+  if (it == charts_.end())
+    return;
+
+  auto &chart = it->second;
+
+  // Fetch instrument store from bridge
+  auto &instruments = bridge_->GetAllInstruments();
+  std::lock_guard<std::mutex> lock(bridge_->GetMapMutex());
+  auto inst_it = instruments.find(chart.symbol);
+  if (inst_it == instruments.end() || !inst_it->second)
+    return;
+
+  auto &inst = *inst_it->second;
+  std::lock_guard<std::mutex> inst_lock(inst.data_mutex);
+
+  // Clear existing data
+  chart.dates.clear();
+  chart.opens.clear();
+  chart.highs.clear();
+  chart.lows.clear();
+  chart.closes.clear();
+  chart.volumes.clear();
+
+  // Copy data from instrument store
+  if (!inst.timestamps.empty()) {
+    chart.dates = inst.timestamps;
+    chart.opens.assign(inst.opens.begin(), inst.opens.end());
+    chart.highs.assign(inst.highs.begin(), inst.highs.end());
+    chart.lows.assign(inst.lows.begin(), inst.lows.end());
+    chart.closes.assign(inst.closes.begin(), inst.closes.end());
+    chart.volumes.assign(inst.volumes.begin(), inst.volumes.end());
+
+    std::cout << "[ChartManager] Populated chart " << chart_id << " with "
+              << chart.dates.size() << " candles for " << chart.symbol
+              << std::endl;
+  }
+}
+
 } // namespace BTQuant

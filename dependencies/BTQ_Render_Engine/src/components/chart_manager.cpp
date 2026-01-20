@@ -141,8 +141,8 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
   auto &chart = it->second;
 
   // Fetch instrument store from bridge
+  // NOTE: Caller (update()) already holds GetMapMutex()
   auto &instruments = bridge_->GetAllInstruments();
-  std::lock_guard<std::mutex> lock(bridge_->GetMapMutex());
   auto inst_it = instruments.find(chart.symbol);
   if (inst_it == instruments.end() || !inst_it->second)
     return;

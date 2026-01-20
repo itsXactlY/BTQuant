@@ -84,13 +84,15 @@ bool HotSpineDataBridge::start() {
   }
 
   // Calculate ring buffer positions
-  size_t header_size = sizeof(SharedMemoryHeader);
+  // CRITICAL: HotSpine reserves 4096 bytes for header, NOT
+  // sizeof(SharedMemoryHeader)!
+  constexpr size_t HOTSPINE_HEADER_SIZE = 4096;
   m_trades = reinterpret_cast<HotTrade *>(static_cast<char *>(m_shm_ptr) +
-                                          header_size);
+                                          HOTSPINE_HEADER_SIZE);
 
   size_t trades_size = m_header->capacity * sizeof(HotTrade);
   m_books = reinterpret_cast<HotOrderbookSnapshot *>(
-      static_cast<char *>(m_shm_ptr) + header_size + trades_size);
+      static_cast<char *>(m_shm_ptr) + HOTSPINE_HEADER_SIZE + trades_size);
 
   std::cout << "[HotSpineDataBridge] Connected to shared memory: " << m_shm_path
             << " (size=" << m_shm_size << " bytes, "
@@ -105,11 +107,23 @@ bool HotSpineDataBridge::start() {
 void HotSpineDataBridge::stop() { m_running = false; }
 
 void HotSpineDataBridge::poll() {
-  if (!m_running || !m_header)
+  static int poll_count = 0;
+  if (poll_count++ % 100 == 0) {
+    std::cout << "[HotSpineDataBridge] poll() call " << poll_count << std::endl;
+  }
+
+  if (!m_running || !m_header) {
+    std::cout << "[HotSpineDataBridge] poll() - not running or no header"
+              << std::endl;
     return;
+  }
 
   // Always use real shared memory data
   poll_shm();
+
+  if (poll_count % 100 == 1) {
+    std::cout << "[HotSpineDataBridge] poll_shm() completed" << std::endl;
+  }
 }
 
 std::shared_ptr<InstrumentStore>
@@ -152,13 +166,28 @@ void HotSpineDataBridge::poll_shm() {
       __atomic_load_n(&m_header->write_index, __ATOMIC_ACQUIRE);
   uint64_t capacity = m_header->capacity;
 
-  while (m_last_read_idx < write_idx) {
+  uint64_t to_process =
+      (write_idx > m_last_read_idx) ? (write_idx - m_last_read_idx) : 0;
+
+  // CRITICAL: Limit trades per poll to avoid hanging
+  const uint64_t MAX_PER_POLL = 100;
+  uint64_t processed = 0;
+
+  // Skip old history but keep recent data for initial chart population
+  if (m_last_read_idx == 0 && to_process > 5000) {
+    m_last_read_idx = write_idx - 5000; // Keep last 5000 trades
+  }
+
+  while (m_last_read_idx < write_idx && processed < MAX_PER_POLL) {
+    processed++;
     // Cast raw bytes directly (No Mocks)
     const HotTrade &trade = m_trades[m_last_read_idx % capacity];
 
     auto inst = get_instrument(trade.symbol_id);
-    if (!inst)
+    if (!inst) {
+      m_last_read_idx++;
       continue; // Skip unknown symbols
+    }
 
     {
       std::lock_guard<std::mutex> lock(inst->data_mutex);
@@ -196,7 +225,23 @@ void HotSpineDataBridge::poll_shm() {
       __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE);
   uint64_t book_capacity = m_header->orderbook_capacity;
 
-  while (m_last_book_read_idx < book_write_idx) {
+  uint64_t books_to_process = (book_write_idx > m_last_book_read_idx)
+                                  ? (book_write_idx - m_last_book_read_idx)
+                                  : 0;
+
+  // Skip historical orderbooks on first run
+  if (m_last_book_read_idx == 0 && books_to_process > 100) {
+    m_last_book_read_idx = book_write_idx;
+    return;
+  }
+
+  // Limit orderbooks per poll
+  const uint64_t MAX_BOOKS_PER_POLL = 50;
+  uint64_t books_processed = 0;
+
+  while (m_last_book_read_idx < book_write_idx &&
+         books_processed < MAX_BOOKS_PER_POLL) {
+    books_processed++;
     const HotOrderbookSnapshot &snap =
         m_books[m_last_book_read_idx % book_capacity];
 

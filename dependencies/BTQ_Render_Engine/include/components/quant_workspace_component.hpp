@@ -71,7 +71,8 @@ private:
   // Rendering Methods
   void render_instrument_chart(const std::string &symbol,
                                const InstrumentStore &inst,
-                               RenderEngine::TimeFrame timeframe);
+                               RenderEngine::TimeFrame timeframe,
+                               const ChartInstance &chart);
   void render_timeframe_selector();
   void render_indicator_selector();
   void render_chart_controls();

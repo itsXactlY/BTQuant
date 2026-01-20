@@ -75,7 +75,8 @@ void QuantWorkspaceComponent::render_gui() {
                         std::to_string(static_cast<int>(chart.timeframe)))
                            .c_str(),
                        &open)) {
-        render_instrument_chart(chart.symbol, *it->second, chart.timeframe);
+        render_instrument_chart(chart.symbol, *it->second, chart.timeframe,
+                                chart);
       }
       ImGui::End();
 
@@ -163,10 +164,10 @@ void QuantWorkspaceComponent::render_indicator_selector() {
 
 void QuantWorkspaceComponent::render_instrument_chart(
     const std::string &symbol, const InstrumentStore &inst,
-    RenderEngine::TimeFrame timeframe) {
+    RenderEngine::TimeFrame timeframe, const ChartInstance& chart) {
   std::lock_guard<std::mutex> inst_lock(inst.data_mutex);
 
-  if (inst.timestamps.empty()) {
+  if (chart.dates.empty()) {
     ImGui::Text("Initializing Stream for %s...", symbol.c_str());
     return;
   }
@@ -301,12 +302,12 @@ void QuantWorkspaceComponent::render_instrument_chart(
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y2, 0,
                                        1000000); // For Volume alignment
 
-    const double *dates = inst.timestamps.data();
-    const double *opens = inst.opens.data();
-    const double *closes = inst.closes.data();
-    const double *lows = inst.lows.data();
-    const double *highs = inst.highs.data();
-    int count = (int)inst.timestamps.size();
+    const double *dates = chart.dates.data();
+    const float *opens = chart.opens.data();
+    const float *closes = chart.closes.data();
+    const float *lows = chart.lows.data();
+    const float *highs = chart.highs.data();
+    int count = (int)chart.dates.size();
 
     // Plot 1: Candlesticks (Manual high-perf implementation)
     if (ImPlot::BeginItem("OHLC")) {

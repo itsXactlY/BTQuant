@@ -606,10 +606,20 @@ double PositionManager::calculate_portfolio_var() const {
 
 double PositionManager::calculate_portfolio_sharpe() const {
   // Simplified portfolio Sharpe ratio calculation
-  auto summary = get_portfolio_summary();
-  double total_return =
-      summary.total_unrealized_pnl + summary.total_realized_pnl;
-  double total_value = summary.total_value + cash_balance_;
+  // Calculate totals directly to avoid recursion
+  double total_unrealized_pnl = 0.0;
+  double total_realized_pnl = 0.0;
+  double total_value = 0.0;
+
+  for (const auto &pair : positions_) {
+    const auto &position = pair.second;
+    total_unrealized_pnl += position.unrealized_pnl;
+    total_realized_pnl += position.realized_pnl;
+    total_value += position.market_value;
+  }
+
+  double total_return = total_unrealized_pnl + total_realized_pnl;
+  total_value += cash_balance_;
 
   if (total_value > 0) {
     double return_rate = total_return / total_value;
@@ -1057,7 +1067,6 @@ uint64_t RiskAssessment::get_current_timestamp() {
              std::chrono::system_clock::now().time_since_epoch())
       .count();
 }
-
 
 void OrderManager::set_execution_callback(ExecutionCallback callback) {
   execution_callback_ = callback;

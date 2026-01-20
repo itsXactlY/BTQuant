@@ -48,6 +48,8 @@ set(DASHBOARD_SOURCES
     src/system/GPUMemoryManager.cpp
     src/config/dashboard_config.cpp
     src/data/market_data_processor.cpp
+    src/data/symbol_manager.cpp
+    src/monitoring/performance_monitor.cpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})
@@ -72,8 +74,11 @@ target_link_libraries(dashboard_advanced PRIVATE
 # Optimization
 target_compile_definitions(dashboard_advanced PRIVATE IMGUI_ENABLE_DOCKING)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(dashboard_advanced PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)
-endif()
+    target_compile_options(dashboard_advanced PRIVATE
+            -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
+            -fstrict-aliasing)
+        target_link_options(dashboard_advanced PRIVATE -flto)
+    endif()
 
-
-
+# Performance monitoring
+target_compile_definitions(dashboard_advanced PRIVATE ENABLE_PERFORMANCE_MONITORING)

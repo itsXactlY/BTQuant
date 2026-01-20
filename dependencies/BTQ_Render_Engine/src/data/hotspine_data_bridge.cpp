@@ -17,7 +17,6 @@ HotSpineDataBridge::HotSpineDataBridge(const std::string &shm_path)
     : m_shm_path(shm_path) {
   // Load symbol registry from shared memory file
   SymbolRegistry::instance().load_from_file("/dev/shm/btquant_symbols.json");
-  init_simulation();
 }
 
 HotSpineDataBridge::~HotSpineDataBridge() {
@@ -112,54 +111,45 @@ void HotSpineDataBridge::poll() {
     std::cout << "[HotSpineDataBridge] poll() call " << poll_count << std::endl;
   }
 
-  if (!m_running || !m_header) {
-    std::cout << "[HotSpineDataBridge] poll() - not running or no header"
-              << std::endl;
+  if (!m_running) {
+    std::cout << "[HotSpineDataBridge] poll() - not running" << std::endl;
     return;
   }
 
-  // Always use real shared memory data
+  // ONLY real shared memory - NO simulation
   poll_shm();
 
   if (poll_count % 100 == 1) {
-    std::cout << "[HotSpineDataBridge] poll_shm() completed" << std::endl;
+    std::cout << "[HotSpineDataBridge] poll completed" << std::endl;
   }
 }
 
-std::shared_ptr<InstrumentStore>
-HotSpineDataBridge::get_instrument(uint32_t symbol_id) {
-  std::lock_guard<std::mutex> lock(m_map_mutex);
-
-  // Search by ID first
-  for (auto &[sym, inst] : m_instruments) {
-    if (inst->symbol_id == symbol_id)
-      return inst;
-  }
-
-  // Check if symbol is in registry - ONLY create if known
+std::string HotSpineDataBridge::getSymbolName(uint32_t symbol_id) const {
   auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-  if (!symbol_info) {
-    // Unknown symbol - ignore it
-    return nullptr;
+  return symbol_info ? symbol_info->symbol : "UNKNOWN";
+}
+
+std::string HotSpineDataBridge::getExchangeName(uint32_t symbol_id) const {
+  auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+  return symbol_info ? symbol_info->exchange : "UNKNOWN";
+}
+
+std::vector<uint32_t> HotSpineDataBridge::getActiveSymbols() const {
+  if (!m_data_processor) {
+    return {};
   }
-
-  // Create instrument for KNOWN symbol
-  auto inst = std::make_shared<InstrumentStore>();
-  inst->symbol = symbol_info->symbol;
-  inst->exchange = symbol_info->exchange;
-  inst->symbol_id = symbol_id;
-  m_instruments[inst->symbol] = inst;
-
-  std::cout << "[HotSpineDataBridge] Discovered: " << inst->symbol
-            << " (ID=" << symbol_id << ", Exchange=" << inst->exchange << ")"
-            << std::endl;
-
-  return inst;
+  return m_data_processor->getActiveSymbols();
 }
 
 void HotSpineDataBridge::poll_shm() {
-  if (!m_header)
+  if (!m_header || !m_data_processor) {
+    static int warn_count = 0;
+    if (warn_count++ % 100 == 0) {
+      std::cout << "[poll_shm] WARNING: m_header=" << m_header
+                << " m_data_processor=" << m_data_processor.get() << std::endl;
+    }
     return;
+  }
 
   // --- Process Trades ---
   uint64_t write_idx =
@@ -169,8 +159,16 @@ void HotSpineDataBridge::poll_shm() {
   uint64_t to_process =
       (write_idx > m_last_read_idx) ? (write_idx - m_last_read_idx) : 0;
 
+  // DEBUG: Show trade processing stats
+  static int debug_count = 0;
+  if (debug_count++ % 100 == 0) {
+    std::cout << "[poll_shm] write_idx=" << write_idx
+              << " last_read=" << m_last_read_idx
+              << " to_process=" << to_process << std::endl;
+  }
+
   // CRITICAL: Limit trades per poll to avoid hanging
-  const uint64_t MAX_PER_POLL = 100;
+  const uint64_t MAX_PER_POLL = 1000; // Increased from 100!
   uint64_t processed = 0;
 
   // Skip old history but keep recent data for initial chart population
@@ -179,44 +177,20 @@ void HotSpineDataBridge::poll_shm() {
   }
 
   while (m_last_read_idx < write_idx && processed < MAX_PER_POLL) {
+
     processed++;
-    // Cast raw bytes directly (No Mocks)
     const HotTrade &trade = m_trades[m_last_read_idx % capacity];
 
-    auto inst = get_instrument(trade.symbol_id);
-    if (!inst) {
-      m_last_read_idx++;
-      continue; // Skip unknown symbols
-    }
+    // Direkte Weitergabe an MarketDataProcessor
+    RenderEngine::MarketDataUpdate update;
+    update.type = RenderEngine::MarketDataType::TRADE;
+    update.symbol_id = trade.symbol_id;
+    update.timestamp = trade.ts_exchange;
+    update.price = trade.price;
+    update.size = trade.size;
+    update.side = (trade.side == 0) ? "buy" : "sell";
 
-    {
-      std::lock_guard<std::mutex> lock(inst->data_mutex);
-      double ts = (double)trade.ts_exchange / 1000000.0;
-
-      // SoA Update
-      inst->timestamps.push_back(ts);
-      inst->opens.push_back(trade.price);
-      inst->highs.push_back(trade.price);
-      inst->lows.push_back(trade.price);
-      inst->closes.push_back(trade.price);
-      inst->volumes.push_back(trade.size);
-
-      // Volume Profile Accumulation (Price rounded to 0.5 tick)
-      double tick_size = 0.5;
-      double rounded_price = std::round(trade.price / tick_size) * tick_size;
-      inst->m_vol_profile[rounded_price] += trade.size;
-
-      // Keep a reasonable history (HFT density management)
-      if (inst->timestamps.size() > 10000) {
-        inst->timestamps.erase(inst->timestamps.begin());
-        inst->opens.erase(inst->opens.begin());
-        inst->highs.erase(inst->highs.begin());
-        inst->lows.erase(inst->lows.begin());
-        inst->closes.erase(inst->closes.begin());
-        inst->volumes.erase(inst->volumes.begin());
-      }
-    }
-
+    m_data_processor->processTradeUpdate(update);
     m_last_read_idx++;
   }
 
@@ -245,15 +219,28 @@ void HotSpineDataBridge::poll_shm() {
     const HotOrderbookSnapshot &snap =
         m_books[m_last_book_read_idx % book_capacity];
 
-    auto inst = get_instrument(snap.symbol_id);
-    if (!inst)
-      continue; // Skip unknown symbols
+    // Direkte Weitergabe an MarketDataProcessor
+    RenderEngine::MarketDataUpdate update;
+    update.type = RenderEngine::MarketDataType::ORDERBOOK;
+    update.symbol_id = snap.symbol_id;
+    update.timestamp = snap.ts_exchange;
 
-    {
-      std::lock_guard<std::mutex> lock(inst->data_mutex);
-      inst->latest_snapshot = snap;
+    // Konvertiere Orderbook-Ebenen
+    for (int i = 0; i < snap.bids_count; ++i) {
+      PriceLevel level;
+      level.price = snap.bids[i].price;
+      level.size = snap.bids[i].size;
+      update.bids.push_back(level);
     }
 
+    for (int i = 0; i < snap.asks_count; ++i) {
+      PriceLevel level;
+      level.price = snap.asks[i].price;
+      level.size = snap.asks[i].size;
+      update.asks.push_back(level);
+    }
+
+    m_data_processor->processOrderbookUpdate(update);
     m_last_book_read_idx++;
   }
 
@@ -261,64 +248,6 @@ void HotSpineDataBridge::poll_shm() {
   __atomic_store_n(&m_header->read_index, m_last_read_idx, __ATOMIC_RELEASE);
   __atomic_store_n(&m_header->orderbook_read_index, m_last_book_read_idx,
                    __ATOMIC_RELEASE);
-}
-
-void HotSpineDataBridge::init_simulation() {
-  std::lock_guard<std::mutex> lock(m_map_mutex);
-
-  auto create_inst = [&](const std::string &symbol, uint32_t id) {
-    auto inst = std::make_shared<InstrumentStore>();
-    inst->symbol = symbol;
-    inst->exchange = "BINANCE";
-    inst->symbol_id = id;
-    m_instruments[symbol] = inst;
-  };
-
-  create_inst("BTC-USDT", 1);
-  create_inst("ETH-USDT", 2);
-  create_inst("SOL-USDT", 3);
-}
-
-void HotSpineDataBridge::poll_simulated() {
-  static double t = 0;
-  t += 0.01;
-
-  std::lock_guard<std::mutex> lock(m_map_mutex);
-  for (auto &[sym, inst] : m_instruments) {
-    std::lock_guard<std::mutex> data_lock(inst->data_mutex);
-
-    auto now_ns = std::chrono::high_resolution_clock::now();
-    double now = std::chrono::duration_cast<std::chrono::microseconds>(
-                     now_ns.time_since_epoch())
-                     .count() /
-                 1000000.0;
-    double base_price = inst->symbol_id * 1000.0;
-    double sine_val = std::sin(t + inst->symbol_id) * 50.0;
-    double current_price = base_price + sine_val;
-
-    // SoA Update
-    inst->timestamps.push_back(now);
-    inst->opens.push_back(current_price - 1.0);
-    inst->highs.push_back(current_price + 2.0);
-    inst->lows.push_back(current_price - 3.0);
-    inst->closes.push_back(current_price);
-    inst->volumes.push_back(100.0 + std::abs(sine_val));
-
-    // Volume Profile Accumulation for Simulation
-    double tick_size = 0.5;
-    double rounded_price = std::round(current_price / tick_size) * tick_size;
-    inst->m_vol_profile[rounded_price] += 10.0;
-
-    // Keep history manageable
-    if (inst->timestamps.size() > 500) {
-      inst->timestamps.erase(inst->timestamps.begin());
-      inst->opens.erase(inst->opens.begin());
-      inst->highs.erase(inst->highs.begin());
-      inst->lows.erase(inst->lows.begin());
-      inst->closes.erase(inst->closes.begin());
-      inst->volumes.erase(inst->volumes.begin());
-    }
-  }
 }
 
 } // namespace BTQuant

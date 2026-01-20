@@ -1,12 +1,22 @@
 #pragma once
 
 #include "hotspine_data_bridge.hpp"
-#include "data_visualization_engine.hpp"  // For PriceLevel
 #include <chrono>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
 #include <optional>
+#include <shared_mutex>
+#include <future>
+#include <atomic>
+#include <functional>
+#include <queue>
+
+// Price level for order book data
+struct PriceLevel {
+  double price;
+  double size;
+};
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -69,7 +79,23 @@ enum class TimeFrame {
   TF_15MIN,   // 15 minutes
   TF_1HOUR,   // 1 hour
   TF_4HOUR,   // 4 hours
-  TF_1DAY     // 1 day
+  TF_1DAY,    // 1 day
+  TF_1SEC,    // 1 second (for sub-second charts)
+  TF_5SEC,    // 5 seconds
+  TF_15SEC,   // 15 seconds
+  TF_30SEC    // 30 seconds
+};
+
+// Indicator cache entry
+struct IndicatorCacheEntry {
+  uint64_t timestamp;
+  std::vector<double> values;
+};
+
+// Caching structure for indicators
+struct IndicatorCache {
+  std::unordered_map<std::string, IndicatorCacheEntry> cache;
+  std::mutex mutex;
 };
 
 // Comprehensive symbol analytics
@@ -168,6 +194,12 @@ struct MarketSummary {
  * - Trading volume patterns
  * - Market microstructure metrics
  * - OHLCV candle aggregation for multiple time frames
+ *
+ * Optimizations:
+ * - Caching of indicator calculations
+ * - Multithreaded processing
+ * - Reduced data copying
+ * - Support for sub-second time frames
  */
 class MarketDataProcessor {
 public:
@@ -181,47 +213,47 @@ public:
   MarketDataProcessor &operator=(MarketDataProcessor &&) = delete;
 
   /**
-   * Process a trade update
+   * Process a trade update (asynchronous)
    * @param update Market data update containing trade information
    */
   void processTradeUpdate(const MarketDataUpdate &update);
 
   /**
-   * Process an orderbook update
+   * Process an orderbook update (asynchronous)
    * @param update Market data update containing orderbook information
    */
   void processOrderbookUpdate(const MarketDataUpdate &update);
 
   /**
-   * Get comprehensive analytics for a symbol
+   * Get comprehensive analytics for a symbol (thread-safe)
    * @param symbol_id Symbol ID to get analytics for
    * @return Symbol analytics data
    */
   SymbolAnalytics getSymbolAnalytics(uint32_t symbol_id) const;
 
   /**
-   * Get list of all active symbols
+   * Get list of all active symbols (thread-safe)
    * @return Vector of symbol IDs that have recent data
    */
   std::vector<uint32_t> getActiveSymbols() const;
 
   /**
-   * Get performance metrics for the processor
+   * Get performance metrics for the processor (thread-safe)
    * @return Current performance metrics
    */
   ProcessorPerformanceMetrics getPerformanceMetrics() const;
 
   /**
-   * Get symbol rankings based on criteria
+   * Get symbol rankings based on criteria (thread-safe)
    * @param criteria Ranking criteria (volume, momentum, etc.)
    * @param limit Maximum number of results (0 = no limit)
    * @return Vector of ranked symbols
    */
   std::vector<SymbolRanking> getRankings(RankingCriteria criteria,
-                                         size_t limit = 0) const;
+                                          size_t limit = 0) const;
 
   /**
-   * Get OHLCV candles for a symbol and time frame
+   * Get OHLCV candles for a symbol and time frame (cached, thread-safe)
    * @param symbol_id Symbol ID to get candles for
    * @param timeframe Time frame of the candles
    * @return Vector of OHLCV candles
@@ -229,7 +261,7 @@ public:
   std::vector<OHLCVCandle> getCandles(uint32_t symbol_id, TimeFrame timeframe) const;
 
   /**
-   * Get current (in-progress) candle for a symbol and time frame
+   * Get current (in-progress) candle for a symbol and time frame (thread-safe)
    * @param symbol_id Symbol ID to get current candle for
    * @param timeframe Time frame of the candle
    * @return Current OHLCV candle if available, empty optional otherwise
@@ -237,7 +269,7 @@ public:
   std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id, TimeFrame timeframe) const;
 
   /**
-   * Get market summary statistics
+   * Get market summary statistics (thread-safe)
    * @return Market-wide summary data
    */
   MarketSummary getMarketSummary() const;
@@ -267,19 +299,67 @@ public:
   void setMomentumWindow(size_t window_size);
   void setVolatilityWindow(size_t window_size);
 
+  /**
+   * Indicator cache methods
+   */
+  void clearIndicatorCache(uint32_t symbol_id, const std::string &indicator_name);
+  void clearAllIndicatorCaches();
+
+  /**
+   * Parallel processing configuration
+   */
+  void setParallelProcessingEnabled(bool enabled);
+  bool isParallelProcessingEnabled() const;
+
 private:
   // Configuration parameters
   size_t vwap_window_size_;
   size_t momentum_window_size_;
   size_t volatility_window_size_;
   size_t spread_analysis_window_;
+  bool parallel_processing_enabled_;
 
-  // Data storage
-  mutable std::mutex data_mutex_;
+  // Data storage with shared mutex for read-heavy workloads
+  mutable std::shared_mutex data_mutex_;
   std::unordered_map<uint32_t, SymbolAnalytics> symbol_analytics_;
 
+  // Indicator caching
+  std::unordered_map<uint32_t, IndicatorCache> indicator_caches_;
+
   // Performance tracking
-  ProcessorPerformanceMetrics performance_metrics_;
+  struct AtomicPerformanceMetrics {
+    std::atomic<uint64_t> total_trades_processed{0};
+    std::atomic<uint64_t> total_orderbooks_processed{0};
+    std::atomic<std::chrono::high_resolution_clock::time_point::rep>
+        last_update_time{0};
+    std::atomic<double> processing_latency_us{0.0};
+    
+    ProcessorPerformanceMetrics toNonAtomic() const {
+      ProcessorPerformanceMetrics result;
+      result.total_trades_processed = total_trades_processed.load();
+      result.total_orderbooks_processed = total_orderbooks_processed.load();
+      result.last_update_time = std::chrono::high_resolution_clock::time_point(
+          std::chrono::high_resolution_clock::duration(last_update_time.load()));
+      result.processing_latency_us = processing_latency_us.load();
+      return result;
+    }
+    
+    void fromNonAtomic(const ProcessorPerformanceMetrics& other) {
+      total_trades_processed.store(other.total_trades_processed);
+      total_orderbooks_processed.store(other.total_orderbooks_processed);
+      last_update_time.store(other.last_update_time.time_since_epoch().count());
+      processing_latency_us.store(other.processing_latency_us);
+    }
+  };
+  
+  AtomicPerformanceMetrics performance_metrics_;
+
+  // Thread pool for parallel processing
+  std::vector<std::thread> worker_threads_;
+  std::queue<std::function<void()>> task_queue_;
+  std::mutex task_queue_mutex_;
+  std::condition_variable task_queue_cv_;
+  std::atomic<bool> stop_workers_;
 
   // Private calculation methods
   void updateVWAP(SymbolAnalytics &symbol_data);
@@ -299,7 +379,13 @@ private:
   // Helper methods
   double calculateMarketDepth(const std::vector<PriceLevel> &levels) const;
   double calculateVolumeInWindow(const std::vector<TradeData> &trades,
-                                 uint64_t window_us) const;
+                                  uint64_t window_us) const;
+
+  // Worker thread function
+  void workerThread();
+
+  // Async task submission
+  void submitTask(std::function<void()> task);
 };
 
 } // namespace RenderEngine

@@ -97,31 +97,27 @@ public:
   void stop();
   void poll(); // Called by the Market Data Thread
 
-  std::map<std::string, std::shared_ptr<InstrumentStore>> &GetAllInstruments() {
-    return m_instruments;
-  }
-
-  // Set MarketDataProcessor for OHLCV aggregation
+  // Direkter Zugriff auf MarketDataProcessor für alle Datenoperationen
   void setMarketDataProcessor(
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
     m_data_processor = processor;
   }
 
-  std::mutex &GetMapMutex() { return m_map_mutex; }
+  // Get active symbols from MarketDataProcessor (direct)
+  std::vector<uint32_t> getActiveSymbols() const;
+
+  // Get symbol information from registry
+  std::string getSymbolName(uint32_t symbol_id) const;
+  std::string getExchangeName(uint32_t symbol_id) const;
 
 private:
-  // MarketDataProcessor for OHLCV aggregation
   std::shared_ptr<RenderEngine::MarketDataProcessor> m_data_processor;
   std::string m_shm_path;
   int m_shm_fd = -1;
   void *m_shm_ptr = nullptr;
   size_t m_shm_size = 0;
-  bool m_is_simulated = false;
 
   std::atomic<bool> m_running{false};
-
-  std::map<std::string, std::shared_ptr<InstrumentStore>> m_instruments;
-  std::mutex m_map_mutex;
 
   // Ring Buffer Pointers
   SharedMemoryHeader *m_header = nullptr;
@@ -133,11 +129,6 @@ private:
   uint64_t m_last_book_read_idx = 0;
 
   void poll_shm();
-  void poll_simulated();
-  void init_simulation();
-
-  // Helper to map symbol ID to object (lazy if needed)
-  std::shared_ptr<InstrumentStore> get_instrument(uint32_t symbol_id);
 };
 
 } // namespace BTQuant

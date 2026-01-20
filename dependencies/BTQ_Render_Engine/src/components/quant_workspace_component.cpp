@@ -1,8 +1,4 @@
 #include "../../include/components/quant_workspace_component.hpp"
-#include "implot_internal.h"
-#include <algorithm>
-#include <iostream>
-#include <vector>
 
 namespace BTQuant {
 
@@ -32,10 +28,6 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
       [this](const OrderManager::OrderExecution &execution) {
         position_manager_->update_position(execution);
       });
-
-  std::cout
-      << "[QuantWorkspaceComponent] Enhanced version initialized with trading"
-      << std::endl;
 }
 
 void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore *core) {
@@ -45,9 +37,6 @@ void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore *core) {
 void QuantWorkspaceComponent::update(float dt) { chart_manager_->update(); }
 
 void QuantWorkspaceComponent::render_gui() {
-  auto &instruments = bridge_->GetAllInstruments();
-  std::lock_guard<std::mutex> lock(bridge_->GetMapMutex());
-
   // Render chart controls
   if (show_chart_controls_) {
     render_chart_controls();
@@ -66,23 +55,20 @@ void QuantWorkspaceComponent::render_gui() {
 
   // Render all visible charts
   for (const auto &chart : chart_manager_->get_visible_charts()) {
-    auto it = instruments.find(chart.symbol);
-    if (it != instruments.end()) {
-      bool open = true;
-      ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    bool open = true;
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
 
-      if (ImGui::Begin((chart.symbol + " - " +
-                        std::to_string(static_cast<int>(chart.timeframe)))
-                           .c_str(),
-                       &open)) {
-        render_instrument_chart(chart.symbol, *it->second, chart.timeframe,
-                                chart);
-      }
-      ImGui::End();
+    if (ImGui::Begin((chart.symbol + " - " +
+                      std::to_string(static_cast<int>(chart.timeframe)))
+                         .c_str(),
+                     &open)) {
+      // Render chart without direct access to InstrumentStore
+      render_instrument_chart(chart.symbol, chart.timeframe, chart);
+    }
+    ImGui::End();
 
-      if (!open) {
-        chart_manager_->destroy_chart(chart.chart_id);
-      }
+    if (!open) {
+      chart_manager_->destroy_chart(chart.chart_id);
     }
   }
 }
@@ -93,8 +79,9 @@ void QuantWorkspaceComponent::render_chart_controls() {
 
   if (ImGui::Begin("Chart Controls", &show_chart_controls_)) {
     // Timeframe selector
-    const char *timeframes[] = {"1 Minute", "5 Minutes", "15 Minutes",
-                                "1 Hour",   "4 Hours",   "1 Day"};
+    const char *timeframes[] = {
+        "1 Second",  "5 Seconds",  "15 Seconds", "30 Seconds", "1 Minute",
+        "5 Minutes", "15 Minutes", "1 Hour",     "4 Hours",    "1 Day"};
     int selected = static_cast<int>(selected_timeframe_);
     if (ImGui::Combo("Timeframe", &selected, timeframes,
                      IM_ARRAYSIZE(timeframes))) {
@@ -105,12 +92,8 @@ void QuantWorkspaceComponent::render_chart_controls() {
 
     // Create chart button
     if (ImGui::Button("Create New Chart")) {
-      // For now, create chart for first available symbol
-      auto &instruments = bridge_->GetAllInstruments();
-      if (!instruments.empty()) {
-        chart_manager_->create_chart(instruments.begin()->first,
-                                     selected_timeframe_);
-      }
+      // For now, create chart for BTC-USDT (default symbol)
+      chart_manager_->create_chart("BTC-USDT", selected_timeframe_);
     }
 
     ImGui::Separator();
@@ -163,9 +146,8 @@ void QuantWorkspaceComponent::render_indicator_selector() {
 }
 
 void QuantWorkspaceComponent::render_instrument_chart(
-    const std::string &symbol, const InstrumentStore &inst,
-    RenderEngine::TimeFrame timeframe, const ChartInstance &chart) {
-  std::lock_guard<std::mutex> inst_lock(inst.data_mutex);
+    const std::string &symbol, RenderEngine::TimeFrame timeframe,
+    const ChartInstance &chart) {
 
   if (chart.dates.empty()) {
     ImGui::Text("Initializing Stream for %s...", symbol.c_str());
@@ -293,7 +275,7 @@ void QuantWorkspaceComponent::render_instrument_chart(
                                              0.0f, 0.94f, 1.0f, 1.0f))); // Cyan
 
   if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
-    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
 
     // Enable auto-fit for price axis
@@ -305,77 +287,32 @@ void QuantWorkspaceComponent::render_instrument_chart(
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y2, 0,
                                        1000000); // For Volume alignment
 
-    // Setup automatic axis limits based on data
-    if (!chart.dates.empty()) {
-      ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
-                              chart.dates.back(), ImPlotCond_Always);
-    }
-
-    const double *dates = chart.dates.data();
-    const float *opens = chart.opens.data();
-    const float *closes = chart.closes.data();
-    const float *lows = chart.lows.data();
-    const float *highs = chart.highs.data();
     int count = (int)chart.dates.size();
 
-    // Debug: Log rendering data
-    static int log_counter = 0;
-    if (log_counter++ % 60 == 0) { // Log once per ~60 frames
-      std::cout << "[Render] " << symbol << " count=" << count;
-      if (count > 0) {
-        std::cout << " first_date=" << dates[0] << " O=" << opens[0]
-                  << " H=" << highs[0] << " L=" << lows[0]
-                  << " C=" << closes[0];
-      }
-      std::cout << std::endl;
-    }
-
-    // Plot 1: Candlesticks (Manual high-perf implementation)
-    if (count > 0 && ImPlot::BeginItem("OHLC")) {
-      ImDrawList *draw_list = ImPlot::GetPlotDrawList();
-      double width = 0.25;
-      if (count > 1) {
-        width = (dates[1] - dates[0]) * 0.25;
-      }
-
+    if (count > 0) {
+      // DEAD SIMPLE: Just plot lines for each OHLC component
+      std::vector<double> opens_d(count), highs_d(count), lows_d(count),
+          closes_d(count);
       for (int i = 0; i < count; ++i) {
-        ImVec2 open_pos = ImPlot::PlotToPixels(dates[i] - width, opens[i]);
-        ImVec2 close_pos = ImPlot::PlotToPixels(dates[i] + width, closes[i]);
-        ImVec2 low_pos = ImPlot::PlotToPixels(dates[i], lows[i]);
-        ImVec2 high_pos = ImPlot::PlotToPixels(dates[i], highs[i]);
-
-        // Neon Red for down, Cyber Cyan for up
-        ImU32 color = (opens[i] > closes[i])
-                          ? ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.2f, 1.0f))
-                          : // Neon Red
-                          ImGui::GetColorU32(
-                              ImVec4(0.0f, 0.94f, 1.0f, 1.0f)); // Cyber Cyan
-
-        draw_list->AddLine(low_pos, high_pos, color);
-        draw_list->AddRectFilled(open_pos, close_pos, color);
-
-        ImPlot::FitPoint(ImPlotPoint(dates[i], lows[i]));
-        ImPlot::FitPoint(ImPlotPoint(dates[i], highs[i]));
-      }
-      ImPlot::EndItem();
-    }
-
-    // Plot 2: Volume Profile (PlotBarsH on Y-axis)
-    if (!inst.m_vol_profile.empty()) {
-      std::vector<double> vp_prices;
-      std::vector<double> vp_volumes;
-      for (auto const &[price, vol] : inst.m_vol_profile) {
-        vp_prices.push_back(price);
-        vp_volumes.push_back(vol);
+        opens_d[i] = chart.opens[i];
+        highs_d[i] = chart.highs[i];
+        lows_d[i] = chart.lows[i];
+        closes_d[i] = chart.closes[i];
       }
 
-      ImPlot::SetAxis(ImAxis_Y1); // Align to Price Axis
-      ImPlot::SetNextFillStyle(
-          ImVec4(0.0f, 0.94f, 1.0f, 0.3f)); // Transparent Cyan
-      ImPlot::PlotBars("VolProfile", vp_prices.data(), vp_volumes.data(),
-                       (int)vp_prices.size(), 0.5, ImPlotBarsFlags_Horizontal);
-    }
+      // Plot all OHLC as separate lines
+      ImPlot::SetNextLineStyle(ImVec4(0.5f, 0.5f, 0.5f, 0.5f));
+      ImPlot::PlotLine("Open", chart.dates.data(), opens_d.data(), count);
 
+      ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+      ImPlot::PlotLine("High", chart.dates.data(), highs_d.data(), count);
+
+      ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+      ImPlot::PlotLine("Low", chart.dates.data(), lows_d.data(), count);
+
+      ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), 2.0f);
+      ImPlot::PlotLine("Close", chart.dates.data(), closes_d.data(), count);
+    }
     // Plot indicators
     indicator_renderer_->render_indicators(symbol, timeframe, indicators);
 
@@ -442,8 +379,7 @@ void QuantWorkspaceComponent::render_trading_panel() {
                                                : OrderManager::OrderType::Limit;
       order.price = order_price_;
 
-      std::string order_id = order_manager_->place_order(order);
-      std::cout << "[Trading] Order placed: " << order_id << std::endl;
+      order_manager_->place_order(order);
     }
 
     ImGui::PopStyleColor();

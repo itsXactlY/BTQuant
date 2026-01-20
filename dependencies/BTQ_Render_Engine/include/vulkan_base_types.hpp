@@ -25,24 +25,29 @@ class VulkanDashboard;
 struct VulkanDashboardConfig {
   // Vulkan configuration
   bool enable_validation_layers = false;
-  bool enable_msaa = true;
-  VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_4_BIT;
-  bool enable_hdr = true;
+  bool enable_msaa = false;  // Disable MSAA for better performance in sub-second charts
+  VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
+  bool enable_hdr = false;   // Disable HDR for better performance
   VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
   // Performance targets
-  uint32_t target_fps = 60;
-  uint32_t max_ui_elements = 1000;
-  float max_data_latency_ms = 1.0f;
+  uint32_t target_fps = 144;     // Higher target FPS for sub-second charts
+  uint32_t max_ui_elements = 500;  // Reduce UI element count for performance
+  float max_data_latency_ms = 0.5f; // Lower latency target
 
-  // Memory configuration
-  size_t vertex_pool_size = 64 * 1024 * 1024;  // 64MB
-  size_t uniform_pool_size = 16 * 1024 * 1024; // 16MB
-  size_t storage_pool_size = 32 * 1024 * 1024; // 32MB
+  // Memory configuration (increased for higher data rates)
+  size_t vertex_pool_size = 128 * 1024 * 1024;  // 128MB
+  size_t uniform_pool_size = 32 * 1024 * 1024; // 32MB
+  size_t storage_pool_size = 64 * 1024 * 1024; // 64MB
 
   // HotSpine integration
   std::string shm_name = "/btquant_hotspine";
   std::string symbol_registry_path = "/dev/shm/btquant_symbols.json";
+
+  // Performance optimization flags
+  bool enable_command_buffer_recycling = true;
+  bool enable_gpu_memory_budgeting = true;
+  bool enable_low_latency_mode = true;
 };
 
 struct BufferAllocation {
@@ -202,34 +207,22 @@ public:
   void wait_idle() { vkDeviceWaitIdle(device_); }
 
   // Swapchain management
-  // Pipeline and descriptor management
-  VkPipeline create_graphics_pipeline(
-      const std::string &vert_path, const std::string &frag_path,
-      const std::vector<VkVertexInputBindingDescription> &bindings,
-      const std::vector<VkVertexInputAttributeDescription> &attributes,
-      VkPipelineLayout layout, VkRenderPass render_pass = VK_NULL_HANDLE);
-  VkPipeline create_compute_pipeline(const std::string &shader_path,
-                                     VkPipelineLayout layout);
-  VkShaderModule create_shader_module(const std::vector<char> &code);
-  VkPipelineLayout create_pipeline_layout(
-      const std::vector<VkDescriptorSetLayout> &layouts,
-      const std::vector<VkPushConstantRange> &push_constants);
-
   void recreate_swapchain(uint32_t width, uint32_t height);
 
   uint32_t find_memory_type(uint32_t type_filter,
                             VkMemoryPropertyFlags properties);
 
-  // Offscreen rendering support
-  VkSampler get_default_sampler() const { return default_sampler_; }
-  VkDescriptorSet create_texture_descriptor(VkImageView view);
-
   // Helper methods for single-time commands
   VkCommandBuffer begin_single_time_commands();
   void end_single_time_commands(VkCommandBuffer commandBuffer);
-  void copy_buffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-  void create_placeholder_texture(VkImage &image, VkDeviceMemory &memory,
-                                  VkImageView &view, VkSampler &sampler);
+
+  // Performance optimization methods
+  void set_low_latency_mode(bool enabled);
+  bool is_low_latency_mode() const { return config_.enable_low_latency_mode; }
+
+  // Frame timing metrics
+  float get_frame_time_ms() const { return frame_time_ms_; }
+  float get_fps() const { return fps_; }
 
 private:
   VulkanDashboardConfig config_;
@@ -269,9 +262,10 @@ private:
   VkImageView depth_image_view_ = VK_NULL_HANDLE;
   VkDeviceMemory depth_memory_ = VK_NULL_HANDLE;
 
-  // Command buffers
+  // Command buffers (recyclable)
   VkCommandPool command_pool_ = VK_NULL_HANDLE;
   std::vector<VkCommandBuffer> command_buffers_;
+  std::vector<bool> command_buffer_in_use_;
   VkCommandBuffer current_command_buffer_ = VK_NULL_HANDLE;
 
   // Descriptor pools
@@ -291,9 +285,15 @@ private:
   // Frame timing
   std::chrono::high_resolution_clock::time_point last_frame_time_;
   float delta_time_ = 0.0f;
+  float frame_time_ms_ = 0.0f;
+  float fps_ = 0.0f;
 
   // Current frame data
   uint32_t current_image_index_ = 0;
+
+  // Performance monitoring
+  std::vector<float> frame_time_history_;
+  static constexpr size_t FRAME_TIME_HISTORY_SIZE = 100;
 
   // Private initialization methods
   void create_instance();
@@ -317,8 +317,8 @@ private:
   bool is_device_suitable(VkPhysicalDevice device);
   VkSampleCountFlagBits get_max_usable_sample_count();
   VkFormat find_supported_format(const std::vector<VkFormat> &candidates,
-                                 VkImageTiling tiling,
-                                 VkFormatFeatureFlags features);
+                                  VkImageTiling tiling,
+                                  VkFormatFeatureFlags features);
   VkFormat find_depth_format();
 
   // Cleanup helpers
@@ -331,6 +331,10 @@ private:
 
   VkSampler default_sampler_ = VK_NULL_HANDLE;
   void create_default_sampler();
+
+  // Command buffer recycling
+  VkCommandBuffer acquire_command_buffer();
+  void release_command_buffer(VkCommandBuffer cmd_buf);
 };
 
 } // namespace BTQuant

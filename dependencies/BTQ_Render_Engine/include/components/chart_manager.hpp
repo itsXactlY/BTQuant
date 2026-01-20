@@ -52,11 +52,18 @@ public:
   void update();
   void populate_chart_data(uint32_t chart_id);
 
+  // Helper to map symbol name to ID
+  uint32_t getSymbolId(const std::string &symbol) const;
+
 private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unordered_map<uint32_t, ChartInstance> charts_;
   uint32_t next_chart_id_ = 0;
+  
+  // Symbol name to ID mapping (cached for performance)
+  mutable std::unordered_map<std::string, uint32_t> symbol_id_map_;
+  mutable std::mutex id_map_mutex_;
 };
 
 } // namespace BTQuant

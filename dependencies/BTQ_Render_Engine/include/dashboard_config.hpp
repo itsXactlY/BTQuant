@@ -1,9 +1,17 @@
 #pragma once
 
-#include "data_visualization_engine.hpp"
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <iomanip>
+
+// Color type definition
+struct ColorRGBA {
+  float r;
+  float g;
+  float b;
+  float a;
+};
 
 namespace BTQuant {
 namespace RenderEngine {

@@ -1,7 +1,7 @@
 #include "hotspine_data_bridge.hpp"
 #include "implot.h"
-#include "vulkan_dashboard_advanced.hpp"
 #include "market_data_processor.hpp"
+#include "vulkan_dashboard_advanced.hpp"
 #include <iostream>
 #include <memory>
 
@@ -18,19 +18,22 @@ int main(int argc, char **argv) {
   std::cout << "[Main] BTQuant Real-Time Terminal Starting..." << std::endl;
 
   // 1. Data Layer Initialization (Shared Ptr)
-  auto bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant");
+  auto bridge =
+      std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   if (!bridge->start()) {
     std::cerr << "[Main] Critical: Failed to start Data Bridge." << std::endl;
     return -1;
   }
 
   // 2. Market Data Processor
-  auto processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
+  auto processor =
+      std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
   bridge->setMarketDataProcessor(processor);
 
   // 3. Rendering Layer Initialization
   BTQuant::VulkanDashboardConfig config{};
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, bridge, processor, config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(
+      1920, 1080, bridge, processor, config);
 
   dashboard->initialize();
 

@@ -3,6 +3,7 @@
 #include "symbol_registry.hpp"
 #include <chrono>
 #include <cmath>
+#include <cstring> // For strerror
 #include <fcntl.h>
 #include <iostream>
 #include <random>
@@ -30,6 +31,73 @@ HotSpineDataBridge::~HotSpineDataBridge() {
 }
 
 bool HotSpineDataBridge::start() {
+  // Open shared memory
+  m_shm_fd = shm_open(m_shm_path.c_str(), O_RDWR, 0666);
+  if (m_shm_fd == -1) {
+    std::cerr << "[HotSpineDataBridge] ERROR: Failed to open shared memory '"
+              << m_shm_path << "': " << strerror(errno) << std::endl;
+    std::cerr << "  Make sure HotSpine data feed is running!" << std::endl;
+    return false; // FAIL - require real data
+  }
+
+  // Get the size
+  struct stat sb;
+  if (fstat(m_shm_fd, &sb) == -1) {
+    std::cerr << "[HotSpineDataBridge] ERROR: Failed to fstat shared memory"
+              << std::endl;
+    close(m_shm_fd);
+    m_shm_fd = -1;
+    return false;
+  }
+  m_shm_size = sb.st_size;
+
+  // Map it
+  m_shm_ptr =
+      mmap(NULL, m_shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shm_fd, 0);
+  if (m_shm_ptr == MAP_FAILED) {
+    std::cerr << "[HotSpineDataBridge] ERROR: Failed to mmap shared memory"
+              << std::endl;
+    close(m_shm_fd);
+    m_shm_fd = -1;
+    return false;
+  }
+
+  // Initialize pointers
+  m_header = reinterpret_cast<SharedMemoryHeader *>(m_shm_ptr);
+
+  // Verify magic number - "UQTB" = 0x42545155 in little-endian uint32_t
+  // or check ASCII bytes directly: 'U'(55) 'Q'(51) 'T'(54) 'B'(42)
+  uint32_t expected_magic_le = 0x42545155; // Little-endian representation
+  if (m_header->magic != expected_magic_le) {
+    std::cerr
+        << "[HotSpineDataBridge] ERROR: Invalid magic number in shared memory"
+        << std::endl;
+    std::cerr << "  Expected: 0x" << std::hex << expected_magic_le
+              << " (UQTB), Got: 0x" << m_header->magic << std::dec << std::endl;
+    std::cerr << "  Cannot proceed without valid shared memory!" << std::endl;
+    munmap(m_shm_ptr, m_shm_size);
+    m_shm_ptr = nullptr;
+    m_header = nullptr;
+    close(m_shm_fd);
+    m_shm_fd = -1;
+    return false; // FAIL - don't fall back to simulation
+  }
+
+  // Calculate ring buffer positions
+  size_t header_size = sizeof(SharedMemoryHeader);
+  m_trades = reinterpret_cast<HotTrade *>(static_cast<char *>(m_shm_ptr) +
+                                          header_size);
+
+  size_t trades_size = m_header->capacity * sizeof(HotTrade);
+  m_books = reinterpret_cast<HotOrderbookSnapshot *>(
+      static_cast<char *>(m_shm_ptr) + header_size + trades_size);
+
+  std::cout << "[HotSpineDataBridge] Connected to shared memory: " << m_shm_path
+            << " (size=" << m_shm_size << " bytes, "
+            << "trades_capacity=" << m_header->capacity << ", "
+            << "books_capacity=" << m_header->orderbook_capacity << ")"
+            << std::endl;
+
   m_running = true;
   return true;
 }
@@ -37,17 +105,11 @@ bool HotSpineDataBridge::start() {
 void HotSpineDataBridge::stop() { m_running = false; }
 
 void HotSpineDataBridge::poll() {
-  if (!m_running)
+  if (!m_running || !m_header)
     return;
 
-  // Detect if shared memory is valid/available
-  bool shm_valid = (m_header != nullptr && m_header->magic == 0x55515442);
-
-  if (!shm_valid) {
-    poll_simulated();
-  } else {
-    poll_shm();
-  }
+  // Always use real shared memory data
+  poll_shm();
 }
 
 std::shared_ptr<InstrumentStore>

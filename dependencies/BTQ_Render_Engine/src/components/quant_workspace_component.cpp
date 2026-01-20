@@ -164,7 +164,7 @@ void QuantWorkspaceComponent::render_indicator_selector() {
 
 void QuantWorkspaceComponent::render_instrument_chart(
     const std::string &symbol, const InstrumentStore &inst,
-    RenderEngine::TimeFrame timeframe, const ChartInstance& chart) {
+    RenderEngine::TimeFrame timeframe, const ChartInstance &chart) {
   std::lock_guard<std::mutex> inst_lock(inst.data_mutex);
 
   if (chart.dates.empty()) {
@@ -295,12 +295,21 @@ void QuantWorkspaceComponent::render_instrument_chart(
   if (ImPlot::BeginPlot(symbol.c_str(), ImVec2(-1, -1), ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+
+    // Enable auto-fit for price axis
     ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_AutoFit);
+
     ImPlot::SetupAxis(ImAxis_Y2, "Volume",
                       ImPlotAxisFlags_AuxDefault | ImPlotAxisFlags_NoGridLines |
                           ImPlotAxisFlags_NoTickLabels);
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y2, 0,
                                        1000000); // For Volume alignment
+
+    // Setup automatic axis limits based on data
+    if (!chart.dates.empty()) {
+      ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
+                              chart.dates.back(), ImPlotCond_Always);
+    }
 
     const double *dates = chart.dates.data();
     const float *opens = chart.opens.data();
@@ -309,8 +318,20 @@ void QuantWorkspaceComponent::render_instrument_chart(
     const float *highs = chart.highs.data();
     int count = (int)chart.dates.size();
 
+    // Debug: Log rendering data
+    static int log_counter = 0;
+    if (log_counter++ % 60 == 0) { // Log once per ~60 frames
+      std::cout << "[Render] " << symbol << " count=" << count;
+      if (count > 0) {
+        std::cout << " first_date=" << dates[0] << " O=" << opens[0]
+                  << " H=" << highs[0] << " L=" << lows[0]
+                  << " C=" << closes[0];
+      }
+      std::cout << std::endl;
+    }
+
     // Plot 1: Candlesticks (Manual high-perf implementation)
-    if (ImPlot::BeginItem("OHLC")) {
+    if (count > 0 && ImPlot::BeginItem("OHLC")) {
       ImDrawList *draw_list = ImPlot::GetPlotDrawList();
       double width = 0.25;
       if (count > 1) {

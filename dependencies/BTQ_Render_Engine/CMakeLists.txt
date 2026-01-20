@@ -42,6 +42,7 @@ set(DASHBOARD_SOURCES
     src/components/quant_workspace_component.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
+    src/trading/trading_interface.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp

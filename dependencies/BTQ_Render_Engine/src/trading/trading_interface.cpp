@@ -6,14 +6,16 @@
  * integration.
  */
 
-#include "../../include/vulkan_dashboard_advanced.hpp"
+#include "../../include/trading/order_manager.hpp"
+#include "../../include/trading/position_manager.hpp"
+#include "../../include/trading/risk_assessment.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
-#include <unordered_set>
 
 namespace BTQuant {
 
@@ -472,21 +474,6 @@ PositionManager::get_position(const std::string &symbol) const {
   return Position{};
 }
 
-struct PortfolioSummary {
-  double total_value;
-  double total_unrealized_pnl;
-  double total_realized_pnl;
-  double total_commission;
-  double cash_balance;
-  double buying_power;
-  double margin_used;
-  double portfolio_beta;
-  double portfolio_var;
-  double sharpe_ratio;
-  int position_count;
-  int trade_count;
-};
-
 PositionManager::PortfolioSummary
 PositionManager::get_portfolio_summary() const {
   PortfolioSummary summary{};
@@ -524,15 +511,7 @@ void PositionManager::set_cash_balance(double balance) {
   cash_balance_ = balance;
 }
 
-private:
-std::unordered_map<std::string, Position> positions_;
-std::unordered_map<std::string, double> market_prices_;
-std::unordered_map<std::string, std::string>
-    order_symbols_; // order_id -> symbol
-
-PositionUpdateCallback position_update_callback_;
-
-double cash_balance_ = 100000.0; // Starting cash
+// Private helper methods
 
 std::string
 PositionManager::get_symbol_from_order(const std::string &order_id) {
@@ -648,7 +627,6 @@ void PositionManager::notify_position_update(const Position &position) {
     position_update_callback_(position);
   }
 }
-};
 
 // ============================================================================
 // Risk Assessment System
@@ -838,15 +816,6 @@ bool RiskAssessment::validate_order_risk(
 
   return true;
 }
-
-struct RiskReport {
-  RiskMetrics metrics;
-  std::vector<RiskAlert> alerts;
-  std::vector<std::string> recommendations;
-  double risk_adjusted_return;
-  double maximum_trade_size;
-  std::unordered_map<std::string, double> symbol_risk_scores;
-};
 
 RiskAssessment::RiskReport RiskAssessment::generate_risk_report(
     const PositionManager::PortfolioSummary &portfolio,
@@ -1088,7 +1057,10 @@ uint64_t RiskAssessment::get_current_timestamp() {
              std::chrono::system_clock::now().time_since_epoch())
       .count();
 }
+
+
+void OrderManager::set_execution_callback(ExecutionCallback callback) {
+  execution_callback_ = callback;
 }
-;
 
 } // namespace BTQuant

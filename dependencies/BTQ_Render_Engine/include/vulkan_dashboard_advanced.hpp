@@ -128,7 +128,7 @@ public:
 
 // Forward declarations
 class VulkanDashboard;
-class QuantWorkspaceComponent;
+class RealtimeDashboardComponent;
 
 class ResizablePanel : public UIComponent {
 public:
@@ -251,7 +251,7 @@ private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
-  std::unique_ptr<QuantWorkspaceComponent> m_workspace;
+  std::unique_ptr<RealtimeDashboardComponent> m_workspace;
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;
   bool m_windowResized = false;

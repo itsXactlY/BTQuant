@@ -33,10 +33,11 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 
 void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore *core) {
   // Panel system handles its own Vulkan resources
-  (void)core; // Suppress unused parameter warning
 }
 
-void QuantWorkspaceComponent::update(float dt) { panel_manager_->update(dt); }
+void QuantWorkspaceComponent::update(float dt) {
+  panel_manager_->update(dt);
+}
 
 void QuantWorkspaceComponent::render_gui() {
   // Render dashboard controls
@@ -89,4 +90,9 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   }
   ImGui::End();
 }
+
+void QuantWorkspaceComponent::clear_data() {
+  panel_manager_.reset();
+}
+
 } // namespace BTQuant

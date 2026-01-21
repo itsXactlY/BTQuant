@@ -2,6 +2,7 @@
 #include "implot.h"
 #include "market_data_processor.hpp"
 #include "vulkan_dashboard_advanced.hpp"
+#include "components/realtime_dashboard_component.hpp"
 #include <chrono>
 #include <iostream>
 #include <memory>

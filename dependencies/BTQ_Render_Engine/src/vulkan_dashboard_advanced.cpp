@@ -1,7 +1,7 @@
 #include "vulkan_dashboard_advanced.hpp"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
-#include "components/quant_workspace_component.hpp"
+#include "components/realtime_dashboard_component.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include <iostream>

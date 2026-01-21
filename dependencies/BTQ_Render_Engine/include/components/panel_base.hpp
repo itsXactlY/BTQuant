@@ -35,7 +35,7 @@ struct PanelConfig {
 
 class PanelBase {
 public:
-  PanelBase(const PanelConfig &config) : config_(config) {}
+  PanelBase(const PanelConfig& config) : config_(config) {}
   virtual ~PanelBase() = default;
 
   virtual void update(float dt) {}
@@ -43,16 +43,16 @@ public:
   virtual void initialize() {}
 
   // Panel management
-  void set_position(const ImVec2 &pos) { config_.position = pos; }
-  void set_size(const ImVec2 &size) { config_.size = size; }
+  void set_position(const ImVec2& pos) { config_.position = pos; }
+  void set_size(const ImVec2& size) { config_.size = size; }
   void set_visible(bool visible) { config_.visible = visible; }
-  void set_title(const std::string &title) { config_.title = title; }
+  void set_title(const std::string& title) { config_.title = title; }
 
-  const PanelConfig &get_config() const { return config_; }
-  PanelConfig &get_config() { return config_; }
+  const PanelConfig& get_config() const { return config_; }
+  PanelConfig& get_config() { return config_; }
 
   bool is_visible() const { return config_.visible; }
-  const std::string &get_title() const { return config_.title; }
+  const std::string& get_title() const { return config_.title; }
 
 protected:
   PanelConfig config_;
@@ -61,7 +61,6 @@ protected:
   void begin_panel_window();
   void end_panel_window();
   void render_panel_header();
-  static const char *get_panel_type_name(PanelType type);
 };
 
 } // namespace BTQuant

@@ -1,11 +1,11 @@
 #pragma once
 
+#include "panel_base.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
-#include "panel_base.hpp"
 #include <memory>
-#include <string>
 #include <vector>
+#include <string>
 
 namespace BTQuant {
 
@@ -14,13 +14,13 @@ struct Metric {
   std::string value;
   std::string unit;
   ImVec4 color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-  bool has_progress = false;
-  float progress = 0.0f;
+  bool is_percentage = false;
+  float change = 0.0f; // Percentage change
 };
 
 class MetricsPanel : public PanelBase {
 public:
-  MetricsPanel(const PanelConfig &config,
+  MetricsPanel(const PanelConfig& config,
                std::shared_ptr<PositionManager> position_manager,
                std::shared_ptr<RiskAssessment> risk_assessment);
 
@@ -37,8 +37,8 @@ private:
 
   void update_metrics();
   void render_metric_grid();
-  void render_metric_card(const Metric &metric, float width, float height);
-  ImVec4 get_metric_color(bool is_positive, bool unused = true);
+  void render_metric_card(const Metric& metric, float width);
+  ImVec4 get_metric_color(float value, bool is_positive_good = true);
 };
 
 } // namespace BTQuant

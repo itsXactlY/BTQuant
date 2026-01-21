@@ -1,15 +1,15 @@
 #pragma once
 
+#include "panel_base.hpp"
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
 #include "chart_manager.hpp"
-#include "panel_base.hpp"
 #include <memory>
-#include <unordered_map>
 #include <vector>
+#include <unordered_map>
 
 namespace BTQuant {
 
@@ -35,9 +35,9 @@ public:
   void render();
 
   // Panel management
-  uint32_t add_panel(PanelType type, const std::string &title = "",
-                     int grid_x = -1, int grid_y = -1, int width = 1,
-                     int height = 1);
+  uint32_t add_panel(PanelType type, const std::string& title = "",
+                     int grid_x = -1, int grid_y = -1,
+                     int width = 1, int height = 1);
   void remove_panel(uint32_t panel_id);
   void move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y);
   void resize_panel(uint32_t panel_id, int new_width, int new_height);
@@ -50,7 +50,7 @@ public:
 
   // Serialization
   std::string serialize_layout() const;
-  void deserialize_layout(const std::string &layout_json);
+  void deserialize_layout(const std::string& layout_json);
 
 private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -66,12 +66,10 @@ private:
 
   ImVec2 dashboard_size_ = ImVec2(1920, 1080);
 
-  PanelConfig create_panel_config(PanelType type, const std::string &title,
-                                  int grid_x, int grid_y, int width,
-                                  int height);
+  PanelConfig create_panel_config(PanelType type, const std::string& title,
+                                  int grid_x, int grid_y, int width, int height);
   ImVec2 calculate_panel_position(int grid_x, int grid_y) const;
   ImVec2 calculate_panel_size(int width, int height) const;
-  std::string get_default_panel_title(PanelType type);
 };
 
 } // namespace BTQuant

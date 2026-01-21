@@ -60,6 +60,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
       for (int x = 0; x < grid_layout_.columns && !found; ++x) {
         // Check if position is occupied
         bool occupied = false;
+
         for (const auto &[id, panel] : panels_) {
           const auto &config = panel->get_config();
           if (config.grid_x <= x && x < config.grid_x + config.grid_width &&
@@ -152,8 +153,8 @@ void PanelManager::set_grid_layout(int columns, int rows) {
   grid_layout_.rows = std::max(rows, grid_layout_.rows);
 
   // Reposition all panels
-  for (auto &[id, panel] : panels_) {
-    auto &config = panel->get_config();
+  for (auto& [id, panel] : panels_) {
+    auto& config = panel->get_config();
     config.position = calculate_panel_position(config.grid_x, config.grid_y);
     config.size = calculate_panel_size(config.grid_width, config.grid_height);
   }
@@ -163,8 +164,8 @@ void PanelManager::auto_arrange_panels() {
   int current_x = 0;
   int current_y = 0;
 
-  for (auto &[id, panel] : panels_) {
-    auto &config = panel->get_config();
+  for (auto& [id, panel] : panels_) {
+    auto& config = panel->get_config();
 
     // Check if we need to move to next row
     if (current_x + config.grid_width > grid_layout_.columns) {
@@ -196,10 +197,8 @@ ImVec2 PanelManager::get_panel_size(uint32_t panel_id) const {
   return ImVec2(400, 300);
 }
 
-PanelConfig PanelManager::create_panel_config(PanelType type,
-                                              const std::string &title,
-                                              int grid_x, int grid_y, int width,
-                                              int height) {
+PanelConfig PanelManager::create_panel_config(PanelType type, const std::string& title,
+                                              int grid_x, int grid_y, int width, int height) {
   PanelConfig config;
   config.type = type;
   config.title = title.empty() ? get_default_panel_title(type) : title;
@@ -220,51 +219,44 @@ ImVec2 PanelManager::calculate_panel_position(int grid_x, int grid_y) const {
   float cell_width = dashboard_size_.x / grid_layout_.columns;
   float cell_height = dashboard_size_.y / grid_layout_.rows;
 
-  return ImVec2(grid_x * cell_width + grid_layout_.cell_padding,
-                grid_y * cell_height + grid_layout_.cell_padding);
+  return ImVec2(
+    grid_x * cell_width + grid_layout_.cell_padding,
+    grid_y * cell_height + grid_layout_.cell_padding
+  );
 }
 
 ImVec2 PanelManager::calculate_panel_size(int width, int height) const {
   float cell_width = dashboard_size_.x / grid_layout_.columns;
   float cell_height = dashboard_size_.y / grid_layout_.rows;
 
-  return ImVec2(width * cell_width - 2 * grid_layout_.cell_padding -
-                    grid_layout_.panel_spacing,
-                height * cell_height - 2 * grid_layout_.cell_padding -
-                    grid_layout_.panel_spacing);
+  return ImVec2(
+    width * cell_width - 2 * grid_layout_.cell_padding - grid_layout_.panel_spacing,
+    height * cell_height - 2 * grid_layout_.cell_padding - grid_layout_.panel_spacing
+  );
 }
 
 std::string PanelManager::get_default_panel_title(PanelType type) {
   switch (type) {
-  case PanelType::CHART:
-    return "Price Chart";
-  case PanelType::METRICS:
-    return "Metrics";
-  case PanelType::HEATMAP:
-    return "Heatmap";
-  case PanelType::HISTOGRAM:
-    return "Histogram";
-  case PanelType::SCATTER_PLOT:
-    return "Scatter Plot";
-  case PanelType::TIME_SERIES:
-    return "Time Series";
-  case PanelType::TRADING_ORDERS:
-    return "Orders";
-  case PanelType::TRADING_POSITIONS:
-    return "Positions";
-  case PanelType::RISK_METRICS:
-    return "Risk";
-  case PanelType::ALERTS:
-    return "Alerts";
-  default:
-    return "Panel";
+    case PanelType::CHART: return "Price Chart";
+    case PanelType::METRICS: return "Metrics";
+    case PanelType::HEATMAP: return "Heatmap";
+    case PanelType::HISTOGRAM: return "Histogram";
+    case PanelType::SCATTER_PLOT: return "Scatter Plot";
+    case PanelType::TIME_SERIES: return "Time Series";
+    case PanelType::TRADING_ORDERS: return "Orders";
+    case PanelType::TRADING_POSITIONS: return "Positions";
+    case PanelType::RISK_METRICS: return "Risk";
+    case PanelType::ALERTS: return "Alerts";
+    default: return "Panel";
   }
 }
 
 // TODO: Implement serialization
-std::string PanelManager::serialize_layout() const { return "{}"; }
+std::string PanelManager::serialize_layout() const {
+  return "{}";
+}
 
-void PanelManager::deserialize_layout(const std::string &layout_json) {
+void PanelManager::deserialize_layout(const std::string& layout_json) {
   // TODO: Implement deserialization
 }
 

@@ -89,7 +89,4 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   }
   ImGui::End();
 }
-
-void QuantWorkspaceComponent::clear_data() { panel_manager_.reset(); }
-
 } // namespace BTQuant

@@ -179,219 +179,64 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
   // Diagnostic info
   ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                     "Candles: %zu | Last: %.2f", chart.dates.size(),
+                     "Candles: %zu | Last: %.2f",
+                     chart.dates.size(),
                      chart.closes.empty() ? 0.0 : chart.closes.back());
 
-  // Prepare indicators list
+  // Prepare indicators
   std::vector<IndicatorParams> indicators;
-
   if (indicator_config_.show_sma_10) {
-    IndicatorParams p;
-    p.type = IndicatorType::SMA_10;
-    p.period1 = 10;
-    p.color = ImVec4(0.0f, 0.94f, 1.0f, 1.0f); // Cyan
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::SMA_10, 10, 0, 0, 2.0f,
+                         {0.0f, 0.94f, 1.0f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_sma_20) {
-    IndicatorParams p;
-    p.type = IndicatorType::SMA_20;
-    p.period1 = 20;
-    p.color = ImVec4(1.0f, 0.84f, 0.0f, 1.0f); // Gold
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::SMA_20, 20, 0, 0, 2.0f,
+                         {1.0f, 0.84f, 0.0f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_sma_50) {
-    IndicatorParams p;
-    p.type = IndicatorType::SMA_50;
-    p.period1 = 50;
-    p.color = ImVec4(1.0f, 0.0f, 1.0f, 1.0f); // Magenta
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::SMA_50, 50, 0, 0, 2.0f,
+                         {1.0f, 0.0f, 1.0f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_ema_10) {
-    IndicatorParams p;
-    p.type = IndicatorType::EMA_10;
-    p.period1 = 10;
-    p.color = ImVec4(0.0f, 1.0f, 0.5f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::EMA_10, 10, 0, 0, 2.0f,
+                         {0.0f, 1.0f, 0.5f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_ema_20) {
-    IndicatorParams p;
-    p.type = IndicatorType::EMA_20;
-    p.period1 = 20;
-    p.color = ImVec4(0.5f, 0.5f, 1.0f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::EMA_20, 20, 0, 0, 2.0f,
+                         {0.5f, 0.5f, 1.0f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_ema_50) {
-    IndicatorParams p;
-    p.type = IndicatorType::EMA_50;
-    p.period1 = 50;
-    p.color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::EMA_50, 50, 0, 0, 2.0f,
+                         {1.0f, 0.5f, 0.0f, 1.0f}, 1.0f, true});
   }
   if (indicator_config_.show_rsi) {
-    IndicatorParams p;
-    p.type = IndicatorType::RSI_14;
-    p.period1 = 14;
-    p.color = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::RSI, 14, 0, 0, 1.5f,
+                         {1.0f, 0.8f, 0.0f, 1.0f}, 1.0f, false});
   }
   if (indicator_config_.show_macd) {
-    IndicatorParams p;
-    p.type = IndicatorType::MACD;
-    p.period1 = 12;
-    p.period2 = 26;
-    p.period3 = 9;
-    p.color = ImVec4(0.8f, 0.2f, 0.8f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::MACD, 12, 26, 9, 1.5f,
+                         {0.8f, 0.2f, 0.8f, 1.0f}, 1.0f, false});
   }
   if (indicator_config_.show_bollinger) {
-    IndicatorParams p;
-    p.type = IndicatorType::BOLLINGER_MID;
-    p.period1 = 20;
-    p.std_dev = 2.0;
-    p.color = ImVec4(0.5f, 0.8f, 0.5f, 1.0f);
-    p.visible = true;
-    indicators.push_back(p);
+    indicators.push_back({IndicatorType::BOLLINGER_BANDS, 20, 0, 0, 1.0f,
+                         {0.5f, 0.8f, 0.5f, 1.0f}, 1.0f, true});
   }
 
-  // Render the chart
+  // Render the chart using indicator renderer
   ImVec2 plot_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                            ImGui::GetContentRegionAvail().y - 20);
+                           ImGui::GetContentRegionAvail().y - 20);
 
   if (ImPlot::BeginPlot(symbol_.c_str(), plot_size)) {
-    // Setup axes with time formatting
-    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
-    ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
-    ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_AutoFit);
+    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_Time, 0);
     ImPlot::SetupAxisFormat(ImAxis_Y1, "%.2f");
 
-    int count = static_cast<int>(chart.dates.size());
-    if (count > 0) {
-      // Calculate candle width based on timeframe
-      double candle_width = 30.0;
-      switch (timeframe_) {
-      case RenderEngine::TimeFrame::TF_100MS:
-        candle_width = 0.08;
-        break;
-      case RenderEngine::TimeFrame::TF_500MS:
-        candle_width = 0.4;
-        break;
-      case RenderEngine::TimeFrame::TF_1SEC:
-        candle_width = 0.8;
-        break;
-      case RenderEngine::TimeFrame::TF_5SEC:
-        candle_width = 4.0;
-        break;
-      case RenderEngine::TimeFrame::TF_15SEC:
-        candle_width = 12.0;
-        break;
-      case RenderEngine::TimeFrame::TF_30SEC:
-        candle_width = 24.0;
-        break;
-      case RenderEngine::TimeFrame::TF_1MIN:
-        candle_width = 45.0;
-        break;
-      case RenderEngine::TimeFrame::TF_5MIN:
-        candle_width = 225.0;
-        break;
-      case RenderEngine::TimeFrame::TF_15MIN:
-        candle_width = 675.0;
-        break;
-      case RenderEngine::TimeFrame::TF_1HOUR:
-        candle_width = 2700.0;
-        break;
-      case RenderEngine::TimeFrame::TF_4HOUR:
-        candle_width = 10800.0;
-        break;
-      case RenderEngine::TimeFrame::TF_1DAY:
-        candle_width = 64800.0;
-        break;
-      }
+    // Plot candlestick
+    indicator_renderer_->render_candlestick(chart);
 
-      // Separate bullish and bearish candles
-      std::vector<double> bull_x, bull_open, bull_close, bull_high, bull_low;
-      std::vector<double> bear_x, bear_open, bear_close, bear_high, bear_low;
-
-      for (int i = 0; i < count; ++i) {
-        if (chart.closes[i] >= chart.opens[i]) {
-          bull_x.push_back(chart.dates[i]);
-          bull_open.push_back(chart.opens[i]);
-          bull_close.push_back(chart.closes[i]);
-          bull_high.push_back(chart.highs[i]);
-          bull_low.push_back(chart.lows[i]);
-        } else {
-          bear_x.push_back(chart.dates[i]);
-          bear_open.push_back(chart.opens[i]);
-          bear_close.push_back(chart.closes[i]);
-          bear_high.push_back(chart.highs[i]);
-          bear_low.push_back(chart.lows[i]);
-        }
-      }
-
-      // Draw bullish wicks and bodies (green)
-      if (!bull_x.empty()) {
-        int n = static_cast<int>(bull_x.size());
-        // Wicks
-        std::vector<double> wick_x, wick_y;
-        for (int i = 0; i < n; ++i) {
-          wick_x.push_back(bull_x[i]);
-          wick_x.push_back(bull_x[i]);
-          wick_y.push_back(bull_low[i]);
-          wick_y.push_back(bull_high[i]);
-        }
-        ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.4f, 1.0f), 1.0f);
-        ImPlot::PlotLine("##BullWick", wick_x.data(), wick_y.data(),
-                         static_cast<int>(wick_x.size()),
-                         ImPlotLineFlags_Segments);
-
-        // Bodies - using filled rects
-        std::vector<double> body_h;
-        for (int i = 0; i < n; ++i) {
-          body_h.push_back(bull_close[i] - bull_open[i]);
-        }
-        ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.4f, 0.7f));
-        ImPlot::PlotBars("##BullBody", bull_x.data(), body_h.data(), n,
-                         candle_width * 0.8, ImPlotBarsFlags_None, 0,
-                         sizeof(double));
-      }
-
-      // Draw bearish wicks and bodies (red)
-      if (!bear_x.empty()) {
-        int n = static_cast<int>(bear_x.size());
-        // Wicks
-        std::vector<double> wick_x, wick_y;
-        for (int i = 0; i < n; ++i) {
-          wick_x.push_back(bear_x[i]);
-          wick_x.push_back(bear_x[i]);
-          wick_y.push_back(bear_low[i]);
-          wick_y.push_back(bear_high[i]);
-        }
-        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.2f, 1.0f), 1.0f);
-        ImPlot::PlotLine("##BearWick", wick_x.data(), wick_y.data(),
-                         static_cast<int>(wick_x.size()),
-                         ImPlotLineFlags_Segments);
-
-        // Bodies
-        std::vector<double> body_h;
-        for (int i = 0; i < n; ++i) {
-          body_h.push_back(bear_close[i] - bear_open[i]); // negative
-        }
-        ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.2f, 0.7f));
-        ImPlot::PlotBars("##BearBody", bear_x.data(), body_h.data(), n,
-                         candle_width * 0.8, ImPlotBarsFlags_None, 0,
-                         sizeof(double));
-      }
+    // Plot indicators
+    for (const auto& indicator : indicators) {
+      indicator_renderer_->render_indicator(chart, indicator);
     }
-
-    // Render indicators using the IndicatorRenderer
-    indicator_renderer_->render_indicators(symbol_, timeframe_, indicators);
 
     ImPlot::EndPlot();
   }

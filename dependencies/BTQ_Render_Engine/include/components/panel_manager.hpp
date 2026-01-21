@@ -7,6 +7,7 @@
 #include "../trading/risk_assessment.hpp"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
+#include <imgui.h>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -41,12 +42,15 @@ public:
   void remove_panel(uint32_t panel_id);
   void move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y);
   void resize_panel(uint32_t panel_id, int new_width, int new_height);
+  void set_panel_visible(uint32_t panel_id, bool visible);
 
   // Layout management
   void set_grid_layout(int columns, int rows);
   void auto_arrange_panels();
   ImVec2 get_panel_position(uint32_t panel_id) const;
   ImVec2 get_panel_size(uint32_t panel_id) const;
+  void save_layout(const std::string &filename);
+  void load_layout(const std::string &filename);
 
   // Serialization
   std::string serialize_layout() const;

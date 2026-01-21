@@ -255,6 +255,8 @@ private:
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;
   bool m_windowResized = false;
+  static void framebuffer_size_callback(GLFWwindow *window, int width,
+                                        int height);
   GLFWwindow *window_ = nullptr;
 };
 

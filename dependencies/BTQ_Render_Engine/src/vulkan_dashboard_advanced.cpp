@@ -32,7 +32,8 @@ void VulkanDashboard::initialize() {
 
   // 2. HW Layer Init
   init_window();
-  init_vulkan();
+  m_vulkanCore = std::make_unique<VulkanCore>(config_);
+  m_vulkanCore->initialize(window_, width_, height_);
   std::cout << "[VulkanDashboard] Vulkan initialized." << std::endl;
 
   // Initialize Glfw ImGui Backend
@@ -68,32 +69,7 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // 4. Create fullscreen DockSpace
-  ImGuiViewport *viewport = ImGui::GetMainViewport();
-  ImGui::SetNextWindowPos(viewport->WorkPos);
-  ImGui::SetNextWindowSize(viewport->WorkSize);
-  ImGui::SetNextWindowViewport(viewport->ID);
-
-  ImGuiWindowFlags dockspace_flags =
-      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-      ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-
-  ImGui::Begin("DockSpace Window", nullptr, dockspace_flags);
-  ImGui::PopStyleVar(3);
-
-  ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
-  ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f),
-                   ImGuiDockNodeFlags_PassthruCentralNode);
-
-  ImGui::End();
-
-  // 5. Draw Components (QuantWorkspace)
+  // 4. Draw Components (QuantWorkspace)
   if (m_workspace) {
     m_workspace->update(ImGui::GetIO().DeltaTime);
     m_workspace->render_gui();
@@ -144,47 +120,46 @@ void VulkanDashboard::shutdown() {
 
   if (window_) {
     glfwDestroyWindow(window_);
-    window_ = nullptr;
   }
-  glfwTerminate();
 
-  // m_vulkanCore handles its own cleanup
+  if (m_vulkanCore) {
+    m_vulkanCore.reset();
+  }
+
+  glfwTerminate();
 }
 
+void VulkanDashboard::handle_events() { glfwPollEvents(); }
+
 bool VulkanDashboard::should_close() const {
-  return glfwWindowShouldClose(window_);
+  return glfwWindowShouldClose(window_) || !is_running_;
 }
 
 void VulkanDashboard::init_window() {
   if (!glfwInit()) {
-    throw std::runtime_error("Failed to initialize GLFW");
+    throw std::runtime_error("Failed to initialize GLFW!");
   }
 
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-  window_ = glfwCreateWindow(width_, height_, "BTQuant Professional Terminal",
+  window_ = glfwCreateWindow(width_, height_, "BTQuant Advanced Dashboard",
                              nullptr, nullptr);
   if (!window_) {
-    glfwTerminate();
-    throw std::runtime_error("Failed to create GLFW window");
+    throw std::runtime_error("Failed to create GLFW window!");
   }
 
   glfwSetWindowUserPointer(window_, this);
-  glfwSetFramebufferSizeCallback(window_, [](GLFWwindow *window, int width,
-                                             int height) {
-    auto app =
-        reinterpret_cast<VulkanDashboard *>(glfwGetWindowUserPointer(window));
-    app->m_windowResized = true;
-    app->width_ = width;
-    app->height_ = height;
-  });
+  glfwSetFramebufferSizeCallback(window_, framebuffer_size_callback);
 }
 
-void VulkanDashboard::init_vulkan() {
-  m_vulkanCore = std::make_unique<VulkanCore>(config_);
-  m_vulkanCore->initialize(window_, width_, height_);
+void VulkanDashboard::framebuffer_size_callback(GLFWwindow *window, int width,
+                                                int height) {
+  auto app =
+      reinterpret_cast<VulkanDashboard *>(glfwGetWindowUserPointer(window));
+  app->m_windowResized = true;
+  app->width_ = width;
+  app->height_ = height;
 }
-
-void VulkanDashboard::handle_events() { glfwPollEvents(); }
 
 } // namespace BTQuant

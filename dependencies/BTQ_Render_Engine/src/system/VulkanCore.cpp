@@ -74,7 +74,7 @@ VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
         current_time - last_frame_time_);
     frame_time_ms_ = duration.count() / 1000.0f;
     fps_ = 1000.0f / frame_time_ms_;
-    
+
     // Update frame time history
     frame_time_history_.push_back(frame_time_ms_);
     if (frame_time_history_.size() > FRAME_TIME_HISTORY_SIZE) {
@@ -87,7 +87,8 @@ VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
                   UINT64_MAX);
 
   VkResult result = vkAcquireNextImageKHR(
-      device_, swapchain_, UINT64_MAX, // Unbegrenzter Timeout für bessere Stabilität
+      device_, swapchain_,
+      UINT64_MAX, // Unbegrenzter Timeout für bessere Stabilität
       image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &imageIndex);
 
   if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
@@ -97,8 +98,9 @@ VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = config_.enable_command_buffer_recycling ?
-        VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT : 0;
+    beginInfo.flags = config_.enable_command_buffer_recycling
+                          ? VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
+                          : 0;
     vkBeginCommandBuffer(current_command_buffer_, &beginInfo);
   }
 
@@ -106,7 +108,7 @@ VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
 }
 
 void VulkanCore::RecordCommandBuffer(uint32_t imageIndex,
-                                      ImDrawData *drawData) {
+                                     ImDrawData *drawData) {
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;
@@ -181,18 +183,21 @@ void VulkanCore::end_frame() {}
 
 void VulkanCore::set_low_latency_mode(bool enabled) {
   config_.enable_low_latency_mode = enabled;
-  std::cout << "[VulkanCore] Low latency mode " << (enabled ? "enabled" : "disabled") << std::endl;
+  std::cout << "[VulkanCore] Low latency mode "
+            << (enabled ? "enabled" : "disabled") << std::endl;
 }
 
 VkCommandBuffer VulkanCore::acquire_command_buffer() {
-  // Simple implementation - in production, this would manage a pool of command buffers
+  // Simple implementation - in production, this would manage a pool of command
+  // buffers
   return command_buffers_[current_frame_];
 }
 
 void VulkanCore::release_command_buffer(VkCommandBuffer cmd_buf) {
   // For now, just reset the command buffer for reuse
   if (config_.enable_command_buffer_recycling) {
-    vkResetCommandBuffer(cmd_buf, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    vkResetCommandBuffer(cmd_buf,
+                         VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   }
 }
 
@@ -419,8 +424,12 @@ void VulkanCore::create_logical_device() {
       static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-  if (vkCreateDevice(physical_device_, &createInfo, nullptr, &device_) !=
-      VK_SUCCESS) {
+  VkResult result =
+      vkCreateDevice(physical_device_, &createInfo, nullptr, &device_);
+  if (result != VK_SUCCESS) {
+    std::cerr
+        << "[VulkanCore] CRITICAL: vkCreateDevice failed with error code: "
+        << result << std::endl;
     throw std::runtime_error("failed to create logical device!");
   }
 
@@ -999,6 +1008,29 @@ bool VulkanCore::is_device_suitable(VkPhysicalDevice device) {
       counts & VK_SAMPLE_COUNT_4_BIT; // Check for at least 4x MSAA
   if (config_.enable_msaa && !msaaSupported) {
     std::cout << "[VulkanCore] Device does not support MSAA (4x samples)"
+              << std::endl;
+    return false;
+  }
+
+  // Check extension support
+  uint32_t extensionCount;
+  vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                       nullptr);
+  std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+  vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                       availableExtensions.data());
+
+  bool swapchainSupported = false;
+  for (const auto &extension : availableExtensions) {
+    if (std::string(VK_KHR_SWAPCHAIN_EXTENSION_NAME) ==
+        extension.extensionName) {
+      swapchainSupported = true;
+      break;
+    }
+  }
+
+  if (!swapchainSupported) {
+    std::cout << "[VulkanCore] Device does not support swapchain extension"
               << std::endl;
     return false;
   }

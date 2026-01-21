@@ -46,6 +46,8 @@ set(DASHBOARD_SOURCES
     src/components/panel_manager.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
+    src/components/hierarchical_selector.cpp
+    src/components/orderbook_panel.cpp
     # TODO: Update these for newer ImPlot API
     # src/components/realtime_dashboard_component.cpp
     # src/components/heatmap_panel.cpp

@@ -1,6 +1,7 @@
 #include "../../include/components/panel_manager.hpp"
 #include "../../include/components/chart_panel.hpp"
 #include "../../include/components/metrics_panel.hpp"
+#include "../../include/components/orderbook_panel.hpp"
 #include "imgui.h"
 #include <iostream>
 
@@ -22,8 +23,8 @@ PanelManager::~PanelManager() { panels_.clear(); }
 void PanelManager::initialize() {
   // Create default panels
   add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 0, 2, 1);
-  add_panel(PanelType::METRICS, "Portfolio Metrics", 2, 0, 1, 1);
-  add_panel(PanelType::TRADING_ORDERS, "Active Orders", 0, 1, 1, 1);
+  add_panel(PanelType::METRICS, "Market Debug", 2, 0, 1, 1);
+  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 1, 1, 1);
   add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 1, 1, 1);
   add_panel(PanelType::RISK_METRICS, "Risk Dashboard", 2, 1, 1, 1);
 }
@@ -63,11 +64,16 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
     break;
   case PanelType::METRICS:
     panel = std::make_unique<MetricsPanel>(config, position_manager_,
-                                           risk_assessment_);
+                                           risk_assessment_, processor_);
     break;
   case PanelType::HEATMAP:
     // TODO: Re-enable when HeatmapPanel is updated for newer ImPlot API
     return 0;
+  case PanelType::ORDERBOOK:
+    panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
+    break;
+  case PanelType::SCATTER_PLOT:
+  case PanelType::TIME_SERIES:
   case PanelType::TRADING_ORDERS:
   case PanelType::TRADING_POSITIONS:
   case PanelType::RISK_METRICS:
@@ -201,6 +207,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
     return "Risk";
   case PanelType::ALERTS:
     return "Alerts";
+  case PanelType::ORDERBOOK:
+    return "Orderbook";
   default:
     return "Panel";
   }

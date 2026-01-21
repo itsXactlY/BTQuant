@@ -15,7 +15,7 @@ struct SymbolSelectorState {
   std::string selected_exchange = "Binance";
   std::vector<std::string> available_symbols;
   std::vector<std::string> available_exchanges;
-  RenderEngine::TimeFrame selected_timeframe = RenderEngine::TimeFrame::TF_1MIN;
+  RenderEngine::TimeFrame selected_timeframe = RenderEngine::TimeFrame::TF_1SEC;
   bool needs_refresh = true;
   int selected_symbol_idx = 0;
   int selected_exchange_idx = 0;

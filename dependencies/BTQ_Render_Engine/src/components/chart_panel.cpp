@@ -1,5 +1,6 @@
 #include "../../include/components/chart_panel.hpp"
 #include "implot.h"
+#include <algorithm>
 #include <cstring>
 
 namespace BTQuant {
@@ -51,11 +52,7 @@ void ChartPanel::render() {
     render_chart_controls();
   }
 
-  if (ImGui::CollapsingHeader("Indicators", ImGuiTreeNodeFlags_DefaultOpen)) {
-    render_indicator_selector();
-  }
-
-  // Render the chart
+  // Render the chart (no indicators)
   render_instrument_chart(chart);
 
   end_panel_window();
@@ -92,9 +89,9 @@ void ChartPanel::render_chart_controls() {
   }
   ImGui::SameLine();
 
-  // Timeframe selector
-  const char *timeframes[] = {"1 Min",  "5 Min",  "15 Min",
-                              "1 Hour", "4 Hour", "1 Day"};
+  // Timeframe selector (1ms-15sec only)
+  const char *timeframes[] = {"1ms", "10ms", "100ms", "500ms",
+                              "1s",  "3s",   "5s",    "15s"};
   int selected = static_cast<int>(timeframe_);
   if (ImGui::Combo("Timeframe", &selected, timeframes,
                    IM_ARRAYSIZE(timeframes))) {
@@ -134,58 +131,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     return;
   }
 
-  // Diagnostic info
-  ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                     "Candles: %zu | Last: %.2f", chart.dates.size(),
-                     chart.closes.empty() ? 0.0 : chart.closes.back());
-
-  // Prepare indicators
-  std::vector<IndicatorParams> indicators;
-  if (indicator_config_.show_sma_10) {
-    IndicatorParams params;
-    params.type = IndicatorType::SMA_10;
-    params.period1 = 10;
-    params.line_width = 2.0f;
-    params.color = {0.0f, 0.94f, 1.0f, 1.0f};
-    params.visible = true;
-    indicators.push_back(params);
-  }
-  if (indicator_config_.show_sma_20) {
-    IndicatorParams params;
-    params.type = IndicatorType::SMA_20;
-    params.period1 = 20;
-    params.line_width = 2.0f;
-    params.color = {1.0f, 0.84f, 0.0f, 1.0f};
-    params.visible = true;
-    indicators.push_back(params);
-  }
-  if (indicator_config_.show_sma_50) {
-    IndicatorParams params;
-    params.type = IndicatorType::SMA_50;
-    params.period1 = 50;
-    params.line_width = 2.0f;
-    params.color = {1.0f, 0.0f, 1.0f, 1.0f};
-    params.visible = true;
-    indicators.push_back(params);
-  }
-  if (indicator_config_.show_ema_10) {
-    IndicatorParams params;
-    params.type = IndicatorType::EMA_10;
-    params.period1 = 10;
-    params.line_width = 2.0f;
-    params.color = {0.0f, 1.0f, 0.5f, 1.0f};
-    params.visible = true;
-    indicators.push_back(params);
-  }
-  if (indicator_config_.show_ema_20) {
-    IndicatorParams params;
-    params.type = IndicatorType::EMA_20;
-    params.period1 = 20;
-    params.line_width = 2.0f;
-    params.color = {0.5f, 0.5f, 1.0f, 1.0f};
-    params.visible = true;
-    indicators.push_back(params);
-  }
+  // Diagnostic info & Controls
+  ImGui::Checkbox("Auto-follow", &follow_latest_);
+  ImGui::SameLine();
+  ImGui::TextColored(
+      ImVec4(0.0f, 1.0f, 0.8f, 1.0f),
+      " | Candles: %zu | Last: %.2f | TF: %.4gs", chart.dates.size(),
+      chart.closes.empty() ? 0.0f : chart.closes.back(),
+      RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
+          1000000.0);
 
   // Neon Chart Styling
   ImPlot::PushStyleColor(ImPlotCol_FrameBg, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
@@ -194,100 +148,98 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
 
   if (ImPlot::BeginPlot("##Chart", ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend | ImPlotFlags_NoTitle)) {
+                        ImPlotFlags_NoLegend | ImPlotFlags_NoTitle |
+                            ImPlotFlags_Crosshairs)) {
+
+    // Setup Axes
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
-                      ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_RangeFit);
+                      ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
-    ImPlot::SetupAxisLinks(ImAxis_Y1, nullptr, nullptr);
 
-    double candle_width = 60.0; // Default 1 min
-    if (timeframe_ == RenderEngine::TimeFrame::TF_5MIN)
-      candle_width = 300.0;
-    else if (timeframe_ == RenderEngine::TimeFrame::TF_15MIN)
-      candle_width = 900.0;
-    else if (timeframe_ == RenderEngine::TimeFrame::TF_1HOUR)
-      candle_width = 3600.0;
-    else if (timeframe_ == RenderEngine::TimeFrame::TF_4HOUR)
-      candle_width = 14400.0;
-    else if (timeframe_ == RenderEngine::TimeFrame::TF_1DAY)
-      candle_width = 86400.0;
+    // Auto-follow logic
+    if (follow_latest_) {
+      double time_max = chart.dates.back();
+      // Show last 300 units (seconds)
+      double duration_sec =
+          RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
+          1000000.0;
+      double window_size = std::max(duration_sec * 300.0, 10.0); // At least 10s
+      ImPlot::SetupAxisLimits(ImAxis_X1, time_max - window_size,
+                              time_max + window_size * 0.05, ImPlotCond_Always);
+      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 0, ImPlotCond_Always); // Auto-fit Y
+    } else {
+      // Manual mode: use Cond_Once for initial view
+      double time_min = chart.dates.front();
+      double time_max = chart.dates.back();
+      ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImPlotCond_Once);
+      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 0, ImPlotCond_Once);
+    }
 
-    // Candlestick rendering
-    std::vector<double> up_wick_x, up_wick_y;
-    std::vector<double> down_wick_x, down_wick_y;
-    std::vector<double> up_b_x, up_b_y1, up_b_y2;
-    std::vector<double> down_b_x, down_b_y1, down_b_y2;
+    // Get current visible axis limits for viewport culling
+    ImPlotRect limits = ImPlot::GetPlotLimits();
+    double view_x_min = limits.X.Min;
+    double view_x_max = limits.X.Max;
 
-    for (size_t i = 0; i < chart.dates.size(); ++i) {
+    // Binary search for visible range
+    size_t start_idx = 0;
+    size_t end_idx = chart.dates.size();
+
+    auto lower =
+        std::lower_bound(chart.dates.begin(), chart.dates.end(), view_x_min);
+    if (lower != chart.dates.begin())
+      --lower;
+    start_idx = std::distance(chart.dates.begin(), lower);
+
+    auto upper =
+        std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
+    if (upper != chart.dates.end())
+      ++upper;
+    end_idx = std::distance(chart.dates.begin(), upper);
+
+    end_idx = std::min(end_idx, chart.dates.size());
+
+    // Calculate candle width based on timeframe
+    double duration_sec =
+        RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
+        1000000.0;
+    double candle_half_width = duration_sec * 0.4;
+
+    // Safeguard for very small TFs
+    if (candle_half_width < 0.000001)
+      candle_half_width = 0.000001;
+
+    ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
+    // Draw ONLY visible candles
+    for (size_t i = start_idx; i < end_idx; ++i) {
       double x = chart.dates[i];
       if (x == 0)
         continue;
 
-      if (chart.closes[i] >= chart.opens[i]) {
-        // Bullish Wick
-        up_wick_x.push_back(x);
-        up_wick_x.push_back(x);
-        up_wick_y.push_back(chart.highs[i]);
-        up_wick_y.push_back(chart.lows[i]);
+      float open = chart.opens[i];
+      float high = chart.highs[i];
+      float low = chart.lows[i];
+      float close = chart.closes[i];
 
-        // Bullish Body
-        up_b_x.push_back(x);
-        up_b_y1.push_back(chart.opens[i]);
-        up_b_y2.push_back(chart.closes[i]);
-      } else {
-        // Bearish Wick
-        down_wick_x.push_back(x);
-        down_wick_x.push_back(x);
-        down_wick_y.push_back(chart.highs[i]);
-        down_wick_y.push_back(chart.lows[i]);
+      bool bullish = close >= open;
+      ImU32 color =
+          bullish ? IM_COL32(0, 255, 100, 200) : IM_COL32(255, 50, 80, 200);
+      ImU32 wick_color =
+          bullish ? IM_COL32(0, 255, 100, 255) : IM_COL32(255, 50, 80, 255);
 
-        // Bearish Body
-        down_b_x.push_back(x);
-        down_b_y1.push_back(chart.opens[i]);
-        down_b_y2.push_back(chart.closes[i]);
-      }
-    }
+      // Transform to screen coordinates
+      ImVec2 wick_top = ImPlot::PlotToPixels(x, high);
+      ImVec2 wick_bot = ImPlot::PlotToPixels(x, low);
+      ImVec2 body_tl =
+          ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
+      ImVec2 body_br =
+          ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
 
-    // Draw Wicks (Neon Style)
-    ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
-    if (!up_wick_x.empty()) {
-      ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.4f, 1.0f));
-      ImPlot::PlotLine("##UpWicks", up_wick_x.data(), up_wick_y.data(),
-                       (int)up_wick_x.size(), ImPlotLineFlags_Segments);
-    }
-    if (!down_wick_x.empty()) {
-      ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.2f, 1.0f));
-      ImPlot::PlotLine("##DownWicks", down_wick_x.data(), down_wick_y.data(),
-                       (int)down_wick_x.size(), ImPlotLineFlags_Segments);
-    }
-    ImPlot::PopStyleVar();
+      // Draw wick (vertical line)
+      draw_list->AddLine(wick_top, wick_bot, wick_color, 1.0f);
 
-    // Draw Bodies (Using PlotBars for robustness and performance)
-    if (!up_b_x.empty()) {
-      ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.4f, 0.6f));
-      std::vector<double> up_body_heights;
-      up_body_heights.reserve(up_b_x.size());
-      for (size_t i = 0; i < up_b_x.size(); ++i) {
-        up_body_heights.push_back(up_b_y2[i] - up_b_y1[i]);
-      }
-      ImPlot::PlotBars("##UpBodies", up_b_x.data(), up_body_heights.data(),
-                       (int)up_b_x.size(), candle_width * 0.82, up_b_y1[0]);
-    }
-    if (!down_b_x.empty()) {
-      ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.2f, 0.6f));
-      std::vector<double> down_body_heights;
-      down_body_heights.reserve(down_b_x.size());
-      for (size_t i = 0; i < down_b_x.size(); ++i) {
-        down_body_heights.push_back(down_b_y2[i] - down_b_y1[i]);
-      }
-      ImPlot::PlotBars("##DownBodies", down_b_x.data(),
-                       down_body_heights.data(), (int)down_b_x.size(),
-                       candle_width * 0.82, down_b_y1[0]);
-    }
-
-    // Render Indicators
-    if (!indicators.empty()) {
-      indicator_renderer_->render_indicators(symbol_, timeframe_, indicators);
+      // Draw body (filled rectangle)
+      draw_list->AddRectFilled(body_tl, body_br, color);
     }
 
     ImPlot::EndPlot();

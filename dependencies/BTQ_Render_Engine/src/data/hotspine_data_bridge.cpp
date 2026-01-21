@@ -146,23 +146,17 @@ void HotSpineDataBridge::sync_shm() {
       __atomic_load_n(&m_header->write_index, __ATOMIC_ACQUIRE);
   uint64_t capacity = m_header->capacity;
 
-  // Initial catch-up: If reader is starting fresh, it should process all
-  // Catch-up logic for trades.
-  // If we are starting from zero but there is already data in the buffer,
-  // skip all but the most recent 10k trades to avoid ancient history pollution.
-  if (m_last_read_idx == 0 && write_idx > 100000) {
-    m_last_read_idx = write_idx - 100000;
-    std::cout << "[sync_shm] Catching up to recent trades: " << m_last_read_idx
-              << std::endl;
-  }
-
-  if (m_last_read_idx == 0 && write_idx > capacity) {
-    // Shared memory is a ring buffer. If it has wrapped, start at the oldest
-    // available entry.
-    m_last_read_idx = write_idx - capacity;
-    std::cout
-        << "[sync_shm] Ring buffer wrapped. Starting from oldest available: "
-        << m_last_read_idx << std::endl;
+  // Initial catch-up: Process ENTIRE ring buffer on first sync
+  // This ensures we have all available historical data
+  if (m_last_read_idx == 0 && write_idx > 0) {
+    // For ring buffer: start at oldest valid position
+    if (write_idx > capacity) {
+      m_last_read_idx = write_idx - capacity; // Buffer wrapped, start at oldest
+    } else {
+      m_last_read_idx = 0; // Buffer not full, process from beginning
+    }
+    std::cout << "[sync_shm] Processing full ring buffer. Start: "
+              << m_last_read_idx << " End: " << write_idx << std::endl;
   }
 
   // Batch processing for maximum performance

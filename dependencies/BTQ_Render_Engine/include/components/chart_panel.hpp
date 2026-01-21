@@ -47,10 +47,11 @@ private:
 
   std::string symbol_ = "BTC-USDT";
   std::string exchange_ = "Binance";
-  RenderEngine::TimeFrame timeframe_ = RenderEngine::TimeFrame::TF_1MIN;
+  RenderEngine::TimeFrame timeframe_ = RenderEngine::TimeFrame::TF_1SEC;
   uint32_t chart_id_ = 0;
 
   IndicatorConfig indicator_config_;
+  bool follow_latest_ = true;
 
   void render_chart_controls();
   void render_indicator_selector();

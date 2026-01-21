@@ -55,9 +55,9 @@ bool SymbolSelector::render(SymbolSelectorState &state) {
 
   ImGui::SameLine();
 
-  // Timeframe dropdown
-  const char *timeframes[] = {"1m", "5m", "15m", "1h",  "4h",    "1d",
-                              "1s", "5s", "15s", "30s", "500ms", "100ms"};
+  // Timeframe dropdown (1ms-15sec only)
+  const char *timeframes[] = {"1ms", "10ms", "100ms", "500ms",
+                              "1s",  "3s",   "5s",    "15s"};
 
   if (ImGui::BeginCombo("TF", timeframes[state.selected_timeframe_idx])) {
     for (int i = 0; i < get_timeframe_count(); ++i) {
@@ -131,67 +131,51 @@ void SymbolSelector::refresh_symbols(
 
 const char *SymbolSelector::get_timeframe_name(RenderEngine::TimeFrame tf) {
   switch (tf) {
-  case RenderEngine::TimeFrame::TF_1MIN:
-    return "1m";
-  case RenderEngine::TimeFrame::TF_5MIN:
-    return "5m";
-  case RenderEngine::TimeFrame::TF_15MIN:
-    return "15m";
-  case RenderEngine::TimeFrame::TF_1HOUR:
-    return "1h";
-  case RenderEngine::TimeFrame::TF_4HOUR:
-    return "4h";
-  case RenderEngine::TimeFrame::TF_1DAY:
-    return "1d";
+  case RenderEngine::TimeFrame::TF_1MS:
+    return "1ms";
+  case RenderEngine::TimeFrame::TF_10MS:
+    return "10ms";
+  case RenderEngine::TimeFrame::TF_100MS:
+    return "100ms";
+  case RenderEngine::TimeFrame::TF_500MS:
+    return "500ms";
   case RenderEngine::TimeFrame::TF_1SEC:
     return "1s";
+  case RenderEngine::TimeFrame::TF_3SEC:
+    return "3s";
   case RenderEngine::TimeFrame::TF_5SEC:
     return "5s";
   case RenderEngine::TimeFrame::TF_15SEC:
     return "15s";
-  case RenderEngine::TimeFrame::TF_30SEC:
-    return "30s";
-  case RenderEngine::TimeFrame::TF_500MS:
-    return "500ms";
-  case RenderEngine::TimeFrame::TF_100MS:
-    return "100ms";
   default:
-    return "1m";
+    return "1s";
   }
 }
 
 RenderEngine::TimeFrame SymbolSelector::get_timeframe_from_index(int index) {
   switch (index) {
   case 0:
-    return RenderEngine::TimeFrame::TF_1MIN;
+    return RenderEngine::TimeFrame::TF_1MS;
   case 1:
-    return RenderEngine::TimeFrame::TF_5MIN;
+    return RenderEngine::TimeFrame::TF_10MS;
   case 2:
-    return RenderEngine::TimeFrame::TF_15MIN;
-  case 3:
-    return RenderEngine::TimeFrame::TF_1HOUR;
-  case 4:
-    return RenderEngine::TimeFrame::TF_4HOUR;
-  case 5:
-    return RenderEngine::TimeFrame::TF_1DAY;
-  case 6:
-    return RenderEngine::TimeFrame::TF_1SEC;
-  case 7:
-    return RenderEngine::TimeFrame::TF_5SEC;
-  case 8:
-    return RenderEngine::TimeFrame::TF_15SEC;
-  case 9:
-    return RenderEngine::TimeFrame::TF_30SEC;
-  case 10:
-    return RenderEngine::TimeFrame::TF_500MS;
-  case 11:
     return RenderEngine::TimeFrame::TF_100MS;
+  case 3:
+    return RenderEngine::TimeFrame::TF_500MS;
+  case 4:
+    return RenderEngine::TimeFrame::TF_1SEC;
+  case 5:
+    return RenderEngine::TimeFrame::TF_3SEC;
+  case 6:
+    return RenderEngine::TimeFrame::TF_5SEC;
+  case 7:
+    return RenderEngine::TimeFrame::TF_15SEC;
   default:
-    return RenderEngine::TimeFrame::TF_1MIN;
+    return RenderEngine::TimeFrame::TF_1SEC;
   }
 }
 
-int SymbolSelector::get_timeframe_count() { return 12; }
+int SymbolSelector::get_timeframe_count() { return 8; }
 
 const std::vector<std::string> &SymbolSelector::get_default_symbols() {
   static std::vector<std::string> defaults = {

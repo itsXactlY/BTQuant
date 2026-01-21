@@ -52,6 +52,9 @@ public:
   void save_layout(const std::string &filename);
   void load_layout(const std::string &filename);
 
+  // Accessors
+  ChartManager *get_chart_manager() const { return chart_manager_.get(); }
+
   // Serialization
   std::string serialize_layout() const;
   void deserialize_layout(const std::string &layout_json);

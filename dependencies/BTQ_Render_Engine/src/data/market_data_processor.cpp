@@ -120,7 +120,6 @@ void MarketDataProcessor::processTradeUpdates(
     return;
 
   std::unique_lock<std::shared_mutex> lock(data_mutex_);
-  std::unordered_set<uint32_t> symbols_in_batch;
 
   for (const auto &update : updates) {
     if (update.type != MarketDataType::TRADE)
@@ -128,47 +127,33 @@ void MarketDataProcessor::processTradeUpdates(
 
     auto &symbol_data = symbol_analytics_[update.symbol_id];
     symbol_data.symbol_id = update.symbol_id;
-    symbols_in_batch.insert(update.symbol_id);
 
-    // Update basic trade data
+    // Minimal trade data for candle aggregation only
     TradeData trade;
     trade.timestamp = update.timestamp;
     trade.price = update.price;
     trade.size = update.size;
     trade.is_buy = (update.side == "buy");
 
-    symbol_data.recent_trades.push_back(trade);
-
-    // Maintain window size
-    if (symbol_data.recent_trades.size() > vwap_window_size_ * 2) {
-      symbol_data.recent_trades.erase(symbol_data.recent_trades.begin(),
-                                      symbol_data.recent_trades.begin() +
-                                          vwap_window_size_);
-    }
-
-    // Update OHLCV candles
+    // ONLY update candles - skip all other analytics for speed
     updateCandles(symbol_data, trade);
 
-    // Basic metrics update is cheap
-    updateTradingMetrics(symbol_data, trade);
-
-    // Update performance metrics
     performance_metrics_.total_trades_processed++;
-  }
+    trade_count_delta_++;
 
-  for (uint32_t symbol_id : symbols_in_batch) {
-    auto &symbol_data = symbol_analytics_[symbol_id];
-    updateVWAP(symbol_data);
-    updateMomentum(symbol_data);
-    updateVolatility(symbol_data);
-
-    // Clear indicator caches once per symbol
-    auto cache_it = indicator_caches_.find(symbol_id);
-    if (cache_it != indicator_caches_.end()) {
-      std::lock_guard<std::mutex> cache_lock(cache_it->second.mutex);
-      cache_it->second.cache.clear();
+    // Simple latency metric: current - exchange timestamp
+    uint64_t now_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch())
+            .count();
+    double latency = (now_us - trade.timestamp) / 1000.0;
+    if (latency > 0 && latency < 5000) { // Filter outliers
+      double old_avg = performance_metrics_.avg_latency_ms.load();
+      performance_metrics_.avg_latency_ms.store(old_avg * 0.99 +
+                                                latency * 0.01);
     }
   }
+  // Skip VWAP/Momentum/Volatility/indicator cache - too slow for real-time
 }
 
 void MarketDataProcessor::processOrderbookUpdate(
@@ -221,6 +206,7 @@ void MarketDataProcessor::processOrderbookUpdate(
 
     // Update performance metrics
     performance_metrics_.total_orderbooks_processed++;
+    book_count_delta_++;
   });
 }
 
@@ -250,6 +236,22 @@ std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
 }
 
 ProcessorPerformanceMetrics MarketDataProcessor::getPerformanceMetrics() const {
+  uint64_t now_us =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch())
+          .count();
+
+  // Update rates every second
+  if (now_us - last_performance_update_us_ >= 1000000) {
+    double dt = (now_us - last_performance_update_us_) / 1000000.0;
+    performance_metrics_.trades_per_second.store(
+        trade_count_delta_.exchange(0) / dt);
+    performance_metrics_.orderbooks_per_second.store(
+        book_count_delta_.exchange(0) / dt);
+
+    last_performance_update_us_ = now_us;
+  }
+
   return performance_metrics_.toNonAtomic();
 }
 
@@ -656,32 +658,24 @@ MarketSummary MarketDataProcessor::getMarketSummary() const {
 
 uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
   switch (timeframe) {
-  case TimeFrame::TF_1SEC:
-    return 1000000ULL; // 1 second in microseconds
-  case TimeFrame::TF_5SEC:
-    return 5 * 1000000ULL; // 5 seconds
-  case TimeFrame::TF_15SEC:
-    return 15 * 1000000ULL; // 15 seconds
-  case TimeFrame::TF_30SEC:
-    return 30 * 1000000ULL; // 30 seconds
-  case TimeFrame::TF_1MIN:
-    return 60 * 1000000ULL; // 1 minute
-  case TimeFrame::TF_5MIN:
-    return 5 * 60 * 1000000ULL; // 5 minutes
-  case TimeFrame::TF_15MIN:
-    return 15 * 60 * 1000000ULL; // 15 minutes
-  case TimeFrame::TF_1HOUR:
-    return 60 * 60 * 1000000ULL; // 1 hour
-  case TimeFrame::TF_4HOUR:
-    return 4 * 60 * 60 * 1000000ULL; // 4 hours
-  case TimeFrame::TF_500MS:
-    return 500000ULL; // 500ms
+  case TimeFrame::TF_1MS:
+    return 1000ULL; // 1ms in microseconds
+  case TimeFrame::TF_10MS:
+    return 10000ULL; // 10ms
   case TimeFrame::TF_100MS:
     return 100000ULL; // 100ms
-  case TimeFrame::TF_1DAY:
-    return 24 * 60 * 60 * 1000000ULL; // 1 day
+  case TimeFrame::TF_500MS:
+    return 500000ULL; // 500ms
+  case TimeFrame::TF_1SEC:
+    return 1000000ULL; // 1 second
+  case TimeFrame::TF_3SEC:
+    return 3000000ULL; // 3 seconds
+  case TimeFrame::TF_5SEC:
+    return 5000000ULL; // 5 seconds
+  case TimeFrame::TF_15SEC:
+    return 15000000ULL; // 15 seconds
   default:
-    return 1000000ULL; // Default to 1 second for sub-second charts
+    return 1000000ULL; // Default to 1 second
   }
 }
 
@@ -724,6 +718,18 @@ MarketDataProcessor::getCurrentCandle(uint32_t symbol_id,
   return std::nullopt;
 }
 
+std::optional<OrderbookData>
+MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
+  std::lock_guard lock(data_mutex_);
+
+  auto it = symbol_analytics_.find(symbol_id);
+  if (it != symbol_analytics_.end() && !it->second.recent_orderbooks.empty()) {
+    return it->second.recent_orderbooks.back();
+  }
+
+  return std::nullopt;
+}
+
 OHLCVCandle MarketDataProcessor::createNewCandle(uint64_t timestamp,
                                                  double price,
                                                  double size) const {
@@ -760,12 +766,11 @@ void MarketDataProcessor::updateCandle(OHLCVCandle &candle, double price,
 
 void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
                                         const TradeData &trade) {
-  // Process all time frames including sub-second
+  // Process all sub-second timeframes (1ms-15sec only)
   static const std::vector<TimeFrame> timeframes = {
-      TimeFrame::TF_1SEC,  TimeFrame::TF_5SEC,  TimeFrame::TF_15SEC,
-      TimeFrame::TF_30SEC, TimeFrame::TF_1MIN,  TimeFrame::TF_5MIN,
-      TimeFrame::TF_15MIN, TimeFrame::TF_1HOUR, TimeFrame::TF_4HOUR,
-      TimeFrame::TF_1DAY,  TimeFrame::TF_500MS, TimeFrame::TF_100MS};
+      TimeFrame::TF_1MS,   TimeFrame::TF_10MS, TimeFrame::TF_100MS,
+      TimeFrame::TF_500MS, TimeFrame::TF_1SEC, TimeFrame::TF_3SEC,
+      TimeFrame::TF_5SEC,  TimeFrame::TF_15SEC};
 
   for (TimeFrame tf : timeframes) {
     uint64_t duration = getTimeFrameDuration(tf);
@@ -778,13 +783,8 @@ void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
                                  tf)) {
         updateCandle(current_candle_it->second, trade.price, trade.size);
       } else {
-        // Finalize old candle
+        // Finalize old candle - NO LIMIT, keep all candles
         symbol_data.candles[tf].push_back(current_candle_it->second);
-        if (symbol_data.candles[tf].size() > 20000) {
-          symbol_data.candles[tf].erase(symbol_data.candles[tf].begin(),
-                                        symbol_data.candles[tf].begin() +
-                                            10000);
-        }
         // Start new candle
         symbol_data.current_candles[tf] =
             createNewCandle(candle_start, trade.price, trade.size);

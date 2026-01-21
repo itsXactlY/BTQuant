@@ -140,7 +140,7 @@ void ChartManager::update() {
       }
 
       chart_id = create_chart(symbol_str, exchange, symbol_id,
-                              RenderEngine::TimeFrame::TF_1MIN);
+                              RenderEngine::TimeFrame::TF_1SEC);
     }
 
     populate_chart_data(chart_id);
@@ -228,18 +228,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
       }
     }
 
-    // Maintain history limit
-    if (chart.dates.size() > 20000) {
-      size_t erase_count = chart.dates.size() - 10000;
-      chart.dates.erase(chart.dates.begin(), chart.dates.begin() + erase_count);
-      chart.opens.erase(chart.opens.begin(), chart.opens.begin() + erase_count);
-      chart.highs.erase(chart.highs.begin(), chart.highs.begin() + erase_count);
-      chart.lows.erase(chart.lows.begin(), chart.lows.begin() + erase_count);
-      chart.closes.erase(chart.closes.begin(),
-                         chart.closes.begin() + erase_count);
-      chart.volumes.erase(chart.volumes.begin(),
-                          chart.volumes.begin() + erase_count);
-    }
+    // NO LIMIT - keep all candles for full HotSpine data
   }
 }
 

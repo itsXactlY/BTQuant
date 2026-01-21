@@ -73,19 +73,16 @@ struct OHLCVCandle {
 };
 
 // Time frame definitions for OHLCV aggregation
+// Sub-second focus: 1ms-15sec only (>5min removed per user requirement)
 enum class TimeFrame {
-  TF_1MIN,  // 1 minute
-  TF_5MIN,  // 5 minutes
-  TF_15MIN, // 15 minutes
-  TF_1HOUR, // 1 hour
-  TF_4HOUR, // 4 hours
-  TF_1DAY,  // 1 day
-  TF_1SEC,  // 1 second (for sub-second charts)
-  TF_5SEC,  // 5 seconds
-  TF_15SEC, // 15 seconds
-  TF_30SEC, // 30 seconds
+  TF_1MS,   // 1 millisecond
+  TF_10MS,  // 10 milliseconds
+  TF_100MS, // 100 milliseconds
   TF_500MS, // 500 milliseconds
-  TF_100MS  // 100 milliseconds
+  TF_1SEC,  // 1 second
+  TF_3SEC,  // 3 seconds
+  TF_5SEC,  // 5 seconds
+  TF_15SEC  // 15 seconds
 };
 
 // Indicator cache entry
@@ -161,6 +158,9 @@ struct ProcessorPerformanceMetrics {
   uint64_t total_trades_processed = 0;
   uint64_t total_orderbooks_processed = 0;
   std::chrono::high_resolution_clock::time_point last_update_time;
+  double trades_per_second = 0.0;
+  double orderbooks_per_second = 0.0;
+  double avg_latency_ms = 0.0;
   double processing_latency_us = 0.0;
 };
 
@@ -281,6 +281,13 @@ public:
                                               TimeFrame timeframe) const;
 
   /**
+   * Get latest orderbook data for a symbol (thread-safe)
+   * @param symbol_id Symbol ID to get orderbook for
+   * @return Latest OrderbookData if available, empty optional otherwise
+   */
+  std::optional<OrderbookData> getOrderbookData(uint32_t symbol_id) const;
+
+  /**
    * Get market summary statistics (thread-safe)
    * @return Market-wide summary data
    */
@@ -345,6 +352,9 @@ private:
     std::atomic<uint64_t> total_orderbooks_processed{0};
     std::atomic<std::chrono::high_resolution_clock::time_point::rep>
         last_update_time{0};
+    std::atomic<double> trades_per_second{0.0};
+    std::atomic<double> orderbooks_per_second{0.0};
+    std::atomic<double> avg_latency_ms{0.0};
     std::atomic<double> processing_latency_us{0.0};
 
     ProcessorPerformanceMetrics toNonAtomic() const {
@@ -354,6 +364,9 @@ private:
       result.last_update_time = std::chrono::high_resolution_clock::time_point(
           std::chrono::high_resolution_clock::duration(
               last_update_time.load()));
+      result.trades_per_second = trades_per_second.load();
+      result.orderbooks_per_second = orderbooks_per_second.load();
+      result.avg_latency_ms = avg_latency_ms.load();
       result.processing_latency_us = processing_latency_us.load();
       return result;
     }
@@ -362,11 +375,14 @@ private:
       total_trades_processed.store(other.total_trades_processed);
       total_orderbooks_processed.store(other.total_orderbooks_processed);
       last_update_time.store(other.last_update_time.time_since_epoch().count());
+      trades_per_second.store(other.trades_per_second);
+      orderbooks_per_second.store(other.orderbooks_per_second);
+      avg_latency_ms.store(other.avg_latency_ms);
       processing_latency_us.store(other.processing_latency_us);
     }
   };
 
-  AtomicPerformanceMetrics performance_metrics_;
+  mutable AtomicPerformanceMetrics performance_metrics_;
 
   // Thread pool for parallel processing
   std::vector<std::thread> worker_threads_;
@@ -374,6 +390,11 @@ private:
   std::mutex task_queue_mutex_;
   std::condition_variable task_queue_cv_;
   std::atomic<bool> stop_workers_;
+
+  // Delta trackers for rate calculation
+  mutable std::atomic<uint64_t> trade_count_delta_{0};
+  mutable std::atomic<uint64_t> book_count_delta_{0};
+  mutable uint64_t last_performance_update_us_ = 0;
 
   // Private calculation methods
   void updateVWAP(SymbolAnalytics &symbol_data);

@@ -1,18 +1,16 @@
 #include "../../include/components/quant_workspace_component.hpp"
+#include "imgui.h"
+#include "implot.h"
+#include <glm/glm.hpp>
+#include <iostream>
 
 namespace BTQuant {
 
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : UIComponent({0, 0}, {0, 0}), bridge_(bridge), processor_(processor) {
-
-  // Ensure ImPlot context is created (must be called once)
-  static bool implot_init = false;
-  if (!implot_init) {
-    ImPlot::CreateContext();
-    implot_init = true;
-  }
+    : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), bridge_(bridge),
+      processor_(processor) {
 
   // Initialize Trading Systems
   order_manager_ = std::make_shared<OrderManager>();
@@ -29,17 +27,25 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
   panel_manager_ = std::make_unique<PanelManager>(
       bridge_, processor_, order_manager_, position_manager_, risk_assessment_);
   panel_manager_->initialize();
+
+  // Load symbols from shared memory for hierarchical selector
+  SymbolRegistry::instance().load_from_file("/dev/shm/btquant_symbols.json");
+
+  // Initialize hierarchical selector state
+  hierarchical_selector_.refresh_data(selector_state_,
+                                      panel_manager_->get_chart_manager());
 }
 
 void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore *core) {
   // Panel system handles its own Vulkan resources
 }
 
-void QuantWorkspaceComponent::update(float dt) {
-  panel_manager_->update(dt);
-}
+void QuantWorkspaceComponent::update(float dt) { panel_manager_->update(dt); }
 
 void QuantWorkspaceComponent::render_gui() {
+  // Docking not supported in this branch of ImGui.
+  // We'll just render the panels normally.
+
   // Render dashboard controls
   if (show_dashboard_controls_) {
     render_dashboard_controls();
@@ -51,7 +57,7 @@ void QuantWorkspaceComponent::render_gui() {
 
 void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(300, 250), ImGuiCond_FirstUseEver);
 
   if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_)) {
     ImGui::Text("Ultra-Quantitative Dashboard");
@@ -71,12 +77,60 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
         panel_manager_->add_panel(PanelType::HEATMAP);
       }
       ImGui::SameLine();
-      if (ImGui::Button("Add Histogram Panel")) {
-        panel_manager_->add_panel(PanelType::HISTOGRAM);
+      if (ImGui::Button("Add Orderbook")) {
+        panel_manager_->add_panel(PanelType::ORDERBOOK);
+      }
+    }
+
+    // Hierarchical Selector (Exchange -> Symbol -> Chart)
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Symbol Selection",
+                                ImGuiTreeNodeFlags_DefaultOpen)) {
+      // Render the hierarchical selector
+      bool selection_changed = hierarchical_selector_.render(selector_state_);
+
+      if (selection_changed && !selector_state_.selected_symbol.empty()) {
+        // Create or switch to chart for selected symbol/timeframe
+        auto *chart_manager = panel_manager_->get_chart_manager();
+        if (chart_manager) {
+          // Check if chart already exists for this symbol/timeframe
+          auto charts = chart_manager->get_charts_for_symbol(
+              selector_state_.selected_symbol);
+
+          bool found = false;
+          for (const auto &chart : charts) {
+            if (chart.timeframe == selector_state_.selected_timeframe) {
+              selector_state_.selected_chart_id = chart.chart_id;
+              found = true;
+              break;
+            }
+          }
+
+          // Create new chart if doesn't exist
+          if (!found) {
+            selector_state_.selected_chart_id =
+                chart_manager->create_chart(selector_state_.selected_symbol,
+                                            selector_state_.selected_exchange,
+                                            selector_state_.selected_symbol_id,
+                                            selector_state_.selected_timeframe);
+
+            // Add chart panel to display it
+            panel_manager_->add_panel(PanelType::CHART);
+          }
+        }
+      }
+
+      // Refresh button
+      if (ImGui::Button("Refresh Symbols")) {
+        SymbolRegistry::instance().load_from_file(
+            "/dev/shm/btquant_symbols.json");
+        hierarchical_selector_.refresh_data(
+            selector_state_, panel_manager_->get_chart_manager());
       }
     }
 
     // Layout controls
+    ImGui::Separator();
     if (ImGui::CollapsingHeader("Layout")) {
       if (ImGui::Button("Auto Arrange")) {
         panel_manager_->auto_arrange_panels();
@@ -91,8 +145,6 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::End();
 }
 
-void QuantWorkspaceComponent::clear_data() {
-  panel_manager_.reset();
-}
+void QuantWorkspaceComponent::clear_data() { panel_manager_.reset(); }
 
 } // namespace BTQuant

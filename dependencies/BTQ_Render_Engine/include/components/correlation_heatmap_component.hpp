@@ -35,7 +35,7 @@ private:
 
   // Configuration
   std::vector<std::string> symbols_;
-  RenderEngine::TimeFrame timeframe_ = RenderEngine::TimeFrame::TF_1MIN;
+  RenderEngine::TimeFrame timeframe_ = RenderEngine::TimeFrame::TF_1SEC;
   int lookback_periods_ = 100;
 
   // Cached correlation data

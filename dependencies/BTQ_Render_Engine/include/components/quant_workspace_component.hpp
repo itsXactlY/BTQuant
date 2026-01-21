@@ -2,13 +2,15 @@
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
+#include "../symbol_registry.hpp"
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
-#include "panel_manager.hpp"
+#include "hierarchical_selector.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "panel_manager.hpp"
 #include <memory>
 
 namespace BTQuant {
@@ -38,6 +40,10 @@ private:
 
   // New panel-based UI system
   std::unique_ptr<PanelManager> panel_manager_;
+
+  // Hierarchical selector for Exchange -> Symbol -> Chart
+  HierarchicalSelector hierarchical_selector_;
+  HierarchicalSelectorState selector_state_;
 
   // UI state
   bool show_dashboard_controls_ = true;

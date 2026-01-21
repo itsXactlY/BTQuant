@@ -1,94 +1,238 @@
 cmake_minimum_required(VERSION 3.15)
-project(BTQuant_Render_Engine LANGUAGES CXX)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+project(BTQ_Render_Engine VERSION 1.0.0 LANGUAGES CXX)
+
+# ============================================
+# Compiler Configuration
+# ============================================
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Find Dependencies
+# Compilation flags for performance
+if(MSVC)
+    add_compile_options(/W4 /WX /O2 /fp:fast /openmp)
+else()
+    add_compile_options(-Wall -Wextra -Werror -O3 -ffast-math -march=native -fopenmp)
+endif()
+
+# ============================================
+# Vulkan SDK Configuration
+# ============================================
+
 find_package(Vulkan REQUIRED)
-find_package(Threads REQUIRED)
+if(NOT Vulkan_FOUND)
+    message(FATAL_ERROR "Vulkan SDK not found!")
+endif()
 
-# External Headers
-include(FetchContent)
-FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
-FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git GIT_TAG v3.11.2)
-FetchContent_Declare(concurrentqueue GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git GIT_TAG v1.0.4)
-FetchContent_MakeAvailable(glm json concurrentqueue)
+message(STATUS "Vulkan SDK Found: ${Vulkan_VERSION}")
+message(STATUS "Vulkan Include: ${Vulkan_INCLUDE_DIRS}")
+message(STATUS "Vulkan Library: ${Vulkan_LIBRARIES}")
 
-# Path Configuration
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
-set(IMPLOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
+# ============================================
+# Source Files
+# ============================================
 
-# Explicit Source Listing (Senior HFT Requirement)
-set(LIB_SOURCES
-    ${IMGUI_DIR}/imgui.cpp
-    ${IMGUI_DIR}/imgui_draw.cpp
-    ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
-    ${IMGUI_DIR}/imgui_demo.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMPLOT_DIR}/implot.cpp
-    ${IMPLOT_DIR}/implot_items.cpp
-    ${IMPLOT_DIR}/implot_demo.cpp
+set(HEADER_FILES
+    include/components/MarketMicrostructureRenderer.h
+    include/components/VulkanSynchronization.h
+    include/trading/HotspineData.h
+    include/MarketMicrostructureRenderer.arch.md
 )
 
-set(DASHBOARD_SOURCES
-    src/main_realtime_dashboard.cpp
-    src/vulkan_dashboard_advanced.cpp
-    src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
-    src/components/quant_workspace_component.cpp
-    src/components/panel_base.cpp
-    src/components/chart_panel.cpp
-    src/components/metrics_panel.cpp
-    src/components/panel_manager.cpp
-    src/components/chart_manager.cpp
-    src/components/indicator_renderer.cpp
-    src/components/hierarchical_selector.cpp
-    src/components/orderbook_panel.cpp
-    # TODO: Update these for newer ImPlot API
-    # src/components/realtime_dashboard_component.cpp
-    # src/components/heatmap_panel.cpp
-    # src/components/correlation_heatmap_component.cpp
-    src/trading/trading_interface.cpp
-    src/data/symbol_registry.cpp
-    src/optimization/performance_optimizer.cpp
-    src/system/GPUMemoryManager.cpp
-    src/config/dashboard_config.cpp
-    src/data/market_data_processor.cpp
-    src/data/symbol_manager.cpp
-    src/monitoring/performance_monitor.cpp
+set(SOURCE_FILES
+    src/components/MarketMicrostructureRenderer.cpp
+    src/components/VulkanSynchronization.cpp
 )
 
-add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES})
+# ============================================
+# Shader Files
+# ============================================
 
-target_include_directories(dashboard_advanced PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
+add_subdirectory(shaders)
+
+# ============================================
+# Library Target
+# ============================================
+
+add_library(BTQ_Render_Engine STATIC
+    ${HEADER_FILES}
+    ${SOURCE_FILES}
 )
 
-target_link_libraries(dashboard_advanced PRIVATE
-    Vulkan::Vulkan
-    glfw
-    dl
-    pthread
+# ============================================
+# Include Directories
+# ============================================
+
+target_include_directories(BTQ_Render_Engine
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include/btq_render_engine>
+        ${Vulkan_INCLUDE_DIRS}
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Optimization
-target_compile_definitions(dashboard_advanced PRIVATE IMGUI_ENABLE_DOCKING)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(dashboard_advanced PRIVATE
-            -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
-            -fstrict-aliasing)
-        target_link_options(dashboard_advanced PRIVATE -flto)
-    endif()
+# ============================================
+# Link Libraries
+# ============================================
 
-# Performance monitoring
-target_compile_definitions(dashboard_advanced PRIVATE ENABLE_PERFORMANCE_MONITORING)
+target_link_libraries(BTQ_Render_Engine
+    PUBLIC
+        Vulkan::Vulkan
+)
+
+# ============================================
+# Target Properties
+# ============================================
+
+set_target_properties(BTQ_Render_Engine PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 1
+    PUBLIC_HEADER "${HEADER_FILES}"
+    COMPILE_WARNING_AS_ERROR ON
+)
+
+# ============================================
+# Installation Configuration
+# ============================================
+
+include(GNUInstallDirs)
+
+# Install library
+install(TARGETS BTQ_Render_Engine
+    EXPORT BTQ_Render_EngineTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/btq_render_engine
+)
+
+# Install shaders
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/btq_render_engine
+)
+
+# CMake export configuration
+install(EXPORT BTQ_Render_EngineTargets
+    FILE BTQ_Render_EngineTargets.cmake
+    NAMESPACE BTQ::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/BTQ_Render_Engine
+)
+
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/BTQ_Render_EngineConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/BTQ_Render_EngineConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/BTQ_Render_EngineConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/BTQ_Render_Engine
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/BTQ_Render_EngineConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/BTQ_Render_EngineConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/BTQ_Render_Engine
+)
+
+# ============================================
+# Example Target (Optional)
+# ============================================
+
+option(BTQ_BUILD_EXAMPLES "Build examples" OFF)
+
+if(BTQ_BUILD_EXAMPLES)
+    message(STATUS "Building examples")
+    
+    add_executable(MarketMicrostructureExample
+        examples/MarketMicrostructureExample.cpp
+    )
+    
+    target_link_libraries(MarketMicrostructureExample
+        PRIVATE
+            BTQ::BTQ_Render_Engine
+    )
+    
+    target_include_directories(MarketMicrostructureExample
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    
+    # Copy shaders to example build directory
+    add_custom_command(TARGET MarketMicrostructureExample POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_BINARY_DIR}/shaders
+                $<TARGET_FILE_DIR:MarketMicrostructureExample>/shaders
+    )
+    
+    # Install example
+    install(TARGETS MarketMicrostructureExample
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+
+# ============================================
+# Documentation (Optional)
+# ============================================
+
+option(BTQ_BUILD_DOCUMENTATION "Build documentation" OFF)
+
+if(BTQ_BUILD_DOCUMENTATION)
+    find_package(Doxygen REQUIRED)
+    
+    set(DOXYGEN_IN ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in)
+    set(DOXYGEN_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+    
+    configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
+    
+    add_custom_target(doc
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+    
+    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/docs
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        COMPONENT documentation
+    )
+endif()
+
+# ============================================
+# Testing (Optional)
+# ============================================
+
+option(BTQ_BUILD_TESTS "Build tests" OFF)
+
+if(BTQ_BUILD_TESTS)
+    enable_testing()
+    find_package(GTest REQUIRED)
+    
+    add_subdirectory(tests)
+    
+    include(GoogleTest)
+    gtest_discover_tests(BTQ_Render_Engine_Tests)
+endif()
+
+# ============================================
+# Summary
+# ============================================
+
+message(STATUS "============================================")
+message(STATUS "BTQ Render Engine Configuration")
+message(STATUS "Version: ${PROJECT_VERSION}")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Examples: ${BTQ_BUILD_EXAMPLES}")
+message(STATUS "Documentation: ${BTQ_BUILD_DOCUMENTATION}")
+message(STATUS "Tests: ${BTQ_BUILD_TESTS}")
+message(STATUS "Vulkan: ${Vulkan_VERSION}")
+message(STATUS "============================================")

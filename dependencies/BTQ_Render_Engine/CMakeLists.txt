@@ -37,9 +37,8 @@ set(COMPILED_SHADERS "")
 foreach(SHADER ${SHADERS})
     get_filename_component(FILE_NAME ${SHADER} NAME_WE)
     get_filename_component(FILE_EXT ${SHADER} LAST_EXT)
-    string(REPLACE ".comp" "" FILE_EXT ${FILE_EXT})
-    string(REPLACE ".vert" "" FILE_EXT ${FILE_EXT})
-    string(REPLACE ".frag" "" FILE_EXT ${FILE_EXT})
+    # Remove the dot from extension (not used currently)
+    # string(REPLACE "." "" FILE_EXT_NO_DOT ${FILE_EXT})
     
     set(SPIRV_FILE "${SPIRV_DIR}/${FILE_NAME}.spv")
     
@@ -81,7 +80,7 @@ set(DASHBOARD_SOURCES
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
-    src/components/MarketMicrostructureRenderer.cpp
+    # src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     # TODO: Update these for newer ImPlot API
     # src/components/realtime_dashboard_component.cpp

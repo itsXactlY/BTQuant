@@ -13,6 +13,12 @@ OrderbookPanel::OrderbookPanel(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {}
 
+void OrderbookPanel::set_symbol(uint32_t symbol_id,
+                                const std::string &symbol_name) {
+  symbol_id_ = symbol_id;
+  symbol_name_ = symbol_name;
+}
+
 void OrderbookPanel::update(float dt) { (void)dt; }
 
 void OrderbookPanel::render() {

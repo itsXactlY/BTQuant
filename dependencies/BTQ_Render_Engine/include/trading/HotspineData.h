@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <vector>
+#include <cstring>
 
 namespace BTQuant {
 namespace RenderEngine {

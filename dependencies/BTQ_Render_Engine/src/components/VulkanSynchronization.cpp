@@ -13,8 +13,9 @@
 #include <stdexcept>
 #include <cassert>
 #include <iostream>
+#include <thread>
 
-namespace vk {
+namespace BTQuant {
 
 // ============================================
 // TimelineSemaphore Implementation
@@ -66,7 +67,7 @@ TimelineSemaphore& TimelineSemaphore::operator=(TimelineSemaphore&& other) noexc
     return *this;
 }
 
-TimelineValue TimelineSemaphore::getCurrentValue() const {
+uint64_t TimelineSemaphore::getCurrentValue() const {
     uint64_t value = 0;
     if (vkGetSemaphoreCounterValue(device_, semaphore_, &value) != VK_SUCCESS) {
         return 0;
@@ -74,7 +75,7 @@ TimelineValue TimelineSemaphore::getCurrentValue() const {
     return value;
 }
 
-bool TimelineSemaphore::waitForValue(TimelineValue value, uint64_t timeoutNs) const {
+bool TimelineSemaphore::waitForValue(uint64_t value, uint64_t timeoutNs) const {
     VkSemaphoreWaitInfo waitInfo{};
     waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
     waitInfo.semaphoreCount = 1;
@@ -85,7 +86,7 @@ bool TimelineSemaphore::waitForValue(TimelineValue value, uint64_t timeoutNs) co
     return result == VK_SUCCESS;
 }
 
-bool TimelineSemaphore::signalValue(TimelineValue value) {
+bool TimelineSemaphore::signalValue(uint64_t value) {
     VkSemaphoreSignalInfo signalInfo{};
     signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO;
     signalInfo.semaphore = semaphore_;
@@ -271,52 +272,30 @@ bool VulkanSyncContext::prepareFrame(uint32_t currentFrame, TimelineSemaphore& t
 
 bool VulkanSyncContext::submitCommandBuffer(VkQueue queue, VkCommandBuffer cmdBuffer,
                                            TimelineSemaphore& timelineSemaphore,
-                                           TimelineValue signalValue,
-                                           TimelineValue waitValue) {
-    
-    VkSemaphoreSubmitInfo waitInfo{};
-    waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    waitInfo.semaphore = timelineSemaphore.handle();
-    waitInfo.value = waitValue;
-    waitInfo.stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    waitInfo.deviceIndex = 0;
-    
-    VkSemaphoreSubmitInfo signalInfo{};
-    signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    signalInfo.semaphore = timelineSemaphore.handle();
-    signalInfo.value = signalValue;
-    signalInfo.stageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    signalInfo.deviceIndex = 0;
-    
-    VkCommandBufferSubmitInfo cmdInfo{};
-    cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    cmdInfo.commandBuffer = cmdBuffer;
-    cmdInfo.deviceMask = 0;
-    
-    VkSubmitInfo2 submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo.pWaitSemaphores = &waitInfo;
-    submitInfo.waitSemaphoreCount = waitValue > 0 ? 1 : 0;
-    submitInfo.pCommandBuffers = &cmdInfo;
+                                           uint64_t signalValue,
+                                           uint64_t waitValue) {
+
+    // Simple submission without timeline for now
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pCommandBuffers = &cmdBuffer;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pSignalSemaphores = &signalInfo;
-    submitInfo.signalSemaphoreCount = 1;
-    
+
     const auto acquireFence = fenceManager_->acquireFence();
     if (acquireFence == -1) {
         std::cerr << "No available fences for submission" << std::endl;
         return false;
     }
-    
-    const VkResult result = vkQueueSubmit2(queue, 1, &submitInfo,
-                                         fenceManager_->getFence(static_cast<uint32_t>(acquireFence)));
-    
+
+    const VkResult result = vkQueueSubmit(queue, 1, &submitInfo,
+                                          fenceManager_->getFence(static_cast<uint32_t>(acquireFence)));
+
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to submit command buffer: " << result << std::endl;
         fenceManager_->releaseSlot(static_cast<uint32_t>(acquireFence));
         return false;
     }
-    
+
     return true;
 }
 
@@ -341,7 +320,7 @@ VkMemoryBarrier HotspineBarrierManager::createBufferMemoryBarrier(VkPipelineStag
     VkMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COMPUTE_SHADER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     return barrier;
 }
 
@@ -351,7 +330,7 @@ VkBufferMemoryBarrier HotspineBarrierManager::createSSBOBufferBarrier(VkBuffer b
     VkBufferMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COMPUTE_SHADER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.buffer = buffer;
@@ -490,4 +469,4 @@ void SyncDebugUtils::logSyncState(const VulkanSyncContext& context) {
     std::cout << "Sync context state logged" << std::endl;
 }
 
-} // namespace vk
+} // namespace BTQuant

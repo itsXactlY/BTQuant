@@ -4,6 +4,7 @@
 #include <vector>
 #include <atomic>
 #include <chrono>
+#include <memory>
 
 namespace BTQuant {
 
@@ -13,27 +14,82 @@ namespace BTQuant {
 
 class TimelineSemaphore {
 public:
-    using TimelineValue = uint64_t;
-
     TimelineSemaphore(VkDevice device);
     ~TimelineSemaphore();
 
+    TimelineSemaphore(TimelineSemaphore&& other) noexcept;
+    TimelineSemaphore& operator=(TimelineSemaphore&& other) noexcept;
+
     // Get current timeline value (atomic)
-    TimelineValue getCurrentValue() const;
+    uint64_t getCurrentValue() const;
 
     // Wait for a specific timeline value
-    bool waitForValue(TimelineValue value, uint64_t timeoutNs = UINT64_MAX);
+    bool waitForValue(uint64_t value, uint64_t timeoutNs = UINT64_MAX) const;
 
     // Signal a specific timeline value
-    bool signalValue(TimelineValue value);
+    bool signalValue(uint64_t value);
 
     // Get the Vulkan semaphore handle
     VkSemaphore getHandle() const { return semaphore_; }
+    VkSemaphore handle() const { return semaphore_; } // Alias for compatibility
 
 private:
     VkDevice device_;
     VkSemaphore semaphore_ = VK_NULL_HANDLE;
-    std::atomic<TimelineValue> currentValue_ = 0;
+    std::atomic<uint64_t> currentValue_ = 0;
+};
+
+// ============================================================================
+// Fence Manager - Manages Vulkan fences for frame synchronization
+// ============================================================================
+
+class FenceManager {
+public:
+    FenceManager(VkDevice device, uint32_t maxFrames);
+    ~FenceManager();
+
+    // Acquire a fence for use
+    int32_t acquireFence();
+
+    // Wait for all fences to complete
+    void waitAll() const;
+
+    // Reset all fences
+    void resetAll() const;
+
+    // Get fence by index
+    VkFence getFence(uint32_t index) const { return index < fences_.size() ? fences_[index] : VK_NULL_HANDLE; }
+
+    // Release a fence slot
+    void releaseSlot(uint32_t index) { /* placeholder */ }
+
+private:
+    VkDevice device_;
+    uint32_t maxFrames_;
+    std::vector<VkFence> fences_;
+    std::vector<bool> used_;
+};
+
+// ============================================================================
+// Command Buffer Pool - Manages command buffer allocation
+// ============================================================================
+
+class CommandBufferPool {
+public:
+    CommandBufferPool(VkDevice device, VkCommandPool pool);
+    ~CommandBufferPool();
+
+    // Acquire a command buffer
+    VkCommandBuffer acquireCommandBuffer(bool isPrimary = true);
+
+    // Release a command buffer
+    void releaseCommandBuffer(VkCommandBuffer cmdBuffer);
+
+private:
+    VkDevice device_;
+    VkCommandPool pool_;
+    std::vector<VkCommandBuffer> freeBuffers_;
+    std::vector<VkCommandBuffer> activeBuffers_;
 };
 
 // ============================================================================
@@ -44,7 +100,8 @@ struct RenderPassSyncState {
     VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
     VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
     VkFence inFlightFence = VK_NULL_HANDLE;
-    TimelineSemaphore::TimelineValue lastCompletedValue = 0;
+    uint64_t lastCompletedValue = 0;
+    bool isFirstFrame = true;
 };
 
 // ============================================================================
@@ -59,35 +116,33 @@ public:
     ~VulkanSyncContext();
 
     // Prepare for next frame - wait for previous frame to complete
-    void prepareFrame(uint32_t frameIndex, TimelineSemaphore& timelineSemaphore);
+    bool prepareFrame(uint32_t currentFrame, TimelineSemaphore& timelineSemaphore);
 
     // Acquire command buffer for current frame
     VkCommandBuffer acquireCommandBuffer();
 
     // Submit command buffer with timeline synchronization
     bool submitCommandBuffer(VkQueue queue, VkCommandBuffer cmdBuffer,
-                           TimelineSemaphore& timelineSemaphore,
-                           TimelineSemaphore::TimelineValue signalValue,
-                           TimelineSemaphore::TimelineValue waitValue);
+                            TimelineSemaphore& timelineSemaphore,
+                            uint64_t signalValue,
+                            uint64_t waitValue);
 
     // Get current frame's sync state
     RenderPassSyncState& getSyncState(uint32_t frameIndex) {
-        return syncStates_[frameIndex];
+        return frameStates_[frameIndex];
     }
 
     // Wait for all operations to complete
-    void waitIdle() const;
+    void waitForCompletion() const;
+
+    // Reset all fences
+    void reset() const;
 
 private:
     VkDevice device_;
-    VkCommandPool commandPool_;
-    std::vector<RenderPassSyncState> syncStates_;
-    std::vector<VkCommandBuffer> commandBuffers_;
-    std::atomic<uint32_t> currentFrameIndex_ = 0;
-
-    // Helper for creating synchronization objects
-    VkSemaphore createSemaphore();
-    VkFence createFence(bool signaled = true);
+    std::unique_ptr<CommandBufferPool> cmdPool_;
+    std::unique_ptr<FenceManager> fenceManager_;
+    std::vector<RenderPassSyncState> frameStates_;
 };
 
 // ============================================================================
@@ -126,6 +181,68 @@ public:
     };
 
     static PerformanceStats performanceStats;
+};
+
+// ============================================================================
+// Hotspine Barrier Manager - Manages memory barriers for Hotspine data
+// ============================================================================
+
+class HotspineBarrierManager {
+public:
+    explicit HotspineBarrierManager(VkDevice device);
+
+    // Create memory barriers for Hotspine data synchronization
+    VkMemoryBarrier createBufferMemoryBarrier(VkPipelineStageFlags srcStage,
+                                            VkPipelineStageFlags dstStage) const;
+
+    VkBufferMemoryBarrier createSSBOBufferBarrier(VkBuffer buffer,
+                                                VkDeviceSize offset,
+                                                VkDeviceSize size) const;
+
+    VkImageMemoryBarrier createHeatmapImageBarrier(VkImage image,
+                                                  VkImageLayout oldLayout,
+                                                  VkImageLayout newLayout) const;
+
+    // Record barrier commands
+    void recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer,
+                                   VkBuffer buffer,
+                                   VkDeviceSize offset,
+                                   VkDeviceSize size) const;
+
+private:
+    VkDevice device_;
+};
+
+// ============================================================================
+// Ring Buffer Sync Manager - Lock-free ring buffer slot management
+// ============================================================================
+
+class RingBufferSyncManager {
+public:
+    RingBufferSyncManager(VkDevice device, uint32_t slotCount, VkDeviceSize slotSize);
+    ~RingBufferSyncManager();
+
+    // Acquire a slot in the ring buffer
+    int32_t acquireSlot();
+
+    // Release a slot
+    void releaseSlot(uint32_t slotIndex);
+
+    // Wait for a slot to become available
+    int32_t waitForSlot(uint64_t timeoutNs);
+
+private:
+    struct Slot {
+        bool isAvailable = true;
+        uint64_t lastUsed = 0;
+    };
+
+    VkDevice device_;
+    uint32_t slotCount_;
+    VkDeviceSize slotSize_;
+    std::vector<Slot> slots_;
+    std::atomic<uint32_t> currentIndex_ = 0;
+    std::atomic<uint64_t> currentTime_ = 0;
 };
 
 // ============================================================================

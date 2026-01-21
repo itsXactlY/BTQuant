@@ -14,7 +14,9 @@
 #include <iostream>
 #include <chrono>
 
-namespace components {
+namespace BTQuant {
+
+namespace RenderEngine {
 
 // ============================================
 // MarketMicrostructureRenderer Implementation
@@ -39,8 +41,8 @@ MarketMicrostructureRenderer::MarketMicrostructureRenderer(
     : device_(device)
     , config_(config)
     , timelineSemaphore_(device)
-    , barrierManager_(std::make_unique<vk::HotspineBarrierManager>(device))
-    , ringBufferSync_(std::make_unique<vk::RingBufferSyncManager>(device, 2, 1024 * 1024)) {
+    , barrierManager_(std::make_unique<BTQuant::HotspineBarrierManager>(device))
+    , ringBufferSync_(std::make_unique<BTQuant::RingBufferSyncManager>(device, 2, 1024 * 1024)) {
     
     // Initialize Vulkan pipeline structures to null handles
     computePipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
@@ -198,8 +200,8 @@ bool MarketMicrostructureRenderer::initialize() {
 
 bool MarketMicrostructureRenderer::render(VkCommandBuffer cmdBuffer,
                                         uint32_t currentFrame,
-                                        vk::VulkanSyncContext& syncContext,
-                                        vk::TimelineSemaphore& timelineSemaphore) {
+                                        BTQuant::VulkanSyncContext& syncContext,
+                                        BTQuant::TimelineSemaphore& timelineSemaphore) {
     
     if (!initialized_) {
         return false;
@@ -245,7 +247,7 @@ bool MarketMicrostructureRenderer::render(VkCommandBuffer cmdBuffer,
     return true;
 }
 
-bool MarketMicrostructureRenderer::updateLOBData(const trading::HotspineOrderBookSnapshot& snapshot) {
+bool MarketMicrostructureRenderer::updateLOBData(const HotspineOrderBookSnapshot& snapshot) {
     if (!initialized_) {
         return false;
     }
@@ -514,4 +516,6 @@ void MarketMicrostructureRenderer::computeHeatmapParams(const trading::HotspineO
     lobResources_.priceRange = (maxPrice - minPrice) + (2 * padding);
 }
 
-} // namespace components
+} // namespace RenderEngine
+
+} // namespace BTQuant

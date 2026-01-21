@@ -42,8 +42,19 @@ private:
   // UI state
   bool show_dashboard_controls_ = true;
 
+  // Order input state
+  double order_quantity_ = 1.0;
+  double order_price_ = 0.0;
+  std::string selected_symbol_ = "BTC/USDT";
+  int selected_order_side_ = 0; // 0 = Buy, 1 = Sell
+  int selected_order_type_ = 0; // 0 = Market, 1 = Limit
+  std::vector<std::string> order_sides_ = {"Buy", "Sell"};
+  std::vector<std::string> order_types_ = {"Market", "Limit"};
+
   // UI rendering methods
   void render_dashboard_controls();
+  void render_orders_panel();
+  void render_positions_panel();
 };
 
 } // namespace BTQuant

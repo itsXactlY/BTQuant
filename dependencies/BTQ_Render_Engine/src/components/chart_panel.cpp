@@ -186,40 +186,87 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   // Prepare indicators
   std::vector<IndicatorParams> indicators;
   if (indicator_config_.show_sma_10) {
-    indicators.push_back({IndicatorType::SMA_10, 10, 0, 0, 2.0f,
-                         {0.0f, 0.94f, 1.0f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::SMA_10;
+    params.period1 = 10;
+    params.line_width = 2.0f;
+    params.color = {0.0f, 0.94f, 1.0f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_sma_20) {
-    indicators.push_back({IndicatorType::SMA_20, 20, 0, 0, 2.0f,
-                         {1.0f, 0.84f, 0.0f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::SMA_20;
+    params.period1 = 20;
+    params.line_width = 2.0f;
+    params.color = {1.0f, 0.84f, 0.0f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_sma_50) {
-    indicators.push_back({IndicatorType::SMA_50, 50, 0, 0, 2.0f,
-                         {1.0f, 0.0f, 1.0f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::SMA_50;
+    params.period1 = 50;
+    params.line_width = 2.0f;
+    params.color = {1.0f, 0.0f, 1.0f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_ema_10) {
-    indicators.push_back({IndicatorType::EMA_10, 10, 0, 0, 2.0f,
-                         {0.0f, 1.0f, 0.5f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::EMA_10;
+    params.period1 = 10;
+    params.line_width = 2.0f;
+    params.color = {0.0f, 1.0f, 0.5f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_ema_20) {
-    indicators.push_back({IndicatorType::EMA_20, 20, 0, 0, 2.0f,
-                         {0.5f, 0.5f, 1.0f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::EMA_20;
+    params.period1 = 20;
+    params.line_width = 2.0f;
+    params.color = {0.5f, 0.5f, 1.0f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_ema_50) {
-    indicators.push_back({IndicatorType::EMA_50, 50, 0, 0, 2.0f,
-                         {1.0f, 0.5f, 0.0f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::EMA_50;
+    params.period1 = 50;
+    params.line_width = 2.0f;
+    params.color = {1.0f, 0.5f, 0.0f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_rsi) {
-    indicators.push_back({IndicatorType::RSI, 14, 0, 0, 1.5f,
-                         {1.0f, 0.8f, 0.0f, 1.0f}, 1.0f, false});
+    IndicatorParams params;
+    params.type = IndicatorType::RSI_14;
+    params.period1 = 14;
+    params.line_width = 1.5f;
+    params.color = {1.0f, 0.8f, 0.0f, 1.0f};
+    params.visible = false;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_macd) {
-    indicators.push_back({IndicatorType::MACD, 12, 26, 9, 1.5f,
-                         {0.8f, 0.2f, 0.8f, 1.0f}, 1.0f, false});
+    IndicatorParams params;
+    params.type = IndicatorType::MACD;
+    params.period1 = 12;
+    params.period2 = 26;
+    params.period3 = 9;
+    params.line_width = 1.5f;
+    params.color = {0.8f, 0.2f, 0.8f, 1.0f};
+    params.visible = false;
+    indicators.push_back(params);
   }
   if (indicator_config_.show_bollinger) {
-    indicators.push_back({IndicatorType::BOLLINGER_BANDS, 20, 0, 0, 1.0f,
-                         {0.5f, 0.8f, 0.5f, 1.0f}, 1.0f, true});
+    IndicatorParams params;
+    params.type = IndicatorType::BOLLINGER_MID;
+    params.period1 = 20;
+    params.line_width = 1.0f;
+    params.color = {0.5f, 0.8f, 0.5f, 1.0f};
+    params.visible = true;
+    indicators.push_back(params);
   }
 
   // Render the chart using indicator renderer
@@ -227,18 +274,122 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
                            ImGui::GetContentRegionAvail().y - 20);
 
   if (ImPlot::BeginPlot(symbol_.c_str(), plot_size)) {
-    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_Time, 0);
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
+    ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+    ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisFormat(ImAxis_Y1, "%.2f");
 
-    // Plot candlestick
-    indicator_renderer_->render_candlestick(chart);
+    // Plot candlestick - render directly here since IndicatorRenderer doesn't have render_candlestick
+    render_candlestick(chart);
 
     // Plot indicators
-    for (const auto& indicator : indicators) {
-      indicator_renderer_->render_indicator(chart, indicator);
-    }
+    indicator_renderer_->render_indicators(symbol_, timeframe_, indicators);
 
     ImPlot::EndPlot();
+  }
+}
+
+void ChartPanel::render_candlestick(const ChartInstance& chart) {
+  if (chart.dates.empty()) return;
+
+  int count = (int)chart.dates.size();
+
+  // Determine Visible Range for Culling (Optimization)
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+  double x_min = limits.X.Min;
+  double x_max = limits.X.Max;
+
+  // Professional Candlestick Rendering (Batched)
+  std::vector<double> up_wick_x, up_wick_y;
+  std::vector<double> down_wick_x, down_wick_y;
+  std::vector<double> up_b_x, up_b_y1, up_b_y2;
+  std::vector<double> down_b_x, down_b_y1, down_b_y2;
+
+  // Heuristic for candle width based on timeframe
+  double candle_width = 30.0;
+  if (timeframe_ == RenderEngine::TimeFrame::TF_100MS)
+    candle_width = 0.08;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_500MS)
+    candle_width = 0.4;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_1SEC)
+    candle_width = 0.8;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_5SEC)
+    candle_width = 4.0;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_1MIN)
+    candle_width = 45.0;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_5MIN)
+    candle_width = 225.0;
+  else if (timeframe_ == RenderEngine::TimeFrame::TF_1DAY)
+    candle_width = 64800.0;
+
+  for (int i = 0; i < count; ++i) {
+    double x = chart.dates[i];
+
+    // Simple Culling: Skip candles outside the view (with some padding)
+    if (x < x_min - candle_width || x > x_max + candle_width)
+      continue;
+
+    if (chart.closes[i] >= chart.opens[i]) {
+      // Bullish Wick
+      up_wick_x.push_back(x);
+      up_wick_x.push_back(x);
+      up_wick_y.push_back(chart.highs[i]);
+      up_wick_y.push_back(chart.lows[i]);
+
+      // Bullish Body
+      up_b_x.push_back(x);
+      up_b_y1.push_back(chart.opens[i]);
+      up_b_y2.push_back(chart.closes[i]);
+    } else {
+      // Bearish Wick
+      down_wick_x.push_back(x);
+      down_wick_x.push_back(x);
+      down_wick_y.push_back(chart.highs[i]);
+      down_wick_y.push_back(chart.lows[i]);
+
+      // Bearish Body
+      down_b_x.push_back(x);
+      down_b_y1.push_back(chart.opens[i]);
+      down_b_y2.push_back(chart.closes[i]);
+    }
+  }
+
+  // Draw Wicks (Neon Style)
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
+  if (!up_wick_x.empty()) {
+    ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.4f, 1.0f));
+    ImPlot::PlotLine("##UpWicks", up_wick_x.data(), up_wick_y.data(),
+                     (int)up_wick_x.size(), ImPlotLineFlags_Segments);
+  }
+  if (!down_wick_x.empty()) {
+    ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.2f, 1.0f));
+    ImPlot::PlotLine("##DownWicks", down_wick_x.data(), down_wick_y.data(),
+                     (int)down_wick_x.size(), ImPlotLineFlags_Segments);
+  }
+  ImPlot::PopStyleVar();
+
+  // Draw Bodies (Using PlotBars for robustness and performance)
+  if (!up_b_x.empty()) {
+    ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.4f, 0.6f));
+    // Plot positive bars from y1 to y2 (top - bottom)
+    std::vector<double> up_body_heights;
+    up_body_heights.reserve(up_b_x.size());
+    for (size_t i = 0; i < up_b_x.size(); ++i) {
+      up_body_heights.push_back(up_b_y2[i] - up_b_y1[i]);
+    }
+    ImPlot::PlotBars("##UpBodies", up_b_x.data(), up_body_heights.data(),
+                     (int)up_b_x.size(), candle_width * 0.82, up_b_y1[0]);
+  }
+  if (!down_b_x.empty()) {
+    ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.2f, 0.6f));
+    // Plot negative bars from y1 to y2 (top - bottom)
+    std::vector<double> down_body_heights;
+    down_body_heights.reserve(down_b_x.size());
+    for (size_t i = 0; i < down_b_x.size(); ++i) {
+      down_body_heights.push_back(down_b_y2[i] - down_b_y1[i]);
+    }
+    ImPlot::PlotBars("##DownBodies", down_b_x.data(), down_body_heights.data(),
+                     (int)down_b_x.size(), candle_width * 0.82, down_b_y1[0]);
   }
 }
 

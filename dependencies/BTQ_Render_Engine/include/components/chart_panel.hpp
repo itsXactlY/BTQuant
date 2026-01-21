@@ -41,6 +41,7 @@ private:
   void render_chart_controls();
   void render_indicator_selector();
   void render_instrument_chart(const ChartInstance& chart);
+  void render_candlestick(const ChartInstance& chart);
 };
 
 } // namespace BTQuant

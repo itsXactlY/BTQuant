@@ -46,6 +46,7 @@ set(DASHBOARD_SOURCES
     src/components/panel_manager.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
+    src/components/symbol_selector.cpp
     src/trading/trading_interface.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp

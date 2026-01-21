@@ -8,10 +8,10 @@
 
 namespace BTQuant {
 
-VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                  std::shared_ptr<HotSpineDataBridge> bridge,
-                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                                  const VulkanDashboardConfig &config)
+VulkanDashboard::VulkanDashboard(
+    uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    const VulkanDashboardConfig &config)
     : width_(width), height_(height), hotspine_bridge_(bridge),
       market_data_processor_(processor), config_(config) {}
 
@@ -47,7 +47,8 @@ void VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   // Replaces all obsolete discrete components with the unified QuantWorkspace
-  m_workspace = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_);
+  m_workspace = std::make_unique<QuantWorkspaceComponent>(
+      hotspine_bridge_, market_data_processor_);
 }
 
 void VulkanDashboard::render_frame() {
@@ -67,7 +68,32 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // 4. Draw Components (QuantWorkspace)
+  // 4. Create fullscreen DockSpace
+  ImGuiViewport *viewport = ImGui::GetMainViewport();
+  ImGui::SetNextWindowPos(viewport->WorkPos);
+  ImGui::SetNextWindowSize(viewport->WorkSize);
+  ImGui::SetNextWindowViewport(viewport->ID);
+
+  ImGuiWindowFlags dockspace_flags =
+      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+      ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+  ImGui::Begin("DockSpace Window", nullptr, dockspace_flags);
+  ImGui::PopStyleVar(3);
+
+  ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+  ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f),
+                   ImGuiDockNodeFlags_PassthruCentralNode);
+
+  ImGui::End();
+
+  // 5. Draw Components (QuantWorkspace)
   if (m_workspace) {
     m_workspace->update(ImGui::GetIO().DeltaTime);
     m_workspace->render_gui();

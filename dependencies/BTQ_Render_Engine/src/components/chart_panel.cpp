@@ -8,6 +8,10 @@ ChartPanel::ChartPanel(
     const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     ChartManager *chart_manager)
+ChartPanel::ChartPanel(
+    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    ChartManager *chart_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor),
       chart_manager_(chart_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
@@ -19,10 +23,13 @@ void ChartPanel::initialize() {
   uint32_t symbol_id = id_opt ? *id_opt : 10007; // Default BTC-USDT
   chart_id_ =
       chart_manager_->create_chart(symbol_, exchange_, symbol_id, timeframe_);
+  chart_id_ =
+      chart_manager_->create_chart(symbol_, exchange_, symbol_id, timeframe_);
 }
 
 void ChartPanel::update(float dt) {
-  (void)dt; // Suppress unused parameter warning
+  // Chart manager handles updates
+  (void)dt;
 }
 
 void ChartPanel::render() {
@@ -43,8 +50,11 @@ void ChartPanel::render() {
   }
 
   const ChartInstance &chart = it->second;
+  const ChartInstance &chart = it->second;
 
   // Render chart controls in a collapsible header
+  if (ImGui::CollapsingHeader("Chart Controls",
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
   if (ImGui::CollapsingHeader("Chart Controls",
                               ImGuiTreeNodeFlags_DefaultOpen)) {
     render_chart_controls();
@@ -60,6 +70,8 @@ void ChartPanel::render() {
   end_panel_window();
 }
 
+void ChartPanel::set_symbol(const std::string &symbol,
+                            const std::string &exchange) {
 void ChartPanel::set_symbol(const std::string &symbol,
                             const std::string &exchange) {
   symbol_ = symbol;
@@ -91,57 +103,13 @@ void ChartPanel::render_chart_controls() {
   }
   ImGui::SameLine();
 
-  // Timeframe selector with all supported timeframes
-  const char *timeframes[] = {"1 Min",  "5 Min",  "15 Min", "1 Hour",
-                              "4 Hour", "1 Day",  "1 Sec",  "5 Sec",
-                              "15 Sec", "30 Sec", "500ms",  "100ms"};
-  static int selected = 0;
+  // Timeframe selector
+  const char *timeframes[] = {"1 Min",  "5 Min",  "15 Min",
+                              "1 Hour", "4 Hour", "1 Day"};
+  int selected = static_cast<int>(timeframe_);
   if (ImGui::Combo("Timeframe", &selected, timeframes,
                    IM_ARRAYSIZE(timeframes))) {
-    // Map combo index to TimeFrame enum
-    RenderEngine::TimeFrame tf;
-    switch (selected) {
-    case 0:
-      tf = RenderEngine::TimeFrame::TF_1MIN;
-      break;
-    case 1:
-      tf = RenderEngine::TimeFrame::TF_5MIN;
-      break;
-    case 2:
-      tf = RenderEngine::TimeFrame::TF_15MIN;
-      break;
-    case 3:
-      tf = RenderEngine::TimeFrame::TF_1HOUR;
-      break;
-    case 4:
-      tf = RenderEngine::TimeFrame::TF_4HOUR;
-      break;
-    case 5:
-      tf = RenderEngine::TimeFrame::TF_1DAY;
-      break;
-    case 6:
-      tf = RenderEngine::TimeFrame::TF_1SEC;
-      break;
-    case 7:
-      tf = RenderEngine::TimeFrame::TF_5SEC;
-      break;
-    case 8:
-      tf = RenderEngine::TimeFrame::TF_15SEC;
-      break;
-    case 9:
-      tf = RenderEngine::TimeFrame::TF_30SEC;
-      break;
-    case 10:
-      tf = RenderEngine::TimeFrame::TF_500MS;
-      break;
-    case 11:
-      tf = RenderEngine::TimeFrame::TF_100MS;
-      break;
-    default:
-      tf = RenderEngine::TimeFrame::TF_1MIN;
-      break;
-    }
-    set_timeframe(tf);
+    set_timeframe(static_cast<RenderEngine::TimeFrame>(selected));
   }
 
   ImGui::PopStyleVar();
@@ -172,6 +140,7 @@ void ChartPanel::render_indicator_selector() {
 }
 
 void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
+void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   if (chart.dates.empty()) {
     ImGui::Text("Loading chart data for %s...", symbol_.c_str());
     return;
@@ -179,8 +148,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
   // Diagnostic info
   ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
-                     "Candles: %zu | Last: %.2f",
-                     chart.dates.size(),
+                     "Candles: %zu | Last: %.2f", chart.dates.size(),
                      chart.closes.empty() ? 0.0 : chart.closes.back());
 
   // Prepare indicators
@@ -271,7 +239,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
   // Render the chart using indicator renderer
   ImVec2 plot_size = ImVec2(ImGui::GetContentRegionAvail().x,
-                           ImGui::GetContentRegionAvail().y - 20);
+                            ImGui::GetContentRegionAvail().y - 20);
 
   if (ImPlot::BeginPlot(symbol_.c_str(), plot_size)) {
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_AutoFit);
@@ -279,7 +247,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisFormat(ImAxis_Y1, "%.2f");
 
-    // Plot candlestick - render directly here since IndicatorRenderer doesn't have render_candlestick
+    // Plot candlestick - render directly here since IndicatorRenderer doesn't
+    // have render_candlestick
     render_candlestick(chart);
 
     // Plot indicators
@@ -289,8 +258,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   }
 }
 
-void ChartPanel::render_candlestick(const ChartInstance& chart) {
-  if (chart.dates.empty()) return;
+void ChartPanel::render_candlestick(const ChartInstance &chart) {
+  if (chart.dates.empty())
+    return;
 
   int count = (int)chart.dates.size();
 

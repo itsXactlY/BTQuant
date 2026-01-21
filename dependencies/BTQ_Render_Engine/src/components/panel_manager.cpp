@@ -12,11 +12,18 @@ PanelManager::PanelManager(
     std::shared_ptr<OrderManager> order_manager,
     std::shared_ptr<PositionManager> position_manager,
     std::shared_ptr<RiskAssessment> risk_assessment)
+PanelManager::PanelManager(
+    std::shared_ptr<HotSpineDataBridge> bridge,
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    std::shared_ptr<OrderManager> order_manager,
+    std::shared_ptr<PositionManager> position_manager,
+    std::shared_ptr<RiskAssessment> risk_assessment)
     : bridge_(bridge), processor_(processor), order_manager_(order_manager),
       position_manager_(position_manager), risk_assessment_(risk_assessment) {
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
 }
 
+PanelManager::~PanelManager() { panels_.clear(); }
 PanelManager::~PanelManager() { panels_.clear(); }
 
 void PanelManager::initialize() {
@@ -32,6 +39,7 @@ void PanelManager::update(float dt) {
   chart_manager_->update();
 
   for (auto &[id, panel] : panels_) {
+  for (auto &[id, panel] : panels_) {
     panel->update(dt);
   }
 }
@@ -41,12 +49,16 @@ void PanelManager::render() {
   dashboard_size_ = ImGui::GetIO().DisplaySize;
 
   for (auto &[id, panel] : panels_) {
+  for (auto &[id, panel] : panels_) {
     if (panel->is_visible()) {
       panel->render();
     }
   }
 }
 
+uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
+                                 int grid_x, int grid_y, int width,
+                                 int height) {
 uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
                                  int grid_x, int grid_y, int width,
                                  int height) {
@@ -60,7 +72,6 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
       for (int x = 0; x < grid_layout_.columns && !found; ++x) {
         // Check if position is occupied
         bool occupied = false;
-
         for (const auto &[id, panel] : panels_) {
           const auto &config = panel->get_config();
           if (config.grid_x <= x && x < config.grid_x + config.grid_width &&
@@ -86,6 +97,8 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
 
   PanelConfig config =
       create_panel_config(type, title, grid_x, grid_y, width, height);
+  PanelConfig config =
+      create_panel_config(type, title, grid_x, grid_y, width, height);
 
   std::unique_ptr<PanelBase> panel;
   switch (type) {
@@ -99,15 +112,17 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
     break;
   case PanelType::HEATMAP:
     // TODO: Re-enable when HeatmapPanel is updated for newer ImPlot API
+    // panel = std::make_unique<HeatmapPanel>(config, processor_);
     return 0;
   case PanelType::TRADING_ORDERS:
   case PanelType::TRADING_POSITIONS:
   case PanelType::RISK_METRICS:
   case PanelType::ALERTS:
-  case PanelType::HISTOGRAM:
     // TODO: Implement these panel types
+    // For now, skip creating these panels
     return 0;
   default:
+    // Unknown panel type, skip
     return 0;
   }
 
@@ -128,8 +143,11 @@ void PanelManager::remove_panel(uint32_t panel_id) {
 
 void PanelManager::move_panel(uint32_t panel_id, int new_grid_x,
                               int new_grid_y) {
+void PanelManager::move_panel(uint32_t panel_id, int new_grid_x,
+                              int new_grid_y) {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {
+    auto &config = it->second->get_config();
     auto &config = it->second->get_config();
     config.grid_x = new_grid_x;
     config.grid_y = new_grid_y;
@@ -139,8 +157,11 @@ void PanelManager::move_panel(uint32_t panel_id, int new_grid_x,
 
 void PanelManager::resize_panel(uint32_t panel_id, int new_width,
                                 int new_height) {
+void PanelManager::resize_panel(uint32_t panel_id, int new_width,
+                                int new_height) {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {
+    auto &config = it->second->get_config();
     auto &config = it->second->get_config();
     config.grid_width = new_width;
     config.grid_height = new_height;
@@ -153,8 +174,8 @@ void PanelManager::set_grid_layout(int columns, int rows) {
   grid_layout_.rows = std::max(rows, grid_layout_.rows);
 
   // Reposition all panels
-  for (auto& [id, panel] : panels_) {
-    auto& config = panel->get_config();
+  for (auto &[id, panel] : panels_) {
+    auto &config = panel->get_config();
     config.position = calculate_panel_position(config.grid_x, config.grid_y);
     config.size = calculate_panel_size(config.grid_width, config.grid_height);
   }
@@ -164,8 +185,8 @@ void PanelManager::auto_arrange_panels() {
   int current_x = 0;
   int current_y = 0;
 
-  for (auto& [id, panel] : panels_) {
-    auto& config = panel->get_config();
+  for (auto &[id, panel] : panels_) {
+    auto &config = panel->get_config();
 
     // Check if we need to move to next row
     if (current_x + config.grid_width > grid_layout_.columns) {
@@ -197,8 +218,10 @@ ImVec2 PanelManager::get_panel_size(uint32_t panel_id) const {
   return ImVec2(400, 300);
 }
 
-PanelConfig PanelManager::create_panel_config(PanelType type, const std::string& title,
-                                              int grid_x, int grid_y, int width, int height) {
+PanelConfig PanelManager::create_panel_config(PanelType type,
+                                              const std::string &title,
+                                              int grid_x, int grid_y, int width,
+                                              int height) {
   PanelConfig config;
   config.type = type;
   config.title = title.empty() ? get_default_panel_title(type) : title;
@@ -219,44 +242,51 @@ ImVec2 PanelManager::calculate_panel_position(int grid_x, int grid_y) const {
   float cell_width = dashboard_size_.x / grid_layout_.columns;
   float cell_height = dashboard_size_.y / grid_layout_.rows;
 
-  return ImVec2(
-    grid_x * cell_width + grid_layout_.cell_padding,
-    grid_y * cell_height + grid_layout_.cell_padding
-  );
+  return ImVec2(grid_x * cell_width + grid_layout_.cell_padding,
+                grid_y * cell_height + grid_layout_.cell_padding);
 }
 
 ImVec2 PanelManager::calculate_panel_size(int width, int height) const {
   float cell_width = dashboard_size_.x / grid_layout_.columns;
   float cell_height = dashboard_size_.y / grid_layout_.rows;
 
-  return ImVec2(
-    width * cell_width - 2 * grid_layout_.cell_padding - grid_layout_.panel_spacing,
-    height * cell_height - 2 * grid_layout_.cell_padding - grid_layout_.panel_spacing
-  );
+  return ImVec2(width * cell_width - 2 * grid_layout_.cell_padding -
+                    grid_layout_.panel_spacing,
+                height * cell_height - 2 * grid_layout_.cell_padding -
+                    grid_layout_.panel_spacing);
 }
 
 std::string PanelManager::get_default_panel_title(PanelType type) {
   switch (type) {
-    case PanelType::CHART: return "Price Chart";
-    case PanelType::METRICS: return "Metrics";
-    case PanelType::HEATMAP: return "Heatmap";
-    case PanelType::HISTOGRAM: return "Histogram";
-    case PanelType::SCATTER_PLOT: return "Scatter Plot";
-    case PanelType::TIME_SERIES: return "Time Series";
-    case PanelType::TRADING_ORDERS: return "Orders";
-    case PanelType::TRADING_POSITIONS: return "Positions";
-    case PanelType::RISK_METRICS: return "Risk";
-    case PanelType::ALERTS: return "Alerts";
-    default: return "Panel";
+  case PanelType::CHART:
+    return "Price Chart";
+  case PanelType::METRICS:
+    return "Metrics";
+  case PanelType::HEATMAP:
+    return "Heatmap";
+  case PanelType::HISTOGRAM:
+    return "Histogram";
+  case PanelType::SCATTER_PLOT:
+    return "Scatter Plot";
+  case PanelType::TIME_SERIES:
+    return "Time Series";
+  case PanelType::TRADING_ORDERS:
+    return "Orders";
+  case PanelType::TRADING_POSITIONS:
+    return "Positions";
+  case PanelType::RISK_METRICS:
+    return "Risk";
+  case PanelType::ALERTS:
+    return "Alerts";
+  default:
+    return "Panel";
   }
 }
 
 // TODO: Implement serialization
-std::string PanelManager::serialize_layout() const {
-  return "{}";
-}
+std::string PanelManager::serialize_layout() const { return "{}"; }
 
-void PanelManager::deserialize_layout(const std::string& layout_json) {
+void PanelManager::deserialize_layout(const std::string &layout_json) {
   // TODO: Implement deserialization
 }
 

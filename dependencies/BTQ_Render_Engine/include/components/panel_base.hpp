@@ -61,6 +61,9 @@ protected:
   void begin_panel_window();
   void end_panel_window();
   void render_panel_header();
+
+  // Utility functions
+  static const char* get_panel_type_name(PanelType type);
 };
 
 } // namespace BTQuant

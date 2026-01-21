@@ -1,0 +1,66 @@
+#pragma once
+
+#include "imgui.h"
+#include <memory>
+#include <string>
+
+namespace BTQuant {
+
+enum class PanelType {
+  CHART,
+  METRICS,
+  HEATMAP,
+  HISTOGRAM,
+  SCATTER_PLOT,
+  TIME_SERIES,
+  TRADING_ORDERS,
+  TRADING_POSITIONS,
+  RISK_METRICS,
+  ALERTS
+};
+
+struct PanelConfig {
+  std::string title = "Panel";
+  PanelType type = PanelType::CHART;
+  ImVec2 position = ImVec2(0, 0);
+  ImVec2 size = ImVec2(400, 300);
+  bool visible = true;
+  bool resizable = true;
+  bool movable = true;
+  int grid_x = 0;
+  int grid_y = 0;
+  int grid_width = 1;
+  int grid_height = 1;
+};
+
+class PanelBase {
+public:
+  PanelBase(const PanelConfig& config) : config_(config) {}
+  virtual ~PanelBase() = default;
+
+  virtual void update(float dt) {}
+  virtual void render() = 0;
+  virtual void initialize() {}
+
+  // Panel management
+  void set_position(const ImVec2& pos) { config_.position = pos; }
+  void set_size(const ImVec2& size) { config_.size = size; }
+  void set_visible(bool visible) { config_.visible = visible; }
+  void set_title(const std::string& title) { config_.title = title; }
+
+  const PanelConfig& get_config() const { return config_; }
+  PanelConfig& get_config() { return config_; }
+
+  bool is_visible() const { return config_.visible; }
+  const std::string& get_title() const { return config_.title; }
+
+protected:
+  PanelConfig config_;
+
+  // Helper methods for consistent styling
+  void begin_panel_window();
+  void end_panel_window();
+  void render_panel_header();
+};
+
+} // namespace BTQuant

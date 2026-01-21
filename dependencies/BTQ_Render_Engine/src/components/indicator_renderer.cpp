@@ -154,12 +154,19 @@ void IndicatorRenderer::render_sma(const std::string &symbol,
     sma_values.push_back(sum / params.period1);
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values;
+  time_values.reserve(candles.size());
+  for (const auto& candle : candles) {
+    time_values.push_back(candle.timestamp);
+  }
+
   // Plot SMA
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   std::string label = "SMA" + std::to_string(params.period1);
-  ImPlot::PlotLine(label.c_str(), sma_values.data(),
+  ImPlot::PlotLine(label.c_str(), time_values.data(), sma_values.data(),
                    static_cast<int>(sma_values.size()));
 
   ImPlot::PopStyleVar();
@@ -187,12 +194,19 @@ void IndicatorRenderer::render_ema(const std::string &symbol,
     ema_values.push_back(ema);
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values;
+  time_values.reserve(candles.size());
+  for (const auto& candle : candles) {
+    time_values.push_back(candle.timestamp);
+  }
+
   // Plot EMA
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   std::string label = "EMA" + std::to_string(params.period1);
-  ImPlot::PlotLine(label.c_str(), ema_values.data(),
+  ImPlot::PlotLine(label.c_str(), time_values.data(), ema_values.data(),
                    static_cast<int>(ema_values.size()));
 
   ImPlot::PopStyleVar();
@@ -243,22 +257,29 @@ void IndicatorRenderer::render_rsi(const std::string &symbol,
     rsi_values.push_back(rsi);
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values;
+  time_values.reserve(rsi_values.size());
+  for (size_t i = 0; i < rsi_values.size(); ++i) {
+    time_values.push_back(candles[i + 1].timestamp); // RSI starts at second candle
+  }
+
   // Plot RSI
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
   std::string label = "RSI" + std::to_string(params.period1);
-  ImPlot::PlotLine(label.c_str(), rsi_values.data(),
+  ImPlot::PlotLine(label.c_str(), time_values.data(), rsi_values.data(),
                    static_cast<int>(rsi_values.size()));
 
-  // Draw RSI levels (30 and 70)
-  ImVec2 p1 = ImPlot::PlotToPixels(0, 30);
-  ImVec2 p2 =
-      ImPlot::PlotToPixels(static_cast<double>(rsi_values.size() - 1), 30);
+  // Draw RSI levels (30 and 70) - Need to use actual time range
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+  ImVec2 p1 = ImPlot::PlotToPixels(limits.X.Min, 30);
+  ImVec2 p2 = ImPlot::PlotToPixels(limits.X.Max, 30);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
-  p1 = ImPlot::PlotToPixels(0, 70);
-  p2 = ImPlot::PlotToPixels(static_cast<double>(rsi_values.size() - 1), 70);
+  p1 = ImPlot::PlotToPixels(limits.X.Min, 70);
+  p2 = ImPlot::PlotToPixels(limits.X.Max, 70);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
   ImPlot::PopStyleVar();
@@ -312,13 +333,20 @@ void IndicatorRenderer::render_macd(const std::string &symbol,
     }
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values;
+  time_values.reserve(macd_line.size());
+  for (size_t i = 1; i < candles.size(); ++i) { // MACD starts at second candle
+    time_values.push_back(candles[i].timestamp);
+  }
+
   // Plot MACD
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
-  ImPlot::PlotLine("MACD", macd_line.data(),
+  ImPlot::PlotLine("MACD", time_values.data(), macd_line.data(),
                    static_cast<int>(macd_line.size()));
-  ImPlot::PlotLine("Signal", signal_line.data(),
+  ImPlot::PlotLine("Signal", time_values.data(), signal_line.data(),
                    static_cast<int>(signal_line.size()));
 
   // Plot histogram
@@ -337,10 +365,16 @@ void IndicatorRenderer::render_macd(const std::string &symbol,
       }
     }
 
-    ImPlot::PlotBars("MACD Hist", macd_pos.data(),
-                     static_cast<int>(macd_pos.size()));
-    ImPlot::PlotBars("MACD Hist", macd_neg.data(),
-                     static_cast<int>(macd_neg.size()));
+    std::vector<double> hist_time_values;
+    hist_time_values.reserve(histogram.size());
+    for (size_t i = 2; i < candles.size(); ++i) { // Histogram starts at third candle
+      hist_time_values.push_back(candles[i].timestamp);
+    }
+
+    ImPlot::PlotBars("MACD Hist", hist_time_values.data(), macd_pos.data(),
+                     static_cast<int>(macd_pos.size()), 0.67);
+    ImPlot::PlotBars("MACD Hist", hist_time_values.data(), macd_neg.data(),
+                     static_cast<int>(macd_neg.size()), 0.67);
   }
 
   ImPlot::PopStyleVar();
@@ -389,15 +423,22 @@ void IndicatorRenderer::render_bollinger(const std::string &symbol,
     lower_band.push_back(sma - params.std_dev * std_dev);
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values;
+  time_values.reserve(candles.size());
+  for (const auto& candle : candles) {
+    time_values.push_back(candle.timestamp);
+  }
+
   // Plot Bollinger Bands
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
-  ImPlot::PlotLine("Bollinger Mid", sma_values.data(),
+  ImPlot::PlotLine("Bollinger Mid", time_values.data(), sma_values.data(),
                    static_cast<int>(sma_values.size()));
-  ImPlot::PlotLine("Bollinger Upper", upper_band.data(),
+  ImPlot::PlotLine("Bollinger Upper", time_values.data(), upper_band.data(),
                    static_cast<int>(upper_band.size()));
-  ImPlot::PlotLine("Bollinger Lower", lower_band.data(),
+  ImPlot::PlotLine("Bollinger Lower", time_values.data(), lower_band.data(),
                    static_cast<int>(lower_band.size()));
 
   ImPlot::PopStyleVar();
@@ -454,23 +495,36 @@ void IndicatorRenderer::render_stochastic(const std::string &symbol,
     stochastic_d.push_back(sum / params.period2);
   }
 
+  // Prepare time values (dates) for plotting
+  std::vector<double> time_values_k;
+  time_values_k.reserve(stochastic_k.size());
+  for (size_t i = params.period1 - 1; i < candles.size(); ++i) { // K starts after period1 candles
+    time_values_k.push_back(candles[i].timestamp);
+  }
+
+  std::vector<double> time_values_d;
+  time_values_d.reserve(stochastic_d.size());
+  for (size_t i = params.period1 + params.period2 - 2; i < candles.size(); ++i) { // D starts after period1 + period2 -1 candles
+    time_values_d.push_back(candles[i].timestamp);
+  }
+
   // Plot Stochastic
   ImPlot::PushStyleColor(ImPlotCol_Line, ImU32(ImColor(params.color)));
   ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, params.line_width);
 
-  ImPlot::PlotLine("Stochastic K", stochastic_k.data(),
+  ImPlot::PlotLine("Stochastic K", time_values_k.data(), stochastic_k.data(),
                    static_cast<int>(stochastic_k.size()));
-  ImPlot::PlotLine("Stochastic D", stochastic_d.data(),
+  ImPlot::PlotLine("Stochastic D", time_values_d.data(), stochastic_d.data(),
                    static_cast<int>(stochastic_d.size()));
 
-  // Draw stochastic levels (20 and 80)
-  ImVec2 p1 = ImPlot::PlotToPixels(0, 20);
-  ImVec2 p2 =
-      ImPlot::PlotToPixels(static_cast<double>(stochastic_k.size() - 1), 20);
+  // Draw stochastic levels (20 and 80) - Need to use actual time range
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+  ImVec2 p1 = ImPlot::PlotToPixels(limits.X.Min, 20);
+  ImVec2 p2 = ImPlot::PlotToPixels(limits.X.Max, 20);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
-  p1 = ImPlot::PlotToPixels(0, 80);
-  p2 = ImPlot::PlotToPixels(static_cast<double>(stochastic_k.size() - 1), 80);
+  p1 = ImPlot::PlotToPixels(limits.X.Min, 80);
+  p2 = ImPlot::PlotToPixels(limits.X.Max, 80);
   ImPlot::GetPlotDrawList()->AddLine(p1, p2, IM_COL32(255, 255, 0, 128), 1.0f);
 
   ImPlot::PopStyleVar();

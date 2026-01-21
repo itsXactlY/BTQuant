@@ -40,6 +40,10 @@ set(DASHBOARD_SOURCES
     src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp
     src/components/quant_workspace_component.cpp
+    src/components/panel_base.cpp
+    src/components/chart_panel.cpp
+    src/components/metrics_panel.cpp
+    src/components/panel_manager.cpp
     src/components/chart_manager.cpp
     src/components/indicator_renderer.cpp
     src/trading/trading_interface.cpp

@@ -27,6 +27,16 @@ void PanelManager::initialize() {
   add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 1, 1, 1);
   add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 1, 1, 1);
   add_panel(PanelType::RISK_METRICS, "Risk Dashboard", 2, 1, 1, 1);
+
+  // Initialize orderbook with first active symbol
+  auto active_symbols = bridge_->getActiveSymbols();
+  if (!active_symbols.empty()) {
+    uint32_t symbol_id = active_symbols[0];
+    std::string symbol_name = bridge_->getSymbolName(symbol_id);
+    if (!symbol_name.empty()) {
+      set_active_symbol(symbol_id, symbol_name);
+    }
+  }
 }
 
 void PanelManager::update(float dt) {
@@ -232,6 +242,19 @@ std::string PanelManager::serialize_layout() const {
 void PanelManager::deserialize_layout(const std::string &layout_json) {
   // TODO: Implement layout deserialization
   (void)layout_json;
+}
+
+void PanelManager::set_active_symbol(uint32_t symbol_id,
+                                     const std::string &symbol_name) {
+  // Propagate symbol to all orderbook panels
+  for (auto &[id, panel] : panels_) {
+    if (panel->get_config().type == PanelType::ORDERBOOK) {
+      auto *orderbook = dynamic_cast<OrderbookPanel *>(panel.get());
+      if (orderbook) {
+        orderbook->set_symbol(symbol_id, symbol_name);
+      }
+    }
+  }
 }
 
 } // namespace BTQuant

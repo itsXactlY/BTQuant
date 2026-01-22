@@ -52,6 +52,9 @@ public:
   void save_layout(const std::string &filename);
   void load_layout(const std::string &filename);
 
+  // Symbol propagation
+  void set_active_symbol(uint32_t symbol_id, const std::string &symbol_name);
+
   // Accessors
   ChartManager *get_chart_manager() const { return chart_manager_.get(); }
 

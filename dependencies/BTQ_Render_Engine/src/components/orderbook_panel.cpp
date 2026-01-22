@@ -29,23 +29,78 @@ void OrderbookPanel::render() {
     return;
   }
 
-  // Get orderbook data for the current symbol
+  // Symbol selector for this orderbook panel
+  auto active_symbols = processor_->getActiveSymbols();
+  if (!active_symbols.empty()) {
+
+    // Build symbol names for combo
+    // Use panel pointer as unique ID for the combo itself to avoid conflicts
+    // between panels
+    ImGui::PushID(this);
+    if (ImGui::BeginCombo("Symbol", symbol_name_.c_str())) {
+      for (size_t i = 0; i < active_symbols.size(); ++i) {
+        uint32_t sym_id = active_symbols[i];
+
+        // Push unique ID for this item
+        ImGui::PushID(static_cast<int>(sym_id));
+
+        std::string sym_name = bridge_->getSymbolName(sym_id);
+        std::string exchange = bridge_->getExchangeName(sym_id);
+        std::string display_name = "[" + exchange + "] " + sym_name;
+
+        bool is_selected = (sym_id == symbol_id_);
+
+        if (ImGui::Selectable(display_name.c_str(), is_selected)) {
+          symbol_id_ = sym_id;
+          symbol_name_ = sym_name;
+        }
+
+        if (is_selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+
+        ImGui::PopID();
+      }
+      ImGui::EndCombo();
+    }
+    ImGui::PopID();
+    ImGui::Separator();
+  }
+
+  // Get orderbook data for the selected symbol
   auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
 
   if (!orderbook_opt.has_value()) {
-    ImGui::Text("No orderbook data available for sym: %u", symbol_id_);
+    if (symbol_id_ == 0) {
+      ImGui::Text("Select a symbol above");
+    } else {
+      ImGui::Text("Waiting for orderbook: %s (ID: %u)", symbol_name_.c_str(),
+                  symbol_id_);
+    }
     end_panel_window();
     return;
   }
 
   const auto &orderbook = orderbook_opt.value();
 
-  if (orderbook.bids.empty() && orderbook.asks.empty()) {
-    ImGui::Text("Empty orderbook for sym: %u", symbol_id_);
-    end_panel_window();
-    return;
+  // Debug: Show actual data counts
+  ImGui::Text("Debug: Bids: %zu, Asks: %zu, Spread: %.4f",
+              orderbook.bids.size(), orderbook.asks.size(), orderbook.spread);
+
+  if (!orderbook.asks.empty()) {
+    ImGui::Text("Debug: Top Ask: %.4f, Count (min): %d",
+                orderbook.asks[0].price,
+                std::min((int)orderbook.asks.size(), MAX_LEVELS));
+  } else {
+    ImGui::Text("Debug: Asks Empty!");
   }
 
+  if (orderbook.bids.empty() && orderbook.asks.empty()) {
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
+                       "Empty Orderbook Vectors!");
+  }
+
+  // Render Orderbook Ladder
   render_orderbook_ladder(orderbook);
   ImGui::Separator();
   render_market_depth_chart(orderbook);

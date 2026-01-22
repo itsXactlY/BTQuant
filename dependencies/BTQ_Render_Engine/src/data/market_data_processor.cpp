@@ -170,13 +170,73 @@ void MarketDataProcessor::processOrderbookUpdate(
 
     auto &symbol_data = symbol_analytics_[update_copy.symbol_id];
 
-    // Update orderbook data
+    // Aggregation Logic for L2 Updates
+    // -------------------------------------------------------------------------
+    // 1. Update Persistent State (Price -> Size)
+    // -------------------------------------------------------------------------
+    auto update_level_map = [](auto &map,
+                               const std::vector<PriceLevel> &levels) {
+      for (const auto &level : levels) {
+        if (level.size > 0) {
+          map[level.price] = level.size;
+        } else {
+          map.erase(level.price);
+        }
+      }
+    };
+
+    // Pruning Logic: "Smart Accumulation"
+    // If we receive a new Top Bid of 100, then any known Bid > 100 must be
+    // gone. If we receive a new Top Ask of 101, then any known Ask < 101 must
+    // be gone.
+    if (!update_copy.bids.empty()) {
+      double best_bid =
+          update_copy.bids.front().price; // Assumed sorted descending
+      // Remove known bids strictly greater than valid best bid
+      auto it = symbol_data.consolidated_bids.lower_bound(best_bid);
+      // lower_bound with active greater comparator returns first element <= key
+      // So begin() to lower_bound() covers elements > key
+      symbol_data.consolidated_bids.erase(symbol_data.consolidated_bids.begin(),
+                                          it);
+    }
+    if (!update_copy.asks.empty()) {
+      double best_ask =
+          update_copy.asks.front().price; // Assumed sorted ascending
+      // Remove known asks strictly less than valid best ask
+      auto it = symbol_data.consolidated_asks.lower_bound(best_ask);
+      // lower_bound with active less comparator returns first element >= key
+      // So begin() to lower_bound() covers elements < key
+      symbol_data.consolidated_asks.erase(symbol_data.consolidated_asks.begin(),
+                                          it);
+    }
+
+    update_level_map(symbol_data.consolidated_bids, update_copy.bids);
+    update_level_map(symbol_data.consolidated_asks, update_copy.asks);
+
+    // -------------------------------------------------------------------------
+    // 2. Generate Snapshot from Persistent State
+    // -------------------------------------------------------------------------
     OrderbookData orderbook;
     orderbook.timestamp = update_copy.timestamp;
-    orderbook.bids = update_copy.bids;
-    orderbook.asks = update_copy.asks;
 
-    // Calculate spread and depth
+    // Flatten maps to vectors for the UI (limit to top 50 for performance)
+    size_t count = 0;
+    for (const auto &[price, size] : symbol_data.consolidated_bids) {
+      orderbook.bids.push_back({price, size});
+      if (++count >= 50)
+        break;
+    }
+
+    count = 0;
+    for (const auto &[price, size] : symbol_data.consolidated_asks) {
+      orderbook.asks.push_back({price, size});
+      if (++count >= 50)
+        break;
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. Analytics
+    // -------------------------------------------------------------------------
     if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
       orderbook.spread = orderbook.asks[0].price - orderbook.bids[0].price;
       orderbook.spread_percent =
@@ -192,13 +252,30 @@ void MarketDataProcessor::processOrderbookUpdate(
                             std::max(orderbook.total_depth, 0.001);
     }
 
+    // DEBUG: Periodic logging to diagnose data flow
+    static uint64_t update_counter = 0;
+    if (update_counter++ % 100 == 0) {
+      std::cout << "[MDP] Update #" << update_counter
+                << " SymID: " << update_copy.symbol_id
+                << " InBids: " << update_copy.bids.size()
+                << " InAsks: " << update_copy.asks.size()
+                << " ConsBids: " << symbol_data.consolidated_bids.size()
+                << " ConsAsks: " << symbol_data.consolidated_asks.size()
+                << " OutBids: " << orderbook.bids.size() << std::endl;
+    }
+
     symbol_data.recent_orderbooks.push_back(orderbook);
 
     // Maintain window size
-    if (symbol_data.recent_orderbooks.size() > spread_analysis_window_ * 2) {
-      symbol_data.recent_orderbooks.erase(
-          symbol_data.recent_orderbooks.begin(),
-          symbol_data.recent_orderbooks.begin() + spread_analysis_window_);
+    if (symbol_data.recent_orderbooks.size() > 1) {
+      // Keep only the latest snapshot for display to save memory?
+      // Or keep history for charts? "spread_analysis_window_" likely used for
+      // charts.
+      if (symbol_data.recent_orderbooks.size() > spread_analysis_window_ * 2) {
+        symbol_data.recent_orderbooks.erase(
+            symbol_data.recent_orderbooks.begin(),
+            symbol_data.recent_orderbooks.end() - spread_analysis_window_);
+      }
     }
 
     // Update spread analytics

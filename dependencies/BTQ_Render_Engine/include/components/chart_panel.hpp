@@ -52,6 +52,8 @@ private:
 
   IndicatorConfig indicator_config_;
   bool follow_latest_ = true;
+  double last_view_min_ = 0.0;
+  double last_view_max_ = 0.0;
 
   void render_chart_controls();
   void render_indicator_selector();

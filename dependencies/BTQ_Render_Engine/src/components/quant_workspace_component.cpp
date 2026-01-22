@@ -90,6 +90,10 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       bool selection_changed = hierarchical_selector_.render(selector_state_);
 
       if (selection_changed && !selector_state_.selected_symbol.empty()) {
+        // CRITICAL: Propagate symbol to all panels (orderbook, etc.)
+        panel_manager_->set_active_symbol(selector_state_.selected_symbol_id,
+                                          selector_state_.selected_symbol);
+
         // Create or switch to chart for selected symbol/timeframe
         auto *chart_manager = panel_manager_->get_chart_manager();
         if (chart_manager) {

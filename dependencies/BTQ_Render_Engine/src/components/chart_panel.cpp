@@ -1,6 +1,8 @@
 #include "../../include/components/chart_panel.hpp"
+#include "imgui.h"
 #include "implot.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace BTQuant {
@@ -153,50 +155,120 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
     // Setup Axes
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
-                      ImPlotAxisFlags_AutoFit);
+                      ImPlotAxisFlags_None);
+    // SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
 
     // Auto-follow logic
     if (follow_latest_) {
       double time_max = chart.dates.back();
-      // Show last 300 units (seconds)
+      // Increased window to 1000 candles
       double duration_sec =
           RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
           1000000.0;
-      double window_size = std::max(duration_sec * 300.0, 10.0); // At least 10s
-      ImPlot::SetupAxisLimits(ImAxis_X1, time_max - window_size,
-                              time_max + window_size * 0.05, ImPlotCond_Always);
-      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 0, ImPlotCond_Always); // Auto-fit Y
+      double window_size = std::max(duration_sec * 1000.0, 10.0);
+
+      // Update cached limits for consistent logic
+      last_view_min_ = time_max - window_size;
+      last_view_max_ = time_max + window_size * 0.05;
+
+      ImPlot::SetupAxisLimits(ImAxis_X1, last_view_min_, last_view_max_,
+                              ImPlotCond_Always);
     } else {
-      // Manual mode: use Cond_Once for initial view
-      double time_min = chart.dates.front();
-      double time_max = chart.dates.back();
-      ImPlot::SetupAxisLimits(ImAxis_X1, time_min, time_max, ImPlotCond_Once);
-      ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 0, ImPlotCond_Once);
+      ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
+                              chart.dates.back(), ImPlotCond_Once);
     }
 
-    // Get current visible axis limits for viewport culling
-    ImPlotRect limits = ImPlot::GetPlotLimits();
-    double view_x_min = limits.X.Min;
-    double view_x_max = limits.X.Max;
+    // MANUAL Y-AXIS SCALING
+    // We must invoke SetupAxisLimits BEFORE GetPlotLimits to satisfy ImGui
+    // constraints. We use the limits from the *previous* frame (or
+    // auto-calculated above).
+    {
+      double view_x_min = last_view_min_;
+      double view_x_max = last_view_max_;
 
-    // Binary search for visible range
+      if (view_x_min == 0 && view_x_max == 0 && !chart.dates.empty()) {
+        view_x_min = chart.dates.front();
+        view_x_max = chart.dates.back();
+      }
+
+      // Binary search for visible range based on our ESTIMATE/CACHE
+      size_t start_idx = 0;
+      size_t end_idx = chart.dates.size();
+
+      auto lower =
+          std::lower_bound(chart.dates.begin(), chart.dates.end(), view_x_min);
+      if (lower != chart.dates.begin())
+        --lower;
+      start_idx = std::distance(chart.dates.begin(), lower);
+
+      auto upper =
+          std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
+      if (upper != chart.dates.end())
+        ++upper;
+      end_idx = std::distance(chart.dates.begin(), upper);
+
+      end_idx = std::min(end_idx, chart.dates.size());
+
+      if (start_idx < end_idx) {
+        float y_min = std::numeric_limits<float>::max();
+        float y_max = std::numeric_limits<float>::lowest();
+        bool found_data = false;
+
+        for (size_t i = start_idx; i < end_idx; ++i) {
+          float low = chart.lows[i];
+          float high = chart.highs[i];
+          if (low > 0 && high > 0) { // Valid data
+            if (low < y_min)
+              y_min = low;
+            if (high > y_max)
+              y_max = high;
+            found_data = true;
+          }
+        }
+
+        if (found_data) {
+          float range = y_max - y_min;
+          if (range == 0)
+            range = y_max * 0.01f;
+          if (range == 0)
+            range = 1.0f;
+
+          y_min -= range * 0.1f;
+          y_max += range * 0.1f;
+
+          ImPlot::SetupAxisLimits(ImAxis_Y1, y_min, y_max, ImPlotCond_Always);
+        }
+      }
+    }
+
+    // Now get the actual limits being used for THIS frame's rendering and NEXT
+    // frame's scaling This locks setup, so it must happen AFTER SetupAxisLimits
+    ImPlotRect limits = ImPlot::GetPlotLimits();
+
+    // Store for next frame
+    last_view_min_ = limits.X.Min;
+    last_view_max_ = limits.X.Max;
+
+    // Recalculate start/end for CULLING (Rendering optimization)
+    // We can reuse the indices if the view hasn't drifted much, but better to
+    // be precise for drawing
     size_t start_idx = 0;
     size_t end_idx = chart.dates.size();
+    {
+      auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(),
+                                    limits.X.Min);
+      if (lower != chart.dates.begin())
+        --lower;
+      start_idx = std::distance(chart.dates.begin(), lower);
 
-    auto lower =
-        std::lower_bound(chart.dates.begin(), chart.dates.end(), view_x_min);
-    if (lower != chart.dates.begin())
-      --lower;
-    start_idx = std::distance(chart.dates.begin(), lower);
-
-    auto upper =
-        std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
-    if (upper != chart.dates.end())
-      ++upper;
-    end_idx = std::distance(chart.dates.begin(), upper);
-
-    end_idx = std::min(end_idx, chart.dates.size());
+      auto upper = std::upper_bound(chart.dates.begin(), chart.dates.end(),
+                                    limits.X.Max);
+      if (upper != chart.dates.end())
+        ++upper;
+      end_idx = std::min((size_t)std::distance(chart.dates.begin(), upper),
+                         chart.dates.size());
+    }
 
     // Calculate candle width based on timeframe
     double duration_sec =
@@ -210,6 +282,11 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
     ImDrawList *draw_list = ImPlot::GetPlotDrawList();
 
+    // Calculate minimum pixel width for candles
+    // We need at least 3 pixels for a visible candle body
+    const float MIN_BODY_WIDTH_PX = 3.0f;
+    const float MIN_BODY_HEIGHT_PX = 1.0f;
+
     // Draw ONLY visible candles
     for (size_t i = start_idx; i < end_idx; ++i) {
       double x = chart.dates[i];
@@ -220,6 +297,10 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       float high = chart.highs[i];
       float low = chart.lows[i];
       float close = chart.closes[i];
+
+      // Skip invalid candles
+      if (high == 0 || low == 0 || open == 0 || close == 0)
+        continue;
 
       bool bullish = close >= open;
       ImU32 color =
@@ -234,6 +315,22 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
           ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
       ImVec2 body_br =
           ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
+
+      // Ensure minimum body width in pixels
+      float body_width = std::abs(body_br.x - body_tl.x);
+      if (body_width < MIN_BODY_WIDTH_PX) {
+        float extra = (MIN_BODY_WIDTH_PX - body_width) / 2.0f;
+        body_tl.x -= extra;
+        body_br.x += extra;
+      }
+
+      // Ensure minimum body height in pixels (for doji candles)
+      float body_height = std::abs(body_br.y - body_tl.y);
+      if (body_height < MIN_BODY_HEIGHT_PX) {
+        float mid_y = (body_tl.y + body_br.y) / 2.0f;
+        body_tl.y = mid_y - MIN_BODY_HEIGHT_PX / 2.0f;
+        body_br.y = mid_y + MIN_BODY_HEIGHT_PX / 2.0f;
+      }
 
       // Draw wick (vertical line)
       draw_list->AddLine(wick_top, wick_bot, wick_color, 1.0f);

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <functional>
 #include <future>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -141,6 +142,12 @@ struct SymbolAnalytics {
   // Trade size analytics
   double avg_trade_size = 0.0;
   uint64_t large_trade_count = 0; // Trades > 2x average size
+
+  // L2 Orderbook Aggregation (Price -> Size)
+  // We use functional comparators: std::greater for Bids (Desc), std::less for
+  // Asks (Asc)
+  std::map<double, double, std::greater<double>> consolidated_bids;
+  std::map<double, double, std::less<double>> consolidated_asks;
 
   // Orderbook analytics
   std::vector<OrderbookData> recent_orderbooks;

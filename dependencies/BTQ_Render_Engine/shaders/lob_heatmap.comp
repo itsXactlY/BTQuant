@@ -43,6 +43,10 @@ layout(std140, set = 1, binding = 0) uniform HeatmapParams {
     bool invertYAxis;       // Invert Y-axis (price increasing downward)
 } params;
 
+// Specialization constants for heatmap parameters
+layout(constant_id = 0) const uint MAX_LIQUIDITY = 1000;
+layout(constant_id = 1) const bool INVERT_Y_AXIS = true;
+
 // ========================================
 // Constants
 // ========================================
@@ -84,10 +88,14 @@ vec3 liquidityToColor(float liquidity) {
 // Main Compute Shader Entry
 // ========================================
 
+// Shared memory for intermediate calculations
+shared float sharedLiquidity[16];
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 void main() {
     uvec2 threadIndex = gl_GlobalInvocationID.xy;
+    uvec2 localIndex = gl_LocalInvocationID.xy;
     
     // Check if thread is within heatmap bounds
     if (threadIndex.x >= params.width || threadIndex.y >= params.height) {
@@ -107,13 +115,20 @@ void main() {
     float minDistance = 1e9;
     float totalLiquidity = 0.0;
     
-    for (uint i = 0; i < orderBook.priceLevelsCount; i++) {
+    // Use shared memory for intermediate calculations
+    for (uint i = localIndex.x; i < orderBook.priceLevelsCount; i += 16) {
         float distance = abs(orderBook.levels[i].price - targetPrice);
         if (distance < minDistance) {
             minDistance = distance;
             totalLiquidity = orderBook.levels[i].askQuantity + orderBook.levels[i].bidQuantity;
         }
     }
+    
+    // Store in shared memory
+    sharedLiquidity[localIndex.x] = totalLiquidity;
+    
+    // Barrier to ensure all threads have written to shared memory
+    barrier();
     
     // Compute pixel color
     vec3 color = liquidityToColor(totalLiquidity);

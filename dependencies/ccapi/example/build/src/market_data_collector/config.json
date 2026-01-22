@@ -47,10 +47,10 @@
             "market_type": "spot"
         }
     ],
-    "trade_buffer_size": 1000,
-    "candle_buffer_size": 200,
-    "orderbook_buffer_size": 100,
-    "flush_interval_ms": 1000,
+    "trade_buffer_size": 1000000,
+    "candle_buffer_size": 200000,
+    "orderbook_buffer_size": 1000000,
+    "flush_interval_ms": 1,
     "stats_report_interval_s": 10,
     "enable_mssql": true,
     "enable_exclusive_hotspine": true,
@@ -58,7 +58,7 @@
         "num_worker_threads": 16
     },
     "warmup_config": {
-        "batch_size": 20,
+        "batch_size": 200,
         "startup_delay_ms": 5000,
         "wait_for_connection": true
     },

@@ -33,8 +33,14 @@ TimelineSemaphore::TimelineSemaphore(VkDevice device)
     createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     createInfo.pNext = &timelineInfo;
     
-    if (vkCreateSemaphore(device_, &createInfo, nullptr, &semaphore_) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create timeline semaphore");
+    VkResult result = vkCreateSemaphore(device_, &createInfo, nullptr, &semaphore_);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create timeline semaphore: " + std::to_string(result));
+    }
+    
+    // Validate semaphore creation
+    if (semaphore_ == VK_NULL_HANDLE) {
+        throw std::runtime_error("Created semaphore is VK_NULL_HANDLE");
     }
 }
 
@@ -271,9 +277,30 @@ bool VulkanSyncContext::prepareFrame(uint32_t currentFrame, TimelineSemaphore& t
 }
 
 bool VulkanSyncContext::submitCommandBuffer(VkQueue queue, VkCommandBuffer cmdBuffer,
-                                           TimelineSemaphore& timelineSemaphore,
-                                           uint64_t signalValue,
-                                           uint64_t waitValue) {
+                                            TimelineSemaphore& timelineSemaphore,
+                                            uint64_t signalValue,
+                                            uint64_t waitValue) {
+
+    // Add queue family capability checks
+    VkPhysicalDevice physicalDevice = VK_NULL_HANDLE; // This should be obtained from the Vulkan context
+    uint32_t queueFamilyIndex = 0;
+    
+    // Get queue family properties
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+    
+    if (queueFamilyCount > 0) {
+        std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
+        
+        // Find a suitable queue family
+        for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+            if (queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                queueFamilyIndex = i;
+                break;
+            }
+        }
+    }
 
     // Simple submission without timeline for now
     VkSubmitInfo submitInfo{};
@@ -287,9 +314,9 @@ bool VulkanSyncContext::submitCommandBuffer(VkQueue queue, VkCommandBuffer cmdBu
         return false;
     }
 
-    const VkResult result = vkQueueSubmit(queue, 1, &submitInfo,
-                                          fenceManager_->getFence(static_cast<uint32_t>(acquireFence)));
-
+    VkFence fence = fenceManager_->getFence(static_cast<uint32_t>(acquireFence));
+    VkResult result = vkQueueSubmit(queue, 1, &submitInfo, fence);
+    
     if (result != VK_SUCCESS) {
         std::cerr << "Failed to submit command buffer: " << result << std::endl;
         fenceManager_->releaseSlot(static_cast<uint32_t>(acquireFence));

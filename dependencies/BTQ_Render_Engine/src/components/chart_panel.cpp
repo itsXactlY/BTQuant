@@ -7,6 +7,29 @@
 
 namespace BTQuant {
 
+static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
+  switch (tf) {
+  case RenderEngine::TimeFrame::TF_1MS:
+    return "1ms";
+  case RenderEngine::TimeFrame::TF_10MS:
+    return "10ms";
+  case RenderEngine::TimeFrame::TF_100MS:
+    return "100ms";
+  case RenderEngine::TimeFrame::TF_500MS:
+    return "500ms";
+  case RenderEngine::TimeFrame::TF_1SEC:
+    return "1s";
+  case RenderEngine::TimeFrame::TF_3SEC:
+    return "3s";
+  case RenderEngine::TimeFrame::TF_5SEC:
+    return "5s";
+  case RenderEngine::TimeFrame::TF_15SEC:
+    return "15s";
+  default:
+    return "Unknown";
+  }
+}
+
 ChartPanel::ChartPanel(
     const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
@@ -64,6 +87,8 @@ void ChartPanel::set_symbol(const std::string &symbol,
                             const std::string &exchange) {
   symbol_ = symbol;
   exchange_ = exchange;
+  config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
+
   // Recreate chart with new symbol
   if (chart_id_ != 0) {
     chart_manager_->destroy_chart(chart_id_);
@@ -73,6 +98,8 @@ void ChartPanel::set_symbol(const std::string &symbol,
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
   timeframe_ = timeframe;
+  config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
+
   // Recreate chart with new timeframe
   if (chart_id_ != 0) {
     chart_manager_->destroy_chart(chart_id_);

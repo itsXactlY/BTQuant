@@ -78,6 +78,18 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("Tools")) {
+      if (ImGui::MenuItem("Clear Dashboard History")) {
+        if (market_data_processor_) {
+          market_data_processor_->clearHistory();
+        }
+      }
+      ImGui::EndMenu();
+    }
+    ImGui::EndMainMenuBar();
+  }
+
   // Process updates and UI
   float dt = m_vulkanCore->get_frame_time_ms() / 1000.0f;
   if (m_workspace) {
@@ -100,6 +112,12 @@ bool VulkanDashboard::should_close() const {
 }
 
 void VulkanDashboard::shutdown() {
+  static bool already_shutdown = false;
+  if (already_shutdown) {
+    return;
+  }
+  already_shutdown = true;
+
   std::cout << "[VulkanDashboard] Shutting down..." << std::endl;
 
   if (m_vulkanCore) {
@@ -108,6 +126,8 @@ void VulkanDashboard::shutdown() {
 
   m_workspace.reset();
 
+  ImGui_ImplVulkan_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
   ImPlot::DestroyContext();
   ImGui::DestroyContext();
 

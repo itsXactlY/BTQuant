@@ -8,8 +8,10 @@ void PanelBase::begin_panel_window() {
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-  if (!config_.resizable) flags |= ImGuiWindowFlags_NoResize;
-  if (!config_.movable) flags |= ImGuiWindowFlags_NoMove;
+  if (!config_.resizable)
+    flags |= ImGuiWindowFlags_NoResize;
+  if (!config_.movable)
+    flags |= ImGuiWindowFlags_NoMove;
 
   // Professional styling
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
@@ -17,9 +19,11 @@ void PanelBase::begin_panel_window() {
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive,
+                        ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
 
-  std::string window_title = config_.title + "###panel_" + std::to_string(reinterpret_cast<uintptr_t>(this));
+  std::string window_title = config_.title + "###panel_" +
+                             std::to_string(reinterpret_cast<uintptr_t>(this));
   ImGui::Begin(window_title.c_str(), &config_.visible, flags);
 }
 
@@ -48,25 +52,38 @@ void PanelBase::render() {
 
 void PanelBase::render_panel_header() {
   // Panel type indicator
-  const char* type_name = get_panel_type_name(config_.type);
+  const char *type_name = get_panel_type_name(config_.type);
   ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "[%s]", type_name);
   ImGui::SameLine();
   ImGui::Separator();
 }
 
-const char* PanelBase::get_panel_type_name(PanelType type) {
+const char *PanelBase::get_panel_type_name(PanelType type) {
   switch (type) {
-    case PanelType::CHART: return "Chart";
-    case PanelType::METRICS: return "Metrics";
-    case PanelType::HEATMAP: return "Heatmap";
-    case PanelType::HISTOGRAM: return "Histogram";
-    case PanelType::SCATTER_PLOT: return "Scatter";
-    case PanelType::TIME_SERIES: return "Time Series";
-    case PanelType::TRADING_ORDERS: return "Orders";
-    case PanelType::TRADING_POSITIONS: return "Positions";
-    case PanelType::RISK_METRICS: return "Risk";
-    case PanelType::ALERTS: return "Alerts";
-    default: return "Unknown";
+  case PanelType::CHART:
+    return "Chart";
+  case PanelType::METRICS:
+    return "Metrics";
+  case PanelType::HEATMAP:
+    return "Heatmap";
+  case PanelType::HISTOGRAM:
+    return "Histogram";
+  case PanelType::SCATTER_PLOT:
+    return "Scatter";
+  case PanelType::TIME_SERIES:
+    return "Time Series";
+  case PanelType::TRADING_ORDERS:
+    return "Orders";
+  case PanelType::TRADING_POSITIONS:
+    return "Positions";
+  case PanelType::RISK_METRICS:
+    return "Risk";
+  case PanelType::ALERTS:
+    return "Alerts";
+  case PanelType::ORDERBOOK:
+    return "Orderbook";
+  default:
+    return "Unknown";
   }
 }
 

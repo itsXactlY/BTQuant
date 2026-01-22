@@ -71,3 +71,4 @@ Example_*.py
 dependencies/datacollector/market_data_collector
 discord_architect.py
 
+plans/

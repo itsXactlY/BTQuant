@@ -161,6 +161,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
   }
 
   // Incremental Update Logic: Only append or update the latest candle
+  size_t start_idx = 0;
   if (chart.dates.empty()) {
     chart.dates.reserve(candles.size());
     chart.opens.reserve(candles.size());
@@ -179,13 +180,15 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     }
   } else {
     double last_stored_ts = chart.dates.back();
-    size_t start_idx = 0;
     bool found_overlap = false;
 
     // Search from the end for the last matching candle
     for (int i = (int)candles.size() - 1; i >= 0; --i) {
       double candle_ts = static_cast<double>(candles[i].timestamp) / 1000000.0;
-      if (std::abs(candle_ts - last_stored_ts) < 0.000001) {
+      // Precision-safe comparison for Unix timestamps in seconds (approx 1.7e9)
+      // Double precision is sufficient for ~0.001s, but let's be robust (1ms =
+      // 1e-3)
+      if (std::abs(candle_ts - last_stored_ts) < 0.001) {
         // Update the last candle as it might still be aggregating
         chart.opens.back() = static_cast<float>(candles[i].open);
         chart.highs.back() = static_cast<float>(candles[i].high);
@@ -199,36 +202,34 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     }
 
     if (!found_overlap) {
-      // Data gap or reset, clear and re-populate
-      chart.dates.clear();
-      chart.opens.clear();
-      chart.highs.clear();
-      chart.lows.clear();
-      chart.closes.clear();
-      chart.volumes.clear();
-      for (const auto &candle : candles) {
-        chart.dates.push_back(static_cast<double>(candle.timestamp) /
-                              1000000.0);
-        chart.opens.push_back(static_cast<float>(candle.open));
-        chart.highs.push_back(static_cast<float>(candle.high));
-        chart.lows.push_back(static_cast<float>(candle.low));
-        chart.closes.push_back(static_cast<float>(candle.close));
-        chart.volumes.push_back(static_cast<float>(candle.volume));
-      }
-    } else {
-      // Append ONLY new candles
-      for (size_t i = start_idx; i < candles.size(); ++i) {
-        chart.dates.push_back(static_cast<double>(candles[i].timestamp) /
-                              1000000.0);
-        chart.opens.push_back(static_cast<float>(candles[i].open));
-        chart.highs.push_back(static_cast<float>(candles[i].high));
-        chart.lows.push_back(static_cast<float>(candles[i].low));
-        chart.closes.push_back(static_cast<float>(candles[i].close));
-        chart.volumes.push_back(static_cast<float>(candles[i].volume));
+      // If we didn't find an overlap, it could be a gap or a reset.
+      // APPEND if the new data is strictly after our last data.
+      if (!candles.empty() &&
+          (static_cast<double>(candles[0].timestamp) / 1000000.0 >
+           last_stored_ts)) {
+        start_idx = 0; // Prepare to append everything from the new batch
+      } else {
+        // Real reset or backwards jump, clear and re-populate
+        chart.dates.clear();
+        chart.opens.clear();
+        chart.highs.clear();
+        chart.lows.clear();
+        chart.closes.clear();
+        chart.volumes.clear();
+        start_idx = 0;
       }
     }
+  }
 
-    // NO LIMIT - keep all candles for full HotSpine data
+  // Append ONLY new candles (or all if reset/gap)
+  for (size_t i = start_idx; i < candles.size(); ++i) {
+    chart.dates.push_back(static_cast<double>(candles[i].timestamp) /
+                          1000000.0);
+    chart.opens.push_back(static_cast<float>(candles[i].open));
+    chart.highs.push_back(static_cast<float>(candles[i].high));
+    chart.lows.push_back(static_cast<float>(candles[i].low));
+    chart.closes.push_back(static_cast<float>(candles[i].close));
+    chart.volumes.push_back(static_cast<float>(candles[i].volume));
   }
 }
 

@@ -118,6 +118,9 @@ public:
 
 private:
   VkDevice device_;
+  VkPhysicalDevice physical_device_;
+  VkBufferUsageFlags usage_;
+  VkMemoryPropertyFlags properties_;
   VkBuffer pool_buffer_;
   VkDeviceMemory pool_memory_;
   void *mapped_ptr_;
@@ -130,6 +133,8 @@ private:
   };
   std::vector<FreeBlock> free_blocks_;
   std::mutex allocation_mutex_;
+  std::vector<VkBuffer> cleanup_buffers_;
+  std::vector<VkDeviceMemory> cleanup_memories_;
 
   uint32_t find_memory_type(VkPhysicalDevice physical_device,
                             uint32_t type_filter,
@@ -164,6 +169,7 @@ public:
 
 private:
   VkDevice device_;
+  VkPhysicalDevice physical_device_;
   std::unique_ptr<MemoryPool> vertex_pool_;
   std::unique_ptr<MemoryPool> uniform_pool_;
   std::unique_ptr<MemoryPool> storage_pool_;

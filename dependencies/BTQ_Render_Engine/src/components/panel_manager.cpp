@@ -49,7 +49,10 @@ void PanelManager::update(float dt) {
 
 void PanelManager::render() {
   // Update dashboard size
-  dashboard_size_ = ImGui::GetIO().DisplaySize;
+  ImVec2 current_size = ImGui::GetIO().DisplaySize;
+  if (current_size.x > 0 && current_size.y > 0) {
+    dashboard_size_ = current_size;
+  }
 
   for (auto &[id, panel] : panels_) {
     if (panel->is_visible()) {

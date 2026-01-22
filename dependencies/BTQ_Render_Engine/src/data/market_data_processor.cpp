@@ -96,19 +96,11 @@ void MarketDataProcessor::processQueueLoop() {
         // (Re-implementation inline for context or calling a private helper?
         //  Let's inline the critical parts for the tool call limit)
 
-        // Pruning & Aggregation Logic
-        if (!update.bids.empty()) {
-          double best = update.bids.front().price;
-          auto it = symbol_data.consolidated_bids.lower_bound(best);
-          symbol_data.consolidated_bids.erase(
-              symbol_data.consolidated_bids.begin(), it);
-        }
-        if (!update.asks.empty()) {
-          double best = update.asks.front().price;
-          auto it = symbol_data.consolidated_asks.lower_bound(best);
-          symbol_data.consolidated_asks.erase(
-              symbol_data.consolidated_asks.begin(), it);
-        }
+        // Orderbook Processing
+        // Since HotSpine provides snapshots, we clear existing maps to avoid
+        // stale levels
+        symbol_data.consolidated_bids.clear();
+        symbol_data.consolidated_asks.clear();
 
         auto update_map = [](auto &map, const auto &levels) {
           for (const auto &l : levels) {
@@ -321,6 +313,10 @@ void MarketDataProcessor::updateVWAP(SymbolAnalytics &symbol_data) {
 
   for (size_t i = start_idx; i < symbol_data.recent_trades.size(); ++i) {
     const auto &trade = symbol_data.recent_trades[i];
+    // Validate trade data
+    if (trade.price <= 0 || trade.size <= 0) {
+      continue;
+    }
     total_volume += trade.size;
     total_value += trade.price * trade.size;
   }
@@ -330,8 +326,10 @@ void MarketDataProcessor::updateVWAP(SymbolAnalytics &symbol_data) {
 
     // Calculate VWAP deviation
     double current_price = symbol_data.recent_trades.back().price;
-    symbol_data.vwap_deviation =
-        ((current_price - symbol_data.vwap) / symbol_data.vwap) * 100.0;
+    if (current_price > 0 && symbol_data.vwap > 0) {
+      symbol_data.vwap_deviation =
+          ((current_price - symbol_data.vwap) / symbol_data.vwap) * 100.0;
+    }
   }
 
   // Update volume metrics
@@ -526,7 +524,9 @@ double MarketDataProcessor::calculateMarketDepth(
   // Calculate depth for first 5 levels (or all if less than 5)
   size_t max_levels = std::min(levels.size(), size_t(5));
   for (size_t i = 0; i < max_levels; ++i) {
-    total_depth += levels[i].price * levels[i].size;
+    if (levels[i].price > 0 && levels[i].size > 0) {
+      total_depth += levels[i].price * levels[i].size;
+    }
   }
 
   return total_depth;
@@ -546,7 +546,9 @@ double MarketDataProcessor::calculateVolumeInWindow(
     if (it->timestamp < window_start) {
       break;
     }
-    volume += it->size;
+    if (it->size > 0) {
+      volume += it->size;
+    }
   }
 
   return volume;
@@ -737,6 +739,17 @@ MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
     return it->second.recent_orderbooks.back();
   }
 
+  static uint64_t fail_count = 0;
+  if (symbol_id != 0 && fail_count++ % 1000 == 0) {
+    std::cout << "[Processor] getOrderbookData: Sym=" << symbol_id
+              << " Found=" << (it != shard.data.end() ? "Yes" : "No")
+              << " Empty="
+              << (it != shard.data.end()
+                      ? (it->second.recent_orderbooks.empty() ? "Yes" : "No")
+                      : "N/A")
+              << std::endl;
+  }
+
   return std::nullopt;
 }
 
@@ -804,6 +817,14 @@ void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
           createNewCandle(candle_start, trade.price, trade.size);
     }
   }
+}
+
+void MarketDataProcessor::clearHistory() {
+  for (auto &shard : shards_) {
+    std::unique_lock<std::shared_mutex> lock(shard->mutex);
+    shard->data.clear();
+  }
+  std::cout << "[Processor] History cleared for all shards." << std::endl;
 }
 
 } // namespace RenderEngine

@@ -36,7 +36,8 @@ bool HotSpineDataBridge::start() {
     std::cerr << "[HotSpineDataBridge] ERROR: Failed to open shared memory '"
               << m_shm_path << "': " << strerror(errno) << std::endl;
     std::cerr << "  Make sure HotSpine data feed is running!" << std::endl;
-    return false; // FAIL - require real data
+    throw std::runtime_error("Failed to open shared memory: " +
+                             std::string(strerror(errno)));
   }
 
   // Get the size
@@ -46,7 +47,7 @@ bool HotSpineDataBridge::start() {
               << std::endl;
     close(m_shm_fd);
     m_shm_fd = -1;
-    return false;
+    throw std::runtime_error("Failed to fstat shared memory");
   }
   m_shm_size = sb.st_size;
 
@@ -58,7 +59,7 @@ bool HotSpineDataBridge::start() {
               << std::endl;
     close(m_shm_fd);
     m_shm_fd = -1;
-    return false;
+    throw std::runtime_error("Failed to mmap shared memory");
   }
 
   // Initialize pointers
@@ -79,7 +80,7 @@ bool HotSpineDataBridge::start() {
     m_header = nullptr;
     close(m_shm_fd);
     m_shm_fd = -1;
-    return false; // FAIL - don't fall back to simulation
+    throw std::runtime_error("Invalid magic number in shared memory");
   }
 
   // Calculate ring buffer positions
@@ -159,16 +160,42 @@ void HotSpineDataBridge::sync_shm() {
               << m_last_read_idx << " End: " << write_idx << std::endl;
   }
 
-  // Batch processing for maximum performance
+  // Periodic debug: Show sync progress every 5 seconds
+  static uint64_t last_debug_time = 0;
+  uint64_t now = std::chrono::duration_cast<std::chrono::seconds>(
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
+  if (now - last_debug_time >= 5) {
+    std::cout << "[sync_shm] Trade W=" << write_idx << " R=" << m_last_read_idx
+              << " Book W="
+              << __atomic_load_n(&m_header->orderbook_write_index,
+                                 __ATOMIC_ACQUIRE)
+              << " R=" << m_last_book_read_idx << std::endl;
+    last_debug_time = now;
+  }
+
+  // Batch processing
   std::vector<RenderEngine::MarketDataUpdate> trade_batch;
   const uint64_t BATCH_SIZE = 100000;
   trade_batch.reserve(BATCH_SIZE);
+
+  // Timestamp reasonable filter: Jan 1st 2024 = 1704067200 sec -> 1.704e15
+  // micros
+  const uint64_t MIN_VALID_TS = 1704067200000000ULL;
 
   while (m_last_read_idx < write_idx) {
     const HotTrade &trade = m_trades[m_last_read_idx % capacity];
 
     // SANITY CHECK: Skip uninitialized or corrupt trades
-    if (trade.ts_exchange == 0) {
+    if (trade.ts_exchange < MIN_VALID_TS) {
+      m_last_read_idx++;
+      continue;
+    }
+
+    // Validate trade data
+    if (trade.price <= 0 || trade.size <= 0) {
+      std::cerr << "[HotSpineDataBridge] WARNING: Invalid trade data - price: "
+                << trade.price << ", size: " << trade.size << std::endl;
       m_last_read_idx++;
       continue;
     }
@@ -211,19 +238,28 @@ void HotSpineDataBridge::sync_shm() {
       __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE);
   uint64_t book_capacity = m_header->orderbook_capacity;
 
-  uint64_t books_to_process = (book_write_idx > m_last_book_read_idx)
-                                  ? (book_write_idx - m_last_book_read_idx)
-                                  : 0;
-
-  // Catch-up logic for books
-  if (m_last_book_read_idx == 0 && books_to_process > 100) {
-    m_last_book_read_idx = book_write_idx - 20;
-    std::cout << "[sync_shm] Book catch-up to " << m_last_book_read_idx
-              << std::endl;
+  // Catch-up logic for books: Process ALL available history on first run
+  if (m_last_book_read_idx == 0 && book_write_idx > 0) {
+    if (book_write_idx > book_capacity) {
+      m_last_book_read_idx = book_write_idx - book_capacity;
+    } else {
+      m_last_book_read_idx = 0;
+    }
+    std::cout << "[sync_shm] Orderbook Full Sync from " << m_last_book_read_idx
+              << " to " << book_write_idx << std::endl;
   }
 
-  if (books_to_process > 500) {
-    m_last_book_read_idx = book_write_idx - 50;
+  // CRITICAL FIX: Detect ring buffer wraparound
+  // If our read pointer is ahead of the write pointer, the buffer has wrapped
+  if (m_last_book_read_idx > book_write_idx) {
+    // Reset read pointer to catch up with the wrapped write pointer
+    if (book_write_idx > book_capacity / 4) {
+      m_last_book_read_idx = book_write_idx - (book_capacity / 4);
+    } else {
+      m_last_book_read_idx = 0;
+    }
+    std::cout << "[sync_shm] Book buffer wraparound detected. Reset R="
+              << m_last_book_read_idx << " W=" << book_write_idx << std::endl;
   }
 
   // Process ALL available orderbooks in the buffer
@@ -231,21 +267,55 @@ void HotSpineDataBridge::sync_shm() {
     const HotOrderbookSnapshot &snap =
         m_books[m_last_book_read_idx % book_capacity];
 
+    // LOG snapshots occasionally to verify data is arriving
+    static uint64_t snap_processed = 0;
+    if (snap_processed++ % 5000 == 0) {
+      std::cout << "[OrderbookBridge] Sync: Sym=" << snap.symbol_id
+                << " Bids=" << (int)snap.bids_count
+                << " Asks=" << (int)snap.asks_count << std::endl;
+    }
+
+    // Timestamp reasonable filter
+    // Timestamp handling with fallback
+    uint64_t final_timestamp = snap.ts_exchange;
+    const uint64_t MIN_VALID_TS = 1704067200000000ULL;
+
+    if (final_timestamp < MIN_VALID_TS) {
+      // Fallback to system time
+      final_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
+    }
+
+    // Validate symbol ID (0 is often uninitialized in SHM)
+    if (snap.symbol_id == 0) {
+      m_last_book_read_idx++;
+      continue;
+    }
+
     // Direkte Weitergabe an MarketDataProcessor
     RenderEngine::MarketDataUpdate update;
     update.type = RenderEngine::MarketDataType::ORDERBOOK;
     update.symbol_id = snap.symbol_id;
-    update.timestamp = snap.ts_exchange;
+    update.timestamp = final_timestamp;
 
     // Konvertiere Orderbook-Ebenen
-    for (int i = 0; i < snap.bids_count; ++i) {
+    int safe_bids_count = std::min((int)snap.bids_count, 20);
+    for (int i = 0; i < safe_bids_count; ++i) {
+      if (snap.bids[i].price <= 0 || snap.bids[i].size <= 0)
+        continue;
+
       PriceLevel level;
       level.price = snap.bids[i].price;
       level.size = snap.bids[i].size;
       update.bids.push_back(level);
     }
 
-    for (int i = 0; i < snap.asks_count; ++i) {
+    int safe_asks_count = std::min((int)snap.asks_count, 20);
+    for (int i = 0; i < safe_asks_count; ++i) {
+      if (snap.asks[i].price <= 0 || snap.asks[i].size <= 0)
+        continue;
+
       PriceLevel level;
       level.price = snap.asks[i].price;
       level.size = snap.asks[i].size;

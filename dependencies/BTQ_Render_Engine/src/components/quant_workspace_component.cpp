@@ -40,7 +40,13 @@ void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore *core) {
   // Panel system handles its own Vulkan resources
 }
 
-void QuantWorkspaceComponent::update(float dt) { panel_manager_->update(dt); }
+void QuantWorkspaceComponent::update(float dt) {
+  // Sync data from shared memory on every frame
+  if (bridge_) {
+    bridge_->sync();
+  }
+  panel_manager_->update(dt);
+}
 
 void QuantWorkspaceComponent::render_gui() {
   // Docking not supported in this branch of ImGui.

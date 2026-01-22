@@ -260,6 +260,11 @@ public:
   std::vector<uint32_t> getActiveSymbols() const;
 
   /**
+   * Clear all historical data (e.g. for resets)
+   */
+  void clearHistory();
+
+  /**
    * Get performance metrics for the processor (thread-safe)
    * @return Current performance metrics
    */

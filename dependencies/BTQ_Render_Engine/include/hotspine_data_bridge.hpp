@@ -4,9 +4,10 @@
 #include <atomic>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -62,9 +63,10 @@ struct SharedMemoryHeader {
 struct InstrumentStore {
   std::string symbol;
   std::string exchange;
-  uint32_t symbol_id = 0;
+  std::atomic<uint32_t> symbol_id{0};
 
   // Structure of Arrays (SoA) for ImPlot compatibility & high-throughput
+  // Lock-free access assuming single-writer, multiple-reader pattern
   std::vector<double> timestamps;
   std::vector<double> opens;
   std::vector<double> highs;
@@ -72,16 +74,36 @@ struct InstrumentStore {
   std::vector<double> closes;
   std::vector<double> volumes;
 
-  // Volume Profile (Price -> Cumulative Volume)
+  // Volume Profile (Price -> Cumulative Volume) - Lock-free updates
   std::map<double, double> m_vol_profile;
 
-  // Latest Snapshot for Heatmap/Orderbook
-  HotOrderbookSnapshot latest_snapshot;
-
-  // Thread-safe access for the UI thread
-  mutable std::mutex data_mutex;
+  // Latest Snapshot for Heatmap/Orderbook - Atomic for thread-safety
+  std::atomic<HotOrderbookSnapshot*> latest_snapshot{nullptr};
 
   InstrumentStore() = default;
+  ~InstrumentStore() {
+    if (latest_snapshot.load()) {
+      delete latest_snapshot.load();
+    }
+  }
+
+  // Copy constructor for lock-free duplication
+  InstrumentStore(const InstrumentStore& other) {
+    symbol = other.symbol;
+    exchange = other.exchange;
+    symbol_id.store(other.symbol_id.load());
+    timestamps = other.timestamps;
+    opens = other.opens;
+    highs = other.highs;
+    lows = other.lows;
+    closes = other.closes;
+    volumes = other.volumes;
+    m_vol_profile = other.m_vol_profile;
+    HotOrderbookSnapshot* snap = other.latest_snapshot.load();
+    if (snap) {
+      latest_snapshot.store(new HotOrderbookSnapshot(*snap));
+    }
+  }
 };
 
 // ============================================================================
@@ -118,6 +140,7 @@ private:
   size_t m_shm_size = 0;
 
   std::atomic<bool> m_running{false};
+  std::jthread m_sync_thread; // Real-time sync thread
 
   // Ring Buffer Pointers
   SharedMemoryHeader *m_header = nullptr;
@@ -125,10 +148,11 @@ private:
   HotOrderbookSnapshot *m_books = nullptr;
 
   // Local tracking of read progress
-  uint64_t m_last_read_idx = 0;
-  uint64_t m_last_book_read_idx = 0;
+  std::atomic<uint64_t> m_last_read_idx{0};
+  std::atomic<uint64_t> m_last_book_read_idx{0};
 
   void sync_shm();
+  void sync_loop(); // Real-time sync loop with high priority
 };
 
 } // namespace BTQuant

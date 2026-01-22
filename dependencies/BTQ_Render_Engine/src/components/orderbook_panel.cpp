@@ -21,7 +21,13 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id,
   config_.title = symbol_name + " Orderbook";
 }
 
-void OrderbookPanel::update(float dt) { (void)dt; }
+void OrderbookPanel::update(float dt) {
+    // Request data update from data bridge
+    bridge_->sync();
+    
+    // The MarketDataProcessor will handle the actual data processing
+    // through its internal worker threads and lock-free queue
+}
 
 void OrderbookPanel::render() {
   begin_panel_window();
@@ -191,93 +197,56 @@ void OrderbookPanel::render_market_depth_chart(
   if (ImPlot::BeginPlot("##Depth", ImVec2(-1, 150), ImPlotFlags_CanvasOnly)) {
     ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_AutoFit,
                       ImPlotAxisFlags_AutoFit);
-    // Auto-fit Y axis to show both sides regardless of imbalance
 
-    // Bids (Green) - Descending prices usually, but ImPlot expects sorted X?
-    // Actually depth charts usually have X=Price.
-    // Bids: High Price -> Low Price.
-    // For rendering as a filled area, we need X in order or well defined.
-    // Let's create a stepped look.
+    // Handle Bids - Cumulative depth from best bid down
     std::vector<double> bx, by;
-    double cum = 0;
-
-    // Add point mapping from lowest bid to highest bid?
-    // Usually depth chart: Bids on left, Asks on right.
-    // Bids: from (Price * 0.9, TotalDepth) to (BestBid, 0) ?
-    // No, standard is X=Price, Y=Depth.
-    // Best Bid (Target Price). Y goes up.
-
-    // For L1 (Single Point):
-    // Bid @ 100, Size 10.
-    // We want a block from 99.5 to 100 with height 10.
-
-    // Handle Bids
     if (!orderbook.bids.empty()) {
-      const auto &best_bid = orderbook.bids[0];      // Highest bid
-      const auto &worst_bid = orderbook.bids.back(); // Lowest bid
-
-      // Far left point (extension)
-      bx.push_back(worst_bid.price * 0.995);
-      by.push_back(orderbook.total_depth); // Full depth
-
-      cum = 0;
-      // Reversed iteration for accumulation if we want total?
-      // No, standard is Best -> Worst accumulation.
-      // But for plotting X (Price) increasing: Worst -> Best.
-
-      // Let's stick to simple: Plot points.
-      for (auto it = orderbook.bids.rbegin(); it != orderbook.bids.rend();
-           ++it) {
+      double cumulative_depth = 0.0;
+      
+      // Add points from worst bid to best bid for increasing X-axis
+      for (auto it = orderbook.bids.rbegin(); it != orderbook.bids.rend(); ++it) {
+        cumulative_depth += it->size;
         bx.push_back(it->price);
-        // Cumulative sum logic - this depends on how we want to visualize.
-        // Simplified: Just plot the levels.
-        // For correct depth chart: Sum from Best to Worst.
-        // But we are plotting Worst to Best (X increasing).
-        // So Y at Worst = Total Size. Y at Best = Size at Best.
-        // Let's just plot the L1 block for now.
+        by.push_back(cumulative_depth);
       }
 
-      // Correction: Valid Depth Chart for L1
-      // Point 1: (BestBid * 0.999, Size)
-      // Point 2: (BestBid, Size)
-      // Point 3: (BestBid, 0)
-      bx.clear();
-      by.clear();
+      // Extend to left for visual completeness
+      const auto &worst_bid = orderbook.bids.back();
+      bx.insert(bx.begin(), worst_bid.price * 0.995);
+      by.insert(by.begin(), cumulative_depth);
 
-      // Extension
-      bx.push_back(best_bid.price * 0.995);
-      by.push_back(best_bid.size); // First level size only for L1
-
-      for (const auto &b : orderbook.bids) {
-        bx.push_back(b.price);
-        by.push_back(b.size); // If accumulating, this needs accumulation logic
-      }
-
-      // Drop to zero at best price?
+      // Add point at best bid with 0 depth for shading
+      const auto &best_bid = orderbook.bids[0];
       bx.push_back(best_bid.price);
-      by.push_back(0);
+      by.push_back(0.0);
     }
 
     ImPlot::SetNextFillStyle(ImVec4(0, 1, 0, 0.2f));
     ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
 
-    // Asks (Red)
+    // Handle Asks - Cumulative depth from best ask up
     std::vector<double> ax, ay;
     if (!orderbook.asks.empty()) {
+      double cumulative_depth = 0.0;
+      
+      // Add points from best ask to worst ask
+      for (const auto &ask : orderbook.asks) {
+        cumulative_depth += ask.size;
+        ax.push_back(ask.price);
+        ay.push_back(cumulative_depth);
+      }
+
+      // Extend to right for visual completeness
+      const auto &worst_ask = orderbook.asks.back();
+      ax.push_back(worst_ask.price * 1.005);
+      ay.push_back(cumulative_depth);
+
+      // Add point at best ask with 0 depth for shading
       const auto &best_ask = orderbook.asks[0];
-
-      // Start at best ask, Y=0
-      ax.push_back(best_ask.price);
-      ay.push_back(0);
-
-      // Go up to size
-      ax.push_back(best_ask.price);
-      ay.push_back(best_ask.size);
-
-      // Extend to right
-      ax.push_back(best_ask.price * 1.005);
-      ay.push_back(best_ask.size);
+      ax.insert(ax.begin(), best_ask.price);
+      ay.insert(ay.begin(), 0.0);
     }
+
     ImPlot::SetNextFillStyle(ImVec4(1, 0, 0, 0.2f));
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
 

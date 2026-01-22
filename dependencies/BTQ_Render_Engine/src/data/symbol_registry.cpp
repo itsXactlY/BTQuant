@@ -122,8 +122,7 @@ bool SymbolRegistry::load_from_file(const std::string &filepath) {
 }
 
 uint32_t SymbolRegistry::register_symbol(const std::string &exchange,
-                                         const std::string &symbol,
-                                         uint32_t id) {
+                                         const std::string &symbol) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   std::string key = make_key(exchange, symbol);
@@ -134,10 +133,8 @@ uint32_t SymbolRegistry::register_symbol(const std::string &exchange,
     return it->second;
   }
 
-  // Use provided ID or auto-assign
-  if (id == 0) {
-    id = next_auto_id_++;
-  }
+  // Auto-assign ID
+  uint32_t id = next_auto_id_++;
 
   SymbolInfo info{id, id, exchange, symbol, exchange + ":" + symbol};
   id_to_info_[id] = info;

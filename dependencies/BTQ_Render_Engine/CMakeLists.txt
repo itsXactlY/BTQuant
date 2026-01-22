@@ -20,7 +20,9 @@ include(FetchContent)
 FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
 FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git GIT_TAG v3.11.2)
 FetchContent_Declare(concurrentqueue GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git GIT_TAG v1.0.4)
-FetchContent_MakeAvailable(glm json concurrentqueue)
+FetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.14.0)
+FetchContent_Declare(googlebenchmark GIT_REPOSITORY https://github.com/google/benchmark.git GIT_TAG v1.8.3)
+FetchContent_MakeAvailable(glm json concurrentqueue googletest googlebenchmark)
 
 # Path Configuration
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
@@ -133,3 +135,55 @@ add_dependencies(dashboard_advanced compile_shaders)
 
 # Install compiled shaders
 install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
+
+# ============================================================================
+# Tests
+# ============================================================================
+
+# Unit Tests
+add_executable(btquant_engine_tests
+    tests/test_hotspine_data_bridge.cpp
+    tests/test_market_data_processor.cpp
+)
+
+target_include_directories(btquant_engine_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+    ${googletest_SOURCE_DIR}/googletest/include
+    ${googletest_SOURCE_DIR}/googlemock/include
+)
+
+target_link_libraries(btquant_engine_tests PRIVATE
+    gtest_main
+    gmock_main
+    pthread
+)
+
+# Performance Benchmarks
+add_executable(btquant_engine_benchmarks
+    tests/benchmark_performance.cpp
+)
+
+target_include_directories(btquant_engine_benchmarks PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+    ${benchmark_SOURCE_DIR}/include
+)
+
+target_link_libraries(btquant_engine_benchmarks PRIVATE
+    benchmark::benchmark_main
+    pthread
+)
+
+# Test targets
+add_test(NAME BTQuantEngineUnitTests COMMAND btquant_engine_tests)
+add_test(NAME BTQuantEngineBenchmarks COMMAND btquant_engine_benchmarks)
+
+# Enable testing
+enable_testing()

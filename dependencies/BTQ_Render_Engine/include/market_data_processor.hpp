@@ -3,9 +3,13 @@
 #include "hotspine_data_bridge.hpp"
 #include <atomic>
 #include <chrono>
+#include <coroutine>
 #include <cstdint>
+#include <execution>
+#include <experimental/simd>
 #include <functional>
 #include <future>
+#include <immintrin.h> // For SIMD intrinsics
 #include <map>
 #include <memory>
 #include <mutex>
@@ -17,6 +21,8 @@
 #include <vector>
 // Lock-free queue (header-only, fetched by CMake)
 #include <concurrentqueue.h>
+// Lock-free hash map (assuming available or use std::unordered_map with atomic ops)
+// #include <folly/AtomicHashMap.h> // Example, or implement custom lock-free map
 
 // Price level for order book data
 struct PriceLevel {
@@ -359,6 +365,7 @@ private:
   // Indicator caching (Global for now, protected by its own internal mutexes
   // per entry or global lock in methods)
   mutable std::unordered_map<uint32_t, IndicatorCache> indicator_caches_;
+  mutable std::mutex indicator_cache_mutex_;
 
   // Data storage (Sharded)
   struct Shard {
@@ -435,6 +442,7 @@ private:
 
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade);
+  void updateCandleForTimeframe(SymbolAnalytics &symbol_data, const TradeData &trade, TimeFrame timeframe);
   OHLCVCandle createNewCandle(uint64_t timestamp, double price,
                               double size) const;
   bool isTradeInCurrentCandle(const OHLCVCandle &candle,
@@ -449,6 +457,7 @@ private:
 
   // Worker Loop
   void processQueueLoop();
+  void processUpdate(const MarketDataUpdate& update);
 
   // Helper to get shard for a symbol
   Shard &getShard(uint32_t symbol_id) const {

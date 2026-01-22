@@ -100,6 +100,16 @@ void ChartPanel::render_chart_controls() {
     set_timeframe(static_cast<RenderEngine::TimeFrame>(selected));
   }
 
+  // Auto-follow Window Size
+  ImGui::SameLine();
+  int window_size_int = static_cast<int>(auto_follow_window_);
+  if (ImGui::SliderInt("Window", &window_size_int, 100, 10000, "%d")) {
+    auto_follow_window_ = static_cast<float>(window_size_int);
+  }
+
+  // Auto-follow checkbox
+  ImGui::Checkbox("Auto-follow", &follow_latest_);
+
   ImGui::PopStyleVar();
 }
 
@@ -134,8 +144,6 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   }
 
   // Diagnostic info & Controls
-  ImGui::Checkbox("Auto-follow", &follow_latest_);
-  ImGui::SameLine();
   ImGui::TextColored(
       ImVec4(0.0f, 1.0f, 0.8f, 1.0f),
       " | Candles: %zu | Last: %.2f | TF: %.4gs", chart.dates.size(),
@@ -162,15 +170,19 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     // Auto-follow logic
     if (follow_latest_) {
       double time_max = chart.dates.back();
-      // Increased window to 1000 candles
-      double duration_sec =
-          RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
-          1000000.0;
-      double window_size = std::max(duration_sec * 1000.0, 10.0);
+      // Use raw duration to support both Seconds and Microseconds timestamps
+      double duration_raw =
+          RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
+
+      // Window = Configurable candles * duration per candle
+      double window_size = duration_raw * auto_follow_window_;
+
+      // Determine padding based on window size
+      double padding = window_size * 0.05;
 
       // Update cached limits for consistent logic
       last_view_min_ = time_max - window_size;
-      last_view_max_ = time_max + window_size * 0.05;
+      last_view_max_ = time_max + padding;
 
       ImPlot::SetupAxisLimits(ImAxis_X1, last_view_min_, last_view_max_,
                               ImPlotCond_Always);

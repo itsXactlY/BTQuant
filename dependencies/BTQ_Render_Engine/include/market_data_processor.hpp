@@ -6,12 +6,16 @@
 #include <functional>
 #include <future>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <shared_mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
+// Lock-free queue (header-only, fetched by CMake)
+#include <concurrentqueue.h>
 
 // Price level for order book data
 struct PriceLevel {
@@ -346,14 +350,29 @@ private:
   size_t spread_analysis_window_;
   bool parallel_processing_enabled_;
 
-  // Data storage with shared mutex for read-heavy workloads
-  mutable std::shared_mutex data_mutex_;
-  std::unordered_map<uint32_t, SymbolAnalytics> symbol_analytics_;
+  // Data storage (Sharded)
+  struct Shard {
+    mutable std::shared_mutex mutex;
+    std::unordered_map<uint32_t, SymbolAnalytics> data;
+    // Padding to prevent false sharing cache line contention (64 bytes)
+    char padding[64];
+  };
 
-  // Indicator caching
-  std::unordered_map<uint32_t, IndicatorCache> indicator_caches_;
+  // 16 Shards should be sufficient for thousands of symbols
+  // SymbolID % 16 -> Shard Index
+  static constexpr size_t NUM_SHARDS = 16;
+  std::vector<std::unique_ptr<Shard>> shards_;
 
-  // Performance tracking
+  // Lock-free Ingestion Queue
+  // Using moodycamel::ConcurrentQueue for high-throughput non-blocking
+  // ingestion
+  moodycamel::ConcurrentQueue<MarketDataUpdate> update_queue_;
+
+  // Worker threads (C++20 jthread automatically joins on destruction)
+  std::vector<std::jthread> workers_;
+  std::atomic<bool> running_{true};
+
+  // Performance metrics (Atomic is fine)
   struct AtomicPerformanceMetrics {
     std::atomic<uint64_t> total_trades_processed{0};
     std::atomic<uint64_t> total_orderbooks_processed{0};
@@ -391,13 +410,6 @@ private:
 
   mutable AtomicPerformanceMetrics performance_metrics_;
 
-  // Thread pool for parallel processing
-  std::vector<std::thread> worker_threads_;
-  std::queue<std::function<void()>> task_queue_;
-  std::mutex task_queue_mutex_;
-  std::condition_variable task_queue_cv_;
-  std::atomic<bool> stop_workers_;
-
   // Delta trackers for rate calculation
   mutable std::atomic<uint64_t> trade_count_delta_{0};
   mutable std::atomic<uint64_t> book_count_delta_{0};
@@ -425,11 +437,13 @@ private:
   double calculateVolumeInWindow(const std::vector<TradeData> &trades,
                                  uint64_t window_us) const;
 
-  // Worker thread function
-  void workerThread();
+  // Worker Loop
+  void processQueueLoop();
 
-  // Async task submission
-  void submitTask(std::function<void()> task);
+  // Helper to get shard for a symbol
+  Shard &getShard(uint32_t symbol_id) const {
+    return *shards_[symbol_id % NUM_SHARDS];
+  }
 };
 
 } // namespace RenderEngine

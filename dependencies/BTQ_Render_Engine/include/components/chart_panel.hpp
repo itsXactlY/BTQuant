@@ -52,6 +52,7 @@ private:
 
   IndicatorConfig indicator_config_;
   bool follow_latest_ = true;
+  float auto_follow_window_ = 1000.0f;
   double last_view_min_ = 0.0;
   double last_view_max_ = 0.0;
 

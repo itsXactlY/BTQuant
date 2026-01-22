@@ -82,6 +82,20 @@ const char *PanelBase::get_panel_type_name(PanelType type) {
     return "Alerts";
   case PanelType::ORDERBOOK:
     return "Orderbook";
+  case PanelType::WATCHLIST:
+    return "Watchlist";
+  case PanelType::SCREENER:
+    return "Screener";
+  case PanelType::TAPE:
+    return "Tape";
+  case PanelType::VOLUME_PROFILE:
+    return "Volume Profile";
+  case PanelType::DEPTH_CHART:
+    return "Depth Chart";
+  case PanelType::STATUS_BAR:
+    return "Status Bar";
+  case PanelType::LOG_PANEL:
+    return "Log Panel";
   default:
     return "Unknown";
   }

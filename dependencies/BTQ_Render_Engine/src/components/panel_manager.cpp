@@ -2,6 +2,8 @@
 #include "../../include/components/chart_panel.hpp"
 #include "../../include/components/metrics_panel.hpp"
 #include "../../include/components/orderbook_panel.hpp"
+#include "../../include/components/status_bar_panel.hpp"
+#include "../../include/components/watchlist_panel.hpp"
 #include "imgui.h"
 #include <iostream>
 
@@ -21,12 +23,17 @@ PanelManager::PanelManager(
 PanelManager::~PanelManager() { panels_.clear(); }
 
 void PanelManager::initialize() {
-  // Create default panels
-  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 0, 2, 1);
-  add_panel(PanelType::METRICS, "Market Debug", 2, 0, 1, 1);
-  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 1, 1, 1);
-  add_panel(PanelType::TRADING_POSITIONS, "Positions", 1, 1, 1, 1);
-  add_panel(PanelType::RISK_METRICS, "Risk Dashboard", 2, 1, 1, 1);
+  // Set grid layout for billion-dollar terminal (3 columns, 4 rows)
+  set_grid_layout(3, 4);
+
+  // Create default panels for billion-dollar terminal layout
+  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 3, 1); // Full width status bar
+  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);   // Large main chart
+  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 2, 1, 1, 1);
+  add_panel(PanelType::WATCHLIST, "Watchlist", 2, 2, 1, 1);
+  add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 0, 3, 1, 1);
+  add_panel(PanelType::DEPTH_CHART, "Depth Chart", 1, 3, 1, 1);
+  add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
 
   // Initialize orderbook with first active symbol
   auto active_symbols = bridge_->getActiveSymbols();
@@ -35,6 +42,18 @@ void PanelManager::initialize() {
     std::string symbol_name = bridge_->getSymbolName(symbol_id);
     if (!symbol_name.empty()) {
       set_active_symbol(symbol_id, symbol_name);
+
+      // Add initial symbol to watchlist (find watchlist panel dynamically)
+      for (auto &[id, panel] : panels_) {
+        if (panel->get_config().type == PanelType::WATCHLIST) {
+          auto watchlist_panel = dynamic_cast<WatchlistPanel*>(panel.get());
+          if (watchlist_panel) {
+            watchlist_panel->add_symbol(symbol_id, symbol_name,
+                                       bridge_->getExchangeName(symbol_id));
+          }
+          break;
+        }
+      }
     }
   }
 }
@@ -85,6 +104,12 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
   case PanelType::ORDERBOOK:
     panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
     break;
+  case PanelType::STATUS_BAR:
+    panel = std::make_unique<StatusBarPanel>(config, bridge_, processor_);
+    break;
+  case PanelType::WATCHLIST:
+    panel = std::make_unique<WatchlistPanel>(config, bridge_, processor_);
+    break;
   case PanelType::SCATTER_PLOT:
   case PanelType::TIME_SERIES:
   case PanelType::TRADING_ORDERS:
@@ -92,6 +117,11 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
   case PanelType::RISK_METRICS:
   case PanelType::ALERTS:
   case PanelType::HISTOGRAM:
+  case PanelType::SCREENER:
+  case PanelType::TAPE:
+  case PanelType::VOLUME_PROFILE:
+  case PanelType::DEPTH_CHART:
+  case PanelType::LOG_PANEL:
     // TODO: Implement these panel types
     return 0;
   default:
@@ -184,23 +214,33 @@ PanelConfig PanelManager::create_panel_config(PanelType type,
   config.grid_y = grid_y;
   config.grid_width = width;
   config.grid_height = height;
-  config.position = calculate_panel_position(grid_x, grid_y);
-  config.size = calculate_panel_size(width, height);
+
+  // Special handling for status bar
+  if (type == PanelType::STATUS_BAR) {
+    config.position = ImVec2(0, 0);
+    config.size = ImVec2(dashboard_size_.x, 30);
+    config.resizable = false;
+    config.movable = false;
+  } else {
+    config.position = calculate_panel_position(grid_x, grid_y);
+    config.size = calculate_panel_size(width, height);
+    config.resizable = true;
+    config.movable = true;
+  }
+
   config.visible = true;
-  config.resizable = true;
-  config.movable = true;
   return config;
 }
 
 ImVec2 PanelManager::calculate_panel_position(int grid_x, int grid_y) const {
-  float x = static_cast<float>(grid_x) * (dashboard_size_.x / 3.0f);
-  float y = static_cast<float>(grid_y) * (dashboard_size_.y / 2.0f);
+  float x = static_cast<float>(grid_x) * (dashboard_size_.x / grid_layout_.columns);
+  float y = 30.0f + static_cast<float>(grid_y) * ((dashboard_size_.y - 30.0f) / grid_layout_.rows);
   return ImVec2(x, y);
 }
 
 ImVec2 PanelManager::calculate_panel_size(int width, int height) const {
-  float w = static_cast<float>(width) * (dashboard_size_.x / 3.0f);
-  float h = static_cast<float>(height) * (dashboard_size_.y / 2.0f);
+  float w = static_cast<float>(width) * (dashboard_size_.x / grid_layout_.columns);
+  float h = static_cast<float>(height) * ((dashboard_size_.y - 30.0f) / grid_layout_.rows);
   return ImVec2(w, h);
 }
 
@@ -222,6 +262,20 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
     return "Alerts";
   case PanelType::ORDERBOOK:
     return "Orderbook";
+  case PanelType::STATUS_BAR:
+    return "Status";
+  case PanelType::WATCHLIST:
+    return "Watchlist";
+  case PanelType::SCREENER:
+    return "Screener";
+  case PanelType::TAPE:
+    return "Time & Sales";
+  case PanelType::VOLUME_PROFILE:
+    return "Volume Profile";
+  case PanelType::DEPTH_CHART:
+    return "Depth Chart";
+  case PanelType::LOG_PANEL:
+    return "Log";
   default:
     return "Panel";
   }

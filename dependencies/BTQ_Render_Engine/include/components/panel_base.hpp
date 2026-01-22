@@ -17,7 +17,14 @@ enum class PanelType {
   TRADING_POSITIONS,
   RISK_METRICS,
   ALERTS,
-  ORDERBOOK
+  ORDERBOOK,
+  WATCHLIST,
+  SCREENER,
+  TAPE,
+  VOLUME_PROFILE,
+  DEPTH_CHART,
+  STATUS_BAR,
+  LOG_PANEL
 };
 
 struct PanelConfig {

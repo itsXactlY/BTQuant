@@ -554,253 +554,257 @@ double MarketDataProcessor::calculateVolumeInWindow(
 
 std::vector<SymbolRanking>
 MarketDataProcessor::getRankings(RankingCriteria criteria, size_t limit) const {
-  std::vector<SymbolRanking> MarketDataProcessor::getRankings(
-      RankingCriteria criteria, size_t limit) const {
-    // No global lock
+  // No global lock
 
-    std::vector<SymbolRanking> rankings;
-    rankings.reserve(symbol_analytics_.size());
+  std::vector<SymbolRanking> rankings;
+  rankings.reserve(1000); // Approximate reservation
 
-    // Create rankings based on criteria
-    // Iterate ALL shards
-    for (const auto &shard_ptr : shards_) {
-      std::shared_lock<std::shared_mutex> lock(shard_ptr->mutex);
-      for (const auto &[symbol_id, analytics] : shard_ptr->data) {
-        SymbolRanking ranking;
-        ranking.symbol_id = symbol_id;
+  // Create rankings based on criteria
+  // Iterate ALL shards
+  for (const auto &shard_ptr : shards_) {
+    std::shared_lock<std::shared_mutex> lock(shard_ptr->mutex);
+    for (const auto &[symbol_id, analytics] : shard_ptr->data) {
+      SymbolRanking ranking;
+      ranking.symbol_id = symbol_id;
 
-        switch (criteria) {
-        case RankingCriteria::VOLUME:
-          ranking.value = analytics.volume_1m;
-          ranking.label = "Volume (1m)";
-          break;
-        case RankingCriteria::MOMENTUM:
-          ranking.value = std::abs(analytics.momentum);
-          ranking.label = "Momentum";
-          break;
-        case RankingCriteria::VOLATILITY:
-          ranking.value = analytics.volatility;
-          ranking.label = "Volatility";
-          break;
-        case RankingCriteria::SPREAD:
-          ranking.value = analytics.avg_spread_percent;
-          ranking.label = "Spread %";
-          break;
-        case RankingCriteria::IMBALANCE:
-          ranking.value = std::abs(analytics.current_imbalance);
-          ranking.label = "Imbalance";
-          break;
-        }
-
-        rankings.push_back(ranking);
+      switch (criteria) {
+      case RankingCriteria::VOLUME:
+        ranking.value = analytics.volume_1m;
+        ranking.label = "Volume (1m)";
+        break;
+      case RankingCriteria::MOMENTUM:
+        ranking.value = std::abs(analytics.momentum);
+        ranking.label = "Momentum";
+        break;
+      case RankingCriteria::VOLATILITY:
+        ranking.value = analytics.volatility;
+        ranking.label = "Volatility";
+        break;
+      case RankingCriteria::SPREAD:
+        ranking.value = analytics.avg_spread_percent;
+        ranking.label = "Spread %";
+        break;
+      case RankingCriteria::IMBALANCE:
+        ranking.value = std::abs(analytics.current_imbalance);
+        ranking.label = "Imbalance";
+        break;
       }
+
+      rankings.push_back(ranking);
     }
-
-    // Sort by value (descending)
-    std::sort(rankings.begin(), rankings.end(),
-              [](const SymbolRanking &a, const SymbolRanking &b) {
-                return a.value > b.value;
-              });
-
-    // Limit results
-    if (limit > 0 && rankings.size() > limit) {
-      rankings.resize(limit);
-    }
-
-    return rankings;
   }
 
-  MarketSummary MarketDataProcessor::getMarketSummary() const {
-    MarketSummary MarketDataProcessor::getMarketSummary() const {
-      // No global lock
+  // Sort by value (descending)
+  std::sort(rankings.begin(), rankings.end(),
+            [](const SymbolRanking &a, const SymbolRanking &b) {
+              return a.value > b.value;
+            });
 
-      MarketSummary summary;
-      summary.total_symbols = symbol_analytics_.size();
+  // Limit results
+  if (limit > 0 && rankings.size() > limit) {
+    rankings.resize(limit);
+  }
 
-      if (shards_.empty()) {
-        return summary;
-      }
+  return rankings;
+}
 
-      // Aggregate statistics
-      double total_volume = 0.0;
-      double total_momentum = 0.0;
-      double total_volatility = 0.0;
-      size_t active_symbols = 0;
+MarketSummary MarketDataProcessor::getMarketSummary() const {
+  // No global lock
 
-      for (const auto &shard_ptr : shards_) {
-        std::shared_lock<std::shared_mutex> lock(shard_ptr->mutex);
-        for (const auto &[symbol_id, analytics] : shard_ptr->data) {
-          if (analytics.trade_count > 0) {
-            active_symbols++;
-            total_volume += analytics.volume_1m;
-            total_momentum += analytics.momentum;
-            total_volatility += analytics.volatility;
+  MarketSummary summary;
+  summary.total_symbols = 0;
+  for (const auto &shard_ptr : shards_) {
+    std::shared_lock<std::shared_mutex> lock(shard_ptr->mutex);
+    summary.total_symbols += shard_ptr->data.size();
+  }
 
-            // Count trending symbols
-            if (std::abs(analytics.momentum) > 1.0) { // > 1% momentum
-              if (analytics.momentum > 0) {
-                summary.trending_up++;
-              } else {
-                summary.trending_down++;
-              }
-            }
-          }
-        }
-      }
+  if (shards_.empty()) {
+    return summary;
+  }
 
-      summary.active_symbols = active_symbols;
+  // Aggregate statistics
+  double total_volume = 0.0;
+  double total_momentum = 0.0;
+  double total_volatility = 0.0;
+  size_t active_symbols = 0;
 
-      if (active_symbols > 0) {
-        summary.avg_volume = total_volume / active_symbols;
-        summary.avg_momentum = total_momentum / active_symbols;
-        summary.avg_volatility = total_volatility / active_symbols;
-      }
+  for (const auto &shard_ptr : shards_) {
+    std::shared_lock<std::shared_mutex> lock(shard_ptr->mutex);
+    for (const auto &[symbol_id, analytics] : shard_ptr->data) {
+      if (analytics.trade_count > 0) {
+        active_symbols++;
+        total_volume += analytics.volume_1m;
+        total_momentum += analytics.momentum;
+        total_volatility += analytics.volatility;
 
-      summary.last_update = std::chrono::high_resolution_clock::time_point(
-          std::chrono::high_resolution_clock::duration(
-              performance_metrics_.last_update_time));
-
-      return summary;
-    }
-
-    uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
-      switch (timeframe) {
-      case TimeFrame::TF_1MS:
-        return 1000ULL; // 1ms in microseconds
-      case TimeFrame::TF_10MS:
-        return 10000ULL; // 10ms
-      case TimeFrame::TF_100MS:
-        return 100000ULL; // 100ms
-      case TimeFrame::TF_500MS:
-        return 500000ULL; // 500ms
-      case TimeFrame::TF_1SEC:
-        return 1000000ULL; // 1 second
-      case TimeFrame::TF_3SEC:
-        return 3000000ULL; // 3 seconds
-      case TimeFrame::TF_5SEC:
-        return 5000000ULL; // 5 seconds
-      case TimeFrame::TF_15SEC:
-        return 15000000ULL; // 15 seconds
-      default:
-        return 1000000ULL; // Default to 1 second
-      }
-    }
-
-    std::vector<OHLCVCandle> MarketDataProcessor::getCandles(
-        uint32_t symbol_id, TimeFrame timeframe) const {
-      auto &shard = getShard(symbol_id);
-      std::shared_lock<std::shared_mutex> lock(shard.mutex);
-
-      auto it = shard.data.find(symbol_id);
-      if (it != shard.data.end()) {
-        const auto &candles_it = it->second.candles.find(timeframe);
-        if (candles_it != it->second.candles.end()) {
-          result = candles_it->second; // Copy completed candles
-        }
-
-        // Append current aggregating candle for real-time visualization
-        const auto &current_it = it->second.current_candles.find(timeframe);
-        if (current_it != it->second.current_candles.end()) {
-          result.push_back(current_it->second);
-        }
-      }
-
-      return result;
-    }
-
-    std::optional<OHLCVCandle> MarketDataProcessor::getCurrentCandle(
-        uint32_t symbol_id, TimeFrame timeframe) const {
-      auto &shard = getShard(symbol_id);
-      std::shared_lock<std::shared_mutex> lock(shard.mutex);
-
-      auto it = shard.data.find(symbol_id);
-      if (it != shard.data.end()) {
-        const auto &current_it = it->second.current_candles.find(timeframe);
-        if (current_it != it->second.current_candles.end()) {
-          return current_it->second;
-        }
-      }
-
-      return std::nullopt;
-    }
-
-    std::optional<OrderbookData> MarketDataProcessor::getOrderbookData(
-        uint32_t symbol_id) const {
-      auto &shard = getShard(symbol_id);
-      std::shared_lock<std::shared_mutex> lock(shard.mutex);
-
-      auto it = shard.data.find(symbol_id);
-      if (it != shard.data.end() && !it->second.recent_orderbooks.empty()) {
-        return it->second.recent_orderbooks.back();
-      }
-
-      return std::nullopt;
-    }
-
-    OHLCVCandle MarketDataProcessor::createNewCandle(
-        uint64_t timestamp, double price, double size) const {
-      OHLCVCandle candle;
-      candle.timestamp = timestamp;
-      candle.open = price;
-      candle.high = price;
-      candle.low = price;
-      candle.close = price;
-      candle.volume = size;
-      candle.trade_count = 1;
-      return candle;
-    }
-
-    bool MarketDataProcessor::isTradeInCurrentCandle(
-        const OHLCVCandle &candle, uint64_t trade_timestamp,
-        TimeFrame timeframe) const {
-      uint64_t duration = getTimeFrameDuration(timeframe);
-      return trade_timestamp < candle.timestamp + duration;
-    }
-
-    void MarketDataProcessor::updateCandle(OHLCVCandle & candle, double price,
-                                           double size) const {
-      if (price > candle.high) {
-        candle.high = price;
-      }
-      if (price < candle.low) {
-        candle.low = price;
-      }
-      candle.close = price;
-      candle.volume += size;
-      candle.trade_count++;
-    }
-
-    void MarketDataProcessor::updateCandles(SymbolAnalytics & symbol_data,
-                                            const TradeData &trade) {
-      // Process all sub-second timeframes (1ms-15sec only)
-      static const std::vector<TimeFrame> timeframes = {
-          TimeFrame::TF_1MS,   TimeFrame::TF_10MS, TimeFrame::TF_100MS,
-          TimeFrame::TF_500MS, TimeFrame::TF_1SEC, TimeFrame::TF_3SEC,
-          TimeFrame::TF_5SEC,  TimeFrame::TF_15SEC};
-
-      for (TimeFrame tf : timeframes) {
-        uint64_t duration = getTimeFrameDuration(tf);
-        uint64_t candle_start = (trade.timestamp / duration) * duration;
-
-        auto current_candle_it = symbol_data.current_candles.find(tf);
-
-        if (current_candle_it != symbol_data.current_candles.end()) {
-          if (isTradeInCurrentCandle(current_candle_it->second, trade.timestamp,
-                                     tf)) {
-            updateCandle(current_candle_it->second, trade.price, trade.size);
+        // Count trending symbols
+        if (std::abs(analytics.momentum) > 1.0) { // > 1% momentum
+          if (analytics.momentum > 0) {
+            summary.trending_up++;
           } else {
-            // Finalize old candle - NO LIMIT, keep all candles
-            symbol_data.candles[tf].push_back(current_candle_it->second);
-            // Start new candle
-            symbol_data.current_candles[tf] =
-                createNewCandle(candle_start, trade.price, trade.size);
+            summary.trending_down++;
           }
-        } else {
-          symbol_data.current_candles[tf] =
-              createNewCandle(candle_start, trade.price, trade.size);
         }
       }
     }
+  }
 
-  } // namespace RenderEngine
+  summary.active_symbols = active_symbols;
+
+  if (active_symbols > 0) {
+    summary.avg_volume = total_volume / active_symbols;
+    summary.avg_momentum = total_momentum / active_symbols;
+    summary.avg_volatility = total_volatility / active_symbols;
+  }
+
+  summary.last_update = std::chrono::high_resolution_clock::time_point(
+      std::chrono::high_resolution_clock::duration(
+          performance_metrics_.last_update_time));
+
+  return summary;
+}
+
+uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
+  switch (timeframe) {
+  case TimeFrame::TF_1MS:
+    return 1000ULL; // 1ms in microseconds
+  case TimeFrame::TF_10MS:
+    return 10000ULL; // 10ms
+  case TimeFrame::TF_100MS:
+    return 100000ULL; // 100ms
+  case TimeFrame::TF_500MS:
+    return 500000ULL; // 500ms
+  case TimeFrame::TF_1SEC:
+    return 1000000ULL; // 1 second
+  case TimeFrame::TF_3SEC:
+    return 3000000ULL; // 3 seconds
+  case TimeFrame::TF_5SEC:
+    return 5000000ULL; // 5 seconds
+  case TimeFrame::TF_15SEC:
+    return 15000000ULL; // 15 seconds
+  default:
+    return 1000000ULL; // Default to 1 second
+  }
+}
+
+std::vector<OHLCVCandle>
+MarketDataProcessor::getCandles(uint32_t symbol_id, TimeFrame timeframe) const {
+  auto &shard = getShard(symbol_id);
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
+  std::vector<OHLCVCandle> result;
+
+  auto it = shard.data.find(symbol_id);
+  if (it != shard.data.end()) {
+    const auto &candles_it = it->second.candles.find(timeframe);
+    if (candles_it != it->second.candles.end()) {
+      result = candles_it->second; // Copy completed candles
+    }
+
+    // Append current aggregating candle for real-time visualization
+    const auto &current_it = it->second.current_candles.find(timeframe);
+    if (current_it != it->second.current_candles.end()) {
+      result.push_back(current_it->second);
+    }
+  }
+
+  return result;
+}
+
+std::optional<OHLCVCandle>
+MarketDataProcessor::getCurrentCandle(uint32_t symbol_id,
+                                      TimeFrame timeframe) const {
+  auto &shard = getShard(symbol_id);
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
+
+  auto it = shard.data.find(symbol_id);
+  if (it != shard.data.end()) {
+    const auto &current_it = it->second.current_candles.find(timeframe);
+    if (current_it != it->second.current_candles.end()) {
+      return current_it->second;
+    }
+  }
+
+  return std::nullopt;
+}
+
+std::optional<OrderbookData>
+MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
+  auto &shard = getShard(symbol_id);
+  std::shared_lock<std::shared_mutex> lock(shard.mutex);
+
+  auto it = shard.data.find(symbol_id);
+  if (it != shard.data.end() && !it->second.recent_orderbooks.empty()) {
+    return it->second.recent_orderbooks.back();
+  }
+
+  return std::nullopt;
+}
+
+OHLCVCandle MarketDataProcessor::createNewCandle(uint64_t timestamp,
+                                                 double price,
+                                                 double size) const {
+  OHLCVCandle candle;
+  candle.timestamp = timestamp;
+  candle.open = price;
+  candle.high = price;
+  candle.low = price;
+  candle.close = price;
+  candle.volume = size;
+  candle.trade_count = 1;
+  return candle;
+}
+
+bool MarketDataProcessor::isTradeInCurrentCandle(const OHLCVCandle &candle,
+                                                 uint64_t trade_timestamp,
+                                                 TimeFrame timeframe) const {
+  uint64_t duration = getTimeFrameDuration(timeframe);
+  return trade_timestamp < candle.timestamp + duration;
+}
+
+void MarketDataProcessor::updateCandle(OHLCVCandle &candle, double price,
+                                       double size) const {
+  if (price > candle.high) {
+    candle.high = price;
+  }
+  if (price < candle.low) {
+    candle.low = price;
+  }
+  candle.close = price;
+  candle.volume += size;
+  candle.trade_count++;
+}
+
+void MarketDataProcessor::updateCandles(SymbolAnalytics &symbol_data,
+                                        const TradeData &trade) {
+  // Process all sub-second timeframes (1ms-15sec only)
+  static const std::vector<TimeFrame> timeframes = {
+      TimeFrame::TF_1MS,   TimeFrame::TF_10MS, TimeFrame::TF_100MS,
+      TimeFrame::TF_500MS, TimeFrame::TF_1SEC, TimeFrame::TF_3SEC,
+      TimeFrame::TF_5SEC,  TimeFrame::TF_15SEC};
+
+  for (TimeFrame tf : timeframes) {
+    uint64_t duration = getTimeFrameDuration(tf);
+    uint64_t candle_start = (trade.timestamp / duration) * duration;
+
+    auto current_candle_it = symbol_data.current_candles.find(tf);
+
+    if (current_candle_it != symbol_data.current_candles.end()) {
+      if (isTradeInCurrentCandle(current_candle_it->second, trade.timestamp,
+                                 tf)) {
+        updateCandle(current_candle_it->second, trade.price, trade.size);
+      } else {
+        // Finalize old candle - NO LIMIT, keep all candles
+        symbol_data.candles[tf].push_back(current_candle_it->second);
+        // Start new candle
+        symbol_data.current_candles[tf] =
+            createNewCandle(candle_start, trade.price, trade.size);
+      }
+    } else {
+      symbol_data.current_candles[tf] =
+          createNewCandle(candle_start, trade.price, trade.size);
+    }
+  }
+}
+
+} // namespace RenderEngine
 } // namespace BTQuant

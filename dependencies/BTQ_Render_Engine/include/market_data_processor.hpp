@@ -3,6 +3,7 @@
 #include "hotspine_data_bridge.hpp"
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <future>
 #include <map>
@@ -349,6 +350,10 @@ private:
   size_t volatility_window_size_;
   size_t spread_analysis_window_;
   bool parallel_processing_enabled_;
+
+  // Indicator caching (Global for now, protected by its own internal mutexes
+  // per entry or global lock in methods)
+  mutable std::unordered_map<uint32_t, IndicatorCache> indicator_caches_;
 
   // Data storage (Sharded)
   struct Shard {

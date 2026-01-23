@@ -42,12 +42,10 @@ void StatusBarPanel::render() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 
-  ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar |
-                           ImGuiWindowFlags_NoResize |
-                           ImGuiWindowFlags_NoMove |
-                           ImGuiWindowFlags_NoScrollbar |
-                           ImGuiWindowFlags_NoScrollWithMouse |
-                           ImGuiWindowFlags_NoCollapse;
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+      ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
 
   ImGui::Begin("StatusBar", nullptr, flags);
 
@@ -75,9 +73,32 @@ void StatusBarPanel::render() {
 }
 
 void StatusBarPanel::update_connection_status() {
-  // Check if bridge is connected (simplified check)
-  connection_status_ = (bridge_ != nullptr);
-  connection_text_ = connection_status_ ? "Connected" : "Disconnected";
+  // Check bridge exists
+  if (!bridge_) {
+    connection_status_ = false;
+    connection_text_ = "No Bridge";
+    return;
+  }
+
+  // Check if we have active symbols (SHM is readable)
+  auto active_symbols = bridge_->getActiveSymbols();
+  if (active_symbols.empty()) {
+    connection_status_ = false;
+    connection_text_ = "No Symbols";
+    return;
+  }
+
+  // Check data freshness via processor metrics
+  if (processor_) {
+    auto metrics = processor_->getPerformanceMetrics();
+    bool data_flowing =
+        (metrics.trades_per_second > 0 || metrics.orderbooks_per_second > 0);
+    connection_status_ = data_flowing;
+    connection_text_ = data_flowing ? "Live" : "Stale";
+  } else {
+    connection_status_ = true;
+    connection_text_ = "Connected";
+  }
 }
 
 void StatusBarPanel::update_performance_metrics() {

@@ -76,6 +76,10 @@ private:
 
   ImVec2 dashboard_size_ = ImVec2(1920, 1080);
 
+  // Active symbol tracking for cross-panel propagation
+  uint32_t active_symbol_id_ = 0;
+  std::string active_symbol_name_;
+
   PanelConfig create_panel_config(PanelType type, const std::string &title,
                                   int grid_x, int grid_y, int width,
                                   int height);

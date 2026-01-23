@@ -34,10 +34,9 @@ void WatchlistPanel::render() {
 
   // Table
   if (ImGui::BeginTable("WatchlistTable", 6,
-                        ImGuiTableFlags_Resizable |
-                        ImGuiTableFlags_Sortable |
-                        ImGuiTableFlags_RowBg |
-                        ImGuiTableFlags_BordersInnerV)) {
+                        ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
+                            ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_BordersInnerV)) {
 
     render_table_header();
 
@@ -91,20 +90,42 @@ void WatchlistPanel::clear_watchlist() {
 }
 
 void WatchlistPanel::update_watchlist_data() {
-  if (!processor_) return;
+  if (!processor_)
+    return;
 
   for (auto &[symbol_id, entry] : watchlist_) {
     auto analytics = processor_->getSymbolAnalytics(symbol_id);
     if (analytics.symbol_id != 0) {
       entry.price = analytics.last_trade_price;
-      entry.volume_24h = analytics.volume_1m; // Using 1m as proxy for 24h
       entry.vwap = analytics.vwap;
       entry.last_update_ts = analytics.last_trade_time;
 
-      // Calculate 24h change (simplified - would need historical data)
-      entry.change_24h = 0.0; // Placeholder
+      // Calculate 24h change using longest available timeframe candles
+      // Note: Ideally we want TF_1DAY or TF_1HOUR, but we use the longest
+      // available from the processor as a proxy/placeholder until the processor
+      // supports longer history. We'll use the oldest candle from the longest
+      // timeframe to estimate change.
+      auto candles =
+          processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+      if (!candles.empty()) {
+        const auto &oldest_candle = candles.front();
+        const auto &newest_candle = candles.back(); // Or just use current price
+        entry.change_24h = calculate_24h_change(newest_candle, oldest_candle);
+
+        // Estimate 24h volume by summing available candles (best effort)
+        double total_vol = 0.0;
+        for (const auto &c : candles)
+          total_vol += c.volume;
+        entry.volume_24h = total_vol;
+      } else {
+        entry.change_24h = 0.0;
+        entry.volume_24h = analytics.volume_1m; // Fallback
+      }
     }
   }
+
+  // Apply sort after updating data
+  sort_watchlist();
 }
 
 void WatchlistPanel::render_filter_input() {
@@ -115,10 +136,30 @@ void WatchlistPanel::render_filter_input() {
 }
 
 void WatchlistPanel::render_table_header() {
-  ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_DefaultSort);
-  ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
-  ImGui::TableSetupColumn("Change %", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
-  ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+  ImGuiTableSortSpecs *sorts_specs = ImGui::TableGetSortSpecs();
+  if (sorts_specs && sorts_specs->SpecsDirty) {
+    if (sorts_specs->SpecsCount > 0) {
+      const auto &spec = sorts_specs->Specs[0];
+      sort_column_ = spec.ColumnIndex;
+      sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
+      sort_watchlist();
+    }
+    sorts_specs->SpecsDirty = false;
+  }
+
+  ImGui::TableSetupColumn("Symbol",
+                          ImGuiTableColumnFlags_DefaultSort |
+                              ImGuiTableColumnFlags_WidthFixed,
+                          80.0f);
+  ImGui::TableSetupColumn("Price",
+                          ImGuiTableColumnFlags_DefaultSort |
+                              ImGuiTableColumnFlags_PreferSortDescending);
+  ImGui::TableSetupColumn("Change %",
+                          ImGuiTableColumnFlags_DefaultSort |
+                              ImGuiTableColumnFlags_PreferSortDescending);
+  ImGui::TableSetupColumn("Volume",
+                          ImGuiTableColumnFlags_DefaultSort |
+                              ImGuiTableColumnFlags_PreferSortDescending);
   ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableSetupColumn("Last Update", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableHeadersRow();
@@ -135,7 +176,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
 
   ImGui::TableSetColumnIndex(2);
   ImVec4 change_color = entry.change_24h >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                                               : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+                                              : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
   ImGui::TextColored(change_color, "%.2f%%", entry.change_24h);
 
   ImGui::TableSetColumnIndex(3);
@@ -146,7 +187,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
 
   ImGui::TableSetColumnIndex(5);
   if (entry.last_update_ts > 0) {
-    time_t time = entry.last_update_ts / 1000000; // Convert microseconds to seconds
+    time_t time =
+        entry.last_update_ts / 1000000; // Convert microseconds to seconds
     char time_str[9];
     strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time));
     ImGui::Text("%s", time_str);
@@ -181,14 +223,63 @@ std::vector<uint32_t> WatchlistPanel::get_filtered_symbols() const {
 
 const char *WatchlistPanel::get_sort_column_name(int column) {
   switch (column) {
-  case 0: return "Symbol";
-  case 1: return "Price";
-  case 2: return "Change %";
-  case 3: return "Volume";
-  case 4: return "VWAP";
-  case 5: return "Last Update";
-  default: return "Unknown";
+  case 0:
+    return "Symbol";
+  case 1:
+    return "Price";
+  case 2:
+    return "Change %";
+  case 3:
+    return "Volume";
+  case 4:
+    return "VWAP";
+  case 5:
+    return "Last Update";
+  default:
+    return "Unknown";
   }
+}
+
+double WatchlistPanel::calculate_24h_change(
+    const RenderEngine::OHLCVCandle &current,
+    const RenderEngine::OHLCVCandle &old) const {
+  if (old.close == 0.0)
+    return 0.0;
+  // Using close price of the candles
+  return ((current.close - old.close) / old.close) * 100.0;
+}
+
+void WatchlistPanel::sort_watchlist() {
+  std::sort(display_order_.begin(), display_order_.end(),
+            [this](uint32_t a_id, uint32_t b_id) {
+              const auto &a = watchlist_.at(a_id);
+              const auto &b = watchlist_.at(b_id);
+
+              bool result = false;
+              switch (sort_column_) {
+              case 0: // Symbol
+                result = a.symbol < b.symbol;
+                break;
+              case 1: // Price
+                result = a.price < b.price;
+                break;
+              case 2: // Change %
+                result = a.change_24h < b.change_24h;
+                break;
+              case 3: // Volume
+                result = a.volume_24h < b.volume_24h;
+                break;
+              case 4: // VWAP
+                result = a.vwap < b.vwap;
+                break;
+              case 5: // Last Update
+                result = a.last_update_ts < b.last_update_ts;
+                break;
+              default:
+                result = a.symbol < b.symbol;
+              }
+              return sort_ascending_ ? result : !result;
+            });
 }
 
 } // namespace BTQuant

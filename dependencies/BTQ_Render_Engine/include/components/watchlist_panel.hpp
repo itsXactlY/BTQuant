@@ -59,6 +59,10 @@ private:
   void sort_watchlist();
   std::vector<uint32_t> get_filtered_symbols() const;
 
+  // Helpers
+  double calculate_24h_change(const RenderEngine::OHLCVCandle &current,
+                              const RenderEngine::OHLCVCandle &old) const;
+
   static const char *get_sort_column_name(int column);
 };
 

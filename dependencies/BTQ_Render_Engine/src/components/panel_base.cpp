@@ -54,7 +54,19 @@ void PanelBase::render_panel_header() {
   // Panel type indicator
   const char *type_name = get_panel_type_name(config_.type);
   ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "[%s]", type_name);
+
   ImGui::SameLine();
+  ImGui::Text("%s", config_.title.c_str());
+
+  // Close button (right aligned)
+  if (config_.visible) {
+    float close_size = ImGui::GetTextLineHeight();
+    ImGui::SameLine(ImGui::GetWindowWidth() - close_size - 10.0f);
+    if (ImGui::Button("X", ImVec2(close_size, close_size))) {
+      config_.visible = false;
+    }
+  }
+
   ImGui::Separator();
 }
 

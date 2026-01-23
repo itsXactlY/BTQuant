@@ -84,6 +84,9 @@ set(DASHBOARD_SOURCES
     src/components/orderbook_panel.cpp
     src/components/status_bar_panel.cpp
     src/components/watchlist_panel.cpp
+    src/components/tape_panel.cpp
+    src/components/volume_profile_panel.cpp
+    src/components/depth_chart_panel.cpp
     # src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     # TODO: Update these for newer ImPlot API
@@ -146,6 +149,9 @@ install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
 add_executable(btquant_engine_tests
     tests/test_hotspine_data_bridge.cpp
     tests/test_market_data_processor.cpp
+    src/data/market_data_processor.cpp
+    src/data/hotspine_data_bridge.cpp
+    src/data/symbol_registry.cpp
 )
 
 target_include_directories(btquant_engine_tests PRIVATE
@@ -167,6 +173,7 @@ target_link_libraries(btquant_engine_tests PRIVATE
 # Performance Benchmarks
 add_executable(btquant_engine_benchmarks
     tests/benchmark_performance.cpp
+    src/data/market_data_processor.cpp
 )
 
 target_include_directories(btquant_engine_benchmarks PRIVATE

@@ -1,6 +1,7 @@
 #include "vulkan_dashboard_advanced.hpp"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+#include "components/interaction_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "imgui.h"
 #include "implot.h"
@@ -26,9 +27,8 @@ void VulkanDashboard::initialize() {
   ImGui::CreateContext();
   ImPlot::CreateContext();
 
-  // Style Definitions
-  ImGui::StyleColorsDark();
-  ImPlot::StyleColorsDark();
+  // Style Definitions (Managed by ThemeManager)
+  ThemeManager::getInstance().initialize();
 
   // 2. HW Layer Init
   init_window();
@@ -52,8 +52,58 @@ void VulkanDashboard::init_components() {
   m_workspace = std::make_unique<QuantWorkspaceComponent>(
       hotspine_bridge_, market_data_processor_);
 
-  // Workspace doesn't need to be registered with VulkanCore explicitly
-  // as VulkanDashboard will handle its rendering in render_frame.
+  // Register Hotkeys
+  auto &im = InteractionManager::getInstance();
+
+  // Ctrl+1 to Ctrl+5 for layout switching or panel focus (Placeholder)
+  // Ctrl+1 to Ctrl+5 for layout switching
+  auto *workspace = m_workspace.get(); // Capture for lambda
+  im.registerHotKey(
+      ImGuiKey_1,
+      [workspace]() {
+        if (workspace->getPanelManager()) {
+          // workspace->getPanelManager()->load_layout("layout_desktop_3x5.json");
+          std::cout << "[Layout] Switched to Desktop 3x5" << std::endl;
+          workspace->getPanelManager()
+              ->auto_arrange_panels(); // Simple verification action
+        }
+      },
+      "Layout 1 (3x5 Grid)", true);
+
+  im.registerHotKey(
+      ImGuiKey_2,
+      [workspace]() {
+        if (workspace->getPanelManager()) {
+          // workspace->getPanelManager()->load_layout("layout_focus_chart.json");
+          std::cout << "[Layout] Switched to Chart Focus" << std::endl;
+        }
+      },
+      "Layout 2 (Chart Focus)", true);
+
+  // Space to Toggle Theme
+  im.registerHotKey(
+      ImGuiKey_Space,
+      []() {
+        ThemeManager::getInstance().toggleTheme();
+        std::cout << "Hotkey: Theme Toggled" << std::endl;
+      },
+      "Toggle Theme");
+
+  // Alt+Enter for Fullscreen (Requires window handle, capture this)
+  GLFWwindow *win = window_;
+  im.registerHotKey(
+      ImGuiKey_Enter,
+      [win]() {
+        if (glfwGetWindowMonitor(win)) {
+          glfwSetWindowMonitor(win, nullptr, 100, 100, 1280, 720, 0);
+        } else {
+          GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+          const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+          glfwSetWindowMonitor(win, monitor, 0, 0, mode->width, mode->height,
+                               mode->refreshRate);
+        }
+      },
+      "Toggle Fullscreen", false, true); // Alt+Enter
 }
 
 void VulkanDashboard::render_frame() {
@@ -77,6 +127,9 @@ void VulkanDashboard::render_frame() {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+
+  // Update Interaction Manager
+  InteractionManager::getInstance().update();
 
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("Tools")) {

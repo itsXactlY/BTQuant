@@ -22,11 +22,11 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id,
 }
 
 void OrderbookPanel::update(float dt) {
-    // Request data update from data bridge
-    bridge_->sync();
-    
-    // The MarketDataProcessor will handle the actual data processing
-    // through its internal worker threads and lock-free queue
+  // Request data update from data bridge
+  bridge_->sync();
+
+  // The MarketDataProcessor will handle the actual data processing
+  // through its internal worker threads and lock-free queue
 }
 
 void OrderbookPanel::render() {
@@ -101,8 +101,8 @@ void OrderbookPanel::render() {
     }
     ImGui::PopID();
   } else {
-    ImGui::TextColored(ImVec4(1, 0, 0, 1),
-                       "No active symbols detected in SHM!");
+    const auto &colors = ThemeManager::getInstance().getColors();
+    ImGui::TextColored(colors.accent_red, "No active symbols detected in SHM!");
   }
 
   ImGui::Separator();
@@ -160,8 +160,18 @@ void OrderbookPanel::render_orderbook_ladder(
   int ask_count = std::min((int)orderbook.asks.size(), MAX_LEVELS);
   for (int i = ask_count - 1; i >= 0; --i) {
     const auto &level = orderbook.asks[i];
+    const auto &colors = ThemeManager::getInstance().getColors();
     ImGui::NextColumn(); // Skip Bid Size
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%.4f", level.price);
+    // Drag Source for ASK Price
+    ImGui::Selectable(std::to_string(level.price).c_str(), false,
+                      ImGuiSelectableFlags_SpanAllColumns);
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+      ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
+      ImGui::Text("Price: %.2f", level.price);
+      ImGui::EndDragDropSource();
+    }
+    ImGui::SameLine();
+    ImGui::TextColored(colors.accent_red, "%.4f", level.price);
     ImGui::NextColumn();
     ImGui::Text("%.4f", level.size);
     ImGui::NextColumn();
@@ -179,9 +189,19 @@ void OrderbookPanel::render_orderbook_ladder(
   int bid_count = std::min((int)orderbook.bids.size(), MAX_LEVELS);
   for (int i = 0; i < bid_count; ++i) {
     const auto &level = orderbook.bids[i];
+    const auto &colors = ThemeManager::getInstance().getColors();
     ImGui::Text("%.4f", level.size);
     ImGui::NextColumn();
-    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%.4f", level.price);
+    // Drag Source for BID Price
+    ImGui::Selectable(std::to_string(level.price).c_str(), false,
+                      ImGuiSelectableFlags_SpanAllColumns);
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+      ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
+      ImGui::Text("Price: %.2f", level.price);
+      ImGui::EndDragDropSource();
+    }
+    ImGui::SameLine();
+    ImGui::TextColored(colors.accent_green, "%.4f", level.price);
     ImGui::NextColumn();
     ImGui::NextColumn();
   }
@@ -202,9 +222,10 @@ void OrderbookPanel::render_market_depth_chart(
     std::vector<double> bx, by;
     if (!orderbook.bids.empty()) {
       double cumulative_depth = 0.0;
-      
+
       // Add points from worst bid to best bid for increasing X-axis
-      for (auto it = orderbook.bids.rbegin(); it != orderbook.bids.rend(); ++it) {
+      for (auto it = orderbook.bids.rbegin(); it != orderbook.bids.rend();
+           ++it) {
         cumulative_depth += it->size;
         bx.push_back(it->price);
         by.push_back(cumulative_depth);
@@ -221,14 +242,15 @@ void OrderbookPanel::render_market_depth_chart(
       by.push_back(0.0);
     }
 
-    ImPlot::SetNextFillStyle(ImVec4(0, 1, 0, 0.2f));
+    const auto &colors = ThemeManager::getInstance().getColors();
+    ImPlot::SetNextFillStyle(colors.accent_green);
     ImPlot::PlotShaded("Bids", bx.data(), by.data(), (int)bx.size(), 0);
 
     // Handle Asks - Cumulative depth from best ask up
     std::vector<double> ax, ay;
     if (!orderbook.asks.empty()) {
       double cumulative_depth = 0.0;
-      
+
       // Add points from best ask to worst ask
       for (const auto &ask : orderbook.asks) {
         cumulative_depth += ask.size;
@@ -247,7 +269,7 @@ void OrderbookPanel::render_market_depth_chart(
       ay.insert(ay.begin(), 0.0);
     }
 
-    ImPlot::SetNextFillStyle(ImVec4(1, 0, 0, 0.2f));
+    ImPlot::SetNextFillStyle(colors.accent_red);
     ImPlot::PlotShaded("Asks", ax.data(), ay.data(), (int)ax.size(), 0);
 
     ImPlot::EndPlot();

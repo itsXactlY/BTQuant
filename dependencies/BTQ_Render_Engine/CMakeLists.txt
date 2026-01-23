@@ -97,6 +97,8 @@ set(DASHBOARD_SOURCES
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
+    src/components/theme_manager.cpp
+    src/components/interaction_manager.cpp
     src/config/dashboard_config.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp

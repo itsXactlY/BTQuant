@@ -29,18 +29,24 @@ PanelManager::PanelManager(
 PanelManager::~PanelManager() { panels_.clear(); }
 
 void PanelManager::initialize() {
-  // Set grid layout for billion-dollar terminal (3 columns, 4 rows)
-  set_grid_layout(3, 4);
+  // Set grid layout (3 columns, 5 rows to fit 2x2 chart properly)
+  set_grid_layout(3, 5);
 
-  // Create default panels for billion-dollar terminal layout
-  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 3,
-            1); // Full width status bar
-  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2); // Large main chart
-  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 2, 1, 1, 1);
-  add_panel(PanelType::WATCHLIST, "Watchlist", 2, 2, 1, 1);
-  add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 0, 3, 1, 1);
-  add_panel(PanelType::DEPTH_CHART, "Depth Chart", 1, 3, 1, 1);
+  // Create default panels
+  // Row 0: Status Bar
+  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 3, 1);
+
+  // Row 1-2: Main Chart (2x2) and Depth Chart (1x2)
+  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
+  add_panel(PanelType::DEPTH_CHART, "Depth Chart", 2, 1, 1, 2);
+
+  // Row 3: Orderbook Ladder (2x1) and Tape (1x1)
+  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 3, 2, 1);
   add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
+
+  // Row 4: Volume Profile (2x1) and Watchlist (1x1)
+  add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 0, 4, 2, 1);
+  add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
 
   // Initialize orderbook with first active symbol
   auto active_symbols = bridge_->getActiveSymbols();

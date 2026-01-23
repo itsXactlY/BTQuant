@@ -14,6 +14,7 @@
 
 // Include modular headers
 #include "analytics/technical_analysis.hpp"
+#include "components/theme_manager.hpp"
 #include "trading/order_manager.hpp"
 #include "trading/position_manager.hpp"
 #include "trading/risk_assessment.hpp"
@@ -153,12 +154,6 @@ class LayoutManager {
 public:
   void create_default_layouts();
   void save_layout(const std::string &name, const std::string &desc);
-};
-
-class ThemeManager {
-public:
-  std::vector<std::string> get_available_themes();
-  void set_theme(const std::string &name);
 };
 
 class SearchEngine {

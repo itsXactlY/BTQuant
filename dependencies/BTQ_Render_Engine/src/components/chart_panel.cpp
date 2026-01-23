@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iostream>
 
 namespace BTQuant {
 
@@ -178,10 +179,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
           1000000.0);
 
-  // Neon Chart Styling
-  ImPlot::PushStyleColor(ImPlotCol_FrameBg, ImVec4(0.05f, 0.05f, 0.05f, 1.0f));
-  ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.02f, 0.02f, 0.02f, 1.0f));
-  ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+  // Neon Chart Styling (ThemeManager)
+  const auto &colors = ThemeManager::getInstance().getColors();
+  ImPlot::PushStyleColor(ImPlotCol_FrameBg, colors.background);
+  ImPlot::PushStyleColor(ImPlotCol_PlotBg,
+                         colors.panel_bg); // Use panel bg or specific dark
+  ImPlot::PushStyleColor(ImPlotCol_PlotBorder, colors.border);
   ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
 
   if (ImPlot::BeginPlot("##Chart", ImVec2(-1, -1),
@@ -281,6 +284,17 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       }
     }
 
+    // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)
+    if (ImPlot::BeginDragDropTargetPlot()) {
+      if (const ImGuiPayload *payload =
+              ImGui::AcceptDragDropPayload("PRICE_LEVEL")) {
+        double dropped_price = *(const double *)payload->Data;
+        std::cout << "[ChartPanel] Dropped Price Level: " << dropped_price
+                  << std::endl;
+      }
+      ImPlot::EndDragDropTarget();
+    }
+
     // Now get the actual limits being used for THIS frame's rendering and NEXT
     // frame's scaling This locks setup, so it must happen AFTER SetupAxisLimits
     ImPlotRect limits = ImPlot::GetPlotLimits();
@@ -342,10 +356,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
         continue;
 
       bool bullish = close >= open;
-      ImU32 color =
-          bullish ? IM_COL32(0, 255, 100, 200) : IM_COL32(255, 50, 80, 200);
-      ImU32 wick_color =
-          bullish ? IM_COL32(0, 255, 100, 255) : IM_COL32(255, 50, 80, 255);
+      const auto &colors = ThemeManager::getInstance().getColors();
+      ImU32 color = bullish
+                        ? ImGui::ColorConvertFloat4ToU32(colors.candle_up)
+                        : ImGui::ColorConvertFloat4ToU32(colors.candle_down);
+      // Wicks same as body or distinct? Using same for neon look
+      ImU32 wick_color = color;
 
       // Transform to screen coordinates
       ImVec2 wick_top = ImPlot::PlotToPixels(x, high);

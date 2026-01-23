@@ -13,24 +13,27 @@ void PanelBase::begin_panel_window() {
   if (!config_.movable)
     flags |= ImGuiWindowFlags_NoMove;
 
-  // Professional styling
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.08f, 0.95f));
-  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_TitleBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-  ImGui::PushStyleColor(ImGuiCol_TitleBgActive,
-                        ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+  // Use ThemeManager for glass style
+  push_glass_style();
 
+  // Ensure unique ID for the window
   std::string window_title = config_.title + "###panel_" +
                              std::to_string(reinterpret_cast<uintptr_t>(this));
+
   ImGui::Begin(window_title.c_str(), &config_.visible, flags);
 }
 
 void PanelBase::end_panel_window() {
   ImGui::End();
-  ImGui::PopStyleColor(4);
-  ImGui::PopStyleVar(2);
+  pop_glass_style();
+}
+
+void PanelBase::push_glass_style() {
+  ThemeManager::getInstance().pushGlassStyle();
+}
+
+void PanelBase::pop_glass_style() {
+  ThemeManager::getInstance().popGlassStyle();
 }
 
 void PanelBase::render() {

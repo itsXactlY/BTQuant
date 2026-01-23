@@ -130,8 +130,9 @@ void TapePanel::render_trade_table() {
 
       // Price column
       ImGui::TableSetColumnIndex(1);
-      ImVec4 price_color = trade.is_buy ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                                        : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+      const auto &colors = ThemeManager::getInstance().getColors();
+      ImVec4 price_color =
+          trade.is_buy ? colors.accent_green : colors.accent_red;
       ImGui::TextColored(price_color, "%.4f", trade.price);
 
       // Size column
@@ -141,9 +142,9 @@ void TapePanel::render_trade_table() {
       // Side column
       ImGui::TableSetColumnIndex(3);
       if (trade.is_buy) {
-        ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "BUY");
+        ImGui::TextColored(colors.accent_green, "BUY");
       } else {
-        ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "SELL");
+        ImGui::TextColored(colors.accent_red, "SELL");
       }
 
       ImGui::PopID();

@@ -25,6 +25,8 @@ public:
   void update(float dt) override;
   void render_gui() override;
 
+  PanelManager *getPanelManager() { return panel_manager_.get(); }
+
   void initialize_vulkan_resources(VulkanCore *core) override;
   void clear_data() override;
 

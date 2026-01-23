@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "theme_manager.hpp"
 #include <atomic>
 #include <memory>
 #include <string>
@@ -101,6 +102,10 @@ protected:
   void begin_panel_window();
   void end_panel_window();
   void render_panel_header();
+
+  // Glass-morphism helpers wrappers
+  void push_glass_style();
+  void pop_glass_style();
 
   // Utility functions
   static const char *get_panel_type_name(PanelType type);

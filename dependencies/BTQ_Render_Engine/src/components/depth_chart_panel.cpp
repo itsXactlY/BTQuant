@@ -264,11 +264,14 @@ void DepthChartPanel::render_depth_chart_implot() {
   char plot_id[64];
   snprintf(plot_id, sizeof(plot_id), "##DepthChart_%s", config_.title.c_str());
 
-  // Styling: Neon Financial Colors (Green/Red)
-  ImVec4 col_bid_fill = ImVec4(0.0f, 1.0f, 0.0f, 0.2f); // Neon Green Fill
-  ImVec4 col_bid_line = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Neon Green Line
-  ImVec4 col_ask_fill = ImVec4(1.0f, 0.0f, 0.0f, 0.2f); // Neon Red Fill
-  ImVec4 col_ask_line = ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Neon Red Line
+  // Styling: Neon Financial Colors (Green/Red) from ThemeManager
+  const auto &colors = ThemeManager::getInstance().getColors();
+  ImVec4 col_bid_fill = colors.accent_green;
+  col_bid_fill.w = 0.2f;
+  ImVec4 col_bid_line = colors.accent_green;
+  ImVec4 col_ask_fill = colors.accent_red;
+  col_ask_fill.w = 0.2f;
+  ImVec4 col_ask_line = colors.accent_red;
 
   // Setup Plot Flags for clean look
   if (ImPlot::BeginPlot(plot_id, region,

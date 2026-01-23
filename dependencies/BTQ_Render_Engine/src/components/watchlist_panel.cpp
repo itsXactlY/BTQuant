@@ -28,6 +28,43 @@ void WatchlistPanel::render() {
 
   render_panel_header();
 
+  // Symbol Selector Dropdown - add symbols from all available in bridge
+  if (bridge_) {
+    auto active_symbols = bridge_->getActiveSymbols();
+    if (!active_symbols.empty()) {
+      ImGui::Text("Add:");
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::BeginCombo("##SymbolSelector", "Select Symbol...")) {
+        for (uint32_t sym_id : active_symbols) {
+          std::string sym_name = bridge_->getSymbolName(sym_id);
+          std::string exchange = bridge_->getExchangeName(sym_id);
+          if (sym_name.empty())
+            continue;
+
+          // Check if already in watchlist
+          bool already_added = watchlist_.contains(sym_id);
+
+          std::string label = exchange + "/" + sym_name;
+          if (already_added) {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::Selectable(label.c_str(), false,
+                              ImGuiSelectableFlags_Disabled);
+            ImGui::PopStyleColor();
+          } else {
+            if (ImGui::Selectable(label.c_str())) {
+              add_symbol(sym_id, sym_name, exchange);
+            }
+          }
+        }
+        ImGui::EndCombo();
+      }
+      ImGui::SameLine();
+      ImGui::Text("(%zu symbols)", active_symbols.size());
+    }
+  }
+
   // Filter input
   render_filter_input();
   ImGui::Separator();
@@ -53,8 +90,16 @@ void WatchlistPanel::render() {
 
   // Context menu for adding/removing symbols
   if (ImGui::BeginPopupContextWindow()) {
-    if (ImGui::MenuItem("Add Symbol...")) {
-      // TODO: Open symbol selector dialog
+    if (ImGui::MenuItem("Add All Symbols")) {
+      if (bridge_) {
+        for (uint32_t sym_id : bridge_->getActiveSymbols()) {
+          std::string sym_name = bridge_->getSymbolName(sym_id);
+          std::string exchange = bridge_->getExchangeName(sym_id);
+          if (!sym_name.empty() && !watchlist_.contains(sym_id)) {
+            add_symbol(sym_id, sym_name, exchange);
+          }
+        }
+      }
     }
     if (ImGui::MenuItem("Clear Watchlist")) {
       clear_watchlist();
@@ -168,8 +213,33 @@ void WatchlistPanel::render_table_header() {
 void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
   ImGui::TableNextRow();
 
+  // Make entire row selectable for click-to-chart
   ImGui::TableSetColumnIndex(0);
-  ImGui::Text("%s", entry.symbol.c_str());
+  bool is_selected = (entry.symbol_id == selected_symbol_id_);
+
+  // Use Selectable spanning all columns
+  char label[128];
+  snprintf(label, sizeof(label), "%s##row_%u", entry.symbol.c_str(),
+           entry.symbol_id);
+  if (ImGui::Selectable(label, is_selected,
+                        ImGuiSelectableFlags_SpanAllColumns |
+                            ImGuiSelectableFlags_AllowDoubleClick)) {
+    selected_symbol_id_ = entry.symbol_id;
+
+    // Trigger symbol selection callback (e.g., to open chart)
+    if (on_symbol_selected_) {
+      on_symbol_selected_(entry.symbol_id, entry.symbol);
+    }
+  }
+
+  // Show tooltip on hover
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Click to view %s chart", entry.symbol.c_str());
+    ImGui::Text("Exchange: %s", entry.exchange.c_str());
+    ImGui::Text("24h High/Low: %.4f / %.4f", entry.high_24h, entry.low_24h);
+    ImGui::EndTooltip();
+  }
 
   ImGui::TableSetColumnIndex(1);
   ImGui::Text("%.4f", entry.price);
@@ -177,10 +247,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
   ImGui::TableSetColumnIndex(2);
   ImVec4 change_color = entry.change_24h >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
                                               : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-  ImGui::TextColored(change_color, "%.2f%%", entry.change_24h);
+  ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
 
   ImGui::TableSetColumnIndex(3);
-  ImGui::Text("%.0f", entry.volume_24h);
+  // Format volume with K/M suffix for readability
+  if (entry.volume_24h >= 1e6) {
+    ImGui::Text("%.2fM", entry.volume_24h / 1e6);
+  } else if (entry.volume_24h >= 1e3) {
+    ImGui::Text("%.2fK", entry.volume_24h / 1e3);
+  } else {
+    ImGui::Text("%.0f", entry.volume_24h);
+  }
 
   ImGui::TableSetColumnIndex(4);
   ImGui::Text("%.4f", entry.vwap);

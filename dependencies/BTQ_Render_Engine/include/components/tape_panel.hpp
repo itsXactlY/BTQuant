@@ -11,6 +11,11 @@ namespace BTQuant {
 /**
  * TapePanel - Time & Sales display
  *
+ * C++26 Reactive Architecture:
+ * - Subscribes to TRADE notifications from MarketDataProcessor
+ * - markDirty() in callback, consumeDirty() in render()
+ * - No polling timer - event-driven updates
+ *
  * Shows a scrolling list of recent trades with:
  * - Timestamp (HH:MM:SS.mmm)
  * - Price
@@ -23,9 +28,9 @@ public:
             std::shared_ptr<HotSpineDataBridge> bridge,
             std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  void update(float dt) override;
-  void render() override;
+  ~TapePanel() override;
 
+  void render() override;
   void set_symbol(uint32_t symbol_id, const std::string &symbol_name);
 
 private:
@@ -41,11 +46,10 @@ private:
 
   // Cached trades for rendering
   std::vector<RenderEngine::TradeData> cached_trades_;
-  float update_timer_ = 0.0f;
-  static constexpr float UPDATE_INTERVAL = 0.05f; // 50ms refresh
 
   void render_trade_table();
   void render_controls();
+  void subscribe_to_updates();
 };
 
 } // namespace BTQuant

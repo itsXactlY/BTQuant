@@ -5,16 +5,22 @@
 #include "panel_base.hpp"
 #include <imgui.h>
 #include <memory>
+#include <vector>
 
 namespace BTQuant {
 
 /**
  * DepthChartPanel - Cumulative bid/ask depth visualization
  *
- * Shows an area chart with:
- * - Bid depth (green) accumulating from mid price leftward
- * - Ask depth (red) accumulating from mid price rightward
- * - X-axis: price, Y-axis: cumulative size
+ * C++26 Reactive Architecture:
+ * - Subscribes to ORDERBOOK notifications from MarketDataProcessor
+ * - markDirty() in callback, consumeDirty() in render()
+ * - No polling timer - event-driven updates
+ *
+ * Uses ImPlot for professional financial charting:
+ * - Shaded area for bid depth (green)
+ * - Shaded area for ask depth (red)
+ * - Gradient fills with alpha
  */
 class DepthChartPanel : public PanelBase {
 public:
@@ -22,9 +28,9 @@ public:
                   std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  void update(float dt) override;
-  void render() override;
+  ~DepthChartPanel() override;
 
+  void render() override;
   void set_symbol(uint32_t symbol_id, const std::string &symbol_name);
 
 private:
@@ -34,13 +40,21 @@ private:
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";
 
-  // Cached orderbook data
+  // Cached orderbook data - pre-computed for rendering
   RenderEngine::OrderbookData cached_orderbook_;
-  float update_timer_ = 0.0f;
-  static constexpr float UPDATE_INTERVAL = 0.05f; // 50ms refresh
 
-  void render_depth_chart();
+  // Pre-computed plot data (avoids per-frame allocation)
+  std::vector<double> bid_prices_;
+  std::vector<double> bid_cumulative_;
+  std::vector<double> ask_prices_;
+  std::vector<double> ask_cumulative_;
+  double mid_price_ = 0.0;
+  double max_depth_ = 1.0;
+
+  void compute_depth_data();
+  void render_depth_chart_implot();
   void render_stats();
+  void subscribe_to_updates();
 };
 
 } // namespace BTQuant

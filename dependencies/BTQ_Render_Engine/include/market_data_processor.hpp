@@ -21,8 +21,9 @@
 #include <vector>
 // Lock-free queue (header-only, fetched by CMake)
 #include <concurrentqueue.h>
-// Lock-free hash map (assuming available or use std::unordered_map with atomic ops)
-// #include <folly/AtomicHashMap.h> // Example, or implement custom lock-free map
+// Lock-free hash map (assuming available or use std::unordered_map with atomic
+// ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
+// lock-free map
 
 // Price level for order book data
 struct PriceLevel {
@@ -204,6 +205,21 @@ struct MarketSummary {
   std::chrono::high_resolution_clock::time_point last_update;
 };
 
+// C++26 Push Notification Types
+enum class NotificationType { TRADE, ORDERBOOK, CANDLE, ANALYTICS };
+
+// Callback signature for push notifications
+using SymbolCallback =
+    std::function<void(uint32_t symbol_id, NotificationType type)>;
+
+// Subscription entry for reactive updates
+struct Subscription {
+  uint64_t id;
+  uint32_t symbol_id;      // 0 = all symbols
+  NotificationType filter; // Which events to receive
+  SymbolCallback callback;
+};
+
 /**
  * MarketDataProcessor - Advanced market data analytics engine
  *
@@ -354,6 +370,27 @@ public:
   void setParallelProcessingEnabled(bool enabled);
   bool isParallelProcessingEnabled() const;
 
+  /**
+   * C++26 Push Notification Subscription System
+   * Panels subscribe to receive immediate callbacks when data updates
+   */
+
+  /**
+   * Subscribe to symbol updates (lock-free)
+   * @param symbol_id Symbol to subscribe to (0 = all symbols)
+   * @param filter Which notification types to receive
+   * @param callback Function to call when data updates
+   * @return Subscription ID for later unsubscription
+   */
+  uint64_t subscribe(uint32_t symbol_id, NotificationType filter,
+                     SymbolCallback callback);
+
+  /**
+   * Unsubscribe from updates (lock-free)
+   * @param subscription_id ID returned from subscribe()
+   */
+  void unsubscribe(uint64_t subscription_id);
+
 private:
   // Configuration parameters
   size_t vwap_window_size_;
@@ -442,7 +479,8 @@ private:
 
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade);
-  void updateCandleForTimeframe(SymbolAnalytics &symbol_data, const TradeData &trade, TimeFrame timeframe);
+  void updateCandleForTimeframe(SymbolAnalytics &symbol_data,
+                                const TradeData &trade, TimeFrame timeframe);
   OHLCVCandle createNewCandle(uint64_t timestamp, double price,
                               double size) const;
   bool isTradeInCurrentCandle(const OHLCVCandle &candle,
@@ -457,12 +495,24 @@ private:
 
   // Worker Loop
   void processQueueLoop();
-  void processUpdate(const MarketDataUpdate& update);
+  void processUpdate(const MarketDataUpdate &update);
 
   // Helper to get shard for a symbol
   Shard &getShard(uint32_t symbol_id) const {
     return *shards_[symbol_id % NUM_SHARDS];
   }
+
+  // C++26 Lock-free subscriber access using copy-on-read pattern
+  // Writes (subscribe/unsubscribe) are rare, reads (notify) are frequent
+  // Take mutex only for write, copy shared_ptr for lock-free iteration
+  using SubscriberList = std::vector<Subscription>;
+  mutable std::mutex subscribers_mutex_;
+  std::shared_ptr<SubscriberList> subscribers_{
+      std::make_shared<SubscriberList>()};
+  std::atomic<uint64_t> next_subscription_id_{1};
+
+  // Notify all relevant subscribers (called from worker threads)
+  void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
 };
 
 } // namespace RenderEngine

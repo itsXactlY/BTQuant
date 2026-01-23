@@ -3,6 +3,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -17,12 +18,17 @@ struct WatchlistEntry {
   double change_24h = 0.0;
   double volume_24h = 0.0;
   double vwap = 0.0;
+  double high_24h = 0.0;
+  double low_24h = 0.0;
   uint64_t last_update_ts = 0;
   bool is_active = true;
 };
 
 class WatchlistPanel : public PanelBase {
 public:
+  using SymbolSelectedCallback =
+      std::function<void(uint32_t symbol_id, const std::string &symbol)>;
+
   WatchlistPanel(const PanelConfig &config,
                  std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
@@ -36,6 +42,11 @@ public:
   void remove_symbol(uint32_t symbol_id);
   void clear_watchlist();
 
+  // Symbol selection callback (e.g., to open chart when clicked)
+  void set_symbol_selected_callback(SymbolSelectedCallback cb) {
+    on_symbol_selected_ = std::move(cb);
+  }
+
 private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -47,6 +58,8 @@ private:
   int sort_column_ = 0; // 0=symbol, 1=price, 2=change, 3=volume
   bool sort_ascending_ = true;
   char filter_buffer_[256] = {0};
+  uint32_t selected_symbol_id_ = 0;
+  SymbolSelectedCallback on_symbol_selected_;
 
   // Performance
   float update_timer_ = 0.0f;

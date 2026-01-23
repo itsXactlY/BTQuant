@@ -1,21 +1,47 @@
 #include "../../include/components/volume_profile_panel.hpp"
 #include "imgui.h"
+#include "implot.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <limits>
 
 namespace BTQuant {
 
 VolumeProfilePanel::VolumeProfilePanel(
     const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {}
+    : PanelBase(config), bridge_(bridge), processor_(processor) {
+  volume_profile_.reserve(NUM_PRICE_LEVELS);
 
-void VolumeProfilePanel::update(float dt) {
-  update_timer_ += dt;
-  if (update_timer_ >= UPDATE_INTERVAL) {
-    build_volume_profile();
-    update_timer_ = 0.0f;
+  // C++26: Subscribe to push notifications instead of polling
+  subscribe_to_updates();
+}
+
+VolumeProfilePanel::~VolumeProfilePanel() {
+  // C++26: Clean unsubscription on destruction
+  if (processor_ && subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
   }
+}
+
+void VolumeProfilePanel::subscribe_to_updates() {
+  if (!processor_ || symbol_id_ == 0)
+    return;
+
+  // Unsubscribe from previous symbol if any
+  if (subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
+  }
+
+  // Subscribe to TRADE notifications for this symbol
+  // Callback sets dirty flag - will be processed in next render()
+  subscription_id_ = processor_->subscribe(
+      symbol_id_, RenderEngine::NotificationType::TRADE,
+      [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+        // Thread-safe: atomic flag set from worker thread
+        this->markDirty();
+      });
 }
 
 void VolumeProfilePanel::render() {
@@ -29,6 +55,15 @@ void VolumeProfilePanel::render() {
   render_panel_header();
   render_controls();
   ImGui::Separator();
+
+  // C++26 Reactive: Only rebuild when new data arrives or first load
+  if (processor_ && symbol_id_ != 0) {
+    // consumeDirty() returns true initially or when notified
+    if (consumeDirty() || volume_profile_.empty()) {
+      build_volume_profile();
+    }
+  }
+
   render_volume_bars();
 
   end_panel_window();
@@ -39,69 +74,75 @@ void VolumeProfilePanel::set_symbol(uint32_t symbol_id,
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   volume_profile_.clear();
+  max_volume_ = 0.0;
+  poc_price_ = 0.0;
+
+  // Re-subscribe to new symbol
+  subscribe_to_updates();
+  markDirty(); // Force immediate build
 }
 
 void VolumeProfilePanel::build_volume_profile() {
-  if (!processor_ || symbol_id_ == 0)
-    return;
-
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
   const auto &trades = analytics.recent_trades;
 
-  if (trades.empty()) {
-    volume_profile_.clear();
+  if (trades.empty())
     return;
-  }
 
-  // Find price range from recent trades
-  double min_price = trades.front().price;
-  double max_price = trades.front().price;
+  // Find price range
+  double min_price = std::numeric_limits<double>::max();
+  double max_price = std::numeric_limits<double>::lowest();
+
   for (const auto &trade : trades) {
     min_price = std::min(min_price, trade.price);
     max_price = std::max(max_price, trade.price);
   }
 
-  // Calculate bucket size
+  if (max_price <= min_price)
+    return;
+
+  // Compute bucket size
   double range = max_price - min_price;
-  if (range <= 0)
-    range = 1.0;
   price_bucket_size_ = range / NUM_PRICE_LEVELS;
   if (price_bucket_size_ <= 0)
     price_bucket_size_ = 1.0;
 
-  // Initialize volume levels
+  // Reset profile
   volume_profile_.clear();
   volume_profile_.resize(NUM_PRICE_LEVELS);
+
   for (size_t i = 0; i < NUM_PRICE_LEVELS; ++i) {
-    volume_profile_[i].price =
-        min_price + (i + 0.5) * price_bucket_size_; // Midpoint
-    volume_profile_[i].buy_volume = 0.0;
-    volume_profile_[i].sell_volume = 0.0;
-    volume_profile_[i].total_volume = 0.0;
+    volume_profile_[i].price = min_price + (i + 0.5) * price_bucket_size_;
+    volume_profile_[i].buy_volume = 0;
+    volume_profile_[i].sell_volume = 0;
+    volume_profile_[i].total_volume = 0;
   }
 
-  // Aggregate volume into buckets
+  // Aggregate trades into buckets
   for (const auto &trade : trades) {
-    size_t bucket_idx =
+    size_t bucket =
         static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
-    bucket_idx = std::min(bucket_idx, NUM_PRICE_LEVELS - 1);
+    bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
 
     if (trade.is_buy) {
-      volume_profile_[bucket_idx].buy_volume += trade.size;
+      volume_profile_[bucket].buy_volume += trade.size;
     } else {
-      volume_profile_[bucket_idx].sell_volume += trade.size;
+      volume_profile_[bucket].sell_volume += trade.size;
     }
-    volume_profile_[bucket_idx].total_volume += trade.size;
+    volume_profile_[bucket].total_volume += trade.size;
   }
 
   // Find POC and max volume
-  max_volume_ = 0.0;
-  poc_price_ = 0.0;
-  double poc_volume = 0.0;
+  max_volume_ = 0;
+  poc_price_ = volume_profile_[0].price;
+  double poc_volume = 0;
+
   for (const auto &level : volume_profile_) {
-    max_volume_ = std::max(max_volume_, level.total_volume);
-    if (level.total_volume > poc_volume) {
-      poc_volume = level.total_volume;
+    double total = level.buy_volume + level.sell_volume;
+    max_volume_ =
+        std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
+    if (total > poc_volume) {
+      poc_volume = total;
       poc_price_ = level.price;
     }
   }
@@ -110,7 +151,7 @@ void VolumeProfilePanel::build_volume_profile() {
 void VolumeProfilePanel::render_controls() {
   ImGui::Text("Symbol: %s", symbol_name_.c_str());
   ImGui::SameLine();
-  ImGui::Text("| POC: %.4f", poc_price_);
+  ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "| POC: %.4f", poc_price_);
 }
 
 void VolumeProfilePanel::render_volume_bars() {
@@ -120,49 +161,63 @@ void VolumeProfilePanel::render_volume_bars() {
   }
 
   ImVec2 region = ImGui::GetContentRegionAvail();
-  ImDrawList *draw_list = ImGui::GetWindowDrawList();
-  ImVec2 cursor = ImGui::GetCursorScreenPos();
+  if (region.x < 100 || region.y < 100)
+    return;
 
-  float row_height = region.y / static_cast<float>(volume_profile_.size());
-  float bar_max_width = region.x / 2.0f - 10.0f; // Half width for each side
+  // Prepare data for ImPlot horizontal bars
+  std::vector<double> prices;
+  std::vector<double> buy_volumes;
+  std::vector<double> sell_volumes;
 
-  // Render from top (highest price) to bottom (lowest price)
-  for (size_t i = 0; i < volume_profile_.size(); ++i) {
-    size_t idx = volume_profile_.size() - 1 - i; // Reverse order
-    const auto &level = volume_profile_[idx];
+  prices.reserve(volume_profile_.size());
+  buy_volumes.reserve(volume_profile_.size());
+  sell_volumes.reserve(volume_profile_.size());
 
-    float y = cursor.y + i * row_height;
-    float center_x = cursor.x + region.x / 2.0f;
-
-    // Buy volume bar (left side, green)
-    float buy_width = (level.buy_volume / max_volume_) * bar_max_width;
-    ImVec4 buy_color = (level.price == poc_price_)
-                           ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f)
-                           : ImVec4(0.2f, 0.6f, 0.2f, 0.8f);
-    draw_list->AddRectFilled(ImVec2(center_x - buy_width, y),
-                             ImVec2(center_x - 2, y + row_height - 2),
-                             ImGui::ColorConvertFloat4ToU32(buy_color));
-
-    // Sell volume bar (right side, red)
-    float sell_width = (level.sell_volume / max_volume_) * bar_max_width;
-    ImVec4 sell_color = (level.price == poc_price_)
-                            ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
-                            : ImVec4(0.6f, 0.2f, 0.2f, 0.8f);
-    draw_list->AddRectFilled(
-        ImVec2(center_x + 2, y),
-        ImVec2(center_x + 2 + sell_width, y + row_height - 2),
-        ImGui::ColorConvertFloat4ToU32(sell_color));
-
-    // Price label (center)
-    char price_str[32];
-    snprintf(price_str, sizeof(price_str), "%.2f", level.price);
-    ImVec2 text_size = ImGui::CalcTextSize(price_str);
-    draw_list->AddText(ImVec2(center_x - text_size.x / 2, y + 2),
-                       IM_COL32(200, 200, 200, 255), price_str);
+  for (const auto &level : volume_profile_) {
+    prices.push_back(level.price);
+    buy_volumes.push_back(level.buy_volume);
+    sell_volumes.push_back(-level.sell_volume); // Negative for left side
   }
 
-  // Reserve space for the rendered content
-  ImGui::Dummy(region);
+  // Unique plot ID per panel instance to avoid ImGui ID conflicts
+  char plot_id[64];
+  snprintf(plot_id, sizeof(plot_id), "##VolumeProfile_%s",
+           config_.title.c_str());
+
+  if (ImPlot::BeginPlot(plot_id, region,
+                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
+                            ImPlotFlags_NoMouseText)) {
+
+    ImPlot::SetupAxes("Volume", "Price",
+                      ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_Invert,
+                      ImPlotAxisFlags_AutoFit);
+
+    // Bar height based on price bucket size
+    double bar_height = price_bucket_size_ * 0.8;
+
+    // Buy bars (green, positive X) - using PlotBars with horizontal flag
+    ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
+    ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
+                     static_cast<int>(prices.size()), bar_height,
+                     ImPlotBarsFlags_Horizontal);
+
+    // Sell bars (red, negative X)
+    ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
+    ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
+                     static_cast<int>(prices.size()), bar_height,
+                     ImPlotBarsFlags_Horizontal);
+
+    // POC line
+    if (poc_price_ > 0) {
+      double poc_line_x[2] = {-max_volume_, max_volume_};
+      double poc_line_y[2] = {poc_price_, poc_price_};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+      ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+      ImPlot::PopStyleColor();
+    }
+
+    ImPlot::EndPlot();
+  }
 }
 
 } // namespace BTQuant

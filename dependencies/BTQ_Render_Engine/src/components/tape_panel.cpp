@@ -8,25 +8,36 @@ namespace BTQuant {
 TapePanel::TapePanel(
     const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {}
+    : PanelBase(config), bridge_(bridge), processor_(processor) {
+  cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
-void TapePanel::update(float dt) {
-  update_timer_ += dt;
-  if (update_timer_ >= UPDATE_INTERVAL) {
-    // Refresh trade data from processor
-    if (processor_ && symbol_id_ != 0) {
-      auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-      cached_trades_ = analytics.recent_trades;
+  // C++26: Subscribe to push notifications instead of polling
+  subscribe_to_updates();
+}
 
-      // Keep only most recent trades for display
-      if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
-        cached_trades_.erase(cached_trades_.begin(),
-                             cached_trades_.begin() +
-                                 (cached_trades_.size() - MAX_VISIBLE_TRADES));
-      }
-    }
-    update_timer_ = 0.0f;
+TapePanel::~TapePanel() {
+  // C++26: Clean unsubscription on destruction
+  if (processor_ && subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
   }
+}
+
+void TapePanel::subscribe_to_updates() {
+  if (!processor_ || symbol_id_ == 0)
+    return;
+
+  // Unsubscribe from previous symbol if any
+  if (subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
+  }
+
+  // Subscribe to TRADE notifications for this symbol
+  subscription_id_ = processor_->subscribe(
+      symbol_id_, RenderEngine::NotificationType::TRADE,
+      [this](uint32_t /*symbol_id*/, RenderEngine::NotificationType /*type*/) {
+        // Thread-safe: atomic flag set from worker thread
+        this->markDirty();
+      });
 }
 
 void TapePanel::render() {
@@ -40,6 +51,22 @@ void TapePanel::render() {
   render_panel_header();
   render_controls();
   ImGui::Separator();
+
+  // C++26 Reactive: Refresh data when new trades arrive or first load
+  if (processor_ && symbol_id_ != 0) {
+    if (consumeDirty() || cached_trades_.empty()) {
+      auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+      cached_trades_ = analytics.recent_trades;
+
+      // Keep only most recent trades for display
+      if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
+        cached_trades_.erase(cached_trades_.begin(),
+                             cached_trades_.begin() +
+                                 (cached_trades_.size() - MAX_VISIBLE_TRADES));
+      }
+    }
+  }
+
   render_trade_table();
 
   end_panel_window();
@@ -49,6 +76,10 @@ void TapePanel::set_symbol(uint32_t symbol_id, const std::string &symbol_name) {
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   cached_trades_.clear();
+
+  // Re-subscribe to new symbol
+  subscribe_to_updates();
+  markDirty(); // Force immediate refresh
 }
 
 void TapePanel::render_controls() {

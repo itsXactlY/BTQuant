@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -41,12 +42,21 @@ struct PanelConfig {
   int grid_height = 1;
 };
 
+/**
+ * PanelBase - Base class for all UI panels
+ *
+ * C++26 Reactive Architecture:
+ * - Panels subscribe to MarketDataProcessor for push notifications
+ * - data_dirty_ flag set by notification callback (thread-safe atomic)
+ * - render() checks consumeDirty() to know when to refresh data
+ * - No polling timers needed - truly event-driven
+ */
 class PanelBase {
 public:
   PanelBase(const PanelConfig &config) : config_(config) {}
   virtual ~PanelBase() = default;
 
-  virtual void update(float dt) {}
+  virtual void update([[maybe_unused]] float dt) {}
   virtual void render() = 0;
   virtual void initialize() {}
 
@@ -64,6 +74,28 @@ public:
 
 protected:
   PanelConfig config_;
+
+  // C++26 Reactive Push Notification Support
+  // Set by processor callback when new data arrives - atomic for thread safety
+  std::atomic<bool> data_dirty_{true}; // Start dirty to force initial load
+  uint64_t subscription_id_ = 0;       // ID from processor->subscribe()
+
+  /**
+   * Called by MarketDataProcessor notification callback
+   * Thread-safe: uses release memory ordering for proper visibility
+   */
+  void markDirty() noexcept {
+    data_dirty_.store(true, std::memory_order_release);
+  }
+
+  /**
+   * Called in render() to check if data needs refresh
+   * Atomically clears the flag and returns previous value
+   * Uses acquire-release for proper synchronization with markDirty()
+   */
+  [[nodiscard]] bool consumeDirty() noexcept {
+    return data_dirty_.exchange(false, std::memory_order_acq_rel);
+  }
 
   // Helper methods for consistent styling
   void begin_panel_window();

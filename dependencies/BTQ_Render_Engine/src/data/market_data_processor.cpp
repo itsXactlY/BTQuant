@@ -203,6 +203,41 @@ MarketDataProcessor::getOrderbookData(uint32_t symbol_id) const {
   return std::nullopt;
 }
 
+std::vector<OrderbookData>
+MarketDataProcessor::getHistoricalOrderbooks(uint32_t symbol_id,
+                                             size_t count) const {
+  auto &shard = getShard(symbol_id);
+  std::shared_lock lock(shard.mutex);
+
+  auto it = shard.data.find(symbol_id);
+  if (it != shard.data.end()) {
+    const auto &history = it->second.recent_orderbooks;
+    if (count == 0 || count >= history.size()) {
+      return {history.begin(), history.end()};
+    }
+    return {history.end() - count, history.end()};
+  }
+  return {};
+}
+
+std::vector<VolumeProfileLevel>
+MarketDataProcessor::getVolumeProfile(uint32_t symbol_id,
+                                      TimeFrame timeframe) const {
+  auto &shard = getShard(symbol_id);
+  std::shared_lock lock(shard.mutex);
+
+  auto it = shard.data.find(symbol_id);
+  if (it != shard.data.end()) {
+    std::vector<VolumeProfileLevel> result;
+    result.reserve(it->second.session_volume_profile.size());
+    for (const auto &[price, level] : it->second.session_volume_profile) {
+      result.push_back(level);
+    }
+    return result;
+  }
+  return {};
+}
+
 MarketSummary MarketDataProcessor::getMarketSummary() const {
   MarketSummary summary;
   auto now = std::chrono::high_resolution_clock::now();
@@ -522,6 +557,16 @@ void MarketDataProcessor::updateTradingMetrics(SymbolAnalytics &symbol_data,
   if (trade.size > 2.0 * symbol_data.avg_trade_size) {
     symbol_data.large_trade_count++;
   }
+
+  // Update Volume Profile
+  auto &vp_level = symbol_data.session_volume_profile[trade.price];
+  vp_level.price = trade.price;
+  vp_level.total_volume += trade.size;
+  if (trade.is_buy) {
+    vp_level.buy_volume += trade.size;
+  } else {
+    vp_level.sell_volume += trade.size;
+  }
 }
 
 void MarketDataProcessor::updateSpreadAnalysis(SymbolAnalytics &symbol_data) {
@@ -772,8 +817,7 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate &update) {
     // Keep only recent orderbooks (last 100)
     symbol_data.recent_orderbooks.push_back(orderbook);
     if (symbol_data.recent_orderbooks.size() > 100) {
-      symbol_data.recent_orderbooks.erase(
-          symbol_data.recent_orderbooks.begin());
+      symbol_data.recent_orderbooks.pop_front();
     }
   }
 

@@ -20,6 +20,7 @@ struct IndicatorConfig {
   bool show_rsi = false;
   bool show_macd = false;
   bool show_bollinger = false;
+  bool show_volume_profile = true;
 };
 
 class ChartPanel : public PanelBase {

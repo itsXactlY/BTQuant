@@ -1,6 +1,7 @@
 #include "../../include/components/panel_manager.hpp"
 #include "../../include/components/chart_panel.hpp"
 #include "../../include/components/depth_chart_panel.hpp"
+#include "../../include/components/dom_surface_panel.hpp"
 #include "../../include/components/metrics_panel.hpp"
 #include "../../include/components/orderbook_panel.hpp"
 #include "../../include/components/status_bar_panel.hpp"
@@ -45,7 +46,7 @@ void PanelManager::initialize() {
   add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
 
   // Row 4: Volume Profile (2x1) and Watchlist (1x1)
-  add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 0, 4, 2, 1);
+  add_panel(PanelType::HEATMAP, "DOM Surface", 0, 4, 2, 1);
   add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
 
   // Initialize orderbook with first active symbol
@@ -112,8 +113,8 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
                                            risk_assessment_, processor_);
     break;
   case PanelType::HEATMAP:
-    // TODO: Re-enable when HeatmapPanel is updated for newer ImPlot API
-    return 0;
+    panel = std::make_unique<DomSurfacePanel>(processor_);
+    break;
   case PanelType::ORDERBOOK:
     panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
     break;
@@ -449,6 +450,12 @@ void PanelManager::set_active_symbol(uint32_t symbol_id,
     case PanelType::DEPTH_CHART: {
       if (auto *dc = dynamic_cast<DepthChartPanel *>(panel.get())) {
         dc->set_symbol(symbol_id, symbol_name);
+      }
+      break;
+    }
+    case PanelType::HEATMAP: {
+      if (auto *dom = dynamic_cast<DomSurfacePanel *>(panel.get())) {
+        dom->setSymbol(symbol_id);
       }
       break;
     }

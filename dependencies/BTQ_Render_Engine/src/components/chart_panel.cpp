@@ -161,6 +161,8 @@ void ChartPanel::render_indicator_selector() {
   ImGui::Checkbox("MACD", &indicator_config_.show_macd);
   ImGui::SameLine();
   ImGui::Checkbox("Bollinger", &indicator_config_.show_bollinger);
+  ImGui::SameLine();
+  ImGui::Checkbox("Vol Profile", &indicator_config_.show_volume_profile);
 
   ImGui::PopStyleVar();
 }
@@ -196,6 +198,21 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
                       ImPlotAxisFlags_None);
     // SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+
+    // Setup X2 for Volume Profile (Hidden, Inverted?)
+    if (indicator_config_.show_volume_profile) {
+      ImPlot::SetupAxis(ImAxis_X2, nullptr,
+                        ImPlotAxisFlags_NoTickLabels |
+                            ImPlotAxisFlags_NoGridLines);
+      // We want bars on the right side.
+      // If we set limits manually, e.g. 0 to MaxVolume.
+      // And we probably want to invert it so 0 is on the right?
+      // Or just map normal 0..Max.
+      ImPlot::SetupAxisLimits(
+          ImAxis_X2, 0, 1000,
+          ImPlotCond_Always); // Placeholder, updated dynamically?
+                              // Actually, let's auto fit X2.
+    }
 
     // Auto-follow logic
     if (follow_latest_) {
@@ -280,6 +297,80 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
           y_max += range * 0.1f;
 
           ImPlot::SetupAxisLimits(ImAxis_Y1, y_min, y_max, ImPlotCond_Always);
+        }
+      }
+    }
+
+    // VOLUME PROFILE OVERLAY
+    if (indicator_config_.show_volume_profile) {
+      auto id_opt = chart_manager_->getSymbolId(symbol_);
+      if (id_opt) {
+        auto profile = processor_->getVolumeProfile(*id_opt, timeframe_);
+        if (!profile.empty()) {
+          std::vector<double> prices;
+          std::vector<double> volumes;
+          prices.reserve(profile.size());
+          volumes.reserve(profile.size());
+
+          double max_vol = 0;
+          for (const auto &level : profile) {
+            if (level.price >= last_view_min_ &&
+                level.price <=
+                    last_view_max_ // Check Y axis? No, Price is Y.
+                                   // Wait, ImPlot axis logic: X is Time, Y is
+                                   // Price. Volume Profile: Bars extend from
+                                   // Right to Left or Left to Right? If
+                                   // standard PlotBars Horizontal: xs = Volume
+                                   // (Length), ys = Price (Position) But X axis
+                                   // is TIME. We can't map Volume to Time
+                                   // directly unless we use a secondary X axis.
+            ) {
+              // We need to map Volume to Time units or use a separate axis.
+              // Easiest is to scale Volume to fit in the current Time window.
+              // Or simply draw it on the right edge.
+            }
+            prices.push_back(level.price);
+            volumes.push_back(level.total_volume);
+            if (level.total_volume > max_vol)
+              max_vol = level.total_volume;
+          }
+
+          if (max_vol > 0) {
+            // Option 1: Scale volumes to time range (width of view)
+            double time_width = last_view_max_ - last_view_min_;
+            double scale =
+                (time_width * 0.3) / max_vol; // Take up 30% of screen width
+
+            std::vector<double> scaled_volumes;
+            scaled_volumes.reserve(volumes.size());
+            // Position bars at the right edge
+            std::vector<double> bar_starts;
+            bar_starts.reserve(volumes.size());
+
+            for (double v : volumes) {
+              // Bars growing from Right to Left?
+              // ImPlotBars doesn't support "start from X".
+              // We might need to use PlotRects or simply plot bars at (X_end -
+              // vol) to X_end? Or just generic PlotBarsHorizontal at X_end -
+              // vol/2 ?? ImPlot::PlotBars with Horizontal flag plots centered
+              // at X? No, "positions" are Y coordinates. "values" are X
+              // lengths. Bars start at 0? We need them to start at
+              // `last_view_max_` and go left. Actually, maybe just plot them as
+              // standard bars on X2 axis? Let's try simple PlotBars with
+              // Horizontal flag. X = Volume, Y = Price. But X axis is Time. We
+              // need to use ImPlot::SetAxes(ImAxis_X2, ImAxis_Y1); Setup X2 to
+              // be Volume.
+              scaled_volumes.push_back(v);
+            }
+
+            ImPlot::SetAxes(ImAxis_X2, ImAxis_Y1);
+            ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.25f);
+            ImPlot::PlotBars("VP", volumes.data(), prices.data(),
+                             static_cast<int>(prices.size()), 0.0,
+                             ImPlotBarsFlags_Horizontal);
+            ImPlot::PopStyleVar();
+            ImPlot::SetAxes(ImAxis_X1, ImAxis_Y1); // Reset
+          }
         }
       }
     }

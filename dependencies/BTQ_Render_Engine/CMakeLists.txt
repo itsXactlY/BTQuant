@@ -87,6 +87,7 @@ set(DASHBOARD_SOURCES
     src/components/tape_panel.cpp
     src/components/volume_profile_panel.cpp
     src/components/depth_chart_panel.cpp
+    src/components/dom_surface_panel.cpp
     # src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     # TODO: Update these for newer ImPlot API

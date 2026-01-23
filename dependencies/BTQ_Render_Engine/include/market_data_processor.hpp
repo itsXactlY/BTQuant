@@ -5,6 +5,7 @@
 #include <chrono>
 #include <coroutine>
 #include <cstdint>
+#include <deque>
 #include <execution>
 #include <experimental/simd>
 #include <functional>
@@ -29,6 +30,13 @@
 struct PriceLevel {
   double price;
   double size;
+};
+
+struct VolumeProfileLevel {
+  double price;
+  double total_volume;
+  double buy_volume;
+  double sell_volume;
 };
 
 namespace BTQuant {
@@ -162,7 +170,7 @@ struct SymbolAnalytics {
   std::map<double, double, std::less<double>> consolidated_asks;
 
   // Orderbook analytics
-  std::vector<OrderbookData> recent_orderbooks;
+  std::deque<OrderbookData> recent_orderbooks;
   double current_spread = 0.0;
   double current_spread_percent = 0.0;
   double avg_spread = 0.0;
@@ -170,6 +178,9 @@ struct SymbolAnalytics {
   double current_imbalance = 0.0;
   double avg_imbalance = 0.0;
   double market_depth = 0.0;
+
+  // Volume Profile (Session)
+  std::map<double, VolumeProfileLevel> session_volume_profile;
 };
 
 // Performance metrics for the processor
@@ -325,6 +336,11 @@ public:
    * @return Latest OrderbookData if available, empty optional otherwise
    */
   std::optional<OrderbookData> getOrderbookData(uint32_t symbol_id) const;
+
+  std::vector<OrderbookData> getHistoricalOrderbooks(uint32_t symbol_id,
+                                                     size_t count) const;
+  std::vector<VolumeProfileLevel> getVolumeProfile(uint32_t symbol_id,
+                                                   TimeFrame timeframe) const;
 
   /**
    * Get market summary statistics (thread-safe)

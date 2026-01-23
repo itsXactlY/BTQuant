@@ -55,6 +55,23 @@ void DepthChartPanel::render() {
   }
 
   render_panel_header();
+
+  // Auto-select first available symbol if none set (like OrderbookPanel)
+  if (processor_ && bridge_ && symbol_id_ == 0) {
+    auto active_symbols = processor_->getActiveSymbols();
+    for (uint32_t sym_id : active_symbols) {
+      auto ob_opt = processor_->getOrderbookData(sym_id);
+      if (ob_opt.has_value()) {
+        symbol_id_ = sym_id;
+        symbol_name_ = bridge_->getSymbolName(sym_id);
+        config_.title = "Depth Chart - " + symbol_name_;
+        subscribe_to_updates();
+        markDirty();
+        break;
+      }
+    }
+  }
+
   render_stats();
   ImGui::Separator();
 
@@ -80,26 +97,95 @@ void DepthChartPanel::compute_depth_data() {
   const auto &bids = cached_orderbook_.bids;
   const auto &asks = cached_orderbook_.asks;
 
-  // Clear and repopulate (vectors keep capacity)
+  // Clear and repopulate
   bid_prices_.clear();
   bid_cumulative_.clear();
   ask_prices_.clear();
   ask_cumulative_.clear();
 
-  // Compute cumulative bid depth
-  double cumulative = 0.0;
-  for (const auto &level : bids) {
-    cumulative += level.size;
-    bid_prices_.push_back(level.price);
-    bid_cumulative_.push_back(cumulative);
+  // --- BIDS (Left Side, Green) ---
+  // Visualize as: High Depth at Low Price (Left), dropping to 0 at Best Bid
+  // (Right)
+  if (!bids.empty()) {
+    std::vector<std::pair<double, double>> temp_points;
+    double cumulative = 0.0;
+
+    // 1. Calculate cumulative depth from Best -> Worst (Descending Price)
+    //    Best Bid (High Price) has small depth. Worst Bid (Low Price) has max
+    //    depth.
+    for (const auto &level : bids) {
+      cumulative += level.size;
+      temp_points.push_back({level.price, cumulative});
+    }
+
+    if (!temp_points.empty()) {
+      double max_depth = temp_points.back().second;
+      double worst_price = temp_points.back().first;
+      double best_price = temp_points.front().first;
+
+      // 2. Build vectors for ImPlot (X must be Ascending: Low Price -> High
+      // Price)
+      //    So we add points in this order:
+      //    A. Extension to Left (Price < Worst Bid, Depth = Max)
+      //    B. Worst Bid -> Best Bid (Reverse of temp_points)
+      //    C. Drop to Zero at Best Bid
+
+      // A. Extension
+      bid_prices_.push_back(worst_price * 0.995);
+      bid_cumulative_.push_back(max_depth);
+
+      // B. Points (Reverse iteration of temp_points to get ascending Price)
+      for (auto it = temp_points.rbegin(); it != temp_points.rend(); ++it) {
+        bid_prices_.push_back(it->first);
+        bid_cumulative_.push_back(it->second);
+      }
+
+      // C. Drop to Zero
+      bid_prices_.push_back(best_price);
+      bid_cumulative_.push_back(0.0);
+    }
   }
 
-  // Compute cumulative ask depth
-  cumulative = 0.0;
-  for (const auto &level : asks) {
-    cumulative += level.size;
-    ask_prices_.push_back(level.price);
-    ask_cumulative_.push_back(cumulative);
+  // --- ASKS (Right Side, Red) ---
+  // Visualize as: 0 at Best Ask (Left), rising to High Depth at High Price
+  // (Right)
+  if (!asks.empty()) {
+    double cumulative = 0.0;
+    std::vector<std::pair<double, double>> temp_points;
+
+    // 1. Calculate cumulative depth from Best -> Worst (Ascending Price)
+    //    Best Ask (Low Price) has small depth. Worst Ask (High Price) has max
+    //    depth.
+    for (const auto &level : asks) {
+      cumulative += level.size;
+      temp_points.push_back({level.price, cumulative});
+    }
+
+    if (!temp_points.empty()) {
+      double max_depth = temp_points.back().second;
+      double worst_price = temp_points.back().first;
+      double best_price = temp_points.front().first;
+
+      // 2. Build vectors for ImPlot (X is Ascending: Low Price -> High Price)
+      //    Order:
+      //    A. Start at Zero at Best Ask
+      //    B. Best Ask -> Worst Ask (Normal order)
+      //    C. Extension to Right
+
+      // A. Start at Zero
+      ask_prices_.push_back(best_price);
+      ask_cumulative_.push_back(0.0);
+
+      // B. Points
+      for (const auto &p : temp_points) {
+        ask_prices_.push_back(p.first);
+        ask_cumulative_.push_back(p.second);
+      }
+
+      // C. Extension
+      ask_prices_.push_back(worst_price * 1.005);
+      ask_cumulative_.push_back(max_depth);
+    }
   }
 
   // Compute mid price and max depth for axis scaling
@@ -108,12 +194,11 @@ void DepthChartPanel::compute_depth_data() {
   }
 
   max_depth_ = 1.0;
-  if (!bid_cumulative_.empty()) {
-    max_depth_ = std::max(max_depth_, bid_cumulative_.back());
-  }
-  if (!ask_cumulative_.empty()) {
-    max_depth_ = std::max(max_depth_, ask_cumulative_.back());
-  }
+  // Check cumulative vectors for max depth (ignoring the 0 points)
+  for (double d : bid_cumulative_)
+    max_depth_ = std::max(max_depth_, d);
+  for (double d : ask_cumulative_)
+    max_depth_ = std::max(max_depth_, d);
 }
 
 void DepthChartPanel::set_symbol(uint32_t symbol_id,
@@ -155,6 +240,8 @@ void DepthChartPanel::render_stats() {
 void DepthChartPanel::render_depth_chart_implot() {
   if (bid_prices_.empty() && ask_prices_.empty()) {
     ImGui::Text("Waiting for orderbook data...");
+    ImGui::Text("(Bids: %zu, Asks: %zu)", cached_orderbook_.bids.size(),
+                cached_orderbook_.asks.size());
     return;
   }
 
@@ -173,24 +260,32 @@ void DepthChartPanel::render_depth_chart_implot() {
     price_max = std::max(price_max, ask_prices_.back());
   }
 
-  // Unique plot ID per panel instance to avoid ImGui ID conflicts
+  // Unique plot ID
   char plot_id[64];
   snprintf(plot_id, sizeof(plot_id), "##DepthChart_%s", config_.title.c_str());
 
+  // Styling: Neon Financial Colors (Green/Red)
+  ImVec4 col_bid_fill = ImVec4(0.0f, 1.0f, 0.0f, 0.2f); // Neon Green Fill
+  ImVec4 col_bid_line = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Neon Green Line
+  ImVec4 col_ask_fill = ImVec4(1.0f, 0.0f, 0.0f, 0.2f); // Neon Red Fill
+  ImVec4 col_ask_line = ImVec4(1.0f, 0.2f, 0.2f, 1.0f); // Neon Red Line
+
+  // Setup Plot Flags for clean look
   if (ImPlot::BeginPlot(plot_id, region,
                         ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                            ImPlotFlags_NoMouseText)) {
+                            ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect |
+                            ImPlotFlags_NoMenus)) {
 
-    // Set axis limits
-    ImPlot::SetupAxes("Price", "Cumulative Size", ImPlotAxisFlags_AutoFit,
-                      ImPlotAxisFlags_AutoFit);
+    // Set axis limits - cleaner look without labels
+    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoLabel,
+                      ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_Opposite);
     ImPlot::SetupAxisLimits(ImAxis_X1, price_min, price_max, ImPlotCond_Always);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, max_depth_ * 1.1, ImPlotCond_Always);
 
-    // Plot bid depth (green shaded area)
-    if (bid_prices_.size() >= 2) {
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.1f, 0.7f, 0.1f, 0.4f));
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.2f, 0.9f, 0.2f, 1.0f));
+    // Plot bid depth (Neon Green)
+    if (!bid_prices_.empty()) {
+      ImPlot::PushStyleColor(ImPlotCol_Fill, col_bid_fill);
+      ImPlot::PushStyleColor(ImPlotCol_Line, col_bid_line);
       ImPlot::PlotShaded("Bids", bid_prices_.data(), bid_cumulative_.data(),
                          static_cast<int>(bid_prices_.size()), 0.0);
       ImPlot::PlotLine("Bids", bid_prices_.data(), bid_cumulative_.data(),
@@ -198,10 +293,10 @@ void DepthChartPanel::render_depth_chart_implot() {
       ImPlot::PopStyleColor(2);
     }
 
-    // Plot ask depth (red shaded area)
-    if (ask_prices_.size() >= 2) {
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.7f, 0.1f, 0.1f, 0.4f));
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+    // Plot ask depth (Neon Red)
+    if (!ask_prices_.empty()) {
+      ImPlot::PushStyleColor(ImPlotCol_Fill, col_ask_fill);
+      ImPlot::PushStyleColor(ImPlotCol_Line, col_ask_line);
       ImPlot::PlotShaded("Asks", ask_prices_.data(), ask_cumulative_.data(),
                          static_cast<int>(ask_prices_.size()), 0.0);
       ImPlot::PlotLine("Asks", ask_prices_.data(), ask_cumulative_.data(),

@@ -91,7 +91,11 @@ void TapePanel::render_controls() {
 }
 
 void TapePanel::render_trade_table() {
-  if (ImGui::BeginTable("TapeTable", 4,
+  // Unique table ID per panel instance to avoid ID conflicts
+  char table_id[64];
+  snprintf(table_id, sizeof(table_id), "TapeTable##%s", config_.title.c_str());
+
+  if (ImGui::BeginTable(table_id, 4,
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_BordersInnerV |
                             ImGuiTableFlags_Resizable)) {
@@ -103,9 +107,13 @@ void TapePanel::render_trade_table() {
     ImGui::TableHeadersRow();
 
     // Render trades in reverse order (newest first)
-    for (auto it = cached_trades_.rbegin(); it != cached_trades_.rend(); ++it) {
+    int row_index = 0;
+    for (auto it = cached_trades_.rbegin(); it != cached_trades_.rend();
+         ++it, ++row_index) {
       const auto &trade = *it;
 
+      // Push unique ID for this row to avoid conflicts
+      ImGui::PushID(row_index);
       ImGui::TableNextRow();
 
       // Time column (HH:MM:SS.mmm)
@@ -137,6 +145,8 @@ void TapePanel::render_trade_table() {
       } else {
         ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "SELL");
       }
+
+      ImGui::PopID();
     }
 
     // Auto-scroll to bottom (newest trades)

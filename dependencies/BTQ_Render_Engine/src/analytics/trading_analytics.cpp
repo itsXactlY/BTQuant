@@ -1,18 +1,43 @@
 /**
- * BTQuant Advanced Analytics and Trading Tools
+ * @file trading_analytics.cpp
+ * @brief BTQuant Advanced Analytics and Trading Tools (C++23/26)
  *
- * Professional trading analytics including technical indicators, volume
- * analysis, market depth visualization, pattern recognition, and risk
- * management tools.
+ * Professional trading analytics with modern C++ parallel features:
+ * - std::execution parallel policies for multi-core computation
+ * - [[nodiscard]] and [[likely]]/[[unlikely]] attributes
+ * - constexpr constants and thread-safe design
+ * - SIMD-friendly algorithm structures
+ *
+ * @version 2.0.0 (C++23/26)
  */
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <execution>
+#include <future>
 #include <numeric>
+#include <thread>
 
 namespace BTQuant {
+
+// ============================================================================
+// Parallel Execution Configuration
+// ============================================================================
+namespace {
+// Use hardware concurrency for optimal parallelization
+[[nodiscard]] inline unsigned int get_optimal_thread_count() noexcept {
+  const unsigned int hw_threads = std::thread::hardware_concurrency();
+  return (hw_threads > 0) ? hw_threads : 4u;
+}
+
+// Minimum data size to justify parallel execution overhead
+constexpr size_t PARALLEL_THRESHOLD = 256;
+
+// Batch size for parallel indicator calculation
+constexpr size_t PARALLEL_BATCH_SIZE = 64;
+} // namespace
 
 // ============================================================================
 // Technical Analysis Indicators

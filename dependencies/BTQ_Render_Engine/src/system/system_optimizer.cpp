@@ -1,14 +1,21 @@
 /**
- * BTQuant System Optimization and Monitoring
+ * @file system_optimizer.cpp
+ * @brief BTQuant System Optimization and Monitoring (C++23/26)
  *
- * Comprehensive system optimization including CPU/GPU monitoring, memory leak
- * detection, network optimization, cache management, thread pool optimization,
- * and automatic tuning.
+ * Comprehensive system optimization with modern C++ features:
+ * - std::jthread for automatic thread joining (C++20)
+ * - std::execution parallel policies for async monitoring
+ * - [[nodiscard]] attributes for health metrics
+ * - constexpr configuration constants
+ * - Lock-free atomic operations where possible
+ *
+ * @version 2.0.0 (C++23/26)
  */
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <atomic>
 #include <chrono>
+#include <execution>
 #include <fstream>
 #include <mutex>
 #include <regex>
@@ -18,6 +25,17 @@
 #include <unistd.h>
 
 namespace BTQuant {
+
+// ============================================================================
+// Monitoring Configuration Constants
+// ============================================================================
+namespace {
+constexpr std::chrono::milliseconds MONITORING_INTERVAL{1000};
+constexpr double CPU_HEALTH_THRESHOLD = 80.0;
+constexpr double MEMORY_HEALTH_THRESHOLD = 80.0;
+constexpr double GPU_TEMP_CRITICAL = 85.0;
+constexpr double SWAP_USAGE_WARNING = 10.0;
+} // namespace
 
 // ============================================================================
 // System Resource Monitor

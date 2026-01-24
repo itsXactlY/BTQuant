@@ -6,10 +6,9 @@
  */
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
-#include "../include/interaction_manager.hpp"
 #include <algorithm>
 #include <fstream>
-#include <json/json.h>
+#include <nlohmann/json.hpp>
 #include <regex>
 
 namespace BTQuant {

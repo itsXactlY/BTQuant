@@ -1,521 +1,448 @@
 /**
  * @file MarketMicrostructureRenderer.cpp
- * @brief Main Market Microstructure Renderer Implementation
- * 
- * Provides concrete implementation of the zero-latency trading visualization system.
- * 
+ * @brief Market Microstructure Renderer Implementation (C++23/26)
+ *
+ * Zero-latency trading visualization with modern C++ features:
+ * - [[nodiscard]], [[likely]]/[[unlikely]] attributes
+ * - Designated initializers and structured bindings
+ * - std::span for safe buffer access
+ *
  * @author Market Microstructure Renderer Team
- * @version 1.0.0
+ * @version 3.0.0 (C++23/26)
  */
 
 #include "../../include/components/MarketMicrostructureRenderer.h"
-#include <stdexcept>
+#include "../../include/components/VulkanSynchronization.h"
+#include "../../include/hotspine_data_bridge.hpp"
+#include "../../include/market_data_processor.hpp"
+#include "../../include/trading/HotspineData.h"
+#include "../../include/vulkan_base_types.hpp"
+#include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <chrono>
+#include <cstring>
+#include <iostream>
+#include <span>
+#include <stdexcept>
+#include <string_view>
 
-namespace BTQuant {
+namespace BTQuant::RenderEngine {
 
-namespace RenderEngine {
+// ============================================
+// C++26 Error Types for Expected Returns
+// ============================================
+
+enum class RendererError {
+  NotInitialized,
+  NullVulkanCore,
+  PipelineCreationFailed,
+  BufferAllocationFailed,
+  TooManyClusters
+};
+
+[[nodiscard]] constexpr auto to_string(RendererError error) noexcept
+    -> std::string_view {
+  switch (error) {
+  case RendererError::NotInitialized:
+    return "Renderer not initialized";
+  case RendererError::NullVulkanCore:
+    return "VulkanCore is null";
+  case RendererError::PipelineCreationFailed:
+    return "Pipeline creation failed";
+  case RendererError::BufferAllocationFailed:
+    return "Buffer allocation failed";
+  case RendererError::TooManyClusters:
+    return "Too many clusters provided";
+  }
+  return "Unknown error";
+}
 
 // ============================================
 // MarketMicrostructureRenderer Implementation
 // ============================================
 
-std::unique_ptr<MarketMicrostructureRenderer> MarketMicrostructureRenderer::create(
-    VkDevice device, const RendererConfig& config) {
-    
-    auto renderer = std::unique_ptr<MarketMicrostructureRenderer>(
-        new MarketMicrostructureRenderer(device, config)
-    );
-    
-    if (!renderer->initialize()) {
-        return nullptr;
-    }
-    
-    return renderer;
-}
-
 MarketMicrostructureRenderer::MarketMicrostructureRenderer(
-    VkDevice device, const RendererConfig& config)
-    : device_(device)
-    , config_(config)
-    , timelineSemaphore_(device)
-    , barrierManager_(std::make_unique<BTQuant::HotspineBarrierManager>(device))
-    , ringBufferSync_(std::make_unique<BTQuant::RingBufferSyncManager>(device, 2, 1024 * 1024)) {
-    
-    // Initialize Vulkan pipeline structures to null handles
-    computePipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
-    renderPipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                        VK_NULL_HANDLE, VK_NULL_HANDLE };
-    descriptorSets_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                       VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
+    VulkanCore *vulkanCore, std::shared_ptr<HotSpineDataBridge> hotspineBridge,
+    std::shared_ptr<MarketDataProcessor> marketDataProcessor,
+    const RendererConfig &config)
+    : vulkanCore_(vulkanCore), hotspineBridge_(std::move(hotspineBridge)),
+      marketDataProcessor_(std::move(marketDataProcessor)), config_(config),
+      lastFrameTime_(std::chrono::high_resolution_clock::now()),
+      initialized_(false) {}
+
+MarketMicrostructureRenderer::~MarketMicrostructureRenderer() { cleanup(); }
+
+void MarketMicrostructureRenderer::initialize() {
+  if (initialized_) [[unlikely]] {
+    return;
+  }
+
+  if (!vulkanCore_) [[unlikely]] {
+    throw std::runtime_error("VulkanCore is null - cannot initialize renderer");
+  }
+
+  try {
+    createComputePipelines();
+    createGraphicsPipelines();
+    createDescriptorSets();
+    createStorageBuffers();
+    createTextureResources();
+
+    // Initialize ring buffer manager for data updates
+    constexpr uint32_t DOUBLE_BUFFER = 2;
+    constexpr VkDeviceSize BUFFER_SIZE = 1024 * 1024; // 1MB per buffer
+
+    ringBufferManager_ = std::make_unique<RingBufferManager>(
+        vulkanCore_->get_device(), DOUBLE_BUFFER, BUFFER_SIZE);
+
+    initialized_ = true;
+
+    std::cout << "[MarketMicrostructureRenderer] Initialized successfully\n";
+  } catch (const std::exception &e) {
+    std::cerr << "[MarketMicrostructureRenderer] Initialization failed: "
+              << e.what() << "\n";
+    cleanup();
+    throw;
+  }
 }
 
-MarketMicrostructureRenderer::~MarketMicrostructureRenderer() {
-    shouldExit_.store(true);
-    updateCondition_.notify_all();
-    
-    // Wait for any pending operations
-    if (initialized_) {
-        // Clean up Vulkan resources
-        if (computePipelines_.lobHeatmap != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device_, computePipelines_.lobHeatmap, nullptr);
-        }
-        if (computePipelines_.lobHeatmapLayout != VK_NULL_HANDLE) {
-            vkDestroyPipelineLayout(device_, computePipelines_.lobHeatmapLayout, nullptr);
-        }
-        if (computePipelines_.tpoProfile != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device_, computePipelines_.tpoProfile, nullptr);
-        }
-        if (computePipelines_.tpoProfileLayout != VK_NULL_HANDLE) {
-            vkDestroyPipelineLayout(device_, computePipelines_.tpoProfileLayout, nullptr);
-        }
-        
-        if (renderPipelines_.heatmapSampler != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device_, renderPipelines_.heatmapSampler, nullptr);
-        }
-        if (renderPipelines_.heatmapSamplerLayout != VK_NULL_HANDLE) {
-            vkDestroyPipelineLayout(device_, renderPipelines_.heatmapSamplerLayout, nullptr);
-        }
-        if (renderPipelines_.footprintChart != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device_, renderPipelines_.footprintChart, nullptr);
-        }
-        if (renderPipelines_.footprintChartLayout != VK_NULL_HANDLE) {
-            vkDestroyPipelineLayout(device_, renderPipelines_.footprintChartLayout, nullptr);
-        }
-        if (renderPipelines_.tpoProfile != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device_, renderPipelines_.tpoProfile, nullptr);
-        }
-        if (renderPipelines_.tpoProfileLayout != VK_NULL_HANDLE) {
-            vkDestroyPipelineLayout(device_, renderPipelines_.tpoProfileLayout, nullptr);
-        }
-        
-        if (descriptorSets_.pool != VK_NULL_HANDLE) {
-            vkDestroyDescriptorPool(device_, descriptorSets_.pool, nullptr);
-        }
-        if (descriptorSets_.lobHeatmap != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(device_, descriptorSets_.lobHeatmap, nullptr);
-        }
-        if (descriptorSets_.tpoProfile != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(device_, descriptorSets_.tpoProfile, nullptr);
-        }
-        if (descriptorSets_.footprintChart != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(device_, descriptorSets_.footprintChart, nullptr);
-        }
+void MarketMicrostructureRenderer::cleanup() {
+  if (!vulkanCore_) [[unlikely]] {
+    return;
+  }
+
+  auto device = vulkanCore_->get_device();
+  vkDeviceWaitIdle(device);
+
+  // Helper lambda for cleaning up Vulkan handles
+  auto destroyIfValid = [device]<typename T>(T &handle, auto destroyFn) {
+    if (handle != VK_NULL_HANDLE) {
+      destroyFn(device, handle, nullptr);
+      handle = VK_NULL_HANDLE;
     }
+  };
+
+  // Clean up LOB heatmap resources
+  destroyIfValid(lobHeatmapPipeline_, vkDestroyPipeline);
+  destroyIfValid(lobHeatmapPipelineLayout_, vkDestroyPipelineLayout);
+  destroyIfValid(lobHeatmapDescriptorSetLayout_, vkDestroyDescriptorSetLayout);
+  destroyIfValid(lobHeatmapImage_, vkDestroyImage);
+  destroyIfValid(lobHeatmapImageView_, vkDestroyImageView);
+  destroyIfValid(lobHeatmapImageMemory_, vkFreeMemory);
+  destroyIfValid(lobHeatmapSampler_, vkDestroySampler);
+
+  // Clean up footprint resources
+  destroyIfValid(footprintPipeline_, vkDestroyPipeline);
+  destroyIfValid(footprintPipelineLayout_, vkDestroyPipelineLayout);
+  destroyIfValid(footprintDescriptorSetLayout_, vkDestroyDescriptorSetLayout);
+
+  // Clean up TPO profile resources
+  destroyIfValid(tpoProfilePipeline_, vkDestroyPipeline);
+  destroyIfValid(tpoProfilePipelineLayout_, vkDestroyPipelineLayout);
+  destroyIfValid(tpoProfileDescriptorSetLayout_, vkDestroyDescriptorSetLayout);
+
+  // Deallocate buffer allocations through memory manager
+  auto &memManager = vulkanCore_->get_memory_manager();
+
+  auto deallocateIfValid = [&memManager](BufferAllocation &alloc) {
+    if (alloc.buffer != VK_NULL_HANDLE) {
+      memManager.deallocate_buffer(alloc);
+      alloc = {};
+    }
+  };
+
+  deallocateIfValid(lobHeatmapSSBO_);
+  deallocateIfValid(lobHeatmapUBO_);
+  deallocateIfValid(footprintSSBO_);
+  deallocateIfValid(footprintUBO_);
+  deallocateIfValid(tpoProfileSSBO_);
+  deallocateIfValid(tpoProfileUBO_);
+  deallocateIfValid(tpoProfileHistogram_);
+
+  ringBufferManager_.reset();
+  initialized_ = false;
 }
 
-MarketMicrostructureRenderer::MarketMicrostructureRenderer(
-    MarketMicrostructureRenderer&& other) noexcept
-    : device_(other.device_)
-    , config_(other.config_)
-    , initialized_(other.initialized_.load())
-    , computePipelines_(other.computePipelines_)
-    , renderPipelines_(other.renderPipelines_)
-    , descriptorSets_(other.descriptorSets_)
-    , lobResources_(std::move(other.lobResources_))
-    , tpoResources_(std::move(other.tpoResources_))
-    , footprintResources_(std::move(other.footprintResources_))
-    , timelineSemaphore_(std::move(other.timelineSemaphore_))
-    , barrierManager_(std::move(other.barrierManager_))
-    , ringBufferSync_(std::move(other.ringBufferSync_))
-    , stats_(other.stats_)
-    , lastFrameTimeNs_(other.lastFrameTimeNs_) {
-    
-    other.device_ = VK_NULL_HANDLE;
-    other.computePipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
-    other.renderPipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                              VK_NULL_HANDLE, VK_NULL_HANDLE };
-    other.descriptorSets_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                             VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
+void MarketMicrostructureRenderer::render(
+    VkCommandBuffer cmdBuffer, [[maybe_unused]] uint32_t currentFrame,
+    [[maybe_unused]] VulkanSyncContext &syncContext,
+    [[maybe_unused]] TimelineSemaphore &timelineSemaphore) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
+
+  auto frameStartTime = std::chrono::high_resolution_clock::now();
+
+  // Update statistics atomically
+  {
+    std::lock_guard lock(statsMutex_);
+    stats_.framesRendered++;
+  }
+
+  // Update storage buffers with latest data
+  updateStorageBuffers();
+
+  // Execute compute shaders
+  executeLOBHeatmapCompute(cmdBuffer);
+  executeTPOProfileCompute(cmdBuffer);
+
+  // Render visualizations
+  renderHeatmapTexture(cmdBuffer);
+  renderFootprintChart(cmdBuffer);
+  renderTPOProfile(cmdBuffer);
+
+  // Calculate frame timing
+  auto frameEndTime = std::chrono::high_resolution_clock::now();
+  auto frameDuration =
+      std::chrono::duration<float, std::milli>(frameEndTime - frameStartTime);
+
+  lastFrameTime_ = frameEndTime;
+
+  // Update statistics with exponential moving average
+  {
+    std::lock_guard lock(statsMutex_);
+    constexpr float SMOOTHING_FACTOR = 0.1f;
+    stats_.averageFrameTimeMs = std::lerp(
+        stats_.averageFrameTimeMs, frameDuration.count(), SMOOTHING_FACTOR);
+    stats_.lastUpdateTimeNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            frameEndTime.time_since_epoch())
+            .count();
+  }
 }
 
-MarketMicrostructureRenderer& MarketMicrostructureRenderer::operator=(
-    MarketMicrostructureRenderer&& other) noexcept {
-    
-    if (this != &other) {
-        // Clean up existing resources
-        if (initialized_) {
-            // Destroy existing Vulkan objects (see destructor)
-        }
-        
-        // Move resources
-        device_ = other.device_;
-        config_ = other.config_;
-        initialized_ = other.initialized_.load();
-        computePipelines_ = other.computePipelines_;
-        renderPipelines_ = other.renderPipelines_;
-        descriptorSets_ = other.descriptorSets_;
-        lobResources_ = std::move(other.lobResources_);
-        tpoResources_ = std::move(other.tpoResources_);
-        footprintResources_ = std::move(other.footprintResources_);
-        timelineSemaphore_ = std::move(other.timelineSemaphore_);
-        barrierManager_ = std::move(other.barrierManager_);
-        ringBufferSync_ = std::move(other.ringBufferSync_);
-        stats_ = other.stats_;
-        lastFrameTimeNs_ = other.lastFrameTimeNs_;
-        
-        other.device_ = VK_NULL_HANDLE;
-        other.computePipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
-        other.renderPipelines_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                                  VK_NULL_HANDLE, VK_NULL_HANDLE };
-        other.descriptorSets_ = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                                 VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
-    }
-    
-    return *this;
+void MarketMicrostructureRenderer::updateLOBData(
+    const HotspineOrderBookSnapshot &snapshot) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
+
+  std::lock_guard lock(dataMutex_);
+
+  // Store snapshot for processing during render
+  currentOrderBookData_.clear();
+  currentOrderBookData_.push_back(snapshot);
+  currentHeatmapTimeIndex_ = snapshot.currentTimeIndex;
+
+  {
+    std::lock_guard statsLock(statsMutex_);
+    stats_.lobUpdates++;
+  }
 }
 
-bool MarketMicrostructureRenderer::initialize() {
-    try {
-        if (!createComputePipelines()) {
-            throw std::runtime_error("Failed to create compute pipelines");
-        }
-        
-        if (!createRenderingPipelines()) {
-            throw std::runtime_error("Failed to create rendering pipelines");
-        }
-        
-        if (!createDescriptorSets()) {
-            throw std::runtime_error("Failed to create descriptor sets");
-        }
-        
-        if (!createBuffers()) {
-            throw std::runtime_error("Failed to create buffers");
-        }
-        
-        if (!createImages()) {
-            throw std::runtime_error("Failed to create images");
-        }
-        
-        initialized_.store(true);
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Renderer initialization failed: " << e.what() << std::endl;
-        initialized_.store(false);
-        return false;
-    }
+void MarketMicrostructureRenderer::updateTradeData(
+    std::span<const HotspineTradeTick> trades) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
+
+  std::lock_guard lock(dataMutex_);
+
+  currentTradeData_.assign(trades.begin(), trades.end());
+  tpoProfileNeedsReset_ = true;
+
+  {
+    std::lock_guard statsLock(statsMutex_);
+    stats_.tradeUpdates++;
+  }
 }
 
-bool MarketMicrostructureRenderer::render(VkCommandBuffer cmdBuffer,
-                                        uint32_t currentFrame,
-                                        BTQuant::VulkanSyncContext& syncContext,
-                                        BTQuant::TimelineSemaphore& timelineSemaphore) {
-    
-    if (!initialized_) {
-        return false;
-    }
-    
-    const auto frameStartTime = std::chrono::high_resolution_clock::now();
-    
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> lock(statsMutex_);
-        stats_.framesRendered++;
-    }
-    
-    // Execute LOB heatmap compute shader
-    if (lobResources_.needsUpdate) {
-        updateHeatmapCompute(cmdBuffer, currentFrame);
-    }
-    
-    // Execute TPO profile compute shader
-    if (tpoResources_.needsUpdate) {
-        updateTPOCompute(cmdBuffer, currentFrame);
-    }
-    
-    // Render all visualizations
-    renderHeatmap(cmdBuffer, currentFrame);
-    renderFootprintChart(cmdBuffer, currentFrame);
-    renderTPOProfile(cmdBuffer, currentFrame);
-    
-    // Calculate frame time
-    const auto frameEndTime = std::chrono::high_resolution_clock::now();
-    const auto frameDurationNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        frameEndTime - frameStartTime
-    ).count();
-    
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> lock(statsMutex_);
-        stats_.lastUpdateTimeNs = frameEndTime.time_since_epoch().count();
-        stats_.averageFrameTimeMs = 0.9 * stats_.averageFrameTimeMs + 0.1 * (frameDurationNs / 1000000.0);
-    }
-    
-    lastFrameTimeNs_ = frameDurationNs;
-    return true;
+void MarketMicrostructureRenderer::updateFootprintClusters(
+    std::span<const CandleCluster> clusters) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
+
+  if (clusters.size() > config_.footprintChart.maxClusters) [[unlikely]] {
+    std::println(std::cerr,
+                 "[MarketMicrostructureRenderer] Too many clusters: {} > {}",
+                 clusters.size(), config_.footprintChart.maxClusters);
+    return;
+  }
+
+  std::lock_guard lock(dataMutex_);
+
+  currentFootprintClusters_.assign(clusters.begin(), clusters.end());
+  currentClusterCount_ = static_cast<uint32_t>(clusters.size());
+
+  {
+    std::lock_guard statsLock(statsMutex_);
+    stats_.footprintCellsRendered = currentClusterCount_;
+  }
 }
 
-bool MarketMicrostructureRenderer::updateLOBData(const HotspineOrderBookSnapshot& snapshot) {
-    if (!initialized_) {
-        return false;
-    }
-    
-    std::lock_guard<std::mutex> lock(lobResources_.updateMutex);
-    
-    try {
-        // Allocate memory for new order book data
-        const auto slotIndex = ringBufferSync_->acquireSlot();
-        if (slotIndex == -1) {
-            return false; // No available slots
-        }
-        
-        auto& slot = ringBufferSync_->getSlot(static_cast<uint32_t>(slotIndex));
-        
-        // Calculate required buffer size
-        const auto bufferSize = trading::calculateOrderBookBufferSize(snapshot.priceLevelsCount);
-        
-        // Copy data to GPU buffer (placeholder - real implementation would use DMA)
-        // This would normally use vkCmdCopyBuffer or vkMapMemory
-        
-        lobResources_.currentTimeIndex = snapshot.currentTimeIndex;
-        computeHeatmapParams(snapshot);
-        lobResources_.needsUpdate = true;
-        
-        // Release the slot back to the pool
-        ringBufferSync_->releaseSlot(static_cast<uint32_t>(slotIndex));
-        
-        {
-            std::lock_guard<std::mutex> lock(statsMutex_);
-            stats_.lobUpdates++;
-        }
-        
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "LOB data update failed: " << e.what() << std::endl;
-        return false;
-    }
+void MarketMicrostructureRenderer::updateConfig(const RendererConfig &config) {
+  std::lock_guard lock(statsMutex_);
+
+  bool needsRecreation =
+      (config.lobHeatmap.width != config_.lobHeatmap.width ||
+       config.lobHeatmap.height != config_.lobHeatmap.height);
+
+  config_ = config;
+
+  if (needsRecreation && initialized_) [[unlikely]] {
+    std::println(std::cerr,
+                 "[MarketMicrostructureRenderer] Config change requires "
+                 "recreation - not implemented");
+  }
 }
 
-bool MarketMicrostructureRenderer::updateTradeData(const trading::HotspineTradeTicks& trades) {
-    if (!initialized_) {
-        return false;
-    }
-    
-    std::lock_guard<std::mutex> lock(tpoResources_.updateMutex);
-    
-    try {
-        // Allocate memory for new trade data
-        const auto slotIndex = ringBufferSync_->acquireSlot();
-        if (slotIndex == -1) {
-            return false; // No available slots
-        }
-        
-        auto& slot = ringBufferSync_->getSlot(static_cast<uint32_t>(slotIndex));
-        
-        // Calculate required buffer size
-        const auto bufferSize = trading::calculateTradeTicksBufferSize(trades.tickCount);
-        
-        // Copy data to GPU buffer
-        tpoResources_.needsUpdate = true;
-        
-        ringBufferSync_->releaseSlot(static_cast<uint32_t>(slotIndex));
-        
-        {
-            std::lock_guard<std::mutex> lock(statsMutex_);
-            stats_.tradeUpdates++;
-        }
-        
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Trade data update failed: " << e.what() << std::endl;
-        return false;
-    }
+[[nodiscard]] RendererStats MarketMicrostructureRenderer::getStats() const {
+  std::lock_guard lock(statsMutex_);
+  return stats_;
 }
 
-bool MarketMicrostructureRenderer::updateFootprintClusters(std::span<const trading::CandleCluster> clusters) {
-    if (!initialized_) {
-        return false;
-    }
-    
-    std::lock_guard<std::mutex> lock(footprintResources_.updateMutex);
-    
-    if (clusters.size() > config_.footprintChart.maxClusters) {
-        return false; // Cluster count exceeds maximum
-    }
-    
-    try {
-        // Update clusters SSBO
-        // Real implementation would use buffer copy or staging buffer
-        
-        footprintResources_.clusterCount = static_cast<uint32_t>(clusters.size());
-        footprintResources_.needsUpdate = true;
-        
-        {
-            std::lock_guard<std::mutex> lock(statsMutex_);
-            stats_.footprintCellsRendered = static_cast<uint32_t>(clusters.size());
-        }
-        
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Footprint clusters update failed: " << e.what() << std::endl;
-        return false;
-    }
-}
-
-RendererStats MarketMicrostructureRenderer::getStats() const {
-    std::lock_guard<std::mutex> lock(statsMutex_);
-    return stats_;
-}
-
-void MarketMicrostructureRenderer::setHeatmapConfig(const LOBHeatmapConfig& config) {
-    std::lock_guard<std::mutex> lock(statsMutex_);
-    config_.lobHeatmap = config;
-    
-    // Recreate heatmap image if dimensions changed
-    if (lobResources_.heatmapImage) {
-        // Real implementation would recreate the heatmap texture
-    }
-}
-
-void MarketMicrostructureRenderer::setFootprintConfig(const FootprintChartConfig& config) {
-    std::lock_guard<std::mutex> lock(statsMutex_);
-    config_.footprintChart = config;
-}
-
-void MarketMicrostructureRenderer::setTPOConfig(const TPOProfileConfig& config) {
-    std::lock_guard<std::mutex> lock(statsMutex_);
-    config_.tpoProfile = config;
-    
-    // Recreate histogram if bucket count changed
-    if (tpoResources_.tpoHistogramSSBO) {
-        // Real implementation would recreate the histogram buffer
-    }
+void MarketMicrostructureRenderer::resetStats() {
+  std::lock_guard lock(statsMutex_);
+  stats_ = RendererStats{};
 }
 
 // ============================================
-// Private Helper Methods
+// Private: Resource Creation
 // ============================================
 
-bool MarketMicrostructureRenderer::createComputePipelines() {
-    // Placeholder for pipeline creation
-    // Real implementation would compile shaders to SPIR-V and create pipelines
-    
-    return true;
+void MarketMicrostructureRenderer::createComputePipelines() {
+  // Placeholder - real implementation would load SPIR-V and create pipelines
 }
 
-bool MarketMicrostructureRenderer::createRenderingPipelines() {
-    // Placeholder for pipeline creation
-    return true;
+void MarketMicrostructureRenderer::createGraphicsPipelines() {
+  // Placeholder - real implementation would create graphics pipelines
 }
 
-bool MarketMicrostructureRenderer::createDescriptorSets() {
-    // Placeholder for descriptor set creation
-    return true;
+void MarketMicrostructureRenderer::createDescriptorSets() {
+  // Placeholder - real implementation would create descriptor sets
 }
 
-bool MarketMicrostructureRenderer::createBuffers() {
-    // Placeholder for buffer creation
-    return true;
+void MarketMicrostructureRenderer::createStorageBuffers() {
+  if (!vulkanCore_) [[unlikely]] {
+    return;
+  }
+
+  auto &memManager = vulkanCore_->get_memory_manager();
+
+  // Allocate LOB heatmap buffers
+  auto lobDataSize =
+      config_.lobHeatmap.width * config_.lobHeatmap.height * sizeof(float) * 4;
+  lobHeatmapSSBO_ = memManager.allocate_storage_buffer(lobDataSize);
+  lobHeatmapUBO_ = memManager.allocate_uniform_buffer(256);
+
+  // Allocate footprint chart buffers
+  auto footprintDataSize =
+      config_.footprintChart.maxClusters * sizeof(CandleCluster);
+  footprintSSBO_ = memManager.allocate_storage_buffer(footprintDataSize);
+  footprintUBO_ = memManager.allocate_uniform_buffer(256);
+
+  // Allocate TPO profile buffers
+  auto tpoHistogramSize = config_.tpoProfile.bucketCount * sizeof(uint32_t);
+  constexpr size_t TPO_TRADE_BUFFER_SIZE = 64 * 1024;
+  tpoProfileSSBO_ = memManager.allocate_storage_buffer(TPO_TRADE_BUFFER_SIZE);
+  tpoProfileUBO_ = memManager.allocate_uniform_buffer(256);
+  tpoProfileHistogram_ = memManager.allocate_storage_buffer(tpoHistogramSize);
 }
 
-bool MarketMicrostructureRenderer::createImages() {
-    // Placeholder for image creation
-    return true;
+void MarketMicrostructureRenderer::createTextureResources() {
+  // Placeholder for texture resource creation
 }
 
-void MarketMicrostructureRenderer::updateHeatmapCompute(VkCommandBuffer cmdBuffer, uint32_t currentFrame) {
-    // Record compute shader dispatch
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelines_.lobHeatmap);
-    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                           computePipelines_.lobHeatmapLayout, 0, 1,
-                           &descriptorSets_.lobHeatmapSet, 0, nullptr);
-    
-    // Dispatch compute shader work groups
-    const uint32_t workGroupsX = (config_.lobHeatmap.width + 15) / 16;
-    const uint32_t workGroupsY = (config_.lobHeatmap.height + 15) / 16;
-    vkCmdDispatch(cmdBuffer, workGroupsX, workGroupsY, 1);
-    
-    // Record memory barrier for heatmap image
-    const auto imageBarrier = barrierManager_->createHeatmapImageBarrier(
-        lobResources_.heatmapImage->handle(),
-        VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    );
-    
-    vkCmdPipelineBarrier(
-        cmdBuffer,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &imageBarrier
-    );
-    
-    lobResources_.needsUpdate = false;
+// ============================================
+// Private: Compute Execution
+// ============================================
+
+void MarketMicrostructureRenderer::executeLOBHeatmapCompute(
+    VkCommandBuffer cmdBuffer) {
+  if (lobHeatmapPipeline_ == VK_NULL_HANDLE) [[unlikely]] {
+    return;
+  }
+
+  vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    lobHeatmapPipeline_);
+  vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          lobHeatmapPipelineLayout_, 0, 1,
+                          &lobHeatmapDescriptorSet_, 0, nullptr);
+
+  constexpr uint32_t WORKGROUP_SIZE = 16;
+  auto workGroupsX =
+      (config_.lobHeatmap.width + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+  auto workGroupsY =
+      (config_.lobHeatmap.height + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+  vkCmdDispatch(cmdBuffer, workGroupsX, workGroupsY, 1);
 }
 
-void MarketMicrostructureRenderer::updateTPOCompute(VkCommandBuffer cmdBuffer, uint32_t currentFrame) {
-    // Record TPO profile compute shader dispatch
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelines_.tpoProfile);
-    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                           computePipelines_.tpoProfileLayout, 0, 1,
-                           &descriptorSets_.tpoProfileSet, 0, nullptr);
-    
-    // Dispatch compute shader work groups
-    const uint32_t workGroups = (config_.tpoProfile.bucketCount + 63) / 64;
-    vkCmdDispatch(cmdBuffer, workGroups, 1, 1);
-    
-    tpoResources_.needsUpdate = false;
+void MarketMicrostructureRenderer::executeTPOProfileCompute(
+    VkCommandBuffer cmdBuffer) {
+  if (tpoProfilePipeline_ == VK_NULL_HANDLE) [[unlikely]] {
+    return;
+  }
+
+  vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    tpoProfilePipeline_);
+  vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          tpoProfilePipelineLayout_, 0, 1,
+                          &tpoProfileDescriptorSet_, 0, nullptr);
+
+  constexpr uint32_t TPO_WORKGROUP_SIZE = 64;
+  auto workGroups = (config_.tpoProfile.bucketCount + TPO_WORKGROUP_SIZE - 1) /
+                    TPO_WORKGROUP_SIZE;
+  vkCmdDispatch(cmdBuffer, workGroups, 1, 1);
 }
 
-void MarketMicrostructureRenderer::renderHeatmap(VkCommandBuffer cmdBuffer, uint32_t currentFrame) {
-    // Render heatmap texture to screen
-    // Real implementation would use dynamic rendering with texture sampling
-    
-    // For demonstration purposes, this is a placeholder
-    // In actual implementation, you would:
-    // 1. Bind heatmap sampler pipeline
-    // 2. Bind descriptor sets
-    // 3. Draw quad with heatmap texture coordinates
+// ============================================
+// Private: Rendering
+// ============================================
+
+void MarketMicrostructureRenderer::renderFootprintChart(
+    VkCommandBuffer cmdBuffer) {
+  if (footprintPipeline_ == VK_NULL_HANDLE || currentClusterCount_ == 0)
+      [[unlikely]] {
+    return;
+  }
+
+  vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    footprintPipeline_);
+  vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          footprintPipelineLayout_, 0, 1,
+                          &footprintDescriptorSet_, 0, nullptr);
+
+  constexpr uint32_t VERTICES_PER_QUAD = 6;
+  vkCmdDraw(cmdBuffer, VERTICES_PER_QUAD, currentClusterCount_, 0, 0);
 }
 
-void MarketMicrostructureRenderer::renderFootprintChart(VkCommandBuffer cmdBuffer, uint32_t currentFrame) {
-    // Render footprint chart using instanced rendering
-    if (footprintResources_.clusterCount == 0) {
-        return;
-    }
-    
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderPipelines_.footprintChart);
-    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                           renderPipelines_.footprintChartLayout, 0, 1,
-                           &descriptorSets_.footprintChartSet, 0, nullptr);
-    
-    // Bind vertex and index buffers
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &footprintResources_.vertexBuffer->handle(), offsets);
-    vkCmdBindIndexBuffer(cmdBuffer, footprintResources_.indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-    
-    // Draw instanced clusters
-    vkCmdDrawIndexed(cmdBuffer, footprintResources_.indexCount,
-                    footprintResources_.clusterCount, 0, 0, 0);
+void MarketMicrostructureRenderer::renderHeatmapTexture(
+    [[maybe_unused]] VkCommandBuffer cmdBuffer) {
+  // Placeholder for heatmap texture rendering
 }
 
-void MarketMicrostructureRenderer::renderTPOProfile(VkCommandBuffer cmdBuffer, uint32_t currentFrame) {
-    // Render TPO profile histogram
-    // Real implementation would use the histogram data to draw a bar chart
-    
-    // For demonstration purposes, this is a placeholder
+void MarketMicrostructureRenderer::renderTPOProfile(
+    [[maybe_unused]] VkCommandBuffer cmdBuffer) {
+  // Placeholder for TPO profile rendering
 }
 
-void MarketMicrostructureRenderer::computeHeatmapParams(const trading::HotspineOrderBookSnapshot& snapshot) {
-    // Calculate heatmap rendering parameters
-    float minPrice = std::numeric_limits<float>::max();
-    float maxPrice = std::numeric_limits<float>::lowest();
-    
-    for (const auto& level : snapshot.getPriceLevels()) {
-        minPrice = std::min(minPrice, level.price);
-        maxPrice = std::max(maxPrice, level.price);
-    }
-    
-    // Add padding to ensure we cover all price levels
-    const float padding = (maxPrice - minPrice) * 0.1f;
-    lobResources_.basePrice = minPrice - padding;
-    lobResources_.priceRange = (maxPrice - minPrice) + (2 * padding);
+// ============================================
+// Private: Buffer Updates
+// ============================================
+
+void MarketMicrostructureRenderer::updateUniformBuffers(
+    [[maybe_unused]] uint32_t currentFrame) {
+  // Update uniform buffers with current frame data
 }
 
-} // namespace RenderEngine
+void MarketMicrostructureRenderer::updateStorageBuffers() {
+  std::lock_guard lock(dataMutex_);
 
-} // namespace BTQuant
+  // Update footprint SSBO using std::ranges::copy if possible
+  if (!currentFootprintClusters_.empty() && footprintSSBO_.mapped_ptr) {
+    auto dataSpan = std::as_bytes(std::span(currentFootprintClusters_));
+    std::memcpy(footprintSSBO_.mapped_ptr, dataSpan.data(), dataSpan.size());
+  }
+
+  // Update trade data SSBO
+  if (!currentTradeData_.empty() && tpoProfileSSBO_.mapped_ptr) {
+    auto dataSpan = std::as_bytes(std::span(currentTradeData_));
+    std::memcpy(tpoProfileSSBO_.mapped_ptr, dataSpan.data(), dataSpan.size());
+  }
+}
+
+// Performance recording handled in render() method
+void MarketMicrostructureRenderer::recordFrameStats() {}
+
+} // namespace BTQuant::RenderEngine

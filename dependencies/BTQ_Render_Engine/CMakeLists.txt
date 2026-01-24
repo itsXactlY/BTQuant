@@ -2,8 +2,10 @@ cmake_minimum_required(VERSION 3.15)
 project(BTQuant_Render_Engine LANGUAGES CXX)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-set(CMAKE_CXX_STANDARD 20)
+# C++26 Standard - Cutting Edge (GCC 15+ / Clang 18+)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find Dependencies
 find_package(Vulkan REQUIRED)
@@ -88,12 +90,11 @@ set(DASHBOARD_SOURCES
     src/components/volume_profile_panel.cpp
     src/components/depth_chart_panel.cpp
     src/components/dom_surface_panel.cpp
-    # src/components/MarketMicrostructureRenderer.cpp
+    src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
-    # TODO: Update these for newer ImPlot API
-    # src/components/realtime_dashboard_component.cpp
-    # src/components/heatmap_panel.cpp
-    # src/components/correlation_heatmap_component.cpp
+    src/components/realtime_dashboard_component.cpp
+    src/components/correlation_heatmap_component.cpp
+    src/components/symbol_selector.cpp
     src/trading/trading_interface.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
@@ -104,6 +105,13 @@ set(DASHBOARD_SOURCES
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/monitoring/performance_monitor.cpp
+    # Analytics and advanced features
+    src/analytics/trading_analytics.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/data/ui_data_manager.cpp
+    src/system/system_optimizer.cpp
+    # NOTE: src/ui/advanced_ui_features.cpp excluded - contains duplicate class definitions
+    #       already defined in vulkan_dashboard_advanced.hpp and theme_manager.hpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})

@@ -72,3 +72,5 @@ dependencies/datacollector/market_data_collector
 discord_architect.py
 
 plans/
+dependencies/BTQ_Render_Engine/imgui_.ini
+dependencies/BTQ_Render_Engine/imgui.ini

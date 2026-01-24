@@ -1,8 +1,14 @@
 /**
- * BTQuant Advanced Dashboard Layout Manager Implementation
+ * @file dashboard_layout_manager.cpp
+ * @brief BTQuant Advanced Dashboard Layout Manager (C++23/26)
  *
  * Professional layout management system for the six-panel financial dashboard
  * with responsive design, dynamic resizing, and professional spacing.
+ *
+ * Modern C++ features used:
+ * - [[nodiscard]] attributes for getter methods
+ * - constexpr layout constants
+ * - Designated initializers for panel configuration
  *
  * Layout Structure:
  * ┌─────────────────┬─────────────────┬─────────────────┐
@@ -13,19 +19,26 @@
  * │                 │                 │                 │
  * └─────────────────┴─────────────────┴─────────────────┘
  *
- * Features:
- * - Responsive six-panel layout system
- * - Professional spacing and alignment
- * - Dynamic resizing with constraints
- * - Dark theme color management
- * - High-DPI display support
- * - Animation and transition support
+ * @version 2.0.0 (C++23/26)
  */
 
 #include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
+#include <array>
 
 namespace BTQuant {
+
+// ============================================================================
+// Layout Configuration Constants
+// ============================================================================
+namespace {
+constexpr float DEFAULT_PADDING = 8.0f;
+constexpr float DEFAULT_BORDER_WIDTH = 1.0f;
+constexpr float MIN_PANEL_WIDTH = 100.0f;
+constexpr float MIN_PANEL_HEIGHT = 80.0f;
+constexpr std::array<float, 3> DEFAULT_COLUMN_WEIGHTS = {0.33f, 0.34f, 0.33f};
+constexpr std::array<float, 2> DEFAULT_ROW_WEIGHTS = {0.45f, 0.55f};
+} // namespace
 
 // Layout panel identifiers
 enum class PanelType {

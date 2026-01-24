@@ -1,12 +1,32 @@
+/**
+ * @file correlation_heatmap_component.cpp
+ * @brief Correlation Heatmap Component (C++23/26)
+ *
+ * Multi-asset correlation visualization with modern C++ features:
+ * - [[nodiscard]], [[likely]]/[[unlikely]] attributes
+ * - constexpr constants
+ * - Improved structure initialization
+ *
+ * @version 2.0.0 (C++23/26)
+ */
+
 #include "../../include/components/correlation_heatmap_component.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numeric>
 
 namespace BTQuant {
+
+// Constants
+namespace {
+constexpr float UPDATE_INTERVAL_SECONDS = 5.0f;
+constexpr std::array<const char *, 5> EXCHANGES = {"Binance", "OKX", "Bybit",
+                                                   "Coinbase", "Kraken"};
+} // namespace
 
 CorrelationHeatmapComponent::CorrelationHeatmapComponent(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

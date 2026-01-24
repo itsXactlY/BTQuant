@@ -1,8 +1,28 @@
+/**
+ * @file symbol_selector.cpp
+ * @brief Symbol Selector Component (C++23/26)
+ *
+ * Multi-asset symbol selection UI with modern C++ features:
+ * - [[nodiscard]] attributes
+ * - constexpr constants
+ * - std::array for fixed-size collections
+ *
+ * @version 2.0.0 (C++23/26)
+ */
+
 #include "../../include/components/symbol_selector.hpp"
 #include "imgui.h"
 #include <algorithm>
+#include <array>
 
 namespace BTQuant {
+
+// Constants
+namespace {
+constexpr int TIMEFRAME_COUNT = 8;
+constexpr std::array<const char *, TIMEFRAME_COUNT> TIMEFRAME_NAMES = {
+    "1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s"};
+} // namespace
 
 bool SymbolSelector::render(SymbolSelectorState &state) {
   bool changed = false;

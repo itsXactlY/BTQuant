@@ -70,7 +70,7 @@ void WatchlistPanel::render() {
   ImGui::Separator();
 
   // Table
-  if (ImGui::BeginTable("WatchlistTable", 6,
+  if (ImGui::BeginTable("WatchlistTable", 7,
                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
                             ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_BordersInnerV)) {
@@ -112,6 +112,10 @@ void WatchlistPanel::render() {
 
 void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string &symbol,
                                 const std::string &exchange) {
+  if (watchlist_.find(symbol_id) != watchlist_.end()) {
+    return; // Already exists
+  }
+
   WatchlistEntry entry;
   entry.symbol_id = symbol_id;
   entry.symbol = symbol;
@@ -196,6 +200,7 @@ void WatchlistPanel::render_table_header() {
                           ImGuiTableColumnFlags_DefaultSort |
                               ImGuiTableColumnFlags_WidthFixed,
                           80.0f);
+  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableSetupColumn("Price",
                           ImGuiTableColumnFlags_DefaultSort |
                               ImGuiTableColumnFlags_PreferSortDescending);
@@ -217,11 +222,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
   ImGui::TableSetColumnIndex(0);
   bool is_selected = (entry.symbol_id == selected_symbol_id_);
 
+  ImGui::PushID(static_cast<int>(entry.symbol_id)); // Fix ID conflict
+
   // Use Selectable spanning all columns
-  char label[128];
-  snprintf(label, sizeof(label), "%s##row_%u", entry.symbol.c_str(),
-           entry.symbol_id);
-  if (ImGui::Selectable(label, is_selected,
+  if (ImGui::Selectable(entry.symbol.c_str(), is_selected,
                         ImGuiSelectableFlags_SpanAllColumns |
                             ImGuiSelectableFlags_AllowDoubleClick)) {
     selected_symbol_id_ = entry.symbol_id;
@@ -231,6 +235,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
       on_symbol_selected_(entry.symbol_id, entry.symbol);
     }
   }
+
+  ImGui::PopID();
 
   // Show tooltip on hover
   if (ImGui::IsItemHovered()) {
@@ -242,14 +248,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
   }
 
   ImGui::TableSetColumnIndex(1);
-  ImGui::Text("%.4f", entry.price);
+  ImGui::Text("%s", entry.exchange.c_str());
 
   ImGui::TableSetColumnIndex(2);
+  ImGui::Text("%.4f", entry.price);
+
+  ImGui::TableSetColumnIndex(3);
   ImVec4 change_color = entry.change_24h >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
                                               : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
   ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
 
-  ImGui::TableSetColumnIndex(3);
+  ImGui::TableSetColumnIndex(4);
   // Format volume with K/M suffix for readability
   if (entry.volume_24h >= 1e6) {
     ImGui::Text("%.2fM", entry.volume_24h / 1e6);
@@ -259,10 +268,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {
     ImGui::Text("%.0f", entry.volume_24h);
   }
 
-  ImGui::TableSetColumnIndex(4);
+  ImGui::TableSetColumnIndex(5);
   ImGui::Text("%.4f", entry.vwap);
 
-  ImGui::TableSetColumnIndex(5);
+  ImGui::TableSetColumnIndex(6);
   if (entry.last_update_ts > 0) {
     time_t time =
         entry.last_update_ts / 1000000; // Convert microseconds to seconds
@@ -303,14 +312,16 @@ const char *WatchlistPanel::get_sort_column_name(int column) {
   case 0:
     return "Symbol";
   case 1:
-    return "Price";
+    return "Exchange";
   case 2:
-    return "Change %";
+    return "Price";
   case 3:
-    return "Volume";
+    return "Change %";
   case 4:
-    return "VWAP";
+    return "Volume";
   case 5:
+    return "VWAP";
+  case 6:
     return "Last Update";
   default:
     return "Unknown";
@@ -337,19 +348,22 @@ void WatchlistPanel::sort_watchlist() {
               case 0: // Symbol
                 result = a.symbol < b.symbol;
                 break;
-              case 1: // Price
+              case 1: // Exchange
+                result = a.exchange < b.exchange;
+                break;
+              case 2: // Price
                 result = a.price < b.price;
                 break;
-              case 2: // Change %
+              case 3: // Change %
                 result = a.change_24h < b.change_24h;
                 break;
-              case 3: // Volume
+              case 4: // Volume
                 result = a.volume_24h < b.volume_24h;
                 break;
-              case 4: // VWAP
+              case 5: // VWAP
                 result = a.vwap < b.vwap;
                 break;
-              case 5: // Last Update
+              case 6: // Last Update
                 result = a.last_update_ts < b.last_update_ts;
                 break;
               default:

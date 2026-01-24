@@ -147,6 +147,7 @@ void DomSurfacePanel::render() {
     return;
   }
 
+  // Enable Pan/Zoom for DOM Surface
   if (ImPlot::BeginPlot("##DomHeatmap", ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
     ImPlot::SetupAxes("Time Step", "Price");
@@ -166,6 +167,15 @@ void DomSurfacePanel::render() {
     }
 
     ImPlot::EndPlot();
+  }
+
+  // Debug Overlay for DOM troubleshooting
+  if (heatmap_data_.size() > 0) {
+    ImGui::SetCursorPos(ImVec2(10, 30));
+    ImGui::TextColored(ImVec4(1, 1, 0, 1),
+                       "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
+                       heatmap_data_.size() / price_bins_, price_bins_);
+    ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
   }
 
   end_panel_window();

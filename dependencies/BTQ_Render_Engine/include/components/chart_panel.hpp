@@ -56,6 +56,7 @@ private:
   float auto_follow_window_ = 1000.0f;
   double last_view_min_ = 0.0;
   double last_view_max_ = 0.0;
+  bool first_frame_ = true;
 
   void render_chart_controls();
   void render_indicator_selector();

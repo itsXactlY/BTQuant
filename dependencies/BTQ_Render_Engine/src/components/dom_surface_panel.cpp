@@ -37,6 +37,8 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
         });
   }
 
+  // Clear existing data to prevent mixing symbols
+  heatmap_data_.clear();
   markDirty();
 }
 
@@ -51,8 +53,8 @@ void DomSurfacePanel::updateHeatmapData() {
   if (current_symbol_id_ == 0 || !processor_)
     return;
 
-  auto history =
-      processor_->getHistoricalOrderbooks(current_symbol_id_, history_depth_);
+  // Request ALL available orderbook history (0 = no limit)
+  auto history = processor_->getHistoricalOrderbooks(current_symbol_id_, 0);
   if (history.empty())
     return;
 
@@ -148,10 +150,17 @@ void DomSurfacePanel::render() {
   }
 
   // Enable Pan/Zoom for DOM Surface
-  if (ImPlot::BeginPlot("##DomHeatmap", ImVec2(-1, -1),
+  std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
+  if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
     ImPlot::SetupAxes("Time Step", "Price");
     ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_NoTickLabels);
+
+    // Always fit axes to data bounds (fills the plot area)
+    ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
+                            ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
+                            ImPlotCond_Always);
 
     // Use time history size for Cols and price_bins for Rows
     int rows = price_bins_;

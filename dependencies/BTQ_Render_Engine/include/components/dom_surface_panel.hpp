@@ -28,7 +28,7 @@ private:
   uint32_t current_symbol_id_ = 0;
 
   // Visualization parameters
-  int history_depth_ = 50;    // Number of snapshots to show (X-axis time)
+  int history_depth_ = 300;   // Number of snapshots to show (X-axis time)
   int price_bins_ = 100;      // Number of vertical price buckets (Y-axis price)
   double price_range_ = 0.02; // +/- 2% from mid price
 

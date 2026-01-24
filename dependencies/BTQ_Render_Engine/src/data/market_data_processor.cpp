@@ -622,11 +622,8 @@ void MarketDataProcessor::updateCandleForTimeframe(SymbolAnalytics &symbol_data,
       candle_start != current_candle.timestamp) {
     // Save previous candle if it exists
     if (current_candle.timestamp != 0) {
+      // Keep FULL candle history (no limit)
       candles.push_back(current_candle);
-      // Keep only recent candles (last 1000)
-      if (candles.size() > 1000) {
-        candles.erase(candles.begin());
-      }
     }
 
     // Create new candle
@@ -770,11 +767,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate &update) {
     trade.size = update.size;
     trade.is_buy = (update.side == "buy");
 
-    // Keep only recent trades (last 1000)
+    // Keep FULL trade history (no limit)
     symbol_data.recent_trades.push_back(trade);
-    if (symbol_data.recent_trades.size() > 1000) {
-      symbol_data.recent_trades.erase(symbol_data.recent_trades.begin());
-    }
 
     // Update analytics
     updateTradingMetrics(symbol_data, trade);
@@ -814,11 +808,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate &update) {
       symbol_data.consolidated_asks[level.price] += level.size;
     }
 
-    // Keep only recent orderbooks (last 100)
+    // Keep FULL orderbook history (no limit)
     symbol_data.recent_orderbooks.push_back(orderbook);
-    if (symbol_data.recent_orderbooks.size() > 100) {
-      symbol_data.recent_orderbooks.pop_front();
-    }
   }
 
   // Update indicators

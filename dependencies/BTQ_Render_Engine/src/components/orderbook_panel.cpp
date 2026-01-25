@@ -80,7 +80,7 @@ void OrderbookPanel::render() {
           if (symbol_id_ != sym_id) {
             symbol_id_ = sym_id;
             symbol_name_ = bridge_->getSymbolName(symbol_id_);
-            config_.title = symbol_name_ + " Orderbook";
+            config_.title = symbol_name_ + " DOM";
             std::cout << "[OrderbookPanel] Auto-selected: " << symbol_name_
                       << " (ID=" << symbol_id_ << ")" << std::endl;
           }

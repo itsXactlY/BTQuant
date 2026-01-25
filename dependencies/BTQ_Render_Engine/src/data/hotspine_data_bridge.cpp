@@ -72,6 +72,19 @@ std::expected<void, std::string> HotSpineDataBridge::start() {
     return std::unexpected("Invalid magic number in shared memory");
   }
 
+  // Verify version number - Must match HOTSPINE_VERSION
+  // Assuming HOTSPINE_VERSION is 3 now
+  if (m_header->version != 3) [[unlikely]] {
+    munmap(m_shm_ptr, m_shm_size);
+    m_shm_ptr = nullptr;
+    m_header = nullptr;
+    close(m_shm_fd);
+    m_shm_fd = -1;
+    return std::unexpected(
+        std::format("Shared memory version mismatch: expected 3, found {}",
+                    m_header->version));
+  }
+
   // Calculate ring buffer positions
   constexpr size_t HOTSPINE_HEADER_SIZE = 4096;
   m_trades = reinterpret_cast<HotTrade *>(static_cast<char *>(m_shm_ptr) +

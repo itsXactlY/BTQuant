@@ -1,9 +1,10 @@
 #pragma once
 
-#include "imgui.h"
+#include "MarketMicrostructureRenderer.h"
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
 #include <deque>
+#include <imgui.h>
 #include <implot.h>
 #include <memory>
 #include <vector>
@@ -13,7 +14,8 @@ namespace BTQuant {
 class DomSurfacePanel : public PanelBase {
 public:
   explicit DomSurfacePanel(
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+      RenderEngine::MarketMicrostructureRenderer *renderer);
   ~DomSurfacePanel() override;
 
   void render() override;
@@ -24,7 +26,7 @@ public:
   void setPriceRange(double range) { price_range_ = range; }
 
 private:
-  std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t current_symbol_id_ = 0;
 
   // Visualization parameters

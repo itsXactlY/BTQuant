@@ -259,6 +259,8 @@ void MarketMicrostructureRenderer::updateLOBData(
   std::memcpy(lobSnapshotBuffer_.data(), &snapshot, size);
 
   currentHeatmapTimeIndex_ = snapshot.currentTimeIndex;
+  lastBasePrice_ = snapshot.basePrice;
+  lastPriceRange_ = snapshot.priceRange;
 
   {
     std::lock_guard statsLock(statsMutex_);

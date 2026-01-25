@@ -120,7 +120,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
                                            risk_assessment_, processor_);
     break;
   case PanelType::HEATMAP:
-    panel = std::make_unique<DomSurfacePanel>(processor_);
+    panel = std::make_unique<DomSurfacePanel>(processor_, micro_renderer_);
     break;
   case PanelType::ORDERBOOK:
     panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);

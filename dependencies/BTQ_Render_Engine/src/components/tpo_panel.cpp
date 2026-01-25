@@ -48,18 +48,22 @@ void TpoPanel::render() {
     // Axis Setup
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
                       ImPlotAxisFlags_None);
+
+    // Smooth time window (30s)
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 30, ImPlotCond_Always);
 
     float p_min = 0, p_max = 1000;
     if (!clusters.empty()) {
-      p_min = clusters[0].centerY;
-      p_max = clusters[0].centerY;
-      for (const auto &c : clusters) {
-        p_min = std::min(p_min, (float)c.centerY);
-        p_max = std::max(p_max, (float)c.centerY);
-      }
-      ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min - 10, (double)p_max + 10,
-                              ImPlotCond_Once);
+      // Quantower-style Y-axis focus: Center on active price range with padding
+      float mid = clusters.back().centerY;
+      constexpr float windowSize = 50.0f; // ±50 ticks
+      constexpr float tickSize = 0.5f;
+
+      p_min = mid - (windowSize * tickSize);
+      p_max = mid + (windowSize * tickSize);
+
+      ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min, (double)p_max,
+                              ImPlotCond_Always);
     }
 
     // Custom Formatting (C++26 lambda)
@@ -113,9 +117,11 @@ void TpoPanel::render() {
       if (show_text && (std::abs(p2.y - p1.y) > 18)) {
         std::string label = std::format("{}", delta);
         ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+        ImU32 text_color =
+            (delta > 0) ? ImColor(0.6f, 1.0f, 0.6f) : ImColor(1.0f, 0.6f, 0.6f);
         draw_list->AddText(ImVec2((p1.x + p2.x - text_size.x) * 0.5f,
                                   (p1.y + p2.y - text_size.y) * 0.5f),
-                           IM_COL32_WHITE, label.c_str());
+                           text_color, label.c_str());
       }
     }
 

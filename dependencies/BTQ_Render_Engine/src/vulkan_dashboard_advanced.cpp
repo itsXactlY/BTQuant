@@ -8,7 +8,11 @@
 #include "components/realtime_dashboard_component.hpp"
 #include "imgui.h"
 #include "implot.h"
-#include <iostream>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
+#include <string>
+#include <thread>
 
 namespace BTQuant {
 
@@ -19,10 +23,16 @@ VulkanDashboard::VulkanDashboard(
     : width_(width), height_(height), hotspine_bridge_(bridge),
       market_data_processor_(processor), config_(config) {}
 
-VulkanDashboard::~VulkanDashboard() { shutdown(); }
+VulkanDashboard::~VulkanDashboard() {
+  is_running_ = false;
+  if (m_worker_thread.joinable()) {
+    m_worker_thread.join();
+  }
+  shutdown();
+}
 
 std::expected<void, std::string> VulkanDashboard::initialize() {
-  std::println("[VulkanDashboard] Initializing Advanced Terminal Renderer...");
+  printf("[VulkanDashboard] Initializing Advanced Terminal Renderer...\n");
 
   // 1. ImGui Context Lifecycle Setup (MUST BE BEFORE VULKAN INIT)
   IMGUI_CHECKVERSION();
@@ -38,30 +48,41 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   // Use the established VulkanCore initialization
   m_vulkanCore = std::make_unique<VulkanCore>(config_);
   m_vulkanCore->initialize(window_, width_, height_);
-  std::println("[VulkanDashboard] Vulkan initialized.");
+  printf("[VulkanDashboard] Vulkan initialized.\n");
 
   m_timeline_semaphore =
       std::make_unique<TimelineSemaphore>(m_vulkanCore->get_device());
 
   // Initialize Glfw ImGui Backend
-  std::println("[VulkanDashboard] Initializing ImGui GLFW Backend...");
+  printf("[VulkanDashboard] Initializing ImGui GLFW Backend...\n");
   ImGui_ImplGlfw_InitForVulkan(window_, true);
-  std::println("[VulkanDashboard] ImGui GLFW Backend initialized.");
+  printf("[VulkanDashboard] ImGui GLFW Backend initialized.\n");
 
   init_components();
+
+  // 3. Start Data Microstructure Worker Thread (Parallel Ingestion)
+  m_worker_thread = std::thread(&VulkanDashboard::worker_loop, this);
+
   return {};
 }
 
+void VulkanDashboard::worker_loop() {
+  while (is_running_.load()) {
+    pollDataToRenderer();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+}
+
 void VulkanDashboard::init_components() {
-  std::println("[VulkanDashboard] Initializing Components...");
+  printf("[VulkanDashboard] Initializing Components...\n");
   m_micro_renderer =
       std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
           m_vulkanCore.get(), hotspine_bridge_, market_data_processor_);
 
   if (auto result = m_micro_renderer->initialize(); !result) [[unlikely]] {
-    std::println(
-        "[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: {}",
-        RenderEngine::to_string(result.error()));
+    printf(
+        "[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: %s\n",
+        std::string(RenderEngine::to_string(result.error())).c_str());
   }
 
   m_workspace = std::make_unique<QuantWorkspaceComponent>(
@@ -82,7 +103,7 @@ void VulkanDashboard::init_components() {
       [workspace]() {
         if (workspace->getPanelManager()) {
           // workspace->getPanelManager()->load_layout("layout_desktop_3x5.json");
-          std::cout << "[Layout] Switched to Desktop 3x5" << std::endl;
+          printf("[Layout] Switched to Desktop 3x5\n");
           workspace->getPanelManager()
               ->auto_arrange_panels(); // Simple verification action
         }
@@ -94,7 +115,7 @@ void VulkanDashboard::init_components() {
       [workspace]() {
         if (workspace->getPanelManager()) {
           // workspace->getPanelManager()->load_layout("layout_focus_chart.json");
-          std::cout << "[Layout] Switched to Chart Focus" << std::endl;
+          printf("[Layout] Switched to Chart Focus\n");
         }
       },
       "Layout 2 (Chart Focus)", true);
@@ -104,7 +125,7 @@ void VulkanDashboard::init_components() {
       ImGuiKey_Space,
       []() {
         ThemeManager::getInstance().toggleTheme();
-        std::cout << "Hotkey: Theme Toggled" << std::endl;
+        printf("Hotkey: Theme Toggled\n");
       },
       "Toggle Theme");
 
@@ -184,8 +205,9 @@ void VulkanDashboard::render_frame() {
 
   // Handle high-performance microstructure rendering (Data Ingestion & Compute
   // Phase)
+  // Handle microstructure rendering execution
   if (m_micro_renderer) {
-    pollDataToRenderer();
+    // Note: pollDataToRenderer is now handled by m_worker_thread
     m_micro_renderer->prepare();
     m_micro_renderer->executeCompute(
         m_vulkanCore->get_current_command_buffer());
@@ -232,7 +254,7 @@ void VulkanDashboard::shutdown() {
   }
   already_shutdown = true;
 
-  std::cout << "[VulkanDashboard] Shutting down..." << std::endl;
+  printf("[VulkanDashboard] Shutting down...\n");
 
   if (m_vulkanCore) {
     m_vulkanCore->wait_idle();
@@ -253,7 +275,7 @@ void VulkanDashboard::shutdown() {
 
 void VulkanDashboard::init_window() {
   if (!glfwInit()) {
-    std::cerr << "[VulkanDashboard] Failed to initialize GLFW" << std::endl;
+    fprintf(stderr, "[VulkanDashboard] Failed to initialize GLFW\n");
     exit(EXIT_FAILURE);
   }
 
@@ -278,14 +300,19 @@ void VulkanDashboard::pollDataToRenderer() {
     return;
   }
 
-  // 1. Resolve Symbol ID from active_symbol_
+  // 1. Resolve Symbol ID from active_symbol_ (Thread-Safe)
+  std::string active_sym;
+  {
+    std::lock_guard lock(m_configMutex);
+    active_sym = active_symbol_;
+  }
+
   uint32_t symbol_id = 0;
-  auto id_opt =
-      SymbolRegistry::instance().get_symbol_id("Binance", active_symbol_);
+  auto id_opt = SymbolRegistry::instance().get_symbol_id("Binance", active_sym);
   if (!id_opt) {
     auto all_symbols = SymbolRegistry::instance().get_all_symbols();
     for (const auto &info : all_symbols) {
-      if (info.symbol == active_symbol_) {
+      if (info.symbol == active_sym) {
         symbol_id = info.id;
         break;
       }
@@ -324,38 +351,50 @@ void VulkanDashboard::pollDataToRenderer() {
         static_cast<uint32_t>(m_vulkanCore->get_current_frame_index());
     snapshot->priceLevelsCount = totalLevels;
 
-    // Calculate dynamic price range for the snapshot
-    float minPrice = 1e9f, maxPrice = -1e9f;
-    if (!analytics.consolidated_bids.empty()) {
-      minPrice = std::min(
-          minPrice,
-          static_cast<float>(analytics.consolidated_bids.rbegin()->first));
-      maxPrice = std::max(
-          maxPrice,
-          static_cast<float>(analytics.consolidated_bids.begin()->first));
-    }
-    if (!analytics.consolidated_asks.empty()) {
-      minPrice = std::min(
-          minPrice,
-          static_cast<float>(analytics.consolidated_asks.begin()->first));
-      maxPrice = std::max(
-          maxPrice,
-          static_cast<float>(analytics.consolidated_asks.rbegin()->first));
+    // Use mid-price centered window for professional Heatmap scaling (Quantower
+    // style)
+    float midPrice = 0.0f;
+    if (!analytics.consolidated_bids.empty() &&
+        !analytics.consolidated_asks.empty()) {
+      midPrice =
+          (static_cast<float>(analytics.consolidated_bids.begin()->first) +
+           static_cast<float>(analytics.consolidated_asks.begin()->first)) /
+          2.0f;
+    } else if (!analytics.consolidated_bids.empty()) {
+      midPrice = static_cast<float>(analytics.consolidated_bids.begin()->first);
+    } else if (!analytics.consolidated_asks.empty()) {
+      midPrice = static_cast<float>(analytics.consolidated_asks.begin()->first);
     }
 
-    snapshot->basePrice = minPrice;
-    snapshot->priceRange =
-        (maxPrice - minPrice) > 1e-6f ? (maxPrice - minPrice) : 1.0f;
+    // Use a tighter window for high-resolution depth (Quantower style)
+    constexpr float tickSize = 0.5f;
+    constexpr float tickWindow =
+        50.0f; // ±50 ticks = ±25 USD for BTC (Ultra-Durable & Vibrant)
 
+    snapshot->basePrice = midPrice - (tickWindow * tickSize);
+    snapshot->priceRange = (tickWindow * 2.0f) * tickSize;
+
+    float maxVol = 1.0f;
     uint32_t idx = 0;
     for (auto const &[price, size] : analytics.consolidated_bids) {
+      if (idx >= totalLevels)
+        break;
+      float vol = static_cast<float>(size);
+      maxVol = std::max(maxVol, vol);
       snapshot->levels[idx++] = {static_cast<float>(price), 0,
-                                 static_cast<uint32_t>(size), 0};
+                                 static_cast<uint32_t>(vol * 100.0f), 0};
     }
     for (auto const &[price, size] : analytics.consolidated_asks) {
+      if (idx >= totalLevels)
+        break;
+      float vol = static_cast<float>(size);
+      maxVol = std::max(maxVol, vol);
       snapshot->levels[idx++] = {static_cast<float>(price),
-                                 static_cast<uint32_t>(size), 0, 0};
+                                 static_cast<uint32_t>(vol * 100.0f), 0, 0};
     }
+
+    // Dynamic Normalization for Heatmap (Quantower style)
+    m_micro_renderer->updateHeatmapParams(maxVol * 100.0f * 0.7f);
 
     m_micro_renderer->updateLOBData(*snapshot);
   }

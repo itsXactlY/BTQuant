@@ -226,8 +226,14 @@ public:
   void render_frame();
   void handle_events();
   bool should_close() const;
-  void set_active_symbol(const std::string &s) { active_symbol_ = s; }
-  std::string get_active_symbol() const { return active_symbol_; }
+  void set_active_symbol(const std::string &s) {
+    std::lock_guard lock(m_configMutex);
+    active_symbol_ = s;
+  }
+  std::string get_active_symbol() const {
+    std::lock_guard lock(m_configMutex);
+    return active_symbol_;
+  }
   VulkanCore *get_vulkan_core() { return m_vulkanCore.get(); }
 
 private:
@@ -247,7 +253,10 @@ private:
   std::unique_ptr<TimelineSemaphore> m_timeline_semaphore;
   bool use_modern_dashboard_ = false;
   uint32_t m_currentImageIndex = 0;
-  bool is_running_ = true;
+  std::atomic<bool> is_running_ = true;
+  std::thread m_worker_thread;
+  mutable std::mutex m_configMutex;
+  void worker_loop();
   bool m_windowResized = false;
   static void framebuffer_size_callback(GLFWwindow *window, int width,
                                         int height);

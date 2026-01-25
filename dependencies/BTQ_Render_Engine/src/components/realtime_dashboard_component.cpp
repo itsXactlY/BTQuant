@@ -70,7 +70,7 @@ void RealtimeDashboardComponent::setup_default_panels() {
                   {10, 420},
                   {800, 200}},
       PanelConfig{
-          DashboardPanelType::ORDER_BOOK, "Order Book", {820, 220}, {400, 400}},
+          DashboardPanelType::ORDER_BOOK, "DOM", {820, 220}, {400, 400}},
       PanelConfig{DashboardPanelType::RECENT_TRADES,
                   "Recent Trades",
                   {10, 630},

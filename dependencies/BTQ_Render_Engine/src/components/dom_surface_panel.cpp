@@ -1,4 +1,6 @@
 #include "components/dom_surface_panel.hpp"
+#include "../../include/components/MarketMicrostructureRenderer.h"
+#include "../../include/symbol_registry.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -6,10 +8,11 @@
 namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    RenderEngine::MarketMicrostructureRenderer *renderer)
     : PanelBase(
-          PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
-      processor_(processor) {}
+          PanelConfig{.title = "LOB Heatmap", .type = PanelType::HEATMAP}),
+      renderer_(renderer) {}
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
@@ -58,7 +61,7 @@ void DomSurfacePanel::updateHeatmapData() {
   if (history.empty())
     return;
 
-  // Determine price range based on LATEST snapshot
+  // Determine price range based on professional tick-window (Quantower style)
   const auto &latest = history.back();
   double mid_price = 0;
   if (!latest.bids.empty() && !latest.asks.empty()) {
@@ -74,8 +77,15 @@ void DomSurfacePanel::updateHeatmapData() {
   if (mid_price <= 0)
     return;
 
-  double min_price = mid_price * (1.0 - price_range_);
-  double max_price = mid_price * (1.0 + price_range_);
+  // Use fixed tick resolution and window (e.g., ±200 ticks)
+  constexpr double tickSize = 0.5;
+  constexpr double tickWindow = 200.0;
+
+  double min_price = mid_price - (tickWindow * tickSize);
+  double max_price = mid_price + (tickWindow * tickSize);
+
+  // Increase bin resolution for "smooth" look
+  price_bins_ = 256;
 
   if (max_price <= min_price)
     return;
@@ -137,13 +147,14 @@ void DomSurfacePanel::updateHeatmapData() {
 }
 
 void DomSurfacePanel::render() {
-  if (consumeDirty()) {
+  // ONLY run CPU logic if Vulkan renderer is NOT available
+  if (!renderer_ && consumeDirty()) {
     updateHeatmapData();
   }
 
   begin_panel_window();
 
-  if (current_symbol_id_ == 0 || heatmap_data_.empty()) {
+  if (current_symbol_id_ == 0 || (heatmap_data_.empty() && !renderer_)) {
     ImGui::Text("No Data / Select Symbol");
     end_panel_window();
     return;
@@ -156,23 +167,44 @@ void DomSurfacePanel::render() {
     ImPlot::SetupAxes("Time Step", "Price");
     ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_NoTickLabels);
 
+    if (renderer_) {
+      auto [baseP, rangeP] = renderer_->getLOBPriceBounds();
+      bounds_min_[1] = baseP;
+      bounds_max_[1] = baseP + rangeP;
+      bounds_min_[0] = 0;
+      bounds_max_[0] = 600; // time steps
+    }
+
     // Always fit axes to data bounds (fills the plot area)
     ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
                             ImPlotCond_Always);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
-                            ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, (double)bounds_min_[1],
+                            (double)bounds_max_[1], ImPlotCond_Always);
 
     // Use time history size for Cols and price_bins for Rows
     int rows = price_bins_;
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
-    if (cols > 0 && rows > 0) {
-      ImPlot::PushColormap(ImPlotColormap_Viridis);
-      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0,
-                          scale_max_, nullptr,
+    // Use high-performance Vulkan Heatmap if available (Quantower style)
+    if (renderer_) {
+      void *texID = renderer_->getHeatmapTextureID();
+      if (texID) {
+        ImPlot::PlotImage("Heatmap", texID,
                           ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                           ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-      ImPlot::PopColormap();
+      }
+    } else {
+      // Use time history size for Cols and price_bins for Rows
+      int rows = price_bins_;
+      int cols = static_cast<int>(heatmap_data_.size()) / rows;
+      if (cols > 0 && rows > 0) {
+        ImPlot::PushColormap(ImPlotColormap_Viridis);
+        ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0,
+                            scale_max_, nullptr,
+                            ImPlotPoint(bounds_min_[0], bounds_min_[1]),
+                            ImPlotPoint(bounds_max_[0], bounds_max_[1]));
+        ImPlot::PopColormap();
+      }
     }
 
     ImPlot::EndPlot();

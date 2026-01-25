@@ -155,8 +155,8 @@ class HotOrderbookSnapshot(ctypes.Structure):
         ("bids_count", ctypes.c_uint8),
         ("asks_count", ctypes.c_uint8),
         ("padding", ctypes.c_uint8 * 2),
-        ("bids", HotOrderbookLevel * 20),  # Max 20 bid levels
-        ("asks", HotOrderbookLevel * 20),  # Max 20 ask levels
+        ("bids", HotOrderbookLevel * 200),  # Max 200 bid levels
+        ("asks", HotOrderbookLevel * 200),  # Max 200 ask levels
     ]
     
     def __repr__(self) -> str:

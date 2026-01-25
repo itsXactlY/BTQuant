@@ -106,6 +106,10 @@ public:
   // Check if renderer is initialized
   bool isInitialized() const { return initialized_; }
 
+  // Get ImGui Texture ID for the LOB Heatmap
+  // This utilizes ImGui_ImplVulkan_AddTexture manually
+  void *getHeatmapTextureID();
+
 private:
   // Vulkan resource creation
   // Vulkan resource creation
@@ -183,6 +187,10 @@ private:
   std::vector<HotspineTradeTick> currentTradeData_;
   std::vector<CandleCluster> currentFootprintClusters_;
   mutable std::mutex dataMutex_;
+
+  // ImGui Texture state
+  void *heatmapTextureID_ = nullptr;
+  VkDescriptorSet heatmapDescriptorSet_ = VK_NULL_HANDLE;
 };
 
 // ============================================================================

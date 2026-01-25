@@ -79,8 +79,10 @@ void AlertsPanel::render_rules_table() {
     ImGui::TableSetupColumn("Actions");
     ImGui::TableHeadersRow();
 
-    for (auto &rule : rules_) {
+    for (size_t i = 0; i < rules_.size(); ++i) {
+      auto &rule = rules_[i];
       ImGui::TableNextRow();
+      ImGui::PushID(static_cast<int>(i));
 
       ImGui::TableSetColumnIndex(0);
       ImGui::TextUnformatted(rule.name.c_str());
@@ -124,6 +126,7 @@ void AlertsPanel::render_rules_table() {
       if (ImGui::Button("Del")) {
         // TODO: Delete logic (would need iterator handling)
       }
+      ImGui::PopID();
     }
     ImGui::EndTable();
   }

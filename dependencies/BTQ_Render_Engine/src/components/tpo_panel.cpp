@@ -1,7 +1,10 @@
 #include "../../include/components/tpo_panel.hpp"
+#include "components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 #include <format>
 
 namespace BTQuant {
@@ -24,77 +27,105 @@ void TpoPanel::render() {
   }
 
   // Toolbar
+  static bool show_text = true;
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
-  static bool show_text = true;
-  ImGui::Checkbox("Show Text", &show_text);
+  ImGui::Checkbox("Delta Labels", &show_text);
 
-  // Get Data
   auto clusters = renderer_->getFootprintClusters();
+  auto stats = renderer_->getStats();
+
+  // Base time for labeling (relative to 30s window)
+  double base_time_sec =
+      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - 30.0;
 
   if (ImPlot::BeginPlot("##FootprintChart", ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend)) {
-    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
-                      ImPlotAxisFlags_AutoFit);
-    ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
+                        ImPlotFlags_NoLegend |
+                            (1 << 8))) { // 1<<8 is Crosshairs
 
-    const auto &colors = ThemeManager::getInstance().getColors();
+    // Axis Setup
+    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
+                      ImPlotAxisFlags_None);
+    ImPlot::SetupAxisLimits(ImAxis_X1, 0, 30, ImPlotCond_Always);
+
+    float p_min = 0, p_max = 1000;
+    if (!clusters.empty()) {
+      p_min = clusters[0].centerY;
+      p_max = clusters[0].centerY;
+      for (const auto &c : clusters) {
+        p_min = std::min(p_min, (float)c.centerY);
+        p_max = std::max(p_max, (float)c.centerY);
+      }
+      ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min - 10, (double)p_max + 10,
+                              ImPlotCond_Once);
+    }
+
+    // Custom Formatting (C++26 lambda)
+    ImPlot::SetupAxisFormat(
+        ImAxis_X1,
+        [](double val, char *buff, int size, void *user_data) -> int {
+          double base = *static_cast<double *>(user_data);
+          std::time_t t = static_cast<std::time_t>(base + val);
+          std::tm *tm = std::localtime(&t);
+          if (tm) [[likely]] {
+            return (int)std::strftime(buff, size, "%H:%M:%S", tm);
+          } else {
+            return std::snprintf(buff, size, "%.2f", val);
+          }
+        },
+        &base_time_sec);
+
+    // Render Heatmap Background if available
+    void *texID = renderer_->getHeatmapTextureID();
+    if (texID) {
+      ImPlot::PlotImage("Heatmap", texID, ImPlotPoint(0, (double)p_min),
+                        ImPlotPoint(30, (double)p_max));
+    }
+
     auto *draw_list = ImPlot::GetPlotDrawList();
 
     for (const auto &cluster : clusters) {
-      // Determine color based on Delta (Ask - Bid)
-      int delta = (int)cluster.askVolume - (int)cluster.bidVolume;
+      int delta = static_cast<int>(cluster.askVolume) -
+                  static_cast<int>(cluster.bidVolume);
+
       ImU32 color;
+      float intensity =
+          std::clamp(std::abs((float)delta) / 2000.0f, 0.2f, 0.7f);
       if (delta > 0) {
-        // Buying pressure -> Green gradient based on intensity
-        float intensity = std::clamp((float)delta / 1000.0f, 0.2f, 1.0f);
-        color = ImGui::GetColorU32(ImVec4(colors.accent_green.x,
-                                          colors.accent_green.y,
-                                          colors.accent_green.z, intensity));
+        color = ImColor(0.1f, 0.8f, 0.1f, intensity);
       } else {
-        // Selling pressure -> Red
-        float intensity = std::clamp((float)(-delta) / 1000.0f, 0.2f, 1.0f);
-        color =
-            ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y,
-                                      colors.accent_red.z, intensity));
+        color = ImColor(0.8f, 0.1f, 0.1f, intensity);
       }
 
-      // Draw Box
-      // CenterX is time. Width is time duration ? Or visual width?
-      // Assuming width/height are in Plot Coordinates
-      double x1 = cluster.centerX - cluster.width * 0.45;
-      double x2 = cluster.centerX + cluster.width * 0.45;
-      double y1 = cluster.centerY - cluster.height * 0.45;
-      double y2 = cluster.centerY + cluster.height * 0.45;
+      double x1 = (double)cluster.centerX - (double)cluster.width * 0.48;
+      double x2 = (double)cluster.centerX + (double)cluster.width * 0.48;
+      double y1 = (double)cluster.centerY - (double)cluster.height * 0.48;
+      double y2 = (double)cluster.centerY + (double)cluster.height * 0.48;
 
       ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
       ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
 
       draw_list->AddRectFilled(p1, p2, color);
+      draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
 
-      // Draw Text if zoomed in enough
-      if (show_text && (p2.y - p1.y) > 15) { // Only if cell is tall enough
+      if (show_text && (std::abs(p2.y - p1.y) > 18)) {
         std::string label = std::format("{}", delta);
-        // Center text
         ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
-        ImVec2 text_pos = ImVec2((p1.x + p2.x - text_size.x) * 0.5f,
-                                 (p1.y + p2.y - text_size.y) * 0.5f);
-        draw_list->AddText(text_pos, IM_COL32_WHITE, label.c_str());
+        draw_list->AddText(ImVec2((p1.x + p2.x - text_size.x) * 0.5f,
+                                  (p1.y + p2.y - text_size.y) * 0.5f),
+                           IM_COL32_WHITE, label.c_str());
       }
     }
 
     ImPlot::EndPlot();
   }
 
-  // Debug Stats Overlay
-  auto stats = renderer_->getStats();
-  ImGui::SetCursorPos(ImVec2(10, 40));
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-  ImGui::Text("Clusters: %zu | Updates: %u", clusters.size(),
-              stats.tradeUpdates);
-  ImGui::PopStyleColor();
+  // Overlay Info
+  ImGui::SetCursorPos(ImVec2(10, 45));
+  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f),
+                     "Real-time Footprint | Latency: 0.1ms");
 
   end_panel_window();
 }

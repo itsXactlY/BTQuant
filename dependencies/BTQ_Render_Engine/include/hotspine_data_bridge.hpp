@@ -43,8 +43,8 @@ struct HotOrderbookSnapshot {
   uint8_t bids_count;
   uint8_t asks_count;
   uint8_t padding[2];
-  std::array<HotOrderbookLevel, 20> bids;
-  std::array<HotOrderbookLevel, 20> asks;
+  std::array<HotOrderbookLevel, 200> bids;
+  std::array<HotOrderbookLevel, 200> asks;
 };
 
 struct SharedMemoryHeader {

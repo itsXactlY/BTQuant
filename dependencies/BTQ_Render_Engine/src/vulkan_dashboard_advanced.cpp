@@ -422,12 +422,14 @@ void VulkanDashboard::pollDataToRenderer() {
 
     clusters.reserve(aggregator.size());
     for (auto const &[key, val] : aggregator) {
+      // Use relative seconds from window start for better float precision in
+      // coordinates
+      const float rel_time_sec =
+          static_cast<float>(key.time - (now_us - window_us)) / 1'000'000.0f;
+
       clusters.emplace_back(
-          static_cast<float>(key.time - (now_us - window_us)) /
-              static_cast<float>(window_us),
-          static_cast<float>(key.price_bin) * tickSize,
-          static_cast<float>(timeframe_us) / static_cast<float>(window_us) *
-              0.8f,
+          rel_time_sec, static_cast<float>(key.price_bin) * tickSize,
+          static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f,
           tickSize * 0.9f, val.bidVol, val.askVol, val.count, 0.0f, true);
     }
 

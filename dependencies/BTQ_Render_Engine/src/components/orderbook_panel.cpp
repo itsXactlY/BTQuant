@@ -25,8 +25,28 @@ void OrderbookPanel::update(float dt) {
   // Request data update from data bridge
   bridge_->sync();
 
-  // The MarketDataProcessor will handle the actual data processing
-  // through its internal worker threads and lock-free queue
+  if (bridge_) {
+    auto trades = bridge_->getTradeBuffer();
+    // Simple linear scan. In production, use monotonic index or similar.
+    for (const auto &trade : trades) {
+      // Skip potential empty slots
+      if (trade.ts_local == 0)
+        continue;
+
+      if (trade.ts_local > last_processed_trade_ts_ &&
+          trade.symbol_id == symbol_id_) {
+        auto &vol = volume_profile_[trade.price];
+        if (trade.side == 0)
+          vol.bought += trade.size; // Buy
+        else
+          vol.sold += trade.size; // Sell
+
+        if (trade.ts_local > last_processed_trade_ts_) {
+          last_processed_trade_ts_ = trade.ts_local;
+        }
+      }
+    }
+  }
 }
 
 void OrderbookPanel::render() {
@@ -175,12 +195,18 @@ void OrderbookPanel::render_orderbook_ladder(
     for (int i = ask_count - 1; i >= 0; --i) {
       const auto &level = orderbook.asks[i];
       ImGui::TableNextRow();
+      ImGui::PushID(i); // Unique ID for this row/side
 
       // 1. Bid (Empty)
       ImGui::TableSetColumnIndex(0);
 
-      // 2. Sold (Placeholder)
+      // 2. Sold (Accumulated)
       ImGui::TableSetColumnIndex(1);
+      if (volume_profile_.contains(level.price)) {
+        double sold = volume_profile_[level.price].sold;
+        if (sold > 0)
+          ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+      }
 
       // 3. Price
       ImGui::TableSetColumnIndex(2);
@@ -202,15 +228,29 @@ void OrderbookPanel::render_orderbook_ladder(
       ImGui::SameLine();
       ImGui::TextColored(colors.accent_red, "%.2f", level.price);
 
-      // 4. Bought (Placeholder)
+      // 4. Bought (Accumulated)
       ImGui::TableSetColumnIndex(3);
+      if (volume_profile_.contains(level.price)) {
+        double bought = volume_profile_[level.price].bought;
+        if (bought > 0)
+          ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+      }
 
-      // 5. Ask Size (with Bar)
+      // 5. Ask Size (with Bar and Heatmap)
       ImGui::TableSetColumnIndex(4);
       {
         float width = ImGui::GetContentRegionAvail().x;
         float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        // Liquidity Heatmap Background for the whole row
+        float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+        if (intensity > 0.05f) {
+          ImU32 bg_color =
+              ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, intensity * 0.3f));
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
+        }
+
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos,
             ImVec2(pos.x + bar_width,
@@ -220,11 +260,28 @@ void OrderbookPanel::render_orderbook_ladder(
         ImGui::Text("%.4f", level.size);
       }
 
-      // 6. Delta (Placeholder)
+      // 6. Delta (Accumulated)
       ImGui::TableSetColumnIndex(5);
+      if (volume_profile_.contains(level.price)) {
+        const auto &vol = volume_profile_[level.price];
+        double delta = vol.bought - vol.sold;
+        if (delta != 0) {
+          ImVec4 color =
+              delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
+          ImGui::TextColored(color, "%+.0f", delta);
+        }
+      }
 
-      // 7. Volume (Placeholder)
+      // 7. Volume (Accumulated)
       ImGui::TableSetColumnIndex(6);
+      if (volume_profile_.contains(level.price)) {
+        const auto &vol = volume_profile_[level.price];
+        double total = vol.bought + vol.sold;
+        if (total > 0)
+          ImGui::Text("%.0f", total);
+      }
+
+      ImGui::PopID();
     }
 
     // Spread Row
@@ -237,6 +294,7 @@ void OrderbookPanel::render_orderbook_ladder(
     for (int i = 0; i < bid_count; ++i) {
       const auto &level = orderbook.bids[i];
       ImGui::TableNextRow();
+      ImGui::PushID(i + 1000); // Offset to ensure uniqueness from Asks
 
       // 1. Bid Size (with Bar)
       ImGui::TableSetColumnIndex(0);
@@ -249,6 +307,14 @@ void OrderbookPanel::render_orderbook_ladder(
         float width = ImGui::GetContentRegionAvail().x;
         float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        // Liquidity Heatmap Background for the whole row
+        float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+        if (intensity > 0.05f) {
+          ImU32 bg_color =
+              ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, intensity * 0.3f));
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
+        }
 
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImVec2(pos.x + width - bar_width, pos.y),
@@ -267,6 +333,11 @@ void OrderbookPanel::render_orderbook_ladder(
 
       // 2. Sold
       ImGui::TableSetColumnIndex(1);
+      if (volume_profile_.contains(level.price)) {
+        double sold = volume_profile_[level.price].sold;
+        if (sold > 0)
+          ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
+      }
 
       // 3. Price
       ImGui::TableSetColumnIndex(2);
@@ -290,12 +361,37 @@ void OrderbookPanel::render_orderbook_ladder(
 
       // 4. Bought
       ImGui::TableSetColumnIndex(3);
+      if (volume_profile_.contains(level.price)) {
+        double bought = volume_profile_[level.price].bought;
+        if (bought > 0)
+          ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
+      }
+
       // 5. Ask (Empty)
       ImGui::TableSetColumnIndex(4);
+
       // 6. Delta
       ImGui::TableSetColumnIndex(5);
+      if (volume_profile_.contains(level.price)) {
+        const auto &vol = volume_profile_[level.price];
+        double delta = vol.bought - vol.sold;
+        if (delta != 0) {
+          ImVec4 color =
+              delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
+          ImGui::TextColored(color, "%+.0f", delta);
+        }
+      }
+
       // 7. Vol
       ImGui::TableSetColumnIndex(6);
+      if (volume_profile_.contains(level.price)) {
+        const auto &vol = volume_profile_[level.price];
+        double total = vol.bought + vol.sold;
+        if (total > 0)
+          ImGui::Text("%.0f", total);
+      }
+
+      ImGui::PopID();
     }
 
     ImGui::EndTable();

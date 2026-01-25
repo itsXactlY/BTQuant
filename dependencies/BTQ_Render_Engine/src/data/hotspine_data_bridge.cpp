@@ -2,9 +2,10 @@
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
 #include <chrono>
-#include <cstring> // For strerror
+#include <cstring>
 #include <expected>
 #include <fcntl.h>
+#include <format>
 #include <iostream>
 #include <print>
 #include <pthread.h> // For thread priority
@@ -345,7 +346,7 @@ void HotSpineDataBridge::sync_shm() {
     update.timestamp = final_timestamp;
 
     // Konvertiere Orderbook-Ebenen
-    int safe_bids_count = std::min((int)snap.bids_count, 20);
+    int safe_bids_count = std::min((int)snap.bids_count, 200);
     for (int i = 0; i < safe_bids_count; ++i) {
       if (snap.bids[i].price <= 0 || snap.bids[i].size <= 0)
         continue;
@@ -356,7 +357,7 @@ void HotSpineDataBridge::sync_shm() {
       update.bids.push_back(level);
     }
 
-    int safe_asks_count = std::min((int)snap.asks_count, 20);
+    int safe_asks_count = std::min((int)snap.asks_count, 200);
     for (int i = 0; i < safe_asks_count; ++i) {
       if (snap.asks[i].price <= 0 || snap.asks[i].size <= 0)
         continue;

@@ -18,6 +18,8 @@
 #include "../../include/symbol_registry.hpp"
 #include "../../include/trading/HotspineData.h"
 #include "../../include/vulkan_base_types.hpp"
+#include "backends/imgui_impl_vulkan.h"
+#include "imgui.h"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -994,5 +996,21 @@ void MarketMicrostructureRenderer::updateStorageBuffers() {
 
 // Performance recording handled in render() method
 void MarketMicrostructureRenderer::recordFrameStats() {}
+
+void *MarketMicrostructureRenderer::getHeatmapTextureID() {
+  if (!initialized_ || lobHeatmapImageView_ == VK_NULL_HANDLE) [[unlikely]] {
+    return nullptr;
+  }
+
+  if (heatmapTextureID_ == nullptr) {
+    heatmapDescriptorSet_ = ImGui_ImplVulkan_AddTexture(
+        lobHeatmapSampler_, lobHeatmapImageView_, VK_IMAGE_LAYOUT_GENERAL);
+    heatmapTextureID_ = (void *)heatmapDescriptorSet_;
+    std::println(
+        "[MarketMicrostructureRenderer] Heatmap Texture registered with ImGui");
+  }
+
+  return heatmapTextureID_;
+}
 
 } // namespace BTQuant::RenderEngine

@@ -107,8 +107,9 @@ VkResult VulkanCore::PrepareFrame(uint32_t &imageIndex) {
   return result;
 }
 
-void VulkanCore::RecordCommandBuffer(uint32_t imageIndex,
-                                     ImDrawData *drawData) {
+void VulkanCore::RecordCommandBuffer(
+    uint32_t imageIndex, ImDrawData *drawData,
+    std::function<void(VkCommandBuffer)> graphicsCallback) {
   VkRenderPassBeginInfo renderPassInfo{};
   renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   renderPassInfo.renderPass = render_pass_;
@@ -125,6 +126,11 @@ void VulkanCore::RecordCommandBuffer(uint32_t imageIndex,
 
   vkCmdBeginRenderPass(current_command_buffer_, &renderPassInfo,
                        VK_SUBPASS_CONTENTS_INLINE);
+
+  // Execute external graphics commands (e.g., microstructure visualizations)
+  if (graphicsCallback) {
+    graphicsCallback(current_command_buffer_);
+  }
 
   if (drawData) {
     ImGui_ImplVulkan_RenderDrawData(drawData, current_command_buffer_);

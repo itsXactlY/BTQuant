@@ -26,7 +26,9 @@ enum class PanelType {
   VOLUME_PROFILE,
   DEPTH_CHART,
   STATUS_BAR,
-  LOG_PANEL
+  LOG_PANEL,
+  FOOTPRINT_CHART,
+  TPO_PROFILE
 };
 
 struct PanelConfig {

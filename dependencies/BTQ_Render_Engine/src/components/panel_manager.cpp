@@ -2,10 +2,12 @@
 #include "../../include/components/chart_panel.hpp"
 #include "../../include/components/depth_chart_panel.hpp"
 #include "../../include/components/dom_surface_panel.hpp"
+#include "../../include/components/footprint_panel.hpp"
 #include "../../include/components/metrics_panel.hpp"
 #include "../../include/components/orderbook_panel.hpp"
 #include "../../include/components/status_bar_panel.hpp"
 #include "../../include/components/tape_panel.hpp"
+#include "../../include/components/tpo_panel.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/watchlist_panel.hpp"
 #include <fstream>
@@ -21,9 +23,11 @@ PanelManager::PanelManager(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     std::shared_ptr<OrderManager> order_manager,
     std::shared_ptr<PositionManager> position_manager,
-    std::shared_ptr<RiskAssessment> risk_assessment)
+    std::shared_ptr<RiskAssessment> risk_assessment,
+    RenderEngine::MarketMicrostructureRenderer *micro_renderer)
     : bridge_(bridge), processor_(processor), order_manager_(order_manager),
-      position_manager_(position_manager), risk_assessment_(risk_assessment) {
+      position_manager_(position_manager), risk_assessment_(risk_assessment),
+      micro_renderer_(micro_renderer) {
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
 }
 
@@ -132,6 +136,12 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
     break;
   case PanelType::DEPTH_CHART:
     panel = std::make_unique<DepthChartPanel>(config, bridge_, processor_);
+    break;
+  case PanelType::FOOTPRINT_CHART:
+    panel = std::make_unique<FootprintPanel>(config, micro_renderer_);
+    break;
+  case PanelType::TPO_PROFILE:
+    panel = std::make_unique<TpoPanel>(config, micro_renderer_);
     break;
   case PanelType::SCATTER_PLOT:
   case PanelType::TIME_SERIES:
@@ -298,6 +308,10 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
     return "Volume Profile";
   case PanelType::DEPTH_CHART:
     return "Depth Chart";
+  case PanelType::FOOTPRINT_CHART:
+    return "Footprint Chart";
+  case PanelType::TPO_PROFILE:
+    return "TPO Profile";
   case PanelType::LOG_PANEL:
     return "Log";
   default:
@@ -356,8 +370,8 @@ std::string PanelManager::serialize_layout() const {
     panel_json["grid_width"] = config.grid_width;
     panel_json["grid_height"] = config.grid_height;
 
-    // Optional: save exact position/size if manually moved (overriding grid)
-    // panel_json["pos_x"] = config.position.x;
+    // Optional: save exact position/size if manually moved (overriding
+    // grid) panel_json["pos_x"] = config.position.x;
     // ...
 
     panels_json.push_back(panel_json);
@@ -374,8 +388,8 @@ void PanelManager::deserialize_layout(const std::string &layout_json) {
     // clear existing panels
     panels_.clear();
     // Reset ID counter? Maybe risky if other things hold IDs, but typically
-    // fine for full reload. However, if we don't reset, IDs grow indefinitely.
-    // Let's reset for fresh start.
+    // fine for full reload. However, if we don't reset, IDs grow
+    // indefinitely. Let's reset for fresh start.
     next_panel_id_ = 1;
 
     if (j.contains("grid")) {
@@ -450,6 +464,18 @@ void PanelManager::set_active_symbol(uint32_t symbol_id,
     case PanelType::DEPTH_CHART: {
       if (auto *dc = dynamic_cast<DepthChartPanel *>(panel.get())) {
         dc->set_symbol(symbol_id, symbol_name);
+      }
+      break;
+    }
+    case PanelType::FOOTPRINT_CHART: {
+      if (auto *fp = dynamic_cast<FootprintPanel *>(panel.get())) {
+        fp->set_symbol_id(symbol_id);
+      }
+      break;
+    }
+    case PanelType::TPO_PROFILE: {
+      if (auto *tpo = dynamic_cast<TpoPanel *>(panel.get())) {
+        tpo->set_symbol_id(symbol_id);
       }
       break;
     }

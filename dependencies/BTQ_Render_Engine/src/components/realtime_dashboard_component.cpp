@@ -46,7 +46,10 @@ RealtimeDashboardComponent::RealtimeDashboardComponent(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : UIComponent({0, 0}, {0, 0}), bridge_(std::move(bridge)),
       processor_(std::move(processor)) {
+  setup_default_panels();
+}
 
+void RealtimeDashboardComponent::setup_default_panels() {
   // Initialize default panels using structured initialization
   struct PanelConfig {
     DashboardPanelType type;
@@ -83,7 +86,19 @@ RealtimeDashboardComponent::RealtimeDashboardComponent(
       PanelConfig{DashboardPanelType::MULTI_SYMBOL_OVERVIEW,
                   "Multi-Symbol",
                   {1230, 320},
-                  {400, 300}}};
+                  {400, 300}},
+      PanelConfig{DashboardPanelType::FOOTPRINT_CHART,
+                  "BTC-USDT Footprint",
+                  {10, 840},
+                  {800, 400}},
+      PanelConfig{DashboardPanelType::HEATMAP_LOB,
+                  "BTC-USDT Heatmap",
+                  {820, 630},
+                  {400, 400}},
+      PanelConfig{DashboardPanelType::TPO_PROFILE,
+                  "BTC-USDT TPO",
+                  {1230, 630},
+                  {400, 400}}};
 
   for (const auto &[type, title, pos, size] : defaultPanels) {
     add_panel(type, std::string(title), pos, size);
@@ -108,9 +123,15 @@ void RealtimeDashboardComponent::render_gui() {
   }
 }
 
-void RealtimeDashboardComponent::initialize_vulkan_resources(
-    [[maybe_unused]] VulkanCore *core) {
-  // Initialize any Vulkan resources if needed
+void RealtimeDashboardComponent::initialize_vulkan_resources(VulkanCore *core) {
+  if (!microstructure_renderer_ && core) {
+    ::BTQuant::RenderEngine::RendererConfig config =
+        ::BTQuant::RenderEngine::createDefaultRendererConfig();
+    microstructure_renderer_ =
+        std::make_unique<::BTQuant::RenderEngine::MarketMicrostructureRenderer>(
+            core, bridge_, processor_, config);
+    microstructure_renderer_->initialize();
+  }
 }
 
 void RealtimeDashboardComponent::clear_data() {
@@ -134,6 +155,11 @@ void RealtimeDashboardComponent::remove_panel(int index) {
   if (index >= 0 && static_cast<size_t>(index) < panels_.size()) [[likely]] {
     panels_.erase(panels_.begin() + index);
   }
+}
+
+void RealtimeDashboardComponent::reset_layout() {
+  panels_.clear();
+  setup_default_panels();
 }
 
 void RealtimeDashboardComponent::render_panel(const DashboardPanel &panel) {
@@ -169,6 +195,11 @@ void RealtimeDashboardComponent::render_panel(const DashboardPanel &panel) {
       break;
     case DashboardPanelType::MULTI_SYMBOL_OVERVIEW:
       render_multi_symbol_overview_panel(panel);
+      break;
+    case DashboardPanelType::FOOTPRINT_CHART:
+    case DashboardPanelType::HEATMAP_LOB:
+    case DashboardPanelType::TPO_PROFILE:
+      render_microstructure_panels(panel);
       break;
     }
   }
@@ -507,9 +538,7 @@ void RealtimeDashboardComponent::render_dashboard_menu() {
         show_panel_config_ = !show_panel_config_;
       }
       if (ImGui::MenuItem("Reset Layout")) {
-        panels_.clear();
-        // Re-initialize with constructor pattern
-        *this = RealtimeDashboardComponent(bridge_, processor_);
+        reset_layout();
       }
       ImGui::EndMenu();
     }
@@ -609,6 +638,29 @@ RealtimeDashboardComponent::get_recent_trades(const std::string &symbol,
 
   return std::vector<RenderEngine::TradeData>(trades.begin() + startIdx,
                                               trades.end());
+}
+
+void RealtimeDashboardComponent::render_microstructure_panels(
+    const DashboardPanel &panel) {
+  if (!microstructure_renderer_) {
+    ImGui::Text("Microstructure renderer not initialized");
+    return;
+  }
+
+  // Display renderer stats in the window
+  auto stats = microstructure_renderer_->getStats();
+  ImGui::Text("Avg Frame Time: %.3f ms", stats.averageFrameTimeMs);
+
+  if (panel.type == DashboardPanelType::FOOTPRINT_CHART) {
+    ImGui::Text("Footprint Chart (Vulkan Native)");
+    ImGui::Text("Clusters Rendered: %u", stats.footprintCellsRendered);
+  } else if (panel.type == DashboardPanelType::HEATMAP_LOB) {
+    ImGui::Text("LOB Heatmap (Compute)");
+    ImGui::Text("LOB Updates: %u", stats.lobUpdates);
+  } else if (panel.type == DashboardPanelType::TPO_PROFILE) {
+    ImGui::Text("TPO Profile (Atomic Compute)");
+    ImGui::Text("Trade Updates: %u", stats.tradeUpdates);
+  }
 }
 
 } // namespace BTQuant

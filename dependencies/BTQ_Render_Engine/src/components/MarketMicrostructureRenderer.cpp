@@ -15,55 +15,71 @@
 #include "../../include/components/VulkanSynchronization.h"
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
+#include "../../include/symbol_registry.hpp"
 #include "../../include/trading/HotspineData.h"
 #include "../../include/vulkan_base_types.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <fstream>
 #include <iostream>
+#include <print>
 #include <span>
 #include <stdexcept>
 #include <string_view>
 
 namespace BTQuant::RenderEngine {
 
+// to_string moved to header
 // ============================================
-// C++26 Error Types for Expected Returns
+// Helper functions for shader loading
 // ============================================
 
-enum class RendererError {
-  NotInitialized,
-  NullVulkanCore,
-  PipelineCreationFailed,
-  BufferAllocationFailed,
-  TooManyClusters
-};
-
-[[nodiscard]] constexpr auto to_string(RendererError error) noexcept
-    -> std::string_view {
-  switch (error) {
-  case RendererError::NotInitialized:
-    return "Renderer not initialized";
-  case RendererError::NullVulkanCore:
-    return "VulkanCore is null";
-  case RendererError::PipelineCreationFailed:
-    return "Pipeline creation failed";
-  case RendererError::BufferAllocationFailed:
-    return "Buffer allocation failed";
-  case RendererError::TooManyClusters:
-    return "Too many clusters provided";
+namespace {
+[[nodiscard]] std::expected<std::vector<uint32_t>, RendererError>
+load_spirv_binary(const std::string &path) noexcept {
+  std::ifstream file(path, std::ios::ate | std::ios::binary);
+  if (!file.is_open()) [[unlikely]] {
+    return std::unexpected(RendererError::ShaderLoadFailed);
   }
-  return "Unknown error";
+
+  size_t fileSize = static_cast<size_t>(file.tellg());
+  std::vector<uint32_t> buffer(fileSize / sizeof(uint32_t));
+  file.seekg(0);
+  file.read(reinterpret_cast<char *>(buffer.data()), fileSize);
+  file.close();
+
+  return buffer;
 }
+
+[[nodiscard]] std::expected<VkShaderModule, RendererError>
+create_shader_module(VkDevice device, std::span<const uint32_t> code) noexcept {
+  VkShaderModuleCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      .codeSize = code.size() * sizeof(uint32_t),
+      .pCode = code.data()};
+
+  VkShaderModule shaderModule;
+  if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) !=
+      VK_SUCCESS) [[unlikely]] {
+    return std::unexpected(RendererError::PipelineCreationFailed);
+  }
+
+  return shaderModule;
+}
+} // namespace
 
 // ============================================
 // MarketMicrostructureRenderer Implementation
 // ============================================
 
 MarketMicrostructureRenderer::MarketMicrostructureRenderer(
-    VulkanCore *vulkanCore, std::shared_ptr<HotSpineDataBridge> hotspineBridge,
-    std::shared_ptr<MarketDataProcessor> marketDataProcessor,
+    BTQuant::VulkanCore *vulkanCore,
+    std::shared_ptr<BTQuant::HotSpineDataBridge> hotspineBridge,
+    std::shared_ptr<BTQuant::RenderEngine::MarketDataProcessor>
+        marketDataProcessor,
     const RendererConfig &config)
     : vulkanCore_(vulkanCore), hotspineBridge_(std::move(hotspineBridge)),
       marketDataProcessor_(std::move(marketDataProcessor)), config_(config),
@@ -72,41 +88,46 @@ MarketMicrostructureRenderer::MarketMicrostructureRenderer(
 
 MarketMicrostructureRenderer::~MarketMicrostructureRenderer() { cleanup(); }
 
-void MarketMicrostructureRenderer::initialize() {
+std::expected<void, RendererError> MarketMicrostructureRenderer::initialize() {
   if (initialized_) [[unlikely]] {
-    return;
+    return {};
   }
 
   if (!vulkanCore_) [[unlikely]] {
-    throw std::runtime_error("VulkanCore is null - cannot initialize renderer");
+    return std::unexpected(RendererError::NullVulkanCore);
   }
 
-  try {
-    createComputePipelines();
-    createGraphicsPipelines();
-    createDescriptorSets();
-    createStorageBuffers();
-    createTextureResources();
-
-    // Initialize ring buffer manager for data updates
-    constexpr uint32_t DOUBLE_BUFFER = 2;
-    constexpr VkDeviceSize BUFFER_SIZE = 1024 * 1024; // 1MB per buffer
-
-    ringBufferManager_ = std::make_unique<RingBufferManager>(
-        vulkanCore_->get_device(), DOUBLE_BUFFER, BUFFER_SIZE);
-
-    initialized_ = true;
-
-    std::cout << "[MarketMicrostructureRenderer] Initialized successfully\n";
-  } catch (const std::exception &e) {
-    std::cerr << "[MarketMicrostructureRenderer] Initialization failed: "
-              << e.what() << "\n";
-    cleanup();
-    throw;
+  if (auto res = createDescriptorSets(); !res) {
+    return std::unexpected(res.error());
   }
+  if (auto res = createComputePipelines(); !res) {
+    return std::unexpected(res.error());
+  }
+  if (auto res = createGraphicsPipelines(); !res) {
+    return std::unexpected(res.error());
+  }
+  if (auto res = createStorageBuffers(); !res) {
+    return std::unexpected(res.error());
+  }
+  if (auto res = createTextureResources(); !res) {
+    return std::unexpected(res.error());
+  }
+
+  // Initialize ring buffer manager for data updates
+  constexpr uint32_t DOUBLE_BUFFER = 2;
+  constexpr VkDeviceSize BUFFER_SIZE = 4 * 1024 * 1024; // 4MB per buffer
+
+  ringBufferManager_ = std::make_unique<RingBufferManager>(
+      vulkanCore_->get_device(), DOUBLE_BUFFER, BUFFER_SIZE);
+
+  initialized_ = true;
+
+  std::println("[MarketMicrostructureRenderer] Initialized successfully with "
+               "modern C++26 standard");
+  return {};
 }
 
-void MarketMicrostructureRenderer::cleanup() {
+void MarketMicrostructureRenderer::cleanup() noexcept {
   if (!vulkanCore_) [[unlikely]] {
     return;
   }
@@ -163,28 +184,37 @@ void MarketMicrostructureRenderer::cleanup() {
   initialized_ = false;
 }
 
-void MarketMicrostructureRenderer::render(
-    VkCommandBuffer cmdBuffer, [[maybe_unused]] uint32_t currentFrame,
-    [[maybe_unused]] VulkanSyncContext &syncContext,
-    [[maybe_unused]] TimelineSemaphore &timelineSemaphore) {
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::prepare() {
   if (!initialized_) [[unlikely]] {
-    return;
-  }
-
-  auto frameStartTime = std::chrono::high_resolution_clock::now();
-
-  // Update statistics atomically
-  {
-    std::lock_guard lock(statsMutex_);
-    stats_.framesRendered++;
+    return std::unexpected(RendererError::NotInitialized);
   }
 
   // Update storage buffers with latest data
   updateStorageBuffers();
 
+  {
+    std::lock_guard lock(statsMutex_);
+    stats_.framesRendered++;
+  }
+
+  return {};
+}
+
+void MarketMicrostructureRenderer::executeCompute(VkCommandBuffer cmdBuffer) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
+
   // Execute compute shaders
   executeLOBHeatmapCompute(cmdBuffer);
   executeTPOProfileCompute(cmdBuffer);
+}
+
+void MarketMicrostructureRenderer::executeGraphics(VkCommandBuffer cmdBuffer) {
+  if (!initialized_) [[unlikely]] {
+    return;
+  }
 
   // Render visualizations
   renderHeatmapTexture(cmdBuffer);
@@ -194,7 +224,7 @@ void MarketMicrostructureRenderer::render(
   // Calculate frame timing
   auto frameEndTime = std::chrono::high_resolution_clock::now();
   auto frameDuration =
-      std::chrono::duration<float, std::milli>(frameEndTime - frameStartTime);
+      std::chrono::duration<float, std::milli>(frameEndTime - lastFrameTime_);
 
   lastFrameTime_ = frameEndTime;
 
@@ -202,8 +232,9 @@ void MarketMicrostructureRenderer::render(
   {
     std::lock_guard lock(statsMutex_);
     constexpr float SMOOTHING_FACTOR = 0.1f;
-    stats_.averageFrameTimeMs = std::lerp(
-        stats_.averageFrameTimeMs, frameDuration.count(), SMOOTHING_FACTOR);
+    stats_.averageFrameTimeMs =
+        stats_.averageFrameTimeMs * (1.0f - SMOOTHING_FACTOR) +
+        frameDuration.count() * SMOOTHING_FACTOR;
     stats_.lastUpdateTimeNs =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             frameEndTime.time_since_epoch())
@@ -220,8 +251,11 @@ void MarketMicrostructureRenderer::updateLOBData(
   std::lock_guard lock(dataMutex_);
 
   // Store snapshot for processing during render
-  currentOrderBookData_.clear();
-  currentOrderBookData_.push_back(snapshot);
+  size_t size =
+      HotspineOrderBookSnapshot::calculateBufferSize(snapshot.priceLevelsCount);
+  lobSnapshotBuffer_.resize(size);
+  std::memcpy(lobSnapshotBuffer_.data(), &snapshot, size);
+
   currentHeatmapTimeIndex_ = snapshot.currentTimeIndex;
 
   {
@@ -237,9 +271,7 @@ void MarketMicrostructureRenderer::updateTradeData(
   }
 
   std::lock_guard lock(dataMutex_);
-
   currentTradeData_.assign(trades.begin(), trades.end());
-  tpoProfileNeedsReset_ = true;
 
   {
     std::lock_guard statsLock(statsMutex_);
@@ -254,9 +286,9 @@ void MarketMicrostructureRenderer::updateFootprintClusters(
   }
 
   if (clusters.size() > config_.footprintChart.maxClusters) [[unlikely]] {
-    std::println(std::cerr,
-                 "[MarketMicrostructureRenderer] Too many clusters: {} > {}",
-                 clusters.size(), config_.footprintChart.maxClusters);
+    std::cerr << "[MarketMicrostructureRenderer] Too many clusters: "
+              << clusters.size() << " > " << config_.footprintChart.maxClusters
+              << "\n";
     return;
   }
 
@@ -301,21 +333,416 @@ void MarketMicrostructureRenderer::resetStats() {
 // Private: Resource Creation
 // ============================================
 
-void MarketMicrostructureRenderer::createComputePipelines() {
-  // Placeholder - real implementation would load SPIR-V and create pipelines
-}
-
-void MarketMicrostructureRenderer::createGraphicsPipelines() {
-  // Placeholder - real implementation would create graphics pipelines
-}
-
-void MarketMicrostructureRenderer::createDescriptorSets() {
-  // Placeholder - real implementation would create descriptor sets
-}
-
-void MarketMicrostructureRenderer::createStorageBuffers() {
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::createComputePipelines() {
   if (!vulkanCore_) [[unlikely]] {
-    return;
+    return std::unexpected(RendererError::NullVulkanCore);
+  }
+
+  auto device = vulkanCore_->get_device();
+
+  try {
+    // 1. Create LOB Heatmap Pipeline
+    auto lobHeatmapCode = load_spirv_binary("shaders/spirv/lob_heatmap.spv");
+    if (!lobHeatmapCode)
+      return std::unexpected(
+          RendererError::ShaderLoadFailed); // Handle error appropriately
+
+    auto lobModuleRes = create_shader_module(device, *lobHeatmapCode);
+    if (!lobModuleRes)
+      return std::unexpected(lobModuleRes.error());
+    VkShaderModule lobHeatmapModule = *lobModuleRes;
+
+    VkPipelineShaderStageCreateInfo lobHeatmapStage{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = lobHeatmapModule,
+        .pName = "main"};
+
+    std::vector<VkDescriptorSetLayout> lobLayouts = {
+        lobHeatmapDescriptorSetLayout_};
+    VkPipelineLayoutCreateInfo lobLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = static_cast<uint32_t>(lobLayouts.size()),
+        .pSetLayouts = lobLayouts.data()};
+
+    if (vkCreatePipelineLayout(device, &lobLayoutInfo, nullptr,
+                               &lobHeatmapPipelineLayout_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create LOB Heatmap pipeline layout");
+    }
+
+    VkComputePipelineCreateInfo lobPipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = lobHeatmapStage,
+        .layout = lobHeatmapPipelineLayout_};
+
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &lobPipelineInfo,
+                                 nullptr, &lobHeatmapPipeline_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create LOB Heatmap compute pipeline");
+    }
+
+    // 2. Create TPO Profile Pipeline
+    auto tpoProfileCode = load_spirv_binary("shaders/spirv/tpo_profile.spv");
+    if (!tpoProfileCode)
+      return std::unexpected(RendererError::ShaderLoadFailed);
+
+    auto tpoModuleRes = create_shader_module(device, *tpoProfileCode);
+    if (!tpoModuleRes)
+      return std::unexpected(tpoModuleRes.error());
+    VkShaderModule tpoProfileModule = *tpoModuleRes;
+
+    VkPipelineShaderStageCreateInfo tpoProfileStage{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = tpoProfileModule,
+        .pName = "main"};
+
+    std::vector<VkDescriptorSetLayout> tpoLayouts = {
+        tpoProfileDescriptorSetLayout_};
+    VkPipelineLayoutCreateInfo tpoLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = static_cast<uint32_t>(tpoLayouts.size()),
+        .pSetLayouts = tpoLayouts.data()};
+
+    if (vkCreatePipelineLayout(device, &tpoLayoutInfo, nullptr,
+                               &tpoProfilePipelineLayout_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create TPO Profile pipeline layout");
+    }
+
+    VkComputePipelineCreateInfo tpoPipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = tpoProfileStage,
+        .layout = tpoProfilePipelineLayout_};
+
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &tpoPipelineInfo,
+                                 nullptr, &tpoProfilePipeline_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create TPO Profile compute pipeline");
+    }
+
+    vkDestroyShaderModule(device, lobHeatmapModule, nullptr);
+    vkDestroyShaderModule(device, tpoProfileModule, nullptr);
+
+    return {};
+  } catch (const std::exception &e) {
+    std::cerr
+        << "[MarketMicrostructureRenderer] Compute pipeline creation failed: "
+        << e.what() << "\n";
+    return std::unexpected(RendererError::PipelineCreationFailed);
+  }
+}
+
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::createGraphicsPipelines() {
+  if (!vulkanCore_) [[unlikely]] {
+    return std::unexpected(RendererError::NullVulkanCore);
+  }
+
+  auto device = vulkanCore_->get_device();
+
+  try {
+    // 1. Load Footprint Shaders
+    auto vertCode = load_spirv_binary("shaders/spirv/footprint_vert.spv");
+    auto fragCode = load_spirv_binary("shaders/spirv/footprint_frag.spv");
+
+    if (!vertCode || !fragCode)
+      return std::unexpected(RendererError::ShaderLoadFailed);
+    auto vertRes = create_shader_module(device, *vertCode);
+    auto fragRes = create_shader_module(device, *fragCode);
+    if (!vertRes || !fragRes)
+      return std::unexpected(RendererError::ShaderCompilationFailed);
+
+    VkShaderModule vertModule = *vertRes;
+    VkShaderModule fragModule = *fragRes;
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+         .stage = VK_SHADER_STAGE_VERTEX_BIT,
+         .module = vertModule,
+         .pName = "main"},
+        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+         .module = fragModule,
+         .pName = "main"}};
+
+    // 2. Pipeline Layout
+    std::vector<VkDescriptorSetLayout> layouts = {
+        footprintDescriptorSetLayout_ // Set 0
+    };
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts = layouts.data()};
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr,
+                               &footprintPipelineLayout_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create footprint pipeline layout");
+    }
+
+    // 3. Pipeline State
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .primitiveRestartEnable = VK_FALSE};
+
+    VkViewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)vulkanCore_->get_swapchain_extent().width,
+        .height = (float)vulkanCore_->get_swapchain_extent().height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f};
+
+    VkRect2D scissor{.offset = {0, 0},
+                     .extent = vulkanCore_->get_swapchain_extent()};
+
+    VkPipelineViewportStateCreateInfo viewportState{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .pViewports = &viewport,
+        .scissorCount = 1,
+        .pScissors = &scissor};
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_NONE,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .depthBiasConstantFactor = 0.0f,
+        .depthBiasClamp = 0.0f,
+        .depthBiasSlopeFactor = 0.0f,
+        .lineWidth = 1.0f};
+
+    VkPipelineMultisampleStateCreateInfo multisampling{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
+        .minSampleShading = 1.0f,
+        .pSampleMask = nullptr,
+        .alphaToCoverageEnable = VK_FALSE,
+        .alphaToOneEnable = VK_FALSE};
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{
+        .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT};
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .logicOpEnable = VK_FALSE,
+        .logicOp = VK_LOGIC_OP_COPY,
+        .attachmentCount = 1,
+        .pAttachments = &colorBlendAttachment,
+        .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f}};
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputInfo,
+        .pInputAssemblyState = &inputAssembly,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pColorBlendState = &colorBlending,
+        .layout = footprintPipelineLayout_,
+        .renderPass = vulkanCore_->get_render_pass(),
+        .subpass = 0};
+
+    if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &footprintPipeline_) != VK_SUCCESS) {
+      throw std::runtime_error("Failed to create footprint graphics pipeline");
+    }
+
+    vkDestroyShaderModule(device, vertModule, nullptr);
+    vkDestroyShaderModule(device, fragModule, nullptr);
+
+    return {};
+  } catch (const std::exception &e) {
+    std::cerr << "[MarketMicrostructureRenderer] Pipeline creation failed: "
+              << e.what() << "\n";
+    return std::unexpected(RendererError::PipelineCreationFailed);
+  }
+}
+
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::createDescriptorSets() {
+  if (!vulkanCore_) [[unlikely]] {
+    return std::unexpected(RendererError::NullVulkanCore);
+  }
+
+  auto device = vulkanCore_->get_device();
+  auto descriptorPool = vulkanCore_->get_descriptor_pool();
+
+  // 1. LOB Heatmap Layout & Sets
+  std::vector<VkDescriptorSetLayoutBinding> lobBindings = {
+      {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+       nullptr},
+      {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+       nullptr}};
+
+  VkDescriptorSetLayoutCreateInfo lobLayoutInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = static_cast<uint32_t>(lobBindings.size()),
+      .pBindings = lobBindings.data()};
+
+  if (vkCreateDescriptorSetLayout(device, &lobLayoutInfo, nullptr,
+                                  &lobHeatmapDescriptorSetLayout_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to create LOB Heatmap descriptor set layout");
+  }
+
+  VkDescriptorSetAllocateInfo lobAllocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = descriptorPool,
+      .descriptorSetCount = 1,
+      .pSetLayouts = &lobHeatmapDescriptorSetLayout_};
+  vkAllocateDescriptorSets(device, &lobAllocInfo, &lobHeatmapDescriptorSet_);
+
+  // 2. Footprint Layout & Sets (Simplifying to single set for now if possible,
+  // or multiple)
+  std::vector<VkDescriptorSetLayoutBinding> footprintBindings = {
+      {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+       nullptr},
+      {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}};
+
+  VkDescriptorSetLayoutCreateInfo footprintLayoutInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = static_cast<uint32_t>(footprintBindings.size()),
+      .pBindings = footprintBindings.data()};
+
+  if (vkCreateDescriptorSetLayout(device, &footprintLayoutInfo, nullptr,
+                                  &footprintDescriptorSetLayout_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to create Footprint descriptor set layout");
+  }
+
+  VkDescriptorSetAllocateInfo footprintAllocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = descriptorPool,
+      .descriptorSetCount = 1,
+      .pSetLayouts = &footprintDescriptorSetLayout_};
+  vkAllocateDescriptorSets(device, &footprintAllocInfo,
+                           &footprintDescriptorSet_);
+
+  // 3. TPO Profile Layout & Sets
+  std::vector<VkDescriptorSetLayoutBinding> tpoBindings = {
+      {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+       nullptr},
+      {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT,
+       nullptr}};
+
+  VkDescriptorSetLayoutCreateInfo tpoLayoutInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = static_cast<uint32_t>(tpoBindings.size()),
+      .pBindings = tpoBindings.data()};
+
+  if (vkCreateDescriptorSetLayout(device, &tpoLayoutInfo, nullptr,
+                                  &tpoProfileDescriptorSetLayout_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to create TPO Profile descriptor set layout");
+  }
+
+  VkDescriptorSetAllocateInfo tpoAllocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = descriptorPool,
+      .descriptorSetCount = 1,
+      .pSetLayouts = &tpoProfileDescriptorSetLayout_};
+  vkAllocateDescriptorSets(device, &tpoAllocInfo, &tpoProfileDescriptorSet_);
+
+  // 4. Update Descriptor Sets
+  std::vector<VkWriteDescriptorSet> writes;
+
+  // LOB Heatmap Updates
+  VkDescriptorBufferInfo lobBufferInfo{lobHeatmapSSBO_.buffer, 0,
+                                       VK_WHOLE_SIZE};
+  VkDescriptorImageInfo lobImageInfo{lobHeatmapSampler_, lobHeatmapImageView_,
+                                     VK_IMAGE_LAYOUT_GENERAL};
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = lobHeatmapDescriptorSet_,
+                    .dstBinding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &lobBufferInfo});
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = lobHeatmapDescriptorSet_,
+                    .dstBinding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &lobImageInfo});
+
+  // Footprint Updates
+  VkDescriptorBufferInfo footprintSSBOInfo{footprintSSBO_.buffer, 0,
+                                           VK_WHOLE_SIZE};
+  VkDescriptorBufferInfo footprintUBOInfo{footprintUBO_.buffer, 0,
+                                          VK_WHOLE_SIZE};
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = footprintDescriptorSet_,
+                    .dstBinding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &footprintSSBOInfo});
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = footprintDescriptorSet_,
+                    .dstBinding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &footprintUBOInfo});
+
+  // TPO Profile Updates
+  VkDescriptorBufferInfo tpoInInfo{tpoProfileSSBO_.buffer, 0, VK_WHOLE_SIZE};
+  VkDescriptorBufferInfo tpoOutInfo{tpoProfileHistogram_.buffer, 0,
+                                    VK_WHOLE_SIZE};
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = tpoProfileDescriptorSet_,
+                    .dstBinding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &tpoInInfo});
+
+  writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = tpoProfileDescriptorSet_,
+                    .dstBinding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &tpoOutInfo});
+
+  vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()),
+                         writes.data(), 0, nullptr);
+  return {};
+}
+
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::createStorageBuffers() {
+  if (!vulkanCore_) [[unlikely]] {
+    return std::unexpected(RendererError::NullVulkanCore);
   }
 
   auto &memManager = vulkanCore_->get_memory_manager();
@@ -338,10 +765,102 @@ void MarketMicrostructureRenderer::createStorageBuffers() {
   tpoProfileSSBO_ = memManager.allocate_storage_buffer(TPO_TRADE_BUFFER_SIZE);
   tpoProfileUBO_ = memManager.allocate_uniform_buffer(256);
   tpoProfileHistogram_ = memManager.allocate_storage_buffer(tpoHistogramSize);
+
+  return {};
 }
 
-void MarketMicrostructureRenderer::createTextureResources() {
-  // Placeholder for texture resource creation
+[[nodiscard]] std::expected<void, RendererError>
+MarketMicrostructureRenderer::createTextureResources() {
+  if (!vulkanCore_) [[unlikely]] {
+    return std::unexpected(RendererError::NullVulkanCore);
+  }
+
+  auto device = vulkanCore_->get_device();
+  auto physicalDevice = vulkanCore_->get_physical_device();
+
+  // 1. Create LOB Heatmap Texture
+  VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                              .imageType = VK_IMAGE_TYPE_2D,
+                              .format = VK_FORMAT_R8G8B8A8_UNORM,
+                              .extent = {.width = config_.lobHeatmap.width,
+                                         .height = config_.lobHeatmap.height,
+                                         .depth = 1},
+                              .mipLevels = 1,
+                              .arrayLayers = 1,
+                              .samples = VK_SAMPLE_COUNT_1_BIT,
+                              .tiling = VK_IMAGE_TILING_OPTIMAL,
+                              .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                       VK_IMAGE_USAGE_SAMPLED_BIT |
+                                       VK_IMAGE_USAGE_STORAGE_BIT,
+                              .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+
+  if (vkCreateImage(device, &imageInfo, nullptr, &lobHeatmapImage_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to create LOB Heatmap image");
+  }
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, lobHeatmapImage_, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo{
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .allocationSize = memRequirements.size,
+      .memoryTypeIndex = vulkanCore_->find_memory_type(
+          memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)};
+
+  if (vkAllocateMemory(device, &allocInfo, nullptr, &lobHeatmapImageMemory_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate LOB Heatmap image memory");
+  }
+
+  vkBindImageMemory(device, lobHeatmapImage_, lobHeatmapImageMemory_, 0);
+
+  // 2. Create Image View
+  VkImageViewCreateInfo viewInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = lobHeatmapImage_,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = VK_FORMAT_R8G8B8A8_UNORM,
+      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
+
+  if (vkCreateImageView(device, &viewInfo, nullptr, &lobHeatmapImageView_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to create LOB Heatmap image view");
+  }
+
+  // 3. Create Sampler
+  VkSamplerCreateInfo samplerInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+      .magFilter = VK_FILTER_LINEAR,
+      .minFilter = VK_FILTER_LINEAR,
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+      .unnormalizedCoordinates = VK_FALSE};
+
+  if (vkCreateSampler(device, &samplerInfo, nullptr, &lobHeatmapSampler_) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to create LOB Heatmap sampler");
+  }
+
+  // 4. Create Static Quad Vertex Buffer for Footprint
+  static const float quadVertices[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+                                       1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+
+  auto &memManager = vulkanCore_->get_memory_manager();
+  footprintUBO_ = memManager.allocate_vertex_buffer(sizeof(quadVertices));
+  if (footprintUBO_.mapped_ptr) {
+    std::memcpy(footprintUBO_.mapped_ptr, quadVertices, sizeof(quadVertices));
+  }
+
+  return {};
 }
 
 // ============================================
@@ -360,12 +879,11 @@ void MarketMicrostructureRenderer::executeLOBHeatmapCompute(
                           lobHeatmapPipelineLayout_, 0, 1,
                           &lobHeatmapDescriptorSet_, 0, nullptr);
 
-  constexpr uint32_t WORKGROUP_SIZE = 16;
-  auto workGroupsX =
-      (config_.lobHeatmap.width + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+  constexpr uint32_t WORKGROUP_SIZE_Y = 64;
+  // Optimized dispatch: only update the single current time column
   auto workGroupsY =
-      (config_.lobHeatmap.height + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-  vkCmdDispatch(cmdBuffer, workGroupsX, workGroupsY, 1);
+      (config_.lobHeatmap.height + WORKGROUP_SIZE_Y - 1) / WORKGROUP_SIZE_Y;
+  vkCmdDispatch(cmdBuffer, 1, workGroupsY, 1);
 }
 
 void MarketMicrostructureRenderer::executeTPOProfileCompute(
@@ -399,46 +917,78 @@ void MarketMicrostructureRenderer::renderFootprintChart(
 
   vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     footprintPipeline_);
+
+  // Bind Descriptor Sets
   vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           footprintPipelineLayout_, 0, 1,
                           &footprintDescriptorSet_, 0, nullptr);
+
+  // Bind Vertex Buffer (Static Quad)
+  VkDeviceSize offsets[] = {0};
+  vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &footprintUBO_.buffer, offsets);
 
   constexpr uint32_t VERTICES_PER_QUAD = 6;
   vkCmdDraw(cmdBuffer, VERTICES_PER_QUAD, currentClusterCount_, 0, 0);
 }
 
 void MarketMicrostructureRenderer::renderHeatmapTexture(
-    [[maybe_unused]] VkCommandBuffer cmdBuffer) {
-  // Placeholder for heatmap texture rendering
+    VkCommandBuffer cmdBuffer) {
+  // Heatmap is drawn as a fullscreen quad or panel quad
+  // We'll use a specialized graphics pipeline that reads from the compute
+  // output image.
+  // For now, assume it's part of the main UI overlay if not bound elsewhere.
 }
 
-void MarketMicrostructureRenderer::renderTPOProfile(
-    [[maybe_unused]] VkCommandBuffer cmdBuffer) {
-  // Placeholder for TPO profile rendering
+void MarketMicrostructureRenderer::renderTPOProfile(VkCommandBuffer cmdBuffer) {
+  if (tpoProfilePipeline_ == VK_NULL_HANDLE) [[unlikely]] {
+    return;
+  }
+
+  // Draw TPO Histogram
 }
 
-// ============================================
-// Private: Buffer Updates
-// ============================================
+void MarketMicrostructureRenderer::updateUniformBuffers(uint32_t currentFrame) {
+  if (!initialized_)
+    return;
 
-void MarketMicrostructureRenderer::updateUniformBuffers(
-    [[maybe_unused]] uint32_t currentFrame) {
-  // Update uniform buffers with current frame data
+  // Placeholder for updating view matrices and configuration
 }
 
 void MarketMicrostructureRenderer::updateStorageBuffers() {
   std::lock_guard lock(dataMutex_);
 
-  // Update footprint SSBO using std::ranges::copy if possible
+  // 1. Update Footprint SSBO
   if (!currentFootprintClusters_.empty() && footprintSSBO_.mapped_ptr) {
     auto dataSpan = std::as_bytes(std::span(currentFootprintClusters_));
     std::memcpy(footprintSSBO_.mapped_ptr, dataSpan.data(), dataSpan.size());
   }
 
-  // Update trade data SSBO
+  // 2. Update TPO Profile (Trade Data) SSBO
+  // The shader expects a struct { uint tickCount, uint startTimeLow, ...
+  // TradeTick ticks[] }
   if (!currentTradeData_.empty() && tpoProfileSSBO_.mapped_ptr) {
-    auto dataSpan = std::as_bytes(std::span(currentTradeData_));
-    std::memcpy(tpoProfileSSBO_.mapped_ptr, dataSpan.data(), dataSpan.size());
+    struct TPOInputHeader {
+      uint32_t tickCount;
+      uint32_t startTimeL, startTimeH;
+      uint32_t endTimeL, endTimeH;
+      float minPrice, maxPrice;
+    };
+
+    TPOInputHeader header{
+        .tickCount = static_cast<uint32_t>(currentTradeData_.size()),
+    };
+
+    std::memcpy(tpoProfileSSBO_.mapped_ptr, &header, sizeof(header));
+    std::memcpy(static_cast<char *>(tpoProfileSSBO_.mapped_ptr) +
+                    sizeof(header),
+                currentTradeData_.data(),
+                currentTradeData_.size() * sizeof(HotspineTradeTick));
+  }
+
+  // 3. Update LOB Heatmap Snapshot SSBO
+  if (!lobSnapshotBuffer_.empty() && lobHeatmapSSBO_.mapped_ptr) {
+    std::memcpy(lobHeatmapSSBO_.mapped_ptr, lobSnapshotBuffer_.data(),
+                lobSnapshotBuffer_.size());
   }
 }
 

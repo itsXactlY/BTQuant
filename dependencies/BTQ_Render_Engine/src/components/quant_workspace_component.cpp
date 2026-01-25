@@ -8,7 +8,8 @@ namespace BTQuant {
 
 QuantWorkspaceComponent::QuantWorkspaceComponent(
     std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    RenderEngine::MarketMicrostructureRenderer *micro_renderer)
     : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), bridge_(bridge),
       processor_(processor) {
 
@@ -25,7 +26,8 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 
   // Initialize the new panel-based system
   panel_manager_ = std::make_unique<PanelManager>(
-      bridge_, processor_, order_manager_, position_manager_, risk_assessment_);
+      bridge_, processor_, order_manager_, position_manager_, risk_assessment_,
+      micro_renderer);
   panel_manager_->initialize();
 
   // Load symbols from shared memory for hierarchical selector
@@ -85,6 +87,13 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
       ImGui::SameLine();
       if (ImGui::Button("Add Orderbook")) {
         panel_manager_->add_panel(PanelType::ORDERBOOK);
+      }
+      if (ImGui::Button("Add Footprint")) {
+        panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Add TPO Profile")) {
+        panel_manager_->add_panel(PanelType::TPO_PROFILE);
       }
     }
 

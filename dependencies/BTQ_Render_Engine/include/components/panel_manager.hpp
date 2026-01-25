@@ -5,6 +5,7 @@
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
+#include "MarketMicrostructureRenderer.h"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 #include <imgui.h>
@@ -23,11 +24,13 @@ struct GridLayout {
 
 class PanelManager {
 public:
-  PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-               std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-               std::shared_ptr<OrderManager> order_manager,
-               std::shared_ptr<PositionManager> position_manager,
-               std::shared_ptr<RiskAssessment> risk_assessment);
+  PanelManager(
+      std::shared_ptr<HotSpineDataBridge> bridge,
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+      std::shared_ptr<OrderManager> order_manager,
+      std::shared_ptr<PositionManager> position_manager,
+      std::shared_ptr<RiskAssessment> risk_assessment,
+      RenderEngine::MarketMicrostructureRenderer *micro_renderer = nullptr);
 
   ~PanelManager();
 
@@ -68,6 +71,7 @@ private:
   std::shared_ptr<OrderManager> order_manager_;
   std::shared_ptr<PositionManager> position_manager_;
   std::shared_ptr<RiskAssessment> risk_assessment_;
+  RenderEngine::MarketMicrostructureRenderer *micro_renderer_;
 
   std::unique_ptr<ChartManager> chart_manager_;
   GridLayout grid_layout_;

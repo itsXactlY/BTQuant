@@ -3,6 +3,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
+#include "MarketMicrostructureRenderer.h"
 #include "imgui.h"
 #include "implot.h"
 #include <memory>
@@ -19,7 +20,10 @@ enum class DashboardPanelType {
   RECENT_TRADES,
   MARKET_STATS,
   PERFORMANCE_METRICS,
-  MULTI_SYMBOL_OVERVIEW
+  MULTI_SYMBOL_OVERVIEW,
+  FOOTPRINT_CHART,
+  HEATMAP_LOB,
+  TPO_PROFILE
 };
 
 struct DashboardPanel {
@@ -48,6 +52,10 @@ public:
   void add_panel(DashboardPanelType type, const std::string &title, ImVec2 pos,
                  ImVec2 size);
   void remove_panel(int index);
+  void reset_layout();
+
+private:
+  void setup_default_panels();
 
 private:
   // Data sources
@@ -56,6 +64,8 @@ private:
 
   // Dashboard panels
   std::vector<DashboardPanel> panels_;
+  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer>
+      microstructure_renderer_;
 
   // UI state
   bool show_panel_config_ = false;
@@ -71,6 +81,7 @@ private:
   void render_market_stats_panel(const DashboardPanel &panel);
   void render_performance_metrics_panel(const DashboardPanel &panel);
   void render_multi_symbol_overview_panel(const DashboardPanel &panel);
+  void render_microstructure_panels(const DashboardPanel &panel);
 
   void render_panel_config_window();
   void render_dashboard_menu();

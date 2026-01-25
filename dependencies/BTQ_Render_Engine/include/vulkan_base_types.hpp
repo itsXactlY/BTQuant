@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <functional> // Added
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -25,18 +26,19 @@ class VulkanDashboard;
 struct VulkanDashboardConfig {
   // Vulkan configuration
   bool enable_validation_layers = false;
-  bool enable_msaa = false;  // Disable MSAA for better performance in sub-second charts
+  bool enable_msaa =
+      false; // Disable MSAA for better performance in sub-second charts
   VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
-  bool enable_hdr = false;   // Disable HDR for better performance
+  bool enable_hdr = false; // Disable HDR for better performance
   VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
   // Performance targets
-  uint32_t target_fps = 144;     // Higher target FPS for sub-second charts
-  uint32_t max_ui_elements = 500;  // Reduce UI element count for performance
+  uint32_t target_fps = 144;        // Higher target FPS for sub-second charts
+  uint32_t max_ui_elements = 500;   // Reduce UI element count for performance
   float max_data_latency_ms = 0.5f; // Lower latency target
 
   // Memory configuration (increased for higher data rates)
-  size_t vertex_pool_size = 128 * 1024 * 1024;  // 128MB
+  size_t vertex_pool_size = 128 * 1024 * 1024; // 128MB
   size_t uniform_pool_size = 32 * 1024 * 1024; // 32MB
   size_t storage_pool_size = 64 * 1024 * 1024; // 64MB
 
@@ -185,7 +187,9 @@ public:
   // Robust Frame Rendering API (User Requested)
   VkResult PrepareFrame(uint32_t &imageIndex);
   VkResult PresentFrame(uint32_t imageIndex);
-  void RecordCommandBuffer(uint32_t imageIndex, ImDrawData *drawData);
+  void RecordCommandBuffer(
+      uint32_t imageIndex, ImDrawData *drawData,
+      std::function<void(VkCommandBuffer)> graphicsCallback = nullptr);
   void RecreateSwapchain(); // Uses internal width_/height_
 
   // Legacy/Internal frame rendering
@@ -323,8 +327,8 @@ private:
   bool is_device_suitable(VkPhysicalDevice device);
   VkSampleCountFlagBits get_max_usable_sample_count();
   VkFormat find_supported_format(const std::vector<VkFormat> &candidates,
-                                  VkImageTiling tiling,
-                                  VkFormatFeatureFlags features);
+                                 VkImageTiling tiling,
+                                 VkFormatFeatureFlags features);
   VkFormat find_depth_format();
 
   // Cleanup helpers

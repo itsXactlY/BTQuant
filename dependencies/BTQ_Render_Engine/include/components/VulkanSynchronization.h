@@ -63,7 +63,7 @@ public:
   }
 
   // Release a fence slot
-  void releaseSlot(uint32_t index) { /* placeholder */ }
+  void releaseSlot([[maybe_unused]] uint32_t index) { /* placeholder */ }
 
 private:
   VkDevice device_;

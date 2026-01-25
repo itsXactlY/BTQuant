@@ -8,32 +8,24 @@
 // - ui/ui_base.hpp
 // ============================================================================
 
-#include "hotspine_data_bridge.hpp"
-#include "market_data_processor.hpp"
-#include "vulkan_base_types.hpp"
-
 // Include modular headers
 #include "analytics/technical_analysis.hpp"
+#include "components/VulkanSynchronization.h"
 #include "components/theme_manager.hpp"
+#include "hotspine_data_bridge.hpp"
+#include "market_data_processor.hpp"
 #include "trading/order_manager.hpp"
 #include "trading/position_manager.hpp"
 #include "trading/risk_assessment.hpp"
 #include "ui/ui_base.hpp"
+#include "vulkan_base_types.hpp"
 
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <deque>
-#include <functional>
+#include <expected>
 #include <glm/glm.hpp>
 #include <imgui.h>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <optional>
+#include <print>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace BTQuant {
@@ -44,6 +36,7 @@ struct OrderBookLevel {
   double price;
   double size;
 };
+class MarketMicrostructureRenderer;
 } // namespace RenderEngine
 
 // Helper: Convert ImVec4 to glm::vec4
@@ -130,6 +123,7 @@ public:
 // Forward declarations
 class VulkanDashboard;
 class QuantWorkspaceComponent;
+class RealtimeDashboardComponent;
 
 class ResizablePanel : public UIComponent {
 public:
@@ -140,7 +134,7 @@ public:
     snap_to_grid_ = s;
     grid_size_ = g;
   }
-  void update(float dt) override {}
+  void update(float) override {}
   void render_gui() override {}
 
 private:
@@ -227,7 +221,7 @@ public:
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig &config);
   ~VulkanDashboard();
-  void initialize();
+  [[nodiscard]] std::expected<void, std::string> initialize();
   void shutdown();
   void render_frame();
   void handle_events();
@@ -237,9 +231,9 @@ public:
   VulkanCore *get_vulkan_core() { return m_vulkanCore.get(); }
 
 private:
-  void init_window();
-  void init_vulkan();
   void init_components();
+  void init_window();
+  void pollDataToRenderer();
   uint32_t width_, height_;
   VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
@@ -247,6 +241,11 @@ private:
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> m_vulkanCore;
   std::unique_ptr<QuantWorkspaceComponent> m_workspace;
+  std::unique_ptr<RealtimeDashboardComponent> m_modern_dashboard;
+  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> m_micro_renderer;
+  std::unique_ptr<VulkanSyncContext> m_sync_context;
+  std::unique_ptr<TimelineSemaphore> m_timeline_semaphore;
+  bool use_modern_dashboard_ = false;
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;
   bool m_windowResized = false;

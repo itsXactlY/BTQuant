@@ -1,8 +1,8 @@
+#include "components/realtime_dashboard_component.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "implot.h"
 #include "market_data_processor.hpp"
 #include "vulkan_dashboard_advanced.hpp"
-#include "components/realtime_dashboard_component.hpp"
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -18,13 +18,15 @@ int main(int argc, char **argv) {
   (void)argc;
   (void)argv;
 
-  std::cout << "[Main] BTQuant Real-Time Terminal Starting..." << std::endl;
+  std::println("[Main] BTQuant Real-Time Terminal Starting...");
 
   // 1. Data Layer Initialization (Shared Ptr)
   auto bridge =
       std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
-  if (!bridge->start()) {
-    std::cerr << "[Main] Critical: Failed to start Data Bridge." << std::endl;
+  auto start_res = bridge->start();
+  if (!start_res) [[unlikely]] {
+    std::println(stderr, "[Main] Critical: Failed to start Data Bridge: {}",
+                 start_res.error());
     return -1;
   }
 
@@ -38,13 +40,17 @@ int main(int argc, char **argv) {
   auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(
       1920, 1080, bridge, processor, config);
 
-  dashboard->initialize();
+  if (auto init_res = dashboard->initialize(); !init_res) [[unlikely]] {
+    std::println(stderr, "[Main] Critical: Failed to initialize Dashboard: {}",
+                 init_res.error());
+    return -1;
+  }
 
   // 2b. ImPlot Context (Must be after ImGui initialization in
   // dashboard->initialize)
-  std::cout << "[Main] Creating ImPlot context..." << std::endl;
+  std::println("[Main] Creating ImPlot context...");
   ImPlot::CreateContext();
-  std::cout << "[Main] ImPlot context created" << std::endl;
+  std::println("[Main] ImPlot context created");
 
   // 3. Execution Loop with FPS limiting
   auto frame_start = std::chrono::steady_clock::now();
@@ -67,7 +73,7 @@ int main(int argc, char **argv) {
   }
 
   // 4. Graceful Shutdown
-  std::cout << "[Main] Terminal shutdown initiated." << std::endl;
+  std::println("[Main] Terminal shutdown initiated.");
   dashboard->shutdown();
   bridge->stop();
 

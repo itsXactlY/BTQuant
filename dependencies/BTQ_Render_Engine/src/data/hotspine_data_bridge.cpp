@@ -1,17 +1,17 @@
-#include "hotspine_data_bridge.hpp"
-#include "market_data_processor.hpp"
-#include "symbol_registry.hpp"
+#include "../../include/hotspine_data_bridge.hpp"
+#include "../../include/market_data_processor.hpp"
+#include "../../include/symbol_registry.hpp"
 #include <chrono>
-#include <cmath>
 #include <cstring> // For strerror
+#include <expected>
 #include <fcntl.h>
 #include <iostream>
-#include <random>
+#include <print>
+#include <pthread.h> // For thread priority
+#include <sched.h>   // For real-time scheduling
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <sched.h> // For real-time scheduling
-#include <pthread.h> // For thread priority
 
 namespace BTQuant {
 
@@ -31,63 +31,47 @@ HotSpineDataBridge::~HotSpineDataBridge() {
   }
 }
 
-bool HotSpineDataBridge::start() {
+std::expected<void, std::string> HotSpineDataBridge::start() {
   // Open shared memory
   m_shm_fd = shm_open(m_shm_path.c_str(), O_RDWR, 0666);
-  if (m_shm_fd == -1) {
-    std::cerr << "[HotSpineDataBridge] ERROR: Failed to open shared memory '"
-              << m_shm_path << "': " << strerror(errno) << std::endl;
-    std::cerr << "  Make sure HotSpine data feed is running!" << std::endl;
-    throw std::runtime_error("Failed to open shared memory: " +
-                             std::string(strerror(errno)));
+  if (m_shm_fd == -1) [[unlikely]] {
+    return std::unexpected(std::format("Failed to open shared memory '{}': {}",
+                                       m_shm_path, strerror(errno)));
   }
 
   // Get the size
   struct stat sb;
-  if (fstat(m_shm_fd, &sb) == -1) {
-    std::cerr << "[HotSpineDataBridge] ERROR: Failed to fstat shared memory"
-              << std::endl;
+  if (fstat(m_shm_fd, &sb) == -1) [[unlikely]] {
     close(m_shm_fd);
     m_shm_fd = -1;
-    throw std::runtime_error("Failed to fstat shared memory");
+    return std::unexpected("Failed to fstat shared memory");
   }
   m_shm_size = sb.st_size;
 
   // Map it
-  m_shm_ptr =
-      mmap(NULL, m_shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shm_fd, 0);
-  if (m_shm_ptr == MAP_FAILED) {
-    std::cerr << "[HotSpineDataBridge] ERROR: Failed to mmap shared memory"
-              << std::endl;
+  m_shm_ptr = mmap(nullptr, m_shm_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                   m_shm_fd, 0);
+  if (m_shm_ptr == MAP_FAILED) [[unlikely]] {
     close(m_shm_fd);
     m_shm_fd = -1;
-    throw std::runtime_error("Failed to mmap shared memory");
+    return std::unexpected("Failed to mmap shared memory");
   }
 
   // Initialize pointers
   m_header = reinterpret_cast<SharedMemoryHeader *>(m_shm_ptr);
 
-  // Verify magic number - "UQTB" = 0x42545155 in little-endian uint32_t
-  // or check ASCII bytes directly: 'U'(55) 'Q'(51) 'T'(54) 'B'(42)
-  uint32_t expected_magic_le = 0x42545155; // Little-endian representation
-  if (m_header->magic != expected_magic_le) {
-    std::cerr
-        << "[HotSpineDataBridge] ERROR: Invalid magic number in shared memory"
-        << std::endl;
-    std::cerr << "  Expected: 0x" << std::hex << expected_magic_le
-              << " (UQTB), Got: 0x" << m_header->magic << std::dec << std::endl;
-    std::cerr << "  Cannot proceed without valid shared memory!" << std::endl;
+  // Verify magic number - "UQTB" = 0x42545155
+  constexpr uint32_t expected_magic_le = 0x42545155;
+  if (m_header->magic != expected_magic_le) [[unlikely]] {
     munmap(m_shm_ptr, m_shm_size);
     m_shm_ptr = nullptr;
     m_header = nullptr;
     close(m_shm_fd);
     m_shm_fd = -1;
-    throw std::runtime_error("Invalid magic number in shared memory");
+    return std::unexpected("Invalid magic number in shared memory");
   }
 
   // Calculate ring buffer positions
-  // CRITICAL: HotSpine reserves 4096 bytes for header, NOT
-  // sizeof(SharedMemoryHeader)!
   constexpr size_t HOTSPINE_HEADER_SIZE = 4096;
   m_trades = reinterpret_cast<HotTrade *>(static_cast<char *>(m_shm_ptr) +
                                           HOTSPINE_HEADER_SIZE);
@@ -96,19 +80,16 @@ bool HotSpineDataBridge::start() {
   m_books = reinterpret_cast<HotOrderbookSnapshot *>(
       static_cast<char *>(m_shm_ptr) + HOTSPINE_HEADER_SIZE + trades_size);
 
-  std::cout << "[HotSpineDataBridge] Connected to shared memory: " << m_shm_path
-            << " (size=" << m_shm_size << " bytes, "
-            << "trades_capacity=" << m_header->capacity << ", "
-            << "books_capacity=" << m_header->orderbook_capacity << ")"
-            << std::endl;
+  std::println("[HotSpineDataBridge] Connected to SHM: {} (capacity={})",
+               m_shm_path, m_header->capacity);
 
-  m_running = true;
-  // Start real-time sync thread
-  m_sync_thread = std::jthread([this](std::stop_token stoken) {
-    this->sync_loop();
-  });
+  m_running.store(true, std::memory_order_release);
 
-  return true;
+  // Start real-time sync thread using std::jthread
+  m_sync_thread =
+      std::jthread([this](std::stop_token stoken) { this->sync_loop(); });
+
+  return {};
 }
 
 void HotSpineDataBridge::stop() {
@@ -139,26 +120,42 @@ std::string HotSpineDataBridge::getExchangeName(uint32_t symbol_id) const {
 }
 
 std::vector<uint32_t> HotSpineDataBridge::getActiveSymbols() const {
-  if (!m_data_processor) {
+  return m_data_processor ? m_data_processor->getActiveSymbols()
+                          : std::vector<uint32_t>{};
+}
+
+std::span<const HotTrade> HotSpineDataBridge::getTradeBuffer() const {
+  if (!m_trades || !m_header)
     return {};
-  }
-  return m_data_processor->getActiveSymbols();
+  return std::span<const HotTrade>(m_trades, m_header->capacity);
+}
+
+std::span<const HotOrderbookSnapshot>
+HotSpineDataBridge::getBookBuffer() const {
+  if (!m_books || !m_header)
+    return {};
+  return std::span<const HotOrderbookSnapshot>(m_books,
+                                               m_header->orderbook_capacity);
 }
 
 void HotSpineDataBridge::sync_loop() {
   // Set real-time scheduling priority for minimal latency
   sched_param param;
-  param.sched_priority = sched_get_priority_max(SCHED_FIFO) - 10; // High priority but not max
+  param.sched_priority =
+      sched_get_priority_max(SCHED_FIFO) - 10; // High priority but not max
   if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
-    std::cerr << "[HotSpineDataBridge] WARNING: Failed to set real-time priority" << std::endl;
+    std::println(
+        stderr,
+        "[HotSpineDataBridge] WARNING: Failed to set real-time priority");
   }
 
   // Lock memory to prevent paging
   if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
-    std::cerr << "[HotSpineDataBridge] WARNING: Failed to lock memory" << std::endl;
+    std::println(stderr, "[HotSpineDataBridge] WARNING: Failed to lock memory");
   }
 
-  const auto sync_interval = std::chrono::microseconds(100); // 10kHz sync rate for ultra-low latency
+  const auto sync_interval =
+      std::chrono::microseconds(100); // 10kHz sync rate for ultra-low latency
   auto next_sync = std::chrono::steady_clock::now() + sync_interval;
 
   while (!m_sync_thread.get_stop_token().stop_requested() && m_running) {
@@ -177,8 +174,9 @@ void HotSpineDataBridge::sync_shm() {
   if (!m_header || !m_data_processor) {
     static int warn_count = 0;
     if (warn_count++ % 100 == 0) {
-      std::cout << "[sync_shm] WARNING: m_header=" << m_header
-                << " m_data_processor=" << m_data_processor.get() << std::endl;
+      std::println(stderr,
+                   "[sync_shm] WARNING: m_header={} m_data_processor={}",
+                   (void *)m_header, (void *)m_data_processor.get());
     }
     return;
   }
@@ -199,8 +197,8 @@ void HotSpineDataBridge::sync_shm() {
       last_read = 0; // Buffer not full, process from beginning
     }
     m_last_read_idx.store(last_read, std::memory_order_release);
-    std::cout << "[sync_shm] Processing full ring buffer. Start: "
-              << last_read << " End: " << write_idx << std::endl;
+    std::println("[sync_shm] Processing full ring buffer. Start: {} End: {}",
+                 last_read, write_idx);
   }
 
   // Periodic debug: Show sync progress every 5 seconds
@@ -209,11 +207,11 @@ void HotSpineDataBridge::sync_shm() {
                      std::chrono::system_clock::now().time_since_epoch())
                      .count();
   if (now - last_debug_time >= 5) {
-    std::cout << "[sync_shm] Trade W=" << write_idx << " R=" << m_last_read_idx
-              << " Book W="
-              << __atomic_load_n(&m_header->orderbook_write_index,
-                                 __ATOMIC_ACQUIRE)
-              << " R=" << m_last_book_read_idx << std::endl;
+    std::println(
+        "[sync_shm] Trade W={} R={} Book W={} R={}", write_idx,
+        m_last_read_idx.load(),
+        __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE),
+        m_last_book_read_idx.load());
     last_debug_time = now;
   }
 
@@ -237,8 +235,10 @@ void HotSpineDataBridge::sync_shm() {
 
     // Validate trade data
     if (trade.price <= 0 || trade.size <= 0) {
-      std::cerr << "[HotSpineDataBridge] WARNING: Invalid trade data - price: "
-                << trade.price << ", size: " << trade.size << std::endl;
+      std::println(stderr,
+                   "[HotSpineDataBridge] WARNING: Invalid trade data - price: "
+                   "{}, size: {}",
+                   trade.price, trade.size);
       last_read++;
       continue;
     }
@@ -258,10 +258,9 @@ void HotSpineDataBridge::sync_shm() {
       m_data_processor->processTradeUpdates(trade_batch);
       static uint64_t batch_count = 0;
       if (++batch_count % 10 == 0) {
-        std::cout << "[HotSpineDataBridge] Processed batch of "
-                  << trade_batch.size()
-                  << " trades. Last Read Index: " << last_read
-                  << std::endl;
+        std::println("[HotSpineDataBridge] Processed batch of {} trades. Last "
+                     "Read Index: {}",
+                     trade_batch.size(), last_read);
       }
       trade_batch.clear();
     }
@@ -283,7 +282,8 @@ void HotSpineDataBridge::sync_shm() {
   uint64_t book_capacity = m_header->orderbook_capacity;
 
   // Catch-up logic for books: Process ALL available history on first run
-  uint64_t last_book_read = m_last_book_read_idx.load(std::memory_order_acquire);
+  uint64_t last_book_read =
+      m_last_book_read_idx.load(std::memory_order_acquire);
   if (last_book_read == 0 && book_write_idx > 0) {
     if (book_write_idx > book_capacity) {
       last_book_read = book_write_idx - book_capacity;
@@ -291,8 +291,8 @@ void HotSpineDataBridge::sync_shm() {
       last_book_read = 0;
     }
     m_last_book_read_idx.store(last_book_read, std::memory_order_release);
-    std::cout << "[sync_shm] Orderbook Full Sync from " << last_book_read
-              << " to " << book_write_idx << std::endl;
+    std::println("[sync_shm] Orderbook Full Sync from {} to {}", last_book_read,
+                 book_write_idx);
   }
 
   // CRITICAL FIX: Detect ring buffer wraparound
@@ -305,21 +305,19 @@ void HotSpineDataBridge::sync_shm() {
       last_book_read = 0;
     }
     m_last_book_read_idx.store(last_book_read, std::memory_order_release);
-    std::cout << "[sync_shm] Book buffer wraparound detected. Reset R="
-              << last_book_read << " W=" << book_write_idx << std::endl;
+    std::println("[sync_shm] Book buffer wraparound detected. Reset R={} W={}",
+                 last_book_read, book_write_idx);
   }
 
   // Process ALL available orderbooks in the buffer
   while (last_book_read < book_write_idx) {
-    const HotOrderbookSnapshot &snap =
-        m_books[last_book_read % book_capacity];
+    const HotOrderbookSnapshot &snap = m_books[last_book_read % book_capacity];
 
     // LOG snapshots occasionally to verify data is arriving
     static uint64_t snap_processed = 0;
     if (snap_processed++ % 5000 == 0) {
-      std::cout << "[OrderbookBridge] Sync: Sym=" << snap.symbol_id
-                << " Bids=" << (int)snap.bids_count
-                << " Asks=" << (int)snap.asks_count << std::endl;
+      std::println("[OrderbookBridge] Sync: Sym={} Bids={} Asks={}",
+                   snap.symbol_id, (int)snap.bids_count, (int)snap.asks_count);
     }
 
     // Timestamp reasonable filter

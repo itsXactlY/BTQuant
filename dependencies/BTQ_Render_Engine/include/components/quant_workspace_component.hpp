@@ -19,7 +19,8 @@ class QuantWorkspaceComponent : public UIComponent {
 public:
   explicit QuantWorkspaceComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+      RenderEngine::MarketMicrostructureRenderer *micro_renderer = nullptr);
   virtual ~QuantWorkspaceComponent() = default;
 
   void update(float dt) override;

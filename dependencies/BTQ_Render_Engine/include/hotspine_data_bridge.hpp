@@ -2,12 +2,14 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
+#include <expected>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
-#include <vector>
 #include <thread>
-#include <chrono>
+#include <vector>
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -78,7 +80,7 @@ struct InstrumentStore {
   std::map<double, double> m_vol_profile;
 
   // Latest Snapshot for Heatmap/Orderbook - Atomic for thread-safety
-  std::atomic<HotOrderbookSnapshot*> latest_snapshot{nullptr};
+  std::atomic<HotOrderbookSnapshot *> latest_snapshot{nullptr};
 
   InstrumentStore() = default;
   ~InstrumentStore() {
@@ -88,7 +90,7 @@ struct InstrumentStore {
   }
 
   // Copy constructor for lock-free duplication
-  InstrumentStore(const InstrumentStore& other) {
+  InstrumentStore(const InstrumentStore &other) {
     symbol = other.symbol;
     exchange = other.exchange;
     symbol_id.store(other.symbol_id.load());
@@ -99,7 +101,7 @@ struct InstrumentStore {
     closes = other.closes;
     volumes = other.volumes;
     m_vol_profile = other.m_vol_profile;
-    HotOrderbookSnapshot* snap = other.latest_snapshot.load();
+    HotOrderbookSnapshot *snap = other.latest_snapshot.load();
     if (snap) {
       latest_snapshot.store(new HotOrderbookSnapshot(*snap));
     }
@@ -115,7 +117,7 @@ public:
   HotSpineDataBridge(const std::string &shm_path = "/btquant");
   ~HotSpineDataBridge();
 
-  bool start();
+  [[nodiscard]] std::expected<void, std::string> start();
   void stop();
   void sync(); // Performs real-time synchronization
 
@@ -126,7 +128,11 @@ public:
   }
 
   // Get active symbols from MarketDataProcessor (direct)
-  std::vector<uint32_t> getActiveSymbols() const;
+  [[nodiscard]] std::vector<uint32_t> getActiveSymbols() const;
+
+  // Get views into live data (C++26 optimized)
+  [[nodiscard]] std::span<const HotTrade> getTradeBuffer() const;
+  [[nodiscard]] std::span<const HotOrderbookSnapshot> getBookBuffer() const;
 
   // Get symbol information from registry
   std::string getSymbolName(uint32_t symbol_id) const;

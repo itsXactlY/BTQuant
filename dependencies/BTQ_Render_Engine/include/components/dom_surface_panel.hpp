@@ -27,6 +27,8 @@ public:
 
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
+  std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  uint64_t subscription_id_ = 0;
   uint32_t current_symbol_id_ = 0;
 
   // Visualization parameters

@@ -108,11 +108,16 @@ public:
 
   // Get ImGui Texture ID for the LOB Heatmap
   // This utilizes ImGui_ImplVulkan_AddTexture manually
+  void *getHeatmapTextureID();
+
   // Get current price bounds for UI synchronization
   std::pair<float, float> getLOBPriceBounds() const {
     std::lock_guard lock(dataMutex_);
     return {lastBasePrice_, lastPriceRange_};
   }
+
+  // Update Heatmap Parameters (Dynamic Normalization)
+  void updateHeatmapParams(float maxLiquidity);
 
 private:
   // Vulkan resource creation

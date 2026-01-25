@@ -187,7 +187,7 @@ void HotSpineDataBridge::sync_loop() {
 void HotSpineDataBridge::sync_shm() {
   if (!m_header || !m_data_processor) {
     static int warn_count = 0;
-    if (warn_count++ % 100 == 0) {
+    if (warn_count++ % 1000 == 0) {
       std::println(stderr,
                    "[sync_shm] WARNING: m_header={} m_data_processor={}",
                    (void *)m_header, (void *)m_data_processor.get());
@@ -195,201 +195,202 @@ void HotSpineDataBridge::sync_shm() {
     return;
   }
 
-  // --- Process Trades ---
-  uint64_t write_idx =
+  // --- Adaptive Validation Logic ---
+  uint64_t trade_write_idx =
       __atomic_load_n(&m_header->write_index, __ATOMIC_ACQUIRE);
+  uint64_t trade_read_idx = m_last_read_idx.load(std::memory_order_relaxed);
+  uint64_t trade_lag = (trade_write_idx > trade_read_idx)
+                           ? (trade_write_idx - trade_read_idx)
+                           : 0;
+
+  ValidationLevel current_level = ValidationLevel::FULL;
+  if (trade_lag > 5000) {
+    current_level = ValidationLevel::MINIMAL;
+  } else if (trade_lag > 1000) {
+    current_level = ValidationLevel::ADAPTIVE;
+  }
+  m_validation_level.store(current_level, std::memory_order_relaxed);
+
+  // Measure start time for overhead tracking
+  auto start_time = std::chrono::high_resolution_clock::now();
+
+  // --- Process Trades ---
   uint64_t capacity = m_header->capacity;
 
-  // Initial catch-up: Process ENTIRE ring buffer on first sync
-  // This ensures we have all available historical data
-  uint64_t last_read = m_last_read_idx.load(std::memory_order_acquire);
-  if (last_read == 0 && write_idx > 0) {
-    // For ring buffer: start at oldest valid position
-    if (write_idx > capacity) {
-      last_read = write_idx - capacity; // Buffer wrapped, start at oldest
+  // Initial catch-up logic
+  if (trade_read_idx == 0 && trade_write_idx > 0) {
+    if (trade_write_idx > capacity) {
+      trade_read_idx = trade_write_idx - capacity;
     } else {
-      last_read = 0; // Buffer not full, process from beginning
+      trade_read_idx = 0;
     }
-    m_last_read_idx.store(last_read, std::memory_order_release);
-    std::println("[sync_shm] Processing full ring buffer. Start: {} End: {}",
-                 last_read, write_idx);
+    m_last_read_idx.store(trade_read_idx, std::memory_order_release);
+    std::println("[sync_shm] Trade Catch-up: Start={} End={} Lag={}",
+                 trade_read_idx, trade_write_idx, trade_lag);
   }
 
-  // Periodic debug: Show sync progress every 5 seconds
+  // Debug logging
   static uint64_t last_debug_time = 0;
-  uint64_t now = std::chrono::duration_cast<std::chrono::seconds>(
-                     std::chrono::system_clock::now().time_since_epoch())
-                     .count();
-  if (now - last_debug_time >= 5) {
-    std::println(
-        "[sync_shm] Trade W={} R={} Book W={} R={}", write_idx,
-        m_last_read_idx.load(),
-        __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE),
-        m_last_book_read_idx.load());
-    last_debug_time = now;
+  uint64_t now_sec = std::chrono::duration_cast<std::chrono::seconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+  if (now_sec - last_debug_time >= 10) {
+    std::string level_str = "FULL";
+    if (current_level == ValidationLevel::ADAPTIVE)
+      level_str = "ADAPTIVE";
+    if (current_level == ValidationLevel::MINIMAL)
+      level_str = "MINIMAL";
+
+    std::println("[sync_shm] Trade W={} R={} Lag={} Level={}", trade_write_idx,
+                 trade_read_idx, trade_lag, level_str);
+    last_debug_time = now_sec;
   }
 
-  // Batch processing
   std::vector<RenderEngine::MarketDataUpdate> trade_batch;
   const uint64_t BATCH_SIZE = 100000;
   trade_batch.reserve(BATCH_SIZE);
 
-  // Timestamp reasonable filter: Jan 1st 2024 = 1704067200 sec -> 1.704e15
-  // micros
-  const uint64_t MIN_VALID_TS = 1704067200000000ULL;
+  constexpr uint64_t MIN_VALID_TS = 1704067200000000ULL;
 
-  while (last_read < write_idx) {
-    const HotTrade &trade = m_trades[last_read % capacity];
+  // Optimized Loop
+  while (trade_read_idx < trade_write_idx) {
+    const HotTrade &trade = m_trades[trade_read_idx % capacity];
+    bool valid = true;
 
-    // SANITY CHECK: Skip uninitialized or corrupt trades
-    if (trade.ts_exchange < MIN_VALID_TS) {
-      last_read++;
-      continue;
+    // Validation strategy based on level
+    if (current_level == ValidationLevel::FULL) {
+      if (trade.ts_exchange < MIN_VALID_TS || trade.price <= 0 ||
+          trade.size <= 0) {
+        valid = false;
+      }
+    } else if (current_level == ValidationLevel::ADAPTIVE) {
+      // Skip price/size checks, only check timestamp
+      if (trade.ts_exchange < MIN_VALID_TS) {
+        valid = false;
+      }
+    }
+    // MINIMAL: Assume valid (no checks)
+
+    if (valid) {
+      RenderEngine::MarketDataUpdate update;
+      update.type = RenderEngine::MarketDataType::TRADE;
+      update.symbol_id = trade.symbol_id;
+      update.timestamp = trade.ts_exchange;
+      update.price = trade.price;
+      update.size = trade.size;
+      update.side = (trade.side == 0) ? "buy" : "sell";
+      trade_batch.push_back(std::move(update));
     }
 
-    // Validate trade data
-    if (trade.price <= 0 || trade.size <= 0) {
-      std::println(stderr,
-                   "[HotSpineDataBridge] WARNING: Invalid trade data - price: "
-                   "{}, size: {}",
-                   trade.price, trade.size);
-      last_read++;
-      continue;
-    }
-
-    RenderEngine::MarketDataUpdate update;
-    update.type = RenderEngine::MarketDataType::TRADE;
-    update.symbol_id = trade.symbol_id;
-    update.timestamp = trade.ts_exchange;
-    update.price = trade.price;
-    update.size = trade.size;
-    update.side = (trade.side == 0) ? "buy" : "sell";
-
-    trade_batch.push_back(std::move(update));
-    last_read++;
+    trade_read_idx++;
 
     if (trade_batch.size() >= BATCH_SIZE) {
       m_data_processor->processTradeUpdates(trade_batch);
-      static uint64_t batch_count = 0;
-      if (++batch_count % 10 == 0) {
-        std::println("[HotSpineDataBridge] Processed batch of {} trades. Last "
-                     "Read Index: {}",
-                     trade_batch.size(), last_read);
-      }
       trade_batch.clear();
+      // Update read index periodically during large batches to allow recovery
+      m_last_read_idx.store(trade_read_idx, std::memory_order_relaxed);
     }
   }
 
-  // Finalize remaining trades in the batch
   if (!trade_batch.empty()) {
     m_data_processor->processTradeUpdates(trade_batch);
   }
 
-  // CRITICAL: Update shared memory read_index so producer knows we've consumed
-  // it
-  __atomic_store_n(&m_header->read_index, last_read, __ATOMIC_RELEASE);
-  m_last_read_idx.store(last_read, std::memory_order_release);
+  __atomic_store_n(&m_header->read_index, trade_read_idx, __ATOMIC_RELEASE);
+  m_last_read_idx.store(trade_read_idx, std::memory_order_release);
 
   // --- Process Orderbooks ---
   uint64_t book_write_idx =
       __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE);
   uint64_t book_capacity = m_header->orderbook_capacity;
+  uint64_t book_read_idx = m_last_book_read_idx.load(std::memory_order_relaxed);
 
-  // Catch-up logic for books: Process ALL available history on first run
-  uint64_t last_book_read =
-      m_last_book_read_idx.load(std::memory_order_acquire);
-  if (last_book_read == 0 && book_write_idx > 0) {
+  // Catch-up logic for books
+  if (book_read_idx == 0 && book_write_idx > 0) {
     if (book_write_idx > book_capacity) {
-      last_book_read = book_write_idx - book_capacity;
+      book_read_idx = book_write_idx - book_capacity;
     } else {
-      last_book_read = 0;
+      book_read_idx = 0;
     }
-    m_last_book_read_idx.store(last_book_read, std::memory_order_release);
-    std::println("[sync_shm] Orderbook Full Sync from {} to {}", last_book_read,
+    std::println("[sync_shm] Book Catch-up: Start={} End={}", book_read_idx,
                  book_write_idx);
   }
 
-  // CRITICAL FIX: Detect ring buffer wraparound
-  // If our read pointer is ahead of the write pointer, the buffer has wrapped
-  if (last_book_read > book_write_idx) {
-    // Reset read pointer to catch up with the wrapped write pointer
-    if (book_write_idx > book_capacity / 4) {
-      last_book_read = book_write_idx - (book_capacity / 4);
-    } else {
-      last_book_read = 0;
-    }
-    m_last_book_read_idx.store(last_book_read, std::memory_order_release);
-    std::println("[sync_shm] Book buffer wraparound detected. Reset R={} W={}",
-                 last_book_read, book_write_idx);
+  // Wraparound check
+  if (book_read_idx > book_write_idx) {
+    book_read_idx = (book_write_idx > book_capacity / 4)
+                        ? (book_write_idx - book_capacity / 4)
+                        : 0;
+    std::println("[sync_shm] Book Wraparound: Reset to {}", book_read_idx);
   }
 
-  // Process ALL available orderbooks in the buffer
-  while (last_book_read < book_write_idx) {
-    const HotOrderbookSnapshot &snap = m_books[last_book_read % book_capacity];
+  while (book_read_idx < book_write_idx) {
+    const HotOrderbookSnapshot &snap = m_books[book_read_idx % book_capacity];
+    bool skip_snapshot = false;
 
-    // LOG snapshots occasionally to verify data is arriving
-    static uint64_t snap_processed = 0;
-    if (snap_processed++ % 5000 == 0) {
-      std::println("[OrderbookBridge] Sync: Sym={} Bids={} Asks={}",
-                   snap.symbol_id, (int)snap.bids_count, (int)snap.asks_count);
+    // Fast-fail on symbol ID
+    if (snap.symbol_id == 0) {
+      book_read_idx++;
+      continue;
     }
 
-    // Timestamp reasonable filter
-    // Timestamp handling with fallback
+    // Adaptive timestamp check (only in FULL/ADAPTIVE)
     uint64_t final_timestamp = snap.ts_exchange;
-    const uint64_t MIN_VALID_TS = 1704067200000000ULL;
-
-    if (final_timestamp < MIN_VALID_TS) {
-      // Fallback to system time
+    if (current_level != ValidationLevel::MINIMAL &&
+        final_timestamp < MIN_VALID_TS) {
       final_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
     }
 
-    // Validate symbol ID (0 is often uninitialized in SHM)
-    if (snap.symbol_id == 0) {
-      last_book_read++;
-      continue;
-    }
-
-    // Direkte Weitergabe an MarketDataProcessor
     RenderEngine::MarketDataUpdate update;
     update.type = RenderEngine::MarketDataType::ORDERBOOK;
     update.symbol_id = snap.symbol_id;
     update.timestamp = final_timestamp;
 
-    // Konvertiere Orderbook-Ebenen
-    int safe_bids_count = std::min((int)snap.bids_count, 200);
-    for (int i = 0; i < safe_bids_count; ++i) {
-      if (snap.bids[i].price <= 0 || snap.bids[i].size <= 0)
-        continue;
+    // Optimized Level Processing
+    int safe_bids = std::min((int)snap.bids_count, 200);
+    int safe_asks = std::min((int)snap.asks_count, 200);
 
-      PriceLevel level;
-      level.price = snap.bids[i].price;
-      level.size = snap.bids[i].size;
-      update.bids.push_back(level);
-    }
+    // Reserve to avoid reallocations
+    update.bids.reserve(safe_bids);
+    update.asks.reserve(safe_asks);
 
-    int safe_asks_count = std::min((int)snap.asks_count, 200);
-    for (int i = 0; i < safe_asks_count; ++i) {
-      if (snap.asks[i].price <= 0 || snap.asks[i].size <= 0)
-        continue;
-
-      PriceLevel level;
-      level.price = snap.asks[i].price;
-      level.size = snap.asks[i].size;
-      update.asks.push_back(level);
+    if (current_level == ValidationLevel::FULL) {
+      for (int i = 0; i < safe_bids; ++i) {
+        if (snap.bids[i].price > 0 && snap.bids[i].size > 0) {
+          update.bids.push_back({snap.bids[i].price, snap.bids[i].size});
+        }
+      }
+      for (int i = 0; i < safe_asks; ++i) {
+        if (snap.asks[i].price > 0 && snap.asks[i].size > 0) {
+          update.asks.push_back({snap.asks[i].price, snap.asks[i].size});
+        }
+      }
+    } else {
+      // ADAPTIVE & MINIMAL: Trust the producer, skip per-level checks for speed
+      // This effectively vectorizes better as we just copy
+      for (int i = 0; i < safe_bids; ++i) {
+        update.bids.push_back({snap.bids[i].price, snap.bids[i].size});
+      }
+      for (int i = 0; i < safe_asks; ++i) {
+        update.asks.push_back({snap.asks[i].price, snap.asks[i].size});
+      }
     }
 
     m_data_processor->processOrderbookUpdate(update);
-    last_book_read++;
+    book_read_idx++;
   }
 
-  // Update Reader Index
-  __atomic_store_n(&m_header->read_index, last_read, __ATOMIC_RELEASE);
-  __atomic_store_n(&m_header->orderbook_read_index, last_book_read,
+  __atomic_store_n(&m_header->orderbook_read_index, book_read_idx,
                    __ATOMIC_RELEASE);
-  m_last_book_read_idx.store(last_book_read, std::memory_order_release);
+  m_last_book_read_idx.store(book_read_idx, std::memory_order_release);
+
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                      end_time - start_time)
+                      .count();
+  m_validation_overhead_us.store(duration, std::memory_order_relaxed);
 }
 
 } // namespace BTQuant

@@ -10,8 +10,15 @@ void PanelBase::begin_panel_window() {
   ImGuiWindowFlags flags = ImGuiWindowFlags_None;
   if (!config_.resizable)
     flags |= ImGuiWindowFlags_NoResize;
-  if (!config_.movable)
+  if (!config_.movable) {
     flags |= ImGuiWindowFlags_NoMove;
+  } else {
+    // Explicitly ensure no move flag is NOT set if it is supposed to be movable
+    // This is the default, but let's be super safe and distinct
+  }
+
+  // DEBUG: Force movable for now to rule out config issues
+  // flags &= ~ImGuiWindowFlags_NoMove;
 
   // Use ThemeManager for glass style
   push_glass_style();

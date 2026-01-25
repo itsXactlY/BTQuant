@@ -323,6 +323,12 @@ void MarketMicrostructureRenderer::updateConfig(const RendererConfig &config) {
   }
 }
 
+// Update Heatmap Params for Dynamic Normalization
+void MarketMicrostructureRenderer::updateHeatmapParams(float maxLiquidity) {
+  std::lock_guard lock(statsMutex_);
+  config_.lobHeatmap.maxLiquidity = maxLiquidity;
+}
+
 [[nodiscard]] RendererStats MarketMicrostructureRenderer::getStats() const {
   std::lock_guard lock(statsMutex_);
   return stats_;
@@ -819,6 +825,35 @@ MarketMicrostructureRenderer::createTextureResources() {
   }
 
   vkBindImageMemory(device, lobHeatmapImage_, lobHeatmapImageMemory_, 0);
+
+  // Transition image to GENERAL layout immediately for Compute/ImGui access
+  {
+    VkCommandBuffer cmd = vulkanCore_->begin_single_time_commands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = lobHeatmapImage_;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask =
+        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    vulkanCore_->end_single_time_commands(cmd);
+  }
 
   // 2. Create Image View
   VkImageViewCreateInfo viewInfo{

@@ -16,6 +16,13 @@ namespace RenderEngine {
 class MarketDataProcessor;
 } // namespace RenderEngine
 
+// Optimization: Adaptive Validation Levels
+enum class ValidationLevel {
+  FULL,     // Check everything (prices, sizes, timestamps, symbol_ids)
+  ADAPTIVE, // Skip some checks based on confidence/load
+  MINIMAL   // Only essential structure checks (pointers, basic bounds)
+};
+
 // ============================================================================
 // Zero-Copy Shared Memory Data Structures
 // Must match Python ctypes structure exactly
@@ -144,6 +151,10 @@ private:
   int m_shm_fd = -1;
   void *m_shm_ptr = nullptr;
   size_t m_shm_size = 0;
+
+  // Adaptive Validation State
+  std::atomic<ValidationLevel> m_validation_level{ValidationLevel::FULL};
+  std::atomic<uint64_t> m_validation_overhead_us{0}; // For metrics
 
   std::atomic<bool> m_running{false};
   std::jthread m_sync_thread; // Real-time sync thread

@@ -4,6 +4,7 @@
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include <imgui.h>
+#include <implot.h>
 #include <memory>
 
 namespace BTQuant {
@@ -46,6 +47,11 @@ private:
   // publicly in getTradeBuffer() return type (std::span). But
   // SharedMemoryHeader has write_index.
   uint64_t last_processed_trade_ts_ = 0;
+
+  // Cached values for optimization
+  double cached_max_vol_ = 1.0;
+  uint32_t cached_orderbook_id_ = 0;
+  std::vector<double> cached_bx_, cached_by_, cached_ax_, cached_ay_;
 };
 
 } // namespace BTQuant

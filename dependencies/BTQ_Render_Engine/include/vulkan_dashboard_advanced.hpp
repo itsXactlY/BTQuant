@@ -258,6 +258,7 @@ private:
   mutable std::mutex m_configMutex;
   void worker_loop();
   bool m_windowResized = false;
+  uint64_t m_logic_frame_count = 0; // Monotonic counter for LOB time index
   static void framebuffer_size_callback(GLFWwindow *window, int width,
                                         int height);
   GLFWwindow *window_ = nullptr;

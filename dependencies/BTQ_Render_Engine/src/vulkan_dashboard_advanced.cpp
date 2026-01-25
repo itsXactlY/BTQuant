@@ -194,13 +194,39 @@ void VulkanDashboard::render_frame() {
   }
 
   // Process updates and UI
+  // Process updates and UI
   float dt = m_vulkanCore->get_frame_time_ms() / 1000.0f;
+
   if (use_modern_dashboard_ && m_modern_dashboard) {
     m_modern_dashboard->update(dt);
     m_modern_dashboard->render_gui();
   } else if (m_workspace) {
     m_workspace->update(dt);
     m_workspace->render_gui();
+  }
+
+  // --- DEBUG OVERLAY (Moved to end for Z-order visibility) ---
+  if (true) {
+    ImGui::SetNextWindowPos(ImVec2(10, 50), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Debug Info", nullptr,
+                     ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+      ImGui::Text("Logic Frame: %lu", m_logic_frame_count);
+      if (m_micro_renderer) {
+        auto stats = m_micro_renderer->getStats();
+        ImGui::Text("Renderer Statistics:");
+        ImGui::Text("  LOB Updates: %lu", stats.lobUpdates);
+        ImGui::Text("  Trade Updates: %lu", stats.tradeUpdates);
+
+        void *texID = m_micro_renderer->getHeatmapTextureID();
+        ImGui::Text("  Texture ID: %p", texID);
+
+        auto bounds = m_micro_renderer->getLOBPriceBounds();
+        ImGui::Text("  LOB Bounds: %.2f - %.2f", bounds.first,
+                    bounds.first + bounds.second);
+      }
+    }
+    ImGui::End();
   }
 
   // Handle high-performance microstructure rendering (Data Ingestion & Compute
@@ -347,8 +373,7 @@ void VulkanDashboard::pollDataToRenderer() {
         reinterpret_cast<RenderEngine::HotspineOrderBookSnapshot *>(
             buffer.data());
 
-    snapshot->currentTimeIndex =
-        static_cast<uint32_t>(m_vulkanCore->get_current_frame_index());
+    snapshot->currentTimeIndex = static_cast<uint32_t>(m_logic_frame_count++);
     snapshot->priceLevelsCount = totalLevels;
 
     // Use mid-price centered window for professional Heatmap scaling (Quantower

@@ -12,7 +12,7 @@ DomSurfacePanel::DomSurfacePanel(
     RenderEngine::MarketMicrostructureRenderer *renderer)
     : PanelBase(
           PanelConfig{.title = "LOB Heatmap", .type = PanelType::HEATMAP}),
-      renderer_(renderer), processor_(processor) {}
+      renderer_(renderer) {}
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {

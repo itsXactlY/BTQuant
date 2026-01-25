@@ -1,4 +1,5 @@
 #include "../../include/components/panel_manager.hpp"
+#include "../../include/components/alerts_panel.hpp"
 #include "../../include/components/chart_panel.hpp"
 #include "../../include/components/depth_chart_panel.hpp"
 #include "../../include/components/dom_surface_panel.hpp"
@@ -39,7 +40,9 @@ void PanelManager::initialize() {
 
   // Create default panels
   // Row 0: Status Bar
-  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 3, 1);
+  // Row 0: Status Bar and Alerts
+  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 2, 1);
+  add_panel(PanelType::ALERTS, "Alerts", 2, 0, 1, 1);
 
   // Row 1-2: Main Chart (2x2) and Depth Chart (1x2)
   add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
@@ -143,12 +146,14 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
   case PanelType::TPO_PROFILE:
     panel = std::make_unique<TpoPanel>(config, micro_renderer_);
     break;
+  case PanelType::ALERTS:
+    panel = std::make_unique<AlertsPanel>(config);
+    break;
   case PanelType::SCATTER_PLOT:
   case PanelType::TIME_SERIES:
   case PanelType::TRADING_ORDERS:
   case PanelType::TRADING_POSITIONS:
   case PanelType::RISK_METRICS:
-  case PanelType::ALERTS:
   case PanelType::HISTOGRAM:
   case PanelType::SCREENER:
   case PanelType::LOG_PANEL:

@@ -84,6 +84,7 @@ set(DASHBOARD_SOURCES
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
+    src/components/alerts_panel.cpp
     src/components/status_bar_panel.cpp
     src/components/watchlist_panel.cpp
     src/components/tape_panel.cpp

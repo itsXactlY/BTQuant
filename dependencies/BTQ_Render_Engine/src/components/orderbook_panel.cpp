@@ -143,70 +143,163 @@ void OrderbookPanel::render() {
 void OrderbookPanel::render_orderbook_ladder(
     const RenderEngine::OrderbookData &orderbook) {
 
-  ImGui::Columns(3, "Ladder", true);
-  ImGui::SetColumnWidth(0, 80);
-  ImGui::SetColumnWidth(1, 100);
-  // Col 2 uses remaining space
+  // Calculate max volume for relative scaling
+  double max_vol = 1.0;
+  for (const auto &level : orderbook.bids)
+    max_vol = std::max(max_vol, level.size);
+  for (const auto &level : orderbook.asks)
+    max_vol = std::max(max_vol, level.size);
+  if (max_vol < 1.0)
+    max_vol = 1.0;
 
-  ImGui::Text("Bid Size");
-  ImGui::NextColumn();
-  ImGui::Text("Price");
-  ImGui::NextColumn();
-  ImGui::Text("Ask Size");
-  ImGui::NextColumn();
-  ImGui::Separator();
+  // Use Table instead of Columns for modern layout (C++26 style UI)
+  if (ImGui::BeginTable("OrderbookTable", 7,
+                        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_Resizable |
+                            ImGuiTableFlags_SizingStretchSame)) {
 
-  // Draw Asks (Sell) - Top down (descending price)
-  int ask_count = std::min((int)orderbook.asks.size(), MAX_LEVELS);
-  for (int i = ask_count - 1; i >= 0; --i) {
-    const auto &level = orderbook.asks[i];
+    // Setup Columns
+    ImGui::TableSetupColumn("Bid", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Sold", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80);
+    ImGui::TableSetupColumn("Bought", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Ask", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
+    ImGui::TableHeadersRow();
+
     const auto &colors = ThemeManager::getInstance().getColors();
-    ImGui::NextColumn(); // Skip Bid Size
-    // Drag Source for ASK Price
-    ImGui::Selectable(std::to_string(level.price).c_str(), false,
-                      ImGuiSelectableFlags_SpanAllColumns);
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-      ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-      ImGui::Text("Price: %.2f", level.price);
-      ImGui::EndDragDropSource();
+
+    // Render Asks (Sell) - Top down
+    int ask_count = std::min((int)orderbook.asks.size(), MAX_LEVELS);
+    for (int i = ask_count - 1; i >= 0; --i) {
+      const auto &level = orderbook.asks[i];
+      ImGui::TableNextRow();
+
+      // 1. Bid (Empty)
+      ImGui::TableSetColumnIndex(0);
+
+      // 2. Sold (Placeholder)
+      ImGui::TableSetColumnIndex(1);
+
+      // 3. Price
+      ImGui::TableSetColumnIndex(2);
+      // Center Price text
+      float cursor_check =
+          ImGui::GetCursorPosX() +
+          (ImGui::GetContentRegionAvail().x -
+           ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) *
+              0.5f;
+      ImGui::SetCursorPosX(cursor_check);
+
+      ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
+                        ImGuiSelectableFlags_SpanAllColumns);
+      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
+        ImGui::Text("Price: %.2f", level.price);
+        ImGui::EndDragDropSource();
+      }
+      ImGui::SameLine();
+      ImGui::TextColored(colors.accent_red, "%.2f", level.price);
+
+      // 4. Bought (Placeholder)
+      ImGui::TableSetColumnIndex(3);
+
+      // 5. Ask Size (with Bar)
+      ImGui::TableSetColumnIndex(4);
+      {
+        float width = ImGui::GetContentRegionAvail().x;
+        float bar_width = width * (float)(level.size / max_vol);
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            pos,
+            ImVec2(pos.x + bar_width,
+                   pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(ImVec4(colors.accent_red.x, colors.accent_red.y,
+                                      colors.accent_red.z, 0.2f)));
+        ImGui::Text("%.4f", level.size);
+      }
+
+      // 6. Delta (Placeholder)
+      ImGui::TableSetColumnIndex(5);
+
+      // 7. Volume (Placeholder)
+      ImGui::TableSetColumnIndex(6);
     }
-    ImGui::SameLine();
-    ImGui::TextColored(colors.accent_red, "%.4f", level.price);
-    ImGui::NextColumn();
-    ImGui::Text("%.4f", level.size);
-    ImGui::NextColumn();
-  }
 
-  // Best Bid/Ask Highlight or Spread
-  ImGui::Separator();
-  ImGui::NextColumn();
-  ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "SPREAD: %.4f", orderbook.spread);
-  ImGui::NextColumn();
-  ImGui::NextColumn();
-  ImGui::Separator();
+    // Spread Row
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(2);
+    ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "--- %.1f ---", orderbook.spread);
 
-  // Draw Bids (Buy) - (descending price)
-  int bid_count = std::min((int)orderbook.bids.size(), MAX_LEVELS);
-  for (int i = 0; i < bid_count; ++i) {
-    const auto &level = orderbook.bids[i];
-    const auto &colors = ThemeManager::getInstance().getColors();
-    ImGui::Text("%.4f", level.size);
-    ImGui::NextColumn();
-    // Drag Source for BID Price
-    ImGui::Selectable(std::to_string(level.price).c_str(), false,
-                      ImGuiSelectableFlags_SpanAllColumns);
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
-      ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
-      ImGui::Text("Price: %.2f", level.price);
-      ImGui::EndDragDropSource();
+    // Render Bids (Buy)
+    int bid_count = std::min((int)orderbook.bids.size(), MAX_LEVELS);
+    for (int i = 0; i < bid_count; ++i) {
+      const auto &level = orderbook.bids[i];
+      ImGui::TableNextRow();
+
+      // 1. Bid Size (with Bar)
+      ImGui::TableSetColumnIndex(0);
+      {
+        // Draw bar from right to left? Standard is Left or Right aligned.
+        // Image 1 implies Right aligned for Bid? No, standard is bars grow from
+        // center spine (Price). But here Columns are separated. Let's do
+        // Standard Left-to-Right for now, or Right-to-Left if it looks better
+        // next to Price. Let's do Right-to-Left for Bid to "point" to Price.
+        float width = ImGui::GetContentRegionAvail().x;
+        float bar_width = width * (float)(level.size / max_vol);
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(pos.x + width - bar_width, pos.y),
+            ImVec2(pos.x + width,
+                   pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(ImVec4(colors.accent_green.x,
+                                      colors.accent_green.y,
+                                      colors.accent_green.z, 0.2f)));
+
+        // Text Right Aligned
+        auto text = std::format("{:.4f}", level.size);
+        float text_width = ImGui::CalcTextSize(text.c_str()).x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - text_width);
+        ImGui::TextUnformatted(text.c_str());
+      }
+
+      // 2. Sold
+      ImGui::TableSetColumnIndex(1);
+
+      // 3. Price
+      ImGui::TableSetColumnIndex(2);
+      float cursor_check =
+          ImGui::GetCursorPosX() +
+          (ImGui::GetContentRegionAvail().x -
+           ImGui::CalcTextSize(std::to_string(level.price).c_str()).x) *
+              0.5f;
+      ImGui::SetCursorPosX(cursor_check);
+
+      ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
+                        ImGuiSelectableFlags_SpanAllColumns);
+      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("PRICE_LEVEL", &level.price, sizeof(double));
+        ImGui::Text("Price: %.2f", level.price);
+        ImGui::EndDragDropSource();
+      }
+      ImGui::SameLine();
+      ImGui::TextColored(colors.accent_green, "%.2f",
+                         level.price); // Green for Bid Price
+
+      // 4. Bought
+      ImGui::TableSetColumnIndex(3);
+      // 5. Ask (Empty)
+      ImGui::TableSetColumnIndex(4);
+      // 6. Delta
+      ImGui::TableSetColumnIndex(5);
+      // 7. Vol
+      ImGui::TableSetColumnIndex(6);
     }
-    ImGui::SameLine();
-    ImGui::TextColored(colors.accent_green, "%.4f", level.price);
-    ImGui::NextColumn();
-    ImGui::NextColumn();
-  }
 
-  ImGui::Columns(1);
+    ImGui::EndTable();
+  }
 }
 
 void OrderbookPanel::render_market_depth_chart(

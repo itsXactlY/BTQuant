@@ -2,133 +2,95 @@
 
 #include <array>
 #include <atomic>
-#include <concepts>
-#include <cstddef> // fix size_t
 #include <cstdint>
-#include <new>
-#include <span>
-
-// ============================================================================
-// AGENT 1: PROTOCOL DESIGNER
-// MISSION: Zero-Latency, Lock-Free Shared Memory Layout (V3)
-// ============================================================================
+#include <limits>
 
 namespace HotSpine::V3 {
 
-// Alignment Constants to prevent False Sharing (Cache Coherence)
-constexpr std::size_t CACHE_LINE_SIZE = 64;
+// =========================================================================================
+// 1.1 Atomic Primitives (The SeqLock)
+// =========================================================================================
+struct SeqLock {
+  std::atomic<uint64_t> seq{0};
 
-// ------------------------------------------------------------------------
-// atomic_seq_lock: Zero-Mutex Concurrency
-// Writer: Increment to ODD (locking), Update, Increment to EVEN (release).
-// Reader: Read seq (must be even), Read Data, Re-read seq. Retry if diff.
-// ------------------------------------------------------------------------
-struct alignas(CACHE_LINE_SIZE) AtomicSeqLock {
-  std::atomic<uint64_t> seq_{0};
-
-  // Writer Side
-  void begin_write() {
-    uint64_t s = seq_.load(std::memory_order_relaxed);
-    seq_.store(s + 1, std::memory_order_release); // Make ODD
-    std::atomic_signal_fence(std::memory_order_acq_rel);
-  }
-
-  void end_write() {
-    std::atomic_signal_fence(std::memory_order_acq_rel);
-    uint64_t s = seq_.load(std::memory_order_relaxed);
-    seq_.store(s + 1, std::memory_order_release); // Make EVEN
-  }
-
-  // Reader Side helper (Non-blocking)
-  // returns true if snapshot is consistent
-  template <typename Func> bool read_optimistic(Func &&read_op) const {
-    uint64_t s1 = seq_.load(std::memory_order_acquire);
-    if (s1 & 1)
-      return false; // Locked by writer
-
-    read_op(); // Perform copy/read
-
+  void write_begin() {
+    // Increment to odd
+    seq.fetch_add(1, std::memory_order_release);
     std::atomic_thread_fence(std::memory_order_acquire);
-    uint64_t s2 = seq_.load(std::memory_order_relaxed);
-    return s1 == s2;
+  }
+
+  void write_end() {
+    std::atomic_thread_fence(std::memory_order_release);
+    // Increment to even
+    seq.fetch_add(1, std::memory_order_release);
+  }
+
+  uint64_t read_begin() const { return seq.load(std::memory_order_acquire); }
+
+  bool read_retry(uint64_t start_seq) const {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    return (start_seq % 2 != 0) ||
+           (seq.load(std::memory_order_relaxed) != start_seq);
   }
 };
 
-// ------------------------------------------------------------------------
-// VolumeNode: 16 Bytes Packed
-// Represents a single price level's volume in the footprint
-// ------------------------------------------------------------------------
+// =========================================================================================
+// 1.2 Data Atoms (The "Pixel")
+// =========================================================================================
 struct alignas(16) VolumeNode {
-  double price;  // 8 bytes
-  double volume; // 8 bytes
+  float buy_vol;        // 4B
+  float sell_vol;       // 4B
+  uint16_t trade_count; // 2B
+  uint16_t tpo_bits;    // 2B - Bitmask for 30min brackets (0-15)
+  uint8_t padding[4];   // 4B
 };
-static_assert(sizeof(VolumeNode) == 16, "VolumeNode must be 16 bytes");
-static_assert(std::is_standard_layout_v<VolumeNode>);
+static_assert(sizeof(VolumeNode) == 16, "VolumeNode size mismatch");
 
-// ------------------------------------------------------------------------
-// ClusterColumn: The Viewport (Render Window)
-// Fixed-size array representing the visible price ladder or TPO profile
-// This is valid POD (Plain Old Data) for direct GPU upload or ImGui render
-// ------------------------------------------------------------------------
+// =========================================================================================
+// 1.3 The Viewport (The Render Window)
+// =========================================================================================
 constexpr std::size_t VIEWPORT_ROWS = 256;
 
-struct alignas(CACHE_LINE_SIZE) ClusterColumn {
-  uint64_t timestamp_us;
-  uint32_t symbol_id;
-  uint32_t active_rows; // How many rows are actually populated
+struct alignas(64) ClusterColumn {
+  int64_t timestamp_us;
+  double open;
+  double high;
+  double low;
+  double close;
+  int64_t base_tick_index; // The absolute price index of row 0
+  double tick_size;
 
-  // High/Low range for this column
-  double high_price;
-  double low_price;
+  VolumeNode rows[VIEWPORT_ROWS]; // The visual rows
+};
+// Size check: 8 + 8*4 + 8 + 8 + 16*256 = 56 + 4096 = 4152 bytes.
+// alignas(64) pads it to multiple of 64. 4152 / 64 = 64.875 -> 4160 bytes.
+
+struct alignas(64) HeatmapBin {
+  int64_t price_tick_index;
   double total_volume;
-  double delta; // Buy Vol - Sell Vol
-
-  // The Render Data
-  std::array<VolumeNode, VIEWPORT_ROWS> rows;
+  uint32_t order_count;
+  uint32_t padding;
 };
 
-// ------------------------------------------------------------------------
-// SharedMemoryLayoutV3: The Ring Buffer
-// 1024 Columns. Reader chases Head.
-// ------------------------------------------------------------------------
-constexpr std::size_t RING_BUFFER_SIZE = 1024;
-
-struct alignas(CACHE_LINE_SIZE) SharedMemoryLayoutV3 {
-  // Control Block
-  static constexpr uint64_t MAGIC = 0x484F5433; // "HOT3" in ASCII
-  uint64_t magic;
-  uint64_t version;
-
-  alignas(CACHE_LINE_SIZE) AtomicSeqLock header_lock;
-  std::atomic<uint64_t> head_index{0}; // Monotonically increasing
-
-  // Data Block
-  // We do not lock individual slots; we rely on the head_index and
-  // the fact that we won't wrap around fast enough to corrupt the
-  // reader's specific slot before they are done (or they detect tear).
-  // For strict correctness, each slot can have its own SeqLock if needed,
-  // but for high-throughput ring buffers, a single head update is often
-  // sufficient IF the reader is fast. However, to satisfy directives:
-  // "Implement the atomic SeqLock mechanism", we will embed a SeqLock PER SLOT
-  // to allow random access reading of history without fearing overwritten data
-  // during the read.
-
-  struct Slot {
-    alignas(CACHE_LINE_SIZE) AtomicSeqLock seq_lock;
-    ClusterColumn data;
+// =========================================================================================
+// 1.4 The Global Layout
+// =========================================================================================
+struct SharedMemoryLayoutV3 {
+  struct Header {
+    uint32_t magic; // 0x42545133 "BTQ3"
+    uint32_t padding;
+    SeqLock global_lock;
+    std::atomic<uint64_t> head_index;
+    uint8_t reserved[32]; // Padding to align body
   };
 
-  std::array<Slot, RING_BUFFER_SIZE> buffer;
+  Header header;
 
-  // Helper to get slot
-  Slot &get_slot(uint64_t index) { return buffer[index % RING_BUFFER_SIZE]; }
-
-  const Slot &get_slot(uint64_t index) const {
-    return buffer[index % RING_BUFFER_SIZE];
-  }
+  // Body
+  ClusterColumn history[1024]; // Ring buffer
+  HeatmapBin dom[512];         // Aggregated DOM
 };
 
-// Safety Checks
-static_assert(std::is_standard_layout_v<SharedMemoryLayoutV3>);
-
+static_assert(sizeof(VolumeNode) == 16);
+static_assert(alignof(ClusterColumn) == 64);
 } // namespace HotSpine::V3

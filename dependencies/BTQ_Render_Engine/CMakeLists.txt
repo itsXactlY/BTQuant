@@ -22,13 +22,18 @@ include(FetchContent)
 FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1)
 FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git GIT_TAG v3.11.2)
 FetchContent_Declare(concurrentqueue GIT_REPOSITORY https://github.com/cameron314/concurrentqueue.git GIT_TAG v1.0.4)
-FetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.14.0)
-FetchContent_Declare(googlebenchmark GIT_REPOSITORY https://github.com/google/benchmark.git GIT_TAG v1.8.3)
-FetchContent_MakeAvailable(glm json concurrentqueue googletest googlebenchmark)
+
+# ImGui Docking Branch
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui.git GIT_TAG docking)
+
+# ImPlot
+FetchContent_Declare(implot GIT_REPOSITORY https://github.com/epezent/implot.git GIT_TAG master)
+
+FetchContent_MakeAvailable(glm json concurrentqueue imgui implot)
 
 # Path Configuration
-set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
-set(IMPLOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui)
+set(IMGUI_DIR ${imgui_SOURCE_DIR})
+set(IMPLOT_DIR ${implot_SOURCE_DIR})
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SPIRV_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders/spirv)
 
@@ -41,8 +46,6 @@ set(COMPILED_SHADERS "")
 foreach(SHADER ${SHADERS})
     get_filename_component(FILE_NAME ${SHADER} NAME_WE)
     get_filename_component(FILE_EXT ${SHADER} LAST_EXT)
-    # Remove the dot from extension (not used currently)
-    # string(REPLACE "." "" FILE_EXT_NO_DOT ${FILE_EXT})
     
     set(SPIRV_FILE "${SPIRV_DIR}/${FILE_NAME}.spv")
     
@@ -56,7 +59,7 @@ foreach(SHADER ${SHADERS})
     list(APPEND COMPILED_SHADERS ${SPIRV_FILE})
 endforeach()
 
-# Explicit Source Listing (Senior HFT Requirement)
+# Explicit Source Listing (Fetching from valid source dirs now)
 set(LIB_SOURCES
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
@@ -117,15 +120,15 @@ set(DASHBOARD_SOURCES
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp
-    # NOTE: src/ui/advanced_ui_features.cpp excluded - contains duplicate class definitions
-    #       already defined in vulkan_dashboard_advanced.hpp and theme_manager.hpp
 )
 
 add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
 
 target_include_directories(dashboard_advanced PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
@@ -159,77 +162,6 @@ add_dependencies(dashboard_advanced compile_shaders)
 # Install compiled shaders
 install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
 
-# ============================================================================
-# Trading Terminal Executable
-# ============================================================================
-
-set(TRADING_TERMINAL_SOURCES
-    src/main_trading_terminal.cpp
-    src/vulkan_dashboard_advanced.cpp
-    src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
-    src/components/quant_workspace_component.cpp
-    src/components/panel_base.cpp
-    src/components/chart_panel.cpp
-    src/components/metrics_panel.cpp
-    src/components/panel_manager.cpp
-    src/components/chart_manager.cpp
-    src/components/indicator_renderer.cpp
-    src/components/hierarchical_selector.cpp
-    src/components/orderbook_panel.cpp
-    src/components/alerts_panel.cpp
-    src/components/status_bar_panel.cpp
-    src/components/watchlist_panel.cpp
-    src/components/tape_panel.cpp
-    src/components/volume_profile_panel.cpp
-    src/components/depth_chart_panel.cpp
-    src/components/footprint_panel.cpp
-    src/components/tpo_panel.cpp
-    src/components/dom_surface_panel.cpp
-    src/components/MarketMicrostructureRenderer.cpp
-    src/components/VulkanSynchronization.cpp
-    src/components/realtime_dashboard_component.cpp
-    src/components/correlation_heatmap_component.cpp
-    src/components/symbol_selector.cpp
-    src/trading/trading_interface.cpp
-    src/trading/order_manager.cpp
-    src/trading/position_manager.cpp
-    src/trading/risk_assessment.cpp
-    src/data/symbol_registry.cpp
-    src/optimization/performance_optimizer.cpp
-    src/system/GPUMemoryManager.cpp
-    src/components/theme_manager.cpp
-    src/components/interaction_manager.cpp
-    src/config/dashboard_config.cpp
-    src/data/market_data_processor.cpp
-    src/data/symbol_manager.cpp
-    src/monitoring/performance_monitor.cpp
-    src/analytics/technical_analysis.cpp
-    src/analytics/trading_analytics.cpp
-    src/layout/dashboard_layout_manager.cpp
-    src/data/ui_data_manager.cpp
-    src/system/system_optimizer.cpp
-)
-
-add_executable(btquant_terminal ${TRADING_TERMINAL_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
-
-target_include_directories(btquant_terminal PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-)
-
-target_link_libraries(btquant_terminal PRIVATE
-    Vulkan::Vulkan
-    glfw
-    dl
-    pthread
-)
-
 # Optimization
 target_compile_definitions(btquant_terminal PRIVATE IMGUI_ENABLE_DOCKING)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -245,105 +177,3 @@ target_compile_definitions(btquant_terminal PRIVATE ENABLE_PERFORMANCE_MONITORIN
 # Shader compilation target
 add_dependencies(btquant_terminal compile_shaders)
 
-# # ============================================================================
-# # Tests
-# # ============================================================================
-
-# # Unit Tests
-# add_executable(btquant_engine_tests
-#     tests/test_hotspine_data_bridge.cpp
-#     tests/test_market_data_processor.cpp
-#     src/data/market_data_processor.cpp
-#     src/data/hotspine_data_bridge.cpp
-#     src/data/symbol_registry.cpp
-# )
-
-# target_include_directories(btquant_engine_tests PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/include
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src
-#     ${glm_SOURCE_DIR}
-#     ${json_SOURCE_DIR}/include
-#     ${concurrentqueue_SOURCE_DIR}
-#     ${googletest_SOURCE_DIR}/googletest/include
-#     ${googletest_SOURCE_DIR}/googlemock/include
-# )
-
-# target_link_libraries(btquant_engine_tests PRIVATE
-#     gtest_main
-#     gmock_main
-#     pthread
-# )
-
-# # Performance Benchmarks
-# add_executable(btquant_engine_benchmarks
-#     tests/benchmark_performance.cpp
-#     src/data/market_data_processor.cpp
-# )
-
-# target_include_directories(btquant_engine_benchmarks PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/include
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src
-#     ${glm_SOURCE_DIR}
-#     ${json_SOURCE_DIR}/include
-#     ${concurrentqueue_SOURCE_DIR}
-#     ${benchmark_SOURCE_DIR}/include
-# )
-
-# target_link_libraries(btquant_engine_benchmarks PRIVATE
-#     benchmark::benchmark_main
-#     pthread
-# )
-
-# # Trading Terminal Performance Benchmarks
-# add_executable(btquant_trading_terminal_benchmarks
-#     tests/benchmark_trading_terminal.cpp
-#     src/components/dom_surface_panel.cpp
-#     src/components/footprint_panel.cpp
-#     src/components/chart_panel.cpp
-#     src/components/volume_profile_panel.cpp
-#     src/components/tpo_panel.cpp
-#     src/components/orderbook_panel.cpp
-#     src/components/depth_chart_panel.cpp
-#     src/components/MarketMicrostructureRenderer.cpp
-#     src/components/VulkanSynchronization.cpp
-#     src/data/hotspine_data_bridge.cpp
-#     src/data/market_data_processor.cpp
-#     src/data/symbol_registry.cpp
-#     src/monitoring/performance_monitor.cpp
-#     src/optimization/performance_optimizer.cpp
-#     src/system/GPUMemoryManager.cpp
-#     src/components/theme_manager.cpp
-#     src/components/interaction_manager.cpp
-#     src/config/dashboard_config.cpp
-#     src/layout/dashboard_layout_manager.cpp
-#     src/data/ui_data_manager.cpp
-#     src/system/system_optimizer.cpp
-#     src/analytics/trading_analytics.cpp
-#     src/trading/trading_interface.cpp
-# )
-
-# target_include_directories(btquant_trading_terminal_benchmarks PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/include
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src
-#     ${glm_SOURCE_DIR}
-#     ${json_SOURCE_DIR}/include
-#     ${concurrentqueue_SOURCE_DIR}
-#     ${benchmark_SOURCE_DIR}/include
-#     ${Vulkan_INCLUDE_DIRS}
-# )
-
-# target_link_libraries(btquant_trading_terminal_benchmarks PRIVATE
-#     benchmark::benchmark_main
-#     Vulkan::Vulkan
-#     pthread
-#     dl
-# )
-
-# # Test targets
-# add_test(NAME BTQuantEngineUnitTests COMMAND btquant_engine_tests)
-# add_test(NAME BTQuantEngineBenchmarks COMMAND btquant_engine_benchmarks)
-# add_test(NAME BTQuantTradingTerminalBenchmarks COMMAND btquant_trading_terminal_benchmarks)
-
-# # Enable testing
-# enable_testing()

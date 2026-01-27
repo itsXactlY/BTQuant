@@ -185,17 +185,6 @@ void WatchlistPanel::render_filter_input() {
 }
 
 void WatchlistPanel::render_table_header() {
-  ImGuiTableSortSpecs *sorts_specs = ImGui::TableGetSortSpecs();
-  if (sorts_specs && sorts_specs->SpecsDirty) {
-    if (sorts_specs->SpecsCount > 0) {
-      const auto &spec = sorts_specs->Specs[0];
-      sort_column_ = spec.ColumnIndex;
-      sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
-      sort_watchlist();
-    }
-    sorts_specs->SpecsDirty = false;
-  }
-
   ImGui::TableSetupColumn("Symbol",
                           ImGuiTableColumnFlags_DefaultSort |
                               ImGuiTableColumnFlags_WidthFixed,
@@ -213,6 +202,17 @@ void WatchlistPanel::render_table_header() {
   ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableSetupColumn("Last Update", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableHeadersRow();
+
+  ImGuiTableSortSpecs *sorts_specs = ImGui::TableGetSortSpecs();
+  if (sorts_specs && sorts_specs->SpecsDirty) {
+    if (sorts_specs->SpecsCount > 0) {
+      const auto &spec = sorts_specs->Specs[0];
+      sort_column_ = spec.ColumnIndex;
+      sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
+      sort_watchlist();
+    }
+    sorts_specs->SpecsDirty = false;
+  }
 }
 
 void WatchlistPanel::render_table_row(const WatchlistEntry &entry) {

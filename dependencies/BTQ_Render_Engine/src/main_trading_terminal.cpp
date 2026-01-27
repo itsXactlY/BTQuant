@@ -228,7 +228,8 @@ void render_main_menu() {
 }
 
 void render_dockspace() {
-  // Docking code disabled due to missing headers
+  ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(),
+                               ImGuiDockNodeFlags_PassthruCentralNode);
   render_main_menu();
 }
 
@@ -358,6 +359,11 @@ bool initialize_application() {
   // Initialize ThemeManager AFTER dashboard (ImGui context created)
   ThemeManager::getInstance().initialize();
   ThemeManager::getInstance().applyTheme(ThemeType::DarkNeon);
+
+  // Enable Docking
+  ImGuiIO &io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
   std::cout << "✓ Theme & Interaction managers initialized" << std::endl;
 
   // Initialize panel manager

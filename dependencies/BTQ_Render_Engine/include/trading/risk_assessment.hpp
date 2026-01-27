@@ -36,6 +36,9 @@ public:
     double leverage_risk = 0;
     double volatility_risk = 0;
     double liquidity_risk = 0;
+    double daily_loss = 0;
+    double drawdown = 0;
+    double leverage = 0;
   };
 
   struct RiskAlert {
@@ -43,8 +46,9 @@ public:
     Severity severity;
     std::string message;
     std::string symbol;
+    std::string metric_name;
     double current_value;
-    double limit_value;
+    double threshold_value;
     uint64_t timestamp;
     bool acknowledged;
   };
@@ -60,6 +64,8 @@ public:
 
   RiskAssessment();
   void set_risk_limits(const RiskLimits &limits);
+  RiskLimits get_risk_limits() const;
+  RiskMetrics get_risk_metrics() const;
   RiskMetrics calculate_risk_metrics(
       const PositionManager::PortfolioSummary &summary,
       const std::vector<PositionManager::Position> &positions);
@@ -71,6 +77,10 @@ public:
   validate_order_risk(const OrderManager::Order &order,
                       const PositionManager::PortfolioSummary &portfolio,
                       const std::vector<PositionManager::Position> &positions);
+  bool validate_order(const OrderManager::Order &order,
+                     const PositionManager::Position &position,
+                     const RiskMetrics &metrics);
+  bool is_risk_compliant(const RiskMetrics &metrics) const;
   RiskReport
   generate_risk_report(const PositionManager::PortfolioSummary &portfolio,
                        const std::vector<PositionManager::Position> &positions);

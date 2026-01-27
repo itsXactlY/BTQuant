@@ -1,4 +1,4 @@
-#pragma once
+#pragma once 
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -6,10 +6,11 @@
 #include "indicator_renderer.hpp"
 #include "panel_base.hpp"
 #include <memory>
+#include <vector>
 
 namespace BTQuant {
 
-// Indicator configuration for the chart panel
+// Indicator configuration for chart panel
 struct IndicatorConfig {
   bool show_sma_10 = false;
   bool show_sma_20 = false;
@@ -21,6 +22,34 @@ struct IndicatorConfig {
   bool show_macd = false;
   bool show_bollinger = false;
   bool show_volume_profile = true;
+  bool show_fibonacci = false;
+  bool show_crosshair_info = true;
+  
+  // Fibonacci configuration
+  double fib_start_price = 0.0;
+  double fib_end_price = 0.0;
+  
+  // RSI configuration
+  int rsi_period = 14;
+  double rsi_overbought = 70.0;
+  double rsi_oversold = 30.0;
+  
+  // Bollinger Bands configuration
+  int bollinger_period = 20;
+  double bollinger_std_dev = 2.0;
+  
+  // MACD configuration
+  int macd_fast_period = 12;
+  int macd_slow_period = 26;
+  int macd_signal_period = 9;
+};
+
+// Fibonacci Retracement Level
+struct FibonacciLevel {
+  double price;
+  double ratio;
+  const char* label;
+  ImU32 color;
 };
 
 class ChartPanel : public PanelBase {
@@ -62,6 +91,29 @@ private:
   void render_indicator_selector();
   void render_instrument_chart(const ChartInstance &chart);
   void render_candlestick(const ChartInstance &chart);
+  
+  // Indicator rendering methods
+  void render_sma_lines(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_ema_lines(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_bollinger_bands(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_rsi_indicator(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_macd_indicator(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_fibonacci_levels(const ChartInstance &chart, size_t start_idx, size_t end_idx);
+  void render_crosshair_info(const ChartInstance &chart, double mouse_x, double mouse_y);
+  
+  // Indicator calculation helpers
+  std::vector<double> calculate_sma(const std::vector<float>& prices, int period);
+  std::vector<double> calculate_ema(const std::vector<float>& prices, int period);
+  std::vector<double> calculate_ema(const std::vector<double>& prices, int period);
+  std::vector<double> calculate_bollinger_upper(const std::vector<float>& prices, int period, double std_dev);
+  std::vector<double> calculate_bollinger_lower(const std::vector<float>& prices, int period, double std_dev);
+  std::vector<double> calculate_rsi(const std::vector<float>& prices, int period);
+  std::vector<double> calculate_macd_line(const std::vector<float>& prices, int fast, int slow);
+  std::vector<double> calculate_macd_signal(const std::vector<double>& macd_line, int signal);
+  std::vector<double> calculate_macd_histogram(const std::vector<double>& macd_line, const std::vector<double>& signal);
+  
+  // Fibonacci calculation
+  std::vector<FibonacciLevel> calculate_fibonacci_levels(double start_price, double end_price);
 };
 
 } // namespace BTQuant

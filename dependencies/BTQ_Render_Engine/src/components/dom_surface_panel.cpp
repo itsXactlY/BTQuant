@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <numeric>
+#include <chrono>
 
 namespace BTQuant {
 
@@ -39,6 +41,9 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
   // Clear existing data to prevent mixing symbols
   heatmap_data_.clear();
+  large_order_markers_.clear();
+  recent_order_sizes_.clear();
+  median_order_size_ = 0.0;
   markDirty();
 }
 
@@ -136,9 +141,206 @@ void DomSurfacePanel::updateHeatmapData() {
   scale_max_ = max_vol > 0 ? max_vol : 1.0;
 }
 
+void DomSurfacePanel::updateLargeOrderMarkers() {
+  if (current_symbol_id_ == 0 || !processor_)
+    return;
+
+  // Get latest orderbook for large order detection
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt)
+    return;
+
+  const auto &orderbook = *orderbook_opt;
+
+  // Calculate median order size from recent orderbook levels
+  calculateMedianOrderSize();
+
+  // Detect large orders in the latest orderbook
+  detectLargeOrders(orderbook);
+
+  // Cleanup old markers (fade-out)
+  if (enable_fade_out_) {
+    cleanupOldMarkers();
+  }
+}
+
+void DomSurfacePanel::calculateMedianOrderSize() {
+  if (recent_order_sizes_.empty()) {
+    median_order_size_ = 1.0; // Default fallback
+    return;
+  }
+
+  // Sort and find median
+  std::vector<double> sorted_sizes(recent_order_sizes_.begin(), 
+                                  recent_order_sizes_.end());
+  std::sort(sorted_sizes.begin(), sorted_sizes.end());
+
+  size_t n = sorted_sizes.size();
+  if (n % 2 == 0) {
+    median_order_size_ = (sorted_sizes[n/2 - 1] + sorted_sizes[n/2]) / 2.0;
+  } else {
+    median_order_size_ = sorted_sizes[n/2];
+  }
+}
+
+void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& orderbook) {
+  // Collect all order sizes for median calculation
+  for (const auto &level : orderbook.bids) {
+    recent_order_sizes_.push_back(level.size);
+  }
+  for (const auto &level : orderbook.asks) {
+    recent_order_sizes_.push_back(level.size);
+  }
+
+  // Keep only the last MEDIAN_WINDOW_SIZE sizes
+  while (recent_order_sizes_.size() > MEDIAN_WINDOW_SIZE) {
+    recent_order_sizes_.pop_front();
+  }
+
+  // Detect large orders (threshold: >10x median)
+  double threshold = large_order_threshold_ * median_order_size_;
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+
+  // Check bids
+  for (const auto &level : orderbook.bids) {
+    if (level.size > threshold) {
+      // Check if we already have a marker at this price level
+      bool exists = false;
+      for (const auto &marker : large_order_markers_) {
+        if (std::abs(marker.price - level.price) < 0.0001) {
+          exists = true;
+          break;
+        }
+      }
+
+      if (!exists && large_order_markers_.size() < static_cast<size_t>(max_large_order_markers_)) {
+        // Calculate position: X = current time (rightmost), Y = price
+        double x = static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
+        double y = level.price;
+
+        LargeOrderMarker marker(x, y, level.size, level.price, true, current_time);
+        marker.radius = calculateMarkerRadius(level.size);
+        large_order_markers_.push_back(marker);
+      }
+    }
+  }
+
+  // Check asks
+  for (const auto &level : orderbook.asks) {
+    if (level.size > threshold) {
+      // Check if we already have a marker at this price level
+      bool exists = false;
+      for (const auto &marker : large_order_markers_) {
+        if (std::abs(marker.price - level.price) < 0.0001) {
+          exists = true;
+          break;
+        }
+      }
+
+      if (!exists && large_order_markers_.size() < static_cast<size_t>(max_large_order_markers_)) {
+        // Calculate position: X = current time (rightmost), Y = price
+        double x = static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
+        double y = level.price;
+
+        LargeOrderMarker marker(x, y, level.size, level.price, false, current_time);
+        marker.radius = calculateMarkerRadius(level.size);
+        large_order_markers_.push_back(marker);
+      }
+    }
+  }
+}
+
+void DomSurfacePanel::cleanupOldMarkers() {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+
+  // Remove markers older than FADE_OUT_DURATION_US
+  large_order_markers_.erase(
+      std::remove_if(large_order_markers_.begin(), large_order_markers_.end(),
+          [current_time](const LargeOrderMarker& marker) {
+            return (current_time - marker.timestamp) > FADE_OUT_DURATION_US;
+          }),
+      large_order_markers_.end());
+}
+
+float DomSurfacePanel::calculateMarkerRadius(double order_size) const {
+  if (median_order_size_ <= 0.0)
+    return BASE_RADIUS;
+
+  // Calculate radius: base_radius * sqrt(order_size / median_size)
+  float radius = BASE_RADIUS * std::sqrt(order_size / median_order_size_);
+
+  // Clamp to min/max range
+  return std::clamp(radius, MIN_RADIUS, MAX_RADIUS);
+}
+
+ImU32 DomSurfacePanel::getMarkerColor(const LargeOrderMarker& marker) const {
+  // Calculate alpha based on fade-out (if enabled)
+  float alpha = 0.7f; // Default alpha
+  if (enable_fade_out_) {
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    uint64_t age = current_time - marker.timestamp;
+    float fade_ratio = 1.0f - static_cast<float>(age) / static_cast<float>(FADE_OUT_DURATION_US);
+    alpha = std::clamp(fade_ratio * 0.8f, 0.3f, 0.8f);
+  }
+
+  // Color: Green for Bids, Red for Asks
+  if (marker.is_bid) {
+    return IM_COL32(0, 255, 0, static_cast<int>(alpha * 255)); // Green
+  } else {
+    return IM_COL32(255, 0, 0, static_cast<int>(alpha * 255)); // Red
+  }
+}
+
+std::string DomSurfacePanel::getMarkerTooltip(const LargeOrderMarker& marker) const {
+  std::string side = marker.is_bid ? "Bid" : "Ask";
+  return std::format("Whale {}: {:.2f} @ ${:.2f}", side, marker.size, marker.price);
+}
+
+void DomSurfacePanel::renderLargeOrderMarkers() {
+  if (large_order_markers_.empty())
+    return;
+
+  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 1.0f);
+
+  // Get plot area for manual circle rendering
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+
+  // Render each large order marker as a circle
+  for (const auto &marker : large_order_markers_) {
+    ImU32 color = getMarkerColor(marker);
+    ImU32 border_color = IM_COL32(255, 255, 255, 230); // White border
+
+    // Convert plot coordinates to pixel coordinates
+    ImVec2 pixel_pos = ImPlot::PlotToPixels(marker.x, marker.y);
+
+    // Draw filled circle
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    if (draw_list) {
+      draw_list->AddCircleFilled(pixel_pos, marker.radius, color, 32);
+      draw_list->AddCircle(pixel_pos, marker.radius, border_color, 32, 1.0f);
+
+      // Check for hover and show tooltip
+      ImVec2 mouse_pos = ImGui::GetMousePos();
+      float distance = std::sqrt(
+          std::pow(mouse_pos.x - pixel_pos.x, 2) + 
+          std::pow(mouse_pos.y - pixel_pos.y, 2));
+
+      if (distance < marker.radius) {
+        ImGui::SetTooltip("%s", getMarkerTooltip(marker).c_str());
+      }
+    }
+  }
+
+  ImPlot::PopStyleVar();
+}
+
 void DomSurfacePanel::render() {
   if (consumeDirty()) {
     updateHeatmapData();
+    updateLargeOrderMarkers();
   }
 
   begin_panel_window();
@@ -156,7 +358,7 @@ void DomSurfacePanel::render() {
     ImPlot::SetupAxes("Time Step", "Price");
     ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_NoTickLabels);
 
-    // Always fit axes to data bounds (fills the plot area)
+    // Always fit axes to data bounds (fills plot area)
     ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
                             ImPlotCond_Always);
     ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
@@ -175,6 +377,9 @@ void DomSurfacePanel::render() {
       ImPlot::PopColormap();
     }
 
+    // Render Large Order Markers OVER the heatmap
+    renderLargeOrderMarkers();
+
     ImPlot::EndPlot();
   }
 
@@ -185,6 +390,7 @@ void DomSurfacePanel::render() {
                        "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
     ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
+    ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(), median_order_size_);
   }
 
   end_panel_window();

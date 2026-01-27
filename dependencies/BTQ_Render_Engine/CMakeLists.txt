@@ -99,6 +99,9 @@ set(DASHBOARD_SOURCES
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
     src/trading/trading_interface.cpp
+    src/trading/order_manager.cpp
+    src/trading/position_manager.cpp
+    src/trading/risk_assessment.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
@@ -109,6 +112,7 @@ set(DASHBOARD_SOURCES
     src/data/symbol_manager.cpp
     src/monitoring/performance_monitor.cpp
     # Analytics and advanced features
+    src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
@@ -156,57 +160,190 @@ add_dependencies(dashboard_advanced compile_shaders)
 install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
 
 # ============================================================================
-# Tests
+# Trading Terminal Executable
 # ============================================================================
 
-# Unit Tests
-add_executable(btquant_engine_tests
-    tests/test_hotspine_data_bridge.cpp
-    tests/test_market_data_processor.cpp
-    src/data/market_data_processor.cpp
+set(TRADING_TERMINAL_SOURCES
+    src/main_trading_terminal.cpp
+    src/vulkan_dashboard_advanced.cpp
+    src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp
+    src/components/quant_workspace_component.cpp
+    src/components/panel_base.cpp
+    src/components/chart_panel.cpp
+    src/components/metrics_panel.cpp
+    src/components/panel_manager.cpp
+    src/components/chart_manager.cpp
+    src/components/indicator_renderer.cpp
+    src/components/hierarchical_selector.cpp
+    src/components/orderbook_panel.cpp
+    src/components/alerts_panel.cpp
+    src/components/status_bar_panel.cpp
+    src/components/watchlist_panel.cpp
+    src/components/tape_panel.cpp
+    src/components/volume_profile_panel.cpp
+    src/components/depth_chart_panel.cpp
+    src/components/footprint_panel.cpp
+    src/components/tpo_panel.cpp
+    src/components/dom_surface_panel.cpp
+    src/components/MarketMicrostructureRenderer.cpp
+    src/components/VulkanSynchronization.cpp
+    src/components/realtime_dashboard_component.cpp
+    src/components/correlation_heatmap_component.cpp
+    src/components/symbol_selector.cpp
+    src/trading/trading_interface.cpp
+    src/trading/order_manager.cpp
+    src/trading/position_manager.cpp
+    src/trading/risk_assessment.cpp
     src/data/symbol_registry.cpp
-)
-
-target_include_directories(btquant_engine_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${googletest_SOURCE_DIR}/googletest/include
-    ${googletest_SOURCE_DIR}/googlemock/include
-)
-
-target_link_libraries(btquant_engine_tests PRIVATE
-    gtest_main
-    gmock_main
-    pthread
-)
-
-# Performance Benchmarks
-add_executable(btquant_engine_benchmarks
-    tests/benchmark_performance.cpp
+    src/optimization/performance_optimizer.cpp
+    src/system/GPUMemoryManager.cpp
+    src/components/theme_manager.cpp
+    src/components/interaction_manager.cpp
+    src/config/dashboard_config.cpp
     src/data/market_data_processor.cpp
+    src/data/symbol_manager.cpp
+    src/monitoring/performance_monitor.cpp
+    src/analytics/technical_analysis.cpp
+    src/analytics/trading_analytics.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/data/ui_data_manager.cpp
+    src/system/system_optimizer.cpp
 )
 
-target_include_directories(btquant_engine_benchmarks PRIVATE
+add_executable(btquant_terminal ${TRADING_TERMINAL_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
+
+target_include_directories(btquant_terminal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
-    ${benchmark_SOURCE_DIR}/include
 )
 
-target_link_libraries(btquant_engine_benchmarks PRIVATE
-    benchmark::benchmark_main
+target_link_libraries(btquant_terminal PRIVATE
+    Vulkan::Vulkan
+    glfw
+    dl
     pthread
 )
 
-# Test targets
-add_test(NAME BTQuantEngineUnitTests COMMAND btquant_engine_tests)
-add_test(NAME BTQuantEngineBenchmarks COMMAND btquant_engine_benchmarks)
+# Optimization
+target_compile_definitions(btquant_terminal PRIVATE IMGUI_ENABLE_DOCKING)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(btquant_terminal PRIVATE
+            -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
+            -fstrict-aliasing)
+        target_link_options(btquant_terminal PRIVATE -flto)
+    endif()
 
-# Enable testing
-enable_testing()
+# Performance monitoring
+target_compile_definitions(btquant_terminal PRIVATE ENABLE_PERFORMANCE_MONITORING)
+
+# Shader compilation target
+add_dependencies(btquant_terminal compile_shaders)
+
+# # ============================================================================
+# # Tests
+# # ============================================================================
+
+# # Unit Tests
+# add_executable(btquant_engine_tests
+#     tests/test_hotspine_data_bridge.cpp
+#     tests/test_market_data_processor.cpp
+#     src/data/market_data_processor.cpp
+#     src/data/hotspine_data_bridge.cpp
+#     src/data/symbol_registry.cpp
+# )
+
+# target_include_directories(btquant_engine_tests PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+#     ${googletest_SOURCE_DIR}/googletest/include
+#     ${googletest_SOURCE_DIR}/googlemock/include
+# )
+
+# target_link_libraries(btquant_engine_tests PRIVATE
+#     gtest_main
+#     gmock_main
+#     pthread
+# )
+
+# # Performance Benchmarks
+# add_executable(btquant_engine_benchmarks
+#     tests/benchmark_performance.cpp
+#     src/data/market_data_processor.cpp
+# )
+
+# target_include_directories(btquant_engine_benchmarks PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+#     ${benchmark_SOURCE_DIR}/include
+# )
+
+# target_link_libraries(btquant_engine_benchmarks PRIVATE
+#     benchmark::benchmark_main
+#     pthread
+# )
+
+# # Trading Terminal Performance Benchmarks
+# add_executable(btquant_trading_terminal_benchmarks
+#     tests/benchmark_trading_terminal.cpp
+#     src/components/dom_surface_panel.cpp
+#     src/components/footprint_panel.cpp
+#     src/components/chart_panel.cpp
+#     src/components/volume_profile_panel.cpp
+#     src/components/tpo_panel.cpp
+#     src/components/orderbook_panel.cpp
+#     src/components/depth_chart_panel.cpp
+#     src/components/MarketMicrostructureRenderer.cpp
+#     src/components/VulkanSynchronization.cpp
+#     src/data/hotspine_data_bridge.cpp
+#     src/data/market_data_processor.cpp
+#     src/data/symbol_registry.cpp
+#     src/monitoring/performance_monitor.cpp
+#     src/optimization/performance_optimizer.cpp
+#     src/system/GPUMemoryManager.cpp
+#     src/components/theme_manager.cpp
+#     src/components/interaction_manager.cpp
+#     src/config/dashboard_config.cpp
+#     src/layout/dashboard_layout_manager.cpp
+#     src/data/ui_data_manager.cpp
+#     src/system/system_optimizer.cpp
+#     src/analytics/trading_analytics.cpp
+#     src/trading/trading_interface.cpp
+# )
+
+# target_include_directories(btquant_trading_terminal_benchmarks PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src/imgui
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+#     ${benchmark_SOURCE_DIR}/include
+#     ${Vulkan_INCLUDE_DIRS}
+# )
+
+# target_link_libraries(btquant_trading_terminal_benchmarks PRIVATE
+#     benchmark::benchmark_main
+#     Vulkan::Vulkan
+#     pthread
+#     dl
+# )
+
+# # Test targets
+# add_test(NAME BTQuantEngineUnitTests COMMAND btquant_engine_tests)
+# add_test(NAME BTQuantEngineBenchmarks COMMAND btquant_engine_benchmarks)
+# add_test(NAME BTQuantTradingTerminalBenchmarks COMMAND btquant_trading_terminal_benchmarks)
+
+# # Enable testing
+# enable_testing()

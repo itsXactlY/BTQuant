@@ -47,9 +47,11 @@ public:
 
   PositionManager();
   void update_position(const OrderManager::OrderExecution &execution);
+  void update_market_price(const std::string &symbol, double price);
   void
   update_market_prices(const std::unordered_map<std::string, double> &prices);
   std::vector<Position> get_positions() const;
+  std::vector<Position> get_all_positions() const;
   Position get_position(const std::string &symbol) const;
   PortfolioSummary get_portfolio_summary() const;
   void set_cash_balance(double balance);

@@ -1,111 +1,39 @@
 {
     "grid": {
-        "columns": 3,
+        "columns": 6,
         "rows": 5
     },
     "panels": [
         {
             "grid_height": 1,
-            "grid_width": 5,
-            "grid_x": 0,
-            "grid_y": 3,
-            "title": "Status",
-            "type": 16,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
+            "grid_width": 6,
             "grid_x": 0,
             "grid_y": 0,
-            "title": "Status Bar",
-            "type": 16,
+            "title": "Positions",
+            "type": 7,
+            "visible": false
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 2,
+            "grid_x": 1,
+            "grid_y": 0,
+            "title": "Active Orders",
+            "type": 6,
             "visible": true
         },
         {
             "grid_height": 1,
-            "grid_width": 1,
+            "grid_width": 2,
             "grid_x": 2,
             "grid_y": 0,
-            "title": "Alerts",
-            "type": 9,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 2,
-            "grid_x": 0,
-            "grid_y": 1,
-            "title": "BTC-USDT Chart",
-            "type": 0,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 1,
-            "grid_x": 2,
-            "grid_y": 1,
-            "title": "Depth Chart - ADAUSDT",
-            "type": 15,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 2,
-            "grid_x": 0,
-            "grid_y": 3,
-            "title": "BTC-USDT Orderbook",
-            "type": 10,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 2,
-            "grid_y": 3,
             "title": "Time & Sales",
             "type": 13,
             "visible": true
         },
         {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 0,
-            "grid_y": 0,
-            "title": "DOM Surface",
-            "type": 2,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 2,
-            "grid_y": 4,
-            "title": "Watchlist",
-            "type": 11,
-            "visible": true
-        },
-        {
             "grid_height": 2,
             "grid_width": 2,
-            "grid_x": 0,
-            "grid_y": 0,
-            "title": "Chart",
-            "type": 0,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 0,
-            "grid_y": 0,
-            "title": "DOM Surface",
-            "type": 2,
-            "visible": true
-        },
-        {
-            "grid_height": 2,
-            "grid_width": 1,
             "grid_x": 3,
             "grid_y": 0,
             "title": "Orderbook",
@@ -113,21 +41,21 @@
             "visible": true
         },
         {
-            "grid_height": 2,
+            "grid_height": 1,
             "grid_width": 1,
             "grid_x": 4,
             "grid_y": 0,
-            "title": "Tape",
-            "type": 13,
-            "visible": false
+            "title": "DOM Surface",
+            "type": 2,
+            "visible": true
         },
         {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": 0,
-            "grid_y": 2,
-            "title": "Volume Profile",
-            "type": 14,
+            "grid_height": 3,
+            "grid_width": 4,
+            "grid_x": 5,
+            "grid_y": 0,
+            "title": "BTC/USDT Chart",
+            "type": 0,
             "visible": true
         }
     ]

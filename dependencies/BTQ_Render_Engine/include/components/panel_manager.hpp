@@ -43,6 +43,7 @@ public:
                      int grid_x = -1, int grid_y = -1, int width = 1,
                      int height = 1);
   void remove_panel(uint32_t panel_id);
+  void clear_panels();
   void move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y);
   void resize_panel(uint32_t panel_id, int new_width, int new_height);
   void set_panel_visible(uint32_t panel_id, bool visible);

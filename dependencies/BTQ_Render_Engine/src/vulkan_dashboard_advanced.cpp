@@ -8,6 +8,8 @@
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "performance_monitor.hpp"
+#include <cstdint>
 #include <iostream>
 
 namespace BTQuant {
@@ -156,9 +158,6 @@ void VulkanDashboard::render_frame() {
                           &use_modern_dashboard_)) {
         // Toggle flag
       }
-      if (use_modern_dashboard_ && ImGui::MenuItem("Reset Layout")) {
-        m_modern_dashboard->reset_layout();
-      }
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Tools")) {
@@ -169,8 +168,14 @@ void VulkanDashboard::render_frame() {
       }
       ImGui::EndMenu();
     }
+    if (custom_menubar_callback_) {
+      custom_menubar_callback_();
+    }
     ImGui::EndMainMenuBar();
   }
+
+  // Performance Overlay
+  render_performance_overlay();
 
   // Process updates and UI
   float dt = m_vulkanCore->get_frame_time_ms() / 1000.0f;
@@ -437,6 +442,45 @@ void VulkanDashboard::pollDataToRenderer() {
       m_micro_renderer->updateFootprintClusters(clusters);
     }
   }
+}
+
+void VulkanDashboard::render_performance_overlay() {
+  if (!show_performance_overlay_) {
+    return;
+  }
+
+  ImGui::SetNextWindowPos(ImVec2(10, 40), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
+
+  if (ImGui::Begin("Performance", nullptr,
+                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                       ImGuiWindowFlags_NoDocking |
+                       ImGuiWindowFlags_AlwaysAutoResize)) {
+
+    double fps = g_performance_monitor.get_fps();
+    double frame_time = g_performance_monitor.get_frame_time_ms();
+
+    ImGui::Text("FPS: %.1f", fps);
+    ImGui::Text("Frame Time: %.2f ms", frame_time);
+
+    ImGui::Separator();
+
+    auto metrics = g_performance_monitor.get_metrics();
+    for (const auto &m : metrics) {
+      ImGui::Text("%s: %.2f %s", m.name.c_str(), m.value, m.unit.c_str());
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Symbol: %s", active_symbol_.c_str());
+
+    if (market_data_processor_) {
+      auto stats = market_data_processor_->getPerformanceMetrics();
+      ImGui::Text("Trades/sec: %.0f", stats.trades_per_second);
+      ImGui::Text("Orderbook Updates/sec: %.0f", stats.orderbooks_per_second);
+    }
+  }
+
+  ImGui::End();
 }
 
 } // namespace BTQuant

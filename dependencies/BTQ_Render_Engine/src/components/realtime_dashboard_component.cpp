@@ -29,9 +29,9 @@ namespace BTQuant {
 // ============================================
 namespace {
 constexpr std::array DEFAULT_SYMBOLS = {
-    std::string_view{"BTC-USDT"}, std::string_view{"ETH-USDT"},
-    std::string_view{"BNB-USDT"}, std::string_view{"ADA-USDT"},
-    std::string_view{"SOL-USDT"}};
+    std::string_view{"BTCUSDT"}, std::string_view{"ETHUSDT"},
+    std::string_view{"BNBUSDT"}, std::string_view{"ADAUSDT"},
+    std::string_view{"SOLUSDT"}};
 
 constexpr auto POSITIVE_COLOR = ImVec4{0.0f, 1.0f, 0.0f, 1.0f};
 constexpr auto NEGATIVE_COLOR = ImVec4{1.0f, 0.0f, 0.0f, 1.0f};
@@ -60,7 +60,7 @@ void RealtimeDashboardComponent::setup_default_panels() {
 
   constexpr std::array defaultPanels = {
       PanelConfig{DashboardPanelType::PRICE_CHART,
-                  "BTC-USDT Price",
+                  "BTCUSDT Price",
                   {10, 10},
                   {800, 400}},
       PanelConfig{
@@ -88,15 +88,15 @@ void RealtimeDashboardComponent::setup_default_panels() {
                   {1230, 320},
                   {400, 300}},
       PanelConfig{DashboardPanelType::FOOTPRINT_CHART,
-                  "BTC-USDT Footprint",
+                  "BTCUSDT Footprint",
                   {10, 840},
                   {800, 400}},
       PanelConfig{DashboardPanelType::HEATMAP_LOB,
-                  "BTC-USDT Heatmap",
+                  "BTCUSDT Heatmap",
                   {820, 630},
                   {400, 400}},
       PanelConfig{DashboardPanelType::TPO_PROFILE,
-                  "BTC-USDT TPO",
+                  "BTCUSDT TPO",
                   {1230, 630},
                   {400, 400}}};
 
@@ -147,7 +147,7 @@ void RealtimeDashboardComponent::add_panel(DashboardPanelType type,
                      .position = pos,
                      .size = size,
                      .visible = true,
-                     .symbol = "BTC-USDT",
+                     .symbol = "BTCUSDT",
                      .timeframe = RenderEngine::TimeFrame::TF_15SEC});
 }
 
@@ -431,11 +431,18 @@ void RealtimeDashboardComponent::render_market_stats_panel(
 void RealtimeDashboardComponent::render_performance_metrics_panel(
     [[maybe_unused]] const DashboardPanel &panel) {
   auto io = ImGui::GetIO();
+
+  auto metrics = processor_->getPerformanceMetrics();
+  auto activeSymbols = processor_->getActiveSymbols();
+
   ImGui::Text("FPS: %.1f", io.Framerate);
   ImGui::Text("Frame Time: %.2f ms", 1000.0f / io.Framerate);
-  ImGui::Text("Memory Usage: N/A");
-  ImGui::Text("Data Processed: N/A");
-  ImGui::Text("Active Connections: N/A");
+  ImGui::Text("Memory Usage: N/A"); // Requires OS-specific calls
+  ImGui::Text("Data Processed: %lu Trades / %lu Books",
+              metrics.total_trades_processed,
+              metrics.total_orderbooks_processed);
+  ImGui::Text("Active Symbols: %zu", activeSymbols.size());
+  ImGui::Text("Processing Latency: %.2f us", metrics.processing_latency_us);
 }
 
 void RealtimeDashboardComponent::render_multi_symbol_overview_panel(
@@ -447,11 +454,31 @@ void RealtimeDashboardComponent::render_multi_symbol_overview_panel(
   }
   ImGui::Separator();
 
-  for (auto symbol : DEFAULT_SYMBOLS) {
-    auto data = get_ohlcv_data(std::string(symbol),
-                               RenderEngine::TimeFrame::TF_15SEC, 2);
+  auto activeSymbols = processor_->getActiveSymbols();
+  if (activeSymbols.empty()) {
+    // Fallback to default if no active symbols found (e.g. before data arrives)
+    // or just show empty state
+  }
 
-    ImGui::Text("%s", std::string(symbol).c_str());
+  // Combine default with active to ensure we show something in demo mode
+  std::vector<std::string> symbolsToShow;
+  for (auto s : DEFAULT_SYMBOLS)
+    symbolsToShow.emplace_back(s);
+
+  // Add dynamic ones
+  for (auto id : activeSymbols) {
+    // Need a way to get name from ID.
+    // MarketDataProcessor doesn't expose getName(id) directly but we have
+    // HotSpineDataBridge? Actually we can look up in registry if we had access,
+    // or just skip name. For now, let's stick to DEFAULT_SYMBOLS which demo
+    // mode populates + any others we can infer. Ideally we'd use SymbolRegistry
+    // here.
+  }
+
+  for (const auto &symStr : symbolsToShow) {
+    auto data = get_ohlcv_data(symStr, RenderEngine::TimeFrame::TF_15SEC, 2);
+
+    ImGui::Text("%s", symStr.c_str());
     ImGui::NextColumn();
 
     if (data.size() >= 1) [[likely]] {
@@ -560,11 +587,15 @@ void RealtimeDashboardComponent::render_dashboard_menu() {
     if (auto dashPos = symbol.find('-'); dashPos != std::string::npos) {
       return {symbol.substr(0, dashPos), symbol.substr(dashPos + 1)};
     }
-    return {symbol, "Binance"};
+    return {symbol, "binance"};
   }();
 
   auto symbolIdOpt =
       SymbolRegistry::instance().get_symbol_id(exchange, symbolName);
+
+  // If not found, try the other way around if dash exists? No, stick to
+  // consistent format. Or try lowercase/uppercase logic if needed.
+
   if (!symbolIdOpt) [[unlikely]] {
     return {};
   }
@@ -654,12 +685,25 @@ void RealtimeDashboardComponent::render_microstructure_panels(
   if (panel.type == DashboardPanelType::FOOTPRINT_CHART) {
     ImGui::Text("Footprint Chart (Vulkan Native)");
     ImGui::Text("Clusters Rendered: %u", stats.footprintCellsRendered);
+    ImGui::Text("Mode: Zero-Copy Storage Buffer");
   } else if (panel.type == DashboardPanelType::HEATMAP_LOB) {
     ImGui::Text("LOB Heatmap (Compute)");
     ImGui::Text("LOB Updates: %u", stats.lobUpdates);
+
+    // Render the Compute Shader result texture!
+    if (auto texID = microstructure_renderer_->getHeatmapTextureID()) {
+      // Calculate available size
+      ImVec2 contentSize = ImGui::GetContentRegionAvail();
+      // Maintain aspect ratio or fill? Fill for heatmap.
+      ImGui::Image(texID, contentSize, ImVec2(0, 0), ImVec2(1, 1));
+    } else {
+      ImGui::TextColored(ImVec4(1, 1, 0, 1), "Waiting for Compute Pipeline...");
+    }
+
   } else if (panel.type == DashboardPanelType::TPO_PROFILE) {
     ImGui::Text("TPO Profile (Atomic Compute)");
     ImGui::Text("Trade Updates: %u", stats.tradeUpdates);
+    ImGui::ProgressBar(0.5f, ImVec2(-1, 0), "Processing..."); // Placeholder
   }
 }
 

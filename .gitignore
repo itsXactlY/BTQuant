@@ -82,7 +82,4 @@ dependencies/BTQ_Render_Engine/imgui_.ini
 dependencies/BTQ_Render_Engine/imgui.ini
 
 
-scripts/ralph/ralph.sh
-scripts/ralph/PROMPT.md
 install_ralph.sh
-prd.json

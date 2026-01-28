@@ -13,8 +13,8 @@
  * @brief Advanced Vulkan-based trading dashboard for BTQuant platform
  *
  * This module implements a high-performance trading dashboard using Vulkan for
- * rendering and supports real-time market data visualization, trading analytics,
- * and algorithmic trading capabilities.
+ * rendering and supports real-time market data visualization, trading
+ * analytics, and algorithmic trading capabilities.
  *
  * Features:
  * - Vulkan-accelerated rendering
@@ -235,10 +235,11 @@ struct MarketDepthChartComponent;
  * @class VulkanDashboard
  * @brief Main dashboard class that manages the entire trading interface
  *
- * The VulkanDashboard class serves as the central hub for the trading application,
- * coordinating between the Vulkan rendering engine, market data processing,
- * user interface components, and trading systems. It handles window management,
- * rendering loops, event processing, and resource lifecycle management.
+ * The VulkanDashboard class serves as the central hub for the trading
+ * application, coordinating between the Vulkan rendering engine, market data
+ * processing, user interface components, and trading systems. It handles window
+ * management, rendering loops, event processing, and resource lifecycle
+ * management.
  */
 class VulkanDashboard {
 public:
@@ -285,6 +286,21 @@ public:
   /// @brief Get access to the underlying Vulkan core
   VulkanCore *get_vulkan_core() { return m_vulkanCore.get(); }
 
+  /// @brief Set a callback to render custom ImGui menu items
+  void set_custom_menubar_callback(std::function<void()> callback) {
+    custom_menubar_callback_ = callback;
+  }
+
+  /// @brief Get the workspace component
+  QuantWorkspaceComponent *get_workspace_component() {
+    return m_workspace.get();
+  }
+
+  /// @brief Toggle performance overlay
+  void set_show_performance_overlay(bool show) {
+    show_performance_overlay_ = show;
+  }
+
 private:
   /// @brief Initialize all UI components
   void init_components();
@@ -294,6 +310,9 @@ private:
 
   /// @brief Poll market data and feed it to the microstructure renderer
   void pollDataToRenderer();
+
+  /// @brief Render the internal performance overlay
+  void render_performance_overlay();
 
   uint32_t width_, height_;
   VulkanDashboardConfig config_;
@@ -306,6 +325,11 @@ private:
   std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> m_micro_renderer;
   std::unique_ptr<VulkanSyncContext> m_sync_context;
   std::unique_ptr<TimelineSemaphore> m_timeline_semaphore;
+
+  // Customization
+  std::function<void()> custom_menubar_callback_;
+  bool show_performance_overlay_ = false;
+
   bool use_modern_dashboard_ = false;
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;

@@ -1,0 +1,408 @@
+[
+  {
+    "id": 0,
+    "phase": "cleanup",
+    "title": "Remove old layout code",
+    "description": "Delete all deprecated layout components, old UI files, and legacy dashboard code. Keep only the new modern dashboard shown in screenshot. Remove unused imports and dependencies.",
+    "files_to_modify": [
+      "ui/old_layout/",
+      "ui/legacy_components/",
+      "layouts/deprecated/"
+    ],
+    "verification": "Old layout files removed, application still runs with new dashboard",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 1,
+    "phase": "architecture",
+    "title": "Design backend architecture for dashboard",
+    "description": "Plan clean backend structure for the modern dashboard: WebSocket manager, data pipeline, state management, real-time update handler. Define clear separation between data layer and presentation.",
+    "files_to_modify": [],
+    "verification": "Architecture document with data flow diagram created",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 2,
+    "phase": "backend",
+    "title": "Create WebSocket/Data feed manager",
+    "description": "Build robust WebSocket connection manager for real-time crypto price data. Handle reconnection, error recovery, rate limiting. Support multiple symbols (BTCUSDT, ETHUSDT, BNBUSDT, etc.).",
+    "files_to_modify": [
+      "backend/websocket_manager.py",
+      "backend/data_feed.py"
+    ],
+    "verification": "WebSocket connects and receives live price updates for all symbols",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 3,
+    "phase": "backend",
+    "title": "Implement market data processor",
+    "description": "Create data processor to handle incoming market data: price updates, volume, 24h changes, order book updates. Calculate derived metrics (24h high/low, change %).",
+    "files_to_modify": [
+      "backend/market_processor.py",
+      "backend/calculations.py"
+    ],
+    "verification": "Market data processed correctly, metrics calculated accurately",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 4,
+    "phase": "backend",
+    "title": "Build technical indicators engine",
+    "description": "Implement technical indicators system: RSI, MACD, Signal. Use efficient calculations with rolling windows. Support real-time indicator updates as new data arrives.",
+    "files_to_modify": [
+      "backend/indicators/rsi.py",
+      "backend/indicators/macd.py",
+      "backend/indicators/engine.py"
+    ],
+    "verification": "Indicators calculate correctly and update in real-time",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 5,
+    "phase": "backend",
+    "title": "Create trade processor and order book handler",
+    "description": "Build trade data processor to handle recent trades stream. Implement order book manager for bid/ask updates. Store in efficient data structures for quick access.",
+    "files_to_modify": [
+      "backend/trade_processor.py",
+      "backend/orderbook.py"
+    ],
+    "verification": "Trades and order book data processed and accessible",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 6,
+    "phase": "backend",
+    "title": "Implement performance monitoring system",
+    "description": "Create performance tracker for FPS, frame time, memory usage, data processing latency. Calculate and expose metrics shown in Performance panel (142.9 FPS, 7.88ms frame time, etc.).",
+    "files_to_modify": [
+      "backend/performance_monitor.py",
+      "backend/metrics_collector.py"
+    ],
+    "verification": "Performance metrics collected and accurate",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 7,
+    "phase": "backend",
+    "title": "Build state management system",
+    "description": "Create centralized state manager for dashboard data: current prices, selected symbol, active view, user preferences. Implement observer pattern for state changes.",
+    "files_to_modify": [
+      "backend/state_manager.py",
+      "backend/observers.py"
+    ],
+    "verification": "State changes propagate correctly to all components",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 8,
+    "phase": "integration",
+    "title": "Connect backend to Price Chart panel",
+    "description": "Wire backend data feed to price chart. Implement efficient data buffering for chart updates. Support real-time candlestick/line updates without performance degradation.",
+    "files_to_modify": [
+      "ui/panels/price_chart.py",
+      "backend/chart_data_provider.py"
+    ],
+    "verification": "Price chart updates smoothly with live data at 140+ FPS",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 9,
+    "phase": "integration",
+    "title": "Connect backend to Volume panel",
+    "description": "Wire volume data to volume chart panel. Implement time-based volume aggregation. Support real-time volume bar updates.",
+    "files_to_modify": [
+      "ui/panels/volume_chart.py",
+      "backend/volume_aggregator.py"
+    ],
+    "verification": "Volume chart displays and updates correctly",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 10,
+    "phase": "integration",
+    "title": "Connect backend to Technical Indicators panel",
+    "description": "Wire indicator calculations to indicators chart. Update RSI, MACD, Signal values in real-time as new data arrives. Optimize for performance.",
+    "files_to_modify": [
+      "ui/panels/indicators_chart.py",
+      "backend/indicator_provider.py"
+    ],
+    "verification": "Indicators display correctly and update in real-time",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 11,
+    "phase": "integration",
+    "title": "Connect backend to Order Book panel",
+    "description": "Wire order book data to display panel. Handle order book updates efficiently. Show 'No order book data' message when data unavailable.",
+    "files_to_modify": [
+      "ui/panels/order_book.py",
+      "backend/orderbook_provider.py"
+    ],
+    "verification": "Order book displays when available, shows proper message when not",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 12,
+    "phase": "integration",
+    "title": "Connect backend to Recent Trades panel",
+    "description": "Wire trade stream to recent trades list. Display latest trades with proper formatting. Handle 'No recent trades' state.",
+    "files_to_modify": [
+      "ui/panels/recent_trades.py",
+      "backend/trades_provider.py"
+    ],
+    "verification": "Recent trades display and update in real-time",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 13,
+    "phase": "integration",
+    "title": "Connect backend to Market Stats panel",
+    "description": "Wire market statistics to stats panel: Current Price, 24h High/Low, 24h Volume, Market Status. Update in real-time as data changes.",
+    "files_to_modify": [
+      "ui/panels/market_stats.py",
+      "backend/stats_provider.py"
+    ],
+    "verification": "Market stats display correctly and update live",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 14,
+    "phase": "integration",
+    "title": "Connect backend to Multi-Symbol table",
+    "description": "Wire multi-symbol data to symbol table (BTCUSDT, ETHUSDT, BNBUSDT, ADAUSDT, SOLUSDT). Display price, 24h change %, volume. Update all symbols in real-time. Color code changes (green/red).",
+    "files_to_modify": [
+      "ui/panels/multi_symbol_table.py",
+      "backend/multi_symbol_provider.py"
+    ],
+    "verification": "All symbols display and update correctly with color coding",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 15,
+    "phase": "integration",
+    "title": "Connect backend to Performance panel",
+    "description": "Wire performance metrics to performance display: FPS, Frame Time, Memory Usage, Data Processed, Active Symbols, Processing Latency. Update metrics in real-time.",
+    "files_to_modify": [
+      "ui/panels/performance_panel.py",
+      "backend/performance_provider.py"
+    ],
+    "verification": "Performance metrics display accurately and update live",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 16,
+    "phase": "integration",
+    "title": "Connect backend to Heatmap and TPO panels",
+    "description": "Wire data to BTCUSDT Heatmap and BTCUSDT TPO panels. Implement heatmap calculation (LOB Heatmap), TPO profile (Atomic compute). Display average frame times and processing status.",
+    "files_to_modify": [
+      "ui/panels/heatmap.py",
+      "ui/panels/tpo.py",
+      "backend/heatmap_calculator.py",
+      "backend/tpo_calculator.py"
+    ],
+    "verification": "Heatmap and TPO display correctly with proper calculations",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 17,
+    "phase": "integration",
+    "title": "Connect backend to Footprint panel",
+    "description": "Wire data to BTCUSDT Footprint panel. Implement footprint chart calculations (Vulkan Native). Display clusters, mode (Zero-Copy Storage Buffer), frame time.",
+    "files_to_modify": [
+      "ui/panels/footprint.py",
+      "backend/footprint_calculator.py"
+    ],
+    "verification": "Footprint chart displays with correct rendering mode",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 18,
+    "phase": "optimization",
+    "title": "Optimize data pipeline for high-frequency updates",
+    "description": "Optimize entire data pipeline for processing 223327 trades and 102345 books efficiently. Implement zero-copy techniques, circular buffers, batch processing. Target: maintain 140+ FPS with 3.00 us processing latency.",
+    "files_to_modify": [
+      "backend/pipeline_optimizer.py",
+      "backend/buffer_manager.py"
+    ],
+    "verification": "Dashboard maintains 140+ FPS under full load",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 19,
+    "phase": "optimization",
+    "title": "Implement efficient memory management",
+    "description": "Optimize memory usage for handling large datasets. Implement data retention policies, circular buffers for historical data, efficient storage for order book snapshots.",
+    "files_to_modify": [
+      "backend/memory_manager.py",
+      "backend/data_retention.py"
+    ],
+    "verification": "Memory usage stays stable under continuous operation",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 20,
+    "phase": "features",
+    "title": "Implement symbol switching",
+    "description": "Add ability to switch between symbols in multi-symbol table. Update all panels (charts, stats, indicators) when new symbol selected. Smooth transition without lag.",
+    "files_to_modify": [
+      "ui/symbol_selector.py",
+      "backend/symbol_manager.py"
+    ],
+    "verification": "Symbol switching works smoothly, all panels update correctly",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 21,
+    "phase": "features",
+    "title": "Add chart timeframe selection",
+    "description": "Implement timeframe selector for charts (1m, 5m, 15m, 1h, 4h, 1d). Support dynamic timeframe switching without reconnecting WebSocket.",
+    "files_to_modify": [
+      "ui/timeframe_selector.py",
+      "backend/timeframe_manager.py"
+    ],
+    "verification": "Timeframe switching works, charts update with correct data",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 22,
+    "phase": "features",
+    "title": "Implement data export functionality",
+    "description": "Add ability to export chart data, trades, order book snapshots to CSV/JSON. Support date range selection and symbol filtering.",
+    "files_to_modify": [
+      "backend/data_exporter.py",
+      "ui/export_dialog.py"
+    ],
+    "verification": "Data exports correctly in multiple formats",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 23,
+    "phase": "error-handling",
+    "title": "Implement robust error handling",
+    "description": "Add comprehensive error handling: WebSocket disconnections, API errors, data anomalies, invalid updates. Implement auto-reconnect with exponential backoff. Show user-friendly error messages.",
+    "files_to_modify": [
+      "backend/error_handler.py",
+      "backend/reconnect_manager.py"
+    ],
+    "verification": "Application handles errors gracefully and recovers automatically",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 24,
+    "phase": "testing",
+    "title": "Create backend unit tests",
+    "description": "Build comprehensive test suite for all backend components: data processors, calculators, state management, WebSocket manager. Aim for 80%+ coverage.",
+    "files_to_modify": [
+      "tests/backend/test_websocket.py",
+      "tests/backend/test_processors.py",
+      "tests/backend/test_indicators.py",
+      "tests/backend/test_state.py"
+    ],
+    "verification": "All backend tests pass with 80%+ coverage",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 25,
+    "phase": "testing",
+    "title": "Create integration tests for dashboard",
+    "description": "Build end-to-end tests for complete dashboard workflows: data flow from WebSocket to UI, symbol switching, indicator calculations, performance under load.",
+    "files_to_modify": [
+      "tests/integration/test_dashboard_flow.py",
+      "tests/integration/test_performance.py"
+    ],
+    "verification": "Integration tests pass, dashboard works end-to-end",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 26,
+    "phase": "documentation",
+    "title": "Document backend architecture",
+    "description": "Create comprehensive backend documentation: data flow diagrams, component architecture, API references, WebSocket protocol details, state management design.",
+    "files_to_modify": [
+      "docs/BACKEND_ARCHITECTURE.md",
+      "docs/DATA_FLOW.md",
+      "docs/API_REFERENCE.md"
+    ],
+    "verification": "Backend documentation complete and clear",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 27,
+    "phase": "documentation",
+    "title": "Create dashboard user guide",
+    "description": "Write user guide for dashboard: panel descriptions, how to interpret charts, indicator explanations, performance metrics meaning, symbol switching, timeframe selection.",
+    "files_to_modify": [
+      "docs/DASHBOARD_GUIDE.md",
+      "docs/INDICATORS_EXPLAINED.md"
+    ],
+    "verification": "User guide helps users understand and use dashboard effectively",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 28,
+    "phase": "configuration",
+    "title": "Create dashboard configuration system",
+    "description": "Build configuration system for dashboard: default symbols, update intervals, chart colors, performance settings, panel layout preferences. Support JSON config file and runtime changes.",
+    "files_to_modify": [
+      "config/dashboard_config.py",
+      "config/dashboard_defaults.json"
+    ],
+    "verification": "Dashboard respects configuration, allows customization",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 29,
+    "phase": "finalization",
+    "title": "Performance benchmark and optimization report",
+    "description": "Run comprehensive performance benchmarks. Document current performance metrics: FPS under various loads, memory usage patterns, processing latency, data throughput. Create optimization report.",
+    "files_to_modify": [
+      "benchmarks/dashboard_benchmark.py",
+      "docs/PERFORMANCE_REPORT.md"
+    ],
+    "verification": "Benchmark results documented, meets performance targets",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 30,
+    "phase": "finalization",
+    "title": "Final integration and polish",
+    "description": "Complete final integration of all components. Ensure smooth transitions, consistent styling, proper error messages. Verify all panels work together seamlessly. Final code cleanup and optimization.",
+    "files_to_modify": [
+      "**/*"
+    ],
+    "verification": "Dashboard fully functional, polished, and production-ready",
+    "completed": false,
+    "priority": "critical"
+  }
+]

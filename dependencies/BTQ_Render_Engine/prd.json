@@ -1,0 +1,310 @@
+[
+  {
+    "id": 0,
+    "phase": "setup",
+    "title": "Respect .gitignore - exclude ignored files/folders",
+    "description": "CRITICAL: Parse .gitignore file and exclude all ignored files and folders from analysis, refactoring, and cleanup. Never modify, move, or process files that are in .gitignore (build artifacts, __pycache__, venv, .env, IDE configs, etc.).",
+    "files_to_modify": [],
+    "verification": "Verification script confirms no .gitignore files are touched",
+    "completed": true,
+    "priority": "critical"
+  },
+  {
+    "id": 1,
+    "phase": "analysis",
+    "title": "Code inventory: Identify all BTQ Render Engine files",
+    "description": "Complete inventory of all Python files, modules, classes and functions across the different applications. Document dependencies and mark redundancies. Skip files/folders in .gitignore.",
+    "files_to_modify": [],
+    "verification": "Complete list of all components with dependency tree created",
+    "completed": true,
+    "priority": "high"
+  },
+  {
+    "id": 2,
+    "phase": "analysis",
+    "title": "Identify functional overlaps",
+    "description": "Find all duplicated functions, classes and code blocks between the 2-3 applications. Document commonalities and differences. Only analyze tracked files.",
+    "files_to_modify": [],
+    "verification": "Table with all duplicates and their usage created",
+    "completed": true,
+    "priority": "high"
+  },
+  {
+    "id": 3,
+    "phase": "analysis",
+    "title": "Extract core functionality",
+    "description": "Define the essential render engine features that must be included in the final application. Mark non-essential features.",
+    "files_to_modify": [],
+    "verification": "Feature matrix with must-have, nice-to-have and deprecated features",
+    "completed": true,
+    "priority": "high"
+  },
+  {
+    "id": 4,
+    "phase": "architecture",
+    "title": "Design modular architecture",
+    "description": "Plan clean project structure with clear separation: Core Engine, Rendering, UI, Utils, Config. Define dependency injection pattern.",
+    "files_to_modify": [],
+    "verification": "Architecture diagram and folder structure documented",
+    "completed": true,
+    "priority": "high"
+  },
+  {
+    "id": 5,
+    "phase": "architecture",
+    "title": "API interface design",
+    "description": "Define unified API for all render operations. Establish clear interfaces between modules.",
+    "files_to_modify": [],
+    "verification": "API documentation with all public methods and parameters",
+    "completed": true,
+    "priority": "high"
+  },
+  {
+    "id": 6,
+    "phase": "refactoring",
+    "title": "Create core engine module",
+    "description": "Build central render engine as reusable module. Consolidate all common functions from old applications here.",
+    "files_to_modify": [
+      "core/engine.py",
+      "core/__init__.py"
+    ],
+    "verification": "Core engine module runs standalone with unit tests",
+    "completed": true,
+    "priority": "critical"
+  },
+  {
+    "id": 7,
+    "phase": "refactoring",
+    "title": "Consolidate rendering pipeline",
+    "description": "Migrate all rendering logic from various apps into unified pipeline. Unify shader, texture handling, buffer management.",
+    "files_to_modify": [
+      "core/renderer.py",
+      "core/pipeline.py"
+    ],
+    "verification": "Rendering pipeline produces identical outputs as before",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 8,
+    "phase": "refactoring",
+    "title": "Merge utilities",
+    "description": "Migrate all helper functions, math utils, file I/O and logging from apps into common utils module. Eliminate duplicates.",
+    "files_to_modify": [
+      "utils/helpers.py",
+      "utils/math.py",
+      "utils/io.py"
+    ],
+    "verification": "Utils module complete with docstrings and type hints",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 9,
+    "phase": "refactoring",
+    "title": "Unify configuration management",
+    "description": "Migrate all config files (JSON, YAML, INI) into unified system. Create central config class with validation.",
+    "files_to_modify": [
+      "config/settings.py",
+      "config/validator.py"
+    ],
+    "verification": "All settings accessible through one config class",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 10,
+    "phase": "refactoring",
+    "title": "Consolidate UI/frontend",
+    "description": "If GUI exists: Merge all UI components into unified interface. Establish consistent look & feel.",
+    "files_to_modify": [
+      "ui/main_window.py",
+      "ui/components/"
+    ],
+    "verification": "One unified UI frontend working",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 11,
+    "phase": "cleanup",
+    "title": "Eliminate dead code",
+    "description": "Remove all unused functions, imports and variables. Use code coverage tool for identification. Only process files not in .gitignore.",
+    "files_to_modify": [
+      "**/*.py"
+    ],
+    "verification": "Coverage report shows only used code",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 12,
+    "phase": "cleanup",
+    "title": "Unify code style",
+    "description": "Establish PEP 8 compliance. Run Black formatter and Flake8 linter over entire codebase (excluding .gitignore files).",
+    "files_to_modify": [
+      "**/*.py"
+    ],
+    "verification": "Flake8 and Black pass without errors",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 13,
+    "phase": "cleanup",
+    "title": "Add type hints",
+    "description": "Add complete type hints to all functions and methods. Run MyPy validation. Skip .gitignore files.",
+    "files_to_modify": [
+      "**/*.py"
+    ],
+    "verification": "MyPy passes without type errors",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 14,
+    "phase": "integration",
+    "title": "Main application entry point",
+    "description": "Create central main.py that orchestrates all modules. Integrate command-line arguments parser.",
+    "files_to_modify": [
+      "main.py",
+      "cli.py"
+    ],
+    "verification": "python main.py starts the complete application",
+    "completed": false,
+    "priority": "critical"
+  },
+  {
+    "id": 15,
+    "phase": "integration",
+    "title": "Dependency management",
+    "description": "Create requirements.txt or pyproject.toml with all exact dependencies. Document virtual environment setup.",
+    "files_to_modify": [
+      "requirements.txt",
+      "pyproject.toml"
+    ],
+    "verification": "Fresh install in new venv works",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 16,
+    "phase": "testing",
+    "title": "Create unit tests",
+    "description": "Build test suite for core engine, renderer and utils. Aim for minimum 70% code coverage.",
+    "files_to_modify": [
+      "tests/test_engine.py",
+      "tests/test_renderer.py",
+      "tests/test_utils.py"
+    ],
+    "verification": "Pytest runs with >70% coverage",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 17,
+    "phase": "testing",
+    "title": "Integration tests",
+    "description": "Create end-to-end tests for complete rendering workflows. Cover various use cases.",
+    "files_to_modify": [
+      "tests/integration/"
+    ],
+    "verification": "All integration tests pass",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 18,
+    "phase": "documentation",
+    "title": "Code documentation",
+    "description": "Add meaningful docstrings to all modules, classes and functions. Format Sphinx-compatible.",
+    "files_to_modify": [
+      "**/*.py"
+    ],
+    "verification": "Sphinx can generate complete API documentation",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 19,
+    "phase": "documentation",
+    "title": "README and user guide",
+    "description": "Comprehensive README.md with installation, quick start, features. Separate USER_GUIDE.md for advanced usage.",
+    "files_to_modify": [
+      "README.md",
+      "docs/USER_GUIDE.md"
+    ],
+    "verification": "New user can start with README alone",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 20,
+    "phase": "documentation",
+    "title": "Architecture documentation",
+    "description": "Technical documentation of architecture, design decisions and data flow. Include diagrams.",
+    "files_to_modify": [
+      "docs/ARCHITECTURE.md"
+    ],
+    "verification": "Developer can understand architecture without code review",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 21,
+    "phase": "optimization",
+    "title": "Performance profiling",
+    "description": "Identify bottlenecks with cProfile. Optimize critical paths.",
+    "files_to_modify": [],
+    "verification": "Performance report with before/after metrics",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 22,
+    "phase": "optimization",
+    "title": "Memory optimization",
+    "description": "Find and fix memory leaks. Optimize garbage collection for large render jobs.",
+    "files_to_modify": [
+      "core/engine.py",
+      "core/renderer.py"
+    ],
+    "verification": "Memory profiler shows stable memory usage",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 23,
+    "phase": "finalization",
+    "title": "Archive old applications",
+    "description": "Move the 2-3 old applications to archive/ folder. Don't delete for reference. Add archive/ to .gitignore if needed.",
+    "files_to_modify": [],
+    "verification": "Old apps in archive/, new app works standalone",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 24,
+    "phase": "finalization",
+    "title": "Create migration guide",
+    "description": "Document how to migrate from old apps to new one. List breaking changes.",
+    "files_to_modify": [
+      "docs/MIGRATION.md"
+    ],
+    "verification": "Users can migrate independently",
+    "completed": false,
+    "priority": "normal"
+  },
+  {
+    "id": 25,
+    "phase": "finalization",
+    "title": "Final review and cleanup",
+    "description": "Complete code review. Remove last TODOs. Set version 1.0.0 tag. Verify .gitignore compliance.",
+    "files_to_modify": [
+      "**/*"
+    ],
+    "verification": "Human review: Everything clean, documented and functional",
+    "completed": false,
+    "priority": "critical"
+  }
+]

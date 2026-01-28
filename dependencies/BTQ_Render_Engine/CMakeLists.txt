@@ -74,7 +74,7 @@ set(LIB_SOURCES
 )
 
 set(DASHBOARD_SOURCES
-    src/main_realtime_dashboard.cpp
+    src/main_trading_terminal.cpp
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
     src/data/hotspine_data_bridge.cpp

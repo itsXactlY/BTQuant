@@ -59,6 +59,21 @@ public:
   using PositionUpdateCallback = std::function<void(const Position &)>;
   void set_position_update_callback(PositionUpdateCallback callback);
 
+  // Analytics integration
+  struct TradeRecord {
+    std::string trade_id;
+    std::string symbol;
+    std::string order_id;
+    double quantity;
+    double price;
+    double commission;
+    double pnl;  // Calculated P&L
+    uint64_t timestamp;
+    bool is_buy;
+  };
+
+  TradeRecord create_trade_record(const OrderManager::OrderExecution &execution, double realized_pnl = 0.0);
+
 private:
   std::unordered_map<std::string, Position> positions_;
   std::unordered_map<std::string, double> market_prices_;

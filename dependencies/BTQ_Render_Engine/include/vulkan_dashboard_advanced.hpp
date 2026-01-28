@@ -8,6 +8,23 @@
 // - ui/ui_base.hpp
 // ============================================================================
 
+/**
+ * @file vulkan_dashboard_advanced.hpp
+ * @brief Advanced Vulkan-based trading dashboard for BTQuant platform
+ *
+ * This module implements a high-performance trading dashboard using Vulkan for
+ * rendering and supports real-time market data visualization, trading analytics,
+ * and algorithmic trading capabilities.
+ *
+ * Features:
+ * - Vulkan-accelerated rendering
+ * - Real-time market data processing
+ * - Advanced charting and analytics
+ * - Multi-exchange connectivity
+ * - Risk management integration
+ * - Customizable layouts and themes
+ */
+
 // Include modular headers
 #include "analytics/technical_analysis.hpp"
 #include "components/VulkanSynchronization.h"
@@ -214,26 +231,70 @@ struct MarketDepthChartComponent;
 // Main Dashboard Class
 // ============================================================================
 
+/**
+ * @class VulkanDashboard
+ * @brief Main dashboard class that manages the entire trading interface
+ *
+ * The VulkanDashboard class serves as the central hub for the trading application,
+ * coordinating between the Vulkan rendering engine, market data processing,
+ * user interface components, and trading systems. It handles window management,
+ * rendering loops, event processing, and resource lifecycle management.
+ */
 class VulkanDashboard {
 public:
+  /**
+   * @brief Construct a new VulkanDashboard object
+   * @param width Window width in pixels
+   * @param height Window height in pixels
+   * @param bridge Shared pointer to the data bridge for market data
+   * @param processor Shared pointer to the market data processor
+   * @param config Configuration object for dashboard settings
+   */
   VulkanDashboard(uint32_t width, uint32_t height,
                   std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig &config);
+
+  /// @brief Destructor - cleans up all allocated resources
   ~VulkanDashboard();
+
+  /**
+   * @brief Initialize the dashboard and all its components
+   * @return Expected<void, std::string> Success or error message
+   */
   [[nodiscard]] std::expected<void, std::string> initialize();
+
+  /// @brief Clean up and shut down the dashboard
   void shutdown();
+
+  /// @brief Render a single frame of the dashboard
   void render_frame();
+
+  /// @brief Handle input events (keyboard, mouse, etc.)
   void handle_events();
+
+  /// @brief Check if the dashboard window should be closed
   bool should_close() const;
+
+  /// @brief Set the currently active trading symbol
   void set_active_symbol(const std::string &s) { active_symbol_ = s; }
+
+  /// @brief Get the currently active trading symbol
   std::string get_active_symbol() const { return active_symbol_; }
+
+  /// @brief Get access to the underlying Vulkan core
   VulkanCore *get_vulkan_core() { return m_vulkanCore.get(); }
 
 private:
+  /// @brief Initialize all UI components
   void init_components();
+
+  /// @brief Initialize the GLFW window
   void init_window();
+
+  /// @brief Poll market data and feed it to the microstructure renderer
   void pollDataToRenderer();
+
   uint32_t width_, height_;
   VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
@@ -249,6 +310,13 @@ private:
   uint32_t m_currentImageIndex = 0;
   bool is_running_ = true;
   bool m_windowResized = false;
+
+  /**
+   * @brief Callback for when the window framebuffer is resized
+   * @param window Pointer to the GLFW window
+   * @param width New width
+   * @param height New height
+   */
   static void framebuffer_size_callback(GLFWwindow *window, int width,
                                         int height);
   GLFWwindow *window_ = nullptr;

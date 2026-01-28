@@ -101,10 +101,19 @@ set(DASHBOARD_SOURCES
     src/components/realtime_dashboard_component.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
+    src/components/trading_orders_panel.cpp
+    src/components/trading_positions_panel.cpp
+    src/components/risk_metrics_panel.cpp
+    src/components/histogram_panel.cpp
+    src/components/scatter_plot_panel.cpp
+    src/components/time_series_panel.cpp
+    src/components/screener_panel.cpp
+    src/components/log_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/order_manager.cpp
     src/trading/position_manager.cpp
     src/trading/risk_assessment.cpp
+    src/trading/advanced_trading_features.cpp
     src/data/symbol_registry.cpp
     src/optimization/performance_optimizer.cpp
     src/system/GPUMemoryManager.cpp
@@ -144,36 +153,206 @@ target_link_libraries(dashboard_advanced PRIVATE
 )
 
 # Optimization
-target_compile_definitions(dashboard_advanced PRIVATE IMGUI_ENABLE_DOCKING)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(dashboard_advanced PRIVATE
-            -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
-            -fstrict-aliasing)
-        target_link_options(dashboard_advanced PRIVATE -flto)
-    endif()
+# target_compile_definitions(dashboard_advanced PRIVATE IMGUI_ENABLE_DOCKING)
+# if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+#     target_compile_options(dashboard_advanced PRIVATE
+#             -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
+#             -fstrict-aliasing)
+#         target_link_options(dashboard_advanced PRIVATE -flto)
+#     endif()
 
-# Performance monitoring
-target_compile_definitions(dashboard_advanced PRIVATE ENABLE_PERFORMANCE_MONITORING)
+# # Performance monitoring
+# target_compile_definitions(dashboard_advanced PRIVATE ENABLE_PERFORMANCE_MONITORING)
 
-# Shader compilation target
-add_custom_target(compile_shaders DEPENDS ${COMPILED_SHADERS})
-add_dependencies(dashboard_advanced compile_shaders)
+# # Shader compilation target
+# add_custom_target(compile_shaders DEPENDS ${COMPILED_SHADERS})
+# add_dependencies(dashboard_advanced compile_shaders)
 
-# Install compiled shaders
-install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
+# # Install compiled shaders
+# install(FILES ${COMPILED_SHADERS} DESTINATION ${CMAKE_INSTALL_BINDIR}/shaders)
 
-# Optimization
-target_compile_definitions(btquant_terminal PRIVATE IMGUI_ENABLE_DOCKING)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(btquant_terminal PRIVATE
-            -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
-            -fstrict-aliasing)
-        target_link_options(btquant_terminal PRIVATE -flto)
-    endif()
+# # Trading Terminal Executable
+# set(TRADING_TERMINAL_SOURCES
+#     src/main_trading_terminal.cpp
+#     src/vulkan_dashboard_advanced.cpp
+#     src/system/VulkanCore.cpp
+#     src/data/hotspine_data_bridge.cpp
+#     src/components/quant_workspace_component.cpp
+#     src/components/panel_base.cpp
+#     src/components/chart_panel.cpp
+#     src/components/metrics_panel.cpp
+#     src/components/panel_manager.cpp
+#     src/components/chart_manager.cpp
+#     src/components/indicator_renderer.cpp
+#     src/components/hierarchical_selector.cpp
+#     src/components/orderbook_panel.cpp
+#     src/components/alerts_panel.cpp
+#     src/components/status_bar_panel.cpp
+#     src/components/watchlist_panel.cpp
+#     src/components/tape_panel.cpp
+#     src/components/volume_profile_panel.cpp
+#     src/components/depth_chart_panel.cpp
+#     src/components/footprint_panel.cpp
+#     src/components/tpo_panel.cpp
+#     src/components/dom_surface_panel.cpp
+#     src/components/MarketMicrostructureRenderer.cpp
+#     src/components/VulkanSynchronization.cpp
+#     src/components/realtime_dashboard_component.cpp
+#     src/components/correlation_heatmap_component.cpp
+#     src/components/symbol_selector.cpp
+#     src/components/trading_orders_panel.cpp
+#     src/components/trading_positions_panel.cpp
+#     src/components/risk_metrics_panel.cpp
+#     src/components/histogram_panel.cpp
+#     src/components/scatter_plot_panel.cpp
+#     src/components/time_series_panel.cpp
+#     src/components/screener_panel.cpp
+#     src/components/log_panel.cpp
+#     src/trading/trading_interface.cpp
+#     src/trading/order_manager.cpp
+#     src/trading/position_manager.cpp
+#     src/trading/risk_assessment.cpp
+#     src/trading/advanced_trading_features.cpp
+#     src/data/symbol_registry.cpp
+#     src/optimization/performance_optimizer.cpp
+#     src/system/GPUMemoryManager.cpp
+#     src/components/theme_manager.cpp
+#     src/components/interaction_manager.cpp
+#     src/config/dashboard_config.cpp
+#     src/data/market_data_processor.cpp
+#     src/data/symbol_manager.cpp
+#     src/monitoring/performance_monitor.cpp
+#     # Analytics and advanced features
+#     src/analytics/technical_analysis.cpp
+#     src/analytics/trading_analytics.cpp
+#     src/layout/dashboard_layout_manager.cpp
+#     src/data/ui_data_manager.cpp
+#     src/system/system_optimizer.cpp
+# )
 
-# Performance monitoring
-target_compile_definitions(btquant_terminal PRIVATE ENABLE_PERFORMANCE_MONITORING)
+# add_executable(trading_terminal ${TRADING_TERMINAL_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
 
-# Shader compilation target
-add_dependencies(btquant_terminal compile_shaders)
+# target_include_directories(trading_terminal PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${IMGUI_DIR}
+#     ${IMGUI_DIR}/backends
+#     ${IMPLOT_DIR}
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${Vulkan_INCLUDE_DIRS}
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+# )
+
+# target_link_libraries(trading_terminal PRIVATE
+#     Vulkan::Vulkan
+#     glfw
+#     dl
+#     pthread
+# )
+
+# # Optimization
+# target_compile_definitions(trading_terminal PRIVATE IMGUI_ENABLE_DOCKING)
+# if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+#     target_compile_options(trading_terminal PRIVATE
+#             -Wall -Wextra -O3 -march=native -ffast-math -funroll-loops
+#             -fstrict-aliasing)
+#         target_link_options(trading_terminal PRIVATE -flto)
+#     endif()
+
+# # Performance monitoring
+# target_compile_definitions(trading_terminal PRIVATE ENABLE_PERFORMANCE_MONITORING)
+
+# # Shader compilation target
+# add_dependencies(trading_terminal compile_shaders)
+
+# Benchmark executable
+# Comment out benchmark_performance target for now since benchmark library is not found
+# add_executable(benchmark_performance tests/benchmark_performance.cpp)
+# target_include_directories(benchmark_performance PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${Vulkan_INCLUDE_DIRS}
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+# )
+# target_link_libraries(benchmark_performance PRIVATE
+#     Vulkan::Vulkan
+#     glfw
+#     dl
+#     pthread
+# )
+
+# Unit test executable
+# enable_testing()
+# find_package(GTest REQUIRED)
+# add_executable(unit_tests
+#     tests/test_market_data_processor.cpp
+#     tests/test_hotspine_data_bridge.cpp
+#     tests/test_trading_components.cpp
+#     src/data/market_data_processor.cpp
+#     src/data/hotspine_data_bridge.cpp
+#     src/data/symbol_registry.cpp
+#     src/trading/order_manager.cpp
+#     src/trading/position_manager.cpp
+#     src/trading/risk_assessment.cpp
+#     src/trading/advanced_trading_features.cpp
+#     src/analytics/technical_analysis.cpp
+#     src/analytics/trading_analytics.cpp
+#     src/components/theme_manager.cpp
+#     src/components/interaction_manager.cpp
+#     src/monitoring/performance_monitor.cpp
+#     src/system/system_optimizer.cpp
+#     src/data/symbol_manager.cpp
+#     src/config/dashboard_config.cpp
+#     src/components/panel_manager.cpp
+#     src/components/panel_base.cpp
+#     src/components/chart_manager.cpp
+#     src/components/chart_panel.cpp
+#     src/components/metrics_panel.cpp
+#     src/components/orderbook_panel.cpp
+#     src/components/watchlist_panel.cpp
+#     src/components/tape_panel.cpp
+#     src/components/volume_profile_panel.cpp
+#     src/components/depth_chart_panel.cpp
+#     src/components/footprint_panel.cpp
+#     src/components/tpo_panel.cpp
+#     src/components/dom_surface_panel.cpp
+#     src/components/trading_orders_panel.cpp
+#     src/components/trading_positions_panel.cpp
+#     src/components/risk_metrics_panel.cpp
+#     src/components/histogram_panel.cpp
+#     src/components/scatter_plot_panel.cpp
+#     src/components/time_series_panel.cpp
+#     src/components/screener_panel.cpp
+#     src/components/log_panel.cpp
+#     src/components/alerts_panel.cpp
+#     src/components/status_bar_panel.cpp
+#     src/components/quant_workspace_component.cpp
+#     src/components/realtime_dashboard_component.cpp
+#     src/components/correlation_heatmap_component.cpp
+#     src/components/symbol_selector.cpp
+#     src/components/hierarchical_selector.cpp
+#     src/components/indicator_renderer.cpp
+#     src/components/MarketMicrostructureRenderer.cpp
+#     src/components/VulkanSynchronization.cpp
+#     src/system/VulkanCore.cpp
+#     src/system/GPUMemoryManager.cpp
+#     src/optimization/performance_optimizer.cpp
+#     src/layout/dashboard_layout_manager.cpp
+#     src/data/ui_data_manager.cpp
+#     src/vulkan_dashboard_advanced.cpp
+#     src/performance_monitor.cpp
+#     src/symbol_registry.cpp
+# )
+# target_include_directories(unit_tests PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/include
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src
+#     ${Vulkan_INCLUDE_DIRS}
+#     ${glm_SOURCE_DIR}
+#     ${json_SOURCE_DIR}/include
+#     ${concurrentqueue_SOURCE_DIR}
+# )
+# target_link_libraries(unit_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
 

@@ -72,12 +72,10 @@ PerformanceMetrics TradingAnalytics::calculate_performance_metrics() const {
     std::vector<double> returns;
 
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
-        
+        double pnl = trade.pnl;
+
         returns.push_back(pnl);
-        
+
         if (pnl > 0) {
             total_profit += pnl;
             winning_trades++;
@@ -147,9 +145,7 @@ TradeStatistics TradingAnalytics::calculate_trade_statistics() const {
     double total_duration = 0.0;
 
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         
         if (pnl > 0) {
             total_profit += pnl;
@@ -214,9 +210,7 @@ EquityCurve TradingAnalytics::calculate_equity_curve(double initial_capital) con
     double peak_equity = initial_capital;
 
     for (const auto& trade : sorted_trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         
         equity += pnl;
         
@@ -295,9 +289,7 @@ double TradingAnalytics::calculate_volatility(int period_days) const {
                              std::to_string(tm.tm_mon) + "-" + 
                              std::to_string(tm.tm_mday);
         
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         
         daily_pnl[day_key] += pnl;
     }
@@ -328,9 +320,7 @@ double TradingAnalytics::calculate_var(double confidence_level) const {
 
     std::vector<double> returns;
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         returns.push_back(pnl);
     }
 
@@ -353,9 +343,7 @@ double TradingAnalytics::calculate_cvar(double confidence_level) const {
 
     std::vector<double> returns;
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         returns.push_back(pnl);
     }
 
@@ -379,9 +367,7 @@ double TradingAnalytics::calculate_cvar(double confidence_level) const {
 std::vector<Trade> TradingAnalytics::get_winning_trades() const {
     std::vector<Trade> result;
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         if (pnl > 0) {
             result.push_back(trade);
         }
@@ -392,9 +378,7 @@ std::vector<Trade> TradingAnalytics::get_winning_trades() const {
 std::vector<Trade> TradingAnalytics::get_losing_trades() const {
     std::vector<Trade> result;
     for (const auto& trade : impl_->trades) {
-        double pnl = trade.is_buy ? 
-            (trade.price * trade.quantity) : 
-            -(trade.price * trade.quantity);
+        double pnl = trade.pnl;
         if (pnl < 0) {
             result.push_back(trade);
         }

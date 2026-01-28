@@ -19,6 +19,7 @@ struct Trade {
     double quantity;
     double price;
     double commission;
+    double pnl;  // Profit and Loss for this trade
     std::chrono::system_clock::time_point timestamp;
     bool is_buy;
 };

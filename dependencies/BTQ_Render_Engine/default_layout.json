@@ -29,16 +29,16 @@
             "grid_y": 0,
             "title": "Alerts",
             "type": 9,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
             "grid_width": 2,
             "grid_x": 0,
             "grid_y": 1,
-            "title": "BTC-USDT Chart [15s]",
+            "title": "BTC-USDT Chart",
             "type": 0,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -47,16 +47,16 @@
             "grid_y": 1,
             "title": "Depth Chart - ADAUSDT",
             "type": 15,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
             "grid_width": 2,
             "grid_x": 0,
             "grid_y": 3,
-            "title": "BNBUSDT Orderbook",
+            "title": "BTC-USDT Orderbook",
             "type": 10,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -65,7 +65,7 @@
             "grid_y": 3,
             "title": "Time & Sales",
             "type": 13,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -74,7 +74,7 @@
             "grid_y": 0,
             "title": "DOM Surface",
             "type": 2,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -83,7 +83,7 @@
             "grid_y": 4,
             "title": "Watchlist",
             "type": 11,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -92,7 +92,7 @@
             "grid_y": 0,
             "title": "Chart",
             "type": 0,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -101,16 +101,16 @@
             "grid_y": 0,
             "title": "DOM Surface",
             "type": 2,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
             "grid_width": 1,
             "grid_x": 3,
             "grid_y": 0,
-            "title": "ADA-USDT Orderbook",
+            "title": "Orderbook",
             "type": 10,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -128,7 +128,7 @@
             "grid_y": 2,
             "title": "Volume Profile",
             "type": 14,
-            "visible": false
+            "visible": true
         }
     ]
 }

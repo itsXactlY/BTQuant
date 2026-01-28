@@ -16,24 +16,53 @@ void PositionManager::update_position(const OrderManager::OrderExecution &execut
   Position &position = positions_[symbol];
   bool is_buy = is_buy_execution(execution);
 
+  // Determine if this execution is reducing the position size (closing)
+  double execution_qty = is_buy ? execution.quantity : -execution.quantity;
+  bool is_closing = (position.quantity > 0 && execution_qty < 0) ||
+                    (position.quantity < 0 && execution_qty > 0);
+
   if (position.quantity == 0) {
     // New position
     position.symbol = symbol;
-    position.quantity = is_buy ? execution.quantity : -execution.quantity;
+    position.quantity = execution_qty;
     position.average_price = execution.price;
     position.first_trade_time = execution.timestamp;
     position.trade_count = 1;
+    position.contributing_orders.push_back(execution.order_id);
+  } else if (is_closing) {
+    // Closing or reducing position - calculate realized P&L
+    double qty_to_close = std::min(std::abs(position.quantity), std::abs(execution_qty));
+    double realized_pnl_per_unit = execution.price - position.average_price;
+    double realized_pnl = qty_to_close * realized_pnl_per_unit * (position.quantity > 0 ? 1 : -1);
+
+    position.realized_pnl += realized_pnl;
+
+    // Update quantity
+    position.quantity += execution_qty;  // execution_qty already has the correct sign
+
+    // If position is fully closed, reset average price
+    if (position.quantity == 0) {
+      position.average_price = 0;
+    } else {
+      // Average price remains the same for remaining position
+      // The average price doesn't change when closing part of position
+      // Only the quantity changes
+    }
+
+    position.trade_count++;
+    position.contributing_orders.push_back(execution.order_id);
   } else {
-    // Update existing position
-    double total_cost = position.quantity * position.average_price;
-    double new_cost = (is_buy ? execution.quantity : -execution.quantity) * execution.price;
-    double new_quantity = position.quantity + (is_buy ? execution.quantity : -execution.quantity);
+    // Adding to existing position
+    double total_cost = std::abs(position.quantity) * position.average_price;
+    double new_cost = std::abs(execution_qty) * execution.price;
+    double new_quantity = position.quantity + execution_qty;
 
     if (new_quantity != 0) {
-      position.average_price = (total_cost + new_cost) / new_quantity;
+      position.average_price = (total_cost + new_cost) / std::abs(new_quantity);
     }
     position.quantity = new_quantity;
     position.trade_count++;
+    position.contributing_orders.push_back(execution.order_id);
   }
 
   position.last_trade_time = execution.timestamp;
@@ -48,8 +77,10 @@ void PositionManager::update_position(const OrderManager::OrderExecution &execut
 
     if (position.quantity > 0) {
       position.unrealized_pnl = position.market_value - position.cost_basis;
-    } else {
+    } else if (position.quantity < 0) {
       position.unrealized_pnl = position.cost_basis - position.market_value;
+    } else {
+      position.unrealized_pnl = 0; // No position
     }
   }
 
@@ -269,6 +300,21 @@ void PositionManager::notify_position_update(const Position &position) {
   if (position_update_callback_) {
     position_update_callback_(position);
   }
+}
+
+PositionManager::TradeRecord PositionManager::create_trade_record(const OrderManager::OrderExecution &execution, double realized_pnl) {
+  TradeRecord record;
+  record.trade_id = execution.execution_id;
+  record.symbol = get_symbol_from_order(execution.order_id);
+  record.order_id = execution.order_id;
+  record.quantity = execution.quantity;
+  record.price = execution.price;
+  record.commission = execution.commission;
+  record.pnl = realized_pnl;  // Use the calculated P&L
+  record.timestamp = execution.timestamp;
+  record.is_buy = is_buy_execution(execution);
+
+  return record;
 }
 
 } // namespace BTQuant

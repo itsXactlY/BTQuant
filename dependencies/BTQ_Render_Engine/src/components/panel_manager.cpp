@@ -11,6 +11,14 @@
 #include "../../include/components/tpo_panel.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/watchlist_panel.hpp"
+#include "../../include/components/trading_orders_panel.hpp"
+#include "../../include/components/trading_positions_panel.hpp"
+#include "../../include/components/risk_metrics_panel.hpp"
+#include "../../include/components/histogram_panel.hpp"
+#include "../../include/components/scatter_plot_panel.hpp"
+#include "../../include/components/time_series_panel.hpp"
+#include "../../include/components/screener_panel.hpp"
+#include "../../include/components/log_panel.hpp"
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -150,15 +158,29 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
     panel = std::make_unique<AlertsPanel>(config);
     break;
   case PanelType::SCATTER_PLOT:
+    panel = std::make_unique<ScatterPlotPanel>(config);
+    break;
   case PanelType::TIME_SERIES:
+    panel = std::make_unique<TimeSeriesPanel>(config);
+    break;
   case PanelType::TRADING_ORDERS:
+    panel = std::make_unique<TradingOrdersPanel>(config, order_manager_, position_manager_);
+    break;
   case PanelType::TRADING_POSITIONS:
+    panel = std::make_unique<TradingPositionsPanel>(config, position_manager_, risk_assessment_);
+    break;
   case PanelType::RISK_METRICS:
+    panel = std::make_unique<RiskMetricsPanel>(config, risk_assessment_, position_manager_);
+    break;
   case PanelType::HISTOGRAM:
+    panel = std::make_unique<HistogramPanel>(config);
+    break;
   case PanelType::SCREENER:
+    panel = std::make_unique<ScreenerPanel>(config);
+    break;
   case PanelType::LOG_PANEL:
-    // TODO: Implement these panel types
-    return 0;
+    panel = std::make_unique<LogPanel>(config);
+    break;
   default:
     return 0;
   }

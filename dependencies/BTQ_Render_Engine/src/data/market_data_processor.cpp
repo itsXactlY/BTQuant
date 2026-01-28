@@ -767,7 +767,10 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate &update) {
     trade.size = update.size;
     trade.is_buy = (update.side == "buy");
 
-    // Keep FULL trade history (no limit)
+    // Limit trade history to prevent memory growth
+    if (symbol_data.recent_trades.size() >= 10000) {
+      symbol_data.recent_trades.erase(symbol_data.recent_trades.begin());
+    }
     symbol_data.recent_trades.push_back(trade);
 
     // Update analytics
@@ -808,15 +811,23 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate &update) {
       symbol_data.consolidated_asks[level.price] += level.size;
     }
 
-    // Keep FULL orderbook history (no limit)
+    // Limit orderbook history to prevent memory growth
+    if (symbol_data.recent_orderbooks.size() >= 1000) {
+      symbol_data.recent_orderbooks.erase(symbol_data.recent_orderbooks.begin());
+    }
     symbol_data.recent_orderbooks.push_back(orderbook);
   }
 
-  // Update indicators
-  updateVWAP(symbol_data);
-  updateMomentum(symbol_data);
-  updateVolatility(symbol_data);
-  updateSpreadAnalysis(symbol_data);
+  // Update indicators - only update periodically to reduce CPU load
+  static uint64_t update_counter = 0;
+  if (++update_counter % 10 == 0) { // Update every 10 updates
+    updateVWAP(symbol_data);
+    updateMomentum(symbol_data);
+    updateVolatility(symbol_data);
+  }
+  if (update_counter % 5 == 0) { // Update spread analysis every 5 updates
+    updateSpreadAnalysis(symbol_data);
+  }
 
   // Release lock before notifying subscribers (avoid holding while calling
   // callbacks)

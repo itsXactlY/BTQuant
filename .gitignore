@@ -59,6 +59,12 @@ Research-Spine/
 **/experiments/
 test/strategy_*.py
 
+# Ralph
+.env
+.ralph/
+scripts/ralph/.state/
+[BROKEN]/
+
 # ===== Misc =====
 TODO.rst
 TODO ::.txt
@@ -74,3 +80,9 @@ discord_architect.py
 plans/
 dependencies/BTQ_Render_Engine/imgui_.ini
 dependencies/BTQ_Render_Engine/imgui.ini
+
+
+scripts/ralph/ralph.sh
+scripts/ralph/PROMPT.md
+install_ralph.sh
+prd.json

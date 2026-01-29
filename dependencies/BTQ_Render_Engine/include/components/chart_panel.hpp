@@ -112,9 +112,6 @@ private:
   // Track the last known data size to detect when cache needs invalidation
   size_t last_known_data_size_ = 0;
 
-  // Method to clear cache when data changes
-  void invalidate_cache_if_needed(size_t current_data_size);
-
   void render_chart_controls();
   void render_indicator_selector();
   void render_instrument_chart(const ChartInstance &chart);

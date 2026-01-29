@@ -49,3 +49,13 @@ Changes Made:
 
 The performance monitor calls are now properly integrated into the main render loop to track frame performance metrics.
 >>>>>>> ralphy/agent-7-1769699288708-ur8d4m-instrument-main-render-loop-add-performance-monito
+
+Task Completed: Create VolumeProfileNode structure
+
+Changes Made:
+1. Created widgets directory in dependencies/BTQ_Render_Engine/include/widgets
+2. Created VolumeProfileNode.h header file with the VolumeProfileNode struct
+3. Defined the struct with fields: priceLevel, totalVolume, buyVolume, sellVolume, delta, numTrades
+4. Included proper header guards and necessary includes
+
+The VolumeProfileNode struct contains all required fields for volume profile analysis with appropriate data types.

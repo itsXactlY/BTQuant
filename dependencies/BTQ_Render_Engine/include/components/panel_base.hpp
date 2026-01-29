@@ -1,10 +1,11 @@
 #pragma once
 
-#include "imgui.h"
-#include "theme_manager.hpp"
 #include <atomic>
 #include <memory>
 #include <string>
+
+#include "imgui.h"
+#include "theme_manager.hpp"
 
 namespace BTQuant {
 
@@ -28,7 +29,8 @@ enum class PanelType {
   STATUS_BAR,
   LOG_PANEL,
   FOOTPRINT_CHART,
-  TPO_PROFILE
+  TPO_PROFILE,
+  PERFORMANCE_MONITOR
 };
 
 struct PanelConfig {
@@ -55,8 +57,8 @@ struct PanelConfig {
  * - No polling timers needed - truly event-driven
  */
 class PanelBase {
-public:
-  PanelBase(const PanelConfig &config) : config_(config) {}
+ public:
+  PanelBase(const PanelConfig& config) : config_(config) {}
   virtual ~PanelBase() = default;
 
   virtual void update([[maybe_unused]] float dt) {}
@@ -64,32 +66,30 @@ public:
   virtual void initialize() {}
 
   // Panel management
-  void set_position(const ImVec2 &pos) { config_.position = pos; }
-  void set_size(const ImVec2 &size) { config_.size = size; }
+  void set_position(const ImVec2& pos) { config_.position = pos; }
+  void set_size(const ImVec2& size) { config_.size = size; }
   void set_visible(bool visible) { config_.visible = visible; }
-  void set_title(const std::string &title) { config_.title = title; }
+  void set_title(const std::string& title) { config_.title = title; }
 
-  const PanelConfig &get_config() const { return config_; }
-  PanelConfig &get_config() { return config_; }
+  const PanelConfig& get_config() const { return config_; }
+  PanelConfig& get_config() { return config_; }
 
   bool is_visible() const { return config_.visible; }
-  const std::string &get_title() const { return config_.title; }
+  const std::string& get_title() const { return config_.title; }
 
-protected:
+ protected:
   PanelConfig config_;
 
   // C++26 Reactive Push Notification Support
   // Set by processor callback when new data arrives - atomic for thread safety
-  std::atomic<bool> data_dirty_{true}; // Start dirty to force initial load
-  uint64_t subscription_id_ = 0;       // ID from processor->subscribe()
+  std::atomic<bool> data_dirty_{true};  // Start dirty to force initial load
+  uint64_t subscription_id_ = 0;        // ID from processor->subscribe()
 
   /**
    * Called by MarketDataProcessor notification callback
    * Thread-safe: uses release memory ordering for proper visibility
    */
-  void markDirty() noexcept {
-    data_dirty_.store(true, std::memory_order_release);
-  }
+  void markDirty() noexcept { data_dirty_.store(true, std::memory_order_release); }
 
   /**
    * Called in render() to check if data needs refresh
@@ -110,7 +110,7 @@ protected:
   void pop_glass_style();
 
   // Utility functions
-  static const char *get_panel_type_name(PanelType type);
+  static const char* get_panel_type_name(PanelType type);
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

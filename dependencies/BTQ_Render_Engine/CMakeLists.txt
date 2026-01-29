@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(BTQuant_Render_Engine LANGUAGES CXX)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-# C++26 Standard - Cutting Edge (GCC 15+ / Clang 18+)
+# C++26 Standard - Cutting Edge (GCC 15+ / Clang 18+) for main application
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -109,6 +109,7 @@ set(DASHBOARD_SOURCES
     src/components/time_series_panel.cpp
     src/components/screener_panel.cpp
     src/components/log_panel.cpp
+    src/components/performance_monitor_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/order_manager.cpp
     src/trading/position_manager.cpp
@@ -285,74 +286,303 @@ target_link_libraries(dashboard_advanced PRIVATE
 # )
 
 # Unit test executable
-# enable_testing()
-# find_package(GTest REQUIRED)
-# add_executable(unit_tests
-#     tests/test_market_data_processor.cpp
-#     tests/test_hotspine_data_bridge.cpp
-#     tests/test_trading_components.cpp
-#     src/data/market_data_processor.cpp
-#     src/data/hotspine_data_bridge.cpp
-#     src/data/symbol_registry.cpp
-#     src/trading/order_manager.cpp
-#     src/trading/position_manager.cpp
-#     src/trading/risk_assessment.cpp
-#     src/trading/advanced_trading_features.cpp
-#     src/analytics/technical_analysis.cpp
-#     src/analytics/trading_analytics.cpp
-#     src/components/theme_manager.cpp
-#     src/components/interaction_manager.cpp
-#     src/monitoring/performance_monitor.cpp
-#     src/system/system_optimizer.cpp
-#     src/data/symbol_manager.cpp
-#     src/config/dashboard_config.cpp
-#     src/components/panel_manager.cpp
-#     src/components/panel_base.cpp
-#     src/components/chart_manager.cpp
-#     src/components/chart_panel.cpp
-#     src/components/metrics_panel.cpp
-#     src/components/orderbook_panel.cpp
-#     src/components/watchlist_panel.cpp
-#     src/components/tape_panel.cpp
-#     src/components/volume_profile_panel.cpp
-#     src/components/depth_chart_panel.cpp
-#     src/components/footprint_panel.cpp
-#     src/components/tpo_panel.cpp
-#     src/components/dom_surface_panel.cpp
-#     src/components/trading_orders_panel.cpp
-#     src/components/trading_positions_panel.cpp
-#     src/components/risk_metrics_panel.cpp
-#     src/components/histogram_panel.cpp
-#     src/components/scatter_plot_panel.cpp
-#     src/components/time_series_panel.cpp
-#     src/components/screener_panel.cpp
-#     src/components/log_panel.cpp
-#     src/components/alerts_panel.cpp
-#     src/components/status_bar_panel.cpp
-#     src/components/quant_workspace_component.cpp
-#     src/components/realtime_dashboard_component.cpp
-#     src/components/correlation_heatmap_component.cpp
-#     src/components/symbol_selector.cpp
-#     src/components/hierarchical_selector.cpp
-#     src/components/indicator_renderer.cpp
-#     src/components/MarketMicrostructureRenderer.cpp
-#     src/components/VulkanSynchronization.cpp
-#     src/system/VulkanCore.cpp
-#     src/system/GPUMemoryManager.cpp
-#     src/optimization/performance_optimizer.cpp
-#     src/layout/dashboard_layout_manager.cpp
-#     src/data/ui_data_manager.cpp
-#     src/vulkan_dashboard_advanced.cpp
-#     src/performance_monitor.cpp
-#     src/symbol_registry.cpp
-# )
-# target_include_directories(unit_tests PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/include
-#     ${CMAKE_CURRENT_SOURCE_DIR}/src
-#     ${Vulkan_INCLUDE_DIRS}
-#     ${glm_SOURCE_DIR}
-#     ${json_SOURCE_DIR}/include
-#     ${concurrentqueue_SOURCE_DIR}
-# )
-# target_link_libraries(unit_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+enable_testing()
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    add_executable(component_enhancement_tests
+        tests/component_enhancement_tests.cpp
+        src/data/market_data_processor.cpp
+        src/data/hotspine_data_bridge.cpp
+        src/data/symbol_registry.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/analytics/technical_analysis.cpp
+        src/analytics/trading_analytics.cpp
+        src/components/theme_manager.cpp
+        src/components/interaction_manager.cpp
+        src/monitoring/performance_monitor.cpp
+        src/system/system_optimizer.cpp
+        src/data/symbol_manager.cpp
+        src/config/dashboard_config.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/system/VulkanCore.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/vulkan_dashboard_advanced.cpp
+        src/performance_monitor.cpp
+        src/symbol_registry.cpp
+        src/components/technical_indicators_component.cpp
+    )
+    target_include_directories(component_enhancement_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(component_enhancement_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+endif()
+
+# Data flow and layout tests
+if(GTest_FOUND)
+    add_executable(data_flow_layout_tests
+        tests/test_data_flow_layout.cpp
+        src/data/market_data_processor.cpp
+        src/data/hotspine_data_bridge.cpp
+        src/data/symbol_registry.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/analytics/technical_analysis.cpp
+        src/analytics/trading_analytics.cpp
+        src/components/theme_manager.cpp
+        src/components/interaction_manager.cpp
+        src/monitoring/performance_monitor.cpp
+        src/data/symbol_manager.cpp
+        src/config/dashboard_config.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/performance_monitor.cpp
+        src/symbol_registry.cpp
+        src/components/technical_indicators_component.cpp
+        src/data/unified_data_pipeline.cpp
+    )
+    target_include_directories(data_flow_layout_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/components
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+    )
+    # Use C++17 for tests due to JSON library compatibility issues
+    target_compile_features(data_flow_layout_tests PRIVATE cxx_std_17)
+    target_link_libraries(data_flow_layout_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+endif()
+
+# Integration tests
+if(GTest_FOUND)
+    add_executable(integration_tests
+        tests/integration_tests.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/components/theme_manager.cpp
+        src/components/interaction_manager.cpp
+        src/components/performance_monitor_panel.cpp
+        src/trading/trading_interface.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/data/symbol_registry.cpp
+        src/optimization/performance_optimizer.cpp
+        src/system/GPUMemoryManager.cpp
+        src/config/dashboard_config.cpp
+        src/data/market_data_processor.cpp
+        src/data/symbol_manager.cpp
+        src/monitoring/performance_monitor.cpp
+        src/system/VulkanCore.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/vulkan_dashboard_advanced.cpp
+        src/performance_monitor.cpp
+        src/symbol_registry.cpp
+        src/components/technical_indicators_component.cpp
+        src/data/hotspine_data_bridge.cpp
+        ${LIB_SOURCES}
+    )
+    target_include_directories(integration_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(integration_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+endif()
+
+# Comprehensive tests
+if(GTest_FOUND)
+    add_executable(comprehensive_tests
+        tests/comprehensive_tests.cpp
+        src/data/market_data_processor.cpp
+        src/data/hotspine_data_bridge.cpp
+        src/data/symbol_registry.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/analytics/technical_analysis.cpp
+        src/analytics/trading_analytics.cpp
+        src/components/theme_manager.cpp
+        src/components/interaction_manager.cpp
+        src/monitoring/performance_monitor.cpp
+        src/system/system_optimizer.cpp
+        src/data/symbol_manager.cpp
+        src/config/dashboard_config.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/system/VulkanCore.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/vulkan_dashboard_advanced.cpp
+        src/performance_monitor.cpp
+        src/symbol_registry.cpp
+        src/components/technical_indicators_component.cpp
+    )
+    target_include_directories(comprehensive_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(comprehensive_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+endif()
 

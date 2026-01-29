@@ -1,4 +1,5 @@
 #include "../../include/components/theme_manager.hpp"
+#include "../../include/ui/unified_theme_system.hpp"
 #include <iostream>
 
 namespace BTQuant {
@@ -151,6 +152,31 @@ void ThemeManager::toggleTheme() {
   } else {
     applyTheme(ThemeType::DarkNeon);
   }
+}
+
+// Integration with unified theme system
+void ThemeManager::apply_unified_theme(const std::string& theme_name) {
+  // Get the unified theme manager instance
+  static auto& unified_manager = UI::UnifiedThemeManager::getInstance();
+
+  // Set the theme in the unified system
+  unified_manager.set_current_theme(theme_name);
+
+  // Apply the theme to ImGui
+  unified_manager.apply_to_imgui();
+
+  // Update our internal theme type based on the unified theme
+  auto theme = unified_manager.get_theme(theme_name);
+  if (theme && theme->is_dark_theme) {
+    current_theme_type_ = ThemeType::DarkNeon;
+  } else {
+    current_theme_type_ = ThemeType::LightClean;
+  }
+}
+
+void ThemeManager::sync_with_layout_manager() {
+  // This method would sync the current theme with the layout manager
+  // For now, it's a placeholder implementation
 }
 
 } // namespace BTQuant

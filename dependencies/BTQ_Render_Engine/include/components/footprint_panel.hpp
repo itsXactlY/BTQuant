@@ -49,7 +49,7 @@ public:
   }
   void setShowVolumeLabels(bool show) { show_volume_labels_ = show; }
   void setShowDeltaIndicator(bool show) { show_delta_indicator_ = show; }
-  void setDeltaThreshold(double threshold) { delta_threshold_ = threshold; }
+  void setDeltaThreshold(float threshold) { delta_threshold_ = threshold; }
 
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
@@ -62,7 +62,7 @@ private:
   // Visualization Options
   bool show_volume_labels_ = true;
   bool show_delta_indicator_ = true;
-  double delta_threshold_ = 0.0; // Threshold for delta coloring
+  float delta_threshold_ = 0.0f; // Threshold for delta coloring
 
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;

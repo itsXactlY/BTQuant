@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/glm-build/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/glm-build/glm/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-build/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/concurrentqueue-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

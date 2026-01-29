@@ -1,39 +1,39 @@
 # Modern Dashboard Integration Tasks
 
 - [x] **Phase 1: Analysis & Architecture** <!-- id: 0 -->
-    - [ ] Analyze existing components (DOM, Charts, Indicators, etc.) <!-- id: 1 -->
-    - [ ] Design integration architecture for Modern Dashboard <!-- id: 2 -->
-- [ ] **Phase 2: Component Enhancements** <!-- id: 3 -->
-    - [ ] Fix DOM Surface (Depth & Whale Orders) <!-- id: 4 -->
-    - [ ] Restore Chart Zoom/Pan <!-- id: 5 -->
-    - [ ] Improve Volume Profile <!-- id: 6 -->
-    - [ ] Rework Technical Indicators <!-- id: 7 -->
-    - [ ] Rework Footprint Chart <!-- id: 8 -->
-    - [ ] Rework TPO Profile <!-- id: 9 -->
-- [ ] **Phase 3: Integration (Migration)** <!-- id: 10 -->
-    - [ ] Migrate DOM Surface <!-- id: 11 -->
-    - [ ] Migrate Chart System <!-- id: 12 -->
-    - [ ] Migrate Volume Profile <!-- id: 13 -->
-    - [ ] Migrate Time & Sales <!-- id: 14 -->
-    - [ ] Migrate Watchlist <!-- id: 15 -->
-    - [ ] Migrate Footprint Chart <!-- id: 16 -->
-    - [ ] Migrate TPO Profile <!-- id: 17 -->
-    - [ ] Migrate Dashboard Controls <!-- id: 18 -->
-    - [ ] Integrate Performance Monitor <!-- id: 19 -->
-- [ ] **Phase 4: Data Flow & Layout** <!-- id: 20 -->
-    - [ ] Unified Data Pipeline <!-- id: 19 -->
-    - [ ] Global Symbol Switching <!-- id: 20 -->
-    - [ ] Flexible Panel Layout System <!-- id: 21 -->
-    - [ ] Panel Add/Remove Functionality <!-- id: 22 -->
-- [ ] **Phase 5: Optimization & Polish** <!-- id: 25 -->
-    - [ ] Optimize Rendering Performance <!-- id: 23 -->
-    - [ ] Optimize Memory Usage <!-- id: 24 -->
-    - [ ] Unify Visual Theme <!-- id: 25 -->
-    - [ ] Smooth Transitions & Animations <!-- id: 26 -->
-    - [ ] Layout Presets System <!-- id: 27 -->
-- [ ] **Phase 6: Cleanup & Finalization** <!-- id: 31 -->
-    - [ ] Remove Deprecated Code (WAIT FOR APPROVAL) <!-- id: 28 -->
-    - [ ] Comprehensive Testing <!-- id: 29 -->
-    - [ ] Stress Testing <!-- id: 30 -->
-    - [ ] Documentation <!-- id: 31 -->
-    - [ ] Final Verification <!-- id: 32 -->
+- [x] Analyze existing components (DOM, Charts, Indicators, etc.) <!-- id: 1 -->
+- [x] Design integration architecture for Modern Dashboard <!-- id: 2 -->
+- [x] **Phase 2: Component Enhancements** <!-- id: 3 -->
+- [x] Fix DOM Surface (Depth & Whale Orders) <!-- id: 4 -->
+- [x] Restore Chart Zoom/Pan <!-- id: 5 -->
+- [x] Improve Volume Profile <!-- id: 6 -->
+- [ ] Rework Technical Indicators <!-- id: 7 -->
+- [ ] Rework Footprint Chart <!-- id: 8 -->
+- [ ] Rework TPO Profile <!-- id: 9 -->
+- [x] **Phase 3: Integration (Migration)** <!-- id: 10 -->
+- [ ] Migrate DOM Surface <!-- id: 11 -->
+- [ ] Migrate Chart System <!-- id: 12 -->
+- [ ] Migrate Volume Profile <!-- id: 13 -->
+- [ ] Migrate Time & Sales <!-- id: 14 -->
+- [ ] Migrate Watchlist <!-- id: 15 -->
+- [ ] Migrate Footprint Chart <!-- id: 16 -->
+- [ ] Migrate TPO Profile <!-- id: 17 -->
+- [ ] Migrate Dashboard Controls <!-- id: 18 -->
+- [ ] Integrate Performance Monitor <!-- id: 19 -->
+- [x] **Phase 4: Data Flow & Layout** <!-- id: 20 -->
+- [ ] Unified Data Pipeline <!-- id: 19 -->
+- [ ] Global Symbol Switching <!-- id: 20 -->
+- [ ] Flexible Panel Layout System <!-- id: 21 -->
+- [ ] Panel Add/Remove Functionality <!-- id: 22 -->
+- [x] **Phase 5: Optimization & Polish** <!-- id: 25 -->
+- [ ] Optimize Rendering Performance <!-- id: 23 -->
+- [ ] Optimize Memory Usage <!-- id: 24 -->
+- [ ] Unify Visual Theme <!-- id: 25 -->
+- [ ] Smooth Transitions & Animations <!-- id: 26 -->
+- [ ] Layout Presets System <!-- id: 27 -->
+- [x] **Phase 6: Cleanup & Finalization** <!-- id: 31 -->
+- [ ] Remove Deprecated Code (WAIT FOR APPROVAL) <!-- id: 28 -->
+- [ ] Comprehensive Testing <!-- id: 29 -->
+- [ ] Stress Testing <!-- id: 30 -->
+- [ ] Documentation <!-- id: 31 -->
+- [ ] Final Verification <!-- id: 32 -->

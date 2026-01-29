@@ -59,6 +59,10 @@ public:
   // Dynamic updates
   void toggleTheme(); // Switching between Dark/Light or variants
 
+  // Integration with unified theme system
+  void apply_unified_theme(const std::string& theme_name);
+  void sync_with_layout_manager();
+
 private:
   ThemeManager() = default;
 

@@ -1,4 +1,5 @@
 #include "../../include/components/panel_base.hpp"
+
 #include "imgui.h"
 
 namespace BTQuant {
@@ -8,17 +9,15 @@ void PanelBase::begin_panel_window() {
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_None;
-  if (!config_.resizable)
-    flags |= ImGuiWindowFlags_NoResize;
-  if (!config_.movable)
-    flags |= ImGuiWindowFlags_NoMove;
+  if (!config_.resizable) flags |= ImGuiWindowFlags_NoResize;
+  if (!config_.movable) flags |= ImGuiWindowFlags_NoMove;
 
   // Use ThemeManager for glass style
   push_glass_style();
 
   // Ensure unique ID for the window
-  std::string window_title = config_.title + "###panel_" +
-                             std::to_string(reinterpret_cast<uintptr_t>(this));
+  std::string window_title =
+      config_.title + "###panel_" + std::to_string(reinterpret_cast<uintptr_t>(this));
 
   ImGui::Begin(window_title.c_str(), &config_.visible, flags);
 }
@@ -28,13 +27,9 @@ void PanelBase::end_panel_window() {
   pop_glass_style();
 }
 
-void PanelBase::push_glass_style() {
-  ThemeManager::getInstance().pushGlassStyle();
-}
+void PanelBase::push_glass_style() { ThemeManager::getInstance().pushGlassStyle(); }
 
-void PanelBase::pop_glass_style() {
-  ThemeManager::getInstance().popGlassStyle();
-}
+void PanelBase::pop_glass_style() { ThemeManager::getInstance().popGlassStyle(); }
 
 void PanelBase::render() {
   begin_panel_window();
@@ -55,7 +50,7 @@ void PanelBase::render() {
 
 void PanelBase::render_panel_header() {
   // Panel type indicator
-  const char *type_name = get_panel_type_name(config_.type);
+  const char* type_name = get_panel_type_name(config_.type);
   ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "[%s]", type_name);
 
   ImGui::SameLine();
@@ -73,47 +68,53 @@ void PanelBase::render_panel_header() {
   ImGui::Separator();
 }
 
-const char *PanelBase::get_panel_type_name(PanelType type) {
+const char* PanelBase::get_panel_type_name(PanelType type) {
   switch (type) {
-  case PanelType::CHART:
-    return "Chart";
-  case PanelType::METRICS:
-    return "Metrics";
-  case PanelType::HEATMAP:
-    return "Heatmap";
-  case PanelType::HISTOGRAM:
-    return "Histogram";
-  case PanelType::SCATTER_PLOT:
-    return "Scatter";
-  case PanelType::TIME_SERIES:
-    return "Time Series";
-  case PanelType::TRADING_ORDERS:
-    return "Orders";
-  case PanelType::TRADING_POSITIONS:
-    return "Positions";
-  case PanelType::RISK_METRICS:
-    return "Risk";
-  case PanelType::ALERTS:
-    return "Alerts";
-  case PanelType::ORDERBOOK:
-    return "Orderbook";
-  case PanelType::WATCHLIST:
-    return "Watchlist";
-  case PanelType::SCREENER:
-    return "Screener";
-  case PanelType::TAPE:
-    return "Tape";
-  case PanelType::VOLUME_PROFILE:
-    return "Volume Profile";
-  case PanelType::DEPTH_CHART:
-    return "Depth Chart";
-  case PanelType::STATUS_BAR:
-    return "Status Bar";
-  case PanelType::LOG_PANEL:
-    return "Log Panel";
-  default:
-    return "Unknown";
+    case PanelType::CHART:
+      return "Chart";
+    case PanelType::METRICS:
+      return "Metrics";
+    case PanelType::HEATMAP:
+      return "Heatmap";
+    case PanelType::HISTOGRAM:
+      return "Histogram";
+    case PanelType::SCATTER_PLOT:
+      return "Scatter";
+    case PanelType::TIME_SERIES:
+      return "Time Series";
+    case PanelType::TRADING_ORDERS:
+      return "Orders";
+    case PanelType::TRADING_POSITIONS:
+      return "Positions";
+    case PanelType::RISK_METRICS:
+      return "Risk";
+    case PanelType::ALERTS:
+      return "Alerts";
+    case PanelType::ORDERBOOK:
+      return "Orderbook";
+    case PanelType::WATCHLIST:
+      return "Watchlist";
+    case PanelType::SCREENER:
+      return "Screener";
+    case PanelType::TAPE:
+      return "Tape";
+    case PanelType::VOLUME_PROFILE:
+      return "Volume Profile";
+    case PanelType::DEPTH_CHART:
+      return "Depth Chart";
+    case PanelType::STATUS_BAR:
+      return "Status Bar";
+    case PanelType::LOG_PANEL:
+      return "Log Panel";
+    case PanelType::FOOTPRINT_CHART:
+      return "Footprint Chart";
+    case PanelType::TPO_PROFILE:
+      return "TPO Profile";
+    case PanelType::PERFORMANCE_MONITOR:
+      return "Performance Monitor";
+    default:
+      return "Unknown";
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

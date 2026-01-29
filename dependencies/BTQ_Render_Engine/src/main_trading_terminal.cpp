@@ -27,7 +27,7 @@ using namespace BTQuant::RenderEngine;
 // Main Entry Point
 // ============================================================================
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
   std::cout << "========================================" << std::endl;
@@ -42,17 +42,14 @@ int main(int argc, char **argv) {
   std::cout << "Initializing Data Layer..." << std::endl;
 
   // Market Processor
-  auto market_processor =
-      std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
+  auto market_processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
 
   // Data Bridge
-  auto data_bridge =
-      std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
+  auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
   data_bridge->setMarketDataProcessor(market_processor);
 
   if (auto res = data_bridge->start(); !res) {
-    std::cerr << "✗ Failed to initialize HotSpine data bridge: " << res.error()
-              << std::endl;
+    std::cerr << "✗ Failed to initialize HotSpine data bridge: " << res.error() << std::endl;
     return 1;
   }
   std::cout << "✓ Data Pipeline active" << std::endl;
@@ -61,12 +58,11 @@ int main(int argc, char **argv) {
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(
-      1920, 1080, data_bridge, market_processor, dashboard_config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, data_bridge,
+                                                              market_processor, dashboard_config);
 
   if (auto res = dashboard->initialize(); !res) {
-    std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error()
-              << std::endl;
+    std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error() << std::endl;
     return 1;
   }
   std::cout << "✓ Vulkan Dashboard initialized" << std::endl;
@@ -76,8 +72,8 @@ int main(int argc, char **argv) {
 
   // 5. Configure Layout (via Workspace Component)
   // We access the internal components to set up the default trading layout
-  if (auto *workspace = dashboard->get_workspace_component()) {
-    if (auto *panel_mgr = workspace->getPanelManager()) {
+  if (auto* workspace = dashboard->get_workspace_component()) {
+    if (auto* panel_mgr = workspace->getPanelManager()) {
       std::cout << "Configuring Default Layout..." << std::endl;
 
       // Clear existing default if any
@@ -85,30 +81,41 @@ int main(int argc, char **argv) {
       panel_mgr->clear_panels();
 
       // Construct the PRO Trading Layout
-      // Grid: 6x5 (Wider Aspect Ratio, extra row for positions)
-      panel_mgr->set_grid_layout(6, 5);
+      // Grid: 6x9 (Wider Aspect Ratio, extra rows for all components)
+      panel_mgr->set_grid_layout(6, 9);
 
       // 1. Main Chart (Top Left, large)
-      panel_mgr->add_panel(BTQuant::PanelType::CHART, "BTC/USDT Chart", 0, 0, 4,
-                           3);
+      panel_mgr->add_panel(BTQuant::PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
 
       // 2. Orderbook / DOM (Right side)
       // DOM Surface (Heatmap)
-      panel_mgr->add_panel(BTQuant::PanelType::HEATMAP, "DOM Surface", 4, 0, 2,
-                           2);
+      panel_mgr->add_panel(BTQuant::PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
       // Classic Orderbook
-      panel_mgr->add_panel(BTQuant::PanelType::ORDERBOOK, "Orderbook", 4, 2, 2,
-                           2);
+      panel_mgr->add_panel(BTQuant::PanelType::ORDERBOOK, "Orderbook", 4, 2, 2, 2);
 
       // 3. Bottom Row 1 (Tape / Orders)
-      panel_mgr->add_panel(BTQuant::PanelType::TAPE, "Time & Sales", 0, 3, 2,
-                           1);
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_ORDERS, "Active Orders",
-                           2, 3, 2, 1);
+      panel_mgr->add_panel(BTQuant::PanelType::TAPE, "Time & Sales", 0, 3, 2, 1);
+      panel_mgr->add_panel(BTQuant::PanelType::TRADING_ORDERS, "Active Orders", 2, 3, 2, 1);
 
       // 4. Bottom Row 2 (Positions / Risk)
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_POSITIONS, "Positions",
-                           0, 4, 6, 1);
+      panel_mgr->add_panel(BTQuant::PanelType::TRADING_POSITIONS, "Positions", 0, 4, 2, 1);
+
+      // 5. Add remaining components for complete integration
+      // Volume Profile (Bottom Right)
+      panel_mgr->add_panel(BTQuant::PanelType::VOLUME_PROFILE, "Volume Profile", 2, 4, 2, 1);
+
+      // Watchlist (Far Right Bottom)
+      panel_mgr->add_panel(BTQuant::PanelType::WATCHLIST, "Watchlist", 4, 4, 2, 1);
+
+      // Add Footprint Chart and TPO Profile if needed
+      // These could be added as additional panels or accessible via menu
+      // For now, we'll add them to the layout as well
+      panel_mgr->add_panel(BTQuant::PanelType::FOOTPRINT_CHART, "Footprint Chart", 0, 5, 3, 2);
+      panel_mgr->add_panel(BTQuant::PanelType::TPO_PROFILE, "TPO Profile", 3, 5, 3, 2);
+
+      // Add Performance Monitor panel
+      panel_mgr->add_panel(BTQuant::PanelType::PERFORMANCE_MONITOR, "Performance Monitor", 0, 7, 6,
+                           2);
 
       panel_mgr->auto_arrange_panels();
 
@@ -120,16 +127,14 @@ int main(int argc, char **argv) {
   // 6. Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
-      auto *workspace = dashboard->get_workspace_component();
-      auto *panel_mgr = workspace ? workspace->getPanelManager() : nullptr;
+      auto* workspace = dashboard->get_workspace_component();
+      auto* panel_mgr = workspace ? workspace->getPanelManager() : nullptr;
 
       if (ImGui::MenuItem("Save Layout")) {
-        if (panel_mgr)
-          panel_mgr->save_layout("default_layout.json");
+        if (panel_mgr) panel_mgr->save_layout("default_layout.json");
       }
       if (ImGui::MenuItem("Load Layout")) {
-        if (panel_mgr)
-          panel_mgr->load_layout("default_layout.json");
+        if (panel_mgr) panel_mgr->load_layout("default_layout.json");
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit")) {
@@ -143,7 +148,7 @@ int main(int argc, char **argv) {
         // We can just rely on the window 'X' button or add a request_close
         // method to Dashboard. Actually, we can just print for now.
         std::cout << "Exit requested via menu" << std::endl;
-        exit(0); // Rough, but works for main loop exit
+        exit(0);  // Rough, but works for main loop exit
       }
       ImGui::EndMenu();
     }
@@ -154,7 +159,7 @@ int main(int argc, char **argv) {
         dashboard->set_show_performance_overlay(show_perf);
       }
 
-      auto *workspace = dashboard->get_workspace_component();
+      auto* workspace = dashboard->get_workspace_component();
       if (ImGui::MenuItem("Auto Arrange Panels")) {
         if (workspace && workspace->getPanelManager())
           workspace->getPanelManager()->auto_arrange_panels();
@@ -189,8 +194,7 @@ int main(int argc, char **argv) {
 
   while (!dashboard->should_close()) {
     auto frame_begin = std::chrono::steady_clock::now();
-    float dt =
-        std::chrono::duration<float>(frame_begin - last_frame_time).count();
+    float dt = std::chrono::duration<float>(frame_begin - last_frame_time).count();
     last_frame_time = frame_begin;
 
     // Data Sync
@@ -214,8 +218,8 @@ int main(int argc, char **argv) {
   std::cout << "\nCleaning up..." << std::endl;
 
   // Save layout on exit
-  if (auto *ws = dashboard->get_workspace_component()) {
-    if (auto *pm = ws->getPanelManager()) {
+  if (auto* ws = dashboard->get_workspace_component()) {
+    if (auto* pm = ws->getPanelManager()) {
       pm->save_layout("default_layout.json");
     }
   }

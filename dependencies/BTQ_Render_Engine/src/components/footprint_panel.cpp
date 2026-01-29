@@ -146,7 +146,7 @@ void FootprintPanel::render() {
     return;
   }
 
-  // Toolbar
+  // Enhanced toolbar with more options
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
@@ -154,7 +154,10 @@ void FootprintPanel::render() {
   ImGui::Checkbox("Volume Labels", &show_volume_labels_);
   ImGui::SameLine();
   ImGui::Checkbox("Delta Indicator", &show_delta_indicator_);
-  
+  ImGui::SameLine();
+  static bool show_grid = true;
+  ImGui::Checkbox("Grid", &show_grid);
+
   // Grid size configuration
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
@@ -162,6 +165,9 @@ void FootprintPanel::render() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
   ImGui::SliderInt("Rows", &grid_rows_, 50, 200);
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::SliderFloat("Delta Thresh", &delta_threshold_, 0.0f, 1.0f, "%.2f");
 
   // Get clusters from renderer
   auto clusters = renderer_->getFootprintClusters();
@@ -177,6 +183,14 @@ void FootprintPanel::render() {
     // Axis Setup
     ImPlot::SetupAxes("Time (s)", "Price", ImPlotAxisFlags_None,
                       ImPlotAxisFlags_None);
+
+    // Enable grid if requested
+    if (show_grid) {
+        ImPlot::SetupAxis(ImAxis_X1, "Time (s)", ImPlotAxisFlags_None);
+        ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_None);
+    }
+
+    // Auto-scale X-axis to time window
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 30, ImPlotCond_Always);
 
     // Auto-scale Y-axis to data
@@ -223,7 +237,7 @@ void FootprintPanel::render() {
           cluster.tradeCount,       // trade_count
           cluster.vwap             // vwap
       );
-      
+
       // Render the cell
       renderCell(cell, draw_list);
     }
@@ -231,24 +245,34 @@ void FootprintPanel::render() {
     ImPlot::EndPlot();
   }
 
-  // Debug Overlay
+  // Enhanced Debug Overlay
   if (!clusters.empty()) {
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                       "Clusters: %zu | Grid: %dx%d", 
-                       clusters.size(), grid_cols_, grid_rows_);
-    
+                       "Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                       clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+
     // Calculate statistics
     double total_bid_vol = 0.0;
     double total_ask_vol = 0.0;
+    double total_trade_count = 0;
     for (const auto &c : clusters) {
       total_bid_vol += c.bidVolume;
       total_ask_vol += c.askVolume;
+      total_trade_count += c.tradeCount;
     }
     double total_delta = total_bid_vol - total_ask_vol;
-    
-    ImGui::Text("Total Bid: %.2f | Total Ask: %.2f | Delta: %.2f",
-                total_bid_vol, total_ask_vol, total_delta);
+
+    ImGui::Text("Total Bid: %.2f | Total Ask: %.2f | Delta: %.2f | Trades: %.0f",
+                total_bid_vol, total_ask_vol, total_delta, total_trade_count);
+
+    // Add VWAP line if available from market data
+    // Note: This requires renderer to have access to market data processor
+    // For now, we'll skip this to avoid compilation errors
+    // auto analytics = renderer_->getMarketDataProcessor()->getSymbolAnalytics(symbol_id_);
+    // if (analytics.vwap > 0) {
+    //     ImGui::Text("VWAP: %.4f", analytics.vwap);
+    // }
   }
 
   end_panel_window();

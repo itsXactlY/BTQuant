@@ -26,29 +26,65 @@ void TpoPanel::render() {
     return;
   }
 
-  // Toolbar
-  static bool show_text = true;
+  // Enhanced toolbar with more options
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
+  static bool show_text = true;
   ImGui::Checkbox("Delta Labels", &show_text);
+  ImGui::SameLine();
+  static bool show_grid = true;
+  ImGui::Checkbox("Grid", &show_grid);
+  ImGui::SameLine();
+  static bool show_heatmap = true;
+  ImGui::Checkbox("Heatmap", &show_heatmap);
+
+  // Time window configuration
+  static float time_window = 30.0f;
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::SliderFloat("Time Window", &time_window, 10.0f, 300.0f, "%.0f s");
 
   auto clusters = renderer_->getFootprintClusters();
   auto stats = renderer_->getStats();
 
-  // Base time for labeling (relative to 30s window)
-  double base_time_sec =
-      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - 30.0;
+  // Calculate TPO statistics
+  double local_poc_price = 0.0;
+  double max_volume = 0.0;
+  std::unordered_map<double, double> price_volumes;
 
-  if (ImPlot::BeginPlot("##FootprintChart", ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend |
-                            (1 << 8))) { // 1<<8 is Crosshairs
+  // Pre-calculate POC data
+  for (const auto &cluster : clusters) {
+    // Accumulate volume by price level for POC calculation
+    price_volumes[cluster.centerY] += cluster.askVolume + cluster.bidVolume;
+  }
+
+  // Find Point of Control (POC) - price level with highest volume
+  for (const auto& [price, volume] : price_volumes) {
+      if (volume > max_volume) {
+          max_volume = volume;
+          local_poc_price = price;
+      }
+  }
+
+  // Base time for labeling (relative to time window)
+  double base_time_sec =
+      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - time_window;
+
+  if (ImPlot::BeginPlot("##TPOProfile", ImVec2(-1, -1),
+                        ImPlotFlags_NoLegend | ImPlotFlags_Crosshairs)) {
 
     // Axis Setup
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
                       ImPlotAxisFlags_None);
-    ImPlot::SetupAxisLimits(ImAxis_X1, 0, 30, ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_X1, 0, time_window, ImPlotCond_Always);
+
+    // Enable grid if requested
+    if (show_grid) {
+        ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
+        ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_None);
+    }
 
     float p_min = 0, p_max = 1000;
     if (!clusters.empty()) {
@@ -78,10 +114,12 @@ void TpoPanel::render() {
         &base_time_sec);
 
     // Render Heatmap Background if available
-    void *texID = renderer_->getHeatmapTextureID();
-    if (texID) {
-      ImPlot::PlotImage("Heatmap", texID, ImPlotPoint(0, (double)p_min),
-                        ImPlotPoint(30, (double)p_max));
+    if (show_heatmap) {
+        void *texID = renderer_->getHeatmapTextureID();
+        if (texID) {
+          ImPlot::PlotImage("Heatmap", texID, ImPlotPoint(0, (double)p_min),
+                            ImPlotPoint(time_window, (double)p_max));
+        }
     }
 
     auto *draw_list = ImPlot::GetPlotDrawList();
@@ -94,9 +132,9 @@ void TpoPanel::render() {
       float intensity =
           std::clamp(std::abs((float)delta) / 2000.0f, 0.2f, 0.7f);
       if (delta > 0) {
-        color = ImColor(0.1f, 0.8f, 0.1f, intensity);
+        color = ImColor(0.1f, 0.8f, 0.1f, intensity); // Green for positive delta
       } else {
-        color = ImColor(0.8f, 0.1f, 0.1f, intensity);
+        color = ImColor(0.8f, 0.1f, 0.1f, intensity); // Red for negative delta
       }
 
       double x1 = (double)cluster.centerX - (double)cluster.width * 0.48;
@@ -119,13 +157,23 @@ void TpoPanel::render() {
       }
     }
 
+    // Draw POC line if found (using pre-calculated value)
+    if (local_poc_price > 0) {
+        double poc_line_x[2] = {0, time_window};
+        double poc_line_y[2] = {local_poc_price, local_poc_price};
+        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+        ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+        ImPlot::PopStyleColor();
+    }
+
     ImPlot::EndPlot();
   }
 
-  // Overlay Info
+  // Enhanced Overlay Info
   ImGui::SetCursorPos(ImVec2(10, 45));
   ImGui::TextColored(ImVec4(1, 1, 0, 0.5f),
-                     "Real-time Footprint | Latency: 0.1ms");
+                     "TPO Profile | Clusters: %zu | POC: %.4f",
+                     clusters.size(), local_poc_price > 0 ? local_poc_price : 0.0);
 
   end_panel_window();
 }

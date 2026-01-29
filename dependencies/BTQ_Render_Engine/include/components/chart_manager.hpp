@@ -2,6 +2,7 @@
 
 #include "hotspine_data_bridge.hpp"
 #include "imgui.h"
+#include "implot.h"
 #include "market_data_processor.hpp"
 #include <cstdint>
 #include <memory>

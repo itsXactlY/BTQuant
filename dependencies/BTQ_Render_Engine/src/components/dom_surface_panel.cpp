@@ -446,18 +446,28 @@ void DomSurfacePanel::render() {
     return;
   }
 
+  // DOM Surface controls
+  if (ImGui::Button("Reset View")) {
+    ImPlot::SetNextAxesToFit();
+  }
+  ImGui::SameLine();
+  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu", current_symbol_id_, price_bins_, large_order_markers_.size());
+
   // Enable Pan/Zoom for DOM Surface
   std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
-    ImPlot::SetupAxes("Time Step", "Price");
-    ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_NoTickLabels);
+                        ImPlotFlags_NoLegend)) {
+    ImPlot::SetupAxes("Time", "Price");
 
-    // Always fit axes to data bounds (fills plot area)
+    // Allow user to pan and zoom
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
+    ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
+
+    // Set axis limits with option for user interaction
     ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
-                            ImPlotCond_Always);
+                            heatmap_data_.empty() ? ImPlotCond_Always : ImPlotCond_Once);
     ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
-                            ImPlotCond_Always);
+                            heatmap_data_.empty() ? ImPlotCond_Always : ImPlotCond_Once);
 
     // Use time history size for Cols and price_bins for Rows
     int rows = price_bins_;

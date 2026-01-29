@@ -780,7 +780,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
                               ImPlotCond_Always);
     }
 
-    // Auto-follow logic
+    // Improved Auto-follow logic with better zoom/pan handling
+    bool user_interacted = ImPlot::IsPlotHovered() &&
+                          (ImGui::IsMouseDragging(ImGuiMouseButton_Left) ||
+                           ImGui::IsMouseDragging(ImGuiMouseButton_Right) ||
+                           ImGui::GetIO().MouseWheel != 0.0f);
+
+    if (user_interacted) {
+        follow_latest_ = false;
+    }
 
     if (follow_latest_) {
       double time_max = chart.dates.back();

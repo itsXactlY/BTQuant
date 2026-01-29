@@ -149,9 +149,17 @@ void VolumeProfilePanel::build_volume_profile() {
 }
 
 void VolumeProfilePanel::render_controls() {
+  if (ImGui::Button("Reset View")) {
+    ImPlot::SetNextAxesToFit();
+  }
+  ImGui::SameLine();
   ImGui::Text("Symbol: %s", symbol_name_.c_str());
   ImGui::SameLine();
   ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "| POC: %.4f", poc_price_);
+
+  // Add level count control
+  ImGui::SameLine();
+  ImGui::Text("| Levels: %zu", volume_profile_.size());
 }
 
 void VolumeProfilePanel::render_volume_bars() {
@@ -185,8 +193,7 @@ void VolumeProfilePanel::render_volume_bars() {
            config_.title.c_str());
 
   if (ImPlot::BeginPlot(plot_id, region,
-                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                            ImPlotFlags_NoMouseText)) {
+                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend)) {
 
     ImPlot::SetupAxes("Volume", "Price",
                       ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_Invert,
@@ -213,6 +220,16 @@ void VolumeProfilePanel::render_volume_bars() {
       double poc_line_y[2] = {poc_price_, poc_price_};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
       ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+      ImPlot::PopStyleColor();
+    }
+
+    // Add VWAP line if available
+    auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+    if (analytics.vwap > 0) {
+      double vwap_line_x[2] = {-max_volume_, max_volume_};
+      double vwap_line_y[2] = {analytics.vwap, analytics.vwap};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
+      ImPlot::PlotLine("VWAP", vwap_line_x, vwap_line_y, 2);
       ImPlot::PopStyleColor();
     }
 

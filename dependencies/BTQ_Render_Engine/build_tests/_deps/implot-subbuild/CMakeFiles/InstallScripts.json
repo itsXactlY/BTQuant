@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

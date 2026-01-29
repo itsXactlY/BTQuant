@@ -16,12 +16,15 @@ Changes Made:
 
 The clear() method resets all memory statistics to zero and clears allocation history while preserving the memory pool structures for continued use.
 
-TASK COMPLETED: Audit legacy footprint logic: port DataType enum and ImGui::BeginCombo selector from src/widgets/FootprintChart.cpp to src/components/footprint_panel.cpp
+Task Completed: Extract indicator calculations from render loop
 
-Changes made:
-1. Updated footprint_panel.hpp to include the Data::UnifiedDataPipeline::DataType enum and added getter/setter methods
-2. Updated footprint_panel.cpp to include the ImGui::BeginCombo selector for data type selection in the render() method
-3. Modified the constructor to initialize the data_type_ member variable
-4. Created test file for the functionality (though build has some unrelated issues)
+Changes Made:
+1. Modified ChartPanel class in include/components/chart_panel.hpp to add cached indicator data structures
+2. Added custom hash structures for caching keys and cache invalidation method
+3. Updated calculate_sma, calculate_ema, and calculate_rsi methods in src/components/chart_panel.cpp to use caching
+4. Added cache invalidation logic triggered when new data arrives in the render method
+5. Created comprehensive unit tests in dependencies/BTQ_Render_Engine/tests/test_indicator_caching.cpp
+6. Updated CMakeLists.txt to include the new test files
+7. Ran clang-format to ensure code quality
 
-The DataType enum from unified_data_pipeline.hpp is now accessible in the footprint panel, and an ImGui::BeginCombo selector has been added to allow users to select different data types for the footprint chart visualization.
+The implementation moves indicator calculations out of the render loop and caches results, only recalculating when new data arrives.

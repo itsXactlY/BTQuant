@@ -7,8 +7,8 @@
 
 ## Phase 1: Architecture Consolidation (Namespace Merge)
 
-- [ ] Audit legacy footprint logic: port DataType enum and ImGui::BeginCombo selector from `src/widgets/FootprintChart.cpp` to `src/components/footprint_panel.cpp`
-- [ ] Migrate heatmap coloring: merge getHeatmapColor method from `src/widgets/FootprintChart.cpp` into getCellColor in `src/components/footprint_panel.cpp` to support Delta gradient (green/red)
+- [x] Audit legacy footprint logic: port DataType enum and ImGui::BeginCombo selector from `src/widgets/FootprintChart.cpp` to `src/components/footprint_panel.cpp`
+- [x] Migrate heatmap coloring: merge getHeatmapColor method from `src/widgets/FootprintChart.cpp` into getCellColor in `src/components/footprint_panel.cpp` to support Delta gradient (green/red)
 - [ ] Delete legacy footprint artifacts: remove `src/widgets/FootprintChart.cpp` and `include/widgets/FootprintChart.h` after migration verification to eliminate BTQ namespace
 
 ## Phase 2: Render-Loop Decoupling (Performance Critical)

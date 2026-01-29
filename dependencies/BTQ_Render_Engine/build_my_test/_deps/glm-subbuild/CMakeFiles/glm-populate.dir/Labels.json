@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/CMakeFiles/glm-populate"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/CMakeFiles/glm-populate.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/CMakeFiles/glm-populate-complete.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-build.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-configure.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-download.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-install.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-mkdir.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-patch.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-test.rule"
+		},
+		{
+			"file" : "/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-subbuild/glm-populate-prefix/src/glm-populate-stamp/glm-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"glm-populate"
+		],
+		"name" : "glm-populate"
+	}
+}

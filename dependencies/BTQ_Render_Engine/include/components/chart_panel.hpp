@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -7,6 +7,8 @@
 #include "panel_base.hpp"
 #include <memory>
 #include <vector>
+#include <unordered_map>
+#include <functional>
 
 namespace BTQuant {
 
@@ -86,6 +88,32 @@ private:
   double last_view_min_ = 0.0;
   double last_view_max_ = 0.0;
   bool first_frame_ = true;
+
+  // Cached indicator data to prevent recalculation on every render
+  struct IndicatorCacheKey {
+    size_t data_size;
+    int period;
+
+    bool operator==(const IndicatorCacheKey& other) const {
+      return data_size == other.data_size && period == other.period;
+    }
+  };
+
+  struct IndicatorCacheKeyHash {
+    std::size_t operator()(const IndicatorCacheKey& k) const {
+      return std::hash<size_t>{}(k.data_size) ^ (std::hash<int>{}(k.period) << 1);
+    }
+  };
+
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_sma_;
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_ema_;
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_rsi_;
+
+  // Track the last known data size to detect when cache needs invalidation
+  size_t last_known_data_size_ = 0;
+
+  // Method to clear cache when data changes
+  void invalidate_cache_if_needed(size_t current_data_size);
 
   void render_chart_controls();
   void render_indicator_selector();

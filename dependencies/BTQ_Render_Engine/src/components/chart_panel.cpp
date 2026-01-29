@@ -74,7 +74,13 @@ void ChartPanel::render() {
   const ChartInstance &chart = it->second;
 
   // Invalidate cache if new data has arrived
-  invalidate_cache_if_needed(chart.closes.size());
+  // NOTE: This check is lightweight and only compares sizes
+  if (chart.closes.size() > last_known_data_size_) {
+    cached_sma_.clear();
+    cached_ema_.clear();
+    cached_rsi_.clear();
+    last_known_data_size_ = chart.closes.size();
+  }
 
   // Render chart controls in a collapsible header
   if (ImGui::CollapsingHeader("Chart Controls",
@@ -186,16 +192,6 @@ void ChartPanel::render_indicator_selector() {
 // ============================================================================
 // INDICATOR CALCULATION HELPERS
 // ============================================================================
-
-void ChartPanel::invalidate_cache_if_needed(size_t current_data_size) {
-  if (current_data_size > last_known_data_size_) {
-    // Clear all caches when new data arrives
-    cached_sma_.clear();
-    cached_ema_.clear();
-    cached_rsi_.clear();
-    last_known_data_size_ = current_data_size;
-  }
-}
 
 std::vector<double> ChartPanel::calculate_sma(const std::vector<float> &prices,
                                               int period) {

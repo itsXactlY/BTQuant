@@ -28,7 +28,7 @@
 ## Phase 5: System Observability
 
 - [ ] Instrument main render loop: add performance_monitor.start_frame() and end_frame() calls in `src/main_realtime_dashboard.cpp` ImGui loop
-- [ ] Add widget-specific telemetry: insert scoped std::chrono timers in render() methods of `src/components/chart_panel.cpp` and `src/components/footprint_panel.cpp` to report individual panel render times to PerformanceMonitor
+- [x] Add widget-specific telemetry: insert scoped std::chrono timers in render() methods of `src/components/chart_panel.cpp` and `src/components/footprint_panel.cpp` to report individual panel render times to PerformanceMonitor
 
 ---
 

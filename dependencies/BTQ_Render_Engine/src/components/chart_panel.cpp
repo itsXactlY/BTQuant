@@ -848,7 +848,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
                         ImPlotFlags_NoLegend | ImPlotFlags_NoTitle |
                             ImPlotFlags_Crosshairs)) {
 
-    // Setup Axes
+    // Setup Axes - ALL SETUP CALLS MUST HAPPEN HERE AT THE BEGINNING
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
                       ImPlotAxisFlags_None);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
@@ -872,6 +872,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
         follow_latest_ = false;
     }
 
+    // Determine axis limits based on follow mode
+    double x_axis_min, x_axis_max;
     if (follow_latest_) {
       double time_max = chart.dates.back();
       double duration_raw =
@@ -883,76 +885,77 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       last_view_min_ = time_max - window_size;
       last_view_max_ = time_max + padding;
 
-      ImPlot::SetupAxisLimits(ImAxis_X1, last_view_min_, last_view_max_,
-                              ImPlotCond_Always);
+      x_axis_min = last_view_min_;
+      x_axis_max = last_view_max_;
     } else {
       // If not following, allow manual pan/zoom (Cond_Once allows initial set
       // but user overrides) Only set Once if we ever reset or init
-      ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
-                              chart.dates.back(), ImPlotCond_Once);
+      x_axis_min = chart.dates.front();
+      x_axis_max = chart.dates.back();
     }
 
-    // MANUAL Y-AXIS SCALING
-    {
-      double view_x_min = last_view_min_;
-      double view_x_max = last_view_max_;
+    // Calculate Y-axis limits based on visible X range
+    double y_axis_min = std::numeric_limits<double>::max();
+    double y_axis_max = std::numeric_limits<double>::lowest();
 
-      if (view_x_min == 0 && view_x_max == 0 && !chart.dates.empty()) {
-        view_x_min = chart.dates.front();
-        view_x_max = chart.dates.back();
-      }
+    // Binary search for visible range based on our ESTIMATE/CACHE
+    size_t start_idx = 0;
+    size_t end_idx = chart.dates.size();
 
-      // Binary search for visible range based on our ESTIMATE/CACHE
-      size_t start_idx = 0;
-      size_t end_idx = chart.dates.size();
+    auto lower =
+        std::lower_bound(chart.dates.begin(), chart.dates.end(), x_axis_min);
+    if (lower != chart.dates.begin())
+      --lower;
+    start_idx = std::distance(chart.dates.begin(), lower);
 
-      auto lower =
-          std::lower_bound(chart.dates.begin(), chart.dates.end(), view_x_min);
-      if (lower != chart.dates.begin())
-        --lower;
-      start_idx = std::distance(chart.dates.begin(), lower);
+    auto upper =
+        std::upper_bound(chart.dates.begin(), chart.dates.end(), x_axis_max);
+    if (upper != chart.dates.end())
+      ++upper;
+    end_idx = std::distance(chart.dates.begin(), upper);
 
-      auto upper =
-          std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
-      if (upper != chart.dates.end())
-        ++upper;
-      end_idx = std::distance(chart.dates.begin(), upper);
+    end_idx = std::min(end_idx, chart.dates.size());
 
-      end_idx = std::min(end_idx, chart.dates.size());
+    if (start_idx < end_idx) {
+      bool found_data = false;
 
-      if (start_idx < end_idx) {
-        double y_min = std::numeric_limits<double>::max();
-        double y_max = std::numeric_limits<double>::lowest();
-        bool found_data = false;
-
-        for (size_t i = start_idx; i < end_idx; ++i) {
-          double low = chart.lows[i];
-          double high = chart.highs[i];
-          if (low > 0 && high > 0) { // Valid data
-            if (low < y_min)
-              y_min = low;
-            if (high > y_max)
-              y_max = high;
-            found_data = true;
-          }
-        }
-
-        if (found_data) {
-          double range = y_max - y_min;
-          if (range == 0)
-            range = y_max * 0.01;
-          if (range == 0)
-            range = 1.0;
-
-          y_min -= range * 0.1;
-          y_max += range * 0.1;
-
-          // Always fit Y to visible X range for "Auto Scale Y" behavior
-          ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_min),
-                                  static_cast<float>(y_max), ImPlotCond_Always);
+      for (size_t i = start_idx; i < end_idx; ++i) {
+        double low = chart.lows[i];
+        double high = chart.highs[i];
+        if (low > 0 && high > 0) { // Valid data
+          if (low < y_axis_min)
+            y_axis_min = low;
+          if (high > y_axis_max)
+            y_axis_max = high;
+          found_data = true;
         }
       }
+
+      if (found_data) {
+        double range = y_axis_max - y_axis_min;
+        if (range == 0)
+          range = y_axis_min * 0.01;
+        if (range == 0)
+          range = 1.0;
+
+        y_axis_min -= range * 0.1;
+        y_axis_max += range * 0.1;
+      } else {
+        // Fallback if no valid data found in range
+        y_axis_min = chart.lows.empty() ? 0 : chart.lows[0];
+        y_axis_max = chart.highs.empty() ? 1 : chart.highs[0];
+      }
+    } else {
+      // Fallback if no range found
+      y_axis_min = chart.lows.empty() ? 0 : *std::min_element(chart.lows.begin(), chart.lows.end());
+      y_axis_max = chart.highs.empty() ? 1 : *std::max_element(chart.highs.begin(), chart.highs.end());
     }
+
+    // NOW APPLY ALL AXIS LIMITS AT ONCE - BEFORE ANY PLOTTING OPERATIONS
+    ImPlot::SetupAxisLimits(ImAxis_X1, x_axis_min, x_axis_max,
+                            follow_latest_ ? ImPlotCond_Always : ImPlotCond_Once);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_axis_min),
+                            static_cast<float>(y_axis_max), ImPlotCond_Always);
 
     // VOLUME PROFILE OVERLAY
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
@@ -1001,21 +1004,21 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     last_view_max_ = limits.X.Max;
 
     // Recalculate start/end for CULLING (Rendering optimization)
-    size_t start_idx = 0;
-    size_t end_idx = chart.dates.size();
+    size_t render_start_idx = 0;
+    size_t render_end_idx = chart.dates.size();
     {
       auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(),
                                     limits.X.Min);
       if (lower != chart.dates.begin())
         --lower;
-      start_idx = std::distance(chart.dates.begin(), lower);
+      render_start_idx = std::distance(chart.dates.begin(), lower);
 
       auto upper = std::upper_bound(chart.dates.begin(), chart.dates.end(),
                                     limits.X.Max);
       if (upper != chart.dates.end())
         ++upper;
-      end_idx = std::min((size_t)std::distance(chart.dates.begin(), upper),
-                         chart.dates.size());
+      render_end_idx = std::min((size_t)std::distance(chart.dates.begin(), upper),
+                                chart.dates.size());
     }
 
     // Calculate candle width based on timeframe
@@ -1035,7 +1038,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     const float MIN_BODY_HEIGHT_PX = 1.0f;
 
     // Draw ONLY visible candles
-    for (size_t i = start_idx; i < end_idx; ++i) {
+    for (size_t i = render_start_idx; i < render_end_idx; ++i) {
       double x = chart.dates[i];
       if (x == 0)
         continue;
@@ -1094,12 +1097,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     }
 
     // Render indicators
-    render_sma_lines(chart, start_idx, end_idx);
-    render_ema_lines(chart, start_idx, end_idx);
-    render_bollinger_bands(chart, start_idx, end_idx);
-    render_rsi_indicator(chart, start_idx, end_idx);
-    render_macd_indicator(chart, start_idx, end_idx);
-    render_fibonacci_levels(chart, start_idx, end_idx);
+    render_sma_lines(chart, render_start_idx, render_end_idx);
+    render_ema_lines(chart, render_start_idx, render_end_idx);
+    render_bollinger_bands(chart, render_start_idx, render_end_idx);
+    render_rsi_indicator(chart, render_start_idx, render_end_idx);
+    render_macd_indicator(chart, render_start_idx, render_end_idx);
+    render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
     // Render crosshair info if mouse is over plot
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {

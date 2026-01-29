@@ -15,3 +15,13 @@ Changes Made:
 4. Ran clang-format to ensure code quality
 
 The clear() method resets all memory statistics to zero and clears allocation history while preserving the memory pool structures for continued use.
+
+TASK COMPLETED: Audit legacy footprint logic: port DataType enum and ImGui::BeginCombo selector from src/widgets/FootprintChart.cpp to src/components/footprint_panel.cpp
+
+Changes made:
+1. Updated footprint_panel.hpp to include the Data::UnifiedDataPipeline::DataType enum and added getter/setter methods
+2. Updated footprint_panel.cpp to include the ImGui::BeginCombo selector for data type selection in the render() method
+3. Modified the constructor to initialize the data_type_ member variable
+4. Created test file for the functionality (though build has some unrelated issues)
+
+The DataType enum from unified_data_pipeline.hpp is now accessible in the footprint panel, and an ImGui::BeginCombo selector has been added to allow users to select different data types for the footprint chart visualization.

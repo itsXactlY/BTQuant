@@ -2,6 +2,7 @@
 
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
+#include "data/unified_data_pipeline.hpp"  // For DataType enum
 #include <memory>
 #include <vector>
 
@@ -51,9 +52,16 @@ public:
   void setShowDeltaIndicator(bool show) { show_delta_indicator_ = show; }
   void setDeltaThreshold(float threshold) { delta_threshold_ = threshold; }
 
+  // Data type selection
+  void setDataType(Data::UnifiedDataPipeline::DataType type) { data_type_ = type; }
+  Data::UnifiedDataPipeline::DataType getDataType() const { return data_type_; }
+
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t symbol_id_ = 0;
+
+  // Data Type Selection
+  Data::UnifiedDataPipeline::DataType data_type_ = Data::UnifiedDataPipeline::DataType::FOOTPRINT;
 
   // Grid Configuration (Exocharts-style: 60 columns × 100 rows)
   int grid_cols_ = 60;  // Number of time columns (minutes)

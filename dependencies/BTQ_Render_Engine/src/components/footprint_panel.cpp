@@ -13,7 +13,8 @@ namespace BTQuant {
 FootprintPanel::FootprintPanel(
     const PanelConfig &config,
     RenderEngine::MarketMicrostructureRenderer *renderer)
-    : PanelBase(config), renderer_(renderer), data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT) {}
+    : PanelBase(config), renderer_(renderer), data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT),
+      volume_data_type_(Data::VolumeDataType::Delta) {}
 
 void FootprintPanel::update(float dt) {
   // Update logic if needed
@@ -21,58 +22,203 @@ void FootprintPanel::update(float dt) {
 }
 
 ImU32 FootprintPanel::getCellColor(const FootprintCell& cell) const {
-  // Calculate total volume for intensity
+  // Calculate values based on selected volume data type
+  double value_to_display = 0.0;
   double total_vol = cell.bid_volume + cell.ask_volume;
-  
-  // Calculate normalized delta for color coding
-  double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-  double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
-  normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
-  
-  // Calculate intensity based on total volume (0.2 to 0.8 alpha)
-  float intensity = std::clamp(static_cast<float>(total_vol / 10000.0f), 0.2f, 0.8f);
-  
-  // Exocharts-style color coding
-  // Green for positive delta (more bids), Red for negative delta (more asks)
-  // Neutral gray for balanced
-  
-  if (normalized_delta > delta_threshold_) {
-    // Positive delta - Green gradient
-    float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
-    return IM_COL32(
-        static_cast<int>(0),
-        static_cast<int>(50 + 205 * green_intensity),
-        static_cast<int>(50 + 205 * green_intensity),
-        static_cast<int>(intensity * 255));
-  } else if (normalized_delta < -delta_threshold_) {
-    // Negative delta - Red gradient
-    float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
-    return IM_COL32(
-        static_cast<int>(50 + 205 * red_intensity),
-        static_cast<int>(0),
-        static_cast<int>(0),
-        static_cast<int>(intensity * 255));
-  } else {
-    // Neutral - Gray
-    return IM_COL32(
-        static_cast<int>(80),
-        static_cast<int>(80),
-        static_cast<int>(80),
-        static_cast<int>(intensity * 255));
+  double intensity = 0.0f;
+
+  switch (volume_data_type_) {
+    case Data::VolumeDataType::Trades:
+      value_to_display = static_cast<double>(cell.trade_count);
+      intensity = std::clamp(static_cast<float>(value_to_display / 100.0f), 0.2f, 0.8f);
+      break;
+
+    case Data::VolumeDataType::Volume:
+      value_to_display = total_vol;
+      intensity = std::clamp(static_cast<float>(total_vol / 10000.0f), 0.2f, 0.8f);
+      break;
+
+    case Data::VolumeDataType::BuyVolume:
+      value_to_display = cell.bid_volume;
+      intensity = std::clamp(static_cast<float>(cell.bid_volume / 5000.0f), 0.2f, 0.8f);
+      break;
+
+    case Data::VolumeDataType::SellVolume:
+      value_to_display = cell.ask_volume;
+      intensity = std::clamp(static_cast<float>(cell.ask_volume / 5000.0f), 0.2f, 0.8f);
+      break;
+
+    case Data::VolumeDataType::BuySellVolume:
+      value_to_display = cell.bid_volume - cell.ask_volume;
+      // For BuySellVolume, normalize based on max of bid/ask volume
+      {
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        double normalized_value = max_vol > 0.0 ? value_to_display / max_vol : 0.0;
+        normalized_value = std::clamp(normalized_value, -1.0, 1.0);
+        intensity = std::clamp(static_cast<float>(std::abs(value_to_display) / 5000.0f), 0.2f, 0.8f);
+
+        // Return color based on sign of value
+        if (normalized_value > delta_threshold_) {
+          // Positive - Green gradient
+          float green_intensity = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(0),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(intensity * 255));
+        } else if (normalized_value < -delta_threshold_) {
+          // Negative - Red gradient
+          float red_intensity = std::clamp(static_cast<float>(-normalized_value), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(50 + 205 * red_intensity),
+              static_cast<int>(0),
+              static_cast<int>(0),
+              static_cast<int>(intensity * 255));
+        } else {
+          // Neutral - Gray
+          return IM_COL32(
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(intensity * 255));
+        }
+      }
+      break;
+
+    case Data::VolumeDataType::Delta:
+    default: // Default to Delta
+      value_to_display = cell.delta;
+      // Calculate normalized delta for color coding
+      {
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
+        normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
+
+        // Calculate intensity based on total volume (0.2 to 0.8 alpha)
+        intensity = std::clamp(static_cast<float>(total_vol / 10000.0f), 0.2f, 0.8f);
+
+        // Exocharts-style color coding
+        // Green for positive delta (more bids), Red for negative delta (more asks)
+        // Neutral gray for balanced
+
+        if (normalized_delta > delta_threshold_) {
+          // Positive delta - Green gradient
+          float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(0),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(intensity * 255));
+        } else if (normalized_delta < -delta_threshold_) {
+          // Negative delta - Red gradient
+          float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(50 + 205 * red_intensity),
+              static_cast<int>(0),
+              static_cast<int>(0),
+              static_cast<int>(intensity * 255));
+        } else {
+          // Neutral - Gray
+          return IM_COL32(
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(intensity * 255));
+        }
+      }
+      break;
+
+    case Data::VolumeDataType::DeltaPercent:
+      {
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        value_to_display = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
+        double normalized_delta = std::clamp(value_to_display / 100.0, -1.0, 1.0);
+        intensity = std::clamp(static_cast<float>(total_vol / 10000.0f), 0.2f, 0.8f);
+
+        if (normalized_delta > delta_threshold_) {
+          // Positive delta - Green gradient
+          float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(0),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(intensity * 255));
+        } else if (normalized_delta < -delta_threshold_) {
+          // Negative delta - Red gradient
+          float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(50 + 205 * red_intensity),
+              static_cast<int>(0),
+              static_cast<int>(0),
+              static_cast<int>(intensity * 255));
+        } else {
+          // Neutral - Gray
+          return IM_COL32(
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(intensity * 255));
+        }
+      }
+      break;
   }
+
+  // For scalar values (Trades, Volume, BuyVolume, SellVolume), use a blue gradient
+  float blue_intensity = std::clamp(static_cast<float>(value_to_display / 10000.0f), 0.0f, 1.0f);
+  return IM_COL32(
+      static_cast<int>(0),
+      static_cast<int>(0),
+      static_cast<int>(50 + 205 * blue_intensity),
+      static_cast<int>(intensity * 255));
 }
 
 std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
-  // Show the larger of bid/ask volume
-  double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-  
-  // Format based on volume size
-  if (max_vol >= 1000.0) {
-    return std::format("{:.1f}K", max_vol / 1000.0);
-  } else if (max_vol >= 100.0) {
-    return std::format("{:.0f}", max_vol);
+  double value_to_display = 0.0;
+
+  switch (volume_data_type_) {
+    case Data::VolumeDataType::Trades:
+      return std::format("{}", cell.trade_count);
+
+    case Data::VolumeDataType::Volume:
+      value_to_display = cell.bid_volume + cell.ask_volume;
+      break;
+
+    case Data::VolumeDataType::BuyVolume:
+      value_to_display = cell.bid_volume;
+      break;
+
+    case Data::VolumeDataType::SellVolume:
+      value_to_display = cell.ask_volume;
+      break;
+
+    case Data::VolumeDataType::BuySellVolume:
+      value_to_display = cell.bid_volume - cell.ask_volume;
+      break;
+
+    case Data::VolumeDataType::Delta:
+      value_to_display = cell.delta;
+      break;
+
+    case Data::VolumeDataType::DeltaPercent:
+      {
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        value_to_display = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
+        return std::format("{:.1f}%", value_to_display);
+      }
+
+    default:
+      // For other types, default to showing the larger of bid/ask volume
+      value_to_display = std::max(cell.bid_volume, cell.ask_volume);
+      break;
+  }
+
+  // Format based on value size
+  if (std::abs(value_to_display) >= 1000.0) {
+    return std::format("{:.1f}K", value_to_display / 1000.0);
+  } else if (std::abs(value_to_display) >= 100.0) {
+    return std::format("{:.0f}", value_to_display);
   } else {
-    return std::format("{:.1f}", max_vol);
+    return std::format("{:.1f}", value_to_display);
   }
 }
 
@@ -158,6 +304,30 @@ void FootprintPanel::render() {
       if (ImGui::Selectable(data_type_names[i], is_selected)) {
         current_data_type = i;
         data_type_ = static_cast<Data::UnifiedDataPipeline::DataType>(i);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  ImGui::SameLine();
+
+  // Volume data type selector for footprint visualization
+  const char* volume_data_type_names[] = {
+    "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
+    "BuyVolume%", "SellVolume%", "BuySellVolume", "Delta", "Delta%", "CumulativeDelta",
+    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"
+  };
+
+  int current_vol_data_type = static_cast<int>(volume_data_type_);
+  if (ImGui::BeginCombo("Footprint Mode", volume_data_type_names[current_vol_data_type])) {
+    for (int i = 0; i < 17; i++) {
+      bool is_selected = (current_vol_data_type == i);
+      if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {
+        current_vol_data_type = i;
+        volume_data_type_ = static_cast<Data::VolumeDataType>(i);
       }
       if (is_selected) {
         ImGui::SetItemDefaultFocus();
@@ -269,12 +439,21 @@ void FootprintPanel::render() {
 
   // Enhanced Debug Overlay
   if (!clusters.empty()) {
+    // Determine the current volume data type name for display
+    const char* vol_type_names[] = {
+      "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
+      "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulativeDelta",
+      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"
+    };
+
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                       "Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                       "Mode: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                       vol_type_names[static_cast<int>(volume_data_type_)],
                        clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
 
-    // Calculate statistics
+    // Calculate statistics based on selected volume data type
+    double total_value = 0.0;
     double total_bid_vol = 0.0;
     double total_ask_vol = 0.0;
     double total_trade_count = 0;
@@ -282,19 +461,47 @@ void FootprintPanel::render() {
       total_bid_vol += c.bidVolume;
       total_ask_vol += c.askVolume;
       total_trade_count += c.tradeCount;
+
+      switch (volume_data_type_) {
+        case Data::VolumeDataType::Trades:
+          total_value += c.tradeCount;
+          break;
+
+        case Data::VolumeDataType::Volume:
+          total_value += c.bidVolume + c.askVolume;
+          break;
+
+        case Data::VolumeDataType::BuyVolume:
+          total_value += c.bidVolume;
+          break;
+
+        case Data::VolumeDataType::SellVolume:
+          total_value += c.askVolume;
+          break;
+
+        case Data::VolumeDataType::BuySellVolume:
+          total_value += c.bidVolume - c.askVolume;
+          break;
+
+        case Data::VolumeDataType::Delta:
+          total_value += c.bidVolume - c.askVolume;
+          break;
+
+        case Data::VolumeDataType::DeltaPercent:
+          {
+            double max_vol = std::max(c.bidVolume, c.askVolume);
+            total_value += max_vol > 0.0 ? ((c.bidVolume - c.askVolume) / max_vol) * 100.0 : 0.0;
+          }
+          break;
+
+        default:
+          total_value += c.bidVolume + c.askVolume; // Default to total volume
+          break;
+      }
     }
-    double total_delta = total_bid_vol - total_ask_vol;
 
-    ImGui::Text("Total Bid: %.2f | Total Ask: %.2f | Delta: %.2f | Trades: %.0f",
-                total_bid_vol, total_ask_vol, total_delta, total_trade_count);
-
-    // Add VWAP line if available from market data
-    // Note: This requires renderer to have access to market data processor
-    // For now, we'll skip this to avoid compilation errors
-    // auto analytics = renderer_->getMarketDataProcessor()->getSymbolAnalytics(symbol_id_);
-    // if (analytics.vwap > 0) {
-    //     ImGui::Text("VWAP: %.4f", analytics.vwap);
-    // }
+    ImGui::Text("Total Value: %.2f | Bid: %.2f | Ask: %.2f | Trades: %.0f",
+                total_value, total_bid_vol, total_ask_vol, total_trade_count);
   }
 
   end_panel_window();

@@ -90,32 +90,55 @@ void test_unified_theme_system() {
 
 void test_memory_optimizer() {
     std::cout << "Testing Memory Optimizer..." << std::endl;
-    
+
     MemoryOptimizer mem_optimizer;
     mem_optimizer.initialize();
-    
+
     // Test basic functionality
     mem_optimizer.track_allocation(1024, "test_allocation");
     mem_optimizer.track_deallocation(512, "test_deallocation");
-    
+
     auto stats = mem_optimizer.get_memory_stats();
     assert(stats.total_allocated >= 1024);
     std::cout << "✓ Memory tracking test passed" << std::endl;
-    
+
+    // Verify that we have some allocations before clearing
+    auto initial_allocs = mem_optimizer.get_recent_allocations(10);
+    assert(!initial_allocs.empty());
+    std::cout << "✓ Pre-clear allocations exist test passed" << std::endl;
+
     // Test optimization
     mem_optimizer.optimize_allocations();
     std::cout << "✓ Memory optimization test passed" << std::endl;
-    
+
     // Test setting parameters
     mem_optimizer.set_compaction_threshold(1024 * 1024);  // 1MB
     mem_optimizer.set_release_threshold(512 * 1024);      // 0.5MB
     std::cout << "✓ Parameter setting test passed" << std::endl;
-    
+
     // Test recent allocations
     auto recent_allocs = mem_optimizer.get_recent_allocations(10);
     // Just checking it doesn't crash
     std::cout << "✓ Recent allocations test passed" << std::endl;
-    
+
+    // Test the new clear functionality
+    mem_optimizer.clear();
+
+    // After clearing, verify that stats are reset
+    auto cleared_stats = mem_optimizer.get_memory_stats();
+    assert(cleared_stats.total_allocated == 0);
+    assert(cleared_stats.total_deallocated == 0);
+    assert(cleared_stats.current_allocated == 0);
+    assert(cleared_stats.peak_usage == 0);
+    assert(cleared_stats.fragmentation == 0);
+    assert(cleared_stats.fragmentation_ratio == 0.0f);
+    std::cout << "✓ Memory stats reset after clear test passed" << std::endl;
+
+    // After clearing, verify that recent allocations are empty
+    auto cleared_allocs = mem_optimizer.get_recent_allocations(10);
+    assert(cleared_allocs.empty());
+    std::cout << "✓ Recent allocations cleared test passed" << std::endl;
+
     std::cout << "Memory Optimizer tests completed!" << std::endl << std::endl;
 }
 

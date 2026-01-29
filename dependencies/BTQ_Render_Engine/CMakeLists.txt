@@ -291,6 +291,7 @@ find_package(GTest QUIET)
 if(GTest_FOUND)
     add_executable(component_enhancement_tests
         tests/component_enhancement_tests.cpp
+        tests/footprint_panel_tests.cpp
         src/data/market_data_processor.cpp
         src/data/hotspine_data_bridge.cpp
         src/data/symbol_registry.cpp

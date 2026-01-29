@@ -1,12 +1,12 @@
 # Modern Dashboard Integration Tasks
 
 - [x] **Phase 1: Analysis & Architecture** <!-- id: 0 -->
-- [x] Analyze existing components (DOM, Charts, Indicators, etc.) <!-- id: 1 -->
-- [x] Design integration architecture for Modern Dashboard <!-- id: 2 -->
+- [ ] Analyze existing components (DOM, Charts, Indicators, etc.) <!-- id: 1 -->
+- [ ] Design integration architecture for Modern Dashboard <!-- id: 2 -->
 - [x] **Phase 2: Component Enhancements** <!-- id: 3 -->
-- [x] Fix DOM Surface (Depth & Whale Orders) <!-- id: 4 -->
-- [x] Restore Chart Zoom/Pan <!-- id: 5 -->
-- [x] Improve Volume Profile <!-- id: 6 -->
+- [ ] Fix DOM Surface (Depth & Whale Orders) <!-- id: 4 -->
+- [ ] Restore Chart Zoom/Pan <!-- id: 5 -->
+- [ ] Improve Volume Profile <!-- id: 6 -->
 - [ ] Rework Technical Indicators <!-- id: 7 -->
 - [ ] Rework Footprint Chart <!-- id: 8 -->
 - [ ] Rework TPO Profile <!-- id: 9 -->

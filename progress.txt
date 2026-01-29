@@ -15,3 +15,16 @@ Changes Made:
 4. Ran clang-format to ensure code quality
 
 The clear() method resets all memory statistics to zero and clears allocation history while preserving the memory pool structures for continued use.
+
+Task Completed: Extract indicator calculations from render loop
+
+Changes Made:
+1. Modified ChartPanel class in include/components/chart_panel.hpp to add cached indicator data structures
+2. Added custom hash structures for caching keys and cache invalidation method
+3. Updated calculate_sma, calculate_ema, and calculate_rsi methods in src/components/chart_panel.cpp to use caching
+4. Added cache invalidation logic triggered when new data arrives in the render method
+5. Created comprehensive unit tests in dependencies/BTQ_Render_Engine/tests/test_indicator_caching.cpp
+6. Updated CMakeLists.txt to include the new test files
+7. Ran clang-format to ensure code quality
+
+The implementation moves indicator calculations out of the render loop and caches results, only recalculating when new data arrives.

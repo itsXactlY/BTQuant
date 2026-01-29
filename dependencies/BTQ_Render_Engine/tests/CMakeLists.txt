@@ -63,7 +63,13 @@ set(TEST_SOURCES
     ../src/layout/layout_presets.cpp
     ../src/layout/dashboard_layout_manager.cpp
     ../src/components/theme_manager.cpp
+    ../src/components/chart_panel.cpp
+    ../src/components/chart_manager.cpp
+    ../src/components/panel_base.cpp
+    ../src/data/hotspine_data_bridge.cpp
+    ../src/data/market_data_processor.cpp
     optimization_tests.cpp
+    test_indicator_caching.cpp
 )
 
 # Set properties for imgui if available

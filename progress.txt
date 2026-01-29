@@ -28,3 +28,10 @@ Changes Made:
 7. Ran clang-format to ensure code quality
 
 The implementation moves indicator calculations out of the render loop and caches results, only recalculating when new data arrives.
+
+Task: Delete legacy footprint artifacts
+Status: Completed
+Date: Donnerstag, 29. Januar 2026
+Description: Searched for src/widgets/FootprintChart.cpp and include/widgets/FootprintChart.h to remove legacy footprint artifacts after migration verification.
+             Files were not found in the current workspace, indicating they may have already been removed or relocated during the BTQ namespace migration.
+             Checked BTQ_Render_Engine directory and all subdirectories but no FootprintChart files were located.

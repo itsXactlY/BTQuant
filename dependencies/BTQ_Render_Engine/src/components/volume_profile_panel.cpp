@@ -89,61 +89,112 @@ void VolumeProfilePanel::build_volume_profile() {
   if (trades.empty())
     return;
 
-  // Find price range
+  // Check if we have an existing volume profile and if the new trades fit in the current range
+  bool needs_rebuild = false;
   double min_price = std::numeric_limits<double>::max();
   double max_price = std::numeric_limits<double>::lowest();
 
+  // Find the range of new trades
   for (const auto &trade : trades) {
     min_price = std::min(min_price, trade.price);
     max_price = std::max(max_price, trade.price);
   }
 
-  if (max_price <= min_price)
-    return;
+  // If we have an existing profile, check if new trades fall outside the current range
+  if (!volume_profile_.empty()) {
+    double current_min_price = volume_profile_.front().price - (price_bucket_size_ / 2.0);
+    double current_max_price = volume_profile_.back().price + (price_bucket_size_ / 2.0);
 
-  // Compute bucket size
-  double range = max_price - min_price;
-  price_bucket_size_ = range / NUM_PRICE_LEVELS;
-  if (price_bucket_size_ <= 0)
-    price_bucket_size_ = 1.0;
-
-  // Reset profile
-  volume_profile_.clear();
-  volume_profile_.resize(NUM_PRICE_LEVELS);
-
-  for (size_t i = 0; i < NUM_PRICE_LEVELS; ++i) {
-    volume_profile_[i].price = min_price + (i + 0.5) * price_bucket_size_;
-    volume_profile_[i].buy_volume = 0;
-    volume_profile_[i].sell_volume = 0;
-    volume_profile_[i].total_volume = 0;
-  }
-
-  // Aggregate trades into buckets
-  for (const auto &trade : trades) {
-    size_t bucket =
-        static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
-    bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
-
-    if (trade.is_buy) {
-      volume_profile_[bucket].buy_volume += trade.size;
+    // Check if any new trade falls outside the current range
+    if (min_price < current_min_price || max_price > current_max_price) {
+      needs_rebuild = true;
     } else {
-      volume_profile_[bucket].sell_volume += trade.size;
+      // Trades fit in existing range, update incrementally
+      for (const auto &trade : trades) {
+        // Calculate which bucket this trade belongs to based on existing bucket size
+        size_t bucket_index = static_cast<size_t>((trade.price - current_min_price) / price_bucket_size_);
+
+        if (bucket_index < volume_profile_.size()) {
+          if (trade.is_buy) {
+            volume_profile_[bucket_index].buy_volume += trade.size;
+          } else {
+            volume_profile_[bucket_index].sell_volume += trade.size;
+          }
+          volume_profile_[bucket_index].total_volume += trade.size;
+
+          // Update max volume if needed
+          double max_vol_in_bucket = std::max(volume_profile_[bucket_index].buy_volume,
+                                              volume_profile_[bucket_index].sell_volume);
+          if (max_vol_in_bucket > max_volume_) {
+            max_volume_ = max_vol_in_bucket;
+          }
+        }
+      }
+
+      // Update POC
+      double poc_volume = 0;
+      for (const auto &level : volume_profile_) {
+        double total = level.buy_volume + level.sell_volume;
+        if (total > poc_volume) {
+          poc_volume = total;
+          poc_price_ = level.price;
+        }
+      }
+
+      return; // Exit early since we've updated incrementally
     }
-    volume_profile_[bucket].total_volume += trade.size;
+  } else {
+    needs_rebuild = true; // First time building, so we need to rebuild
   }
 
-  // Find POC and max volume
-  max_volume_ = 0;
-  poc_price_ = volume_profile_[0].price;
-  double poc_volume = 0;
+  if (needs_rebuild || volume_profile_.empty()) {
+    if (max_price <= min_price)
+      return;
 
-  for (const auto &level : volume_profile_) {
-    double total = level.buy_volume + level.sell_volume;
-    max_volume_ =
-        std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
-    if (total > poc_volume) {
-      poc_volume = total;
-      poc_price_ = level.price;
+    // Compute bucket size
+    double range = max_price - min_price;
+    price_bucket_size_ = range / NUM_PRICE_LEVELS;
+    if (price_bucket_size_ <= 0)
+      price_bucket_size_ = 1.0;
+
+    // Reset profile
+    volume_profile_.clear();
+    volume_profile_.resize(NUM_PRICE_LEVELS);
+
+    for (size_t i = 0; i < NUM_PRICE_LEVELS; ++i) {
+      volume_profile_[i].price = min_price + (i + 0.5) * price_bucket_size_;
+      volume_profile_[i].buy_volume = 0;
+      volume_profile_[i].sell_volume = 0;
+      volume_profile_[i].total_volume = 0;
+    }
+
+    // Aggregate trades into buckets
+    for (const auto &trade : trades) {
+      size_t bucket =
+          static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
+      bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
+
+      if (trade.is_buy) {
+        volume_profile_[bucket].buy_volume += trade.size;
+      } else {
+        volume_profile_[bucket].sell_volume += trade.size;
+      }
+      volume_profile_[bucket].total_volume += trade.size;
+    }
+
+    // Find POC and max volume
+    max_volume_ = 0;
+    poc_price_ = volume_profile_[0].price;
+    double poc_volume = 0;
+
+    for (const auto &level : volume_profile_) {
+      double total = level.buy_volume + level.sell_volume;
+      max_volume_ =
+          std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
+      if (total > poc_volume) {
+        poc_volume = total;
+        poc_price_ = level.price;
+      }
     }
   }
 }

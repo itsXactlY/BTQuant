@@ -28,3 +28,12 @@ Changes Made:
 7. Ran clang-format to ensure code quality
 
 The implementation moves indicator calculations out of the render loop and caches results, only recalculating when new data arrives.
+
+Task Completed: Implement incremental volume profile updates
+
+Changes Made:
+1. Modified build_volume_profile method in dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp
+2. Implemented logic to check if new trades fit in existing bucket range before rebuilding
+3. Now only rebuilds the entire volume profile when prices fall outside the existing range
+4. Otherwise updates incrementally by adding new trades to existing buckets
+5. This improves performance by avoiding unnecessary clearing and reconstruction of the volume_profile_ vector on every tick

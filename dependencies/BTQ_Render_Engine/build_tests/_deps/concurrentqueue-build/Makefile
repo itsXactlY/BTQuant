@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
+CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests
+CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
 # Special rule for the target package
 package: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool..."
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackConfig.cmake
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackConfig.cmake
 .PHONY : package
 
 # Special rule for the target package
@@ -78,7 +78,7 @@ package/fast: package
 # Special rule for the target package_source
 package_source:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool for source..."
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackSourceConfig.cmake
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackSourceConfig.cmake
 .PHONY : package_source
 
 # Special rule for the target package_source
@@ -162,14 +162,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/concurrentqueue-build//CMakeFiles/progress.marks
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/concurrentqueue-build//CMakeFiles/progress.marks
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/clean
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/clean
 .PHONY : clean
 
 # The main clean target
@@ -178,17 +178,17 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/preinstall
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/preinstall
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/concurrentqueue-build/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Help Target
@@ -217,6 +217,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

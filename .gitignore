@@ -9,12 +9,15 @@ dontcommit.py
 .coverage
 
 # ===== Build & output =====
+dependencies/BTQ_Render_Engine/build_tests/
+dependencies/BTQ_Render_Engine/build_tests/
 dependencies/ccapi/example/build/
 dependencies/ccapi/binding/
 dependencies/ccapi/binding/
 dependencies/ccapi/include/boost/
 dependencies/ccapi/include/rapidjson/
 dependencies/ccapi/test/
+
 **.egg-info/
 build/
 out/

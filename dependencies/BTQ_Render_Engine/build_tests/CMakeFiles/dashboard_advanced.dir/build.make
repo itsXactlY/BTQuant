@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
+CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests
+CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests
 
 # Include any dependencies generated for this target.
 include CMakeFiles/dashboard_advanced.dir/depend.make
@@ -69,930 +69,930 @@ include CMakeFiles/dashboard_advanced.dir/progress.make
 # Include the compile flags for this target's objects.
 include CMakeFiles/dashboard_advanced.dir/flags.make
 
-/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Compiling shader: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp to /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv"
-	/usr/bin/glslc /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp -o /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv
+/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Compiling shader: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp to /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv"
+	/usr/bin/glslc /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/lob_heatmap.comp -o /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv
 
-/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/test.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Compiling shader: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/test.comp to /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv"
-	/usr/bin/glslc /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/test.comp -o /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv
+/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/test.comp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Compiling shader: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/test.comp to /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv"
+	/usr/bin/glslc /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/test.comp -o /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv
 
-/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Compiling shader: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp to /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv"
-	/usr/bin/glslc /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp -o /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv
+/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Compiling shader: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp to /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv"
+	/usr/bin/glslc /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/tpo_profile.comp -o /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv
 
 CMakeFiles/dashboard_advanced.dir/codegen:
 .PHONY : CMakeFiles/dashboard_advanced.dir/codegen
 
 CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp
+CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp
 CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp > CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp > CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp -o CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/main_trading_terminal.cpp -o CMakeFiles/dashboard_advanced.dir/src/main_trading_terminal.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp
+CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp
 CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp > CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp > CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp -o CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/vulkan_dashboard_advanced.cpp -o CMakeFiles/dashboard_advanced.dir/src/vulkan_dashboard_advanced.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp
+CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp
 CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp > CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp > CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/VulkanCore.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/VulkanCore.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp
+CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp
 CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp > CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp > CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/quant_workspace_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp > CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp > CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_base.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/metrics_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/panel_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/chart_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp > CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp > CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/indicator_renderer.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp > CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp > CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/hierarchical_selector.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/alerts_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/status_bar_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_19) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_20) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tape_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_21) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_22) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_23) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_24) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/tpo_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_25) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/dom_surface_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp > CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp > CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/MarketMicrostructureRenderer.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp > CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp > CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/VulkanSynchronization.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/realtime_dashboard_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp > CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/correlation_heatmap_component.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_30) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp > CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp > CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/symbol_selector.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_31) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_orders_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_32) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/trading_positions_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_33) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/risk_metrics_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_34) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/histogram_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_35) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/scatter_plot_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_36) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/time_series_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_37) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/screener_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_38) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/log_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_39) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp > CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/performance_monitor_panel.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/performance_monitor_panel.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp
+CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp
 CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_40) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/trading_interface.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/trading_interface.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_41) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/order_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_42) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/position_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp
+CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp
 CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_43) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp
+CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp
 CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_44) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp > CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp -o CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp
+CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_45) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp > CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp > CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_registry.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp
+CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp
 CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_46) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp > CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp > CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp -o CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/optimization/performance_optimizer.cpp -o CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp
+CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp
 CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_47) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp > CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp > CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/GPUMemoryManager.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_48) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/theme_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_49) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp
+CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp
 CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_50) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp > CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp > CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp -o CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/config/dashboard_config.cpp -o CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp
+CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp
 CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_51) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp > CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp > CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/market_data_processor.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_52) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/symbol_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp
+CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp
 CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_53) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp > CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp > CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp -o CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/monitoring/performance_monitor.cpp -o CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp
+CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp
 CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_54) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp > CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp > CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp -o CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp -o CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp
+CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp
 CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_55) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp > CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp > CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp -o CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/analytics/trading_analytics.cpp -o CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_56) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/layout/dashboard_layout_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp
+CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp
 CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_57) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp > CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/ui_data_manager.cpp -o CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
-CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp
+CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp
 CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_58) "Building CXX object CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o -MF CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp
 
 CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp > CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp > CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp -o CMakeFiles/dashboard_advanced.dir/src/system/system_optimizer.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o: _deps/imgui-src/imgui.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_59) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o: _deps/imgui-src/imgui_draw.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_60) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_draw.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_draw.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o: _deps/imgui-src/imgui_tables.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_61) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_tables.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_tables.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o: _deps/imgui-src/imgui_widgets.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_62) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_widgets.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_widgets.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o: _deps/imgui-src/imgui_demo.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_63) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui_demo.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/imgui_demo.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o: _deps/imgui-src/backends/imgui_impl_vulkan.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_64) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_vulkan.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_vulkan.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o: _deps/imgui-src/backends/imgui_impl_glfw.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_65) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp > CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/backends/imgui_impl_glfw.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/imgui-src/backends/imgui_impl_glfw.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o: _deps/implot-src/implot.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_66) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o: _deps/implot-src/implot_items.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_67) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_items.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_items.cpp.s
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o: CMakeFiles/dashboard_advanced.dir/flags.make
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o: _deps/implot-src/implot_demo.cpp
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o -c /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_68) "Building CXX object CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o -MF CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o.d -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.o -c /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp > CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.i
 
 CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/implot-src/implot_demo.cpp -o CMakeFiles/dashboard_advanced.dir/_deps/implot-src/implot_demo.cpp.s
 
 # Object files for target dashboard_advanced
 dashboard_advanced_OBJECTS = \
@@ -1134,7 +1134,7 @@ dashboard_advanced: CMakeFiles/dashboard_advanced.dir/build.make
 dashboard_advanced: CMakeFiles/dashboard_advanced.dir/compiler_depend.ts
 dashboard_advanced: /lib/libvulkan.so
 dashboard_advanced: CMakeFiles/dashboard_advanced.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Linking CXX executable dashboard_advanced"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles --progress-num=$(CMAKE_PROGRESS_69) "Linking CXX executable dashboard_advanced"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/dashboard_advanced.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -1145,9 +1145,9 @@ CMakeFiles/dashboard_advanced.dir/clean:
 	$(CMAKE_COMMAND) -P CMakeFiles/dashboard_advanced.dir/cmake_clean.cmake
 .PHONY : CMakeFiles/dashboard_advanced.dir/clean
 
-CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv
-CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv
-CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles/dashboard_advanced.dir/DependInfo.cmake "--color=$(COLOR)" dashboard_advanced
+CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/lob_heatmap.spv
+CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/test.spv
+CMakeFiles/dashboard_advanced.dir/depend: /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/shaders/spirv/tpo_profile.spv
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles/dashboard_advanced.dir/DependInfo.cmake "--color=$(COLOR)" dashboard_advanced
 .PHONY : CMakeFiles/dashboard_advanced.dir/depend
 

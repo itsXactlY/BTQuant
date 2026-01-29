@@ -3,6 +3,7 @@
 #include "implot.h"
 #include "market_data_processor.hpp"
 #include "vulkan_dashboard_advanced.hpp"
+#include "performance_monitor.hpp"
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -60,9 +61,11 @@ int main(int argc, char **argv) {
   while (!dashboard->should_close()) {
     auto frame_begin = std::chrono::steady_clock::now();
 
+    g_performance_monitor.start_frame();
     dashboard->handle_events();
     bridge->sync();
     dashboard->render_frame();
+    g_performance_monitor.end_frame();
 
     // FPS cap
     auto frame_end = std::chrono::steady_clock::now();

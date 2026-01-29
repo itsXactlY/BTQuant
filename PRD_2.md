@@ -19,7 +19,11 @@
 ## Phase 3: Orderbook Rendering Optimization
 
 - [x] Batch orderbook geometry drawing: use ImDrawList::ChannelsSplit to batch liquidity bar backgrounds before text in `src/components/orderbook_panel.cpp` render_orderbook_ladder method
-- [ ] Flatten orderbook UI structure: pre-calculate heatmap geometry and draw as single primitive pass behind table instead of row-by-row cells in `src/components/orderbook_panel.cpp`
+<<<<<<< HEAD
+- [x] Flatten orderbook UI structure: pre-calculate heatmap geometry and draw as single primitive pass behind table instead of row-by-row cells in `src/components/orderbook_panel.cpp`
+=======
+- [x] Flatten orderbook UI structure: pre-calculate heatmap geometry and draw as single primitive pass behind table instead of row-by-row cells in `src/components/orderbook_panel.cpp`
+>>>>>>> ralphy/agent-7-1769699288708-ur8d4m-instrument-main-render-loop-add-performance-monito
 
 ## Phase 4: Volume Profile Memory Management
 

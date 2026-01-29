@@ -332,8 +332,144 @@ void MarketMicrostructureRenderer::resetStats() {
 }
 
 // ============================================
-// Private: Resource Creation
+// Symbol Management & Data Subscription
 // ============================================
+
+void MarketMicrostructureRenderer::setSymbol(uint32_t symbol_id) {
+  if (symbol_id == current_symbol_id_)
+    return;
+
+  // Unsubscribe previous
+  if (subscription_id_ > 0 && marketDataProcessor_) {
+    marketDataProcessor_->unsubscribe(subscription_id_);
+    subscription_id_ = 0;
+  }
+  if (subscription_id_lob_ > 0 && marketDataProcessor_) {
+    marketDataProcessor_->unsubscribe(subscription_id_lob_);
+    subscription_id_lob_ = 0;
+  }
+
+  current_symbol_id_ = symbol_id;
+
+  // Clear buffers
+  {
+    std::lock_guard lock(dataMutex_);
+    currentTradeData_.clear();
+    currentFootprintClusters_.clear();
+    lobSnapshotBuffer_.clear();
+    currentClusterCount_ = 0;
+  }
+  resetStats();
+
+  if (!marketDataProcessor_)
+    return;
+
+  // Subscribe to new symbol
+  // Subscribe to TRADES
+  subscription_id_ = marketDataProcessor_->subscribe(
+      symbol_id, NotificationType::TRADE,
+      [this](uint32_t sym, NotificationType type) {
+        this->onMarketDataUpdate(sym, type);
+      });
+
+  // Subscribe to ORDERBOOK
+  subscription_id_lob_ = marketDataProcessor_->subscribe(
+      symbol_id, NotificationType::ORDERBOOK,
+      [this](uint32_t sym, NotificationType type) {
+        this->onMarketDataUpdate(sym, type);
+      });
+
+  // Also fetch initial state (Snapshot)
+  auto ob = marketDataProcessor_->getOrderbookData(symbol_id);
+  if (ob) {
+    // Manually trigger update
+    onMarketDataUpdate(symbol_id, NotificationType::ORDERBOOK);
+  }
+}
+
+void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id,
+                                                      NotificationType type) {
+  if (symbol_id != current_symbol_id_ || !marketDataProcessor_)
+    return;
+
+  if (type == NotificationType::ORDERBOOK) {
+    auto bookOpt = marketDataProcessor_->getOrderbookData(symbol_id);
+    if (!bookOpt)
+      return;
+
+    const auto &book = *bookOpt;
+
+    // Convert OrderbookData to HotspineOrderBookSnapshot
+    // We need to merge bids and asks into price levels (assuming single price
+    // represents row) Or separate? LOB Heatmap usually assumes Price -> BidVol,
+    // AskVol
+    std::map<double, std::pair<double, double>> levels;
+
+    for (const auto &level : book.bids)
+      levels[level.price].first += level.size;
+    for (const auto &level : book.asks)
+      levels[level.price].second += level.size;
+
+    size_t numLevels = levels.size();
+    size_t bufferSize = HotspineOrderBookSnapshot::calculateBufferSize(
+        static_cast<uint32_t>(numLevels));
+    std::vector<uint8_t> buffer(bufferSize);
+
+    HotspineOrderBookSnapshot *snapshot =
+        reinterpret_cast<HotspineOrderBookSnapshot *>(buffer.data());
+    snapshot->currentTimeIndex =
+        static_cast<uint32_t>(book.timestamp / 1000); // ms
+    snapshot->priceLevelsCount = static_cast<uint32_t>(numLevels);
+
+    if (!levels.empty()) {
+      snapshot->basePrice = static_cast<float>(levels.begin()->first);
+      snapshot->priceRange =
+          static_cast<float>(levels.rbegin()->first - levels.begin()->first);
+      // Avoid zero range
+      if (snapshot->priceRange == 0)
+        snapshot->priceRange = 1.0f;
+    } else {
+      snapshot->basePrice = 0;
+      snapshot->priceRange = 1;
+    }
+
+    int i = 0;
+    for (const auto &[price, vols] : levels) {
+      snapshot->levels[i].price = static_cast<float>(price);
+      snapshot->levels[i].bidQuantity = static_cast<uint32_t>(vols.first);
+      snapshot->levels[i].askQuantity = static_cast<uint32_t>(vols.second);
+      snapshot->levels[i].numOrders = 0; // Not available in OrderbookData
+      i++;
+    }
+
+    updateLOBData(*snapshot);
+  } else if (type == NotificationType::TRADE) {
+    // Fetch recent trades for this symbol
+    // Processor doesn't give us "just the new trade" in callback easily without
+    // custom struct, but we can poll 'recent_trades' from analytics. Ideally we
+    // should process the specific trade from the update if passed, but
+    // subscription relies on callback signature. We will fetch latest 100
+    // trades to ensure we have data.
+    auto analytics = marketDataProcessor_->getSymbolAnalytics(symbol_id);
+
+    // Convert to HotspineTradeTick
+    std::vector<HotspineTradeTick> ticks;
+    ticks.reserve(analytics.recent_trades.size());
+
+    for (const auto &t : analytics.recent_trades) {
+      ticks.emplace_back(t.timestamp, static_cast<float>(t.price),
+                         static_cast<float>(t.size), t.symbol_id, t.is_buy);
+    }
+
+    updateTradeData(ticks);
+
+    // Also update Footprint Clusters?
+    // If we don't have a cluster logic here, we rely on someone else calling
+    // `updateFootprintClusters`. NOTE: Current footprint impl might need
+    // external driving. We will leave it empty for now, assuming external or
+    // future task implementation (Task 7).
+  }
+}
 
 [[nodiscard]] std::expected<void, RendererError>
 MarketMicrostructureRenderer::createComputePipelines() {

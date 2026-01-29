@@ -136,9 +136,16 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string &title,
   case PanelType::STATUS_BAR:
     panel = std::make_unique<StatusBarPanel>(config, bridge_, processor_);
     break;
-  case PanelType::WATCHLIST:
-    panel = std::make_unique<WatchlistPanel>(config, bridge_, processor_);
+  case PanelType::WATCHLIST: {
+    auto watchlist =
+        std::make_unique<WatchlistPanel>(config, bridge_, processor_);
+    watchlist->set_symbol_selected_callback(
+        [this](uint32_t symbol_id, const std::string &symbol_name) {
+          this->set_active_symbol(symbol_id, symbol_name);
+        });
+    panel = std::move(watchlist);
     break;
+  }
   case PanelType::TAPE:
     panel = std::make_unique<TapePanel>(config, bridge_, processor_);
     break;

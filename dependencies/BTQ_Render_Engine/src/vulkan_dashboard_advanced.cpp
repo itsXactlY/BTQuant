@@ -31,6 +31,11 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   ImGui::CreateContext();
   ImPlot::CreateContext();
 
+  ImGuiIO &io = ImGui::GetIO();
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Optional:
+  // Multi-viewport
+
   // Style Definitions (Managed by ThemeManager)
   ThemeManager::getInstance().initialize();
 
@@ -70,7 +75,7 @@ void VulkanDashboard::init_components() {
       hotspine_bridge_, market_data_processor_, m_micro_renderer.get());
 
   m_modern_dashboard = std::make_unique<RealtimeDashboardComponent>(
-      hotspine_bridge_, market_data_processor_);
+      hotspine_bridge_, market_data_processor_, m_micro_renderer.get());
   m_modern_dashboard->initialize_vulkan_resources(m_vulkanCore.get());
 
   // Register Hotkeys

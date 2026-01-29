@@ -2,45 +2,23 @@
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
+#include "../trading/order_manager.hpp"
+#include "../trading/position_manager.hpp"
+#include "../trading/risk_assessment.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
-#include "MarketMicrostructureRenderer.h"
-#include "imgui.h"
-#include "implot.h"
+#include "panel_manager.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace BTQuant {
 
-enum class DashboardPanelType {
-  PRICE_CHART,
-  VOLUME_CHART,
-  INDICATORS,
-  ORDER_BOOK,
-  RECENT_TRADES,
-  MARKET_STATS,
-  PERFORMANCE_METRICS,
-  MULTI_SYMBOL_OVERVIEW,
-  FOOTPRINT_CHART,
-  HEATMAP_LOB,
-  TPO_PROFILE
-};
-
-struct DashboardPanel {
-  DashboardPanelType type;
-  std::string title;
-  ImVec2 position;
-  ImVec2 size;
-  bool visible = true;
-  std::string symbol = "BTC-USDT";
-  RenderEngine::TimeFrame timeframe = RenderEngine::TimeFrame::TF_1SEC;
-};
-
 class RealtimeDashboardComponent : public UIComponent {
 public:
   explicit RealtimeDashboardComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+      RenderEngine::MarketMicrostructureRenderer *renderer = nullptr);
   virtual ~RealtimeDashboardComponent() = default;
 
   void update(float dt) override;
@@ -49,50 +27,29 @@ public:
   void initialize_vulkan_resources(VulkanCore *core) override;
   void clear_data() override;
 
-  void add_panel(DashboardPanelType type, const std::string &title, ImVec2 pos,
-                 ImVec2 size);
-  void remove_panel(int index);
-  void reset_layout();
-
-private:
-  void setup_default_panels();
+  // Dashboard Layout
+  void setup_modern_layout();
+  void render_dashboard_controls();
 
 private:
   // Data sources
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
-  // Dashboard panels
-  std::vector<DashboardPanel> panels_;
-  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer>
-      microstructure_renderer_;
+  // Trading Subsystems
+  std::shared_ptr<OrderManager> order_manager_;
+  std::shared_ptr<PositionManager> position_manager_;
+  std::shared_ptr<RiskAssessment> risk_assessment_;
+
+  // Microstructure Renderer (Shared or Unique)
+  // Microstructure Renderer (Reference)
+  RenderEngine::MarketMicrostructureRenderer *microstructure_renderer_;
+
+  // Panel Manager (The Core)
+  std::unique_ptr<PanelManager> panel_manager_;
 
   // UI state
-  bool show_panel_config_ = false;
-  int selected_panel_ = -1;
-
-  // Rendering methods
-  void render_panel(const DashboardPanel &panel);
-  void render_price_chart_panel(const DashboardPanel &panel);
-  void render_volume_chart_panel(const DashboardPanel &panel);
-  void render_indicators_panel(const DashboardPanel &panel);
-  void render_order_book_panel(const DashboardPanel &panel);
-  void render_recent_trades_panel(const DashboardPanel &panel);
-  void render_market_stats_panel(const DashboardPanel &panel);
-  void render_performance_metrics_panel(const DashboardPanel &panel);
-  void render_multi_symbol_overview_panel(const DashboardPanel &panel);
-  void render_microstructure_panels(const DashboardPanel &panel);
-
-  void render_panel_config_window();
-  void render_dashboard_menu();
-
-  // Helper methods
-  std::vector<TechnicalIndicators::OHLCV>
-  get_ohlcv_data(const std::string &symbol, RenderEngine::TimeFrame timeframe,
-                 int limit = 1000);
-  RenderEngine::OrderbookData get_orderbook_data(const std::string &symbol);
-  std::vector<RenderEngine::TradeData>
-  get_recent_trades(const std::string &symbol, int limit = 50);
+  bool show_dashboard_controls_ = true;
 };
 
 } // namespace BTQuant

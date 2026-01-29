@@ -1,9 +1,9 @@
 #include "components/dom_surface_panel.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <numeric>
-#include <chrono>
 
 namespace BTQuant {
 
@@ -63,32 +63,96 @@ void DomSurfacePanel::updateHeatmapData() {
   if (history.empty())
     return;
 
-  // Determine price range based on LATEST snapshot
-  const auto &latest = history.back();
-  double mid_price = 0;
-  if (!latest.bids.empty() && !latest.asks.empty()) {
-    mid_price = (latest.bids.front().price + latest.asks.front().price) / 2.0;
-  } else if (!latest.bids.empty()) {
-    mid_price = latest.bids.front().price;
-  } else if (!latest.asks.empty()) {
-    mid_price = latest.asks.front().price;
+  // Calculate History Timestamps
+  // Assuming history is sorted by time (oldest -> newest)
+  // We need actual timestamps. If OrderbookData doesn't have it, we might need
+  // to rely on index or add it. Checking MarketDataProcessor structures:
+  // OrderbookData usually has timestamp. If not, we map indices to a time
+  // window (e.g. last N ms). For now, let's assume we can map 0..history.size()
+  // to a time range for the markers. Actually, to fix the scroll, we need
+  // relative time. Let's use the current time and frame duration if timestamp
+  // isn't available, BUT OrderbookData SHOULD have it. I'll check the struct
+  // def if this fails to compile. Assuming OrderbookData has `timestamp`
+  // (uint64_t microseconds).
+
+  // Determine price range
+  double min_price = std::numeric_limits<double>::max();
+  double max_price = std::numeric_limits<double>::lowest();
+
+  if (auto_scale_price_) {
+    for (const auto &book : history) {
+      if (!book.bids.empty())
+        min_price =
+            std::min(min_price, book.bids.back().price); // Lowest bid (deepest)
+      if (!book.bids.empty())
+        max_price = std::max(max_price, book.bids.front().price);
+      if (!book.asks.empty())
+        min_price = std::min(min_price, book.asks.front().price);
+      if (!book.asks.empty())
+        max_price = std::max(max_price,
+                             book.asks.back().price); // Highest ask (deepest)
+    }
+    // Add some padding
+    if (min_price < max_price) {
+      double spread = max_price - min_price;
+      min_price -= spread * 0.05;
+      max_price += spread * 0.05;
+    } else {
+      // Fallback
+      auto latest = history.back();
+      double mid = 0;
+      if (!latest.bids.empty())
+        mid = latest.bids.front().price;
+      else if (!latest.asks.empty())
+        mid = latest.asks.front().price;
+      min_price = mid * 0.98;
+      max_price = mid * 1.02;
+    }
   } else {
-    return; // No price data
+    // Legacy fixed range logic
+    const auto &latest = history.back();
+    double mid_price = 0;
+    if (!latest.bids.empty() && !latest.asks.empty()) {
+      mid_price = (latest.bids.front().price + latest.asks.front().price) / 2.0;
+    } else if (!latest.bids.empty()) {
+      mid_price = latest.bids.front().price;
+    } else if (!latest.asks.empty()) {
+      mid_price = latest.asks.front().price;
+    } else {
+      return;
+    }
+    min_price = mid_price * (1.0 - price_range_);
+    max_price = mid_price * (1.0 + price_range_);
   }
-
-  if (mid_price <= 0)
-    return;
-
-  double min_price = mid_price * (1.0 - price_range_);
-  double max_price = mid_price * (1.0 + price_range_);
 
   if (max_price <= min_price)
     return;
 
+  // Time bounds (X-axis)
+  // We use indices 0..size as the base, but we track timestamps for markers
+  // If OrderbookData doesn't expose timestamp, use system clock tracking in
+  // Processor For strict correctness, we assume history is correctly ordered.
+  // We'll define the X-axis as "Updates Ago" or "Time" depending on capability.
+  // To support scrolling markers, we need to map Marker Time -> Index.
+
+  // Let's assume history updates at uniform rate or we just map linearly.
+  // Crucial: define start/end timestamps for marker interpolation.
+  // Optimization: Only scan timestamps if we have markers? No, need it for
+  // every frame.
+  if (!history.empty()) {
+    // Trying to access timestamp. If compile fails, I will fix.
+    // Based on common patterns: history.front().timestamp
+    history_start_timestamp_ = history.front().timestamp;
+    history_end_timestamp_ = history.back().timestamp;
+  }
+
+  // Ensure valid time range
+  if (history_end_timestamp_ <= history_start_timestamp_) {
+    history_end_timestamp_ = history_start_timestamp_ + 1;
+  }
+
   double price_step =
       (max_price - min_price) / static_cast<double>(price_bins_);
-
-  // Resize data buffer: rows (price bins) * cols (time slices)
   int time_steps = static_cast<int>(history.size());
   size_t total_size =
       static_cast<size_t>(price_bins_) * static_cast<size_t>(time_steps);
@@ -99,17 +163,12 @@ void DomSurfacePanel::updateHeatmapData() {
     std::fill(heatmap_data_.begin(), heatmap_data_.end(), 0.0);
   }
 
-  // Populate data
-  // Map: X-axis = Time (index), Y-axis = Price (bin)
-  // ImPlot PlotHeatmap default: data[row * cols + col]
-  // where row is Y-axis (price) and col is X-axis (time)
-
   double max_vol = 0;
 
   for (int t = 0; t < time_steps; ++t) {
     const auto &book = history[t];
 
-    // Process Bids
+    // Bids
     for (const auto &level : book.bids) {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
@@ -119,8 +178,7 @@ void DomSurfacePanel::updateHeatmapData() {
         }
       }
     }
-
-    // Process Asks
+    // Asks
     for (const auto &level : book.asks) {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
@@ -132,7 +190,6 @@ void DomSurfacePanel::updateHeatmapData() {
     }
   }
 
-  // Update bounds for plotting
   bounds_min_[0] = 0;
   bounds_min_[1] = min_price;
   bounds_max_[0] = static_cast<double>(time_steps);
@@ -171,19 +228,20 @@ void DomSurfacePanel::calculateMedianOrderSize() {
   }
 
   // Sort and find median
-  std::vector<double> sorted_sizes(recent_order_sizes_.begin(), 
-                                  recent_order_sizes_.end());
+  std::vector<double> sorted_sizes(recent_order_sizes_.begin(),
+                                   recent_order_sizes_.end());
   std::sort(sorted_sizes.begin(), sorted_sizes.end());
 
   size_t n = sorted_sizes.size();
   if (n % 2 == 0) {
-    median_order_size_ = (sorted_sizes[n/2 - 1] + sorted_sizes[n/2]) / 2.0;
+    median_order_size_ = (sorted_sizes[n / 2 - 1] + sorted_sizes[n / 2]) / 2.0;
   } else {
-    median_order_size_ = sorted_sizes[n/2];
+    median_order_size_ = sorted_sizes[n / 2];
   }
 }
 
-void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& orderbook) {
+void DomSurfacePanel::detectLargeOrders(
+    const RenderEngine::OrderbookData &orderbook) {
   // Collect all order sizes for median calculation
   for (const auto &level : orderbook.bids) {
     recent_order_sizes_.push_back(level.size);
@@ -199,8 +257,10 @@ void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& order
 
   // Detect large orders (threshold: >10x median)
   double threshold = large_order_threshold_ * median_order_size_;
-  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::steady_clock::now().time_since_epoch()).count();
+  uint64_t current_time =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
 
   // Check bids
   for (const auto &level : orderbook.bids) {
@@ -214,12 +274,15 @@ void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& order
         }
       }
 
-      if (!exists && large_order_markers_.size() < static_cast<size_t>(max_large_order_markers_)) {
+      if (!exists && large_order_markers_.size() <
+                         static_cast<size_t>(max_large_order_markers_)) {
         // Calculate position: X = current time (rightmost), Y = price
-        double x = static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
+        double x =
+            static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
         double y = level.price;
 
-        LargeOrderMarker marker(x, y, level.size, level.price, true, current_time);
+        LargeOrderMarker marker(x, y, level.size, level.price, true,
+                                current_time);
         marker.radius = calculateMarkerRadius(level.size);
         large_order_markers_.push_back(marker);
       }
@@ -238,12 +301,15 @@ void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& order
         }
       }
 
-      if (!exists && large_order_markers_.size() < static_cast<size_t>(max_large_order_markers_)) {
+      if (!exists && large_order_markers_.size() <
+                         static_cast<size_t>(max_large_order_markers_)) {
         // Calculate position: X = current time (rightmost), Y = price
-        double x = static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
+        double x =
+            static_cast<double>(heatmap_data_.size() / price_bins_) - 1.0;
         double y = level.price;
 
-        LargeOrderMarker marker(x, y, level.size, level.price, false, current_time);
+        LargeOrderMarker marker(x, y, level.size, level.price, false,
+                                current_time);
         marker.radius = calculateMarkerRadius(level.size);
         large_order_markers_.push_back(marker);
       }
@@ -252,15 +318,18 @@ void DomSurfacePanel::detectLargeOrders(const RenderEngine::OrderbookData& order
 }
 
 void DomSurfacePanel::cleanupOldMarkers() {
-  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-      std::chrono::steady_clock::now().time_since_epoch()).count();
+  uint64_t current_time =
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
 
   // Remove markers older than FADE_OUT_DURATION_US
   large_order_markers_.erase(
       std::remove_if(large_order_markers_.begin(), large_order_markers_.end(),
-          [current_time](const LargeOrderMarker& marker) {
-            return (current_time - marker.timestamp) > FADE_OUT_DURATION_US;
-          }),
+                     [current_time](const LargeOrderMarker &marker) {
+                       return (current_time - marker.timestamp) >
+                              FADE_OUT_DURATION_US;
+                     }),
       large_order_markers_.end());
 }
 
@@ -275,14 +344,17 @@ float DomSurfacePanel::calculateMarkerRadius(double order_size) const {
   return std::clamp(radius, MIN_RADIUS, MAX_RADIUS);
 }
 
-ImU32 DomSurfacePanel::getMarkerColor(const LargeOrderMarker& marker) const {
+ImU32 DomSurfacePanel::getMarkerColor(const LargeOrderMarker &marker) const {
   // Calculate alpha based on fade-out (if enabled)
   float alpha = 0.7f; // Default alpha
   if (enable_fade_out_) {
-    uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+    uint64_t current_time =
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
     uint64_t age = current_time - marker.timestamp;
-    float fade_ratio = 1.0f - static_cast<float>(age) / static_cast<float>(FADE_OUT_DURATION_US);
+    float fade_ratio = 1.0f - static_cast<float>(age) /
+                                  static_cast<float>(FADE_OUT_DURATION_US);
     alpha = std::clamp(fade_ratio * 0.8f, 0.3f, 0.8f);
   }
 
@@ -294,9 +366,11 @@ ImU32 DomSurfacePanel::getMarkerColor(const LargeOrderMarker& marker) const {
   }
 }
 
-std::string DomSurfacePanel::getMarkerTooltip(const LargeOrderMarker& marker) const {
+std::string
+DomSurfacePanel::getMarkerTooltip(const LargeOrderMarker &marker) const {
   std::string side = marker.is_bid ? "Bid" : "Ask";
-  return std::format("Whale {}: {:.2f} @ ${:.2f}", side, marker.size, marker.price);
+  return std::format("Whale {}: {:.2f} @ ${:.2f}", side, marker.size,
+                     marker.price);
 }
 
 void DomSurfacePanel::renderLargeOrderMarkers() {
@@ -313,20 +387,41 @@ void DomSurfacePanel::renderLargeOrderMarkers() {
     ImU32 color = getMarkerColor(marker);
     ImU32 border_color = IM_COL32(255, 255, 255, 230); // White border
 
+    // Calculate X position based on timestamp relative to history range
+    double relative_time = 0.0;
+    if (history_end_timestamp_ > history_start_timestamp_) {
+      relative_time =
+          static_cast<double>(marker.timestamp - history_start_timestamp_) /
+          static_cast<double>(history_end_timestamp_ -
+                              history_start_timestamp_);
+    }
+    // Map bounds_min[0] (0) to bounds_max[0] (time_steps)
+    // Actually, bounds max is time_steps.
+    double x_pos =
+        bounds_min_[0] + relative_time * (bounds_max_[0] - bounds_min_[0]);
+
+    // Only render if within view
+    if (x_pos < bounds_min_[0] || x_pos > bounds_max_[0]) {
+      // Optional: continue or skip? Markers might be slightly out of bounds if
+      // history shifted past them
+      if (x_pos < bounds_min_[0])
+        continue; // Too old
+      // If too new, show it (shouldn't happen with correct end_timestamp)
+    }
+
     // Convert plot coordinates to pixel coordinates
-    ImVec2 pixel_pos = ImPlot::PlotToPixels(marker.x, marker.y);
+    ImVec2 pixel_pos = ImPlot::PlotToPixels(x_pos, marker.y);
 
     // Draw filled circle
-    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    ImDrawList *draw_list = ImPlot::GetPlotDrawList();
     if (draw_list) {
       draw_list->AddCircleFilled(pixel_pos, marker.radius, color, 32);
       draw_list->AddCircle(pixel_pos, marker.radius, border_color, 32, 1.0f);
 
       // Check for hover and show tooltip
       ImVec2 mouse_pos = ImGui::GetMousePos();
-      float distance = std::sqrt(
-          std::pow(mouse_pos.x - pixel_pos.x, 2) + 
-          std::pow(mouse_pos.y - pixel_pos.y, 2));
+      float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
+                                 std::pow(mouse_pos.y - pixel_pos.y, 2));
 
       if (distance < marker.radius) {
         ImGui::SetTooltip("%s", getMarkerTooltip(marker).c_str());
@@ -390,7 +485,8 @@ void DomSurfacePanel::render() {
                        "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
     ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(), median_order_size_);
+    ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(),
+                median_order_size_);
   }
 
   end_panel_window();

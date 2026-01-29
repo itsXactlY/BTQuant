@@ -6,6 +6,15 @@
     "panels": [
         {
             "grid_height": 1,
+            "grid_width": 1,
+            "grid_x": -1,
+            "grid_y": -1,
+            "title": "DOGEUSDT Orderbook",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
             "grid_width": 6,
             "grid_x": 0,
             "grid_y": 0,
@@ -20,7 +29,7 @@
             "grid_y": 0,
             "title": "Active Orders",
             "type": 6,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 1,
@@ -36,9 +45,9 @@
             "grid_width": 2,
             "grid_x": 3,
             "grid_y": 0,
-            "title": "Orderbook",
+            "title": "BTC-USDT Orderbook",
             "type": 10,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 1,
@@ -54,7 +63,7 @@
             "grid_width": 4,
             "grid_x": 5,
             "grid_y": 0,
-            "title": "BTC/USDT Chart",
+            "title": "BTC-USDT Chart [1s]",
             "type": 0,
             "visible": true
         }

@@ -75,13 +75,12 @@ void ChartPanel::render() {
 
   // Render chart controls in a collapsible header
   if (ImGui::CollapsingHeader("Chart Controls",
-                                ImGuiTreeNodeFlags_DefaultOpen)) {
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
     render_chart_controls();
   }
 
   // Render indicator selector
-  if (ImGui::CollapsingHeader("Indicators",
-                                ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (ImGui::CollapsingHeader("Indicators", ImGuiTreeNodeFlags_DefaultOpen)) {
     render_indicator_selector();
   }
 
@@ -124,7 +123,7 @@ void ChartPanel::render_chart_controls() {
 
   // Timeframe selector (1ms-15sec only)
   const char *timeframes[] = {"1ms", "10ms", "100ms", "500ms",
-                              "1s", "3s",   "5s",    "15s"};
+                              "1s",  "3s",   "5s",    "15s"};
   int selected = static_cast<int>(timeframe_);
   if (ImGui::Combo("Timeframe", &selected, timeframes,
                    IM_ARRAYSIZE(timeframes))) {
@@ -185,9 +184,10 @@ void ChartPanel::render_indicator_selector() {
 // INDICATOR CALCULATION HELPERS
 // ============================================================================
 
-std::vector<double> ChartPanel::calculate_sma(const std::vector<float>& prices, int period) {
+std::vector<double> ChartPanel::calculate_sma(const std::vector<float> &prices,
+                                              int period) {
   std::vector<double> sma(prices.size(), 0.0);
-  
+
   for (size_t i = period - 1; i < prices.size(); ++i) {
     double sum = 0.0;
     for (int j = 0; j < period; ++j) {
@@ -195,58 +195,63 @@ std::vector<double> ChartPanel::calculate_sma(const std::vector<float>& prices, 
     }
     sma[i] = sum / period;
   }
-  
+
   return sma;
 }
 
-std::vector<double> ChartPanel::calculate_ema(const std::vector<float>& prices, int period) {
+std::vector<double> ChartPanel::calculate_ema(const std::vector<float> &prices,
+                                              int period) {
   std::vector<double> ema(prices.size(), 0.0);
-  
+
   if (prices.empty())
     return ema;
-  
+
   // Initialize with SMA
   double sum = 0.0;
   for (int i = 0; i < std::min(period, static_cast<int>(prices.size())); ++i) {
     sum += static_cast<double>(prices[i]);
   }
   ema[period - 1] = sum / period;
-  
+
   // Calculate EMA
   double multiplier = 2.0 / (period + 1.0);
   for (size_t i = period; i < prices.size(); ++i) {
-    ema[i] = (static_cast<double>(prices[i]) - ema[i - 1]) * multiplier + ema[i - 1];
+    ema[i] =
+        (static_cast<double>(prices[i]) - ema[i - 1]) * multiplier + ema[i - 1];
   }
-  
+
   return ema;
 }
 
-std::vector<double> ChartPanel::calculate_ema(const std::vector<double>& prices, int period) {
+std::vector<double> ChartPanel::calculate_ema(const std::vector<double> &prices,
+                                              int period) {
   std::vector<double> ema(prices.size(), 0.0);
-  
+
   if (prices.empty())
     return ema;
-  
+
   // Initialize with SMA
   double sum = 0.0;
   for (int i = 0; i < std::min(period, static_cast<int>(prices.size())); ++i) {
     sum += prices[i];
   }
   ema[period - 1] = sum / period;
-  
+
   // Calculate EMA
   double multiplier = 2.0 / (period + 1.0);
   for (size_t i = period; i < prices.size(); ++i) {
     ema[i] = (prices[i] - ema[i - 1]) * multiplier + ema[i - 1];
   }
-  
+
   return ema;
 }
 
-std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<float>& prices, int period, double std_dev) {
+std::vector<double>
+ChartPanel::calculate_bollinger_upper(const std::vector<float> &prices,
+                                      int period, double std_dev) {
   auto sma = calculate_sma(prices, period);
   std::vector<double> upper_band(prices.size(), 0.0);
-  
+
   for (size_t i = period - 1; i < prices.size(); ++i) {
     // Calculate standard deviation
     double sum_sq_diff = 0.0;
@@ -256,17 +261,19 @@ std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<floa
     }
     double variance = sum_sq_diff / period;
     double std_deviation = std::sqrt(variance);
-    
+
     upper_band[i] = sma[i] + std_dev * std_deviation;
   }
-  
+
   return upper_band;
 }
 
-std::vector<double> ChartPanel::calculate_bollinger_lower(const std::vector<float>& prices, int period, double std_dev) {
+std::vector<double>
+ChartPanel::calculate_bollinger_lower(const std::vector<float> &prices,
+                                      int period, double std_dev) {
   auto sma = calculate_sma(prices, period);
   std::vector<double> lower_band(prices.size(), 0.0);
-  
+
   for (size_t i = period - 1; i < prices.size(); ++i) {
     // Calculate standard deviation
     double sum_sq_diff = 0.0;
@@ -276,89 +283,99 @@ std::vector<double> ChartPanel::calculate_bollinger_lower(const std::vector<floa
     }
     double variance = sum_sq_diff / period;
     double std_deviation = std::sqrt(variance);
-    
+
     lower_band[i] = sma[i] - std_dev * std_deviation;
   }
-  
+
   return lower_band;
 }
 
-std::vector<double> ChartPanel::calculate_rsi(const std::vector<float>& prices, int period) {
+std::vector<double> ChartPanel::calculate_rsi(const std::vector<float> &prices,
+                                              int period) {
   std::vector<double> rsi(prices.size(), 50.0); // Default to neutral
-  
+
   if (prices.size() < static_cast<size_t>(period + 1))
     return rsi;
-  
+
   for (size_t i = period; i < prices.size(); ++i) {
     double gains = 0.0;
     double losses = 0.0;
-    
+
     for (int j = 1; j <= period; ++j) {
-      double change = static_cast<double>(prices[i - j + 1]) - static_cast<double>(prices[i - j]);
+      double change = static_cast<double>(prices[i - j + 1]) -
+                      static_cast<double>(prices[i - j]);
       if (change > 0) {
         gains += change;
       } else {
         losses -= change;
       }
     }
-    
+
     double avg_gain = gains / period;
     double avg_loss = -losses / period;
-    
+
     double rs = avg_loss == 0.0 ? 100.0 : avg_gain / avg_loss;
     rsi[i] = 100.0 - (100.0 / (1.0 + rs));
   }
-  
+
   return rsi;
 }
 
-std::vector<double> ChartPanel::calculate_macd_line(const std::vector<float>& prices, int fast, int slow) {
+std::vector<double>
+ChartPanel::calculate_macd_line(const std::vector<float> &prices, int fast,
+                                int slow) {
   auto ema_fast = calculate_ema(prices, fast);
   auto ema_slow = calculate_ema(prices, slow);
-  
+
   std::vector<double> macd_line(prices.size(), 0.0);
   for (size_t i = 0; i < prices.size(); ++i) {
     macd_line[i] = ema_fast[i] - ema_slow[i];
   }
-  
+
   return macd_line;
 }
 
-std::vector<double> ChartPanel::calculate_macd_signal(const std::vector<double>& macd_line, int signal) {
+std::vector<double>
+ChartPanel::calculate_macd_signal(const std::vector<double> &macd_line,
+                                  int signal) {
   return calculate_ema(macd_line, signal);
 }
 
-std::vector<double> ChartPanel::calculate_macd_histogram(const std::vector<double>& macd_line, const std::vector<double>& signal) {
+std::vector<double>
+ChartPanel::calculate_macd_histogram(const std::vector<double> &macd_line,
+                                     const std::vector<double> &signal) {
   std::vector<double> histogram(macd_line.size(), 0.0);
-  
+
   for (size_t i = 0; i < macd_line.size(); ++i) {
     histogram[i] = macd_line[i] - signal[i];
   }
-  
+
   return histogram;
 }
 
-std::vector<FibonacciLevel> ChartPanel::calculate_fibonacci_levels(double start_price, double end_price) {
+std::vector<FibonacciLevel>
+ChartPanel::calculate_fibonacci_levels(double start_price, double end_price) {
   std::vector<FibonacciLevel> levels;
-  
+
   if (start_price == 0.0 || end_price == 0.0)
     return levels;
-  
+
   double range = end_price - start_price;
-  
+
   // Fibonacci ratios
   const double ratios[] = {0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0};
-  const char* labels[] = {"0%", "23.6%", "38.2%", "50%", "61.8%", "78.6%", "100%"};
+  const char *labels[] = {"0%",    "23.6%", "38.2%", "50%",
+                          "61.8%", "78.6%", "100%"};
   const ImU32 colors[] = {
-    IM_COL32(255, 255, 255, 255), // White
-    IM_COL32(0, 255, 255, 200),    // Cyan
-    IM_COL32(0, 255, 0, 200),      // Green
-    IM_COL32(255, 255, 0, 200),    // Yellow
-    IM_COL32(255, 165, 0, 200),    // Orange
-    IM_COL32(255, 0, 0, 200),      // Red
-    IM_COL32(255, 255, 255, 200)  // White
+      IM_COL32(255, 255, 255, 255), // White
+      IM_COL32(0, 255, 255, 200),   // Cyan
+      IM_COL32(0, 255, 0, 200),     // Green
+      IM_COL32(255, 255, 0, 200),   // Yellow
+      IM_COL32(255, 165, 0, 200),   // Orange
+      IM_COL32(255, 0, 0, 200),     // Red
+      IM_COL32(255, 255, 255, 200)  // White
   };
-  
+
   for (int i = 0; i < 7; ++i) {
     FibonacciLevel level;
     level.price = start_price + range * ratios[i];
@@ -367,7 +384,7 @@ std::vector<FibonacciLevel> ChartPanel::calculate_fibonacci_levels(double start_
     level.color = colors[i];
     levels.push_back(level);
   }
-  
+
   return levels;
 }
 
@@ -375,12 +392,13 @@ std::vector<FibonacciLevel> ChartPanel::calculate_fibonacci_levels(double start_
 // INDICATOR RENDERING METHODS
 // ============================================================================
 
-void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx,
+                                  size_t end_idx) {
   if (chart.closes.empty())
     return;
-  
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  
+
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
   // SMA 10
   if (indicator_config_.show_sma_10) {
     auto sma_10 = calculate_sma(chart.closes, 10);
@@ -392,7 +410,7 @@ void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx, 
       }
     }
   }
-  
+
   // SMA 20
   if (indicator_config_.show_sma_20) {
     auto sma_20 = calculate_sma(chart.closes, 20);
@@ -404,7 +422,7 @@ void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx, 
       }
     }
   }
-  
+
   // SMA 50
   if (indicator_config_.show_sma_50) {
     auto sma_50 = calculate_sma(chart.closes, 50);
@@ -418,12 +436,13 @@ void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx, 
   }
 }
 
-void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx,
+                                  size_t end_idx) {
   if (chart.closes.empty())
     return;
-  
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  
+
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
   // EMA 10
   if (indicator_config_.show_ema_10) {
     auto ema_10 = calculate_ema(chart.closes, 10);
@@ -435,7 +454,7 @@ void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx, 
       }
     }
   }
-  
+
   // EMA 20
   if (indicator_config_.show_ema_20) {
     auto ema_20 = calculate_ema(chart.closes, 20);
@@ -447,7 +466,7 @@ void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx, 
       }
     }
   }
-  
+
   // EMA 50
   if (indicator_config_.show_ema_50) {
     auto ema_50 = calculate_ema(chart.closes, 50);
@@ -461,20 +480,25 @@ void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx, 
   }
 }
 
-void ChartPanel::render_bollinger_bands(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_bollinger_bands(const ChartInstance &chart,
+                                        size_t start_idx, size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_bollinger)
     return;
-  
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  
-  auto upper_band = calculate_bollinger_upper(chart.closes, indicator_config_.bollinger_period, indicator_config_.bollinger_std_dev);
-  auto lower_band = calculate_bollinger_lower(chart.closes, indicator_config_.bollinger_period, indicator_config_.bollinger_std_dev);
-  
+
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
+  auto upper_band = calculate_bollinger_upper(
+      chart.closes, indicator_config_.bollinger_period,
+      indicator_config_.bollinger_std_dev);
+  auto lower_band = calculate_bollinger_lower(
+      chart.closes, indicator_config_.bollinger_period,
+      indicator_config_.bollinger_std_dev);
+
   for (size_t i = start_idx; i < end_idx; ++i) {
     if (i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
       ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i], upper_band[i]);
       ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], lower_band[i]);
-      
+
       // Draw upper band
       draw_list->AddLine(p1, p1, IM_COL32(0, 255, 255, 100), 1.0f);
       // Draw lower band
@@ -483,25 +507,27 @@ void ChartPanel::render_bollinger_bands(const ChartInstance &chart, size_t start
   }
 }
 
-void ChartPanel::render_rsi_indicator(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_rsi_indicator(const ChartInstance &chart,
+                                      size_t start_idx, size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_rsi)
     return;
-  
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
   auto rsi = calculate_rsi(chart.closes, indicator_config_.rsi_period);
-  
+
   // Get plot limits for RSI scaling
   ImPlotRect limits = ImPlot::GetPlotLimits();
-  
+
   for (size_t i = start_idx; i < end_idx; ++i) {
     if (i >= static_cast<size_t>(indicator_config_.rsi_period)) {
       double rsi_value = rsi[i];
-      
+
       // Map RSI to Y-axis (0-100)
-      double y = limits.Y.Min + (rsi_value / 100.0) * (limits.Y.Max - limits.Y.Min);
-      
+      double y =
+          limits.Y.Min + (rsi_value / 100.0) * (limits.Y.Max - limits.Y.Min);
+
       ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], y);
-      
+
       // Color based on overbought/oversold
       ImU32 color = IM_COL32(128, 128, 128, 200);
       if (rsi_value >= indicator_config_.rsi_overbought) {
@@ -509,111 +535,127 @@ void ChartPanel::render_rsi_indicator(const ChartInstance &chart, size_t start_i
       } else if (rsi_value <= indicator_config_.rsi_oversold) {
         color = IM_COL32(0, 255, 0, 200); // Green
       }
-      
+
       // Draw RSI line
       draw_list->AddLine(p, p, color, 1.5f);
     }
   }
-  
+
   // Draw overbought/oversold lines
-  double overbought_y = limits.Y.Min + (indicator_config_.rsi_overbought / 100.0) * (limits.Y.Max - limits.Y.Min);
-  double oversold_y = limits.Y.Min + (indicator_config_.rsi_oversold / 100.0) * (limits.Y.Max - limits.Y.Min);
-  
+  double overbought_y =
+      limits.Y.Min + (indicator_config_.rsi_overbought / 100.0) *
+                         (limits.Y.Max - limits.Y.Min);
+  double oversold_y = limits.Y.Min + (indicator_config_.rsi_oversold / 100.0) *
+                                         (limits.Y.Max - limits.Y.Min);
+
   ImVec2 ob_p1 = ImPlot::PlotToPixels(limits.X.Min, overbought_y);
   ImVec2 ob_p2 = ImPlot::PlotToPixels(limits.X.Max, overbought_y);
   draw_list->AddLine(ob_p1, ob_p2, IM_COL32(255, 0, 0, 100), 1.0f);
-  
+
   ImVec2 os_p1 = ImPlot::PlotToPixels(limits.X.Min, oversold_y);
   ImVec2 os_p2 = ImPlot::PlotToPixels(limits.X.Max, oversold_y);
   draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f);
 }
 
-void ChartPanel::render_macd_indicator(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_macd_indicator(const ChartInstance &chart,
+                                       size_t start_idx, size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_macd)
     return;
-  
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  
-  auto macd_line = calculate_macd_line(chart.closes, indicator_config_.macd_fast_period, indicator_config_.macd_slow_period);
-  auto macd_signal = calculate_macd_signal(macd_line, indicator_config_.macd_signal_period);
+
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
+  auto macd_line =
+      calculate_macd_line(chart.closes, indicator_config_.macd_fast_period,
+                          indicator_config_.macd_slow_period);
+  auto macd_signal =
+      calculate_macd_signal(macd_line, indicator_config_.macd_signal_period);
   auto macd_histogram = calculate_macd_histogram(macd_line, macd_signal);
-  
+
   // Get plot limits for MACD scaling
   ImPlotRect limits = ImPlot::GetPlotLimits();
-  
+
   for (size_t i = start_idx; i < end_idx; ++i) {
-    if (i >= static_cast<size_t>(indicator_config_.macd_slow_period + indicator_config_.macd_signal_period)) {
+    if (i >= static_cast<size_t>(indicator_config_.macd_slow_period +
+                                 indicator_config_.macd_signal_period)) {
       double macd_value = macd_line[i];
       double signal_value = macd_signal[i];
       double hist_value = macd_histogram[i];
-      
+
       // Map MACD to Y-axis
-      double y = limits.Y.Min + ((macd_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) * (limits.Y.Max - limits.Y.Min);
-      
+      double y = limits.Y.Min +
+                 ((macd_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) *
+                     (limits.Y.Max - limits.Y.Min);
+
       ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], y);
-      
+
       // Draw MACD line
       draw_list->AddLine(p, p, IM_COL32(0, 255, 255, 200), 1.5f);
-      
+
       // Draw signal line
-      double signal_y = limits.Y.Min + ((signal_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) * (limits.Y.Max - limits.Y.Min);
+      double signal_y = limits.Y.Min + ((signal_value - limits.Y.Min) /
+                                        (limits.Y.Max - limits.Y.Min)) *
+                                           (limits.Y.Max - limits.Y.Min);
       ImVec2 signal_p = ImPlot::PlotToPixels(chart.dates[i], signal_y);
       draw_list->AddLine(signal_p, signal_p, IM_COL32(255, 165, 0, 200), 1.5f);
-      
+
       // Draw histogram
-      double hist_y = limits.Y.Min + ((hist_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) * (limits.Y.Max - limits.Y.Min);
+      double hist_y = limits.Y.Min + ((hist_value - limits.Y.Min) /
+                                      (limits.Y.Max - limits.Y.Min)) *
+                                         (limits.Y.Max - limits.Y.Min);
       ImVec2 hist_p = ImPlot::PlotToPixels(chart.dates[i], hist_y);
-      
-      ImU32 hist_color = hist_value >= 0 ? IM_COL32(0, 255, 0, 150) : IM_COL32(255, 0, 0, 150);
+
+      ImU32 hist_color =
+          hist_value >= 0 ? IM_COL32(0, 255, 0, 150) : IM_COL32(255, 0, 0, 150);
       draw_list->AddRectFilled(
           ImVec2(hist_p.x - 2, hist_p.y),
-          ImVec2(hist_p.x + 2, hist_p.y + hist_y - signal_y),
-          hist_color);
+          ImVec2(hist_p.x + 2, hist_p.y + hist_y - signal_y), hist_color);
     }
   }
 }
 
-void ChartPanel::render_fibonacci_levels(const ChartInstance &chart, size_t start_idx, size_t end_idx) {
+void ChartPanel::render_fibonacci_levels(const ChartInstance &chart,
+                                         size_t start_idx, size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_fibonacci)
     return;
-  
+
   // Find swing high and low in visible range
   double swing_high = 0.0;
   double swing_low = 1e9;
-  
+
   for (size_t i = start_idx; i < end_idx; ++i) {
     swing_high = std::max(swing_high, static_cast<double>(chart.highs[i]));
     swing_low = std::min(swing_low, static_cast<double>(chart.lows[i]));
   }
-  
+
   if (swing_high == 0.0 || swing_low == 1e9)
     return;
-  
+
   auto fib_levels = calculate_fibonacci_levels(swing_low, swing_high);
-  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  
+  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+
   // Draw Fibonacci levels
-  for (const auto& level : fib_levels) {
+  for (const auto &level : fib_levels) {
     ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[start_idx], level.price);
     ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[end_idx - 1], level.price);
-    
+
     // Draw horizontal line
     draw_list->AddLine(p1, p2, level.color, 1.0f);
-    
+
     // Draw label
     ImVec2 text_pos = ImVec2(p1.x + 5, p1.y - 10);
     draw_list->AddText(text_pos, level.color, level.label);
   }
 }
 
-void ChartPanel::render_crosshair_info(const ChartInstance &chart, double mouse_x, double mouse_y) {
+void ChartPanel::render_crosshair_info(const ChartInstance &chart,
+                                       double mouse_x, double mouse_y) {
   if (!indicator_config_.show_crosshair_info || chart.closes.empty())
     return;
-  
+
   // Find closest candle to mouse position
   size_t closest_idx = 0;
   double min_dist = 1e9;
-  
+
   for (size_t i = 0; i < chart.dates.size(); ++i) {
     double dist = std::abs(chart.dates[i] - mouse_x);
     if (dist < min_dist) {
@@ -621,24 +663,26 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart, double mouse_
       closest_idx = i;
     }
   }
-  
+
   if (closest_idx >= chart.closes.size())
     return;
-  
+
   // Get candle data
   double open = chart.opens[closest_idx];
   double high = chart.highs[closest_idx];
   double low = chart.lows[closest_idx];
   double close = chart.closes[closest_idx];
   double volume = chart.volumes[closest_idx];
-  
+
   // Render crosshair info overlay
-  ImGui::SetNextWindowPos(ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
+  ImGui::SetNextWindowPos(
+      ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
   ImGui::SetNextWindowSize(ImVec2(200, 150));
-  ImGui::Begin("Crosshair Info", nullptr, 
-               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | 
-               ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
-  
+  ImGui::Begin("Crosshair Info", nullptr,
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoResize |
+                   ImGuiWindowFlags_AlwaysAutoResize);
+
   ImGui::TextColored(ImVec4(1, 1, 0, 1), "Candle Info:");
   ImGui::Separator();
   ImGui::Text("Open:  %.2f", open);
@@ -646,18 +690,18 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart, double mouse_
   ImGui::Text("Low:   %.2f", low);
   ImGui::Text("Close: %.2f", close);
   ImGui::Text("Volume: %.2f", volume);
-  
+
   // Calculate change
   if (closest_idx > 0) {
     double prev_close = chart.closes[closest_idx - 1];
     double change = close - prev_close;
     double change_pct = (change / prev_close) * 100.0;
-    
+
     ImGui::Separator();
     ImGui::TextColored(change >= 0 ? ImVec4(0, 1, 0, 1) : ImVec4(1, 0, 0, 1),
-                   "Change: %.2f (%.2f%%)", change, change_pct);
+                       "Change: %.2f (%.2f%%)", change, change_pct);
   }
-  
+
   ImGui::End();
 }
 
@@ -737,6 +781,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     }
 
     // Auto-follow logic
+
     if (follow_latest_) {
       double time_max = chart.dates.back();
       double duration_raw =
@@ -751,6 +796,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       ImPlot::SetupAxisLimits(ImAxis_X1, last_view_min_, last_view_max_,
                               ImPlotCond_Always);
     } else {
+      // If not following, allow manual pan/zoom (Cond_Once allows initial set
+      // but user overrides) Only set Once if we ever reset or init
       ImPlot::SetupAxisLimits(ImAxis_X1, chart.dates.front(),
                               chart.dates.back(), ImPlotCond_Once);
     }
@@ -775,7 +822,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
         --lower;
       start_idx = std::distance(chart.dates.begin(), lower);
 
-      auto upper = std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
+      auto upper =
+          std::upper_bound(chart.dates.begin(), chart.dates.end(), view_x_max);
       if (upper != chart.dates.end())
         ++upper;
       end_idx = std::distance(chart.dates.begin(), upper);
@@ -809,7 +857,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
           y_min -= range * 0.1;
           y_max += range * 0.1;
 
-          ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_min), static_cast<float>(y_max), ImPlotCond_Always);
+          // Always fit Y to visible X range for "Auto Scale Y" behavior
+          ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_min),
+                                  static_cast<float>(y_max), ImPlotCond_Always);
         }
       }
     }
@@ -817,14 +867,26 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     // VOLUME PROFILE OVERLAY
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
       ImPlot::SetAxes(ImAxis_X2, ImAxis_Y1);
-      ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.15f);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 0.9f, 1.0f));
+
+      // Use Theme Colors for a more integrated look
+      ImVec4 vp_color = colors.text;
+      vp_color.w = 0.25f; // reduced alpha
+
+      ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
+      ImPlot::PushStyleColor(
+          ImPlotCol_Line,
+          ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f)); // clearer border
+
+      // Calculate bar width if possible, or use auto
+      // double width = (vp_prices.size() > 1) ? (vp_prices[1] - vp_prices[0]) *
+      // 0.9 : 0.0;
 
       ImPlot::PlotBars("VP", vp_volumes.data(), vp_prices.data(),
                        static_cast<int>(vp_prices.size()), 0.0,
                        ImPlotBarsFlags_Horizontal);
 
-      ImPlot::PopStyleColor();
+      ImPlot::PopStyleColor(2);
       ImPlot::PopStyleVar();
       ImPlot::SetAxes(ImAxis_X1, ImAxis_Y1); // Reset
     }
@@ -933,6 +995,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
       // Draw body (filled rectangle)
       draw_list->AddRectFilled(body_tl, body_br, color);
+    }
+
+    // Check for user interaction to break auto-follow
+    if (ImPlot::IsPlotHovered() &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      follow_latest_ = false;
     }
 
     // Render indicators

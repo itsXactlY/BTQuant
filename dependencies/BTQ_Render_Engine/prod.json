@@ -1,407 +1,331 @@
 [
   {
     "id": 0,
-    "phase": "cleanup",
-    "title": "Remove old layout code",
-    "description": "Delete all deprecated layout components, old UI files, and legacy dashboard code. Keep only the new modern dashboard shown in screenshot. Remove unused imports and dependencies.",
-    "files_to_modify": [
-      "ui/old_layout/",
-      "ui/legacy_components/",
-      "layouts/deprecated/"
-    ],
-    "verification": "Old layout files removed, application still runs with new dashboard",
+    "phase": "analysis",
+    "title": "Analyze existing components and identify all functional code",
+    "description": "All functionality exists in the codebase already. Agent must thoroughly analyze git history and existing code to map: DOM Surface implementation, Chart system with zoom/pan, Volume Profile renderer, Technical indicators, Footprint chart, TPO profile, Time & Sales, Vol Profile, Dashboard controls, Watchlist system. Create complete inventory of what works and what needs migration.",
+    "files_to_modify": [],
+    "verification": "Complete component map created with status of each feature",
     "completed": false,
     "priority": "critical"
   },
   {
     "id": 1,
     "phase": "architecture",
-    "title": "Design backend architecture for dashboard",
-    "description": "Plan clean backend structure for the modern dashboard: WebSocket manager, data pipeline, state management, real-time update handler. Define clear separation between data layer and presentation.",
+    "title": "Design integration architecture for Modern Dashboard",
+    "description": "Plan how to integrate all existing working components into the Modern Dashboard layout from image 2. Map each existing panel to new layout positions. Ensure no functionality is lost during migration. Agent determines optimal data flow and component lifecycle.",
     "files_to_modify": [],
-    "verification": "Architecture document with data flow diagram created",
+    "verification": "Architecture document showing old->new component mapping",
     "completed": false,
-    "priority": "high"
+    "priority": "critical"
   },
   {
     "id": 2,
-    "phase": "backend",
-    "title": "Create WebSocket/Data feed manager",
-    "description": "Build robust WebSocket connection manager for real-time crypto price data. Handle reconnection, error recovery, rate limiting. Support multiple symbols (BTCUSDT, ETHUSDT, BNBUSDT, etc.).",
-    "files_to_modify": [
-      "backend/websocket_manager.py",
-      "backend/data_feed.py"
-    ],
-    "verification": "WebSocket connects and receives live price updates for all symbols",
+    "phase": "dom-surface",
+    "title": "Fix DOM Surface to use ALL order book levels",
+    "description": "Currently DOM Surface only shows ~20 levels deep (image 4). Modify to display ALL available liquidity levels from order book. Use entire order/volume data for complete market depth visualization. Agent must find current depth limitation and remove it, scaling visualization to handle hundreds/thousands of levels.",
+    "files_to_modify": [],
+    "verification": "DOM Surface displays complete order book depth, not just top 20 levels",
     "completed": false,
     "priority": "critical"
   },
   {
     "id": 3,
-    "phase": "backend",
-    "title": "Implement market data processor",
-    "description": "Create data processor to handle incoming market data: price updates, volume, 24h changes, order book updates. Calculate derived metrics (24h high/low, change %).",
-    "files_to_modify": [
-      "backend/market_processor.py",
-      "backend/calculations.py"
-    ],
-    "verification": "Market data processed correctly, metrics calculated accurately",
+    "phase": "dom-surface",
+    "title": "Fix whale order visualization - orders stuck at edges",
+    "description": "Large whale bid/ask orders get stuck at DOM Surface edges (image 6) instead of scrolling properly. Fix scrolling/panning logic so whale orders move correctly with price movement. Orders should stay anchored to their price levels, not stuck at viewport boundaries.",
+    "files_to_modify": [],
+    "verification": "Whale orders scroll smoothly with price changes, never stuck at edges",
     "completed": false,
-    "priority": "critical"
+    "priority": "high"
   },
   {
     "id": 4,
-    "phase": "backend",
-    "title": "Build technical indicators engine",
-    "description": "Implement technical indicators system: RSI, MACD, Signal. Use efficient calculations with rolling windows. Support real-time indicator updates as new data arrives.",
-    "files_to_modify": [
-      "backend/indicators/rsi.py",
-      "backend/indicators/macd.py",
-      "backend/indicators/engine.py"
-    ],
-    "verification": "Indicators calculate correctly and update in real-time",
+    "phase": "charts",
+    "title": "Restore chart zoom and pan functionality",
+    "description": "Charts were zoomable before (image 5) but functionality may be broken/disabled. Agent must restore full zoom/pan capabilities: mouse wheel zoom, drag to pan, pinch zoom if applicable. Find existing zoom implementation and ensure it works in new dashboard.",
+    "files_to_modify": [],
+    "verification": "Charts support smooth zoom in/out and panning",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 5,
-    "phase": "backend",
-    "title": "Create trade processor and order book handler",
-    "description": "Build trade data processor to handle recent trades stream. Implement order book manager for bid/ask updates. Store in efficient data structures for quick access.",
-    "files_to_modify": [
-      "backend/trade_processor.py",
-      "backend/orderbook.py"
-    ],
-    "verification": "Trades and order book data processed and accessible",
-    "completed": false,
-    "priority": "high"
-  },
-  {
-    "id": 6,
-    "phase": "backend",
-    "title": "Implement performance monitoring system",
-    "description": "Create performance tracker for FPS, frame time, memory usage, data processing latency. Calculate and expose metrics shown in Performance panel (142.9 FPS, 7.88ms frame time, etc.).",
-    "files_to_modify": [
-      "backend/performance_monitor.py",
-      "backend/metrics_collector.py"
-    ],
-    "verification": "Performance metrics collected and accurate",
+    "phase": "charts",
+    "title": "Improve Volume Profile visualization",
+    "description": "Current volume profile (image 5) needs better visual design. Agent must improve rendering: better color scheme, clearer bars, proper scaling, smoother gradients. Maintain performance while making it more visually appealing and readable.",
+    "files_to_modify": [],
+    "verification": "Volume profile has improved visual design while maintaining accuracy",
     "completed": false,
     "priority": "normal"
   },
   {
+    "id": 6,
+    "phase": "indicators",
+    "title": "Major rework of technical indicators system",
+    "description": "Technical indicators need complete overhaul (image 5/6). Agent must analyze current indicator implementation and improve: calculation accuracy, rendering performance, visual clarity, configurability. Support multiple indicators simultaneously. Better overlay/panel management.",
+    "files_to_modify": [],
+    "verification": "Indicators system overhauled with better visuals and performance",
+    "completed": false,
+    "priority": "high"
+  },
+  {
     "id": 7,
-    "phase": "backend",
-    "title": "Build state management system",
-    "description": "Create centralized state manager for dashboard data: current prices, selected symbol, active view, user preferences. Implement observer pattern for state changes.",
-    "files_to_modify": [
-      "backend/state_manager.py",
-      "backend/observers.py"
-    ],
-    "verification": "State changes propagate correctly to all components",
+    "phase": "footprint",
+    "title": "Major rework of Footprint Chart",
+    "description": "Footprint chart needs complete redesign (image 7/8). Agent must improve: cluster visualization, delta calculation display, volume rendering, color coding for buy/sell imbalance, grid layout. Make it more readable and informative while maintaining real-time performance.",
+    "files_to_modify": [],
+    "verification": "Footprint chart has improved design and functionality",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 8,
-    "phase": "integration",
-    "title": "Connect backend to Price Chart panel",
-    "description": "Wire backend data feed to price chart. Implement efficient data buffering for chart updates. Support real-time candlestick/line updates without performance degradation.",
-    "files_to_modify": [
-      "ui/panels/price_chart.py",
-      "backend/chart_data_provider.py"
-    ],
-    "verification": "Price chart updates smoothly with live data at 140+ FPS",
+    "phase": "tpo",
+    "title": "Major rework of TPO Profile",
+    "description": "TPO Profile needs redesign (image 7/8). Agent must improve: letter distribution visualization, time-price clustering, profile shape clarity, value area highlighting. Better color scheme and layout for easier reading of market structure.",
+    "files_to_modify": [],
+    "verification": "TPO Profile has improved visualization and clarity",
     "completed": false,
-    "priority": "critical"
+    "priority": "normal"
   },
   {
     "id": 9,
-    "phase": "integration",
-    "title": "Connect backend to Volume panel",
-    "description": "Wire volume data to volume chart panel. Implement time-based volume aggregation. Support real-time volume bar updates.",
-    "files_to_modify": [
-      "ui/panels/volume_chart.py",
-      "backend/volume_aggregator.py"
-    ],
-    "verification": "Volume chart displays and updates correctly",
+    "phase": "ui-menu",
+    "title": "Add submenu system for per-symbol terminals",
+    "description": "Add submenu to Dashboard (see image 3 menu structure). For each coin found in hotspine/watchlist, create menu entry that opens a dedicated default terminal window for that specific symbol. Agent must implement menu system and window spawning logic.",
+    "files_to_modify": [],
+    "verification": "Menu system allows opening individual terminal per symbol",
     "completed": false,
-    "priority": "high"
+    "priority": "normal"
   },
   {
     "id": 10,
     "phase": "integration",
-    "title": "Connect backend to Technical Indicators panel",
-    "description": "Wire indicator calculations to indicators chart. Update RSI, MACD, Signal values in real-time as new data arrives. Optimize for performance.",
-    "files_to_modify": [
-      "ui/panels/indicators_chart.py",
-      "backend/indicator_provider.py"
-    ],
-    "verification": "Indicators display correctly and update in real-time",
+    "title": "Migrate DOM Surface to Modern Dashboard",
+    "description": "Move working DOM Surface component into Modern Dashboard layout. Position according to layout from image 2. Ensure all DOM Surface functionality (depth display, whale orders, interactions) works in new context. Maintain performance.",
+    "files_to_modify": [],
+    "verification": "DOM Surface fully functional in Modern Dashboard position",
     "completed": false,
-    "priority": "high"
+    "priority": "critical"
   },
   {
     "id": 11,
     "phase": "integration",
-    "title": "Connect backend to Order Book panel",
-    "description": "Wire order book data to display panel. Handle order book updates efficiently. Show 'No order book data' message when data unavailable.",
-    "files_to_modify": [
-      "ui/panels/order_book.py",
-      "backend/orderbook_provider.py"
-    ],
-    "verification": "Order book displays when available, shows proper message when not",
+    "title": "Migrate Chart system to Modern Dashboard",
+    "description": "Move working chart components (candlestick, line, indicators) into Modern Dashboard. Position main chart panel according to image 2 layout. Preserve zoom, pan, indicator overlay capabilities. Integrate with symbol selector and timeframe controls.",
+    "files_to_modify": [],
+    "verification": "Chart system fully functional in Modern Dashboard with all features",
     "completed": false,
-    "priority": "normal"
+    "priority": "critical"
   },
   {
     "id": 12,
     "phase": "integration",
-    "title": "Connect backend to Recent Trades panel",
-    "description": "Wire trade stream to recent trades list. Display latest trades with proper formatting. Handle 'No recent trades' state.",
-    "files_to_modify": [
-      "ui/panels/recent_trades.py",
-      "backend/trades_provider.py"
-    ],
-    "verification": "Recent trades display and update in real-time",
+    "title": "Migrate Volume Profile to Modern Dashboard",
+    "description": "Move volume profile visualization into Modern Dashboard layout. Apply visual improvements from task 5. Ensure profile updates in real-time with market data. Position appropriately relative to main chart.",
+    "files_to_modify": [],
+    "verification": "Volume profile displays correctly in new dashboard with improvements",
     "completed": false,
-    "priority": "normal"
+    "priority": "high"
   },
   {
     "id": 13,
     "phase": "integration",
-    "title": "Connect backend to Market Stats panel",
-    "description": "Wire market statistics to stats panel: Current Price, 24h High/Low, 24h Volume, Market Status. Update in real-time as data changes.",
-    "files_to_modify": [
-      "ui/panels/market_stats.py",
-      "backend/stats_provider.py"
-    ],
-    "verification": "Market stats display correctly and update live",
+    "title": "Migrate Time & Sales to Modern Dashboard",
+    "description": "Move Time & Sales panel (trade list from image 1) into Modern Dashboard layout. Maintain real-time trade updates, color coding for buy/sell, scrolling functionality. Position as shown in layout image 2.",
+    "files_to_modify": [],
+    "verification": "Time & Sales panel functional in Modern Dashboard",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 14,
     "phase": "integration",
-    "title": "Connect backend to Multi-Symbol table",
-    "description": "Wire multi-symbol data to symbol table (BTCUSDT, ETHUSDT, BNBUSDT, ADAUSDT, SOLUSDT). Display price, 24h change %, volume. Update all symbols in real-time. Color code changes (green/red).",
-    "files_to_modify": [
-      "ui/panels/multi_symbol_table.py",
-      "backend/multi_symbol_provider.py"
-    ],
-    "verification": "All symbols display and update correctly with color coding",
+    "title": "Migrate Watchlist to Modern Dashboard",
+    "description": "Move watchlist panel from image 1 into Modern Dashboard. Support multi-symbol display with live price updates, 24h changes, volume. Enable symbol selection from watchlist. Position in layout as shown in image 2.",
+    "files_to_modify": [],
+    "verification": "Watchlist fully functional in Modern Dashboard with symbol switching",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 15,
     "phase": "integration",
-    "title": "Connect backend to Performance panel",
-    "description": "Wire performance metrics to performance display: FPS, Frame Time, Memory Usage, Data Processed, Active Symbols, Processing Latency. Update metrics in real-time.",
-    "files_to_modify": [
-      "ui/panels/performance_panel.py",
-      "backend/performance_provider.py"
-    ],
-    "verification": "Performance metrics display accurately and update live",
+    "title": "Migrate Footprint Chart to Modern Dashboard",
+    "description": "Move improved footprint chart into Modern Dashboard layout. Apply improvements from task 7. Ensure real-time cluster updates work correctly. Position appropriately in layout.",
+    "files_to_modify": [],
+    "verification": "Improved footprint chart functional in Modern Dashboard",
     "completed": false,
     "priority": "normal"
   },
   {
     "id": 16,
     "phase": "integration",
-    "title": "Connect backend to Heatmap and TPO panels",
-    "description": "Wire data to BTCUSDT Heatmap and BTCUSDT TPO panels. Implement heatmap calculation (LOB Heatmap), TPO profile (Atomic compute). Display average frame times and processing status.",
-    "files_to_modify": [
-      "ui/panels/heatmap.py",
-      "ui/panels/tpo.py",
-      "backend/heatmap_calculator.py",
-      "backend/tpo_calculator.py"
-    ],
-    "verification": "Heatmap and TPO display correctly with proper calculations",
+    "title": "Migrate TPO Profile to Modern Dashboard",
+    "description": "Move improved TPO profile into Modern Dashboard layout. Apply improvements from task 8. Ensure profile calculation and display work correctly. Position as shown in layout.",
+    "files_to_modify": [],
+    "verification": "Improved TPO profile functional in Modern Dashboard",
     "completed": false,
     "priority": "normal"
   },
   {
     "id": 17,
     "phase": "integration",
-    "title": "Connect backend to Footprint panel",
-    "description": "Wire data to BTCUSDT Footprint panel. Implement footprint chart calculations (Vulkan Native). Display clusters, mode (Zero-Copy Storage Buffer), frame time.",
-    "files_to_modify": [
-      "ui/panels/footprint.py",
-      "backend/footprint_calculator.py"
-    ],
-    "verification": "Footprint chart displays with correct rendering mode",
-    "completed": false,
-    "priority": "low"
-  },
-  {
-    "id": 18,
-    "phase": "optimization",
-    "title": "Optimize data pipeline for high-frequency updates",
-    "description": "Optimize entire data pipeline for processing 223327 trades and 102345 books efficiently. Implement zero-copy techniques, circular buffers, batch processing. Target: maintain 140+ FPS with 3.00 us processing latency.",
-    "files_to_modify": [
-      "backend/pipeline_optimizer.py",
-      "backend/buffer_manager.py"
-    ],
-    "verification": "Dashboard maintains 140+ FPS under full load",
+    "title": "Migrate Dashboard Controls to Modern Dashboard",
+    "description": "Move all dashboard control panels from image 1 into Modern Dashboard: symbol selection, timeframe selector, layout controls, panel add/remove buttons. Ensure all controls work in new layout. Follow Dashboard Controls positioning from image 2.",
+    "files_to_modify": [],
+    "verification": "All dashboard controls functional in Modern Dashboard",
     "completed": false,
     "priority": "high"
   },
   {
-    "id": 19,
-    "phase": "optimization",
-    "title": "Implement efficient memory management",
-    "description": "Optimize memory usage for handling large datasets. Implement data retention policies, circular buffers for historical data, efficient storage for order book snapshots.",
-    "files_to_modify": [
-      "backend/memory_manager.py",
-      "backend/data_retention.py"
-    ],
-    "verification": "Memory usage stays stable under continuous operation",
+    "id": 18,
+    "phase": "integration",
+    "title": "Integrate Performance Monitor into Modern Dashboard",
+    "description": "Ensure performance overlay (FPS, frame time, memory, data processed) displays correctly in Modern Dashboard. Should be non-intrusive but always visible. Agent positions appropriately.",
+    "files_to_modify": [],
+    "verification": "Performance monitor displays correctly in Modern Dashboard",
     "completed": false,
     "priority": "normal"
   },
   {
-    "id": 20,
-    "phase": "features",
-    "title": "Implement symbol switching",
-    "description": "Add ability to switch between symbols in multi-symbol table. Update all panels (charts, stats, indicators) when new symbol selected. Smooth transition without lag.",
-    "files_to_modify": [
-      "ui/symbol_selector.py",
-      "backend/symbol_manager.py"
-    ],
-    "verification": "Symbol switching works smoothly, all panels update correctly",
+    "id": 19,
+    "phase": "data-flow",
+    "title": "Ensure unified data pipeline for all components",
+    "description": "All migrated components must share same data pipeline. Agent ensures: WebSocket feeds all components, no duplicate data streams, efficient data distribution to panels, proper synchronization across all displays. Single source of truth for market data.",
+    "files_to_modify": [],
+    "verification": "All components receive data from unified pipeline efficiently",
     "completed": false,
-    "priority": "high"
+    "priority": "critical"
+  },
+  {
+    "id": 20,
+    "phase": "data-flow",
+    "title": "Implement symbol switching across all panels",
+    "description": "When symbol changes (from watchlist or symbol selector), ALL panels must update to new symbol: DOM Surface, charts, volume profile, footprint, TPO, time & sales, indicators. Agent implements global symbol state management.",
+    "files_to_modify": [],
+    "verification": "Symbol switching updates all panels correctly and instantly",
+    "completed": false,
+    "priority": "critical"
   },
   {
     "id": 21,
-    "phase": "features",
-    "title": "Add chart timeframe selection",
-    "description": "Implement timeframe selector for charts (1m, 5m, 15m, 1h, 4h, 1d). Support dynamic timeframe switching without reconnecting WebSocket.",
-    "files_to_modify": [
-      "ui/timeframe_selector.py",
-      "backend/timeframe_manager.py"
-    ],
-    "verification": "Timeframe switching works, charts update with correct data",
+    "phase": "layout",
+    "title": "Implement flexible panel layout system",
+    "description": "Modern Dashboard should support: panel resize, panel move/dock, panel hide/show, layout save/load. User can customize panel positions. Agent implements docking/layout management system.",
+    "files_to_modify": [],
+    "verification": "Users can resize, move, and customize panel layout",
     "completed": false,
     "priority": "normal"
   },
   {
     "id": 22,
-    "phase": "features",
-    "title": "Implement data export functionality",
-    "description": "Add ability to export chart data, trades, order book snapshots to CSV/JSON. Support date range selection and symbol filtering.",
-    "files_to_modify": [
-      "backend/data_exporter.py",
-      "ui/export_dialog.py"
-    ],
-    "verification": "Data exports correctly in multiple formats",
+    "phase": "layout",
+    "title": "Implement panel add/remove functionality",
+    "description": "Dashboard Controls should allow adding/removing panels dynamically: Add Chart Panel, Add Heatmap Panel, Add Footprint, Add TPO Profile, Add Orderbook (from image 1). Agent implements panel spawning system.",
+    "files_to_modify": [],
+    "verification": "Users can dynamically add and remove panels via controls",
     "completed": false,
-    "priority": "low"
+    "priority": "normal"
   },
   {
     "id": 23,
-    "phase": "error-handling",
-    "title": "Implement robust error handling",
-    "description": "Add comprehensive error handling: WebSocket disconnections, API errors, data anomalies, invalid updates. Implement auto-reconnect with exponential backoff. Show user-friendly error messages.",
-    "files_to_modify": [
-      "backend/error_handler.py",
-      "backend/reconnect_manager.py"
-    ],
-    "verification": "Application handles errors gracefully and recovers automatically",
+    "phase": "optimization",
+    "title": "Optimize rendering performance for all panels",
+    "description": "With all panels integrated, ensure performance targets met: 140+ FPS sustained, low latency updates, efficient GPU usage. Agent profiles and optimizes: reduce draw calls, batch rendering, optimize shaders, minimize CPU-GPU transfers.",
+    "files_to_modify": [],
+    "verification": "Dashboard maintains 140+ FPS with all panels active",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 24,
-    "phase": "testing",
-    "title": "Create backend unit tests",
-    "description": "Build comprehensive test suite for all backend components: data processors, calculators, state management, WebSocket manager. Aim for 80%+ coverage.",
-    "files_to_modify": [
-      "tests/backend/test_websocket.py",
-      "tests/backend/test_processors.py",
-      "tests/backend/test_indicators.py",
-      "tests/backend/test_state.py"
-    ],
-    "verification": "All backend tests pass with 80%+ coverage",
+    "phase": "optimization",
+    "title": "Optimize memory usage for complete dashboard",
+    "description": "Ensure memory usage stays reasonable with all components active. Agent optimizes: data structure sizes, buffer management, texture atlases, history retention policies. No memory leaks.",
+    "files_to_modify": [],
+    "verification": "Memory usage stable during extended operation with all panels",
     "completed": false,
     "priority": "high"
   },
   {
     "id": 25,
-    "phase": "testing",
-    "title": "Create integration tests for dashboard",
-    "description": "Build end-to-end tests for complete dashboard workflows: data flow from WebSocket to UI, symbol switching, indicator calculations, performance under load.",
-    "files_to_modify": [
-      "tests/integration/test_dashboard_flow.py",
-      "tests/integration/test_performance.py"
-    ],
-    "verification": "Integration tests pass, dashboard works end-to-end",
+    "phase": "polish",
+    "title": "Unify visual theme across all panels",
+    "description": "Ensure consistent visual design: colors, fonts, borders, backgrounds across all integrated panels. Follow Modern Dashboard aesthetic from image 2. Agent applies consistent styling.",
+    "files_to_modify": [],
+    "verification": "All panels have consistent, modern visual appearance",
     "completed": false,
     "priority": "normal"
   },
   {
     "id": 26,
-    "phase": "documentation",
-    "title": "Document backend architecture",
-    "description": "Create comprehensive backend documentation: data flow diagrams, component architecture, API references, WebSocket protocol details, state management design.",
-    "files_to_modify": [
-      "docs/BACKEND_ARCHITECTURE.md",
-      "docs/DATA_FLOW.md",
-      "docs/API_REFERENCE.md"
-    ],
-    "verification": "Backend documentation complete and clear",
+    "phase": "polish",
+    "title": "Implement smooth transitions and animations",
+    "description": "Add polished transitions: panel open/close animations, smooth symbol switching, graceful data loading states. Agent adds animations that enhance UX without impacting performance.",
+    "files_to_modify": [],
+    "verification": "Dashboard has smooth, professional transitions throughout",
     "completed": false,
-    "priority": "normal"
+    "priority": "low"
   },
   {
     "id": 27,
-    "phase": "documentation",
-    "title": "Create dashboard user guide",
-    "description": "Write user guide for dashboard: panel descriptions, how to interpret charts, indicator explanations, performance metrics meaning, symbol switching, timeframe selection.",
-    "files_to_modify": [
-      "docs/DASHBOARD_GUIDE.md",
-      "docs/INDICATORS_EXPLAINED.md"
-    ],
-    "verification": "User guide helps users understand and use dashboard effectively",
+    "phase": "features",
+    "title": "Implement layout presets system",
+    "description": "Allow users to save and load layout presets: 'Scalping Layout', 'Volume Analysis Layout', 'Multi-Symbol Layout', etc. Agent implements preset save/load with panel configurations.",
+    "files_to_modify": [],
+    "verification": "Users can save and load custom layout presets",
     "completed": false,
     "priority": "low"
   },
   {
     "id": 28,
-    "phase": "configuration",
-    "title": "Create dashboard configuration system",
-    "description": "Build configuration system for dashboard: default symbols, update intervals, chart colors, performance settings, panel layout preferences. Support JSON config file and runtime changes.",
-    "files_to_modify": [
-      "config/dashboard_config.py",
-      "config/dashboard_defaults.json"
-    ],
-    "verification": "Dashboard respects configuration, allows customization",
+    "phase": "cleanup",
+    "title": "Remove all old/deprecated dashboard code",
+    "description": "After successful migration, remove all old dashboard implementations. Keep only Modern Dashboard code. Agent identifies old UI code through git history and removes it. Archive for reference if needed.",
+    "files_to_modify": [],
+    "verification": "Old dashboard code removed, only Modern Dashboard remains",
     "completed": false,
     "priority": "normal"
   },
   {
     "id": 29,
-    "phase": "finalization",
-    "title": "Performance benchmark and optimization report",
-    "description": "Run comprehensive performance benchmarks. Document current performance metrics: FPS under various loads, memory usage patterns, processing latency, data throughput. Create optimization report.",
-    "files_to_modify": [
-      "benchmarks/dashboard_benchmark.py",
-      "docs/PERFORMANCE_REPORT.md"
-    ],
-    "verification": "Benchmark results documented, meets performance targets",
+    "phase": "testing",
+    "title": "Test all component interactions in Modern Dashboard",
+    "description": "Comprehensive testing of all features: symbol switching, timeframe changes, zoom/pan, indicator toggles, panel operations, DOM Surface interactions, whale order tracking. Agent creates test scenarios covering all functionality.",
+    "files_to_modify": [],
+    "verification": "All features tested and working correctly together",
     "completed": false,
-    "priority": "normal"
+    "priority": "high"
   },
   {
     "id": 30,
+    "phase": "testing",
+    "title": "Stress test with high-frequency data and multiple symbols",
+    "description": "Test dashboard under extreme conditions: many symbols active, high trade frequency, rapid price movements, all panels open. Verify performance targets maintained. Agent runs stress tests.",
+    "files_to_modify": [],
+    "verification": "Dashboard maintains performance under stress conditions",
+    "completed": false,
+    "priority": "high"
+  },
+  {
+    "id": 31,
+    "phase": "documentation",
+    "title": "Document Modern Dashboard architecture and features",
+    "description": "Create comprehensive documentation: component architecture, data flow, panel system, user guide for features, customization options. Agent documents the integrated system.",
+    "files_to_modify": [],
+    "verification": "Complete documentation for Modern Dashboard created",
+    "completed": false,
+    "priority": "low"
+  },
+  {
+    "id": 32,
     "phase": "finalization",
-    "title": "Final integration and polish",
-    "description": "Complete final integration of all components. Ensure smooth transitions, consistent styling, proper error messages. Verify all panels work together seamlessly. Final code cleanup and optimization.",
-    "files_to_modify": [
-      "**/*"
-    ],
-    "verification": "Dashboard fully functional, polished, and production-ready",
+    "title": "Final integration verification and polish",
+    "description": "Complete verification that everything works: all old features preserved, new Modern Dashboard layout functional, performance targets met, no regressions. Final code cleanup and optimization pass.",
+    "files_to_modify": [],
+    "verification": "Modern Dashboard fully functional with all features integrated and polished",
     "completed": false,
     "priority": "critical"
   }

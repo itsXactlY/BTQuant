@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../include/market_data_processor.hpp"
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
 #include "hotspine_data_bridge.hpp"
@@ -13,7 +14,10 @@
 namespace BTQuant {
 namespace RenderEngine {
 
-class MarketDataProcessor;
+// Forward declaration removed as we iterate include
+// class MarketDataProcessor; // Included now
+
+// C++26 Error Types
 
 // C++26 Error Types
 enum class RendererError {
@@ -106,11 +110,22 @@ public:
   // Check if renderer is initialized
   bool isInitialized() const { return initialized_; }
 
+  // Set the active symbol for visualization
+  // This will subscribe to market data for the given symbol
+  void setSymbol(uint32_t symbol_id);
+
   // Get ImGui Texture ID for the LOB Heatmap
   // This utilizes ImGui_ImplVulkan_AddTexture manually
   void *getHeatmapTextureID();
 
 private:
+  // Data Update Callback
+  void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
+
+  uint32_t current_symbol_id_ = 0;
+  uint64_t subscription_id_ = 0;
+  uint64_t subscription_id_lob_ = 0; // Separate subscription for LOB if needed
+
   // Vulkan resource creation
   // Vulkan resource creation
   [[nodiscard]] std::expected<void, RendererError> createComputePipelines();

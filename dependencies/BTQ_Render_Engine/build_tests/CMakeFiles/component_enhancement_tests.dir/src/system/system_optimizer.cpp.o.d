@@ -1,7 +1,7 @@
 CMakeFiles/component_enhancement_tests.dir/src/system/system_optimizer.cpp.o: \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/system/system_optimizer.cpp \
  /usr/include/stdc-predef.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/system/system_optimizer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/system/system_optimizer.hpp \
  /usr/include/c++/15.2.1/string \
  /usr/include/c++/15.2.1/bits/requires_hosted.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
@@ -226,7 +226,7 @@ CMakeFiles/component_enhancement_tests.dir/src/system/system_optimizer.cpp.o: \
  /usr/include/c++/15.2.1/bits/quoted_string.h \
  /usr/include/c++/15.2.1/codecvt /usr/include/c++/15.2.1/bits/fs_dir.h \
  /usr/include/c++/15.2.1/bits/fs_ops.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/json.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/json.hpp \
  /usr/include/c++/15.2.1/algorithm \
  /usr/include/c++/15.2.1/bits/ranges_algo.h \
  /usr/include/c++/15.2.1/pstl/glue_algorithm_defs.h \
@@ -248,9 +248,9 @@ CMakeFiles/component_enhancement_tests.dir/src/system/system_optimizer.cpp.o: \
  /usr/include/c++/15.2.1/pstl/glue_numeric_defs.h \
  /usr/include/c++/15.2.1/utility \
  /usr/include/c++/15.2.1/bits/stl_relops.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/adl_serializer.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/abi_macros.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/from_json.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/adl_serializer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/abi_macros.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/from_json.hpp \
  /usr/include/c++/15.2.1/forward_list \
  /usr/include/c++/15.2.1/bits/forward_list.h \
  /usr/include/c++/15.2.1/bits/forward_list.tcc \
@@ -286,50 +286,50 @@ CMakeFiles/component_enhancement_tests.dir/src/system/system_optimizer.cpp.o: \
  /usr/include/c++/15.2.1/bits/gslice_array.h \
  /usr/include/c++/15.2.1/bits/mask_array.h \
  /usr/include/c++/15.2.1/bits/indirect_array.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/exceptions.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/value_t.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/macro_scope.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/detected.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/void_t.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/thirdparty/hedley/hedley.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/exceptions.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/value_t.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/macro_scope.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/detected.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/void_t.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/thirdparty/hedley/hedley.hpp \
  /usr/include/c++/15.2.1/version /usr/include/c++/15.2.1/cassert \
  /usr/include/assert.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/string_escape.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/position_t.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/cpp_future.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/type_traits.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iterator_traits.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/call_std/begin.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/call_std/end.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/json_fwd.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/string_concat.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/string_escape.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/position_t.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/cpp_future.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/type_traits.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iterator_traits.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/call_std/begin.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/call_std/end.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/json_fwd.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/string_concat.hpp \
  /usr/include/c++/15.2.1/cstring /usr/include/string.h \
  /usr/include/strings.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/identity_tag.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/std_fs.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/to_json.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iteration_proxy.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/identity_tag.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/std_fs.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/to_json.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iteration_proxy.hpp \
  /usr/include/c++/15.2.1/ranges /usr/include/c++/15.2.1/variant \
  /usr/include/c++/15.2.1/bits/elements_of.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/byte_container_with_subtype.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/hash.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/binary_reader.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/input_adapters.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/json_sax.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/lexer.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/is_sax.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/parser.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/internal_iterator.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/primitive_iterator.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iter_impl.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/json_reverse_iterator.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/json_pointer.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/json_ref.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/binary_writer.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/output_adapters.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/serializer.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/to_chars.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/ordered_map.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/byte_container_with_subtype.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/hash.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/binary_reader.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/input_adapters.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/json_sax.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/lexer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/meta/is_sax.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/input/parser.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/internal_iterator.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/primitive_iterator.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/iter_impl.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/iterators/json_reverse_iterator.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/json_pointer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/json_ref.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/binary_writer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/output_adapters.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/output/serializer.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/conversions/to_chars.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/ordered_map.hpp \
  /usr/include/c++/15.2.1/any \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/macro_unscope.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/thirdparty/hedley/hedley_undef.hpp
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/detail/macro_unscope.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/json-src/include/nlohmann/thirdparty/hedley/hedley_undef.hpp

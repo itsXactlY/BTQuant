@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
+CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests
+CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
 # Special rule for the target package
 package: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool..."
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackConfig.cmake
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackConfig.cmake
 .PHONY : package
 
 # Special rule for the target package
@@ -78,7 +78,7 @@ package/fast: package
 # Special rule for the target package_source
 package_source:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool for source..."
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackSourceConfig.cmake
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && /usr/bin/cpack --config ./CPackSourceConfig.cmake
 .PHONY : package_source
 
 # Special rule for the target package_source
@@ -162,14 +162,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/glm-build/glm//CMakeFiles/progress.marks
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/glm-build/glm//CMakeFiles/progress.marks
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/clean
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/clean
 .PHONY : clean
 
 # The main clean target
@@ -178,22 +178,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/preinstall
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/preinstall
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 _deps/glm-build/glm/CMakeFiles/glm.dir/rule:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/CMakeFiles/glm.dir/rule
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/glm-build/glm/CMakeFiles/glm.dir/rule
 .PHONY : _deps/glm-build/glm/CMakeFiles/glm.dir/rule
 
 # Convenience name for target.
@@ -202,7 +202,7 @@ glm: _deps/glm-build/glm/CMakeFiles/glm.dir/rule
 
 # fast build rule for target.
 glm/fast:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/build
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/build
 .PHONY : glm/fast
 
 detail/glm.o: detail/glm.cpp.o
@@ -210,7 +210,7 @@ detail/glm.o: detail/glm.cpp.o
 
 # target to build an object file
 detail/glm.cpp.o:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.o
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.o
 .PHONY : detail/glm.cpp.o
 
 detail/glm.i: detail/glm.cpp.i
@@ -218,7 +218,7 @@ detail/glm.i: detail/glm.cpp.i
 
 # target to preprocess a source file
 detail/glm.cpp.i:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.i
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.i
 .PHONY : detail/glm.cpp.i
 
 detail/glm.s: detail/glm.cpp.s
@@ -226,7 +226,7 @@ detail/glm.s: detail/glm.cpp.s
 
 # target to generate assembly for a file
 detail/glm.cpp.s:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.s
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(MAKE) $(MAKESILENT) -f _deps/glm-build/glm/CMakeFiles/glm.dir/build.make _deps/glm-build/glm/CMakeFiles/glm.dir/detail/glm.cpp.s
 .PHONY : detail/glm.cpp.s
 
 # Help Target
@@ -259,6 +259,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

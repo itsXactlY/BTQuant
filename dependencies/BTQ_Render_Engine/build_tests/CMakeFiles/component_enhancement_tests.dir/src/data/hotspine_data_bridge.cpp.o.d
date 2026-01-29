@@ -1,7 +1,7 @@
 CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.o: \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/hotspine_data_bridge.cpp \
  /usr/include/stdc-predef.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/../../include/hotspine_data_bridge.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/../../include/hotspine_data_bridge.hpp \
  /usr/include/c++/15.2.1/array /usr/include/c++/15.2.1/compare \
  /usr/include/c++/15.2.1/bits/version.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
@@ -232,7 +232,7 @@ CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.o: 
  /usr/include/c++/15.2.1/bits/atomic_timed_wait.h \
  /usr/include/c++/15.2.1/bits/this_thread_sleep.h /usr/include/sys/time.h \
  /usr/include/semaphore.h /usr/include/bits/semaphore.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/../../include/market_data_processor.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/../../include/market_data_processor.hpp \
  /usr/include/c++/15.2.1/coroutine /usr/include/c++/15.2.1/deque \
  /usr/include/c++/15.2.1/bits/stl_deque.h \
  /usr/include/c++/15.2.1/bits/deque.tcc /usr/include/c++/15.2.1/execution \
@@ -474,10 +474,10 @@ CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.o: 
  /usr/include/c++/15.2.1/queue /usr/include/c++/15.2.1/bits/stl_queue.h \
  /usr/include/c++/15.2.1/ranges /usr/include/c++/15.2.1/variant \
  /usr/include/c++/15.2.1/bits/elements_of.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/concurrentqueue-src/concurrentqueue.h \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/concurrentqueue-src/concurrentqueue.h \
  /usr/include/c++/15.2.1/cassert /usr/include/assert.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/../../include/symbol_registry.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/data/../../include/dynamic_logger.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/../../include/symbol_registry.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/data/../../include/dynamic_logger.hpp \
  /usr/include/c++/15.2.1/iostream /usr/include/c++/15.2.1/fstream \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/basic_file.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++io.h \

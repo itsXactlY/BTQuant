@@ -1,9 +1,9 @@
 CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features.cpp.o: \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/advanced_trading_features.cpp \
  /usr/include/stdc-predef.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/../include/trading/advanced_trading_features.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/../include/trading/trading_interface.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/../include/trading/order_manager.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/../include/trading/advanced_trading_features.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/../include/trading/trading_interface.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/../include/trading/order_manager.hpp \
  /usr/include/c++/15.2.1/atomic /usr/include/c++/15.2.1/bits/version.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/os_defines.h \
@@ -166,8 +166,8 @@ CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features
  /usr/include/c++/15.2.1/bits/basic_string.tcc \
  /usr/include/c++/15.2.1/unordered_set \
  /usr/include/c++/15.2.1/bits/unordered_set.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/../include/trading/position_manager.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/../include/trading/risk_assessment.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/../include/trading/position_manager.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/../include/trading/risk_assessment.hpp \
  /usr/include/c++/15.2.1/memory \
  /usr/include/c++/15.2.1/bits/stl_tempbuf.h \
  /usr/include/c++/15.2.1/bits/stl_raw_storage_iter.h \
@@ -214,8 +214,8 @@ CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features
  /usr/include/c++/15.2.1/bits/out_ptr.h \
  /usr/include/c++/15.2.1/pstl/glue_memory_defs.h \
  /usr/include/c++/15.2.1/pstl/execution_defs.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imconfig.h \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imgui.h \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/_deps/imgui-src/imconfig.h \
  /usr/lib/gcc/x86_64-pc-linux-gnu/15.2.1/include/float.h \
  /usr/include/string.h /usr/include/strings.h /usr/include/assert.h \
  /usr/include/c++/15.2.1/chrono /usr/include/c++/15.2.1/bits/chrono.h \

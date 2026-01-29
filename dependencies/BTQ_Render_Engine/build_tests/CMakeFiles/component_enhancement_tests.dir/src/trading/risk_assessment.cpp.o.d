@@ -1,8 +1,8 @@
 CMakeFiles/component_enhancement_tests.dir/src/trading/risk_assessment.cpp.o: \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/src/trading/risk_assessment.cpp \
  /usr/include/stdc-predef.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/trading/risk_assessment.hpp \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/trading/order_manager.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/trading/risk_assessment.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/trading/order_manager.hpp \
  /usr/include/c++/15.2.1/atomic /usr/include/c++/15.2.1/bits/version.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/c++config.h \
  /usr/include/c++/15.2.1/x86_64-pc-linux-gnu/bits/os_defines.h \
@@ -165,7 +165,7 @@ CMakeFiles/component_enhancement_tests.dir/src/trading/risk_assessment.cpp.o: \
  /usr/include/c++/15.2.1/bits/basic_string.tcc \
  /usr/include/c++/15.2.1/unordered_set \
  /usr/include/c++/15.2.1/bits/unordered_set.h \
- /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/include/trading/position_manager.hpp \
+ /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/include/trading/position_manager.hpp \
  /usr/include/c++/15.2.1/algorithm \
  /usr/include/c++/15.2.1/bits/stl_algo.h \
  /usr/include/c++/15.2.1/bits/algorithmfwd.h \

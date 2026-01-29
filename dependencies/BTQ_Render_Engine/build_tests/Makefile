@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine
+CMAKE_SOURCE_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests
+CMAKE_BINARY_DIR = /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -162,9 +162,9 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-5-1769695142197-5rg5l6/dependencies/BTQ_Render_Engine/build_tests/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -216,6 +216,19 @@ component_enhancement_tests: cmake_check_build_system
 component_enhancement_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/build
 .PHONY : component_enhancement_tests/fast
+
+#=============================================================================
+# Target rules for targets named crosshair_tests
+
+# Build rule for target.
+crosshair_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 crosshair_tests
+.PHONY : crosshair_tests
+
+# fast build rule for target.
+crosshair_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/build
+.PHONY : crosshair_tests/fast
 
 #=============================================================================
 # Target rules for targets named data_flow_layout_tests
@@ -546,6 +559,7 @@ src/analytics/technical_analysis.o: src/analytics/technical_analysis.cpp.o
 src/analytics/technical_analysis.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/technical_analysis.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/technical_analysis.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/technical_analysis.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/technical_analysis.cpp.o
 .PHONY : src/analytics/technical_analysis.cpp.o
@@ -557,6 +571,7 @@ src/analytics/technical_analysis.i: src/analytics/technical_analysis.cpp.i
 src/analytics/technical_analysis.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/technical_analysis.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/technical_analysis.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/technical_analysis.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/technical_analysis.cpp.i
 .PHONY : src/analytics/technical_analysis.cpp.i
@@ -568,6 +583,7 @@ src/analytics/technical_analysis.s: src/analytics/technical_analysis.cpp.s
 src/analytics/technical_analysis.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/technical_analysis.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/technical_analysis.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/technical_analysis.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/technical_analysis.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/technical_analysis.cpp.s
 .PHONY : src/analytics/technical_analysis.cpp.s
@@ -579,6 +595,7 @@ src/analytics/trading_analytics.o: src/analytics/trading_analytics.cpp.o
 src/analytics/trading_analytics.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/trading_analytics.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/trading_analytics.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/trading_analytics.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/trading_analytics.cpp.o
 .PHONY : src/analytics/trading_analytics.cpp.o
@@ -590,6 +607,7 @@ src/analytics/trading_analytics.i: src/analytics/trading_analytics.cpp.i
 src/analytics/trading_analytics.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/trading_analytics.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/trading_analytics.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/trading_analytics.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/trading_analytics.cpp.i
 .PHONY : src/analytics/trading_analytics.cpp.i
@@ -601,6 +619,7 @@ src/analytics/trading_analytics.s: src/analytics/trading_analytics.cpp.s
 src/analytics/trading_analytics.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/analytics/trading_analytics.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/analytics/trading_analytics.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/analytics/trading_analytics.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/analytics/trading_analytics.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/analytics/trading_analytics.cpp.s
 .PHONY : src/analytics/trading_analytics.cpp.s
@@ -612,6 +631,7 @@ src/components/MarketMicrostructureRenderer.o: src/components/MarketMicrostructu
 src/components/MarketMicrostructureRenderer.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/MarketMicrostructureRenderer.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/MarketMicrostructureRenderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/MarketMicrostructureRenderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/MarketMicrostructureRenderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/MarketMicrostructureRenderer.cpp.o
@@ -624,6 +644,7 @@ src/components/MarketMicrostructureRenderer.i: src/components/MarketMicrostructu
 src/components/MarketMicrostructureRenderer.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/MarketMicrostructureRenderer.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/MarketMicrostructureRenderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/MarketMicrostructureRenderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/MarketMicrostructureRenderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/MarketMicrostructureRenderer.cpp.i
@@ -636,6 +657,7 @@ src/components/MarketMicrostructureRenderer.s: src/components/MarketMicrostructu
 src/components/MarketMicrostructureRenderer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/MarketMicrostructureRenderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/MarketMicrostructureRenderer.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/MarketMicrostructureRenderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/MarketMicrostructureRenderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/MarketMicrostructureRenderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/MarketMicrostructureRenderer.cpp.s
@@ -648,6 +670,7 @@ src/components/VulkanSynchronization.o: src/components/VulkanSynchronization.cpp
 src/components/VulkanSynchronization.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/VulkanSynchronization.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/VulkanSynchronization.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/VulkanSynchronization.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/VulkanSynchronization.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/VulkanSynchronization.cpp.o
@@ -660,6 +683,7 @@ src/components/VulkanSynchronization.i: src/components/VulkanSynchronization.cpp
 src/components/VulkanSynchronization.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/VulkanSynchronization.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/VulkanSynchronization.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/VulkanSynchronization.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/VulkanSynchronization.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/VulkanSynchronization.cpp.i
@@ -672,6 +696,7 @@ src/components/VulkanSynchronization.s: src/components/VulkanSynchronization.cpp
 src/components/VulkanSynchronization.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/VulkanSynchronization.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/VulkanSynchronization.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/VulkanSynchronization.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/VulkanSynchronization.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/VulkanSynchronization.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/VulkanSynchronization.cpp.s
@@ -684,6 +709,7 @@ src/components/alerts_panel.o: src/components/alerts_panel.cpp.o
 src/components/alerts_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/alerts_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/alerts_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/alerts_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/alerts_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/alerts_panel.cpp.o
@@ -696,6 +722,7 @@ src/components/alerts_panel.i: src/components/alerts_panel.cpp.i
 src/components/alerts_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/alerts_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/alerts_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/alerts_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/alerts_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/alerts_panel.cpp.i
@@ -708,6 +735,7 @@ src/components/alerts_panel.s: src/components/alerts_panel.cpp.s
 src/components/alerts_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/alerts_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/alerts_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/alerts_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/alerts_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/alerts_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/alerts_panel.cpp.s
@@ -720,6 +748,7 @@ src/components/chart_manager.o: src/components/chart_manager.cpp.o
 src/components/chart_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_manager.cpp.o
@@ -732,6 +761,7 @@ src/components/chart_manager.i: src/components/chart_manager.cpp.i
 src/components/chart_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_manager.cpp.i
@@ -744,6 +774,7 @@ src/components/chart_manager.s: src/components/chart_manager.cpp.s
 src/components/chart_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_manager.cpp.s
@@ -756,6 +787,7 @@ src/components/chart_panel.o: src/components/chart_panel.cpp.o
 src/components/chart_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_panel.cpp.o
@@ -768,6 +800,7 @@ src/components/chart_panel.i: src/components/chart_panel.cpp.i
 src/components/chart_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_panel.cpp.i
@@ -780,6 +813,7 @@ src/components/chart_panel.s: src/components/chart_panel.cpp.s
 src/components/chart_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/chart_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/chart_panel.cpp.s
@@ -792,6 +826,7 @@ src/components/correlation_heatmap_component.o: src/components/correlation_heatm
 src/components/correlation_heatmap_component.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/correlation_heatmap_component.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/correlation_heatmap_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/correlation_heatmap_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/correlation_heatmap_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/correlation_heatmap_component.cpp.o
@@ -804,6 +839,7 @@ src/components/correlation_heatmap_component.i: src/components/correlation_heatm
 src/components/correlation_heatmap_component.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/correlation_heatmap_component.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/correlation_heatmap_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/correlation_heatmap_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/correlation_heatmap_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/correlation_heatmap_component.cpp.i
@@ -816,6 +852,7 @@ src/components/correlation_heatmap_component.s: src/components/correlation_heatm
 src/components/correlation_heatmap_component.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/correlation_heatmap_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/correlation_heatmap_component.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/correlation_heatmap_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/correlation_heatmap_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/correlation_heatmap_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/correlation_heatmap_component.cpp.s
@@ -828,6 +865,7 @@ src/components/depth_chart_panel.o: src/components/depth_chart_panel.cpp.o
 src/components/depth_chart_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/depth_chart_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/depth_chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/depth_chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/depth_chart_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/depth_chart_panel.cpp.o
@@ -840,6 +878,7 @@ src/components/depth_chart_panel.i: src/components/depth_chart_panel.cpp.i
 src/components/depth_chart_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/depth_chart_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/depth_chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/depth_chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/depth_chart_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/depth_chart_panel.cpp.i
@@ -852,6 +891,7 @@ src/components/depth_chart_panel.s: src/components/depth_chart_panel.cpp.s
 src/components/depth_chart_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/depth_chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/depth_chart_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/depth_chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/depth_chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/depth_chart_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/depth_chart_panel.cpp.s
@@ -864,6 +904,7 @@ src/components/dom_surface_panel.o: src/components/dom_surface_panel.cpp.o
 src/components/dom_surface_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/dom_surface_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/dom_surface_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/dom_surface_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/dom_surface_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/dom_surface_panel.cpp.o
@@ -876,6 +917,7 @@ src/components/dom_surface_panel.i: src/components/dom_surface_panel.cpp.i
 src/components/dom_surface_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/dom_surface_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/dom_surface_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/dom_surface_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/dom_surface_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/dom_surface_panel.cpp.i
@@ -888,6 +930,7 @@ src/components/dom_surface_panel.s: src/components/dom_surface_panel.cpp.s
 src/components/dom_surface_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/dom_surface_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/dom_surface_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/dom_surface_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/dom_surface_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/dom_surface_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/dom_surface_panel.cpp.s
@@ -900,6 +943,7 @@ src/components/footprint_panel.o: src/components/footprint_panel.cpp.o
 src/components/footprint_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/footprint_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/footprint_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/footprint_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/footprint_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/footprint_panel.cpp.o
@@ -912,6 +956,7 @@ src/components/footprint_panel.i: src/components/footprint_panel.cpp.i
 src/components/footprint_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/footprint_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/footprint_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/footprint_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/footprint_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/footprint_panel.cpp.i
@@ -924,6 +969,7 @@ src/components/footprint_panel.s: src/components/footprint_panel.cpp.s
 src/components/footprint_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/footprint_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/footprint_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/footprint_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/footprint_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/footprint_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/footprint_panel.cpp.s
@@ -936,6 +982,7 @@ src/components/hierarchical_selector.o: src/components/hierarchical_selector.cpp
 src/components/hierarchical_selector.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/hierarchical_selector.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/hierarchical_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/hierarchical_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/hierarchical_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/hierarchical_selector.cpp.o
@@ -948,6 +995,7 @@ src/components/hierarchical_selector.i: src/components/hierarchical_selector.cpp
 src/components/hierarchical_selector.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/hierarchical_selector.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/hierarchical_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/hierarchical_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/hierarchical_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/hierarchical_selector.cpp.i
@@ -960,6 +1008,7 @@ src/components/hierarchical_selector.s: src/components/hierarchical_selector.cpp
 src/components/hierarchical_selector.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/hierarchical_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/hierarchical_selector.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/hierarchical_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/hierarchical_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/hierarchical_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/hierarchical_selector.cpp.s
@@ -972,6 +1021,7 @@ src/components/histogram_panel.o: src/components/histogram_panel.cpp.o
 src/components/histogram_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/histogram_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/histogram_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/histogram_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/histogram_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/histogram_panel.cpp.o
@@ -984,6 +1034,7 @@ src/components/histogram_panel.i: src/components/histogram_panel.cpp.i
 src/components/histogram_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/histogram_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/histogram_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/histogram_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/histogram_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/histogram_panel.cpp.i
@@ -996,6 +1047,7 @@ src/components/histogram_panel.s: src/components/histogram_panel.cpp.s
 src/components/histogram_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/histogram_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/histogram_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/histogram_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/histogram_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/histogram_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/histogram_panel.cpp.s
@@ -1008,6 +1060,7 @@ src/components/indicator_renderer.o: src/components/indicator_renderer.cpp.o
 src/components/indicator_renderer.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/indicator_renderer.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/indicator_renderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/indicator_renderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/indicator_renderer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/indicator_renderer.cpp.o
@@ -1020,6 +1073,7 @@ src/components/indicator_renderer.i: src/components/indicator_renderer.cpp.i
 src/components/indicator_renderer.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/indicator_renderer.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/indicator_renderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/indicator_renderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/indicator_renderer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/indicator_renderer.cpp.i
@@ -1032,6 +1086,7 @@ src/components/indicator_renderer.s: src/components/indicator_renderer.cpp.s
 src/components/indicator_renderer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/indicator_renderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/indicator_renderer.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/indicator_renderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/indicator_renderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/indicator_renderer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/indicator_renderer.cpp.s
@@ -1044,6 +1099,7 @@ src/components/interaction_manager.o: src/components/interaction_manager.cpp.o
 src/components/interaction_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/interaction_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/interaction_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/interaction_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/interaction_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/interaction_manager.cpp.o
@@ -1056,6 +1112,7 @@ src/components/interaction_manager.i: src/components/interaction_manager.cpp.i
 src/components/interaction_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/interaction_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/interaction_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/interaction_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/interaction_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/interaction_manager.cpp.i
@@ -1068,6 +1125,7 @@ src/components/interaction_manager.s: src/components/interaction_manager.cpp.s
 src/components/interaction_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/interaction_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/interaction_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/interaction_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/interaction_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/interaction_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/interaction_manager.cpp.s
@@ -1080,6 +1138,7 @@ src/components/log_panel.o: src/components/log_panel.cpp.o
 src/components/log_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/log_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/log_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/log_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/log_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/log_panel.cpp.o
@@ -1092,6 +1151,7 @@ src/components/log_panel.i: src/components/log_panel.cpp.i
 src/components/log_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/log_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/log_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/log_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/log_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/log_panel.cpp.i
@@ -1104,6 +1164,7 @@ src/components/log_panel.s: src/components/log_panel.cpp.s
 src/components/log_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/log_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/log_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/log_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/log_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/log_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/log_panel.cpp.s
@@ -1116,6 +1177,7 @@ src/components/metrics_panel.o: src/components/metrics_panel.cpp.o
 src/components/metrics_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/metrics_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/metrics_panel.cpp.o
@@ -1128,6 +1190,7 @@ src/components/metrics_panel.i: src/components/metrics_panel.cpp.i
 src/components/metrics_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/metrics_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/metrics_panel.cpp.i
@@ -1140,6 +1203,7 @@ src/components/metrics_panel.s: src/components/metrics_panel.cpp.s
 src/components/metrics_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/metrics_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/metrics_panel.cpp.s
@@ -1152,6 +1216,7 @@ src/components/orderbook_panel.o: src/components/orderbook_panel.cpp.o
 src/components/orderbook_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/orderbook_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/orderbook_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/orderbook_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/orderbook_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/orderbook_panel.cpp.o
@@ -1164,6 +1229,7 @@ src/components/orderbook_panel.i: src/components/orderbook_panel.cpp.i
 src/components/orderbook_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/orderbook_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/orderbook_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/orderbook_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/orderbook_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/orderbook_panel.cpp.i
@@ -1176,6 +1242,7 @@ src/components/orderbook_panel.s: src/components/orderbook_panel.cpp.s
 src/components/orderbook_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/orderbook_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/orderbook_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/orderbook_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/orderbook_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/orderbook_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/orderbook_panel.cpp.s
@@ -1188,6 +1255,7 @@ src/components/panel_base.o: src/components/panel_base.cpp.o
 src/components/panel_base.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_base.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_base.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_base.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_base.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_base.cpp.o
@@ -1200,6 +1268,7 @@ src/components/panel_base.i: src/components/panel_base.cpp.i
 src/components/panel_base.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_base.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_base.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_base.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_base.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_base.cpp.i
@@ -1212,6 +1281,7 @@ src/components/panel_base.s: src/components/panel_base.cpp.s
 src/components/panel_base.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_base.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_base.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_base.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_base.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_base.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_base.cpp.s
@@ -1224,6 +1294,7 @@ src/components/panel_manager.o: src/components/panel_manager.cpp.o
 src/components/panel_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_manager.cpp.o
@@ -1236,6 +1307,7 @@ src/components/panel_manager.i: src/components/panel_manager.cpp.i
 src/components/panel_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_manager.cpp.i
@@ -1248,6 +1320,7 @@ src/components/panel_manager.s: src/components/panel_manager.cpp.s
 src/components/panel_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/panel_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/panel_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/panel_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/panel_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/panel_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/panel_manager.cpp.s
@@ -1287,6 +1360,7 @@ src/components/quant_workspace_component.o: src/components/quant_workspace_compo
 src/components/quant_workspace_component.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/quant_workspace_component.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/quant_workspace_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/quant_workspace_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/quant_workspace_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/quant_workspace_component.cpp.o
@@ -1299,6 +1373,7 @@ src/components/quant_workspace_component.i: src/components/quant_workspace_compo
 src/components/quant_workspace_component.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/quant_workspace_component.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/quant_workspace_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/quant_workspace_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/quant_workspace_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/quant_workspace_component.cpp.i
@@ -1311,6 +1386,7 @@ src/components/quant_workspace_component.s: src/components/quant_workspace_compo
 src/components/quant_workspace_component.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/quant_workspace_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/quant_workspace_component.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/quant_workspace_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/quant_workspace_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/quant_workspace_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/quant_workspace_component.cpp.s
@@ -1323,6 +1399,7 @@ src/components/realtime_dashboard_component.o: src/components/realtime_dashboard
 src/components/realtime_dashboard_component.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/realtime_dashboard_component.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/realtime_dashboard_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/realtime_dashboard_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/realtime_dashboard_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/realtime_dashboard_component.cpp.o
@@ -1335,6 +1412,7 @@ src/components/realtime_dashboard_component.i: src/components/realtime_dashboard
 src/components/realtime_dashboard_component.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/realtime_dashboard_component.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/realtime_dashboard_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/realtime_dashboard_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/realtime_dashboard_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/realtime_dashboard_component.cpp.i
@@ -1347,6 +1425,7 @@ src/components/realtime_dashboard_component.s: src/components/realtime_dashboard
 src/components/realtime_dashboard_component.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/realtime_dashboard_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/realtime_dashboard_component.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/realtime_dashboard_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/realtime_dashboard_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/realtime_dashboard_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/realtime_dashboard_component.cpp.s
@@ -1359,6 +1438,7 @@ src/components/risk_metrics_panel.o: src/components/risk_metrics_panel.cpp.o
 src/components/risk_metrics_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/risk_metrics_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/risk_metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/risk_metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/risk_metrics_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/risk_metrics_panel.cpp.o
@@ -1371,6 +1451,7 @@ src/components/risk_metrics_panel.i: src/components/risk_metrics_panel.cpp.i
 src/components/risk_metrics_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/risk_metrics_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/risk_metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/risk_metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/risk_metrics_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/risk_metrics_panel.cpp.i
@@ -1383,6 +1464,7 @@ src/components/risk_metrics_panel.s: src/components/risk_metrics_panel.cpp.s
 src/components/risk_metrics_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/risk_metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/risk_metrics_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/risk_metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/risk_metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/risk_metrics_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/risk_metrics_panel.cpp.s
@@ -1395,6 +1477,7 @@ src/components/scatter_plot_panel.o: src/components/scatter_plot_panel.cpp.o
 src/components/scatter_plot_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/scatter_plot_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/scatter_plot_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/scatter_plot_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/scatter_plot_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/scatter_plot_panel.cpp.o
@@ -1407,6 +1490,7 @@ src/components/scatter_plot_panel.i: src/components/scatter_plot_panel.cpp.i
 src/components/scatter_plot_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/scatter_plot_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/scatter_plot_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/scatter_plot_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/scatter_plot_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/scatter_plot_panel.cpp.i
@@ -1419,6 +1503,7 @@ src/components/scatter_plot_panel.s: src/components/scatter_plot_panel.cpp.s
 src/components/scatter_plot_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/scatter_plot_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/scatter_plot_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/scatter_plot_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/scatter_plot_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/scatter_plot_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/scatter_plot_panel.cpp.s
@@ -1431,6 +1516,7 @@ src/components/screener_panel.o: src/components/screener_panel.cpp.o
 src/components/screener_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/screener_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/screener_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/screener_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/screener_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/screener_panel.cpp.o
@@ -1443,6 +1529,7 @@ src/components/screener_panel.i: src/components/screener_panel.cpp.i
 src/components/screener_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/screener_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/screener_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/screener_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/screener_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/screener_panel.cpp.i
@@ -1455,6 +1542,7 @@ src/components/screener_panel.s: src/components/screener_panel.cpp.s
 src/components/screener_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/screener_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/screener_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/screener_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/screener_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/screener_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/screener_panel.cpp.s
@@ -1467,6 +1555,7 @@ src/components/status_bar_panel.o: src/components/status_bar_panel.cpp.o
 src/components/status_bar_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/status_bar_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/status_bar_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/status_bar_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/status_bar_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/status_bar_panel.cpp.o
@@ -1479,6 +1568,7 @@ src/components/status_bar_panel.i: src/components/status_bar_panel.cpp.i
 src/components/status_bar_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/status_bar_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/status_bar_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/status_bar_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/status_bar_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/status_bar_panel.cpp.i
@@ -1491,6 +1581,7 @@ src/components/status_bar_panel.s: src/components/status_bar_panel.cpp.s
 src/components/status_bar_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/status_bar_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/status_bar_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/status_bar_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/status_bar_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/status_bar_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/status_bar_panel.cpp.s
@@ -1503,6 +1594,7 @@ src/components/symbol_selector.o: src/components/symbol_selector.cpp.o
 src/components/symbol_selector.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/symbol_selector.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/symbol_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/symbol_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/symbol_selector.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/symbol_selector.cpp.o
@@ -1515,6 +1607,7 @@ src/components/symbol_selector.i: src/components/symbol_selector.cpp.i
 src/components/symbol_selector.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/symbol_selector.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/symbol_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/symbol_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/symbol_selector.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/symbol_selector.cpp.i
@@ -1527,6 +1620,7 @@ src/components/symbol_selector.s: src/components/symbol_selector.cpp.s
 src/components/symbol_selector.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/symbol_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/symbol_selector.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/symbol_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/symbol_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/symbol_selector.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/symbol_selector.cpp.s
@@ -1539,6 +1633,7 @@ src/components/tape_panel.o: src/components/tape_panel.cpp.o
 src/components/tape_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tape_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tape_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tape_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tape_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tape_panel.cpp.o
@@ -1551,6 +1646,7 @@ src/components/tape_panel.i: src/components/tape_panel.cpp.i
 src/components/tape_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tape_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tape_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tape_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tape_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tape_panel.cpp.i
@@ -1563,6 +1659,7 @@ src/components/tape_panel.s: src/components/tape_panel.cpp.s
 src/components/tape_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tape_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tape_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tape_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tape_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tape_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tape_panel.cpp.s
@@ -1574,6 +1671,7 @@ src/components/technical_indicators_component.o: src/components/technical_indica
 # target to build an object file
 src/components/technical_indicators_component.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/technical_indicators_component.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/technical_indicators_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/technical_indicators_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/technical_indicators_component.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/technical_indicators_component.cpp.o
@@ -1585,6 +1683,7 @@ src/components/technical_indicators_component.i: src/components/technical_indica
 # target to preprocess a source file
 src/components/technical_indicators_component.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/technical_indicators_component.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/technical_indicators_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/technical_indicators_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/technical_indicators_component.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/technical_indicators_component.cpp.i
@@ -1596,6 +1695,7 @@ src/components/technical_indicators_component.s: src/components/technical_indica
 # target to generate assembly for a file
 src/components/technical_indicators_component.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/technical_indicators_component.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/technical_indicators_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/technical_indicators_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/technical_indicators_component.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/technical_indicators_component.cpp.s
@@ -1608,6 +1708,7 @@ src/components/theme_manager.o: src/components/theme_manager.cpp.o
 src/components/theme_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/theme_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/theme_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/theme_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/theme_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/theme_manager.cpp.o
@@ -1620,6 +1721,7 @@ src/components/theme_manager.i: src/components/theme_manager.cpp.i
 src/components/theme_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/theme_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/theme_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/theme_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/theme_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/theme_manager.cpp.i
@@ -1632,6 +1734,7 @@ src/components/theme_manager.s: src/components/theme_manager.cpp.s
 src/components/theme_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/theme_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/theme_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/theme_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/theme_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/theme_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/theme_manager.cpp.s
@@ -1644,6 +1747,7 @@ src/components/time_series_panel.o: src/components/time_series_panel.cpp.o
 src/components/time_series_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/time_series_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/time_series_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/time_series_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/time_series_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/time_series_panel.cpp.o
@@ -1656,6 +1760,7 @@ src/components/time_series_panel.i: src/components/time_series_panel.cpp.i
 src/components/time_series_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/time_series_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/time_series_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/time_series_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/time_series_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/time_series_panel.cpp.i
@@ -1668,6 +1773,7 @@ src/components/time_series_panel.s: src/components/time_series_panel.cpp.s
 src/components/time_series_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/time_series_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/time_series_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/time_series_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/time_series_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/time_series_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/time_series_panel.cpp.s
@@ -1680,6 +1786,7 @@ src/components/tpo_panel.o: src/components/tpo_panel.cpp.o
 src/components/tpo_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tpo_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tpo_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tpo_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tpo_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tpo_panel.cpp.o
@@ -1692,6 +1799,7 @@ src/components/tpo_panel.i: src/components/tpo_panel.cpp.i
 src/components/tpo_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tpo_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tpo_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tpo_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tpo_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tpo_panel.cpp.i
@@ -1704,6 +1812,7 @@ src/components/tpo_panel.s: src/components/tpo_panel.cpp.s
 src/components/tpo_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/tpo_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/tpo_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/tpo_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/tpo_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/tpo_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/tpo_panel.cpp.s
@@ -1716,6 +1825,7 @@ src/components/trading_orders_panel.o: src/components/trading_orders_panel.cpp.o
 src/components/trading_orders_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_orders_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_orders_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_orders_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_orders_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_orders_panel.cpp.o
@@ -1728,6 +1838,7 @@ src/components/trading_orders_panel.i: src/components/trading_orders_panel.cpp.i
 src/components/trading_orders_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_orders_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_orders_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_orders_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_orders_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_orders_panel.cpp.i
@@ -1740,6 +1851,7 @@ src/components/trading_orders_panel.s: src/components/trading_orders_panel.cpp.s
 src/components/trading_orders_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_orders_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_orders_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_orders_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_orders_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_orders_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_orders_panel.cpp.s
@@ -1752,6 +1864,7 @@ src/components/trading_positions_panel.o: src/components/trading_positions_panel
 src/components/trading_positions_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_positions_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_positions_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_positions_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_positions_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_positions_panel.cpp.o
@@ -1764,6 +1877,7 @@ src/components/trading_positions_panel.i: src/components/trading_positions_panel
 src/components/trading_positions_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_positions_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_positions_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_positions_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_positions_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_positions_panel.cpp.i
@@ -1776,6 +1890,7 @@ src/components/trading_positions_panel.s: src/components/trading_positions_panel
 src/components/trading_positions_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/trading_positions_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/trading_positions_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/trading_positions_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/trading_positions_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/trading_positions_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/trading_positions_panel.cpp.s
@@ -1788,6 +1903,7 @@ src/components/volume_profile_panel.o: src/components/volume_profile_panel.cpp.o
 src/components/volume_profile_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/volume_profile_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/volume_profile_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/volume_profile_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/volume_profile_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/volume_profile_panel.cpp.o
@@ -1800,6 +1916,7 @@ src/components/volume_profile_panel.i: src/components/volume_profile_panel.cpp.i
 src/components/volume_profile_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/volume_profile_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/volume_profile_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/volume_profile_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/volume_profile_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/volume_profile_panel.cpp.i
@@ -1812,6 +1929,7 @@ src/components/volume_profile_panel.s: src/components/volume_profile_panel.cpp.s
 src/components/volume_profile_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/volume_profile_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/volume_profile_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/volume_profile_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/volume_profile_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/volume_profile_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/volume_profile_panel.cpp.s
@@ -1824,6 +1942,7 @@ src/components/watchlist_panel.o: src/components/watchlist_panel.cpp.o
 src/components/watchlist_panel.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/watchlist_panel.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/watchlist_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/watchlist_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/watchlist_panel.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/watchlist_panel.cpp.o
@@ -1836,6 +1955,7 @@ src/components/watchlist_panel.i: src/components/watchlist_panel.cpp.i
 src/components/watchlist_panel.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/watchlist_panel.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/watchlist_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/watchlist_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/watchlist_panel.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/watchlist_panel.cpp.i
@@ -1848,6 +1968,7 @@ src/components/watchlist_panel.s: src/components/watchlist_panel.cpp.s
 src/components/watchlist_panel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/components/watchlist_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/components/watchlist_panel.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/components/watchlist_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/components/watchlist_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/components/watchlist_panel.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/components/watchlist_panel.cpp.s
@@ -1860,6 +1981,7 @@ src/config/dashboard_config.o: src/config/dashboard_config.cpp.o
 src/config/dashboard_config.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/config/dashboard_config.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/config/dashboard_config.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/config/dashboard_config.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/config/dashboard_config.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/config/dashboard_config.cpp.o
@@ -1872,6 +1994,7 @@ src/config/dashboard_config.i: src/config/dashboard_config.cpp.i
 src/config/dashboard_config.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/config/dashboard_config.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/config/dashboard_config.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/config/dashboard_config.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/config/dashboard_config.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/config/dashboard_config.cpp.i
@@ -1884,6 +2007,7 @@ src/config/dashboard_config.s: src/config/dashboard_config.cpp.s
 src/config/dashboard_config.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/config/dashboard_config.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/config/dashboard_config.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/config/dashboard_config.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/config/dashboard_config.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/config/dashboard_config.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/config/dashboard_config.cpp.s
@@ -1896,6 +2020,7 @@ src/data/hotspine_data_bridge.o: src/data/hotspine_data_bridge.cpp.o
 src/data/hotspine_data_bridge.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/hotspine_data_bridge.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/hotspine_data_bridge.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/hotspine_data_bridge.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/hotspine_data_bridge.cpp.o
@@ -1908,6 +2033,7 @@ src/data/hotspine_data_bridge.i: src/data/hotspine_data_bridge.cpp.i
 src/data/hotspine_data_bridge.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/hotspine_data_bridge.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/hotspine_data_bridge.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/hotspine_data_bridge.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/hotspine_data_bridge.cpp.i
@@ -1920,6 +2046,7 @@ src/data/hotspine_data_bridge.s: src/data/hotspine_data_bridge.cpp.s
 src/data/hotspine_data_bridge.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/hotspine_data_bridge.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/hotspine_data_bridge.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/hotspine_data_bridge.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/hotspine_data_bridge.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/hotspine_data_bridge.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/hotspine_data_bridge.cpp.s
@@ -1932,6 +2059,7 @@ src/data/market_data_processor.o: src/data/market_data_processor.cpp.o
 src/data/market_data_processor.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/market_data_processor.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/market_data_processor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/market_data_processor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/market_data_processor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/market_data_processor.cpp.o
@@ -1944,6 +2072,7 @@ src/data/market_data_processor.i: src/data/market_data_processor.cpp.i
 src/data/market_data_processor.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/market_data_processor.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/market_data_processor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/market_data_processor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/market_data_processor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/market_data_processor.cpp.i
@@ -1956,6 +2085,7 @@ src/data/market_data_processor.s: src/data/market_data_processor.cpp.s
 src/data/market_data_processor.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/market_data_processor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/market_data_processor.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/market_data_processor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/market_data_processor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/market_data_processor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/market_data_processor.cpp.s
@@ -1968,6 +2098,7 @@ src/data/symbol_manager.o: src/data/symbol_manager.cpp.o
 src/data/symbol_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_manager.cpp.o
@@ -1980,6 +2111,7 @@ src/data/symbol_manager.i: src/data/symbol_manager.cpp.i
 src/data/symbol_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_manager.cpp.i
@@ -1992,6 +2124,7 @@ src/data/symbol_manager.s: src/data/symbol_manager.cpp.s
 src/data/symbol_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_manager.cpp.s
@@ -2004,6 +2137,7 @@ src/data/symbol_registry.o: src/data/symbol_registry.cpp.o
 src/data/symbol_registry.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_registry.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_registry.cpp.o
@@ -2016,6 +2150,7 @@ src/data/symbol_registry.i: src/data/symbol_registry.cpp.i
 src/data/symbol_registry.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_registry.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_registry.cpp.i
@@ -2028,6 +2163,7 @@ src/data/symbol_registry.s: src/data/symbol_registry.cpp.s
 src/data/symbol_registry.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/symbol_registry.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/symbol_registry.cpp.s
@@ -2040,6 +2176,7 @@ src/data/ui_data_manager.o: src/data/ui_data_manager.cpp.o
 src/data/ui_data_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/ui_data_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/ui_data_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/ui_data_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/ui_data_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/ui_data_manager.cpp.o
@@ -2052,6 +2189,7 @@ src/data/ui_data_manager.i: src/data/ui_data_manager.cpp.i
 src/data/ui_data_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/ui_data_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/ui_data_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/ui_data_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/ui_data_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/ui_data_manager.cpp.i
@@ -2064,6 +2202,7 @@ src/data/ui_data_manager.s: src/data/ui_data_manager.cpp.s
 src/data/ui_data_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/data/ui_data_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/data/ui_data_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/data/ui_data_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/data/ui_data_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/data/ui_data_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/data/ui_data_manager.cpp.s
@@ -2100,6 +2239,7 @@ src/layout/dashboard_layout_manager.o: src/layout/dashboard_layout_manager.cpp.o
 src/layout/dashboard_layout_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/layout/dashboard_layout_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/layout/dashboard_layout_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/layout/dashboard_layout_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/layout/dashboard_layout_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/layout/dashboard_layout_manager.cpp.o
@@ -2112,6 +2252,7 @@ src/layout/dashboard_layout_manager.i: src/layout/dashboard_layout_manager.cpp.i
 src/layout/dashboard_layout_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/layout/dashboard_layout_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/layout/dashboard_layout_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/layout/dashboard_layout_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/layout/dashboard_layout_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/layout/dashboard_layout_manager.cpp.i
@@ -2124,6 +2265,7 @@ src/layout/dashboard_layout_manager.s: src/layout/dashboard_layout_manager.cpp.s
 src/layout/dashboard_layout_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/layout/dashboard_layout_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/layout/dashboard_layout_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/layout/dashboard_layout_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/layout/dashboard_layout_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/layout/dashboard_layout_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/layout/dashboard_layout_manager.cpp.s
@@ -2160,6 +2302,7 @@ src/monitoring/performance_monitor.o: src/monitoring/performance_monitor.cpp.o
 src/monitoring/performance_monitor.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/monitoring/performance_monitor.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/monitoring/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/monitoring/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/monitoring/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/monitoring/performance_monitor.cpp.o
@@ -2172,6 +2315,7 @@ src/monitoring/performance_monitor.i: src/monitoring/performance_monitor.cpp.i
 src/monitoring/performance_monitor.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/monitoring/performance_monitor.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/monitoring/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/monitoring/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/monitoring/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/monitoring/performance_monitor.cpp.i
@@ -2184,6 +2328,7 @@ src/monitoring/performance_monitor.s: src/monitoring/performance_monitor.cpp.s
 src/monitoring/performance_monitor.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/monitoring/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/monitoring/performance_monitor.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/monitoring/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/monitoring/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/monitoring/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/monitoring/performance_monitor.cpp.s
@@ -2196,6 +2341,7 @@ src/optimization/performance_optimizer.o: src/optimization/performance_optimizer
 src/optimization/performance_optimizer.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/optimization/performance_optimizer.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/optimization/performance_optimizer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/optimization/performance_optimizer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/optimization/performance_optimizer.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/optimization/performance_optimizer.cpp.o
@@ -2208,6 +2354,7 @@ src/optimization/performance_optimizer.i: src/optimization/performance_optimizer
 src/optimization/performance_optimizer.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/optimization/performance_optimizer.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/optimization/performance_optimizer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/optimization/performance_optimizer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/optimization/performance_optimizer.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/optimization/performance_optimizer.cpp.i
@@ -2220,6 +2367,7 @@ src/optimization/performance_optimizer.s: src/optimization/performance_optimizer
 src/optimization/performance_optimizer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/optimization/performance_optimizer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/optimization/performance_optimizer.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/optimization/performance_optimizer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/optimization/performance_optimizer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/optimization/performance_optimizer.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/optimization/performance_optimizer.cpp.s
@@ -2231,6 +2379,7 @@ src/performance_monitor.o: src/performance_monitor.cpp.o
 # target to build an object file
 src/performance_monitor.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/performance_monitor.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/performance_monitor.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/performance_monitor.cpp.o
@@ -2242,6 +2391,7 @@ src/performance_monitor.i: src/performance_monitor.cpp.i
 # target to preprocess a source file
 src/performance_monitor.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/performance_monitor.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/performance_monitor.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/performance_monitor.cpp.i
@@ -2253,6 +2403,7 @@ src/performance_monitor.s: src/performance_monitor.cpp.s
 # target to generate assembly for a file
 src/performance_monitor.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/performance_monitor.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/performance_monitor.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/performance_monitor.cpp.s
@@ -2264,6 +2415,7 @@ src/symbol_registry.o: src/symbol_registry.cpp.o
 # target to build an object file
 src/symbol_registry.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/symbol_registry.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/symbol_registry.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/symbol_registry.cpp.o
@@ -2275,6 +2427,7 @@ src/symbol_registry.i: src/symbol_registry.cpp.i
 # target to preprocess a source file
 src/symbol_registry.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/symbol_registry.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/symbol_registry.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/symbol_registry.cpp.i
@@ -2286,6 +2439,7 @@ src/symbol_registry.s: src/symbol_registry.cpp.s
 # target to generate assembly for a file
 src/symbol_registry.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/symbol_registry.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/symbol_registry.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/symbol_registry.cpp.s
@@ -2298,6 +2452,7 @@ src/system/GPUMemoryManager.o: src/system/GPUMemoryManager.cpp.o
 src/system/GPUMemoryManager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/system/GPUMemoryManager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/system/GPUMemoryManager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/system/GPUMemoryManager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/system/GPUMemoryManager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/system/GPUMemoryManager.cpp.o
@@ -2310,6 +2465,7 @@ src/system/GPUMemoryManager.i: src/system/GPUMemoryManager.cpp.i
 src/system/GPUMemoryManager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/system/GPUMemoryManager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/system/GPUMemoryManager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/system/GPUMemoryManager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/system/GPUMemoryManager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/system/GPUMemoryManager.cpp.i
@@ -2322,6 +2478,7 @@ src/system/GPUMemoryManager.s: src/system/GPUMemoryManager.cpp.s
 src/system/GPUMemoryManager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/system/GPUMemoryManager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/system/GPUMemoryManager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/system/GPUMemoryManager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/system/GPUMemoryManager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/system/GPUMemoryManager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/system/GPUMemoryManager.cpp.s
@@ -2397,6 +2554,7 @@ src/trading/advanced_trading_features.o: src/trading/advanced_trading_features.c
 src/trading/advanced_trading_features.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/advanced_trading_features.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/advanced_trading_features.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/advanced_trading_features.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/advanced_trading_features.cpp.o
@@ -2409,6 +2567,7 @@ src/trading/advanced_trading_features.i: src/trading/advanced_trading_features.c
 src/trading/advanced_trading_features.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/advanced_trading_features.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/advanced_trading_features.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/advanced_trading_features.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/advanced_trading_features.cpp.i
@@ -2421,6 +2580,7 @@ src/trading/advanced_trading_features.s: src/trading/advanced_trading_features.c
 src/trading/advanced_trading_features.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/advanced_trading_features.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/advanced_trading_features.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/advanced_trading_features.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/advanced_trading_features.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/advanced_trading_features.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/advanced_trading_features.cpp.s
@@ -2433,6 +2593,7 @@ src/trading/order_manager.o: src/trading/order_manager.cpp.o
 src/trading/order_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/order_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/order_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/order_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/order_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/order_manager.cpp.o
@@ -2445,6 +2606,7 @@ src/trading/order_manager.i: src/trading/order_manager.cpp.i
 src/trading/order_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/order_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/order_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/order_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/order_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/order_manager.cpp.i
@@ -2457,6 +2619,7 @@ src/trading/order_manager.s: src/trading/order_manager.cpp.s
 src/trading/order_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/order_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/order_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/order_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/order_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/order_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/order_manager.cpp.s
@@ -2469,6 +2632,7 @@ src/trading/position_manager.o: src/trading/position_manager.cpp.o
 src/trading/position_manager.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/position_manager.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/position_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/position_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/position_manager.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/position_manager.cpp.o
@@ -2481,6 +2645,7 @@ src/trading/position_manager.i: src/trading/position_manager.cpp.i
 src/trading/position_manager.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/position_manager.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/position_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/position_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/position_manager.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/position_manager.cpp.i
@@ -2493,6 +2658,7 @@ src/trading/position_manager.s: src/trading/position_manager.cpp.s
 src/trading/position_manager.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/position_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/position_manager.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/position_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/position_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/position_manager.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/position_manager.cpp.s
@@ -2505,6 +2671,7 @@ src/trading/risk_assessment.o: src/trading/risk_assessment.cpp.o
 src/trading/risk_assessment.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/risk_assessment.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/risk_assessment.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/risk_assessment.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/risk_assessment.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/risk_assessment.cpp.o
@@ -2517,6 +2684,7 @@ src/trading/risk_assessment.i: src/trading/risk_assessment.cpp.i
 src/trading/risk_assessment.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/risk_assessment.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/risk_assessment.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/risk_assessment.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/risk_assessment.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/risk_assessment.cpp.i
@@ -2529,6 +2697,7 @@ src/trading/risk_assessment.s: src/trading/risk_assessment.cpp.s
 src/trading/risk_assessment.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/dashboard_advanced.dir/build.make CMakeFiles/dashboard_advanced.dir/src/trading/risk_assessment.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/component_enhancement_tests.dir/build.make CMakeFiles/component_enhancement_tests.dir/src/trading/risk_assessment.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/src/trading/risk_assessment.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/data_flow_layout_tests.dir/build.make CMakeFiles/data_flow_layout_tests.dir/src/trading/risk_assessment.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/src/trading/risk_assessment.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/comprehensive_tests.dir/build.make CMakeFiles/comprehensive_tests.dir/src/trading/risk_assessment.cpp.s
@@ -2666,6 +2835,30 @@ tests/integration_tests.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/integration_tests.dir/build.make CMakeFiles/integration_tests.dir/tests/integration_tests.cpp.s
 .PHONY : tests/integration_tests.cpp.s
 
+tests/test_chart_panel_crosshair.o: tests/test_chart_panel_crosshair.cpp.o
+.PHONY : tests/test_chart_panel_crosshair.o
+
+# target to build an object file
+tests/test_chart_panel_crosshair.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/tests/test_chart_panel_crosshair.cpp.o
+.PHONY : tests/test_chart_panel_crosshair.cpp.o
+
+tests/test_chart_panel_crosshair.i: tests/test_chart_panel_crosshair.cpp.i
+.PHONY : tests/test_chart_panel_crosshair.i
+
+# target to preprocess a source file
+tests/test_chart_panel_crosshair.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/tests/test_chart_panel_crosshair.cpp.i
+.PHONY : tests/test_chart_panel_crosshair.cpp.i
+
+tests/test_chart_panel_crosshair.s: tests/test_chart_panel_crosshair.cpp.s
+.PHONY : tests/test_chart_panel_crosshair.s
+
+# target to generate assembly for a file
+tests/test_chart_panel_crosshair.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/crosshair_tests.dir/build.make CMakeFiles/crosshair_tests.dir/tests/test_chart_panel_crosshair.cpp.s
+.PHONY : tests/test_chart_panel_crosshair.cpp.s
+
 tests/test_data_flow_layout.o: tests/test_data_flow_layout.cpp.o
 .PHONY : tests/test_data_flow_layout.o
 
@@ -2707,6 +2900,7 @@ help:
 	@echo "... test"
 	@echo "... component_enhancement_tests"
 	@echo "... comprehensive_tests"
+	@echo "... crosshair_tests"
 	@echo "... dashboard_advanced"
 	@echo "... data_flow_layout_tests"
 	@echo "... glm"
@@ -2927,6 +3121,9 @@ help:
 	@echo "... tests/integration_tests.o"
 	@echo "... tests/integration_tests.i"
 	@echo "... tests/integration_tests.s"
+	@echo "... tests/test_chart_panel_crosshair.o"
+	@echo "... tests/test_chart_panel_crosshair.i"
+	@echo "... tests/test_chart_panel_crosshair.s"
 	@echo "... tests/test_data_flow_layout.o"
 	@echo "... tests/test_data_flow_layout.i"
 	@echo "... tests/test_data_flow_layout.s"

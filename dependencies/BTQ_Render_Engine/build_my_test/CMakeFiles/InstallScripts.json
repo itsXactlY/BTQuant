@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-build/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/glm-build/glm/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/json-build/cmake_install.cmake",
+		"/home/alca/projects/PubBTQuant/.ralphy-worktrees/agent-4-1769694658807-6pne7j/dependencies/BTQ_Render_Engine/build_my_test/_deps/concurrentqueue-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

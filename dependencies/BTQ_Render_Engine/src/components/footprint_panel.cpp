@@ -13,7 +13,7 @@ namespace BTQuant {
 FootprintPanel::FootprintPanel(
     const PanelConfig &config,
     RenderEngine::MarketMicrostructureRenderer *renderer)
-    : PanelBase(config), renderer_(renderer) {}
+    : PanelBase(config), renderer_(renderer), data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT) {}
 
 void FootprintPanel::update(float dt) {
   // Update logic if needed
@@ -145,6 +145,28 @@ void FootprintPanel::render() {
     end_panel_window();
     return;
   }
+
+  // Data type selector
+  const char* data_type_names[] = {
+    "OHLC", "ORDERBOOK", "TRADES", "VOLUME_PROFILE", "FOOTPRINT", "TPO", "METRICS", "ALERTS"
+  };
+
+  int current_data_type = static_cast<int>(data_type_);
+  if (ImGui::BeginCombo("Data Type", data_type_names[current_data_type])) {
+    for (int i = 0; i < 8; i++) {
+      bool is_selected = (current_data_type == i);
+      if (ImGui::Selectable(data_type_names[i], is_selected)) {
+        current_data_type = i;
+        data_type_ = static_cast<Data::UnifiedDataPipeline::DataType>(i);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  ImGui::SameLine();
 
   // Enhanced toolbar with more options
   if (ImGui::Button("Reset View")) {

@@ -1,6 +1,8 @@
 #include "../../include/components/theme_manager.hpp"
-#include "../../include/ui/unified_theme_system.hpp"
+
 #include <iostream>
+
+#include "../../include/ui/unified_theme_system.hpp"
 
 namespace BTQuant {
 
@@ -13,12 +15,11 @@ void ThemeManager::loadFonts() {
   // Ideally, we would load "Inter" font here.
   // For now, we rely on ImGui's default font or current setup.
   // If the IO has fonts loaded, we pick them.
-  ImGuiIO &io = ImGui::GetIO();
+  ImGuiIO& io = ImGui::GetIO();
   if (!io.Fonts->Fonts.empty()) {
     main_font_ = io.Fonts->Fonts[0];
     // If there's a second font loaded, assume it's large, otherwise reuse main
-    large_font_ =
-        (io.Fonts->Fonts.size() > 1) ? io.Fonts->Fonts[1] : main_font_;
+    large_font_ = (io.Fonts->Fonts.size() > 1) ? io.Fonts->Fonts[1] : main_font_;
   }
 }
 
@@ -26,29 +27,29 @@ void ThemeManager::applyTheme(ThemeType type) {
   current_theme_type_ = type;
 
   if (type == ThemeType::DarkNeon) {
-    current_colors_.background = ImVec4(0.04f, 0.04f, 0.04f, 1.0f); // #0A0A0A
+    current_colors_.background = ImVec4(0.04f, 0.04f, 0.04f, 1.0f);  // #0A0A0A
     current_colors_.text = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     current_colors_.text_dim = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-    current_colors_.accent_green = ImVec4(0.2f, 1.0f, 0.2f, 1.0f); // Neon Green
-    current_colors_.accent_red = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);   // Neon Red
-    current_colors_.accent_cyan = ImVec4(0.0f, 1.0f, 1.0f, 1.0f);  // Cyan
+    current_colors_.accent_green = ImVec4(0.2f, 1.0f, 0.2f, 1.0f);  // Neon Green
+    current_colors_.accent_red = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);    // Neon Red
+    current_colors_.accent_cyan = ImVec4(0.0f, 1.0f, 1.0f, 1.0f);   // Cyan
 
     // Glass effect
     current_colors_.panel_bg =
-        ImVec4(0.08f, 0.08f, 0.08f, 0.85f); // Slightly opaque for readability
+        ImVec4(0.08f, 0.08f, 0.08f, 0.85f);  // Slightly opaque for readability
     current_colors_.border = ImVec4(0.2f, 0.2f, 0.2f, 0.5f);
     current_colors_.header_bg = ImVec4(0.1f, 0.1f, 0.1f, 0.9f);
   } else {
     // Light Clean (Placeholder)
     ImGui::StyleColorsLight();
-    return; // Built-in light style
+    return;  // Built-in light style
   }
 
   updateImGuiStyle();
 }
 
 void ThemeManager::updateImGuiStyle() {
-  ImGuiStyle &style = ImGui::GetStyle();
+  ImGuiStyle& style = ImGui::GetStyle();
 
   // Modern rounding
   style.WindowRounding = 6.0f;
@@ -64,12 +65,12 @@ void ThemeManager::updateImGuiStyle() {
   style.ItemSpacing = ImVec2(6, 6);
 
   // Colors
-  const auto &c = current_colors_;
+  const auto& c = current_colors_;
 
   style.Colors[ImGuiCol_Text] = c.text;
   style.Colors[ImGuiCol_TextDisabled] = c.text_dim;
   style.Colors[ImGuiCol_WindowBg] = c.panel_bg;
-  style.Colors[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0); // Transparent to inherit
+  style.Colors[ImGuiCol_ChildBg] = ImVec4(0, 0, 0, 0);  // Transparent to inherit
   style.Colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.95f);
   style.Colors[ImGuiCol_Border] = c.border;
   style.Colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
@@ -95,7 +96,7 @@ void ThemeManager::updateImGuiStyle() {
 
   style.Colors[ImGuiCol_Button] = ImVec4(0.2f, 0.2f, 0.2f, 0.4f);
   style.Colors[ImGuiCol_ButtonHovered] =
-      ImVec4(0.2f, 0.2f, 0.2f, 0.7f); // Hover grow effect logic can be external
+      ImVec4(0.2f, 0.2f, 0.2f, 0.7f);  // Hover grow effect logic can be external
   style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
 
   style.Colors[ImGuiCol_Header] = ImVec4(0.2f, 0.2f, 0.2f, 0.4f);
@@ -112,7 +113,7 @@ void ThemeManager::updateImGuiStyle() {
 
   style.Colors[ImGuiCol_Tab] = ImVec4(0.15f, 0.15f, 0.15f, 0.6f);
   style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.25f, 0.25f, 0.8f);
-  style.Colors[ImGuiCol_TabActive] = c.panel_bg; // Matches window bg
+  style.Colors[ImGuiCol_TabActive] = c.panel_bg;  // Matches window bg
   style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.1f, 0.1f, 0.1f, 0.6f);
   style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.15f, 0.15f, 0.15f, 0.8f);
 
@@ -157,7 +158,7 @@ void ThemeManager::toggleTheme() {
 // Integration with unified theme system
 void ThemeManager::apply_unified_theme(const std::string& theme_name) {
   // Get the unified theme manager instance
-  static auto& unified_manager = UI::UnifiedThemeManager::getInstance();
+  auto& unified_manager = UI::UnifiedThemeManager::getInstance();
 
   // Set the theme in the unified system
   unified_manager.set_current_theme(theme_name);
@@ -179,4 +180,4 @@ void ThemeManager::sync_with_layout_manager() {
   // For now, it's a placeholder implementation
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

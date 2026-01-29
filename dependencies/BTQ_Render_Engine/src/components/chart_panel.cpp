@@ -652,16 +652,27 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart,
   if (!indicator_config_.show_crosshair_info || chart.closes.empty())
     return;
 
-  // Find closest candle to mouse position
+  // Find closest candle to mouse position using binary search
   size_t closest_idx = 0;
-  double min_dist = 1e9;
 
-  for (size_t i = 0; i < chart.dates.size(); ++i) {
-    double dist = std::abs(chart.dates[i] - mouse_x);
-    if (dist < min_dist) {
-      min_dist = dist;
-      closest_idx = i;
-    }
+  // Use lower_bound to find the insertion point for mouse_x in the sorted dates vector
+  auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(), mouse_x);
+
+  if (lower == chart.dates.end()) {
+    // Mouse x is beyond the last date, use the last element
+    closest_idx = chart.dates.size() - 1;
+  } else if (lower == chart.dates.begin()) {
+    // Mouse x is before the first date, use the first element
+    closest_idx = 0;
+  } else {
+    // Compare the distance to the element at lower and the one before it
+    size_t idx_after = std::distance(chart.dates.begin(), lower);
+    size_t idx_before = idx_after - 1;
+
+    double dist_to_after = std::abs(chart.dates[idx_after] - mouse_x);
+    double dist_to_before = std::abs(chart.dates[idx_before] - mouse_x);
+
+    closest_idx = (dist_to_before < dist_to_after) ? idx_before : idx_after;
   }
 
   if (closest_idx >= chart.closes.size())

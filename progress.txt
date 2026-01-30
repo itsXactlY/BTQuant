@@ -48,4 +48,13 @@ Changes Made:
 4. The performance monitor now tracks frame timing for the main render loop
 
 The performance monitor calls are now properly integrated into the main render loop to track frame performance metrics.
->>>>>>> ralphy/agent-7-1769699288708-ur8d4m-instrument-main-render-loop-add-performance-monito
+=======
+Task Completed: Add PriceLevel structure for orderbook
+
+Changes Made:
+1. Created new header file dependencies/BTQ_Render_Engine/include/data/PriceLevel.h
+2. Implemented PriceLevel struct with price, bidVolume, askVolume, bidOrders, askOrders fields
+3. Added proper include guards and necessary includes
+
+The PriceLevel structure is now available for orderbook implementations with all required fields.
+>>>>>>> ralphy/agent-4-1769729007231-oqjogu-add-pricelevel-structure-for-orderbook

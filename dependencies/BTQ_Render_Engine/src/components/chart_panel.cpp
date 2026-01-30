@@ -957,9 +957,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_axis_min),
                             static_cast<float>(y_axis_max), ImPlotCond_Always);
 
-    // VOLUME PROFILE OVERLAY
+    // VOLUME PROFILE OVERLAY - using direct draw to avoid axis switching after setup lock
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
-      ImPlot::SetAxes(ImAxis_X2, ImAxis_Y1);
+      ImDrawList *draw_list = ImPlot::GetPlotDrawList();
 
       // Use Theme Colors for a more integrated look
       ImVec4 vp_color = colors.text;
@@ -971,17 +971,29 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
           ImPlotCol_Line,
           ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f)); // clearer border
 
-      // Calculate bar width if possible, or use auto
-      // double width = (vp_prices.size() > 1) ? (vp_prices[1] - vp_prices[0]) *
-      // 0.9 : 0.0;
+      // Calculate bar width in plot coordinates based on volume values
+      double max_vol_display = vp_max_vol * 4.0; // Same as used in SetupAxisLimits for X2
 
-      ImPlot::PlotBars("VP", vp_volumes.data(), vp_prices.data(),
-                       static_cast<int>(vp_prices.size()), 0.0,
-                       ImPlotBarsFlags_Horizontal);
+      // Draw volume profile bars using direct drawing to avoid axis switching after setup lock
+      for (size_t i = 0; i < vp_prices.size(); ++i) {
+          // Convert price (Y coordinate) and volume (X coordinate) to screen coordinates
+          ImVec2 pos_screen = ImPlot::PlotToPixels(vp_volumes[i], vp_prices[i]);  // tip of the bar
+          ImVec2 base_screen = ImPlot::PlotToPixels(0, vp_prices[i]);            // base of the bar
+
+          // Calculate bar dimensions
+          float bar_width = base_screen.x - pos_screen.x;  // width from volume value to zero
+          float bar_height = 3.0f;  // fixed height for visibility
+
+          // Define bar corners
+          ImVec2 bar_tl = ImVec2(base_screen.x - bar_width, pos_screen.y - bar_height/2);
+          ImVec2 bar_br = ImVec2(base_screen.x, pos_screen.y + bar_height/2);
+
+          // Draw the volume bar
+          draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
+      }
 
       ImPlot::PopStyleColor(2);
       ImPlot::PopStyleVar();
-      ImPlot::SetAxes(ImAxis_X1, ImAxis_Y1); // Reset
     }
 
     // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)

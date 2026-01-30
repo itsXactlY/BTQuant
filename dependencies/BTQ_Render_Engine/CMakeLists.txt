@@ -658,3 +658,23 @@ target_link_libraries(dashboard_advanced PRIVATE
 #     target_link_libraries(comprehensive_tests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
 # endif()
 
+# Unit test for VolumeAnalysisType
+enable_testing()
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    add_executable(test_volume_analysis_type tests/test_volume_analysis_type.cpp)
+    target_include_directories(test_volume_analysis_type PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_volume_analysis_type PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_volume_analysis_type COMMAND test_volume_analysis_type)
+endif()
+

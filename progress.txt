@@ -1,0 +1,1 @@
+2026-01-30: Completed implementation of VolumeAnalysisType enum with all 16 types in dependencies/BTQ_Render_Engine/include/data/VolumeDataTypes.h. Created comprehensive unit tests and verified functionality. Ran clang-format for code style compliance.

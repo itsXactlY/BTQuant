@@ -1,6 +1,10 @@
 import backtrader as bt
 
+<<<<<<< HEAD
 class QQEMod(bt.Indicator):
+=======
+class QQE(bt.Indicator):
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     lines = ('qqe_line', 'rsi_ma', 'long_band', 'short_band', 'trend', 'qqe_oscillator')
     params = (
         ('rsi_period', 6),

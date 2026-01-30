@@ -745,12 +745,20 @@ class LinesOperation(LineActions):
                 self[0] = self.operation(self.a[0], self.b[0])
             except ZeroDivisionError:
                 self[0] = 0
+<<<<<<< HEAD
+=======
+                print(f'DEBUG :: self.operation(self.a[0], self.b[0]) first check')
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         elif not self.r:
             if not self.btime:
                 try:
                     self[0] = self.operation(self.a[0], self.b)
                 except ZeroDivisionError:
                     self[0] = 0
+<<<<<<< HEAD
+=======
+                    print(f'DEBUG :: self.operation(self.a[0], self.b[0]) self.btime second check')
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
             else:
                 self[0] = self.operation(self.a.time(), self.b)
         else:
@@ -758,6 +766,10 @@ class LinesOperation(LineActions):
                 self[0] = self.operation(self.a, self.b[0])
             except ZeroDivisionError:
                 self[0] = 0
+<<<<<<< HEAD
+=======
+                print(f'DEBUG :: self.operation(self.a[0], self.b[0]) else block last check')
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def once(self, start, end):
         if self.bline:

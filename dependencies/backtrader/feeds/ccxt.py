@@ -32,8 +32,11 @@ class CCXT(DataBase):
 
     params = (
         ('historical', False),  # only historical download
+<<<<<<< HEAD
         
         # TODO figure out whats going wrong here - can remember dark something
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         ('backfill_start', False),  # do backfilling at the start
     )
 

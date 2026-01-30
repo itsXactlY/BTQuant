@@ -22,11 +22,16 @@ class LaguerreFilter(bt.Indicator):
                      )
 
     def __init__(self):
+<<<<<<< HEAD
         self.addminperiod(self.p.period)
+=======
+        self.addminperiod(30)
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         self.alpha = 2/(self.p.period+1)
         self.l.p = (self.data.high + self.data.low)/2
 
     def prenext(self):
+<<<<<<< HEAD
         price = self.l.p[0]
         self.l.L0[0] = price
         self.l.L1[0] = price
@@ -34,6 +39,13 @@ class LaguerreFilter(bt.Indicator):
         self.l.L3[0] = price
         self.l.filter[0] = price
 
+=======
+
+        self.l.L0[0] = self.l.p[0]
+        self.l.L1[0] = self.l.p[-1]
+        self.l.L2[0] = self.l.p[-2]
+        self.l.L3[0] = self.l.p[-2]
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def next(self):
         a = self.alpha

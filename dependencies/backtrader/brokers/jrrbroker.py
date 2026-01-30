@@ -4,12 +4,17 @@ import logging
 from telethon import TelegramClient
 from abc import ABC, abstractmethod
 from typing import Dict, Any
+<<<<<<< HEAD
 from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file, telegram_channel
 from typing import Optional, List, Deque
 import backtrader as bt
 from backtrader.order import Order, BuyOrder, SellOrder
 from backtrader.position import Position
 import collections
+=======
+from backtrader.dontcommit import identify, jrr_webhook_url, discord_webhook_url, telegram_api_id, telegram_api_hash, telegram_session_file
+from typing import Optional
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
 class MessagingService(ABC):
     @abstractmethod
@@ -116,7 +121,11 @@ async def initialize_services():
         api_id=telegram_api_id,
         api_hash=telegram_api_hash,
         session_file=telegram_session_file,
+<<<<<<< HEAD
         channel_id=telegram_channel
+=======
+        channel_id=telegram_channel_debug
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     )
     await telegram_service.initialize()
     
@@ -235,6 +244,7 @@ class JrrOrderBase:
         }
         print(f"payload: {payload}")
         return self._send_jrr_request(payload)
+<<<<<<< HEAD
 
 class JrrBroker(bt.BrokerBase):
     """
@@ -353,3 +363,5 @@ class JrrBroker(bt.BrokerBase):
 
     def getposition(self, data):
         return self.positions[data]
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented

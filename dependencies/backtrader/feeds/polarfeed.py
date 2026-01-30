@@ -1,5 +1,9 @@
 import backtrader as bt
 from backtrader import date2num
+<<<<<<< HEAD
+=======
+from backtrader.utils.py3 import string_types, integer_types
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 import polars as pl
 
 class PolarsData(bt.feed.DataBase):

@@ -5,6 +5,7 @@ from backtrader.dontcommit import connection_string, fast_mssql, bt
 
 class MSSQLData(bt.feeds.PolarsData):
     @classmethod
+<<<<<<< HEAD
     def create_data_feed(cls, ticker, start_date, end_date, time_resolution="1d", pair="USDT", **kwargs):
         """Factory method to create a properly configured MSSQLData instance"""
         df = get_database_data(ticker, start_date, end_date, time_resolution, pair)
@@ -13,6 +14,8 @@ class MSSQLData(bt.feeds.PolarsData):
         return cls(dataname=df, **kwargs)
 
     @classmethod
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     def get_data_from_db(cls, connection_string, coin, timeframe, start_date, end_date):
         start_timestamp = int(start_date.timestamp() * 1_000_000)
         end_timestamp = int(end_date.timestamp() * 1_000_000)
@@ -112,7 +115,11 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
     time_resolution = convert_time_resolution(time_resolution)
 
     if resample:
+<<<<<<< HEAD
         print(f'Resampling microseconds from DB into {time_resolution} Candle data')
+=======
+        # print(f'Resampling microseconds from DB into {time_resolution} Candle data')
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         df = df.sort("TimestampStart")
         
         df = (df
@@ -126,6 +133,10 @@ def get_database_data(ticker, start_date, end_date, time_resolution="1d", pair="
             ])
         )
 
+<<<<<<< HEAD
     # print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', coin_name, pair)
+=======
+    # print('Data extraction & manipulation took:', time.time() - start_time, 'seconds for', pair)
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     
     return df

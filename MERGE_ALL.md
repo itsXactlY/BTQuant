@@ -1,7 +1,12 @@
-# Merge All Agent Branches
+# Git Conflict Resolution & Master Merge
 
-- [x] Commit all uncommitted changes in worktrees located in .ralphy-worktrees/agent-* directories
-- [x] Merge all branches matching pattern ralphy/agent-* into ralphy-base using git merge --no-edit
-- [x] Delete all merged agent branches using git branch -D
-- [ ] Remove worktree directories in .ralphy-worktrees/
-- [ ] Run git worktree prune to clean up
+- [ ] Iterate through all branches: `ralphy/agent-*`
+- [ ] For each branch:
+    - [ ] Attempt a merge into `ralphy-base`.
+    - [ ] IF conflicts occur:
+        - [ ] Analyze conflicting files.
+        - [ ] Favor changes that implement new features over deletions.
+        - [ ] Resolve code-level conflicts by keeping both logic paths if they don't overlap.
+        - [ ] Commit the resolved merge.
+    - [ ] Delete the branch after successful merge and commit.
+- [ ] Final task: Run a build check to ensure the engine still compiles.

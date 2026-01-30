@@ -5,6 +5,7 @@ from backtrader.dontcommit import bsc_privaccount1, bsc_privaccountaddress
 class PancakeSwapV2DirectOrderBase:
     def __init__(self, coin, collateral, **kwargs):
         super().__init__(**kwargs)
+<<<<<<< HEAD
         self.BSC_RPC_URL = "https://bscrpc.pancakeswap.finance"# "https://bsc-dataseed.binance.org/"
         self.PRIVATE_KEY = bsc_privaccount1
         self.WALLET_ADDRESS = Web3.to_checksum_address(bsc_privaccountaddress)
@@ -13,12 +14,21 @@ class PancakeSwapV2DirectOrderBase:
         # V2 ->('0x10ED43C718714eb63d5aA57B78B54704E256024E')
         # V3 ->('0x1A0A18AC4BECDDbd6389559687d1A73d8927E416')
         # V4 ->('0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB')
+=======
+        self.BSC_RPC_URL = "https://bsc-dataseed.binance.org/"
+        self.PRIVATE_KEY = bsc_privaccount1
+        self.WALLET_ADDRESS = Web3.to_checksum_address(bsc_privaccountaddress)
+        self.PANCAKE_ROUTER_ADDRESS = Web3.to_checksum_address('0x10ED43C718714eb63d5aA57B78B54704E256024E')
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         self.TOKEN_ADDRESS = Web3.to_checksum_address(coin)
         self.WBNB_ADDRESS = Web3.to_checksum_address(collateral)
         self.web3 = Web3(Web3.HTTPProvider(self.BSC_RPC_URL))
         if not self.web3.is_connected():
             raise Exception("Failed to connect to Binance Smart Chain")
+<<<<<<< HEAD
         print(f"PancakeSwapV2DirectOrderBase connected to BSC: {self.web3.is_connected()}")
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
         self.pancake_router_abi = [
             {
@@ -64,6 +74,7 @@ class PancakeSwapV2DirectOrderBase:
         return self.web3.to_wei(amount, 'ether')
 
     def get_gas_price(self):
+<<<<<<< HEAD
         print(gp := self.web3.eth.gas_price); return gp
 
     def get_collateral_balance(self):
@@ -75,6 +86,9 @@ class PancakeSwapV2DirectOrderBase:
         except Exception as e:
             print(f"Error getting BNB balance: {e}")
             return 0.0
+=======
+        return self.web3.eth.gas_price
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def send_pcs_buy_request(self, amount):
         try:
@@ -88,15 +102,24 @@ class PancakeSwapV2DirectOrderBase:
     def send_pcs_close_request(self):
         try:
             nonce = self.web3.eth.get_transaction_count(self.WALLET_ADDRESS)
+<<<<<<< HEAD
             result = self.swap_all_tokens_for_bnb(nonce)
             return result
         except Exception as e:
             print(f"Error: {e}")
             return {"success": False, "error": str(e)}
+=======
+            self.swap_all_tokens_for_bnb(nonce)
+            return "Swap Transaction successful. All tokens swapped for BNB."
+        except Exception as e:
+            print(f"Error: {e}")
+            return f"Error: {e}"
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def swap_bnb_for_token(self, bnb_amount, nonce):
         path = [self.WBNB_ADDRESS, self.TOKEN_ADDRESS]
         amount_in_wei = self.to_wei(bnb_amount)
+<<<<<<< HEAD
         deadline = int(time.time()) + 60 * 10
 
         bnb_balance = self.web3.eth.get_balance(self.WALLET_ADDRESS)
@@ -172,6 +195,36 @@ class PancakeSwapV2DirectOrderBase:
         except Exception as e:
             print(f"Error: {e}")
             return {"success": False, "error": str(e)}
+=======
+        deadline = int(time.time()) + 60 * 10  # 10 minutes from now
+
+        # Check if the wallet has sufficient BNB balance
+        bnb_balance = self.web3.eth.get_balance(self.WALLET_ADDRESS)
+        if bnb_balance < amount_in_wei:
+            print("Insufficient BNB balance.")
+            return
+
+        amounts_out = self.pancake_router.functions.getAmountsOut(amount_in_wei, path).call()
+        amount_out_min = amounts_out[1] * 90 // 100  # 10% slippage tolerance
+
+        txn = self.pancake_router.functions.swapExactETHForTokens(
+            amount_out_min,
+            path,
+            self.WALLET_ADDRESS,
+            deadline
+        ).build_transaction({
+            'from': self.WALLET_ADDRESS,
+            'value': amount_in_wei,
+            'gas': 300000,
+            'gasPrice': self.get_gas_price(),
+            'nonce': nonce
+        })
+
+        # Sign and send the transaction
+        signed_txn = self.web3.eth.account.sign_transaction(txn, self.PRIVATE_KEY)
+        tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction).hex()
+        print(f"Swap Transaction Hash: https://bscscan.com/tx/0x{tx_hash}")
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def swap_all_tokens_for_bnb(self, nonce):
         path = [self.TOKEN_ADDRESS, self.WBNB_ADDRESS]
@@ -180,6 +233,7 @@ class PancakeSwapV2DirectOrderBase:
 
         if balance_in_wei == 0:
             print("No tokens available to swap.")
+<<<<<<< HEAD
             return {"success": False, "error": "No tokens available to swap"}
 
         try:
@@ -256,10 +310,40 @@ class PancakeSwapV2DirectOrderBase:
             ).build_transaction({
                 'from': self.WALLET_ADDRESS,
                 'gas': 300000,
+=======
+            return
+
+        deadline = int(time.time()) + 60 * 10  # 10 minutes from now
+        amounts_out = self.pancake_router.functions.getAmountsOut(balance_in_wei, path).call()
+        amount_out_min = amounts_out[1] * 90 // 100  # 10% slippage tolerance
+
+        allowance = self.get_token_allowance()
+        if allowance < balance_in_wei:
+            print(f"Current allowance: {allowance}. Approving maximum allowance...")
+
+            erc20_abi = [
+                {
+                    "constant": False,
+                    "inputs": [
+                        {"name": "_spender", "type": "address"},
+                        {"name": "_value", "type": "uint256"}
+                    ],
+                    "name": "approve",
+                    "outputs": [{"name": "success", "type": "bool"}],
+                    "type": "function"
+                }
+            ]
+            token_contract = self.web3.eth.contract(address=self.TOKEN_ADDRESS, abi=erc20_abi)
+            MAX_ALLOWANCE = int(10**20)
+            approve_txn = token_contract.functions.approve(self.PANCAKE_ROUTER_ADDRESS, MAX_ALLOWANCE).build_transaction({
+                'from': self.WALLET_ADDRESS,
+                'gas': 100000,
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
                 'gasPrice': self.get_gas_price(),
                 'nonce': nonce
             })
 
+<<<<<<< HEAD
             # Sign and send the swap transaction
             signed_txn = self.web3.eth.account.sign_transaction(swap_txn, self.PRIVATE_KEY)
             tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction)
@@ -306,6 +390,37 @@ class PancakeSwapV2DirectOrderBase:
                 "error": str(e),
                 "error_type": type(e).__name__
             }
+=======
+            # Sign and send approve transaction
+            signed_approve_txn = self.web3.eth.account.sign_transaction(approve_txn, self.PRIVATE_KEY)
+            approve_tx_hash = self.web3.eth.send_raw_transaction(signed_approve_txn.raw_transaction).hex()
+            print(f"Approval Transaction Hash: https://bscscan.com/tx/0x{approve_tx_hash}")
+
+            # Wait for the approval transaction to be mined
+            self.web3.eth.wait_for_transaction_receipt(approve_tx_hash)
+
+            # Increment the nonce
+            nonce += 1
+
+        # Send the swap transaction
+        txn = self.pancake_router.functions.swapExactTokensForETH(
+            balance_in_wei,
+            amount_out_min,
+            path,
+            self.WALLET_ADDRESS,
+            deadline
+        ).build_transaction({
+            'from': self.WALLET_ADDRESS,
+            'gas': 300000,
+            'gasPrice': self.get_gas_price(),
+            'nonce': nonce
+        })
+
+        # Sign and send the swap transaction
+        signed_txn = self.web3.eth.account.sign_transaction(txn, self.PRIVATE_KEY)
+        tx_hash = self.web3.eth.send_raw_transaction(signed_txn.raw_transaction).hex()
+        print(f"Swap Transaction Hash: https://bscscan.com/tx/0x{tx_hash}")
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def get_token_balance(self):
         erc20_abi = [

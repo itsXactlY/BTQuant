@@ -1,7 +1,13 @@
 import backtrader as bt
+<<<<<<< HEAD
 from .ElhersHighPass import ElhersHighPass
 from .SuperSmoothFilter import SuperSmoothFilter
 from .iFisher import iFisher
+=======
+from fastquant.strategies.custom_indicators.ElhersHighPass import ElhersHighPass
+from fastquant.strategies.custom_indicators.SuperSmoothFilter import SuperSmoothFilter
+from fastquant.strategies.custom_indicators.iFisher import iFisher
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
 class RoofingFilter(bt.Indicator):
 

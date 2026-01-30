@@ -1,6 +1,7 @@
 import backtrader as bt
 from datetime import datetime, timedelta
 import pytz
+<<<<<<< HEAD
 
 from typing import Type, Optional, Dict, Any
 import backtrader as bt
@@ -11,11 +12,18 @@ from backtrader.brokers.ccxtbroker import CCXTBroker
 
 
 def livetrade_ccxt(
+=======
+from typing import Type
+
+
+def livetrade(
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     coin: str,
     collateral: str,
     exchange: str,
     account: str,
     asset: str,
+<<<<<<< HEAD
     strategy_class: str,
     config: Optional[Dict[str, Any]] = None,
 ) -> None:
@@ -32,11 +40,35 @@ def livetrade_ccxt(
     broker = CCXTBroker(exchange, collateral, config)
     cerebro.setbroker(broker)
 
+=======
+    strategy: Type[bt.Strategy],
+    config: str,
+) -> None:
+    
+    if strategy is None:
+        raise ValueError("No strategy class provided.")
+
+    from backtrader.feeds.ccxt import CCXT
+    from backtrader.brokers.ccxtbroker import CCXTBroker
+
+    cerebro = bt.Cerebro()
+    
+    # Create broker with patched class
+    broker = CCXTBroker(
+        exchange,
+        currency='USDT',
+        config=config
+    )
+
+    broker = CCXTBroker(exchange, collateral, config)
+    cerebro.setbroker(broker)    
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     data = CCXT(
         exchange=exchange,
         symbol=asset,
         ohlcv_limit=500,
         config=config,
+<<<<<<< HEAD
         retries=5,
     )
 
@@ -51,15 +83,37 @@ def livetrade_ccxt(
         enable_alerts=False,
         backtest=False,
     )
+=======
+        retries=5
+    )
+
+    cerebro.setbroker(broker)
+    cerebro.adddata(data, name=data._dataname)
+    cerebro.addstrategy(
+                        strategy,
+                        exchange=exchange,
+                        account=account,
+                        asset=asset,
+                        coin=coin,
+                        collateral=collateral,
+                        enable_alerts=False,
+                        backtest=False)
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     try:
         cerebro.run(live=True, runonce=False, exactbars=False, stdstats=False)
     except Exception as e:
         print(f"An error occurred: {e}")
         import traceback
+<<<<<<< HEAD
         traceback.print_exc()
 
 
+=======
+        print("Full traceback:")
+        traceback.print_exc()
+
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 def livetrade_web3(
     coin: str,
     collateral: str,
@@ -89,9 +143,15 @@ def livetrade_web3(
     - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
     """
 
+<<<<<<< HEAD
     if isinstance(strategy, str):
         strategy_class = strategy.lower()
     elif callable(strategy):
+=======
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         strategy_class = strategy
 
     from backtrader.stores import pancakeswap_store
@@ -130,6 +190,7 @@ def livetrade_web3(
         import traceback
         print("Full traceback:")
         traceback.print_exc()
+<<<<<<< HEAD
 
 
 def livetrade_hotspine(
@@ -300,6 +361,80 @@ def livetrade_hotspine_multi_symbol(
         raise
 
 def livetrade_binance(
+=======
+    
+def livetrade_crypto_binance(
+    coin: str,
+    collateral: str,
+    exchange: str,
+    account: str,
+    asset: str,
+    strategy: str = "",
+    start_hours_ago: int = 1,
+    enable_alerts: bool = False,
+    alert_channel: str = ""
+) -> None:
+    """
+    Live trade a strategy on Binance.
+
+    Args:
+    - coin (str): The address of the coin to trade.
+    - collateral (str): The address of the collateral coin.
+    - exchange (str): The exchange to use (e.g., 'binance').
+    - account (str): The account type to use (e.g., 'JackRabbit_Binance').
+    - asset (str): The asset to trade (e.g., '$BTC/USDT').
+    - amount (float): The amount to trade.
+    - strategy (str): The strategy name as a string or strategy class.
+                    Defaults to "".
+    - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 5.
+    - enable_alerts (bool): Whether to enable the alert engine (e.g., Telegram/Discord). Defaults to False.
+    - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
+    """
+
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    from backtrader.stores import binance_store
+
+    cerebro = bt.Cerebro(quicknotify=True)
+    store = binance_store.BinanceStore(
+        coin_refer=coin,
+        coin_target=collateral
+    )
+
+    # Set the timezone to UTC+2
+    tz = pytz.timezone('Europe/Berlin')
+    current_time = datetime.now(tz)
+
+    # Add extra buffer time to ensure smooth transition
+    buffer_minutes = 2
+    from_date = current_time - timedelta(hours=start_hours_ago, minutes=buffer_minutes)
+
+    print(f"Current time (UTC+2): {current_time}")
+    print(f"Fetching historical data from (UTC+2): {from_date}")
+    
+    data = store.getdata(start_date=from_date)
+    data._dataname = f"{coin}{collateral}"
+    
+    cerebro.addstrategy(
+        strategy_class,
+        exchange=exchange,
+        account=account,
+        asset=asset,
+        coin=coin,
+        collateral=collateral,
+        backtest=False,
+        enable_alerts=enable_alerts,
+        alert_channel=alert_channel
+    )
+    
+    cerebro.adddata(data=data, name=data._dataname)
+    cerebro.run(live=True)
+
+def livetrade_crypto_binance_ML(
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     coin: str,
     collateral: str,
     exchange: str,
@@ -309,6 +444,10 @@ def livetrade_binance(
     start_hours_ago: int = 1,
     enable_alerts: bool = False,
     alert_channel: str = "",
+<<<<<<< HEAD
+=======
+    # memory_saving: int = -1  # Add this parameter with default value
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 ) -> None:
     """
     Live trade a strategy on Binance.
@@ -323,6 +462,7 @@ def livetrade_binance(
     - start_hours_ago (int): The number of hours ago to start the data feed. Defaults to 1.
     - enable_alerts (bool): Whether to enable the alert engine. Defaults to False.
     - alert_channel (str): Define where to send alerts via alert engine.
+<<<<<<< HEAD
     """
     if isinstance(strategy, str):
         strategy_class = strategy.lower()
@@ -330,6 +470,18 @@ def livetrade_binance(
         strategy_class = strategy
     else:
         raise ValueError(f"Invalid strategy: {strategy}")
+=======
+    - memory_saving (int): Memory saving level:
+        0: No memory saving (default behavior)
+        1: Maximum memory savings, disables plotting
+       -1: Save memory for subindicators only
+       -2: Save memory for non-strategy attributes
+    """
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     
     from backtrader.stores import binance_store
     
@@ -374,7 +526,11 @@ def livetrade_binance(
     # Apply memory saving settings
     cerebro.run(live=True, exactbars=100)
 
+<<<<<<< HEAD
 def livetrade_mexc(
+=======
+def livetrade_crypto_mexc(
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     coin: str,
     collateral: str,
     exchange: str,
@@ -402,9 +558,15 @@ def livetrade_mexc(
     - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
 
+<<<<<<< HEAD
     if isinstance(strategy, str):
         strategy_class = strategy.lower()
     elif callable(strategy):
+=======
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
         strategy_class = strategy
 
     from backtrader.stores import mexc_store
@@ -444,7 +606,13 @@ def livetrade_mexc(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
+<<<<<<< HEAD
 def livetrade_bitget(
+=======
+
+# 
+def livetrade_crypto_bitget(
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     coin: str,
     collateral: str,
     exchange: str,
@@ -472,6 +640,7 @@ def livetrade_bitget(
     - alert_channel (str): Define where to send alerts via alert engine to corresponding channels.
     """
 
+<<<<<<< HEAD
     if isinstance(strategy, str):
         strategy_class = strategy.lower()
     elif callable(strategy):
@@ -482,6 +651,20 @@ def livetrade_bitget(
 
     cerebro = bt.Cerebro(quicknotify=True)
     store = BitgetStore(symbol=coin, product="spot", debug=True)
+=======
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+
+    from backtrader.stores import bitget_store
+
+    cerebro = bt.Cerebro(quicknotify=True)
+    store = bitget_store.BitgetStore(
+        coin_refer=coin,
+        coin_target=collateral
+    )
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     # Set the timezone to UTC+2
     tz = pytz.timezone('Europe/Berlin')
@@ -494,7 +677,11 @@ def livetrade_bitget(
     print(f"Current time (UTC+2): {current_time}")
     print(f"Fetching historical data from (UTC+2): {from_date}")
     
+<<<<<<< HEAD
     data = BitgetData(store=store, start_date=from_date)
+=======
+    data = store.getdata(start_date=from_date)
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     data._dataname = f"{coin}{collateral}"
     
     cerebro.addstrategy(
@@ -512,6 +699,7 @@ def livetrade_bitget(
     cerebro.adddata(data=data, name=data._dataname)
     cerebro.run(live=True)
 
+<<<<<<< HEAD
 def livetrade_tv(
     coin: str,
     collateral: str,
@@ -578,6 +766,8 @@ def livetrade_tv(
         traceback.print_exc()
 
 
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 ''' Experimental WIP '''
 ''' Strategy example still WIP in debugging state '''
 def livetrade_multiple_pairs(
@@ -591,12 +781,19 @@ def livetrade_multiple_pairs(
 ) -> None:
     cerebro = bt.Cerebro(quicknotify=True)
     
+<<<<<<< HEAD
     if isinstance(strategy, str):
         strategy_class = strategy.lower()
     elif callable(strategy):
         strategy_class = strategy
     else:
         raise ValueError(f"Invalid strategy: {strategy}")
+=======
+    if strategy_class is None:
+        raise ValueError(f"Strategy '{strategy}' not found in STRATEGY_MAPPING.")
+    else:
+        strategy_class = strategy
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     
     from backtrader.stores import bitget_store
 

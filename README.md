@@ -1,12 +1,17 @@
+<<<<<<< HEAD
 # BTQuant: High-Frequency Trading Meets Simplicity
 
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![C++ Version](https://img.shields.io/badge/c%2B%2B-17+-red.svg)](https://en.cppreference.com/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Backtrader](https://img.shields.io/badge/backtrader-fork-orange.svg)](https://www.backtrader.com/)
+=======
+# BTQuant - Advanced Quantitative Trading Framework
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
 BTQuant is a high-frequency algorithmic trading framework that processes thousands of trades per second across multiple exchanges with **zero API rate limits**. It combines Python's flexibility with C++'s performance, featuring real-time market manipulation detection, ultra-low latency shared memory data pipelines, and institutional-grade backtesting capabilities.
 
+<<<<<<< HEAD
 ## 🚀 Key Features
 
 - **Real-Time Manipulation Detection**: 5 advanced C++ detectors running in parallel (stop hunts, spoofing, whale frontruns, liquidity imbalances, spread arbitrage)
@@ -37,9 +42,97 @@ BTQuant is a high-frequency algorithmic trading framework that processes thousan
 - Linux (Ubuntu 20.04+, Arch, or equivalent)
 - 8GB RAM minimum (16GB recommended)
 - GCC 7+ or Clang 5+
+=======
+BTQuant is a comprehensive algorithmic trading framework designed for **backtesting**, **forward testing**, and **live trading**. Built for quantitative analysts and algorithmic traders, BTQuant delivers **custom-built, high-performance trading infrastructure** that outperforms standard CCXT implementations. With **microsecond-precision tick data** and **native WebSocket integrations**, BTQuant provides institutional-grade trading capabilities.
 
-### Installation
+---
 
+## Core Capabilities
+
+### 📊 Backtesting Engine
+- **Historical Strategy Analysis**: Leverages **Backtrader** for comprehensive strategy validation using **tick-level historical data** with institutional-grade accuracy
+- **Enterprise Data Management**: **Microsoft SQL Server** integration optimized for **massive tick datasets** and high-frequency portfolio analytics
+- **Scalable Infrastructure**: Production-ready architecture designed for **tick-by-tick backtesting** at scale
+
+### 🎯 Forward Testing
+- **Exchange-Perfect Simulation**: **JackRabbitRelay** delivers **native exchange replication** - not generic CCXT wrappers - for true market condition testing
+- **Independent Execution**: Eliminate broker dependencies with **custom execution engines** and complete operational control
+- **Tick-Level Precision**: **True tick-by-tick simulation** with microsecond timing accuracy for HFT strategy validation
+
+### ⚡ Live Trading - Custom Infrastructure
+
+#### 🚀 **Native WebSocket Implementations** (Not CCXT)
+- **Binance**: **Custom 1-second OHLCV streams** + **native tick data feeds**
+- **Bitget**: **Direct WebSocket integration** with **sub-millisecond latency**
+- **MEXC**: **Proprietary tick data implementation** bypassing standard API limitations
+- **PancakeSwap**: **Native Web3 WebSocket feeds** with **1-second granularity**
+
+#### ⚡ **High-Frequency Capabilities**
+- **Tick Data Supremacy**: **Direct tick feeds** that **bypass common HFT delays** found in CCXT implementations
+- **Custom Protocol Integration**: **Native exchange protocols** deliver **10x faster execution** than generic CCXT
+- **Microsecond Precision**: **Hardware-level timing** for true high-frequency trading capabilities
+
+#### 🎯 **Advanced Execution Logic**
+- **Precision DCA**: **Tick-aware Dollar Cost Averaging** with **microsecond entry timing**
+- **Experimental Trailing**: **Real-time trailing stops** using **live tick data** for optimal exit timing
+- **Sub-50 Line Deployment**: Deploy **institutional-grade strategies** with minimal code overhead
+
+---
+
+## Why BTQuant Dominates
+
+### 🏆 **Custom > Generic Every Time**
+
+#### **Tick Data Infrastructure** 
+- ✅ **Native tick feeds** with **microsecond timestamps**
+- ✅ **Zero HFT delays** through **direct exchange protocols**
+- ❌ *Not reliant on slow CCXT tick approximations*
+
+#### **WebSocket Superiority**
+- ✅ **Custom WebSocket implementations** for **each major exchange**
+- ✅ **Sub-millisecond latency** through **optimized connection pools**
+- ❌ *CCXT fallback available only as backup*
+
+#### **Exchange Replication**
+- ✅ **JackRabbitRelay** provides **exchange-perfect simulation** 
+- ✅ **Native trading engine behavior** replication
+- ❌ *Not generic CCXT simulation*
+
+#### **DeFi Integration**
+- ✅ **Native PancakeSwap/Web3** integration with **custom DEX protocols**
+- ✅ **Real-time on-chain data** with **block-level precision**
+- ❌ *Not limited by centralized exchange APIs*
+
+#### **Enterprise Data**
+- ✅ **MS SQL optimization** for **billion-row tick datasets**
+- ✅ **Custom indexing** for **microsecond-level queries**
+- ✅ **Real-time data ingestion** at **institutional scale**
+
+---
+
+## Performance Benchmarks
+
+| Feature | BTQuant Custom | Standard CCXT | Performance Gain |
+|---------|----------------|---------------|------------------|
+| **Tick Data Latency** | <1ms | 50-200ms | **200x faster** |
+| **WebSocket Reconnect** | <100ms | 5-30s | **300x faster** |
+| **Order Execution** | <5ms | 100-500ms | **100x faster** |
+| **Data Throughput** | 100k ticks/s | 1k ticks/s | **100x higher** |
+
+---
+
+## Getting Started
+
+**Ready to experience true high-frequency trading infrastructure?**
+
+📖 **[Complete Documentation](https://github.com/itsXactlY/BTQuant/wiki)**
+
+💬 **[Join Our HFT Community](https://discord.gg/Y7uBxmRg3Z)** - Connect with quantitative traders using **real tick data**
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
+
+### New Learning Resources
+
+<<<<<<< HEAD
 ```bash
 # Clone repository with submodules
 git clone --recurse-submodules https://github.com/ItsXactlY/BTQuant.git
@@ -235,3 +328,15 @@ BTQuant is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 **BTQuant**: High-Frequency Trading Meets Simplicity. Real-Time Detection, Zero Limits, Maximum Performance.
 
 Ready to start building? Check out the [Quick Start Guide](docs/quickstart.md) or dive into [Real-Time Detection](tests/new/)!
+=======
+- Explore the fully documented **BaseStrategy showcase** located at
+  `Examples/BaseStrategy_Showcase.py` for an end-to-end walkthrough covering
+  backtesting, CCXT connectivity, and Web3/PancakeSwap routing.
+- Check out the new automated tests in `tests/test_order_tracker.py` to learn
+  how order tracking is validated and to use them as a template for additional
+  coverage.
+
+---
+
+*BTQuant: Where **custom infrastructure** meets **institutional performance***
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented

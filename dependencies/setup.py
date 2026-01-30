@@ -109,8 +109,12 @@ setuptools.setup(
         'telethon',
         'scikit-learn',
         'keras',
+<<<<<<< HEAD
         'pytz',
         'optuna'
+=======
+        'pytz'
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
     ],
 
     extras_require={

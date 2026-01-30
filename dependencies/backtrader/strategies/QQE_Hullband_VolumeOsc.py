@@ -172,6 +172,7 @@ class QQE_Example(BaseStrategy):
                 else:
                     self.calc_averages()
         self.conditions_checked = True
+<<<<<<< HEAD
 
 
 class QuantitativeMultiIndicatorDCAStrategy(bt.Strategy):
@@ -352,3 +353,5 @@ class QuantitativeMultiIndicatorDCAStrategy(bt.Strategy):
             print(f"Final Portfolio Value: ${self.broker.getvalue():.2f}")
             print(f"Final Cash: ${self.broker.get_cash():.2f}")
             print(f"Total DCA layers executed: {len(self.active_orders)}")
+=======
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented

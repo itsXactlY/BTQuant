@@ -1,6 +1,11 @@
 import backtrader as bt
+<<<<<<< HEAD
 from .DecyclerOscillator import DecyclerOscillator
 from .iFisher import iFisher
+=======
+from fastquant.strategies.custom_indicators.DecyclerOscillator import DecyclerOscillator
+from fastquant.strategies.custom_indicators.iFisher import iFisher
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
 class iDecycler(bt.Indicator):
 

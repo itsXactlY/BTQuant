@@ -26,6 +26,7 @@ class AdaptiveLaguerreFilter(bt.Indicator):
         self.l.p = (self.data.high + self.data.low) / 2
 
     def prenext(self):
+<<<<<<< HEAD
         self.l.filter[0] = self.l.p[0]
         self.l.L0[0] = self.l.p[0]
         
@@ -41,6 +42,14 @@ class AdaptiveLaguerreFilter(bt.Indicator):
         else:
             self.l.L2[0] = self.l.p[0]
             self.l.L3[0] = self.l.p[0]
+=======
+
+        self.l.filter[0] = self.l.p[0]
+        self.l.L0[0] = self.l.p[0]
+        self.l.L1[0] = self.l.p[-1]
+        self.l.L2[0] = self.l.p[-2]
+        self.l.L3[0] = self.l.p[-2]
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
     def next(self):
         p = self.l.p

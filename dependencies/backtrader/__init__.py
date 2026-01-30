@@ -92,9 +92,13 @@ from . import TransparencyPatch as transparencypatch
 import backtrader.indicators.contrib
 import backtrader.studies.contrib
 
+<<<<<<< HEAD
 from .imports import *
 
 
 # Disabled until more time to make it properly
 # from .visuals.plotly_engine import activate_plotly_engine
 # activate_plotly_engine()
+=======
+from .imports import *
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented

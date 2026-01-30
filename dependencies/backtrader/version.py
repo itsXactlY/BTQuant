@@ -24,7 +24,11 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 
+<<<<<<< HEAD
 __version__ = '1.11.0'
+=======
+__version__ = '1.10.0'
+>>>>>>> ralphy/agent-1-1769660237987-g2tgw2-complete-vulkan-initialization-sequence-documented
 
 __btversion__ = tuple(int(x) for x in __version__.split('.'))
 

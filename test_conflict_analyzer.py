@@ -6,15 +6,15 @@ Tests for the conflict analyzer
 import tempfile
 import os
 import unittest
-from conflict_analyzer import find_conflicted_files, analyze_conflict_details
+from conflict_analyzer import find_conflicted_files, analyze_conflict_details, resolve_conflicts_by_combining_paths
 
 
 class TestConflictAnalyzer(unittest.TestCase):
-    
+
     def setUp(self):
         """Set up temporary directory with test files"""
         self.temp_dir = tempfile.mkdtemp()
-        
+
         # Create a file with conflicts
         self.conflict_file = os.path.join(self.temp_dir, "conflict_test.py")
         with open(self.conflict_file, 'w') as f:
@@ -27,7 +27,7 @@ def hello():
     print("Hello from branch")
 >>>>>>> branch-name
 """)
-        
+
         # Create a file without conflicts
         self.clean_file = os.path.join(self.temp_dir, "clean_test.py")
         with open(self.clean_file, 'w') as f:
@@ -35,7 +35,7 @@ def hello():
 def hello():
     print("Hello world")
 """)
-        
+
         # Create another file with multiple conflicts
         self.multi_conflict_file = os.path.join(self.temp_dir, "multi_conflict_test.py")
         with open(self.multi_conflict_file, 'w') as f:
@@ -117,12 +117,97 @@ y = 20
             f.write("# This is not a conflict: <<<<<<< HEAD\n")
             f.write("# This is not a conflict: =======\n")
             f.write("# This is not a conflict: >>>>>>> branch\n")
-        
+
         stats = analyze_conflict_details(text_like_conflict)
-        
+
         # Should not count as conflicts since they're not on separate lines
         # with proper formatting
         self.assertEqual(stats['conflict_blocks'], 0)
+
+    def test_resolve_simple_conflict(self):
+        """Test resolving a simple conflict by keeping both paths"""
+        conflict_content = """# This is a test file
+<<<<<<< HEAD
+def hello():
+    print("Hello from HEAD")
+=======
+def hello():
+    print("Hello from branch")
+>>>>>>> branch-name
+"""
+        resolved_content, num_resolved = resolve_conflicts_by_combining_paths(conflict_content)
+
+        # Both function definitions should be present
+        self.assertIn('def hello():', resolved_content)
+        self.assertIn('print("Hello from HEAD")', resolved_content)
+        self.assertIn('print("Hello from branch")', resolved_content)
+        self.assertEqual(num_resolved, 1)
+
+        # Conflict markers should be removed
+        self.assertNotIn('<<<<<<< HEAD', resolved_content)
+        self.assertNotIn('=======', resolved_content)
+        self.assertNotIn('>>>>>>> branch-name', resolved_content)
+
+    def test_resolve_conflict_with_one_empty_path(self):
+        """Test resolving a conflict where one side is empty"""
+        conflict_content = """# This is a test file
+<<<<<<< HEAD
+def hello():
+    print("Hello from HEAD")
+=======
+>>>>>>> branch-name
+"""
+        resolved_content, num_resolved = resolve_conflicts_by_combining_paths(conflict_content)
+
+        # Only the non-empty path should remain
+        self.assertIn('def hello():', resolved_content)
+        self.assertIn('print("Hello from HEAD")', resolved_content)
+        self.assertNotIn('<<<<<<< HEAD', resolved_content)
+        self.assertNotIn('=======', resolved_content)
+        self.assertNotIn('>>>>>>> branch-name', resolved_content)
+        self.assertEqual(num_resolved, 1)
+
+    def test_resolve_multiple_conflicts(self):
+        """Test resolving multiple conflicts in the same file"""
+        conflict_content = """# This is a test file
+<<<<<<< HEAD
+x = 1
+=======
+x = 2
+>>>>>>> branch-name
+
+some_code = True
+
+<<<<<<< HEAD
+y = 10
+=======
+y = 20
+>>>>>>> branch-name
+"""
+        resolved_content, num_resolved = resolve_conflicts_by_combining_paths(conflict_content)
+
+        # Both sets of values should be present
+        self.assertIn('x = 1', resolved_content)
+        self.assertIn('x = 2', resolved_content)
+        self.assertIn('y = 10', resolved_content)
+        self.assertIn('y = 20', resolved_content)
+        self.assertEqual(num_resolved, 2)
+
+        # Conflict markers should be removed
+        self.assertNotIn('<<<<<<< HEAD', resolved_content)
+        self.assertNotIn('=======', resolved_content)
+        self.assertNotIn('>>>>>>>', resolved_content)
+
+    def test_resolve_no_conflicts(self):
+        """Test that content without conflicts is unchanged"""
+        clean_content = """# This is a clean file
+def hello():
+    print("Hello world")
+"""
+        resolved_content, num_resolved = resolve_conflicts_by_combining_paths(clean_content)
+
+        self.assertEqual(resolved_content, clean_content)
+        self.assertEqual(num_resolved, 0)
 
 
 if __name__ == '__main__':

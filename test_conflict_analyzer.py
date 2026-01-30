@@ -6,7 +6,11 @@ Tests for the conflict analyzer
 import tempfile
 import os
 import unittest
-from conflict_analyzer import find_conflicted_files, analyze_conflict_details, resolve_conflicts_by_combining_paths
+from conflict_analyzer import (
+    find_conflicted_files,
+    analyze_conflict_details,
+    resolve_conflicts_by_combining_paths
+)
 
 
 class TestConflictAnalyzer(unittest.TestCase):
@@ -58,13 +62,13 @@ y = 20
     def test_find_conflicted_files(self):
         """Test finding files with conflicts"""
         conflicted = find_conflicted_files(self.temp_dir, ['.py'])
-        
+
         # Should find the two files with conflicts
         self.assertIn(self.conflict_file, conflicted)
         self.assertIn(self.multi_conflict_file, conflicted)
         # Should not find the clean file
         self.assertNotIn(self.clean_file, conflicted)
-        
+
         # Test with specific extensions
         conflicted_py = find_conflicted_files(self.temp_dir, ['.py'])
         self.assertEqual(len(conflicted_py), 2)
@@ -72,7 +76,7 @@ y = 20
     def test_analyze_conflict_details_single(self):
         """Test analyzing conflict details in a single-conflict file"""
         stats = analyze_conflict_details(self.conflict_file)
-        
+
         self.assertEqual(stats['conflict_blocks'], 1)
         self.assertEqual(stats['conflict_start_markers'], 1)
         self.assertEqual(stats['conflict_separator_markers'], 1)
@@ -82,7 +86,7 @@ y = 20
     def test_analyze_conflict_details_multiple(self):
         """Test analyzing conflict details in a multi-conflict file"""
         stats = analyze_conflict_details(self.multi_conflict_file)
-        
+
         self.assertEqual(stats['conflict_blocks'], 2)
         self.assertEqual(stats['conflict_start_markers'], 2)
         self.assertEqual(stats['conflict_separator_markers'], 2)
@@ -92,7 +96,7 @@ y = 20
     def test_analyze_conflict_details_clean(self):
         """Test analyzing conflict details in a clean file"""
         stats = analyze_conflict_details(self.clean_file)
-        
+
         self.assertEqual(stats['conflict_blocks'], 0)
         self.assertEqual(stats['conflict_start_markers'], 0)
         self.assertEqual(stats['conflict_separator_markers'], 0)
@@ -104,9 +108,9 @@ y = 20
         empty_file = os.path.join(self.temp_dir, "empty.py")
         with open(empty_file, 'w') as f:
             f.write("")
-        
+
         stats = analyze_conflict_details(empty_file)
-        
+
         self.assertEqual(stats['total_lines'], 0)
         self.assertEqual(stats['conflict_blocks'], 0)
 

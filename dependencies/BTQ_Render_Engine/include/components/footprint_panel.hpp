@@ -3,6 +3,7 @@
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 #include "data/unified_data_pipeline.hpp"  // For DataType enum
+#include "data/VolumeDataTypes.h"          // For VolumeDataType enum
 #include <memory>
 #include <vector>
 
@@ -56,12 +57,19 @@ public:
   void setDataType(Data::UnifiedDataPipeline::DataType type) { data_type_ = type; }
   Data::UnifiedDataPipeline::DataType getDataType() const { return data_type_; }
 
+  // Volume data type selection for footprint visualization
+  void setVolumeDataType(Data::VolumeDataType vol_type) { volume_data_type_ = vol_type; }
+  Data::VolumeDataType getVolumeDataType() const { return volume_data_type_; }
+
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t symbol_id_ = 0;
 
   // Data Type Selection
   Data::UnifiedDataPipeline::DataType data_type_ = Data::UnifiedDataPipeline::DataType::FOOTPRINT;
+
+  // Volume Data Type for Footprint Visualization
+  Data::VolumeDataType volume_data_type_ = Data::VolumeDataType::Delta;
 
   // Grid Configuration (Exocharts-style: 60 columns × 100 rows)
   int grid_cols_ = 60;  // Number of time columns (minutes)

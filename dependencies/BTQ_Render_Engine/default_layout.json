@@ -11,7 +11,7 @@
             "grid_y": 0,
             "title": "Performance Monitor",
             "type": 20,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 2,
@@ -20,7 +20,7 @@
             "grid_y": 0,
             "title": "TPO Profile",
             "type": 19,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 2,
@@ -29,7 +29,7 @@
             "grid_y": 0,
             "title": "Footprint Chart",
             "type": 18,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 1,
@@ -56,7 +56,7 @@
             "grid_y": 0,
             "title": "Positions",
             "type": 7,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 1,
@@ -65,7 +65,7 @@
             "grid_y": 1,
             "title": "Active Orders",
             "type": 6,
-            "visible": true
+            "visible": false
         },
         {
             "grid_height": 1,
@@ -81,7 +81,7 @@
             "grid_width": 2,
             "grid_x": 2,
             "grid_y": 1,
-            "title": "Orderbook",
+            "title": "BTCUSDT Orderbook",
             "type": 10,
             "visible": true
         },
@@ -99,9 +99,9 @@
             "grid_width": 4,
             "grid_x": 4,
             "grid_y": 1,
-            "title": "BTC/USDT Chart",
+            "title": "BTCUSDT Chart [1s]",
             "type": 0,
-            "visible": true
+            "visible": false
         }
     ]
 }

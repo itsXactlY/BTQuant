@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace BTQ {
-namespace RenderEngine {
+namespace BTQuant {
 namespace Data {
 
 // Volume Data Type Enum for Footprint and Volume Profile charts
@@ -29,5 +28,4 @@ enum class VolumeDataType {
 };
 
 } // namespace Data
-} // namespace RenderEngine
-} // namespace BTQ
+} // namespace BTQuant

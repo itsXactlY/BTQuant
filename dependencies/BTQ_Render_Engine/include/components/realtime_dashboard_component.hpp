@@ -1,37 +1,39 @@
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
+#include "hierarchical_selector.hpp"
 #include "panel_manager.hpp"
-#include <memory>
-#include <string>
-#include <vector>
 
 namespace BTQuant {
 
 class RealtimeDashboardComponent : public UIComponent {
-public:
+ public:
   explicit RealtimeDashboardComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-      RenderEngine::MarketMicrostructureRenderer *renderer = nullptr);
+      RenderEngine::MarketMicrostructureRenderer* renderer = nullptr);
   virtual ~RealtimeDashboardComponent() = default;
 
   void update(float dt) override;
   void render_gui() override;
 
-  void initialize_vulkan_resources(VulkanCore *core) override;
+  void initialize_vulkan_resources(VulkanCore* core) override;
   void clear_data() override;
 
   // Dashboard Layout
   void setup_modern_layout();
   void render_dashboard_controls();
 
-private:
+ private:
   // Data sources
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -43,13 +45,17 @@ private:
 
   // Microstructure Renderer (Shared or Unique)
   // Microstructure Renderer (Reference)
-  RenderEngine::MarketMicrostructureRenderer *microstructure_renderer_;
+  RenderEngine::MarketMicrostructureRenderer* microstructure_renderer_;
 
   // Panel Manager (The Core)
   std::unique_ptr<PanelManager> panel_manager_;
+
+  // Symbol Selection
+  HierarchicalSelector hierarchical_selector_;
+  HierarchicalSelectorState selector_state_;
 
   // UI state
   bool show_dashboard_controls_ = true;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

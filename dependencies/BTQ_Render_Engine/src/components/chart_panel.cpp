@@ -1,52 +1,51 @@
 #include "../../include/components/chart_panel.hpp"
-#include "imgui.h"
-#include "implot.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
 #include <numeric>
 
+#include "imgui.h"
+#include "implot.h"
+
 namespace BTQuant {
 
 static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
   switch (tf) {
-  case RenderEngine::TimeFrame::TF_1MS:
-    return "1ms";
-  case RenderEngine::TimeFrame::TF_10MS:
-    return "10ms";
-  case RenderEngine::TimeFrame::TF_100MS:
-    return "100ms";
-  case RenderEngine::TimeFrame::TF_500MS:
-    return "500ms";
-  case RenderEngine::TimeFrame::TF_1SEC:
-    return "1s";
-  case RenderEngine::TimeFrame::TF_3SEC:
-    return "3s";
-  case RenderEngine::TimeFrame::TF_5SEC:
-    return "5s";
-  case RenderEngine::TimeFrame::TF_15SEC:
-    return "15s";
-  default:
-    return "Unknown";
+    case RenderEngine::TimeFrame::TF_1MS:
+      return "1ms";
+    case RenderEngine::TimeFrame::TF_10MS:
+      return "10ms";
+    case RenderEngine::TimeFrame::TF_100MS:
+      return "100ms";
+    case RenderEngine::TimeFrame::TF_500MS:
+      return "500ms";
+    case RenderEngine::TimeFrame::TF_1SEC:
+      return "1s";
+    case RenderEngine::TimeFrame::TF_3SEC:
+      return "3s";
+    case RenderEngine::TimeFrame::TF_5SEC:
+      return "5s";
+    case RenderEngine::TimeFrame::TF_15SEC:
+      return "15s";
+    default:
+      return "Unknown";
   }
 }
 
-ChartPanel::ChartPanel(
-    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-    ChartManager *chart_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor),
-      chart_manager_(chart_manager) {
+ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+                       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                       ChartManager* chart_manager)
+    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
 }
 
 void ChartPanel::initialize() {
   // Create chart
   auto id_opt = chart_manager_->getSymbolId(symbol_);
-  uint32_t symbol_id = id_opt ? *id_opt : 10007; // Default BTC-USDT
-  chart_id_ =
-      chart_manager_->create_chart(symbol_, exchange_, symbol_id, timeframe_);
+  uint32_t symbol_id = id_opt ? *id_opt : 10007;  // Default BTC-USDT
+  chart_id_ = chart_manager_->create_chart(symbol_, exchange_, symbol_id, timeframe_);
 }
 
 void ChartPanel::update(float dt) {
@@ -71,7 +70,7 @@ void ChartPanel::render() {
     return;
   }
 
-  const ChartInstance &chart = it->second;
+  const ChartInstance& chart = it->second;
 
   // Invalidate cache if new data has arrived
   // NOTE: This check is lightweight and only compares sizes
@@ -83,8 +82,7 @@ void ChartPanel::render() {
   }
 
   // Render chart controls in a collapsible header
-  if (ImGui::CollapsingHeader("Chart Controls",
-                              ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (ImGui::CollapsingHeader("Chart Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
     render_chart_controls();
   }
 
@@ -99,8 +97,7 @@ void ChartPanel::render() {
   end_panel_window();
 }
 
-void ChartPanel::set_symbol(const std::string &symbol,
-                            const std::string &exchange) {
+void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchange) {
   symbol_ = symbol;
   exchange_ = exchange;
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
@@ -131,11 +128,9 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
 
   // Timeframe selector (1ms-15sec only)
-  const char *timeframes[] = {"1ms", "10ms", "100ms", "500ms",
-                              "1s",  "3s",   "5s",    "15s"};
+  const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s"};
   int selected = static_cast<int>(timeframe_);
-  if (ImGui::Combo("Timeframe", &selected, timeframes,
-                   IM_ARRAYSIZE(timeframes))) {
+  if (ImGui::Combo("Timeframe", &selected, timeframes, IM_ARRAYSIZE(timeframes))) {
     set_timeframe(static_cast<RenderEngine::TimeFrame>(selected));
   }
 
@@ -193,8 +188,7 @@ void ChartPanel::render_indicator_selector() {
 // INDICATOR CALCULATION HELPERS
 // ============================================================================
 
-std::vector<double> ChartPanel::calculate_sma(const std::vector<float> &prices,
-                                              int period) {
+std::vector<double> ChartPanel::calculate_sma(const std::vector<float>& prices, int period) {
   if (prices.empty()) {
     return std::vector<double>();
   }
@@ -224,8 +218,7 @@ std::vector<double> ChartPanel::calculate_sma(const std::vector<float> &prices,
   return sma;
 }
 
-std::vector<double> ChartPanel::calculate_ema(const std::vector<float> &prices,
-                                              int period) {
+std::vector<double> ChartPanel::calculate_ema(const std::vector<float>& prices, int period) {
   if (prices.empty()) {
     return std::vector<double>();
   }
@@ -251,8 +244,7 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<float> &prices,
   // Calculate EMA
   double multiplier = 2.0 / (period + 1.0);
   for (size_t i = period; i < prices.size(); ++i) {
-    ema[i] =
-        (static_cast<double>(prices[i]) - ema[i - 1]) * multiplier + ema[i - 1];
+    ema[i] = (static_cast<double>(prices[i]) - ema[i - 1]) * multiplier + ema[i - 1];
   }
 
   // Cache the result
@@ -260,8 +252,7 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<float> &prices,
   return ema;
 }
 
-std::vector<double> ChartPanel::calculate_ema(const std::vector<double> &prices,
-                                              int period) {
+std::vector<double> ChartPanel::calculate_ema(const std::vector<double>& prices, int period) {
   if (prices.empty()) {
     return std::vector<double>();
   }
@@ -299,9 +290,8 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<double> &prices,
   return ema;
 }
 
-std::vector<double>
-ChartPanel::calculate_bollinger_upper(const std::vector<float> &prices,
-                                      int period, double std_dev) {
+std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<float>& prices,
+                                                          int period, double std_dev) {
   auto sma = calculate_sma(prices, period);
   std::vector<double> upper_band(prices.size(), 0.0);
 
@@ -321,9 +311,8 @@ ChartPanel::calculate_bollinger_upper(const std::vector<float> &prices,
   return upper_band;
 }
 
-std::vector<double>
-ChartPanel::calculate_bollinger_lower(const std::vector<float> &prices,
-                                      int period, double std_dev) {
+std::vector<double> ChartPanel::calculate_bollinger_lower(const std::vector<float>& prices,
+                                                          int period, double std_dev) {
   auto sma = calculate_sma(prices, period);
   std::vector<double> lower_band(prices.size(), 0.0);
 
@@ -343,8 +332,7 @@ ChartPanel::calculate_bollinger_lower(const std::vector<float> &prices,
   return lower_band;
 }
 
-std::vector<double> ChartPanel::calculate_rsi(const std::vector<float> &prices,
-                                              int period) {
+std::vector<double> ChartPanel::calculate_rsi(const std::vector<float>& prices, int period) {
   if (prices.empty()) {
     return std::vector<double>();
   }
@@ -358,7 +346,7 @@ std::vector<double> ChartPanel::calculate_rsi(const std::vector<float> &prices,
     return it->second;
   }
 
-  std::vector<double> rsi(prices.size(), 50.0); // Default to neutral
+  std::vector<double> rsi(prices.size(), 50.0);  // Default to neutral
 
   if (prices.size() < static_cast<size_t>(period + 1)) {
     // Cache the result even if it's empty/default
@@ -371,8 +359,7 @@ std::vector<double> ChartPanel::calculate_rsi(const std::vector<float> &prices,
     double losses = 0.0;
 
     for (int j = 1; j <= period; ++j) {
-      double change = static_cast<double>(prices[i - j + 1]) -
-                      static_cast<double>(prices[i - j]);
+      double change = static_cast<double>(prices[i - j + 1]) - static_cast<double>(prices[i - j]);
       if (change > 0) {
         gains += change;
       } else {
@@ -392,9 +379,8 @@ std::vector<double> ChartPanel::calculate_rsi(const std::vector<float> &prices,
   return rsi;
 }
 
-std::vector<double>
-ChartPanel::calculate_macd_line(const std::vector<float> &prices, int fast,
-                                int slow) {
+std::vector<double> ChartPanel::calculate_macd_line(const std::vector<float>& prices, int fast,
+                                                    int slow) {
   auto ema_fast = calculate_ema(prices, fast);
   auto ema_slow = calculate_ema(prices, slow);
 
@@ -406,15 +392,13 @@ ChartPanel::calculate_macd_line(const std::vector<float> &prices, int fast,
   return macd_line;
 }
 
-std::vector<double>
-ChartPanel::calculate_macd_signal(const std::vector<double> &macd_line,
-                                  int signal) {
+std::vector<double> ChartPanel::calculate_macd_signal(const std::vector<double>& macd_line,
+                                                      int signal) {
   return calculate_ema(macd_line, signal);
 }
 
-std::vector<double>
-ChartPanel::calculate_macd_histogram(const std::vector<double> &macd_line,
-                                     const std::vector<double> &signal) {
+std::vector<double> ChartPanel::calculate_macd_histogram(const std::vector<double>& macd_line,
+                                                         const std::vector<double>& signal) {
   std::vector<double> histogram(macd_line.size(), 0.0);
 
   for (size_t i = 0; i < macd_line.size(); ++i) {
@@ -424,27 +408,25 @@ ChartPanel::calculate_macd_histogram(const std::vector<double> &macd_line,
   return histogram;
 }
 
-std::vector<FibonacciLevel>
-ChartPanel::calculate_fibonacci_levels(double start_price, double end_price) {
+std::vector<FibonacciLevel> ChartPanel::calculate_fibonacci_levels(double start_price,
+                                                                   double end_price) {
   std::vector<FibonacciLevel> levels;
 
-  if (start_price == 0.0 || end_price == 0.0)
-    return levels;
+  if (start_price == 0.0 || end_price == 0.0) return levels;
 
   double range = end_price - start_price;
 
   // Fibonacci ratios
   const double ratios[] = {0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0};
-  const char *labels[] = {"0%",    "23.6%", "38.2%", "50%",
-                          "61.8%", "78.6%", "100%"};
+  const char* labels[] = {"0%", "23.6%", "38.2%", "50%", "61.8%", "78.6%", "100%"};
   const ImU32 colors[] = {
-      IM_COL32(255, 255, 255, 255), // White
-      IM_COL32(0, 255, 255, 200),   // Cyan
-      IM_COL32(0, 255, 0, 200),     // Green
-      IM_COL32(255, 255, 0, 200),   // Yellow
-      IM_COL32(255, 165, 0, 200),   // Orange
-      IM_COL32(255, 0, 0, 200),     // Red
-      IM_COL32(255, 255, 255, 200)  // White
+      IM_COL32(255, 255, 255, 255),  // White
+      IM_COL32(0, 255, 255, 200),    // Cyan
+      IM_COL32(0, 255, 0, 200),      // Green
+      IM_COL32(255, 255, 0, 200),    // Yellow
+      IM_COL32(255, 165, 0, 200),    // Orange
+      IM_COL32(255, 0, 0, 200),      // Red
+      IM_COL32(255, 255, 255, 200)   // White
   };
 
   for (int i = 0; i < 7; ++i) {
@@ -463,12 +445,10 @@ ChartPanel::calculate_fibonacci_levels(double start_price, double end_price) {
 // INDICATOR RENDERING METHODS
 // ============================================================================
 
-void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx,
-                                  size_t end_idx) {
-  if (chart.closes.empty())
-    return;
+void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx) {
+  if (chart.closes.empty()) return;
 
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
   // SMA 10
   if (indicator_config_.show_sma_10) {
@@ -507,12 +487,10 @@ void ChartPanel::render_sma_lines(const ChartInstance &chart, size_t start_idx,
   }
 }
 
-void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx,
-                                  size_t end_idx) {
-  if (chart.closes.empty())
-    return;
+void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx) {
+  if (chart.closes.empty()) return;
 
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
   // EMA 10
   if (indicator_config_.show_ema_10) {
@@ -551,19 +529,16 @@ void ChartPanel::render_ema_lines(const ChartInstance &chart, size_t start_idx,
   }
 }
 
-void ChartPanel::render_bollinger_bands(const ChartInstance &chart,
-                                        size_t start_idx, size_t end_idx) {
-  if (chart.closes.empty() || !indicator_config_.show_bollinger)
-    return;
+void ChartPanel::render_bollinger_bands(const ChartInstance& chart, size_t start_idx,
+                                        size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_bollinger) return;
 
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-  auto upper_band = calculate_bollinger_upper(
-      chart.closes, indicator_config_.bollinger_period,
-      indicator_config_.bollinger_std_dev);
-  auto lower_band = calculate_bollinger_lower(
-      chart.closes, indicator_config_.bollinger_period,
-      indicator_config_.bollinger_std_dev);
+  auto upper_band = calculate_bollinger_upper(chart.closes, indicator_config_.bollinger_period,
+                                              indicator_config_.bollinger_std_dev);
+  auto lower_band = calculate_bollinger_lower(chart.closes, indicator_config_.bollinger_period,
+                                              indicator_config_.bollinger_std_dev);
 
   for (size_t i = start_idx; i < end_idx; ++i) {
     if (i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
@@ -578,12 +553,11 @@ void ChartPanel::render_bollinger_bands(const ChartInstance &chart,
   }
 }
 
-void ChartPanel::render_rsi_indicator(const ChartInstance &chart,
-                                      size_t start_idx, size_t end_idx) {
-  if (chart.closes.empty() || !indicator_config_.show_rsi)
-    return;
+void ChartPanel::render_rsi_indicator(const ChartInstance& chart, size_t start_idx,
+                                      size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_rsi) return;
 
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
   auto rsi = calculate_rsi(chart.closes, indicator_config_.rsi_period);
 
   // Get plot limits for RSI scaling
@@ -594,17 +568,16 @@ void ChartPanel::render_rsi_indicator(const ChartInstance &chart,
       double rsi_value = rsi[i];
 
       // Map RSI to Y-axis (0-100)
-      double y =
-          limits.Y.Min + (rsi_value / 100.0) * (limits.Y.Max - limits.Y.Min);
+      double y = limits.Y.Min + (rsi_value / 100.0) * (limits.Y.Max - limits.Y.Min);
 
       ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], y);
 
       // Color based on overbought/oversold
       ImU32 color = IM_COL32(128, 128, 128, 200);
       if (rsi_value >= indicator_config_.rsi_overbought) {
-        color = IM_COL32(255, 0, 0, 200); // Red
+        color = IM_COL32(255, 0, 0, 200);  // Red
       } else if (rsi_value <= indicator_config_.rsi_oversold) {
-        color = IM_COL32(0, 255, 0, 200); // Green
+        color = IM_COL32(0, 255, 0, 200);  // Green
       }
 
       // Draw RSI line
@@ -614,10 +587,9 @@ void ChartPanel::render_rsi_indicator(const ChartInstance &chart,
 
   // Draw overbought/oversold lines
   double overbought_y =
-      limits.Y.Min + (indicator_config_.rsi_overbought / 100.0) *
-                         (limits.Y.Max - limits.Y.Min);
-  double oversold_y = limits.Y.Min + (indicator_config_.rsi_oversold / 100.0) *
-                                         (limits.Y.Max - limits.Y.Min);
+      limits.Y.Min + (indicator_config_.rsi_overbought / 100.0) * (limits.Y.Max - limits.Y.Min);
+  double oversold_y =
+      limits.Y.Min + (indicator_config_.rsi_oversold / 100.0) * (limits.Y.Max - limits.Y.Min);
 
   ImVec2 ob_p1 = ImPlot::PlotToPixels(limits.X.Min, overbought_y);
   ImVec2 ob_p2 = ImPlot::PlotToPixels(limits.X.Max, overbought_y);
@@ -628,18 +600,15 @@ void ChartPanel::render_rsi_indicator(const ChartInstance &chart,
   draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f);
 }
 
-void ChartPanel::render_macd_indicator(const ChartInstance &chart,
-                                       size_t start_idx, size_t end_idx) {
-  if (chart.closes.empty() || !indicator_config_.show_macd)
-    return;
+void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_idx,
+                                       size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_macd) return;
 
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-  auto macd_line =
-      calculate_macd_line(chart.closes, indicator_config_.macd_fast_period,
-                          indicator_config_.macd_slow_period);
-  auto macd_signal =
-      calculate_macd_signal(macd_line, indicator_config_.macd_signal_period);
+  auto macd_line = calculate_macd_line(chart.closes, indicator_config_.macd_fast_period,
+                                       indicator_config_.macd_slow_period);
+  auto macd_signal = calculate_macd_signal(macd_line, indicator_config_.macd_signal_period);
   auto macd_histogram = calculate_macd_histogram(macd_line, macd_signal);
 
   // Get plot limits for MACD scaling
@@ -653,9 +622,8 @@ void ChartPanel::render_macd_indicator(const ChartInstance &chart,
       double hist_value = macd_histogram[i];
 
       // Map MACD to Y-axis
-      double y = limits.Y.Min +
-                 ((macd_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) *
-                     (limits.Y.Max - limits.Y.Min);
+      double y = limits.Y.Min + ((macd_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) *
+                                    (limits.Y.Max - limits.Y.Min);
 
       ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], y);
 
@@ -663,31 +631,27 @@ void ChartPanel::render_macd_indicator(const ChartInstance &chart,
       draw_list->AddLine(p, p, IM_COL32(0, 255, 255, 200), 1.5f);
 
       // Draw signal line
-      double signal_y = limits.Y.Min + ((signal_value - limits.Y.Min) /
-                                        (limits.Y.Max - limits.Y.Min)) *
-                                           (limits.Y.Max - limits.Y.Min);
+      double signal_y =
+          limits.Y.Min + ((signal_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) *
+                             (limits.Y.Max - limits.Y.Min);
       ImVec2 signal_p = ImPlot::PlotToPixels(chart.dates[i], signal_y);
       draw_list->AddLine(signal_p, signal_p, IM_COL32(255, 165, 0, 200), 1.5f);
 
       // Draw histogram
-      double hist_y = limits.Y.Min + ((hist_value - limits.Y.Min) /
-                                      (limits.Y.Max - limits.Y.Min)) *
+      double hist_y = limits.Y.Min + ((hist_value - limits.Y.Min) / (limits.Y.Max - limits.Y.Min)) *
                                          (limits.Y.Max - limits.Y.Min);
       ImVec2 hist_p = ImPlot::PlotToPixels(chart.dates[i], hist_y);
 
-      ImU32 hist_color =
-          hist_value >= 0 ? IM_COL32(0, 255, 0, 150) : IM_COL32(255, 0, 0, 150);
-      draw_list->AddRectFilled(
-          ImVec2(hist_p.x - 2, hist_p.y),
-          ImVec2(hist_p.x + 2, hist_p.y + hist_y - signal_y), hist_color);
+      ImU32 hist_color = hist_value >= 0 ? IM_COL32(0, 255, 0, 150) : IM_COL32(255, 0, 0, 150);
+      draw_list->AddRectFilled(ImVec2(hist_p.x - 2, hist_p.y),
+                               ImVec2(hist_p.x + 2, hist_p.y + hist_y - signal_y), hist_color);
     }
   }
 }
 
-void ChartPanel::render_fibonacci_levels(const ChartInstance &chart,
-                                         size_t start_idx, size_t end_idx) {
-  if (chart.closes.empty() || !indicator_config_.show_fibonacci)
-    return;
+void ChartPanel::render_fibonacci_levels(const ChartInstance& chart, size_t start_idx,
+                                         size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_fibonacci) return;
 
   // Find swing high and low in visible range
   double swing_high = 0.0;
@@ -698,14 +662,13 @@ void ChartPanel::render_fibonacci_levels(const ChartInstance &chart,
     swing_low = std::min(swing_low, static_cast<double>(chart.lows[i]));
   }
 
-  if (swing_high == 0.0 || swing_low == 1e9)
-    return;
+  if (swing_high == 0.0 || swing_low == 1e9) return;
 
   auto fib_levels = calculate_fibonacci_levels(swing_low, swing_high);
-  ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
   // Draw Fibonacci levels
-  for (const auto &level : fib_levels) {
+  for (const auto& level : fib_levels) {
     ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[start_idx], level.price);
     ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[end_idx - 1], level.price);
 
@@ -718,10 +681,8 @@ void ChartPanel::render_fibonacci_levels(const ChartInstance &chart,
   }
 }
 
-void ChartPanel::render_crosshair_info(const ChartInstance &chart,
-                                       double mouse_x, double mouse_y) {
-  if (!indicator_config_.show_crosshair_info || chart.closes.empty())
-    return;
+void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_x, double mouse_y) {
+  if (!indicator_config_.show_crosshair_info || chart.closes.empty()) return;
 
   // Find closest candle to mouse position using binary search
   size_t closest_idx = 0;
@@ -746,8 +707,7 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart,
     closest_idx = (dist_to_before < dist_to_after) ? idx_before : idx_after;
   }
 
-  if (closest_idx >= chart.closes.size())
-    return;
+  if (closest_idx >= chart.closes.size()) return;
 
   // Get candle data
   double open = chart.opens[closest_idx];
@@ -757,12 +717,10 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart,
   double volume = chart.volumes[closest_idx];
 
   // Render crosshair info overlay
-  ImGui::SetNextWindowPos(
-      ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetMousePos().x + 20, ImGui::GetMousePos().y + 20));
   ImGui::SetNextWindowSize(ImVec2(200, 150));
   ImGui::Begin("Crosshair Info", nullptr,
-               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_NoResize |
+               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_AlwaysAutoResize);
 
   ImGui::TextColored(ImVec4(1, 1, 0, 1), "Candle Info:");
@@ -787,7 +745,7 @@ void ChartPanel::render_crosshair_info(const ChartInstance &chart,
   ImGui::End();
 }
 
-void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
+void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
   if (chart.dates.empty()) {
     ImGui::Text("Loading chart data for %s...", symbol_.c_str());
     return;
@@ -795,17 +753,15 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
   // Diagnostic info & Controls
   ImGui::TextColored(
-      ImVec4(0.0f, 1.0f, 0.8f, 1.0f),
-      " | Candles: %zu | Last: %.2f | TF: %.4gs", chart.dates.size(),
-      chart.closes.empty() ? 0.0f : chart.closes.back(),
-      RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
-          1000000.0);
+      ImVec4(0.0f, 1.0f, 0.8f, 1.0f), " | Candles: %zu | Last: %.2f | TF: %.4gs",
+      chart.dates.size(), chart.closes.empty() ? 0.0f : chart.closes.back(),
+      RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) / 1000000.0);
 
   // Neon Chart Styling (ThemeManager)
-  const auto &colors = ThemeManager::getInstance().getColors();
+  const auto& colors = ThemeManager::getInstance().getColors();
   ImPlot::PushStyleColor(ImPlotCol_FrameBg, colors.background);
   ImPlot::PushStyleColor(ImPlotCol_PlotBg,
-                         colors.panel_bg); // Use panel bg or specific dark
+                         colors.panel_bg);  // Use panel bg or specific dark
   ImPlot::PushStyleColor(ImPlotCol_PlotBorder, colors.border);
   ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(10, 10));
 
@@ -829,11 +785,10 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
         vp_prices.reserve(profile.size());
         vp_volumes.reserve(profile.size());
 
-        for (const auto &level : profile) {
+        for (const auto& level : profile) {
           vp_prices.push_back(level.price);
           vp_volumes.push_back(static_cast<float>(level.total_volume));
-          if (level.total_volume > vp_max_vol)
-            vp_max_vol = level.total_volume;
+          if (level.total_volume > vp_max_vol) vp_max_vol = level.total_volume;
         }
       }
     }
@@ -841,155 +796,140 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
   // Use a unique ID string per symbol/tf/exchange to ensure ImPlot saves state
   // per chart
-  std::string plot_id = "##Chart_" + symbol_ + "_" + exchange_ + "_" +
-                        timeframe_to_string(timeframe_);
+  std::string plot_id =
+      "##Chart_" + symbol_ + "_" + exchange_ + "_" + timeframe_to_string(timeframe_);
+
+  // Pre-calculate axis limits BEFORE BeginPlot to avoid calling locking functions during setup
+  double x_axis_min_pre, x_axis_max_pre;
+  double y_axis_min_pre = std::numeric_limits<double>::max();
+  double y_axis_max_pre = std::numeric_limits<double>::lowest();
+
+  if (follow_latest_) {
+    double time_max = chart.dates.back();
+    double duration_raw = RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
+    double duration_sec = duration_raw / 1000000.0;
+    double window_size = duration_sec * auto_follow_window_;
+    double padding = window_size * 0.05;
+
+    last_view_min_ = time_max - window_size;
+    last_view_max_ = time_max + padding;
+
+    x_axis_min_pre = last_view_min_;
+    x_axis_max_pre = last_view_max_;
+  } else {
+    x_axis_min_pre = chart.dates.front();
+    x_axis_max_pre = chart.dates.back();
+  }
+
+  // Calculate Y-axis limits based on visible X range
+  size_t start_idx_pre = 0;
+  size_t end_idx_pre = chart.dates.size();
+
+  auto lower_pre = std::lower_bound(chart.dates.begin(), chart.dates.end(), x_axis_min_pre);
+  if (lower_pre != chart.dates.begin()) --lower_pre;
+  start_idx_pre = std::distance(chart.dates.begin(), lower_pre);
+
+  auto upper_pre = std::upper_bound(chart.dates.begin(), chart.dates.end(), x_axis_max_pre);
+  if (upper_pre != chart.dates.end()) ++upper_pre;
+  end_idx_pre = std::distance(chart.dates.begin(), upper_pre);
+
+  end_idx_pre = std::min(end_idx_pre, chart.dates.size());
+
+  if (start_idx_pre < end_idx_pre) {
+    bool found_data = false;
+
+    for (size_t i = start_idx_pre; i < end_idx_pre; ++i) {
+      double low = chart.lows[i];
+      double high = chart.highs[i];
+      if (low > 0 && high > 0) {
+        if (low < y_axis_min_pre) y_axis_min_pre = low;
+        if (high > y_axis_max_pre) y_axis_max_pre = high;
+        found_data = true;
+      }
+    }
+
+    if (found_data) {
+      double range = y_axis_max_pre - y_axis_min_pre;
+      if (range == 0) range = y_axis_min_pre * 0.01;
+      if (range == 0) range = 1.0;
+
+      y_axis_min_pre -= range * 0.1;
+      y_axis_max_pre += range * 0.1;
+    } else {
+      y_axis_min_pre = chart.lows.empty() ? 0 : chart.lows[0];
+      y_axis_max_pre = chart.highs.empty() ? 1 : chart.highs[0];
+    }
+  } else {
+    y_axis_min_pre =
+        chart.lows.empty() ? 0 : *std::min_element(chart.lows.begin(), chart.lows.end());
+    y_axis_max_pre =
+        chart.highs.empty() ? 1 : *std::max_element(chart.highs.begin(), chart.highs.end());
+  }
 
   if (ImPlot::BeginPlot(plot_id.c_str(), ImVec2(-1, -1),
-                        ImPlotFlags_NoLegend | ImPlotFlags_NoTitle |
-                            ImPlotFlags_Crosshairs)) {
-
-    // Setup Axes - ALL SETUP CALLS MUST HAPPEN HERE AT THE BEGINNING
-    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None,
-                      ImPlotAxisFlags_None);
+                        ImPlotFlags_NoLegend | ImPlotFlags_NoTitle | ImPlotFlags_Crosshairs)) {
+    // ===== ALL SETUP CALLS MUST HAPPEN FIRST - BEFORE ANY LOCKING FUNCTIONS =====
+    // Setup primary axes
+    ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
     ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Time);
 
-    // Setup X2 for Volume Profile
+    // Setup X2 for Volume Profile (must happen before SetupAxisLimits for main axes)
     if (indicator_config_.show_volume_profile && vp_max_vol > 0) {
       ImPlot::SetupAxis(ImAxis_X2, nullptr,
-                        ImPlotAxisFlags_NoTickLabels |
-                            ImPlotAxisFlags_NoGridLines);
-      ImPlot::SetupAxisLimits(ImAxis_X2, 0, vp_max_vol * 4.0,
-                              ImPlotCond_Always);
+                        ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_NoGridLines);
+      ImPlot::SetupAxisLimits(ImAxis_X2, 0, vp_max_vol * 4.0, ImPlotCond_Always);
     }
 
-    // Improved Auto-follow logic with better zoom/pan handling
-    bool user_interacted = ImPlot::IsPlotHovered() &&
-                          (ImGui::IsMouseDragging(ImGuiMouseButton_Left) ||
-                           ImGui::IsMouseDragging(ImGuiMouseButton_Right) ||
-                           ImGui::GetIO().MouseWheel != 0.0f);
+    // Apply axis limits - these must ALL come before any locking functions
+    ImPlot::SetupAxisLimits(ImAxis_X1, x_axis_min_pre, x_axis_max_pre,
+                            follow_latest_ ? ImPlotCond_Always : ImPlotCond_Once);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_axis_min_pre),
+                            static_cast<float>(y_axis_max_pre), ImPlotCond_Always);
+    // ===== END OF SETUP PHASE =====
+
+    // NOW it's safe to call locking functions like IsPlotHovered(), GetPlotLimits(), etc.
+    // Check for user interaction to break auto-follow
+    bool user_interacted =
+        ImPlot::IsPlotHovered() &&
+        (ImGui::IsMouseDragging(ImGuiMouseButton_Left) ||
+         ImGui::IsMouseDragging(ImGuiMouseButton_Right) || ImGui::GetIO().MouseWheel != 0.0f);
 
     if (user_interacted) {
-        follow_latest_ = false;
+      follow_latest_ = false;
     }
-
-    // Determine axis limits based on follow mode
-    double x_axis_min, x_axis_max;
-    if (follow_latest_) {
-      double time_max = chart.dates.back();
-      double duration_raw =
-          RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
-      double duration_sec = duration_raw / 1000000.0;
-      double window_size = duration_sec * auto_follow_window_;
-      double padding = window_size * 0.05;
-
-      last_view_min_ = time_max - window_size;
-      last_view_max_ = time_max + padding;
-
-      x_axis_min = last_view_min_;
-      x_axis_max = last_view_max_;
-    } else {
-      // If not following, allow manual pan/zoom (Cond_Once allows initial set
-      // but user overrides) Only set Once if we ever reset or init
-      x_axis_min = chart.dates.front();
-      x_axis_max = chart.dates.back();
-    }
-
-    // Calculate Y-axis limits based on visible X range
-    double y_axis_min = std::numeric_limits<double>::max();
-    double y_axis_max = std::numeric_limits<double>::lowest();
-
-    // Binary search for visible range based on our ESTIMATE/CACHE
-    size_t start_idx = 0;
-    size_t end_idx = chart.dates.size();
-
-    auto lower =
-        std::lower_bound(chart.dates.begin(), chart.dates.end(), x_axis_min);
-    if (lower != chart.dates.begin())
-      --lower;
-    start_idx = std::distance(chart.dates.begin(), lower);
-
-    auto upper =
-        std::upper_bound(chart.dates.begin(), chart.dates.end(), x_axis_max);
-    if (upper != chart.dates.end())
-      ++upper;
-    end_idx = std::distance(chart.dates.begin(), upper);
-
-    end_idx = std::min(end_idx, chart.dates.size());
-
-    if (start_idx < end_idx) {
-      bool found_data = false;
-
-      for (size_t i = start_idx; i < end_idx; ++i) {
-        double low = chart.lows[i];
-        double high = chart.highs[i];
-        if (low > 0 && high > 0) { // Valid data
-          if (low < y_axis_min)
-            y_axis_min = low;
-          if (high > y_axis_max)
-            y_axis_max = high;
-          found_data = true;
-        }
-      }
-
-      if (found_data) {
-        double range = y_axis_max - y_axis_min;
-        if (range == 0)
-          range = y_axis_min * 0.01;
-        if (range == 0)
-          range = 1.0;
-
-        y_axis_min -= range * 0.1;
-        y_axis_max += range * 0.1;
-      } else {
-        // Fallback if no valid data found in range
-        y_axis_min = chart.lows.empty() ? 0 : chart.lows[0];
-        y_axis_max = chart.highs.empty() ? 1 : chart.highs[0];
-      }
-    } else {
-      // Fallback if no range found
-      y_axis_min = chart.lows.empty() ? 0 : *std::min_element(chart.lows.begin(), chart.lows.end());
-      y_axis_max = chart.highs.empty() ? 1 : *std::max_element(chart.highs.begin(), chart.highs.end());
-    }
-
-    // NOW APPLY ALL AXIS LIMITS AT ONCE - BEFORE ANY PLOTTING OPERATIONS
-    ImPlot::SetupAxisLimits(ImAxis_X1, x_axis_min, x_axis_max,
-                            follow_latest_ ? ImPlotCond_Always : ImPlotCond_Once);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, static_cast<float>(y_axis_min),
-                            static_cast<float>(y_axis_max), ImPlotCond_Always);
 
     // VOLUME PROFILE OVERLAY - using direct draw to avoid axis switching after setup lock
     if (indicator_config_.show_volume_profile && !vp_prices.empty()) {
-      ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
       // Use Theme Colors for a more integrated look
       ImVec4 vp_color = colors.text;
-      vp_color.w = 0.25f; // reduced alpha
+      vp_color.w = 0.25f;  // reduced alpha
 
       ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, vp_color.w);
       ImPlot::PushStyleColor(ImPlotCol_Fill, vp_color);
-      ImPlot::PushStyleColor(
-          ImPlotCol_Line,
-          ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f)); // clearer border
+      ImPlot::PushStyleColor(ImPlotCol_Line,
+                             ImVec4(vp_color.x, vp_color.y, vp_color.z, 0.5f));  // clearer border
 
       // Calculate bar width in plot coordinates based on volume values
-      double max_vol_display = vp_max_vol * 4.0; // Same as used in SetupAxisLimits for X2
+      double max_vol_display = vp_max_vol * 4.0;  // Same as used in SetupAxisLimits for X2
 
       // Draw volume profile bars using direct drawing to avoid axis switching after setup lock
       for (size_t i = 0; i < vp_prices.size(); ++i) {
-          // Convert price (Y coordinate) and volume (X coordinate) to screen coordinates
-          ImVec2 pos_screen = ImPlot::PlotToPixels(vp_volumes[i], vp_prices[i]);  // tip of the bar
-          ImVec2 base_screen = ImPlot::PlotToPixels(0, vp_prices[i]);            // base of the bar
+        // Convert price (Y coordinate) and volume (X coordinate) to screen coordinates
+        ImVec2 pos_screen = ImPlot::PlotToPixels(vp_volumes[i], vp_prices[i]);  // tip of the bar
+        ImVec2 base_screen = ImPlot::PlotToPixels(0, vp_prices[i]);             // base of the bar
 
-          // Calculate bar dimensions
-          float bar_width = base_screen.x - pos_screen.x;  // width from volume value to zero
-          float bar_height = 3.0f;  // fixed height for visibility
+        // Calculate bar dimensions
+        float bar_width = base_screen.x - pos_screen.x;  // width from volume value to zero
+        float bar_height = 3.0f;                         // fixed height for visibility
 
-          // Define bar corners
-          ImVec2 bar_tl = ImVec2(base_screen.x - bar_width, pos_screen.y - bar_height/2);
-          ImVec2 bar_br = ImVec2(base_screen.x, pos_screen.y + bar_height/2);
+        // Define bar corners
+        ImVec2 bar_tl = ImVec2(base_screen.x - bar_width, pos_screen.y - bar_height / 2);
+        ImVec2 bar_br = ImVec2(base_screen.x, pos_screen.y + bar_height / 2);
 
-          // Draw the volume bar
-          draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
+        // Draw the volume bar
+        draw_list->AddRectFilled(bar_tl, bar_br, ImGui::GetColorU32(vp_color));
       }
 
       ImPlot::PopStyleColor(2);
@@ -998,11 +938,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
 
     // Drag & Drop Target for Price Levels (Must be after ALL Setup calls)
     if (ImPlot::BeginDragDropTargetPlot()) {
-      if (const ImGuiPayload *payload =
-              ImGui::AcceptDragDropPayload("PRICE_LEVEL")) {
-        double dropped_price = *(const double *)payload->Data;
-        std::cout << "[ChartPanel] Dropped Price Level: " << dropped_price
-                  << std::endl;
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PRICE_LEVEL")) {
+        double dropped_price = *(const double*)payload->Data;
+        std::cout << "[ChartPanel] Dropped Price Level: " << dropped_price << std::endl;
       }
       ImPlot::EndDragDropTarget();
     }
@@ -1019,31 +957,25 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     size_t render_start_idx = 0;
     size_t render_end_idx = chart.dates.size();
     {
-      auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(),
-                                    limits.X.Min);
-      if (lower != chart.dates.begin())
-        --lower;
+      auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(), limits.X.Min);
+      if (lower != chart.dates.begin()) --lower;
       render_start_idx = std::distance(chart.dates.begin(), lower);
 
-      auto upper = std::upper_bound(chart.dates.begin(), chart.dates.end(),
-                                    limits.X.Max);
-      if (upper != chart.dates.end())
-        ++upper;
-      render_end_idx = std::min((size_t)std::distance(chart.dates.begin(), upper),
-                                chart.dates.size());
+      auto upper = std::upper_bound(chart.dates.begin(), chart.dates.end(), limits.X.Max);
+      if (upper != chart.dates.end()) ++upper;
+      render_end_idx =
+          std::min((size_t)std::distance(chart.dates.begin(), upper), chart.dates.size());
     }
 
     // Calculate candle width based on timeframe
     double duration_sec =
-        RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) /
-        1000000.0;
+        RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_) / 1000000.0;
     double candle_half_width = duration_sec * 0.4;
 
     // Safeguard for very small TFs
-    if (candle_half_width < 0.000001)
-      candle_half_width = 0.000001;
+    if (candle_half_width < 0.000001) candle_half_width = 0.000001;
 
-    ImDrawList *draw_list = ImPlot::GetPlotDrawList();
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
     // Calculate minimum pixel width for candles
     const float MIN_BODY_WIDTH_PX = 3.0f;
@@ -1052,8 +984,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     // Draw ONLY visible candles
     for (size_t i = render_start_idx; i < render_end_idx; ++i) {
       double x = chart.dates[i];
-      if (x == 0)
-        continue;
+      if (x == 0) continue;
 
       float open = chart.opens[i];
       float high = chart.highs[i];
@@ -1061,23 +992,19 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
       float close = chart.closes[i];
 
       // Skip invalid candles
-      if (high == 0 || low == 0 || open == 0 || close == 0)
-        continue;
+      if (high == 0 || low == 0 || open == 0 || close == 0) continue;
 
       bool bullish = close >= open;
-      const auto &colors = ThemeManager::getInstance().getColors();
-      ImU32 color = bullish
-                        ? ImGui::ColorConvertFloat4ToU32(colors.candle_up)
-                        : ImGui::ColorConvertFloat4ToU32(colors.candle_down);
+      const auto& colors = ThemeManager::getInstance().getColors();
+      ImU32 color = bullish ? ImGui::ColorConvertFloat4ToU32(colors.candle_up)
+                            : ImGui::ColorConvertFloat4ToU32(colors.candle_down);
       ImU32 wick_color = color;
 
       // Transform to screen coordinates
       ImVec2 wick_top = ImPlot::PlotToPixels(x, high);
       ImVec2 wick_bot = ImPlot::PlotToPixels(x, low);
-      ImVec2 body_tl =
-          ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
-      ImVec2 body_br =
-          ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
+      ImVec2 body_tl = ImPlot::PlotToPixels(x - candle_half_width, bullish ? close : open);
+      ImVec2 body_br = ImPlot::PlotToPixels(x + candle_half_width, bullish ? open : close);
 
       // Ensure minimum body width in pixels
       float body_width = std::abs(body_br.x - body_tl.x);
@@ -1103,8 +1030,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
     }
 
     // Check for user interaction to break auto-follow
-    if (ImPlot::IsPlotHovered() &&
-        ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    if (ImPlot::IsPlotHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
       follow_latest_ = false;
     }
 
@@ -1129,4 +1055,4 @@ void ChartPanel::render_instrument_chart(const ChartInstance &chart) {
   ImPlot::PopStyleColor(3);
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

@@ -69,7 +69,8 @@ class TestGetAgentBranches(unittest.TestCase):
 
     @patch('subprocess.run')
     def test_get_agent_branches_current_branch_is_agent_branch(self, mock_run):
-        """Test that the function correctly handles when current branch is an agent branch"""
+        """Test that the function correctly handles when current branch is an
+        agent branch"""
         # Mock the git command output with current branch being an agent branch
         mock_result = MagicMock()
         mock_result.stdout = """  main
@@ -155,7 +156,9 @@ class TestMainFunction(unittest.TestCase):
         # Check that it prints the header
         mock_print.assert_any_call("Finding branches with pattern 'ralphy/agent-*':")
         # Check that it prints the no branches message
-        mock_print.assert_any_call("No branches found matching the pattern 'ralphy/agent-*'")
+        mock_print.assert_any_call(
+            "No branches found matching the pattern 'ralphy/agent-*'"
+        )
 
 
 if __name__ == '__main__':

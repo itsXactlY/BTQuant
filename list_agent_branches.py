@@ -1,87 +1,68 @@
 #!/usr/bin/env python3
 """
-Script to iterate through all branches matching the pattern 'ralphy/agent-*'
+Script to iterate through all git branches with the pattern 'ralphy/agent-*'
 """
 
 import subprocess
 import re
 
 
-def get_matching_branches(local_only=False, remote_only=False):
+def get_agent_branches():
     """Get all branches that match the pattern 'ralphy/agent-*'"""
-    # Determine which branches to fetch
-    cmd = ['git', 'branch', '-a']  # -a for all (local + remote)
-    if local_only:
-        cmd = ['git', 'branch']  # only local branches
-    elif remote_only:
-        cmd = ['git', 'branch', '-r']  # only remote branches
-
-    # Get all branches
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    branches = result.stdout.strip().split('\n')
-
-    # Filter branches that match the pattern
-    agent_branches = []
-    for branch in branches:
-        # Clean up the branch name (remove leading spaces and asterisk for current branch)
-        branch = branch.strip()
-        if branch.startswith('*'):
-            branch = branch[1:].strip()
-
-        # Check if it matches the pattern
-        if re.match(r'(?:remotes/[^/]*/)?ralphy/agent-\d+', branch):
-            # Remove the remote prefix for cleaner display
-            clean_branch = re.sub(r'^remotes/[^/]*/', '', branch)
-            if clean_branch:  # Only add non-empty branch names
-                agent_branches.append(clean_branch)
-
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_branches = []
-    for branch in agent_branches:
-        if branch not in seen:
-            seen.add(branch)
-            unique_branches.append(branch)
-
-    return unique_branches
-
-
-def iterate_branches(operation=None):
-    """
-    Iterate through all matching branches, optionally performing an operation on each
-    """
-    branches = get_matching_branches()
-
-    print(f"Iterating through {len(branches)} branches matching 'ralphy/agent-*':")
-    print("=" * 60)
-
-    for i, branch in enumerate(branches, 1):
-        print(f"{i:3d}. {branch}")
-
-        if operation:
-            try:
-                operation(branch)
-            except Exception as e:
-                print(f"     Error processing {branch}: {e}")
-
-    print("=" * 60)
-    print(f"Completed iteration through {len(branches)} branches.")
+    try:
+        # Get all branches
+        result = subprocess.run(['git', 'branch', '-a'], 
+                              capture_output=True, text=True, check=True)
+        
+        # Extract branch names and filter for ralphy/agent-* pattern
+        branches = []
+        for line in result.stdout.split('\n'):
+            # Remove leading/trailing whitespace and asterisk for current branch
+            branch = line.strip().lstrip('* ')
+            if branch.startswith('ralphy/agent-'):
+                branches.append(branch)
+                
+        return branches
+    except subprocess.CalledProcessError as e:
+        print(f"Error running git command: {e}")
+        return []
 
 
 def main():
-    print("Branches matching pattern 'ralphy/agent-*':")
-    print("=" * 50)
+    """Main function to iterate through and display agent branches"""
+    print("Finding branches with pattern 'ralphy/agent-*'...")
 
-    branches = get_matching_branches()
+    agent_branches = get_agent_branches()
 
-    for i, branch in enumerate(branches, 1):
-        print(f"{i:3d}. {branch}")
+    if not agent_branches:
+        print("No branches found matching the pattern 'ralphy/agent-*'")
+        return
 
-    print(f"\nTotal count: {len(branches)} branches")
+    print(f"\nFound {len(agent_branches)} branches matching 'ralphy/agent-*':")
+    print("-" * 60)
 
-    # Also demonstrate iteration with no operation (just counting)
-    print("\nDemonstrating iteration functionality:")
-    iterate_branches()
+    # Get current branch
+    try:
+        current_branch_result = subprocess.run(['git', 'branch', '--show-current'],
+                                            capture_output=True, text=True, check=True)
+        current_branch = current_branch_result.stdout.strip()
+    except subprocess.CalledProcessError:
+        # Fallback to parsing git branch output
+        try:
+            all_branches_raw = subprocess.run(['git', 'branch'],
+                                           capture_output=True, text=True, check=True)
+            for line in all_branches_raw.stdout.split('\n'):
+                if line.startswith('*'):
+                    current_branch = line.lstrip('* ').strip()
+                    break
+            else:
+                current_branch = None
+        except subprocess.CalledProcessError:
+            current_branch = None
+
+    for i, branch in enumerate(agent_branches, 1):
+        marker = " (current)" if branch == current_branch else ""
+        print(f"{i:2d}. {branch}{marker}")
 
 
 if __name__ == "__main__":

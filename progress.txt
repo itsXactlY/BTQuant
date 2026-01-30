@@ -47,7 +47,7 @@ Changes Made:
 4. The performance monitor now tracks frame timing for the main render loop
 
 The performance monitor calls are now properly integrated into the main render loop to track frame performance metrics.
-=======
+
 Task Completed: Add PriceLevel structure for orderbook
 
 Changes Made:
@@ -56,4 +56,18 @@ Changes Made:
 3. Added proper include guards and necessary includes
 
 The PriceLevel structure is now available for orderbook implementations with all required fields.
->>>>>>> ralphy/agent-4-1769729007231-oqjogu-add-pricelevel-structure-for-orderbook
+
+Task Completed: Create VolumeDataType enum with all Quantower data types
+
+Changes Made:
+1. Created new header file dependencies/BTQ_Render_Engine/include/data/VolumeDataTypes.h
+2. Defined VolumeDataType enum class with all specified Quantower data types:
+   - Trades, BuyTrades, SellTrades
+   - Volume, BuyVolume, SellVolume, BuyVolumePercent, SellVolumePercent, BuySellVolume
+   - Delta, DeltaPercent, CumulativeDelta
+   - AverageSize, AverageBuySize, AverageSellSize
+   - MaxOneTradeVolume, FilteredVolume
+3. Organized the enum within proper BTQ::RenderEngine::Data namespace
+4. Added standard header guards for proper inclusion safety
+
+The VolumeDataType enum now contains all required Quantower data types in a well-structured header file.

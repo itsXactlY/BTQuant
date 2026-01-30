@@ -29,7 +29,6 @@ Changes Made:
 
 The implementation moves indicator calculations out of the render loop and caches results, only recalculating when new data arrives.
 
-<<<<<<< HEAD
 Task Completed: Implement incremental volume profile updates
 
 Changes Made:
@@ -38,7 +37,7 @@ Changes Made:
 3. Now only rebuilds the entire volume profile when prices fall outside the existing range
 4. Otherwise updates incrementally by adding new trades to existing buckets
 5. This improves performance by avoiding unnecessary clearing and reconstruction of the volume_profile_ vector on every tick
-=======
+
 Task Completed: Instrument main render loop with performance monitor
 
 Changes Made:

@@ -1,0 +1,92 @@
+<<<<<<< HEAD
+# CRITICAL - DONT REMOVE THIS LINE
+dontcommit.py
+# CRITICAL - DONT REMOVE THIS LINE
+
+# ===== Caches & bytecode =====
+**/__pycache__/
+*.py[cod]
+**/.btq_cache/
+.coverage
+
+# ===== Build & output =====
+dependencies/BTQ_Render_Engine/build_tests/
+dependencies/BTQ_Render_Engine/build_tests/
+dependencies/ccapi/example/build/
+dependencies/ccapi/binding/
+dependencies/ccapi/binding/
+dependencies/ccapi/include/boost/
+dependencies/ccapi/include/rapidjson/
+dependencies/ccapi/test/
+
+**.egg-info/
+build/
+out/
+dist/
+bt/
+candles/
+dependencies/datacollector/
+
+# ===== Data / artifacts =====
+**/neural_data/
+**/*.parquet
+**/*.feather
+**/*.h5
+*.db
+*.csv
+*.pkl
+*.pt
+*.joblib
+
+# ===== Logs =====
+**/*.log
+**/*.tmp
+**/*.cache
+*.session
+.*.session-journal
+
+# ===== External deps =====
+third_party/
+extern/
+node_modules/
+venv/
+.venv/
+**/*_deps
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== Experiments / scratch =====
+trashpad/
+Research-Spine/
+**/scratch/
+**/experiments/
+test/strategy_*.py
+
+# Ralph
+.env
+.ralph/
+scripts/ralph/.state/
+[BROKEN]/
+.ralphy-sandboxes
+
+# ===== Misc =====
+TODO.rst
+TODO ::.txt
+.continue
+memory_debug.py
+memory_profile_summary.png
+Example_*.py
+**/*html
+
+dependencies/datacollector/market_data_collector
+discord_architect.py
+
+plans/
+dependencies/BTQ_Render_Engine/imgui_.ini
+dependencies/BTQ_Render_Engine/imgui.ini
+
+
+install_ralph.sh
+**/*build*

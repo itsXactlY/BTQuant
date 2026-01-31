@@ -1,0 +1,14 @@
+add_executable(hotspine_validation
+    hotspine_validation.cpp
+)
+
+target_include_directories(hotspine_validation PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../market_data_collector
+)
+
+target_link_libraries(hotspine_validation
+    PRIVATE
+        hotspine_writer
+        rt
+)

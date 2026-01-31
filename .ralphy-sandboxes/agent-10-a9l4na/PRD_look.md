@@ -1,0 +1,181 @@
+# BTQ Render Engine - Complete Quantower Clone (Final Implementation)
+
+**Objective:** Pixel-perfect clone of Quantower trading terminal with ALL features  
+**Constraint:** Work ONLY in `dependencies/BTQ_Render_Engine/`  
+**Current State:** Basic panels exist (Chart, Footprint, Orderbook, Time&Sales), need completion  
+**Tech Stack:** C++23/26, Vulkan, ImGui, existing HotspineDataBridge  
+**Reference:** https://help.quantower.com/quantower/
+
+---
+## Phase 1: Volume Data
+- [ ] Add 16 volume types enum
+- [ ] Create trade data structure
+- [ ] Build cluster cell storage
+- [ ] Add volume calculations
+- [ ] Track cumulative delta
+- [ ] Show cluster cells with colors
+- [ ] Detect diagonal imbalances
+- [ ] Detect stacked imbalances
+- [ ] Add heatmap coloring
+- [ ] Highlight imbalance cells
+- [ ] Show bar summaries
+- [ ] Add cell tooltips
+- [ ] Add data type selector
+- [ ] Add time aggregation options
+- [ ] Add price aggregation options
+- [ ] Add volume filter slider
+- [ ] Add split volume mode
+- [ ] Format numbers properly
+- [ ] Auto-adjust cell sizes
+- [ ] Add zoom level details
+- [ ] Add Step Profile
+- [ ] Show POC lines
+- [ ] Add Right Profile
+- [ ] Add Left Profile
+- [ ] Calculate Value Area
+- [ ] Show VAH and VAL lines
+- [ ] Add Custom Profile with mouse
+- [ ] Add profile anchors
+- [ ] Show split buy/sell bars
+- [ ] Add statistics panel
+- [ ] Compare profiles overlay
+- [ ] Add session profiles
+- [ ] Add composite profiles
+- [ ] Create time statistics table
+- [ ] Add sortable columns
+- [ ] Highlight rows on hover
+- [ ] Sync scroll with chart
+- [ ] Color code values
+- [ ] Create histogram panel
+- [ ] Add BuySellVolume mode
+- [ ] Add Delta mode
+- [ ] Add CumulativeDelta line
+- [ ] Add data type selector
+- [ ] Add bar tooltips
+- [ ] Auto-scale histogram
+- [ ] Calculate basic VWAP
+- [ ] Calculate standard deviation
+- [ ] Add anchored VWAP
+- [ ] Add click-to-anchor
+- [ ] Render VWAP line
+- [ ] Render deviation bands
+- [ ] Manage multiple VWAPs
+- [ ] Add VWAP list panel
+- [ ] Auto-reset session VWAP
+- [ ] Add rolling VWAP
+- [ ] Add VWAP alerts
+- [ ] Show full market depth
+- [ ] Add heatmap background
+- [ ] Show liquidity bars
+- [ ] Highlight large orders
+- [ ] Show bid/ask imbalance
+- [ ] Add depth chart view
+- [ ] Add aggregation modes
+- [ ] Track order flow
+- [ ] Save order book snapshots
+- [ ] Show delta column
+- [ ] Add virtualized scrolling
+- [ ] Add trade filters
+- [ ] Color code trades
+- [ ] Detect trade clusters
+- [ ] Show size histogram
+- [ ] Show trade pace
+- [ ] Add audio alerts
+- [ ] Add trade search
+- [ ] Export to CSV
+- [ ] Show historical trades
+- [ ] Add all indicators
+- [ ] Cache calculations
+- [ ] Add indicator panel
+- [ ] Add indicator alerts
+- [ ] Support multiple timeframes
+- [ ] Optimize crosshair
+- [ ] Add drawing tools
+- [ ] Add replay mode
+- [ ] Create watchlist table
+- [ ] Add/remove symbols
+- [ ] Drag to reorder
+- [ ] Update prices live
+- [ ] Color code changes
+- [ ] Click to switch symbol
+- [ ] Add watchlist groups
+- [ ] Customize columns
+- [ ] Sort by columns
+- [ ] Add price alerts
+- [ ] Add new panel buttons
+- [ ] Add symbol selector
+- [ ] Add exchange selector
+- [ ] Add timeframe selector
+- [ ] Save layout presets
+- [ ] Add quick-save hotkeys
+- [ ] Add layout templates
+- [ ] Export/import workspace
+- [ ] Create settings system
+- [ ] Add appearance settings
+- [ ] Add data settings
+- [ ] Add performance settings
+- [ ] Add alert settings
+- [ ] Add keyboard shortcuts
+- [ ] Add per-panel settings
+- [ ] Save settings to file
+- [ ] Cache calculated data
+- [ ] Update incrementally
+- [ ] Compress historical data
+- [ ] Save data to disk
+- [ ] Add replay system
+- [ ] Aggregate multi-exchange
+- [ ] Monitor data quality
+- [ ] Cull off-screen panels
+- [ ] Cull off-screen chart items
+- [ ] Add footprint LOD
+- [ ] Batch order book geometry
+- [ ] Multi-thread calculations
+- [ ] Use lock-free queues
+- [ ] Add memory pools
+- [ ] Optimize ImGui usage
+- [ ] Add frame pacing
+- [ ] Auto-reduce quality
+- [ ] Track panel render times
+- [ ] Show frame time graph
+- [ ] Add CPU profiler
+- [ ] Track memory usage
+- [ ] Add debug overlay
+- [ ] Track pipeline metrics
+- [ ] Detect performance regression
+- [ ] Apply dark theme
+- [ ] Load monospace font
+- [ ] Add smooth animations
+- [ ] Add haptic effects
+- [ ] Show loading states
+- [ ] Show empty states
+- [ ] Add tooltips everywhere
+- [ ] Add context menus
+- [ ] Add quick actions toolbar
+- [ ] Add first-run tutorial
+- [ ] Test volume calculations
+- [ ] Test cluster engine
+- [ ] Test VWAP math
+- [ ] Test data pipeline
+- [ ] Benchmark performance
+- [ ] Run stress tests
+- [ ] Test visual regression
+- [ ] Generate mock data
+- [ ] Run automated tests
+- [ ] Write user guide
+- [ ] Generate API docs
+- [ ] Write developer guide
+- [ ] Document volume types
+- [ ] Write performance guide
+- [ ] Write troubleshooting guide
+- [ ] Add code examples
+- [ ] Create video tutorials
+- [ ] Remove dead code
+- [ ] Standardize naming
+- [ ] Add logging system
+- [ ] Add error handling
+- [ ] Validate all inputs
+- [ ] Create release build
+- [ ] Add crash reporting
+- [ ] Add telemetry
+- [ ] Run final QA
+- [ ] Create installer

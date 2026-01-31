@@ -1,0 +1,17 @@
+name: "liquidity_imbalance_detector"
+version: "1.0.0"
+description: "Detects liquidity imbalances across exchanges"
+
+parameters:
+  depth_ratio_threshold:
+    default: 3.0
+    min: 1.5
+    max: 10.0
+    description: "Depth ratio threshold for imbalance detection"
+    env_var: "BTQ_LIQUIDITY_DEPTH_RATIO"
+    
+  imbalance_threshold:
+    default: 0.3
+    min: 0.1
+    max: 0.9
+    description: "Bid/ask imbalance threshold"

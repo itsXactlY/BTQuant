@@ -1,0 +1,151 @@
+// LOB Heatmap Compute Shader
+// Vulkan 1.3 - Market Microstructure Renderer
+// Computes limit order book depth evolution as a cyclic heatmap texture
+// Price level -> Y-coordinate, Time -> X-coordinate
+
+#version 460 core
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_scalar_block_layout : enable
+
+// ========================================
+// SSBO Structures (GPU-CPU aligned)
+// ========================================
+
+// Order Book Level Structure (std430 aligned)
+struct OrderBookLevel {
+    float price;           // Price level
+    uint askQuantity;      // Ask volume at this price
+    uint bidQuantity;      // Bid volume at this price
+    uint numOrders;        // Number of orders at this price
+};
+
+// Hotspine Order Book Snapshot (SSBO)
+layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshot {
+    uint currentTimeIndex;     // Current cyclic time index
+    uint priceLevelsCount;     // Number of price levels
+    float basePrice;           // Base price for rendering
+    float priceRange;          // Price range to display
+    OrderBookLevel levels[];   // Variable-length price levels
+} orderBook;
+
+// Heatmap Texture Output (Image2D)
+layout(binding = 1, rgba32f) uniform image2D heatmapOutput;
+
+// ========================================
+// Uniforms
+// ========================================
+
+layout(std140, set = 1, binding = 0) uniform HeatmapParams {
+    uint width;             // Heatmap texture width (time steps)
+    uint height;            // Heatmap texture height (price levels)
+    float maxLiquidity;     // Maximum liquidity for normalization
+    float timeOffset;       // Time offset for rolling window
+    bool invertYAxis;       // Invert Y-axis (price increasing downward)
+} params;
+
+// Specialization constants for heatmap parameters
+layout(constant_id = 0) const uint MAX_LIQUIDITY = 1000;
+layout(constant_id = 1) const bool INVERT_Y_AXIS = true;
+
+// ========================================
+// Constants
+// ========================================
+
+const vec3 COOL_COLOR = vec3(0.0, 0.0, 0.5);    // Blue for low liquidity
+const vec3 WARM_COLOR = vec3(1.0, 0.0, 0.0);    // Red for high liquidity
+const vec3 NEUTRAL_COLOR = vec3(0.2, 0.2, 0.2); // Dark gray for no liquidity
+
+// ========================================
+// Helper Functions
+// ========================================
+
+// Normalize price to [0, height] coordinate
+float priceToY(float price) {
+    float normalizedPrice = (price - orderBook.basePrice) / orderBook.priceRange;
+    float y = normalizedPrice * params.height;
+    
+    if (params.invertYAxis) {
+        return params.height - 1.0 - y;
+    }
+    return y;
+}
+
+// Get color based on liquidity density (Professional multi-stop gradient)
+vec3 liquidityToColor(float liquidity) {
+    float normalized = clamp(liquidity / params.maxLiquidity, 0.0, 1.0);
+    
+    // 0.0: Deep Blue (Low) -> 0.2: Cyan -> 0.4: Green -> 0.6: Yellow -> 0.8: Orange -> 1.0: Fire Red (High)
+    vec3 c1 = vec3(0.02, 0.02, 0.15); // Deep Blue/Black
+    vec3 c2 = vec3(0.0, 0.6, 1.0);   // Bright Cyan
+    vec3 c3 = vec3(0.0, 1.0, 0.4);   // Vibrant Green 
+    vec3 c4 = vec3(1.0, 1.0, 0.0);   // Pure Yellow
+    vec3 c5 = vec3(1.0, 0.4, 0.0);   // Deep Orange
+    vec3 c6 = vec3(1.0, 0.05, 0.0);  // Fire Red
+    
+    if (normalized < 0.2) return mix(c1, c2, normalized / 0.2);
+    if (normalized < 0.4) return mix(c2, c3, (normalized - 0.2) / 0.2);
+    if (normalized < 0.6) return mix(c3, c4, (normalized - 0.4) / 0.2);
+    if (normalized < 0.8) return mix(c4, c5, (normalized - 0.6) / 0.2);
+    return mix(c5, c6, (normalized - 0.8) / 0.2);
+}
+
+// ========================================
+// Main Compute Shader Entry
+// ========================================
+
+// Shared memory for intermediate calculations
+shared float sharedLiquidity[16];
+
+layout(local_size_x = 1, local_size_y = 64) in;
+
+void main() {
+    uint yIndex = gl_GlobalInvocationID.y;
+    
+    // Check if thread is within heatmap bounds
+    if (yIndex >= params.height) {
+        return;
+    }
+    
+    // Current time column to update (cyclic buffer)
+    uint currentCol = orderBook.currentTimeIndex % params.width;
+    ivec2 targetCoords = ivec2(currentCol, yIndex);
+    
+    // Find matching price level using Binary Search (Assumes levels are sorted by price)
+    float targetPrice = orderBook.basePrice + (float(yIndex) / float(params.height)) * orderBook.priceRange;
+    
+    int low = 0;
+    int high = int(orderBook.priceLevelsCount) - 1;
+    int closestIdx = -1;
+    float minDistance = 1e9;
+    
+    while (low <= high) {
+        int mid = (low + high) / 2;
+        float levelPrice = orderBook.levels[mid].price;
+        float dist = abs(levelPrice - targetPrice);
+        
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestIdx = mid;
+        }
+        
+        if (levelPrice < targetPrice) {
+            low = mid + 1;
+        } else if (levelPrice > targetPrice) {
+            high = mid - 1;
+        } else {
+            break; // Exact match
+        }
+    }
+    
+    float totalLiquidity = 0.0;
+    // Only show liquidity if the match is within the pixel's price bin
+    if (closestIdx != -1 && minDistance < (orderBook.priceRange / float(params.height))) {
+        totalLiquidity = float(orderBook.levels[closestIdx].askQuantity + orderBook.levels[closestIdx].bidQuantity);
+    }
+    
+    // Compute pixel color
+    vec3 color = liquidityToColor(totalLiquidity);
+    
+    // Write to heatmap texture at the current cyclic column
+    imageStore(heatmapOutput, targetCoords, vec4(color, 1.0));
+}

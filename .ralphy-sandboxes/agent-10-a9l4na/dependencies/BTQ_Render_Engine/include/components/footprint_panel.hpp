@@ -1,0 +1,92 @@
+#pragma once
+
+#include "MarketMicrostructureRenderer.h"
+#include "panel_base.hpp"
+#include "data/unified_data_pipeline.hpp"  // For DataType enum
+#include "data/VolumeDataTypes.h"          // For VolumeDataType enum
+#include <memory>
+#include <vector>
+
+namespace BTQuant {
+
+// Footprint Cell Structure for Exocharts-style visualization
+struct FootprintCell {
+  double x;             // Time position (X-axis)
+  double y;             // Price position (Y-axis)
+  double width;         // Cell width (time duration)
+  double height;        // Cell height (price range)
+  double bid_volume;    // Total bid volume
+  double ask_volume;    // Total ask volume
+  double delta;         // Delta (bid_volume - ask_volume)
+  uint32_t trade_count; // Number of trades
+  double vwap;          // Volume-weighted average price
+
+  // Constructor
+  FootprintCell(double x_pos, double y_pos, double w, double h, double bid_vol,
+                double ask_vol, uint32_t count, double vwap_price)
+      : x(x_pos), y(y_pos), width(w), height(h), bid_volume(bid_vol),
+        ask_volume(ask_vol), delta(bid_vol - ask_vol), trade_count(count),
+        vwap(vwap_price) {}
+};
+
+class FootprintPanel : public PanelBase {
+public:
+  FootprintPanel(const PanelConfig &config,
+                 RenderEngine::MarketMicrostructureRenderer *renderer);
+
+  void update(float dt) override;
+  void render() override;
+
+  uint32_t get_symbol_id() const { return symbol_id_; }
+  void set_symbol_id(uint32_t id) {
+    symbol_id_ = id;
+    if (renderer_)
+      renderer_->setSymbol(id);
+  }
+
+  // Configuration
+  void setGridSize(int cols, int rows) {
+    grid_cols_ = cols;
+    grid_rows_ = rows;
+  }
+  void setShowVolumeLabels(bool show) { show_volume_labels_ = show; }
+  void setShowDeltaIndicator(bool show) { show_delta_indicator_ = show; }
+  void setDeltaThreshold(float threshold) { delta_threshold_ = threshold; }
+
+  // Data type selection
+  void setDataType(Data::UnifiedDataPipeline::DataType type) { data_type_ = type; }
+  Data::UnifiedDataPipeline::DataType getDataType() const { return data_type_; }
+
+  // Volume data type selection for footprint visualization
+  void setVolumeDataType(Data::VolumeDataType vol_type) { volume_data_type_ = vol_type; }
+  Data::VolumeDataType getVolumeDataType() const { return volume_data_type_; }
+
+private:
+  RenderEngine::MarketMicrostructureRenderer *renderer_;
+  uint32_t symbol_id_ = 0;
+
+  // Data Type Selection
+  Data::UnifiedDataPipeline::DataType data_type_ = Data::UnifiedDataPipeline::DataType::FOOTPRINT;
+
+  // Volume Data Type for Footprint Visualization
+  Data::VolumeDataType volume_data_type_ = Data::VolumeDataType::Delta;
+
+  // Grid Configuration (Exocharts-style: 60 columns × 100 rows)
+  int grid_cols_ = 60;  // Number of time columns (minutes)
+  int grid_rows_ = 100; // Number of price rows (ticks)
+
+  // Visualization Options
+  bool show_volume_labels_ = true;
+  bool show_delta_indicator_ = true;
+  float delta_threshold_ = 0.0f; // Threshold for delta coloring
+
+  // Cell Data (CPU-side aggregation)
+  std::vector<FootprintCell> cells_;
+
+  // Rendering Helpers
+  ImU32 getCellColor(const FootprintCell &cell) const;
+  std::string getCellLabel(const FootprintCell &cell) const;
+  void renderCell(const FootprintCell &cell, ImDrawList *draw_list);
+};
+
+} // namespace BTQuant

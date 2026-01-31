@@ -1,0 +1,39 @@
+# Symbol ID Mappings for BTQuant HotSpine
+version: "1.0"
+description: "Symbol ID mappings - can be extended at runtime"
+
+exchanges:
+  - name: "binance"
+    id_range: [1, 99]
+    symbols:
+
+        
+  - name: "coinbase"
+    id_range: [100, 199]
+    symbols:
+
+
+  - name: "kraken"
+    id_range: [200, 299]
+    symbols:
+
+
+  - name: "okx"
+    id_range: [300, 399]
+    symbols:
+
+  - name: "bybit"
+    id_range: [400, 499]
+    symbols:
+
+
+  - name: "gate"
+    id_range: [500, 599]
+    symbols:
+
+
+# Dynamic symbol registration template
+symbol_template:
+  id_prefix: ""
+  auto_increment: true
+  base_id: 10000

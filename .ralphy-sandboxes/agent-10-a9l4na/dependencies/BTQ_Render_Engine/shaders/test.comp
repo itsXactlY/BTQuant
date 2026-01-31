@@ -1,0 +1,22 @@
+#version 450
+
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0) readonly buffer TestSSBO {
+    uint data[1024];
+    uint count;
+} testBuffer;
+
+layout(set = 0, binding = 1) coherent buffer OutputSSBO {
+    uint results[1024];
+} outputBuffer;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    
+    if (index >= testBuffer.count && index < 1024) {
+        return;
+    }
+    
+    outputBuffer.results[index] = testBuffer.data[index] * 2;
+}

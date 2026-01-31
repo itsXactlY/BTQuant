@@ -1,0 +1,39 @@
+# Build directories
+build/
+build_debug/
+cmake-build-*/
+
+# Compiled files
+*.o
+*.so
+*.a
+*.dylib
+*.exe
+simple_monitor
+multi_exchange_monitor
+manipulation_monitor
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Core dumps
+core
+core.*
+
+# User config (if you want to keep local configs private)
+config/local_*.json

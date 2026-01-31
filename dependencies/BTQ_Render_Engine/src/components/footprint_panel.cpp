@@ -139,7 +139,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
       break;
   }
 
-  // Calculate adaptive alpha based on cell_volume / max_bar_volume
+  // Calculate adaptive alpha based on cell_volume / max_bar_volume with enhanced precision
   float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f) : 0.05f;
 
   // Determine the appropriate color scheme based on the volume analysis type
@@ -191,33 +191,26 @@ ImU32 FootprintPanel::getDeltaColor(const FootprintCell& cell, float alpha) cons
   // Clamp to [-1, 1] range to ensure proper color mapping
   normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
 
-  if (std::abs(normalized_delta) > delta_threshold_) {
-    // Use different colors based on the sign of the delta
-    if (normalized_delta > 0) {
-      // Positive delta (buy pressure) - Pure green gradient
-      float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
-      return IM_COL32(
-          static_cast<int>(50 * (1.0f - green_intensity)), // Reduce red as green increases
-          static_cast<int>(100 + 155 * green_intensity),  // Full green range
-          static_cast<int>(50 * (1.0f - green_intensity)), // Reduce blue as green increases
-          static_cast<int>(alpha * 255));
-    } else {
-      // Negative delta (sell pressure) - Pure red gradient
-      float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
-      return IM_COL32(
-          static_cast<int>(100 + 155 * red_intensity),   // Full red range
-          static_cast<int>(50 * (1.0f - red_intensity)), // Reduce green as red increases
-          static_cast<int>(50 * (1.0f - red_intensity)), // Reduce blue as red increases
-          static_cast<int>(alpha * 255));
-    }
+  // Use smooth green-red gradient based on normalized delta value
+  float red_intensity = 0.0f;
+  float green_intensity = 0.0f;
+
+  if (normalized_delta >= 0) {
+      // Positive delta (buy pressure) - Green gradient
+      green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
+      red_intensity = 1.0f - green_intensity; // Reduce red as green increases
   } else {
-    // Neutral - Gray with reduced alpha
-    return IM_COL32(
-        static_cast<int>(100),
-        static_cast<int>(100),
-        static_cast<int>(100),
-        static_cast<int>(alpha * 100)); // Reduced alpha for neutral cells
+      // Negative delta (sell pressure) - Red gradient
+      red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
+      green_intensity = 1.0f - red_intensity; // Reduce green as red increases
   }
+
+  // Create smooth transition from red (negative) to green (positive) through neutral
+  return IM_COL32(
+      static_cast<int>(128 + 127 * red_intensity - 127 * green_intensity), // Red channel
+      static_cast<int>(128 + 127 * green_intensity - 127 * red_intensity), // Green channel
+      64, // Blue channel kept low for better contrast
+      static_cast<int>(alpha * 255));
 }
 
 ImU32 FootprintPanel::getBuySellColor(const FootprintCell& cell, double max_volume, float alpha) const {
@@ -242,32 +235,26 @@ ImU32 FootprintPanel::getBuySellColor(const FootprintCell& cell, double max_volu
   double normalized_ratio = max_possible_value > 0.0 ?
       std::clamp(normalized_value / max_possible_value, -1.0, 1.0) : 0.0;
 
-  if (std::abs(normalized_ratio) > delta_threshold_) {
-    if (normalized_ratio > 0) {
+  // Use blue-red gradient based on normalized ratio value
+  float red_intensity = 0.0f;
+  float blue_intensity = 0.0f;
+
+  if (normalized_ratio >= 0) {
       // Positive - Blue gradient for buy volume dominance
-      float blue_intensity = std::clamp(static_cast<float>(normalized_ratio), 0.0f, 1.0f);
-      return IM_COL32(
-          static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce red as blue increases
-          static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce green as blue increases
-          static_cast<int>(100 + 155 * blue_intensity),   // Full blue range
-          static_cast<int>(alpha * 255));
-    } else {
-      // Negative - Red gradient for sell volume dominance
-      float red_intensity = std::clamp(static_cast<float>(-normalized_ratio), 0.0f, 1.0f);
-      return IM_COL32(
-          static_cast<int>(100 + 155 * red_intensity),   // Full red range
-          static_cast<int>(50 * (1.0f - red_intensity)), // Reduce green as red increases
-          static_cast<int>(50 * (1.0f - red_intensity)), // Reduce blue as red increases
-          static_cast<int>(alpha * 255));
-    }
+      blue_intensity = std::clamp(static_cast<float>(normalized_ratio), 0.0f, 1.0f);
+      red_intensity = 1.0f - blue_intensity; // Reduce red as blue increases
   } else {
-    // Neutral - Gray with reduced alpha
-    return IM_COL32(
-        static_cast<int>(100),
-        static_cast<int>(100),
-        static_cast<int>(100),
-        static_cast<int>(alpha * 100)); // Reduced alpha for neutral cells
+      // Negative - Red gradient for sell volume dominance
+      red_intensity = std::clamp(static_cast<float>(-normalized_ratio), 0.0f, 1.0f);
+      blue_intensity = 1.0f - red_intensity; // Reduce blue as red increases
   }
+
+  // Create smooth transition from blue (buy) to red (sell) through neutral
+  return IM_COL32(
+      static_cast<int>(128 + 127 * red_intensity - 127 * blue_intensity), // Red channel
+      64, // Green channel kept low for better contrast
+      static_cast<int>(128 + 127 * blue_intensity - 127 * red_intensity), // Blue channel
+      static_cast<int>(alpha * 255));
 }
 
 ImU32 FootprintPanel::getVolumeIntensityColor(const FootprintCell& cell, double max_volume, float alpha) const {

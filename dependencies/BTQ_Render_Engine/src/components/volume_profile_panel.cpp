@@ -269,17 +269,51 @@ void VolumeProfilePanel::render_volume_bars() {
                            static_cast<int>(prices.size()), bar_height);
         break;
       case ProfileMode::Right:
-        // Buy bars (green, positive X) - using PlotBars with horizontal flag
-        ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
-        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
-                         static_cast<int>(prices.size()), bar_height,
-                         ImPlotBarsFlags_Horizontal);
+        // Right Profile: Anchor to right edge with bars extending left
+        // Calculate the maximum volume to determine the right edge position
+        double max_vol = max_volume_;
 
-        // Sell bars (red, negative X)
-        ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
-        ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
-                         static_cast<int>(prices.size()), bar_height,
-                         ImPlotBarsFlags_Horizontal);
+        // Draw buy bars (green) extending left from right edge
+        // For right profile, we want bars that start from the right edge and extend left
+        // We'll use a custom approach with ImDrawList to draw bars anchored to the right
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+        for (size_t i = 0; i < buy_volumes.size(); ++i) {
+            if (buy_volumes[i] > 0) {
+                // Convert plot coordinates to pixel coordinates
+                ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
+                ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - buy_volumes[i], prices[i]);
+
+                // Calculate bar dimensions
+                float bar_top = right_edge.y - bar_height / 2.0;
+                float bar_bottom = right_edge.y + bar_height / 2.0;
+                float bar_right = right_edge.x;  // Right edge of chart
+                float bar_left = left_edge.x;    // Left extent of the bar
+
+                // Draw the bar
+                draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                        IM_COL32(26, 204, 26, 179)); // Green with transparency
+            }
+        }
+
+        // Draw sell bars (red) extending left from right edge
+        for (size_t i = 0; i < sell_volumes.size(); ++i) {
+            if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
+                // Convert plot coordinates to pixel coordinates
+                ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
+                ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - std::abs(sell_volumes[i]), prices[i]);
+
+                // Calculate bar dimensions
+                float bar_top = right_edge.y - bar_height / 2.0;
+                float bar_bottom = right_edge.y + bar_height / 2.0;
+                float bar_right = right_edge.x;  // Right edge of chart
+                float bar_left = left_edge.x;    // Left extent of the bar
+
+                // Draw the bar
+                draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                        IM_COL32(204, 26, 26, 179)); // Red with transparency
+            }
+        }
         break;
       case ProfileMode::Left:
         // Sell bars (red, negative X) - mirrored

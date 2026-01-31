@@ -1093,23 +1093,12 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
   // Draw horizontal yellow POC line at the price level with highest volume
   // Use the locally calculated POC for consistency with highlighted bar
   if (poc_index >= 0 && max_total_volume > 0) {
-    // Calculate appropriate min/max x values for the line
-    // Find the actual min/max volumes in the dataset to determine line length
-    double min_vol = 0.0, max_vol = 0.0;
-    for (int i = 0; i < count; ++i) {
-      min_vol = std::min(min_vol, std::min(ys[i], neg_ys[i]));
-      max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
-    }
+    // Get the current plot limits to draw the POC line across the full visible width
+    ImPlotLimits plot_limits = ImPlot::GetPlotLimits();
 
-    // Ensure we have valid min/max values for the line
-    if (max_vol <= min_vol) {
-      max_vol = max_volume_;
-      min_vol = -max_volume_;
-    }
-
-    // Use the locally calculated POC price (xs[poc_index]) instead of global poc_price_
-    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, xs[poc_index]);
-    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, xs[poc_index]);
+    // Use the plot limits to draw the line across the full width of the visible area
+    ImVec2 poc_start = ImPlot::PlotToPixels(plot_limits.X.Min, xs[poc_index]);
+    ImVec2 poc_end = ImPlot::PlotToPixels(plot_limits.X.Max, xs[poc_index]);
 
     // Draw the horizontal POC line - make it more prominent with consistent styling
     // Use the same color as in other profile modes for consistency

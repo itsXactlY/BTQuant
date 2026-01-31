@@ -539,44 +539,59 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
 
   // Draw border with special highlighting for imbalances
   if (is_diagonal || is_stacked) {
-    // Thicker border for imbalanced cells
-    float border_thickness = 3.0f; // Thicker border
+    float border_thickness = 3.0f; // Thicker border for imbalanced cells
 
-    // Yellow border for diagonal imbalance
-    if (is_diagonal) {
+    // If both diagonal and stacked imbalances exist, draw both effects with offset rectangles
+    if (is_diagonal && is_stacked) {
+      // Draw both borders with slight offset to distinguish them
+      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow
+      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan
+
+      // Draw stacked border first (outer) with slightly larger dimensions
+      draw_list->AddRect(ImVec2(p1.x - 1, p1.y - 1), ImVec2(p2.x + 1, p2.y + 1),
+                         stacked_border_color, 0.0f, 0, border_thickness);
+
+      // Draw diagonal border second (inner) with normal dimensions
+      draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
+
+      // Add enhanced glow effects for both types
+      // Glow for diagonal (inner)
+      ImU32 diagonal_glow_color = IM_COL32(255, 255, 0, 80); // Semi-transparent yellow
+      ImVec2 diagonal_glow_offset(3.0f, 3.0f);
+      draw_list->AddRect(ImVec2(p1.x - diagonal_glow_offset.x, p1.y - diagonal_glow_offset.y),
+                         ImVec2(p2.x + diagonal_glow_offset.x, p2.y + diagonal_glow_offset.y),
+                         diagonal_glow_color, 0.0f, 0, 1.0f);
+
+      // Glow for stacked (outer)
+      ImU32 stacked_glow_color = IM_COL32(0, 255, 255, 80); // Semi-transparent cyan
+      ImVec2 stacked_glow_offset(4.0f, 4.0f);
+      draw_list->AddRect(ImVec2(p1.x - stacked_glow_offset.x, p1.y - stacked_glow_offset.y),
+                         ImVec2(p2.x + stacked_glow_offset.x, p2.y + stacked_glow_offset.y),
+                         stacked_glow_color, 0.0f, 0, 1.0f);
+    }
+    // Only diagonal imbalance
+    else if (is_diagonal) {
       ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow
       draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
 
-      // Optional glow effect for diagonal imbalance
-      ImU32 glow_color = IM_COL32(255, 255, 0, 100); // Semi-transparent yellow
-      ImVec2 glow_offset(2.0f, 2.0f);
+      // Enhanced glow effect for diagonal imbalance
+      ImU32 glow_color = IM_COL32(255, 255, 0, 120); // More prominent yellow glow
+      ImVec2 glow_offset(2.5f, 2.5f);
       draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
                          ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y),
-                         glow_color, 0.0f, 0, 1.0f);
+                         glow_color, 0.0f, 0, 1.5f);
     }
-
-    // Cyan border for stacked imbalance
-    if (is_stacked) {
+    // Only stacked imbalance
+    else if (is_stacked) {
       ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan
       draw_list->AddRect(p1, p2, stacked_border_color, 0.0f, 0, border_thickness);
 
-      // Optional glow effect for stacked imbalance
-      ImU32 glow_color = IM_COL32(0, 255, 255, 100); // Semi-transparent cyan
-      ImVec2 glow_offset(2.0f, 2.0f);
+      // Enhanced glow effect for stacked imbalance
+      ImU32 glow_color = IM_COL32(0, 255, 255, 120); // More prominent cyan glow
+      ImVec2 glow_offset(2.5f, 2.5f);
       draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
                          ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y),
-                         glow_color, 0.0f, 0, 1.0f);
-    }
-
-    // If both, draw both effects
-    if (is_diagonal && is_stacked) {
-      // Draw both borders with different thickness to distinguish
-      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow
-      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan
-      draw_list->AddRect(ImVec2(p1.x - 1, p1.y - 1), ImVec2(p2.x + 1, p2.y + 1),
-                         diagonal_border_color, 0.0f, 0, 2.0f);
-      draw_list->AddRect(ImVec2(p1.x - 2, p1.y - 2), ImVec2(p2.x + 2, p2.y + 2),
-                         stacked_border_color, 0.0f, 0, 1.0f);
+                         glow_color, 0.0f, 0, 1.5f);
     }
   } else {
     // Draw subtle border for cell separation (normal case)

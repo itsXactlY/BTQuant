@@ -165,6 +165,12 @@ private:
 private:
   // Number formatting helper
   static std::string formatNumber(double value, NumberFormat format, int decimal_places);
+
+  // Monospace font for header alignment
+  mutable ImFont* monospace_font_ = nullptr;
+
+  // Helper function to get or load monospace font
+  ImFont* getOrCreateMonospaceFont() const;
 };
 
 } // namespace BTQuant

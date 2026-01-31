@@ -38,16 +38,16 @@
 ### Phase 2a: Basic Rendering [Complexity: M]
 - [x] Enhance footprint_panel.cpp main render loop to iterate visible time bars and price levels, retrieve ClusterCell data, and switch on active VolumeAnalysisType to determine displayed value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [x] Implement adaptive heatmap coloring: calculate alpha based on cell_volume / max_bar_volume, support multiple color schemes (green-red gradient for delta, blue-red for buy/sell, yellow-orange for volume intensity) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Add data type selector dropdown in footprint panel header with all 16 types, update rendering immediately on selection in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Add data type selector dropdown in footprint panel header with all 16 types, update rendering immediately on selection in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 
 ### Phase 2b: Advanced Features [Complexity: M]
 - [x] Implement diagonal imbalance detection algorithm: compare buy_volume at price P with sell_volume at price P-1, flag cells where ratio exceeds configurable threshold (default 3.0x) in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
-- [ ] Add stacked imbalance detection: vertical analysis comparing buy/sell at same price across consecutive bars in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
-- [ ] Add imbalance cell highlighting with colored borders (yellow for diagonal, cyan for stacked), thicker border width, and optional glow effect in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Add stacked imbalance detection: vertical analysis comparing buy/sell at same price across consecutive bars in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
+- [x] Add imbalance cell highlighting with colored borders (yellow for diagonal, cyan for stacked), thicker border width, and optional glow effect in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 
 ### Phase 2c: UI & UX [Complexity: S]
-- [ ] Render bar header summary above each cluster bar showing: total volume, net delta, cumulative delta, POC price with monospace font alignment in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
-- [ ] Render bar footer showing: number of trades, average trade size, max single trade with smaller font below cluster grid in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Render bar header summary above each cluster bar showing: total volume, net delta, cumulative delta, POC price with monospace font alignment in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Render bar footer showing: number of trades, average trade size, max single trade with smaller font below cluster grid in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 - [ ] Implement cell tooltip on hover displaying: exact buy volume, exact sell volume, delta, delta percent, number of buy trades, number of sell trades, max single trade, timestamp range in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 - [ ] Implement number formatting options: raw numbers, K suffix (thousands), M suffix (millions), scientific notation, custom decimal places in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 

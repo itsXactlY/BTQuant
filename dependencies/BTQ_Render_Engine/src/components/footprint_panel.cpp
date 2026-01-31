@@ -42,16 +42,13 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
 
     case NumberFormat::MillionsM:
       if (std::abs(value) >= 1000000000.0) {
-        // Billions
+        // Billions - show as billions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000000.0) << "B";
       } else if (std::abs(value) >= 1000000.0) {
-        // Millions
+        // Millions - show as millions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
-      } else if (std::abs(value) >= 1000.0) {
-        // Thousands
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
       } else {
-        // Raw value
+        // Values less than 1 million - show as raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;
@@ -366,15 +363,18 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
 
     case Data::VolumeAnalysisType::DeltaPercent:
       // Use the delta which contains the percentage value calculated in the main render loop
-      return std::format("{:.1f}%", cell.delta);
+      // Format percentage using the selected number format
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_) + "%";
 
     case Data::VolumeAnalysisType::BuyVolumePercent:
       // Use the delta which contains the percentage value calculated in the main render loop
-      return std::format("{:.1f}%", cell.delta);
+      // Format percentage using the selected number format
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_) + "%";
 
     case Data::VolumeAnalysisType::SellVolumePercent:
       // Use the delta which contains the percentage value calculated in the main render loop
-      return std::format("{:.1f}%", cell.delta);
+      // Format percentage using the selected number format
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_) + "%";
 
     case Data::VolumeAnalysisType::CumulativeDelta:
       // Use the delta which was already calculated in the main render loop

@@ -1052,28 +1052,6 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
     // Also update the global POC price to reflect the current calculation for display purposes
     poc_price_ = xs[poc_index];
   }
-  // If no POC was found locally but we have a global POC, draw that
-  else if (poc_price_ > 0) {
-    // Calculate min/max x values for the line based on global data
-    double min_vol = 0.0, max_vol = 0.0;
-    for (int i = 0; i < count; ++i) {
-      min_vol = std::min(min_vol, std::min(ys[i], neg_ys[i]));
-      max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
-    }
-
-    // Ensure we have valid min/max values for the line
-    if (max_vol <= min_vol) {
-      max_vol = max_volume_;
-      min_vol = -max_volume_;
-    }
-
-    // Draw POC line using global POC price
-    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, poc_price_);
-    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, poc_price_);
-
-    // Draw the horizontal POC line - make it more prominent with consistent styling
-    draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 3.0f);  // Bright yellow with increased thickness
-  }
 }
 
 // Method to render mini histogram overlays on candlestick charts

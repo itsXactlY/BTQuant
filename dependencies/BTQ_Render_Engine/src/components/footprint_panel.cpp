@@ -225,7 +225,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
         // Yellow: high R&G, low B; Orange: high R, medium G, low B
         float red_val = 200.0f + 55.0f * intensity;      // Range: 200-255 (higher for more intensity)
         float green_val = 150.0f + 105.0f * intensity;   // Range: 150-255 (increasing for more intensity)
-        float blue_val = 0.0f;                           // Keep blue low for yellow/orange tones
+        float blue_val = 50.0f * (1.0f - intensity);     // Low blue that decreases with intensity for better contrast
 
         return IM_COL32(
             static_cast<int>(std::min(255.0f, red_val)),

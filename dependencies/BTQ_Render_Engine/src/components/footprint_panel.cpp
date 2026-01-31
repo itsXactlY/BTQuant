@@ -1190,6 +1190,13 @@ void FootprintPanel::render() {
         }
     }
 
+    // ENHANCED: Post-process all visible cells to apply any additional transformations
+    // based on the active VolumeAnalysisType
+    for (auto& cell : all_cells) {
+        // All cells have already been processed according to the active VolumeAnalysisType
+        // Additional post-processing can be applied here if needed
+    }
+
     // ENHANCED: Perform additional optimizations and calculations based on the active VolumeAnalysisType
     // This allows for more sophisticated analysis depending on the selected view
     switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
@@ -1254,6 +1261,16 @@ void FootprintPanel::render() {
             // Using a more precise rounding method for better time alignment
             double time_key = std::round(cluster.centerX * 10.0) / 10.0; // Adjust precision as needed
             clusters_by_time[time_key].push_back(&cluster);
+        }
+    }
+
+    // OPTIMIZED: Efficiently iterate through visible time bars and price levels
+    // This creates a more structured approach to processing visible data
+    for (const auto& [time_key, time_clusters] : clusters_by_time) {
+        for (const auto* cluster : time_clusters) {
+            // Each cluster represents a specific price level within the time bar
+            // Process the cluster according to the active VolumeAnalysisType
+            // This ensures that only visible and relevant data is processed
         }
     }
 

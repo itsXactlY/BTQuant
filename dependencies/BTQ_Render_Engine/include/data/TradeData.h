@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 
 namespace BTQuant {
 namespace Data {
@@ -10,9 +9,9 @@ namespace Data {
 // Trade Data Structure
 // ============================================================================
 
-enum class TradeSide {
-    BUY,
-    SELL
+enum class TradeSide : uint8_t {
+    BUY = 0,
+    SELL = 1
 };
 
 enum class TradeFlags : uint8_t {
@@ -25,12 +24,14 @@ enum class TradeFlags : uint8_t {
     LIMIT_ORDER = 0x20
 };
 
+// Optimized TradeData struct with proper packing for memory efficiency
+#pragma pack(push, 1)
 struct TradeData {
     uint64_t timestamp;      // Unix timestamp in milliseconds
     double price;            // Price of the trade
-    float volume;            // Volume of the trade (changed from double to float for optimization)
+    float volume;            // Volume of the trade
     TradeSide side;          // Side of the trade (BUY/SELL)
-    uint8_t exchange_id;     // Exchange identifier (changed from string to uint8_t for optimization)
+    uint8_t exchange_id;     // Exchange identifier
     uint8_t flags;           // Bitmask of trade flags
 
     // Default constructor
@@ -40,6 +41,7 @@ struct TradeData {
     TradeData(uint64_t ts, double p, float v, TradeSide s, uint8_t ex_id, uint8_t f)
         : timestamp(ts), price(p), volume(v), side(s), exchange_id(ex_id), flags(f) {}
 };
+#pragma pack(pop)
 
 // Helper functions for flag manipulation
 inline void set_flag(uint8_t& flags, TradeFlags flag) {

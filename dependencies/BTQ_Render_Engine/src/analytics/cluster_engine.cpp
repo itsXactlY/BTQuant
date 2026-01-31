@@ -1,4 +1,5 @@
 #include "../../include/analytics/cluster_engine.hpp"
+#include <map>
 #include <mutex>
 #include <tuple>
 #include <limits>
@@ -310,4 +311,82 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
     return imbalances;
 }
 
+void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& trade, BTQuant::Data::TimeAggregationType agg_type, int n_contracts, int n_ticks) {
+    int64_t abs_tick_index = static_cast<int64_t>(std::round(trade.price / tick_size_));
+
+    // Initialize session start time if not already set
+    if (session_start_us_ == 0) {
+        session_start_us_ = trade.timestamp_us;
+    }
+
+    // Determine the appropriate time bucket based on aggregation type
+    int time_bucket = 0;
+
+    switch (agg_type) {
+        case BTQuant::Data::TimeAggregationType::T_1MIN:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_5MIN:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (5LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_15MIN:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (15LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_30MIN:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (30LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_1HOUR:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (60LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_2HOUR:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (2LL * 60LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::T_4HOUR:
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (4LL * 60LL * 60LL * 1000000LL));
+            break;
+        case BTQuant::Data::TimeAggregationType::VOLUME_BASED:
+        {
+            // For volume-based aggregation, use static thread-local variables to accumulate volume at the price level
+            static thread_local std::map<int64_t, double> volume_accumulators;  // Accumulated volume by price level
+
+            // For volume-based aggregation, accumulate volume at the price level
+            volume_accumulators[abs_tick_index] += trade.quantity;
+
+            // Determine which time bucket this belongs to based on accumulated volume
+            time_bucket = static_cast<int>(volume_accumulators[abs_tick_index] / n_contracts);
+
+            // If we've reached the threshold, reset the accumulator for this price level
+            if (volume_accumulators[abs_tick_index] >= n_contracts) {
+                volume_accumulators[abs_tick_index] = fmod(volume_accumulators[abs_tick_index], n_contracts);
+            }
+            break;
+        }
+        case BTQuant::Data::TimeAggregationType::TICK_BASED:
+        {
+            // For tick-based aggregation, use static thread-local variables to count ticks at the price level
+            static thread_local std::map<int64_t, int> tick_accumulators;       // Count of ticks by price level
+
+            // For tick-based aggregation, count ticks at the price level
+            tick_accumulators[abs_tick_index]++;
+
+            // Determine which time bucket this belongs to based on tick count
+            time_bucket = static_cast<int>(tick_accumulators[abs_tick_index] / n_ticks);
+
+            // If we've reached the threshold, reset the counter for this price level
+            if (tick_accumulators[abs_tick_index] >= n_ticks) {
+                tick_accumulators[abs_tick_index] = tick_accumulators[abs_tick_index] % n_ticks;
+            }
+            break;
+        }
+        default:
+            // Default to 1-minute aggregation
+            time_bucket = static_cast<int>((trade.timestamp_us - session_start_us_) / (60LL * 1000000LL));
+            break;
+    }
+
+    // Process the trade with the determined time bucket
+    processTrade(trade, time_bucket);
+}
+
 } // namespace Analytics
+

@@ -131,6 +131,24 @@ public:
   // Notify that price aggregation settings have changed and clusters need to be recalculated
   void notifyPriceAggregationChanged();
 
+  // Set time aggregation type for footprint charts
+  void setTimeAggregationType(Data::TimeAggregationType type) { time_aggregation_type_ = type; }
+
+  // Get time aggregation type
+  Data::TimeAggregationType getTimeAggregationType() const { return time_aggregation_type_; }
+
+  // Set volume-based aggregation parameters
+  void setVolumeBasedNContracts(int n) { volume_based_n_contracts_ = std::max(1, n); }
+
+  // Get volume-based aggregation parameters
+  int getVolumeBasedNContracts() const { return volume_based_n_contracts_; }
+
+  // Set tick-based aggregation parameters
+  void setTickBasedNTicks(int n) { tick_based_n_ticks_ = std::max(1, n); }
+
+  // Get tick-based aggregation parameters
+  int getTickBasedNTicks() const { return tick_based_n_ticks_; }
+
   // Get ImGui Texture ID for the LOB Heatmap
   // This utilizes ImGui_ImplVulkan_AddTexture manually
   void *getHeatmapTextureID();
@@ -231,6 +249,11 @@ private:
   // Price aggregation settings
   Data::PriceAggregationType price_aggregation_type_ = Data::PriceAggregationType::P_1TICK;
   double custom_price_aggregation_value_ = 0.1;
+
+  // Time aggregation settings
+  Data::TimeAggregationType time_aggregation_type_ = Data::TimeAggregationType::T_1MIN;
+  int volume_based_n_contracts_ = 1000;  // Default: every 1000 contracts
+  int tick_based_n_ticks_ = 100;         // Default: every 100 ticks
 
   // Cluster Engine for advanced analytics
   std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;

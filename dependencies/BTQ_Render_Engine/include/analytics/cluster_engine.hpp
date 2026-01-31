@@ -2,10 +2,12 @@
 
 #include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
 #include "../hotspine_layout_v3.hpp"
+#include "data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <vector>
 
@@ -131,6 +133,9 @@ public:
   // Process trade with atomic updates to ClusterCell counters for given price level and time bucket
   void processTrade(const MarketData::Trade& trade, int time_bucket);
 
+  // Process trade with time aggregation based on different aggregation types
+  void processTradeWithTimeAggregation(const MarketData::Trade& trade, BTQuant::Data::TimeAggregationType agg_type, int n_contracts = 1000, int n_ticks = 100);
+
   // Detect diagonal imbalances by comparing buy_volume at price P with sell_volume at price P-1
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_diagonal_imbalances(double threshold = 3.0) const;
 
@@ -176,5 +181,6 @@ private:
 
   // Additional data structure for cluster cells with time buckets
   std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]
+
 };
 } // namespace Analytics

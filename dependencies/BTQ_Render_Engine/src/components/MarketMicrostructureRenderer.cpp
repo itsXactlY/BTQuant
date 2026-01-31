@@ -489,9 +489,14 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id,
       int time_bucket = static_cast<int>(elapsed / INTERVAL_US);
       if (time_bucket < 0) time_bucket = 0; // Ensure non-negative bucket index
 
-      // Process the trade with the cluster engine
+      // Process the trade with the cluster engine using the selected time aggregation type
       if (cluster_engine_) {
-        cluster_engine_->processTrade(trade_data, time_bucket);
+        cluster_engine_->processTradeWithTimeAggregation(
+            trade_data,
+            time_aggregation_type_,
+            volume_based_n_contracts_,
+            tick_based_n_ticks_
+        );
       }
     }
 

@@ -72,7 +72,14 @@ FootprintPanel::FootprintPanel(
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
       volume_based_n_contracts_(1000),
-      tick_based_n_ticks_(100) {}
+      tick_based_n_ticks_(100) {
+    // Initialize renderer with the current time aggregation settings
+    if (renderer_) {
+      renderer_->setTimeAggregationType(time_aggregation_type_);
+      renderer_->setVolumeBasedNContracts(volume_based_n_contracts_);
+      renderer_->setTickBasedNTicks(tick_based_n_ticks_);
+    }
+}
 
 void FootprintPanel::update(float dt) {
   // Update logic if needed
@@ -764,6 +771,10 @@ void FootprintPanel::render() {
       if (ImGui::Selectable(time_agg_names[i], is_selected)) {
         current_time_agg = i;
         time_aggregation_type_ = static_cast<Data::TimeAggregationType>(i);
+        // Update renderer with new time aggregation type
+        if (renderer_) {
+          renderer_->setTimeAggregationType(time_aggregation_type_);
+        }
         // Mark data as dirty to trigger immediate rendering update
         data_dirty_.store(true, std::memory_order_release);
       }
@@ -783,6 +794,10 @@ void FootprintPanel::render() {
     int temp_volume_n = volume_based_n_contracts_;
     if (ImGui::InputInt("##VolumeBasedN", &temp_volume_n, 1, 10)) {
       volume_based_n_contracts_ = std::max(1, temp_volume_n); // Ensure minimum value of 1
+      // Update renderer with new volume-based N contracts value
+      if (renderer_) {
+        renderer_->setVolumeBasedNContracts(volume_based_n_contracts_);
+      }
       // Mark data as dirty to trigger immediate rendering update
       data_dirty_.store(true, std::memory_order_release);
     }
@@ -796,6 +811,10 @@ void FootprintPanel::render() {
     int temp_tick_n = tick_based_n_ticks_;
     if (ImGui::InputInt("##TickBasedN", &temp_tick_n, 1, 10)) {
       tick_based_n_ticks_ = std::max(1, temp_tick_n); // Ensure minimum value of 1
+      // Update renderer with new tick-based N ticks value
+      if (renderer_) {
+        renderer_->setTickBasedNTicks(tick_based_n_ticks_);
+      }
       // Mark data as dirty to trigger immediate rendering update
       data_dirty_.store(true, std::memory_order_release);
     }

@@ -438,6 +438,54 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
   }
 }
 
+std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
+  // Calculate delta percent
+  double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+  double delta_percent = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
+
+  // For buy/sell trades, we'll estimate based on volume ratios
+  // In a real implementation, we'd need separate counters for buy/sell trades
+  double total_vol = cell.bid_volume + cell.ask_volume;
+  int buy_trades = 0;
+  int sell_trades = 0;
+
+  if (total_vol > 0) {
+    buy_trades = static_cast<int>(cell.trade_count * (cell.bid_volume / total_vol));
+    sell_trades = cell.trade_count - buy_trades;
+  } else {
+    // If no volume, split trades equally
+    buy_trades = cell.trade_count / 2;
+    sell_trades = cell.trade_count - buy_trades;
+  }
+
+  // For max single trade, we'll estimate as a portion of total volume
+  // In a real implementation, we'd need the actual max trade size
+  double max_single_trade = total_vol > 0 ? total_vol / cell.trade_count : 0.0;
+
+  // Format the tooltip text with all required information
+  std::string tooltip = std::format(
+    "Buy Volume: {:.2f}\n"
+    "Sell Volume: {:.2f}\n"
+    "Delta: {:.2f}\n"
+    "Delta %: {:.2f}%\n"
+    "Buy Trades: {}\n"
+    "Sell Trades: {}\n"
+    "Max Single Trade: {:.2f}\n"
+    "Timestamp Range: {:.2f}-{:.2f}",
+    cell.bid_volume,
+    cell.ask_volume,
+    cell.delta,
+    delta_percent,
+    buy_trades,
+    sell_trades,
+    max_single_trade,
+    cell.x - cell.width/2.0, // Start time
+    cell.x + cell.width/2.0  // End time
+  );
+
+  return tooltip;
+}
+
 void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list, double max_volume) {
   // Call the overloaded version with empty imbalance vectors
   std::vector<FootprintCell> empty_diagonal;
@@ -569,6 +617,7 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
       }
     }
   }
+
 }
 
 bool FootprintPanel::isDiagonalImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const {
@@ -1002,6 +1051,26 @@ void FootprintPanel::render() {
     for (const auto &cell : all_cells) {
       // Render the cell with the calculated max volume for adaptive alpha
       renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances);
+    }
+
+    // Handle tooltip for the cell under the mouse cursor
+    if (ImPlot::IsPlotHovered()) {
+      ImVec2 mouse_pos_plot = ImPlot::GetPlotMousePos();
+
+      // Find the cell under the mouse cursor
+      for (const auto &cell : all_cells) {
+        double x1 = cell.x - cell.width * 0.48;
+        double x2 = cell.x + cell.width * 0.48;
+        double y1 = cell.y - cell.height * 0.48;
+        double y2 = cell.y + cell.height * 0.48;
+
+        if (mouse_pos_plot.x >= x1 && mouse_pos_plot.x <= x2 &&
+            mouse_pos_plot.y >= y1 && mouse_pos_plot.y <= y2) {
+          // Show tooltip for this cell
+          ImGui::SetTooltip("%s", getCellTooltip(cell).c_str());
+          break; // Only show tooltip for the first cell found under cursor
+        }
+      }
     }
 
     // Render header summaries above each time bar

@@ -3,7 +3,7 @@
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 #include "data/unified_data_pipeline.hpp"  // For DataType enum
-#include "data/VolumeDataTypes.h"          // For VolumeDataType enum
+#include "data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
 #include <memory>
 #include <vector>
 
@@ -84,9 +84,20 @@ private:
   std::vector<FootprintCell> cells_;
 
   // Rendering Helpers
-  ImU32 getCellColor(const FootprintCell &cell) const;
+  ImU32 getCellColor(const FootprintCell &cell, double max_volume = 10000.0) const;
   std::string getCellLabel(const FootprintCell &cell) const;
-  void renderCell(const FootprintCell &cell, ImDrawList *draw_list);
+  void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0);
+  void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume,
+                 const std::vector<FootprintCell> &diagonal_imbalances,
+                 const std::vector<FootprintCell> &stacked_imbalances);
+  std::string getCellTooltip(const FootprintCell &cell) const;
+
+  // Imbalance Detection
+  bool isDiagonalImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const;
+  bool isStackedImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const;
+  void detectImbalances(const std::vector<FootprintCell>& cells,
+                       std::vector<FootprintCell>& diagonal_imbalances,
+                       std::vector<FootprintCell>& stacked_imbalances) const;
 };
 
 } // namespace BTQuant

@@ -96,6 +96,12 @@ void FootprintPanel::update(float dt) {
 }
 
 ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume) const {
+  // For SplitVolume mode, we don't use this method as the cell is drawn with split colors
+  if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) == Data::VolumeAnalysisType::SplitVolume) {
+    // Return a default color that won't be used since split volume draws its own colors
+    return IM_COL32(128, 128, 128, 255); // Gray as default
+  }
+
   // Calculate values based on selected volume data type
   double value_to_display = 0.0;
   double total_vol = cell.bid_volume + cell.ask_volume;
@@ -345,6 +351,11 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
   // we can now use them directly
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+    case Data::VolumeAnalysisType::SplitVolume:
+      // For split volume mode, show both buy and sell volumes
+      return formatNumber(cell.bid_volume, number_format_, custom_decimal_places_) + "/" +
+             formatNumber(cell.ask_volume, number_format_, custom_decimal_places_);
+
     case Data::VolumeAnalysisType::Trades:
       // For trade counts, we'll use the number formatting
       return formatNumber(static_cast<double>(cell.trade_count), number_format_, custom_decimal_places_);
@@ -475,11 +486,37 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
   ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
 
-  // Get cell color
-  ImU32 color = getCellColor(cell, max_volume);
+  // Special handling for SplitVolume mode
+  if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) == Data::VolumeAnalysisType::SplitVolume) {
+    // Draw split volume: left half for buy volume, right half for sell volume
+    float mid_x = (p1.x + p2.x) * 0.5f;
 
-  // Draw filled cell
-  draw_list->AddRectFilled(p1, p2, color);
+    // Calculate colors for buy and sell volumes separately
+    float buy_alpha = cell.bid_volume > 0.0 ? std::clamp(static_cast<float>(cell.bid_volume / max_volume), 0.05f, 1.0f) : 0.05f;
+    float sell_alpha = cell.ask_volume > 0.0 ? std::clamp(static_cast<float>(cell.ask_volume / max_volume), 0.05f, 1.0f) : 0.05f;
+
+    ImU32 buy_color = IM_COL32(0, 200, 0, static_cast<int>(buy_alpha * 255)); // Green for buy volume
+    ImU32 sell_color = IM_COL32(200, 0, 0, static_cast<int>(sell_alpha * 255)); // Red for sell volume
+
+    // Draw left half (buy volume)
+    if (cell.bid_volume > 0.0) {
+      draw_list->AddRectFilled(p1, ImVec2(mid_x, p2.y), buy_color);
+    }
+
+    // Draw right half (sell volume)
+    if (cell.ask_volume > 0.0) {
+      draw_list->AddRectFilled(ImVec2(mid_x, p1.y), p2, sell_color);
+    }
+
+    // Draw dividing line between buy and sell halves
+    draw_list->AddLine(ImVec2(mid_x, p1.y), ImVec2(mid_x, p2.y), IM_COL32(255, 255, 255, 100), 1.0f);
+  } else {
+    // Get cell color for other modes
+    ImU32 color = getCellColor(cell, max_volume);
+
+    // Draw filled cell
+    draw_list->AddRectFilled(p1, p2, color);
+  }
 
   // Check if this cell is part of any imbalances
   bool is_diagonal = false;
@@ -560,7 +597,13 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   } else {
     // Draw subtle border for cell separation (normal case)
     ImU32 border_color = IM_COL32(255, 255, 255, 13); // White, 5% alpha
-    draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
+    // For SplitVolume mode, we still want to draw the border around the whole cell
+    if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) != Data::VolumeAnalysisType::SplitVolume) {
+      draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
+    } else {
+      // For split volume, draw border around the whole cell
+      draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
+    }
   }
 
   // Draw volume label if enabled and cell is large enough
@@ -767,11 +810,11 @@ void FootprintPanel::render() {
 
   ImGui::SameLine();
 
-  // Volume data type selector for footprint visualization (all 16 types)
+  // Volume data type selector for footprint visualization (all 17 types)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
     "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"
+    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "SplitVol"
   };
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
@@ -1160,6 +1203,10 @@ void FootprintPanel::render() {
                 case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
                     analysis_value = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                     break;
+                case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+                    // For split volume, use the maximum of buy or sell volume for scaling purposes
+                    analysis_value = std::max(static_cast<double>(cluster.bidVolume), static_cast<double>(cluster.askVolume));
+                    break;
                 default:
                     analysis_value = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                     break;
@@ -1266,6 +1313,10 @@ void FootprintPanel::render() {
                             break;
                         case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
                             analysis_value = cell.total_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+                            // For split volume, use the maximum of buy or sell volume for scaling purposes
+                            analysis_value = std::max(cell.buy_volume, cell.sell_volume);
                             break;
                         default:
                             analysis_value = cell.total_volume;
@@ -1526,6 +1577,13 @@ void FootprintPanel::render() {
                     cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                     break;
 
+                case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+                    // For split volume mode, preserve original bid/ask volumes for split display
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume); // Keep delta for other calculations
+                    break;
+
                 default:
                     // Default to total volume if unknown type
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
@@ -1748,6 +1806,11 @@ void FootprintPanel::render() {
                     cluster_value = static_cast<double>(cluster->bidVolume + cluster->askVolume);
                     break;
 
+                case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+                    // For split volume, use the maximum of buy or sell volume for aggregation
+                    cluster_value = std::max(static_cast<double>(cluster->bidVolume), static_cast<double>(cluster->askVolume));
+                    break;
+
                 default:
                     cluster_value = static_cast<double>(cluster->bidVolume + cluster->askVolume);
                     break;
@@ -1836,6 +1899,10 @@ void FootprintPanel::render() {
         case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
           cell_volume = cell.bid_volume + cell.ask_volume;
           break;
+        case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+          // For split volume, use the maximum of buy or sell volume for threshold comparison
+          cell_volume = std::max(cell.bid_volume, cell.ask_volume);
+          break;
         default:
           cell_volume = cell.bid_volume + cell.ask_volume; // Default to total volume
           break;
@@ -1918,6 +1985,10 @@ void FootprintPanel::render() {
               break;
             case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
               cell_volume = cell.bid_volume + cell.ask_volume;
+              break;
+            case BTQuant::Data::VolumeAnalysisType::SplitVolume:
+              // For split volume, use the maximum of buy or sell volume for threshold comparison
+              cell_volume = std::max(cell.bid_volume, cell.ask_volume);
               break;
             default:
               cell_volume = cell.bid_volume + cell.ask_volume; // Default to total volume
@@ -2069,7 +2140,7 @@ void FootprintPanel::render() {
     const char* vol_type_names[] = {
       "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
       "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types
+      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "SplitVol"  // 17 types
     };
 
     // Time aggregation type names for display
@@ -2236,6 +2307,11 @@ void FootprintPanel::render() {
 
         case Data::VolumeAnalysisType::FilteredVolume:
           total_value += c.bidVolume + c.askVolume; // Same as total volume for demo
+          break;
+
+        case Data::VolumeAnalysisType::SplitVolume:
+          // For split volume, use the maximum of buy or sell volume for total calculation
+          total_value += std::max(c.bidVolume, c.askVolume);
           break;
 
         default:

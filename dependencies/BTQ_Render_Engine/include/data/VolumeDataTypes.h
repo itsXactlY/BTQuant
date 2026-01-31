@@ -24,7 +24,8 @@ enum class VolumeAnalysisType {
   AverageBuySize,     // Average size of buy trades
   AverageSellSize,    // Average size of sell trades
   MaxOneTradeVolume,  // Maximum volume of a single trade
-  FilteredVolume      // Volume filtered by specific criteria
+  FilteredVolume,     // Volume filtered by specific criteria
+  SplitVolume         // Split volume display: buy volume on left half, sell volume on right half
 };
 
   // Alias for backward compatibility

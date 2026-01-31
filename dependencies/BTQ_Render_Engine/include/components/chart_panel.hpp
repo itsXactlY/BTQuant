@@ -131,6 +131,15 @@ class ChartPanel : public PanelBase {
                                                    const std::vector<double>& y_coords_low,
                                                    bool show_poc_line = true,
                                                    int num_buckets_per_candle = 8);
+  void render_enhanced_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
+                                                           const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                           const std::vector<double>& x_coords,
+                                                           const std::vector<double>& y_coords_high,
+                                                           const std::vector<double>& y_coords_low,
+                                                           bool show_poc_line = true,
+                                                           int num_buckets_per_candle = 8,
+                                                           float opacity = 1.0f,
+                                                           bool show_labels = false);
 
   // Indicator calculation helpers
   std::vector<double> calculate_sma(const std::vector<float>& prices, int period);

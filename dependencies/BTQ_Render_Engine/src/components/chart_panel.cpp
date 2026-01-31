@@ -1073,13 +1073,13 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
         // If we have recent trades, render the step profile histograms showing volume distribution for each candle
         if (!recent_trades.empty()) {
-          // Use the specific method for Step Profile rendering: draw mini histogram overlay on each candlestick bar
-          // showing volume distribution for that bar's price range
+          // Use the enhanced method for Step Profile rendering: draw mini histogram overlay on each candlestick bar
+          // showing volume distribution for that bar's price range with additional visualization options
           // This is the main implementation for the task requirement
           // We'll call the method directly on this instance since we have access to the processor and symbol_id
-          render_step_profile_histograms_on_candle_bars(draw_list, visible_candles, x_coords,
-                                                     y_coords_high, y_coords_low,
-                                                     true, 8);  // Show POC line with 8 buckets per candle
+          render_enhanced_step_profile_histograms_on_candle_bars(draw_list, visible_candles, x_coords,
+                                                              y_coords_high, y_coords_low,
+                                                              true, 8, 0.8f, false);  // Show POC line with 8 buckets per candle, 80% opacity, no labels
         }
       }
     }
@@ -1110,17 +1110,18 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
   ImPlot::PopStyleColor(3);
 }
 
-void ChartPanel::render_step_profile_histograms_on_candle_bars(
-    ImDrawList* draw_list,
-    const std::vector<RenderEngine::OHLCVCandle>& candles,
-    const std::vector<double>& x_coords,
-    const std::vector<double>& y_coords_high,
-    const std::vector<double>& y_coords_low,
-    bool show_poc_line,
-    int num_buckets_per_candle) {
+// Helper method to render enhanced step profile histograms on candle bars
+void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
+                                                                   const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                                   const std::vector<double>& x_coords,
+                                                                   const std::vector<double>& y_coords_high,
+                                                                   const std::vector<double>& y_coords_low,
+                                                                   bool show_poc_line,
+                                                                   int num_buckets_per_candle,
+                                                                   float opacity,
+                                                                   bool show_labels) {
 
-  // This method implements the specific requirement: draw mini histogram overlay on each candlestick bar
-  // showing volume distribution for that bar's price range
+  // This method implements the Step Profile rendering with additional visualization options
   if (candles.empty() || x_coords.size() != candles.size() ||
       y_coords_high.size() != candles.size() || y_coords_low.size() != candles.size()) {
     return;
@@ -1138,7 +1139,7 @@ void ChartPanel::render_step_profile_histograms_on_candle_bars(
   auto analytics = processor_->getSymbolAnalytics(symbol_id);
   const auto& trades = analytics.recent_trades;
 
-  // Iterate through each candle to draw step profile histogram
+  // Iterate through each candle to draw enhanced step profile histogram
   for (size_t i = 0; i < candles.size(); ++i) {
     const auto& candle = candles[i];
 
@@ -1192,7 +1193,7 @@ void ChartPanel::render_step_profile_histograms_on_candle_bars(
     float total_height = y_low - y_high;  // Height of the candle in screen space
     float bucket_height = total_height / num_buckets_per_candle;
 
-    // Draw step profile histogram inside the candle
+    // Draw enhanced step profile histogram inside the candle
     for (int j = 0; j < num_buckets_per_candle; ++j) {
       if (bucket_volumes[j] > 0) {
         // Calculate the fill percentage of this bucket
@@ -1204,7 +1205,7 @@ void ChartPanel::render_step_profile_histograms_on_candle_bars(
         float y_bottom = y_high + (j + 1) * bucket_height;
 
         // Calculate width of the bar based on fill percentage
-        float bar_width = (y_bottom - y_top) * 0.6f;  // Use 60% of height as width for visibility
+        float bar_width = (y_bottom - y_top) * 0.7f;  // Slightly wider for better visibility
         float filled_width = bar_width * fill_percentage;
 
         // Calculate the x positions for the bar
@@ -1215,7 +1216,7 @@ void ChartPanel::render_step_profile_histograms_on_candle_bars(
         ImU32 color;
         if (j == poc_bucket_idx) {
           // Highlight POC bucket with bright yellow
-          color = IM_COL32(255, 255, 0, 240);  // Bright yellow for POC with high opacity
+          color = IM_COL32(255, 255, 0, static_cast<int>(240 * opacity));  // Bright yellow for POC with adjustable opacity
         } else {
           // Use gradient colors based on volume intensity and position in the candle
           float volume_ratio = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
@@ -1226,39 +1227,57 @@ void ChartPanel::render_step_profile_histograms_on_candle_bars(
           // Create a color gradient based on volume intensity and position
           if (position_ratio < 0.5f) {
             // Lower half - red for selling pressure, with intensity based on volume
-            int red_intensity = static_cast<int>(255 * volume_ratio);
-            color = IM_COL32(red_intensity, static_cast<int>(50 * volume_ratio),
-                            static_cast<int>(50 * volume_ratio), 180);
+            int red_intensity = static_cast<int>(255 * volume_ratio * opacity);
+            int alpha = static_cast<int>(180 * opacity);
+            color = IM_COL32(red_intensity, static_cast<int>(50 * volume_ratio * opacity),
+                            static_cast<int>(50 * volume_ratio * opacity), alpha);
           } else {
             // Upper half - green for buying pressure, with intensity based on volume
-            int green_intensity = static_cast<int>(255 * volume_ratio);
-            color = IM_COL32(static_cast<int>(50 * volume_ratio), green_intensity,
-                            static_cast<int>(50 * volume_ratio), 180);
+            int green_intensity = static_cast<int>(255 * volume_ratio * opacity);
+            int alpha = static_cast<int>(180 * opacity);
+            color = IM_COL32(static_cast<int>(50 * volume_ratio * opacity), green_intensity,
+                            static_cast<int>(50 * volume_ratio * opacity), alpha);
           }
         }
 
-        // Draw the step profile histogram bar with a slight outline for better visibility
+        // Draw the enhanced step profile histogram bar with a slight outline for better visibility
         draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
 
         // Add a subtle border to make individual bars more distinguishable
-        draw_list->AddRect(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), IM_COL32(0, 0, 0, 80), 0.0f, 0, 1.0f);
+        if (opacity > 0.3f) {  // Only add border if not too transparent
+          draw_list->AddRect(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom),
+                           IM_COL32(0, 0, 0, static_cast<int>(80 * opacity)), 0.0f, 0, 1.0f);
+        }
       }
     }
 
-    // Optionally draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
+    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
     if (show_poc_line && poc_bucket_idx >= 0) {
       // Calculate the y-coordinate for the POC line
       float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height;  // Center of the POC bucket
 
       // Draw horizontal yellow line across the candle width
-      float poc_line_half_width = (total_height) * 0.3f;  // Reduced width to avoid overlapping with candle wicks
+      float poc_line_half_width = (total_height) * 0.35f;  // Slightly wider for better visibility
       float poc_x_left = x_center - poc_line_half_width;
       float poc_x_right = x_center + poc_line_half_width;
 
-      // Draw the POC line as a horizontal yellow line
+      // Draw the POC line as a horizontal yellow line with adjustable opacity
       draw_list->AddLine(ImVec2(poc_x_left, poc_y), ImVec2(poc_x_right, poc_y),
-                         IM_COL32(255, 255, 0, 255),  // Bright yellow color for POC
-                         2.0f);                        // Line thickness
+                         IM_COL32(255, 255, 0, static_cast<int>(255 * opacity)),  // Bright yellow color for POC with adjustable opacity
+                         2.5f);                        // Slightly thicker line for better visibility
+    }
+
+    // Optionally show labels for the mini histogram
+    if (show_labels) {
+      // Add a small label indicating this is a volume profile histogram
+      char label[32];
+      snprintf(label, sizeof(label), "%.0f", candle.volume);
+
+      // Position the label at the top of the candle
+      ImVec2 label_pos = ImVec2(x_center, y_high - 15.0f);
+
+      // Draw the label with appropriate color
+      draw_list->AddText(label_pos, IM_COL32(255, 255, 255, static_cast<int>(200 * opacity)), label);
     }
   }
 }

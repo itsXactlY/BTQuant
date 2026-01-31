@@ -1076,6 +1076,38 @@ void FootprintPanel::render() {
     ImPlot::EndPlot();
   }
 
+  // Calculate footer statistics: number of trades, average trade size, max single trade
+  int total_trades = 0;
+  double total_volume = 0.0;
+  double max_single_trade_volume = 0.0;
+
+  for (const auto &c : clusters) {
+    total_trades += c.tradeCount;
+    double cluster_total_volume = static_cast<double>(c.bidVolume + c.askVolume);
+    total_volume += cluster_total_volume;
+
+    // Update max single trade volume if this cluster has a larger volume
+    if (cluster_total_volume > max_single_trade_volume) {
+      max_single_trade_volume = cluster_total_volume;
+    }
+  }
+
+  // Calculate average trade size
+  double avg_trade_size = (total_trades > 0) ? total_volume / static_cast<double>(total_trades) : 0.0;
+
+  // Render footer with smaller font below the cluster grid
+  if (!clusters.empty()) {
+    // Create a separator line above the footer
+    ImGui::Separator();
+
+    // Temporarily reduce font size for the footer using text scaling
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 3.0f));
+    ImGui::Text("Trades: %d | Avg Size: %.2f | Max Trade: %.2f",
+                total_trades, avg_trade_size, max_single_trade_volume);
+    ImGui::PopStyleVar(2);
+  }
+
   // Enhanced Debug Overlay
   if (!clusters.empty()) {
     // Determine the current volume data type name for display

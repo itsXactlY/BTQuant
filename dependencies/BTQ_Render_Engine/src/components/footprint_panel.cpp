@@ -28,7 +28,13 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::ThousandsK:
-      if (std::abs(value) >= 1e12) {
+      if (std::abs(value) >= 1e18) {
+        // Exa (quintillions)
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e18) << "E";
+      } else if (std::abs(value) >= 1e15) {
+        // Peta (quadrillions)
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "P";
+      } else if (std::abs(value) >= 1e12) {
         // Trillions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
       } else if (std::abs(value) >= 1e9) {
@@ -47,9 +53,13 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::MillionsM:
-      if (std::abs(value) >= 1e15) {
-        // Quadrillions
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "Q";
+      // Format primarily in millions, with fallback to other units for very large/small numbers
+      if (std::abs(value) >= 1e18) {
+        // Exa (quintillions)
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e18) << "E";
+      } else if (std::abs(value) >= 1e15) {
+        // Peta (quadrillions)
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "P";
       } else if (std::abs(value) >= 1e12) {
         // Trillions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
@@ -57,14 +67,17 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
         // Billions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e9) << "B";
       } else if (std::abs(value) >= 1e6) {
-        // Millions - show as millions
+        // Millions - show as millions (this is the primary unit for this format)
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e6) << "M";
       } else if (std::abs(value) >= 1e3) {
         // Thousands - show as thousands
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e3) << "K";
-      } else {
-        // Values less than 1 thousand - show as raw value
+      } else if (std::abs(value) >= 1.0) {
+        // Values between 1 and 1000 - show as raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
+      } else {
+        // Small values - use scientific notation for better readability
+        oss << std::scientific << std::setprecision(decimal_places) << value;
       }
       break;
 

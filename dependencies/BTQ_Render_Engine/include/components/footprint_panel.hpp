@@ -145,15 +145,16 @@ private:
                  const std::vector<FootprintCell> &stacked_imbalances);
   std::string getCellTooltip(const FootprintCell &cell) const;
 
-  // Number formatting helper
-  static std::string formatNumber(double value, NumberFormat format, int decimal_places);
-
   // Imbalance Detection
   bool isDiagonalImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const;
   bool isStackedImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const;
   void detectImbalances(const std::vector<FootprintCell>& cells,
                        std::vector<FootprintCell>& diagonal_imbalances,
                        std::vector<FootprintCell>& stacked_imbalances) const;
+
+private:
+  // Number formatting helper
+  static std::string formatNumber(double value, NumberFormat format, int decimal_places);
 };
 
 } // namespace BTQuant

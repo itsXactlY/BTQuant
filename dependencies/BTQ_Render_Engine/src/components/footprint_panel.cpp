@@ -24,21 +24,33 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::ThousandsK:
-      if (std::abs(value) >= 1000000.0) {
+      if (std::abs(value) >= 1000000000.0) {
+        // Billions
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000000.0) << "B";
+      } else if (std::abs(value) >= 1000000.0) {
+        // Millions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
       } else if (std::abs(value) >= 1000.0) {
+        // Thousands
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
       } else {
+        // Raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;
 
     case NumberFormat::MillionsM:
-      if (std::abs(value) >= 1000000.0) {
+      if (std::abs(value) >= 1000000000.0) {
+        // Billions
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000000.0) << "B";
+      } else if (std::abs(value) >= 1000000.0) {
+        // Millions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
       } else if (std::abs(value) >= 1000.0) {
+        // Thousands
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
       } else {
+        // Raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;

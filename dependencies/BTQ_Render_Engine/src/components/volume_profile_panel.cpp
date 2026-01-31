@@ -509,120 +509,96 @@ void VolumeProfilePanel::render_volume_bars() {
                             static_cast<int>(prices.size()), bar_height);
         break;
       case ProfileMode::Right: {
-        // Right Profile: Aggregate all visible trades into single histogram anchored to right edge with horizontal bars extending left
+        // Right Profile: Create a histogram of all visible trades anchored to right edge with horizontal bars extending left
         // Get the plot limits to determine what's currently visible
         ImPlotRect plot_limits = ImPlot::GetPlotLimits();  // This gets the current visible range
 
-        // Calculate aggregated volumes for visible trades only
-        double aggregated_buy_volume = 0.0;
-        double aggregated_sell_volume = 0.0;
-
-        // Aggregate visible trades
+        // Find the maximum volume among visible price levels to use as the right anchor
+        double max_visible_volume = 0.0;
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
           if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
-            if (buy_volumes[i] > 0) {
-              aggregated_buy_volume += buy_volumes[i];
-            }
-            if (sell_volumes[i] < 0) {
-              aggregated_sell_volume += std::abs(sell_volumes[i]);  // Store as positive for aggregation
+            double total_vol = std::abs(buy_volumes[i]) + std::abs(sell_volumes[i]);
+            if (total_vol > max_visible_volume) {
+              max_visible_volume = total_vol;
             }
           }
         }
 
-        // Calculate the maximum volume for scaling - use the aggregated max to ensure proper display
-        double max_vol = std::max(aggregated_buy_volume, aggregated_sell_volume);
-        if (max_vol <= 0) max_vol = max_volume_;  // Fallback to global max if aggregated volumes are zero
-        if (max_vol <= 0) max_vol = 1.0;  // Ultimate fallback to 1.0 if no volume data
-
-        // Define positions for the aggregated bars - anchored to the right edge of the plot
-        double visible_center_price = (plot_limits.Y.Min + plot_limits.Y.Max) / 2.0;
-        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.25f;  // Use 25% of visible height for each bar
-        float bar_spacing = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.05f;      // Small spacing between bars
+        // If no visible volume, use the global max as fallback
+        if (max_visible_volume <= 0) max_visible_volume = max_volume_;
+        if (max_visible_volume <= 0) max_visible_volume = 1.0;  // Ultimate fallback
 
         // Calculate the rightmost x-coordinate in plot space (this will be our anchor)
         // In horizontal bar charts, volume is on X-axis and price is on Y-axis
         // So we want to anchor to the maximum X value (right edge of chart)
-        double right_anchor = max_vol;  // Anchor to the maximum volume value
+        double right_anchor = max_visible_volume;  // Anchor to the maximum volume value
 
-        // Draw aggregated buy bar (green) extending left from right edge
-        if (aggregated_buy_volume > 0) {
-          // Position at upper portion of visible range
-          double buy_bar_price = visible_center_price - (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from sell bar
+        // Draw individual horizontal bars for each visible price level
+        for (size_t i = 0; i < buy_volumes.size(); ++i) {
+          // Only draw if the price level is within the visible range
+          if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
+            double buy_vol = buy_volumes[i];
+            double sell_vol = std::abs(sell_volumes[i]); // Convert to positive for visualization
 
-          // Calculate the left extent of the bar based on the aggregated volume
-          double buy_bar_left_extent = right_anchor - (aggregated_buy_volume / max_vol) * max_vol;
+            // Calculate the total volume at this price level
+            double total_vol = buy_vol + sell_vol;
 
-          // Draw the aggregated buy bar extending left from the right edge
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+            if (total_vol > 0) {
+              // Calculate the left extent of the bar based on the total volume
+              double bar_left_extent = right_anchor - (total_vol / max_visible_volume) * max_visible_volume;
 
-          // Convert plot coordinates to pixel coordinates for the bar
-          ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, buy_bar_price);
-          ImVec2 left_edge_px = ImPlot::PlotToPixels(buy_bar_left_extent, buy_bar_price);
+              // Draw the horizontal bar extending left from the right anchor
+              ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-          float bar_top = right_edge_px.y - bar_height_total / 2.0f;
-          float bar_bottom = right_edge_px.y + bar_height_total / 2.0f;
-          float bar_right = right_edge_px.x;  // Right edge of chart
-          float bar_left = left_edge_px.x;    // Left extent of the bar
+              // Convert plot coordinates to pixel coordinates for the bar
+              ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, prices[i]);
+              ImVec2 left_edge_px = ImPlot::PlotToPixels(bar_left_extent, prices[i]);
 
-          // Draw the aggregated buy bar
-          draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                   IM_COL32(26, 204, 26, 179));  // Green with transparency
+              // Calculate bar height based on price bucket size
+              float bar_height = static_cast<float>(price_bucket_size_ * 0.8);
 
-          // Add border for better visibility
-          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
-        }
+              // Adjust bar height to ensure visibility
+              if (bar_height < 2.0f) bar_height = 2.0f;
 
-        // Draw aggregated sell bar (red) extending left from right edge
-        if (aggregated_sell_volume > 0) {
-          // Position at lower portion of visible range
-          double sell_bar_price = visible_center_price + (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from buy bar
+              float bar_top = right_edge_px.y - bar_height / 2.0f;
+              float bar_bottom = right_edge_px.y + bar_height / 2.0f;
+              float bar_right = right_edge_px.x;  // Right edge of chart
+              float bar_left = left_edge_px.x;    // Left extent of the bar
 
-          // Calculate the left extent of the bar based on the aggregated volume
-          double sell_bar_left_extent = right_anchor - (aggregated_sell_volume / max_vol) * max_vol;
+              // Determine color based on whether buy or sell volume dominates
+              ImU32 color;
+              if (buy_vol >= sell_vol) {
+                // More buy volume - use green with intensity based on dominance
+                float dominance = static_cast<float>((buy_vol - sell_vol) / total_vol);
+                int green = 200 + static_cast<int>(55 * dominance);  // Vary from 200 to 255
+                int red = 26 - static_cast<int>(26 * dominance);    // Vary from 26 to 0
+                color = IM_COL32(red, green, 26, 179);  // Green dominant
+              } else {
+                // More sell volume - use red with intensity based on dominance
+                float dominance = static_cast<float>((sell_vol - buy_vol) / total_vol);
+                int red = 200 + static_cast<int>(55 * dominance);   // Vary from 200 to 255
+                int green = 26 - static_cast<int>(26 * dominance);  // Vary from 26 to 0
+                color = IM_COL32(red, green, 26, 179);  // Red dominant
+              }
 
-          // Draw the aggregated sell bar extending left from the right edge
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+              // Draw the horizontal bar
+              draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), color);
 
-          // Convert plot coordinates to pixel coordinates for the bar
-          ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, sell_bar_price);
-          ImVec2 left_edge_px = ImPlot::PlotToPixels(sell_bar_left_extent, sell_bar_price);
-
-          float bar_top = right_edge_px.y - bar_height_total / 2.0f;
-          float bar_bottom = right_edge_px.y + bar_height_total / 2.0f;
-          float bar_right = right_edge_px.x;  // Right edge of chart
-          float bar_left = left_edge_px.x;    // Left extent of the bar
-
-          // Draw the aggregated sell bar
-          draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                   IM_COL32(204, 26, 26, 179));  // Red with transparency
-
-          // Add border for better visibility
-          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
-        }
-
-        // Draw labels for the aggregated bars
-        if (aggregated_buy_volume > 0 || aggregated_sell_volume > 0) {
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-
-          // Draw text labels
-          char buy_label[64];
-          char sell_label[64];
-          snprintf(buy_label, sizeof(buy_label), "B: %.2f", aggregated_buy_volume);
-          snprintf(sell_label, sizeof(sell_label), "S: %.2f", aggregated_sell_volume);
-
-          // Position labels appropriately
-          if (aggregated_buy_volume > 0) {
-            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - ((aggregated_buy_volume / max_vol) * max_vol)/2,
-                                                    visible_center_price - (bar_height_total + bar_spacing) * 0.5);
-            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), buy_label);
+              // Add a subtle border for better visibility
+              draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
+            }
           }
+        }
 
-          if (aggregated_sell_volume > 0) {
-            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - ((aggregated_sell_volume / max_vol) * max_vol)/2,
-                                                    visible_center_price + (bar_height_total + bar_spacing) * 0.5);
-            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), sell_label);
+        // Draw POC line for Right profile mode
+        if (poc_price_ > 0) {
+          // Only draw POC line if it's within the visible range
+          if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
+            double poc_line_x[2] = {0, max_visible_volume};  // From left to right anchor
+            double poc_line_y[2] = {poc_price_, poc_price_};
+            ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+            ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+            ImPlot::PopStyleColor();
           }
         }
         break;

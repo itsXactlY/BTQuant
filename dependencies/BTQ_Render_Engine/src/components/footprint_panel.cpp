@@ -30,7 +30,12 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
 
   switch (format) {
     case NumberFormat::Raw:
-      oss << std::fixed << std::setprecision(decimal_places) << value;
+      // Raw number formatting with special handling for edge cases
+      if (value == 0.0) {
+        oss << "0.0";
+      } else {
+        oss << std::fixed << std::setprecision(decimal_places) << value;
+      }
       break;
 
     case NumberFormat::ThousandsK:
@@ -53,12 +58,15 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::MillionsM:
-      // Format primarily in millions, with fallback to other units for very large/small numbers
-      if (std::abs(value) >= 1e12) {
-        // Trillions
+
+      // Format primarily in millions, with fallback to thousands for smaller values and billions for larger values
+      if (value == 0.0) {
+        oss << "0.0";
+      } else if (std::abs(value) >= 1e12) {
+        // Trillions - show as trillions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
       } else if (std::abs(value) >= 1e9) {
-        // Billions
+        // Billions - show as billions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e9) << "B";
       } else if (std::abs(value) >= 1e6) {
         // Millions - show as millions (this is the primary unit for this format)
@@ -73,7 +81,12 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::Scientific:
-      oss << std::scientific << std::setprecision(decimal_places) << value;
+      // Scientific notation with special handling for edge cases
+      if (value == 0.0) {
+        oss << "0.0";
+      } else {
+        oss << std::scientific << std::setprecision(decimal_places) << value;
+      }
       break;
 
     case NumberFormat::CustomDecimal:

@@ -1022,9 +1022,118 @@ void FootprintPanel::render() {
             visible_clusters[cluster.centerX][cluster.centerY] = &cluster;
 
             // Also calculate max volume for adaptive alpha calculation
-            double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-            if (total_vol > max_volume) {
-                max_volume = total_vol;
+            // Use the appropriate value based on the active VolumeAnalysisType
+            double analysis_value = 0.0;
+
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+                case BTQuant::Data::VolumeAnalysisType::Trades:
+                    analysis_value = static_cast<double>(cluster.tradeCount);
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        if (total_vol > 0) {
+                            double buy_ratio = static_cast<double>(cluster.bidVolume) / total_vol;
+                            analysis_value = static_cast<double>(cluster.tradeCount) * buy_ratio;
+                        } else {
+                            analysis_value = static_cast<double>(cluster.tradeCount) * 0.5; // Equal split if no volume
+                        }
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::SellTrades:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        if (total_vol > 0) {
+                            double sell_ratio = static_cast<double>(cluster.askVolume) / total_vol;
+                            analysis_value = static_cast<double>(cluster.tradeCount) * sell_ratio;
+                        } else {
+                            analysis_value = static_cast<double>(cluster.tradeCount) * 0.5; // Equal split if no volume
+                        }
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::Volume:
+                    analysis_value = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+                    analysis_value = static_cast<double>(cluster.bidVolume);
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::SellVolume:
+                    analysis_value = static_cast<double>(cluster.askVolume);
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+                    analysis_value = std::abs(static_cast<double>(cluster.bidVolume - cluster.askVolume));
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::Delta:
+                    analysis_value = std::abs(static_cast<double>(cluster.bidVolume - cluster.askVolume));
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        analysis_value = total_vol > 0.0 ?
+                            std::abs((static_cast<double>(cluster.bidVolume - cluster.askVolume) / total_vol) * 100.0) : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                    analysis_value = std::abs(static_cast<double>(cluster.bidVolume - cluster.askVolume));
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::AverageSize:
+                    {
+                        int total_count = cluster.tradeCount;
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        analysis_value = total_count > 0 ? total_vol / static_cast<double>(total_count) : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        int buy_count = cluster.tradeCount;
+                        if (total_vol > 0) {
+                            double buy_ratio = static_cast<double>(cluster.bidVolume) / total_vol;
+                            buy_count = static_cast<int>(static_cast<double>(cluster.tradeCount) * buy_ratio);
+                        }
+                        analysis_value = buy_count > 0 ?
+                            static_cast<double>(cluster.bidVolume) / static_cast<double>(buy_count) : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        int sell_count = cluster.tradeCount;
+                        if (total_vol > 0) {
+                            double sell_ratio = static_cast<double>(cluster.askVolume) / total_vol;
+                            sell_count = static_cast<int>(static_cast<double>(cluster.tradeCount) * sell_ratio);
+                        }
+                        analysis_value = sell_count > 0 ?
+                            static_cast<double>(cluster.askVolume) / static_cast<double>(sell_count) : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+                    analysis_value = static_cast<double>(cluster.maxSingleTradeVolume);
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        analysis_value = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.bidVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        analysis_value = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.askVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
+                case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+                    analysis_value = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+                default:
+                    analysis_value = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+            }
+
+            if (analysis_value > max_volume) {
+                max_volume = analysis_value;
             }
         }
     }

@@ -1,7 +1,6 @@
 # BTQ Render Engine - Complete Quantower Clone (Parallel Development Version)
 
 **Objective:** Pixel-perfect clone of Quantower trading terminal with ALL features  
-**Constraint:** Work ONLY in `dependencies/BTQ_Render_Engine/`  
 **Current State:** Basic panels exist (Chart, Footprint, Orderbook, Time&Sales), need completion  
 **Tech Stack:** C++23/26, Vulkan, ImGui, existing HotspineDataBridge  
 **Reference:** https://help.quantower.com/quantower/  

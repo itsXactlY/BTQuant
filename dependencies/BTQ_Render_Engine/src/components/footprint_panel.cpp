@@ -22,20 +22,20 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
   // Limit decimal places to reasonable range to prevent overflow issues
   decimal_places = std::max(0, std::min(10, decimal_places));
 
+  // Handle special cases (NaN, infinity)
+  if (std::isnan(value) || std::isinf(value)) {
+    oss << (std::isnan(value) ? "NaN" : (value > 0 ? "∞" : "-∞"));
+    return oss.str();
+  }
+
   switch (format) {
     case NumberFormat::Raw:
       oss << std::fixed << std::setprecision(decimal_places) << value;
       break;
 
     case NumberFormat::ThousandsK:
-      if (std::abs(value) >= 1e18) {
-        // Exa (quintillions)
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e18) << "E";
-      } else if (std::abs(value) >= 1e15) {
-        // Peta (quadrillions)
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "P";
-      } else if (std::abs(value) >= 1e12) {
-        // Trillions
+      if (std::abs(value) >= 1e12) {
+        // Trillions - for very large numbers
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
       } else if (std::abs(value) >= 1e9) {
         // Billions
@@ -44,23 +44,17 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
         // Millions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e6) << "M";
       } else if (std::abs(value) >= 1e3) {
-        // Thousands
+        // Thousands - this is the primary unit for this format
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e3) << "K";
       } else {
-        // Raw value
+        // Raw value for anything below 1000
         oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;
 
     case NumberFormat::MillionsM:
       // Format primarily in millions, with fallback to other units for very large/small numbers
-      if (std::abs(value) >= 1e18) {
-        // Exa (quintillions)
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e18) << "E";
-      } else if (std::abs(value) >= 1e15) {
-        // Peta (quadrillions)
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "P";
-      } else if (std::abs(value) >= 1e12) {
+      if (std::abs(value) >= 1e12) {
         // Trillions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
       } else if (std::abs(value) >= 1e9) {
@@ -72,12 +66,9 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       } else if (std::abs(value) >= 1e3) {
         // Thousands - show as thousands
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e3) << "K";
-      } else if (std::abs(value) >= 1.0) {
-        // Values between 1 and 1000 - show as raw value
-        oss << std::fixed << std::setprecision(decimal_places) << value;
       } else {
-        // Small values - use scientific notation for better readability
-        oss << std::scientific << std::setprecision(decimal_places) << value;
+        // Values below 1000 - show as raw value
+        oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;
 
@@ -86,6 +77,7 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::CustomDecimal:
+      // For custom decimal format, we can apply the same logic as Raw but with custom precision
       oss << std::fixed << std::setprecision(decimal_places) << value;
       break;
   }

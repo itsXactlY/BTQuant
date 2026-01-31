@@ -582,12 +582,37 @@ void VolumeProfilePanel::render_volume_bars() {
                             static_cast<int>(prices.size()), bar_height);
         break;
       case ProfileMode::Right: {
-        // Right Profile: Create a histogram of all visible trades anchored to right edge with horizontal bars extending left
+        // Right Profile: Create a single aggregated histogram of all visible trades anchored to right edge with horizontal bars extending left
         // Get the plot limits to determine what's currently visible
         ImPlotRect plot_limits = ImPlot::GetPlotLimits();  // This gets the current visible range
 
-        // Find the maximum volume among ALL price levels to use as the right anchor
-        // This ensures consistent scaling across the entire profile regardless of zoom level
+        // Aggregate all visible trades into a single total volume
+        double total_visible_buy_volume = 0.0;
+        double total_visible_sell_volume = 0.0;
+        double total_visible_volume = 0.0;
+
+        for (size_t i = 0; i < buy_volumes.size(); ++i) {
+          // Only include if the price level is within the visible range
+          if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
+            double buy_vol = std::abs(buy_volumes[i]);
+            double sell_vol = std::abs(sell_volumes[i]);
+            double total_vol = buy_vol + sell_vol;
+
+            if (total_vol > 0) {
+              total_visible_buy_volume += buy_vol;
+              total_visible_sell_volume += sell_vol;
+              total_visible_volume += total_vol;
+            }
+          }
+        }
+
+        // If no visible volume, nothing to draw
+        if (total_visible_volume <= 0) {
+          break;
+        }
+
+        // Calculate the rightmost x-coordinate in plot space (this will be our anchor)
+        // Use the maximum volume across the entire dataset for consistent scaling
         double max_total_volume = 0.0;
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
             double total_vol = std::abs(buy_volumes[i]) + std::abs(sell_volumes[i]);
@@ -600,73 +625,49 @@ void VolumeProfilePanel::render_volume_bars() {
         if (max_total_volume <= 0) max_total_volume = max_volume_;
         if (max_total_volume <= 0) max_total_volume = 1.0;  // Ultimate fallback
 
-        // Calculate the rightmost x-coordinate in plot space (this will be our anchor)
-        // In horizontal bar charts, volume is on X-axis and price is on Y-axis
-        // So we want to anchor to the maximum X value (right edge of chart)
-        double right_anchor = max_total_volume;  // Anchor to the maximum volume value
+        // Anchor to the right edge
+        double right_anchor = max_total_volume;
 
-        // Draw individual horizontal bars for each visible price level
-        for (size_t i = 0; i < buy_volumes.size(); ++i) {
-          // Only draw if the price level is within the visible range
-          if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
-            double buy_vol = std::abs(buy_volumes[i]);  // Use absolute value to handle signs properly
-            double sell_vol = std::abs(sell_volumes[i]); // Convert to positive for visualization
+        // Draw a single horizontal bar representing the total volume of all visible trades
+        // The bar extends left from the right anchor, with width proportional to total volume
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-            // Calculate the total volume at this price level
-            double total_vol = buy_vol + sell_vol;
+        // Calculate the left extent based on total visible volume
+        double bar_left_extent = right_anchor - (total_visible_volume / max_total_volume) * max_total_volume;
 
-            if (total_vol > 0) {
-              // Calculate the left extent of the bar based on the total volume
-              double bar_left_extent = right_anchor - (total_vol / max_total_volume) * max_volume_;
+        // Determine the vertical range of the visible area (entire visible Y range)
+        float bar_top = ImPlot::PlotToPixels(0, plot_limits.Y.Max).y;  // Top of visible area
+        float bar_bottom = ImPlot::PlotToPixels(0, plot_limits.Y.Min).y;  // Bottom of visible area
+        float bar_right = ImPlot::PlotToPixels(right_anchor, (plot_limits.Y.Max + plot_limits.Y.Min) / 2).x;  // Right edge of chart
+        float bar_left = ImPlot::PlotToPixels(bar_left_extent, (plot_limits.Y.Max + plot_limits.Y.Min) / 2).x;  // Left extent of the bar
 
-              // Draw the horizontal bar extending left from the right anchor
-              ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-
-              // Convert plot coordinates to pixel coordinates for the bar
-              ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, prices[i]);
-              ImVec2 left_edge_px = ImPlot::PlotToPixels(bar_left_extent, prices[i]);
-
-              // Calculate bar height based on price bucket size
-              float bar_height = static_cast<float>(price_bucket_size_ * 0.8);
-
-              // Adjust bar height to ensure visibility
-              if (bar_height < 2.0f) bar_height = 2.0f;
-
-              float bar_top = right_edge_px.y - bar_height / 2.0f;
-              float bar_bottom = right_edge_px.y + bar_height / 2.0f;
-              float bar_right = right_edge_px.x;  // Right edge of chart
-              float bar_left = left_edge_px.x;    // Left extent of the bar
-
-              // Determine color based on whether buy or sell volume dominates
-              ImU32 color;
-              if (buy_vol >= sell_vol) {
-                // More buy volume - use green with intensity based on dominance
-                float dominance = (total_vol > 0) ? static_cast<float>((buy_vol - sell_vol) / total_vol) : 0.0f;
-                int green = 200 + static_cast<int>(55 * dominance);  // Vary from 200 to 255
-                int red = 26 - static_cast<int>(26 * dominance);    // Vary from 26 to 0
-                color = IM_COL32(red, green, 26, 179);  // Green dominant
-              } else {
-                // More sell volume - use red with intensity based on dominance
-                float dominance = (total_vol > 0) ? static_cast<float>((sell_vol - buy_vol) / total_vol) : 0.0f;
-                int red = 200 + static_cast<int>(55 * dominance);   // Vary from 200 to 255
-                int green = 26 - static_cast<int>(26 * dominance);  // Vary from 26 to 0
-                color = IM_COL32(red, green, 26, 179);  // Red dominant
-              }
-
-              // Draw the horizontal bar
-              draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), color);
-
-              // Add a subtle border for better visibility
-              draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
-            }
-          }
+        // Determine color based on whether buy or sell volume dominates in the visible range
+        ImU32 color;
+        if (total_visible_buy_volume >= total_visible_sell_volume) {
+          // More buy volume - use green with intensity based on dominance
+          float dominance = (total_visible_volume > 0) ? static_cast<float>((total_visible_buy_volume - total_visible_sell_volume) / total_visible_volume) : 0.0f;
+          int green = 200 + static_cast<int>(55 * dominance);  // Vary from 200 to 255
+          int red = 26 - static_cast<int>(26 * dominance);    // Vary from 26 to 0
+          color = IM_COL32(red, green, 26, 179);  // Green dominant
+        } else {
+          // More sell volume - use red with intensity based on dominance
+          float dominance = (total_visible_volume > 0) ? static_cast<float>((total_visible_sell_volume - total_visible_buy_volume) / total_visible_volume) : 0.0f;
+          int red = 200 + static_cast<int>(55 * dominance);   // Vary from 200 to 255
+          int green = 26 - static_cast<int>(26 * dominance);  // Vary from 26 to 0
+          color = IM_COL32(red, green, 26, 179);  // Red dominant
         }
 
-        // Draw POC line for Right profile mode
+        // Draw the aggregated horizontal bar extending left from the right anchor
+        draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), color);
+
+        // Add a subtle border for better visibility
+        draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
+
+        // Draw POC line for Right profile mode based on the overall POC (not recalculated for visible range)
         if (poc_price_ > 0) {
           // Only draw POC line if it's within the visible range
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
-            double poc_line_x[2] = {right_anchor - max_volume_, right_anchor};  // From left extent to right anchor
+            double poc_line_x[2] = {bar_left_extent, right_anchor};  // From left extent to right anchor
             double poc_line_y[2] = {poc_price_, poc_price_};
             ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
@@ -1094,7 +1095,7 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
   // Use the locally calculated POC for consistency with highlighted bar
   if (poc_index >= 0 && max_total_volume > 0) {
     // Get the current plot limits to draw the POC line across the full visible width
-    ImPlotLimits plot_limits = ImPlot::GetPlotLimits();
+    ImPlotRect plot_limits = ImPlot::GetPlotLimits();
 
     // Use the plot limits to draw the line across the full width of the visible area
     ImVec2 poc_start = ImPlot::PlotToPixels(plot_limits.X.Min, xs[poc_index]);

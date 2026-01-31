@@ -228,6 +228,54 @@ void VolumeProfilePanel::render_controls() {
   ImGui::Text("| VAH: %.4f", vah_price_);
   ImGui::SameLine();
   ImGui::Text("| VAL: %.4f", val_price_);
+
+  // Add profile statistics panel
+  if (ImGui::CollapsingHeader("Profile Statistics")) {
+    ImGui::Indent();
+
+    // Display POC price
+    ImGui::Text("POC Price: %.4f", poc_price_);
+
+    // Display VAH price
+    ImGui::Text("VAH Price: %.4f", vah_price_);
+
+    // Display VAL price
+    ImGui::Text("VAL Price: %.4f", val_price_);
+
+    // Calculate and display total volume in value area
+    double total_volume_in_value_area = 0.0;
+    double total_volume_above_poc = 0.0;
+    double total_volume_below_poc = 0.0;
+
+    if (!volume_profile_.empty()) {
+      for (const auto& level : volume_profile_) {
+        // Check if this price level is within the value area
+        if (level.price >= val_price_ && level.price <= vah_price_) {
+          total_volume_in_value_area += level.total_volume;
+        }
+
+        // Calculate volume above and below POC
+        if (level.price > poc_price_) {
+          total_volume_above_poc += level.total_volume;
+        } else if (level.price < poc_price_) {
+          total_volume_below_poc += level.total_volume;
+        }
+      }
+    }
+
+    ImGui::Text("Total Volume in Value Area: %.2f", total_volume_in_value_area);
+
+    // Calculate and display percentage of volume above POC
+    double total_volume = total_volume_above_poc + total_volume_below_poc;
+    if (total_volume > 0) {
+      double percentage_above_poc = (total_volume_above_poc / total_volume) * 100.0;
+      ImGui::Text("Percentage of Volume Above POC: %.2f%%", percentage_above_poc);
+    } else {
+      ImGui::Text("Percentage of Volume Above POC: N/A");
+    }
+
+    ImGui::Unindent();
+  }
 }
 
 void VolumeProfilePanel::render_volume_bars() {

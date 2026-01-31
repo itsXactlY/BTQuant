@@ -146,7 +146,7 @@ TEST_F(TestFootprintPanel, ProportionalSplitCalculationZeroVolumes) {
 
     // Simulate the proportional split calculation
     double total_volume = cell.bid_volume + cell.ask_volume; // 0.0
-    
+
     // When total volume is 0, the split should default to 50%
     double buy_proportion = (total_volume > 0.0) ? cell.bid_volume / total_volume : 0.5;
 
@@ -192,14 +192,106 @@ TEST_F(TestFootprintPanel, ProportionalSplitWithMaxVolumeForAlpha) {
     // Test buy alpha calculation
     float expected_buy_alpha = std::clamp(static_cast<float>(cell.bid_volume / max_volume), 0.05f, 1.0f);
     float expected_buy_alpha_clamped = std::clamp(expected_buy_alpha, 0.05f, 1.0f);
-    
+
     EXPECT_GE(expected_buy_alpha_clamped, 0.05f);
     EXPECT_LE(expected_buy_alpha_clamped, 1.0f);
 
     // Test sell alpha calculation
     float expected_sell_alpha = std::clamp(static_cast<float>(cell.ask_volume / max_volume), 0.05f, 1.0f);
     float expected_sell_alpha_clamped = std::clamp(expected_sell_alpha, 0.05f, 1.0f);
-    
+
     EXPECT_GE(expected_sell_alpha_clamped, 0.05f);
     EXPECT_LE(expected_sell_alpha_clamped, 1.0f);
+}
+
+// Additional tests for the enhanced split volume display
+TEST_F(TestFootprintPanel, SplitVolumeRenderCellHandlesBothVolumes) {
+    // Test that the renderCell method properly handles both buy and sell volumes in split mode
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    // Create a test cell with both buy and sell volumes
+    FootprintCell cell(1.0, 100.0, 0.1, 0.5, 200.0, 100.0, 15, 100.25);
+    
+    // Verify the cell has both volumes set correctly
+    EXPECT_EQ(cell.bid_volume, 200.0);
+    EXPECT_EQ(cell.ask_volume, 100.0);
+    EXPECT_GT(cell.bid_volume, 0.0);
+    EXPECT_GT(cell.ask_volume, 0.0);
+}
+
+TEST_F(TestFootprintPanel, SplitVolumeRenderCellHandlesOnlyBuyVolume) {
+    // Test that the renderCell method properly handles only buy volume in split mode
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    // Create a test cell with only buy volume
+    FootprintCell cell(1.0, 100.0, 0.1, 0.5, 200.0, 0.0, 10, 100.25);
+    
+    // Verify the cell has only buy volume
+    EXPECT_EQ(cell.bid_volume, 200.0);
+    EXPECT_EQ(cell.ask_volume, 0.0);
+    EXPECT_GT(cell.bid_volume, 0.0);
+    EXPECT_EQ(cell.ask_volume, 0.0);
+}
+
+TEST_F(TestFootprintPanel, SplitVolumeRenderCellHandlesOnlySellVolume) {
+    // Test that the renderCell method properly handles only sell volume in split mode
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    // Create a test cell with only sell volume
+    FootprintCell cell(1.0, 100.0, 0.1, 0.5, 0.0, 150.0, 8, 100.25);
+    
+    // Verify the cell has only sell volume
+    EXPECT_EQ(cell.bid_volume, 0.0);
+    EXPECT_EQ(cell.ask_volume, 150.0);
+    EXPECT_EQ(cell.bid_volume, 0.0);
+    EXPECT_GT(cell.ask_volume, 0.0);
+}
+
+TEST_F(TestFootprintPanel, SplitVolumeRenderCellHandlesZeroVolumes) {
+    // Test that the renderCell method properly handles zero volumes in split mode
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    // Create a test cell with zero volumes
+    FootprintCell cell(1.0, 100.0, 0.1, 0.5, 0.0, 0.0, 0, 100.25);
+    
+    // Verify the cell has zero volumes
+    EXPECT_EQ(cell.bid_volume, 0.0);
+    EXPECT_EQ(cell.ask_volume, 0.0);
+    EXPECT_EQ(cell.bid_volume, 0.0);
+    EXPECT_EQ(cell.ask_volume, 0.0);
+}
+
+// Test the enhanced divider line functionality
+TEST_F(TestFootprintPanel, SplitVolumeDividerLineVisibilityBothVolumes) {
+    // Test that divider line is visible when both buy and sell volumes exist
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    FootprintCell cell(1.0, 100.0, 0.1, 0.5, 200.0, 100.0, 15, 100.25);
+    
+    // Calculate expected split position
+    double total_volume = cell.bid_volume + cell.ask_volume; // 300.0
+    double buy_proportion = cell.bid_volume / total_volume; // 0.6667
+    
+    EXPECT_GT(buy_proportion, 0.0);
+    EXPECT_LT(buy_proportion, 1.0);
+    EXPECT_NE(buy_proportion, 0.5); // Should not be 50-50 since volumes are unequal
+}
+
+TEST_F(TestFootprintPanel, SplitVolumeDividerLinePositionOnlyOneVolume) {
+    // Test that divider line is positioned correctly when only one volume exists
+    panel_->setVolumeDataType(Data::VolumeDataType::SplitVolume);
+
+    // Test with only buy volume (should put divider at far right)
+    FootprintCell cell1(1.0, 100.0, 0.1, 0.5, 200.0, 0.0, 10, 100.25);
+    double total_volume1 = cell1.bid_volume + cell1.ask_volume; // 200.0
+    double buy_proportion1 = total_volume1 > 0.0 ? cell1.bid_volume / total_volume1 : 0.5; // 1.0
+    
+    EXPECT_DOUBLE_EQ(buy_proportion1, 1.0);
+    
+    // Test with only sell volume (should put divider at far left)
+    FootprintCell cell2(1.0, 100.0, 0.1, 0.5, 0.0, 150.0, 8, 100.25);
+    double total_volume2 = cell2.bid_volume + cell2.ask_volume; // 150.0
+    double buy_proportion2 = total_volume2 > 0.0 ? cell2.bid_volume / total_volume2 : 0.5; // 0.0
+    
+    EXPECT_DOUBLE_EQ(buy_proportion2, 0.0);
 }

@@ -534,7 +534,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   double base_padding = 0.48;
 
   // Adjust cell padding based on zoom level with more responsive transitions
-  // Use a more sophisticated algorithm that provides better visual feedback at different zoom levels
+  // Use a more sophisticated algorithm that provides better visual feedback at different zoom
+  // levels
   double adjusted_padding;
   if (zoom_factor >= 1.0) {
     // When zoomed in: expand cells to show more detail
@@ -608,12 +609,13 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
     // Draw dividing line between buy and sell sections
     // Only draw if both volumes exist to show the boundary clearly
     if (cell.bid_volume > 0.0 && cell.ask_volume > 0.0) {
-      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 200),
-                         2.5f);
+      // Draw a more prominent divider line when both buy and sell volumes exist
+      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 255),
+                         3.0f);  // White line with higher opacity and thickness
     } else if (total_volume > 0.0) {
       // If only one side has volume, still draw the boundary at the appropriate position
-      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 150),
-                         1.5f);
+      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 200),
+                         2.0f);  // Slightly less prominent when only one volume exists
     }
   } else {
     // Get cell color for other modes
@@ -703,13 +705,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
     // Draw subtle border for cell separation (normal case)
     ImU32 border_color = IM_COL32(255, 255, 255, 13);  // White, 5% alpha
     // For SplitVolume mode, we still want to draw the border around the whole cell
-    if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) !=
-        Data::VolumeAnalysisType::SplitVolume) {
-      draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
-    } else {
-      // For split volume, draw border around the whole cell
-      draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
-    }
+    // The individual buy/sell sections are separated by the divider line inside the cell
+    draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
   }
 
   // Draw volume label if enabled and cell is large enough

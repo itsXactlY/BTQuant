@@ -703,3 +703,23 @@ if(GTest_FOUND)
     add_test(NAME test_footprint_zoom_math_only COMMAND test_footprint_zoom_math_only)
 endif()
 
+# Unit test for Split Volume Display functionality
+if(GTest_FOUND)
+    add_executable(test_split_volume_display
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_split_volume_display.cpp
+    )
+    target_include_directories(test_split_volume_display PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_split_volume_display PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_split_volume_display COMMAND test_split_volume_display)
+endif()
+

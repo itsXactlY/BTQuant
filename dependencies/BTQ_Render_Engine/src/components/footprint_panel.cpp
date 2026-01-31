@@ -102,7 +102,8 @@ FootprintPanel::FootprintPanel(
       volume_based_n_contracts_(1000),
       tick_based_n_ticks_(100),
       price_aggregation_type_(Data::PriceAggregationType::P_1TICK),
-      custom_price_aggregation_value_(0.1) {
+      custom_price_aggregation_value_(0.1),
+      zoom_sensitivity_(1.0) {
     // Initialize renderer with the current aggregation settings
     if (renderer_) {
       renderer_->setTimeAggregationType(time_aggregation_type_);
@@ -508,19 +509,20 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   // At high zoom (zoom_factor > 1), cells expand to show more detail
   double base_padding = 0.48;
 
-  // Adjust cell padding based on zoom level with smoother transitions
+  // Adjust cell padding based on zoom level with more responsive transitions
   double adjusted_padding;
   if (zoom_factor >= 1.0) {
-      // When zoomed in: gradually expand cells to show more detail
-      // Use a square root function to make expansion more gradual
-      adjusted_padding = base_padding / std::pow(zoom_factor, 0.3);
+      // When zoomed in: expand cells significantly to show more detail
+      // Use a power function to make expansion more pronounced at higher zoom levels
+      adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.5);
   } else {
-      // When zoomed out: shrink cells to show more of them, approaching squares
-      adjusted_padding = base_padding * std::pow(zoom_factor, 0.7);
+      // When zoomed out: shrink cells dramatically to show more of them, approaching squares
+      // Use a power function to make contraction more pronounced at lower zoom levels
+      adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.2);
   }
 
-  // Ensure padding stays within reasonable bounds
-  adjusted_padding = std::max(0.1, std::min(0.48, adjusted_padding));
+  // Ensure padding stays within reasonable bounds to maintain visibility
+  adjusted_padding = std::max(0.05, std::min(0.48, adjusted_padding));
 
   double x1 = cell.x - cell.width * adjusted_padding;
   double x2 = cell.x + cell.width * adjusted_padding;
@@ -553,8 +555,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
       draw_list->AddRectFilled(ImVec2(mid_x, p1.y), p2, sell_color);
     }
 
-    // Draw dividing line between buy and sell halves
-    draw_list->AddLine(ImVec2(mid_x, p1.y), ImVec2(mid_x, p2.y), IM_COL32(255, 255, 255, 100), 1.0f);
+    // Draw dividing line between buy and sell halves - make it more prominent
+    draw_list->AddLine(ImVec2(mid_x, p1.y), ImVec2(mid_x, p2.y), IM_COL32(255, 255, 255, 180), 2.0f);
   } else {
     // Get cell color for other modes
     ImU32 color = getCellColor(cell, max_volume);
@@ -697,19 +699,20 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   // Calculate cell corners in plot coordinates with zoom-based adjustment
   double base_padding = 0.48;
 
-  // Adjust cell padding based on zoom level with smoother transitions
+  // Adjust cell padding based on zoom level with more responsive transitions
   double adjusted_padding;
   if (zoom_factor >= 1.0) {
-      // When zoomed in: gradually expand cells to show more detail
-      // Use a square root function to make expansion more gradual
-      adjusted_padding = base_padding / std::pow(zoom_factor, 0.3);
+      // When zoomed in: expand cells significantly to show more detail
+      // Use a power function to make expansion more pronounced at higher zoom levels
+      adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.5);
   } else {
-      // When zoomed out: shrink cells to show more of them, approaching squares
-      adjusted_padding = base_padding * std::pow(zoom_factor, 0.7);
+      // When zoomed out: shrink cells dramatically to show more of them, approaching squares
+      // Use a power function to make contraction more pronounced at lower zoom levels
+      adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.2);
   }
 
-  // Ensure padding stays within reasonable bounds
-  adjusted_padding = std::max(0.1, std::min(0.48, adjusted_padding));
+  // Ensure padding stays within reasonable bounds to maintain visibility
+  adjusted_padding = std::max(0.05, std::min(0.48, adjusted_padding));
 
   double x1 = cell.x - cell.width * adjusted_padding;
   double x2 = cell.x + cell.width * adjusted_padding;
@@ -882,7 +885,7 @@ void FootprintPanel::render() {
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
   if (ImGui::BeginCombo("Footprint Mode##VolumeDataTypeSelector", volume_data_type_names[current_vol_data_type])) {
-    for (int i = 0; i < 16; i++) {  // 16 types to match requirement
+    for (int i = 0; i < 17; i++) {  // 17 types to match requirement (including SplitVol)
       bool is_selected = (current_vol_data_type == i);
       if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {
         current_vol_data_type = i;
@@ -1036,6 +1039,11 @@ void FootprintPanel::render() {
   double max_thresh = 100000.0;
   ImGui::SliderScalar("Vol Thresh", ImGuiDataType_Double, &volume_threshold_, &min_thresh, &max_thresh, "%.0f");
 
+  // Zoom sensitivity control
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(120);
+  ImGui::SliderFloat("Zoom Sens", &zoom_sensitivity_, 0.1f, 3.0f, "%.1f");
+
   // Number formatting options
   ImGui::Separator();
   ImGui::Text("Number Formatting:");
@@ -1159,7 +1167,10 @@ void FootprintPanel::render() {
     double zoom_factor = std::sqrt(x_zoom_factor * y_zoom_factor); // Geometric mean for balanced zoom
 
     // Normalize zoom factor to a more intuitive range
-    zoom_factor = std::max(0.1, zoom_factor); // Prevent extremely small values
+    zoom_factor = std::max(0.01, zoom_factor); // Prevent extremely small values
+
+    // Store zoom factor for use in debug display
+    double effective_zoom_factor = zoom_factor * zoom_sensitivity_;
 
     // Calculate max volume across all visible cells for adaptive alpha calculation
     double max_volume = 0.0;
@@ -2242,30 +2253,30 @@ void FootprintPanel::render() {
     ImGui::SetCursorPos(ImVec2(10, 30));
     if (time_aggregation_type_ == Data::TimeAggregationType::VOLUME_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
+                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s | Zoom: %.2fx",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          volume_based_n_contracts_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
                          clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
-                         enable_volume_filter_ ? "ON" : "OFF");
+                         enable_volume_filter_ ? "ON" : "OFF", effective_zoom_factor);
     } else if (time_aggregation_type_ == Data::TimeAggregationType::TICK_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
+                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s | Zoom: %.2fx",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          tick_based_n_ticks_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
                          clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
-                         enable_volume_filter_ ? "ON" : "OFF");
+                         enable_volume_filter_ ? "ON" : "OFF", effective_zoom_factor);
     } else {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
+                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s | Zoom: %.2fx",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
                          clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
-                         enable_volume_filter_ ? "ON" : "OFF");
+                         enable_volume_filter_ ? "ON" : "OFF", effective_zoom_factor);
     }
 
     // Calculate statistics based on selected volume data type

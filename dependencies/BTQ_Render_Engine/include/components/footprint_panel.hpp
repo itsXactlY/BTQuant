@@ -109,6 +109,10 @@ public:
   void setEnableVolumeFilter(bool enable) { enable_volume_filter_ = enable; }
   bool getEnableVolumeFilter() const { return enable_volume_filter_; }
 
+  // Zoom sensitivity for cell size adjustment
+  void setZoomSensitivity(double sensitivity) { zoom_sensitivity_ = sensitivity; }
+  double getZoomSensitivity() const { return zoom_sensitivity_; }
+
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t symbol_id_ = 0;
@@ -150,6 +154,9 @@ private:
   double volume_threshold_ = 0.0; // Default: no filtering
   static constexpr double min_volume_threshold_ = 0.0;
   static constexpr double max_volume_threshold_ = 100000.0;
+
+  // Zoom sensitivity for cell size adjustment
+  double zoom_sensitivity_ = 1.0; // Default: normal sensitivity
 
   // Data dirty flag for immediate rendering updates
   std::atomic<bool> data_dirty_{true};

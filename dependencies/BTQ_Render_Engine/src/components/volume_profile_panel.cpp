@@ -340,8 +340,26 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
   const ImU32 col_pos = IM_COL32(0, 255, 0, 170);  // Green for positive
   const ImU32 col_neg = IM_COL32(255, 0, 0, 170);  // Red for negative
+  const ImU32 col_poc = IM_COL32(255, 255, 0, 255); // Yellow for POC (Point of Control)
+
+  // Find the POC (Point of Control) - the price level with highest total volume
+  int poc_index = -1;
+  double max_total_volume = 0.0;
 
   for (int i = 0; i < count; ++i) {
+    double total_volume = std::abs(ys[i]) + std::abs(neg_ys[i]);
+    if (total_volume > max_total_volume) {
+      max_total_volume = total_volume;
+      poc_index = i;
+    }
+  }
+
+  for (int i = 0; i < count; ++i) {
+    // Determine if this is the POC bar
+    bool is_poc_bar = (i == poc_index && max_total_volume > 0);
+    ImU32 current_col_pos = is_poc_bar ? col_poc : col_pos;
+    ImU32 current_col_neg = is_poc_bar ? col_poc : col_neg;
+
     if (ys[i] != 0) {
       ImVec2 p1 = ImPlot::PlotToPixels(0, xs[i]);  // x-axis is volume, y-axis is price
       ImVec2 p2 = ImPlot::PlotToPixels(ys[i], xs[i]);
@@ -350,7 +368,7 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
       ImVec2 bar_tl = ImVec2(std::min(p1.x, p2.x), p1.y - height / 2);
       ImVec2 bar_br = ImVec2(std::max(p1.x, p2.x), p1.y + height / 2);
 
-      draw_list->AddRectFilled(bar_tl, bar_br, col_pos);
+      draw_list->AddRectFilled(bar_tl, bar_br, current_col_pos);
     }
 
     if (neg_ys[i] != 0) {
@@ -361,7 +379,7 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
       ImVec2 bar_tl = ImVec2(std::min(p1.x, p2.x), p1.y - height / 2);
       ImVec2 bar_br = ImVec2(std::max(p1.x, p2.x), p1.y + height / 2);
 
-      draw_list->AddRectFilled(bar_tl, bar_br, col_neg);
+      draw_list->AddRectFilled(bar_tl, bar_br, current_col_neg);
     }
   }
 }
@@ -417,8 +435,13 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
 
     // Find max volume in this candle's histogram for scaling
     double max_vol_in_candle = 0.0;
-    for (double vol : bucket_volumes) {
-      if (vol > max_vol_in_candle) max_vol_in_candle = vol;
+    int poc_bucket_idx = 0; // Index of the bucket with highest volume (POC)
+
+    for (int j = 0; j < num_buckets; ++j) {
+      if (bucket_volumes[j] > max_vol_in_candle) {
+        max_vol_in_candle = bucket_volumes[j];
+        poc_bucket_idx = j;
+      }
     }
 
     if (max_vol_in_candle <= 0) continue;
@@ -465,6 +488,23 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
         draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
       }
     }
+
+    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
+    // Calculate the y-coordinate for the POC line
+    float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height; // Center of the POC bucket
+
+    // Draw horizontal yellow line across the candle width
+    float poc_line_half_width = (y_low - y_high) * 0.4f; // Same width as candle
+    float poc_x_left = x_center - poc_line_half_width;
+    float poc_x_right = x_center + poc_line_half_width;
+
+    // Draw the POC line as a horizontal yellow line
+    draw_list->AddLine(
+        ImVec2(poc_x_left, poc_y),
+        ImVec2(poc_x_right, poc_y),
+        IM_COL32(255, 255, 0, 255), // Yellow color for POC
+        2.0f // Line thickness
+    );
   }
 }
 

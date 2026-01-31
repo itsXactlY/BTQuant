@@ -1922,7 +1922,7 @@ void VolumeProfilePanel::render_split_profile(const double* xs, const double* bu
   const ImU32 col_sell = IM_COL32(255, 0, 0, 170);  // Red for sell volume
   const ImU32 col_center = IM_COL32(255, 255, 255, 200);  // White for center line
 
-  // Find max volume to scale properly
+  // Find max volume to scale properly - considering both buy and sell volumes
   double max_vol = 0.0;
   for (int i = 0; i < count; ++i) {
     max_vol = std::max(max_vol, std::max(buy_vols[i], sell_vols[i]));
@@ -1930,39 +1930,48 @@ void VolumeProfilePanel::render_split_profile(const double* xs, const double* bu
   if (max_vol <= 0) max_vol = 1.0;
 
   for (int i = 0; i < count; ++i) {
-    // Get pixel coordinates for the center of the bar (price level)
+    // Get pixel coordinates for the center of the bar (price level) - this is where the center line will be
     ImVec2 center_point = ImPlot::PlotToPixels(0, xs[i]);
 
-    // Calculate the extents of buy and sell volumes
-    double scaled_buy_vol = (buy_vols[i] / max_vol) * max_volume_;
-    double scaled_sell_vol = (sell_vols[i] / max_vol) * max_volume_;
+    // Calculate the extents of buy and sell volumes in plot coordinates
+    // Buy volumes extend to the LEFT (negative x direction) from center
+    double plot_scaled_buy_vol = (buy_vols[i] / max_vol) * max_volume_;
+    // Sell volumes extend to the RIGHT (positive x direction) from center
+    double plot_scaled_sell_vol = (sell_vols[i] / max_vol) * max_volume_;
 
-    ImVec2 buy_point = ImPlot::PlotToPixels(-scaled_buy_vol, xs[i]);
-    ImVec2 sell_point = ImPlot::PlotToPixels(scaled_sell_vol, xs[i]);
+    // Convert plot coordinates to pixel coordinates
+    ImVec2 buy_end_point = ImPlot::PlotToPixels(-plot_scaled_buy_vol, xs[i]);
+    ImVec2 sell_end_point = ImPlot::PlotToPixels(plot_scaled_sell_vol, xs[i]);
 
     // Calculate bar dimensions
     float bar_top = center_point.y - height / 2;
     float bar_bottom = center_point.y + height / 2;
 
-    // Draw buy volume bar (left side, green)
+    // Draw buy volume bar (left side, green) - extends from buy_end_point.x to center_point.x
     if (buy_vols[i] > 0) {
-      ImVec2 bar_tl = ImVec2(buy_point.x, bar_top);
+      ImVec2 bar_tl = ImVec2(buy_end_point.x, bar_top);
       ImVec2 bar_br = ImVec2(center_point.x, bar_bottom);
 
       draw_list->AddRectFilled(bar_tl, bar_br, col_buy);
+
+      // Add a subtle border to make the bar more distinguishable
+      draw_list->AddRect(bar_tl, bar_br, IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
     }
 
-    // Draw sell volume bar (right side, red)
+    // Draw sell volume bar (right side, red) - extends from center_point.x to sell_end_point.x
     if (sell_vols[i] > 0) {
       ImVec2 bar_tl = ImVec2(center_point.x, bar_top);
-      ImVec2 bar_br = ImVec2(sell_point.x, bar_bottom);
+      ImVec2 bar_br = ImVec2(sell_end_point.x, bar_bottom);
 
       draw_list->AddRectFilled(bar_tl, bar_br, col_sell);
+
+      // Add a subtle border to make the bar more distinguishable
+      draw_list->AddRect(bar_tl, bar_br, IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
     }
 
     // Draw center vertical line to separate buy and sell volumes
     draw_list->AddLine(ImVec2(center_point.x, bar_top), ImVec2(center_point.x, bar_bottom),
-                       col_center, 1.0f);
+                       col_center, 2.0f);  // Thicker line for better visibility
   }
 }
 

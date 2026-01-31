@@ -959,6 +959,8 @@ void FootprintPanel::render() {
     // First, collect all visible clusters and organize them by time and price levels
     std::map<double, std::map<double, const RenderEngine::CandleCluster*>> visible_clusters;
 
+    // Calculate max volume across all visible clusters for adaptive alpha calculation
+    // This is done in the same loop to avoid a second iteration
     for (const auto &cluster : clusters) {
         // Check if cluster is within visible bounds
         if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
@@ -1197,6 +1199,43 @@ void FootprintPanel::render() {
             // Add to all cells for imbalance detection
             all_cells.push_back(cell);
         }
+    }
+
+    // ENHANCED: Perform additional optimizations and calculations based on the active VolumeAnalysisType
+    // This allows for more sophisticated analysis depending on the selected view
+    switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+        case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+            // For cumulative delta, calculate running totals across time and price dimensions
+            {
+                // Sort cells by time to ensure proper cumulative calculation
+                std::sort(all_cells.begin(), all_cells.end(),
+                         [](const FootprintCell& a, const FootprintCell& b) {
+                             return a.x < b.x || (a.x == b.x && a.y < b.y);
+                         });
+
+                double cumulative_sum = 0.0;
+                for (auto& cell : all_cells) {
+                    cumulative_sum += cell.delta; // Delta already contains the difference
+                    cell.delta = cumulative_sum; // Update with cumulative value
+                }
+            }
+            break;
+
+        case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+            // For delta percent, ensure values are properly normalized
+            // This is already handled in the individual cell processing above
+            break;
+
+        case BTQuant::Data::VolumeAnalysisType::AverageSize:
+        case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+        case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+            // For average sizes, ensure calculations are consistent
+            // This is already handled in the individual cell processing above
+            break;
+
+        default:
+            // For other types, no additional processing needed
+            break;
     }
 
     // ENHANCED: Post-process all visible cells to apply any additional transformations

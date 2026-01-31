@@ -487,59 +487,59 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
 
   // Draw border with special highlighting for imbalances
   if (is_diagonal || is_stacked) {
-    float border_thickness = 4.0f; // Thicker border for imbalanced cells
+    float border_thickness = 5.0f; // Thicker border for imbalanced cells
 
-    // If both diagonal and stacked imbalances exist, draw both effects with offset rectangles
+    // If both diagonal and stacked imbalances exist, draw both effects
     if (is_diagonal && is_stacked) {
       // Draw both borders with slight offset to distinguish them
-      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow
-      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan
+      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow for diagonal
+      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan for stacked
 
-      // Draw stacked border first (outer) with slightly larger dimensions
-      draw_list->AddRect(ImVec2(p1.x - 1.5f, p1.y - 1.5f), ImVec2(p2.x + 1.5f, p2.y + 1.5f),
-                         stacked_border_color, 0.0f, 0, border_thickness);
-
-      // Draw diagonal border second (inner) with normal dimensions
+      // Draw diagonal border first (inner) with normal dimensions
       draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
 
-      // Add enhanced glow effects for both types
+      // Draw stacked border second (outer) with slightly larger dimensions
+      draw_list->AddRect(ImVec2(p1.x - 2.0f, p1.y - 2.0f), ImVec2(p2.x + 2.0f, p2.y + 2.0f),
+                         stacked_border_color, 0.0f, 0, border_thickness);
+
+      // Add glow effects for both types
       // Glow for diagonal (inner)
-      ImU32 diagonal_glow_color = IM_COL32(255, 255, 0, 100); // Semi-transparent yellow
+      ImU32 diagonal_glow_color = IM_COL32(255, 255, 0, 120); // Semi-transparent yellow
       ImVec2 diagonal_glow_offset(4.0f, 4.0f);
       draw_list->AddRect(ImVec2(p1.x - diagonal_glow_offset.x, p1.y - diagonal_glow_offset.y),
                          ImVec2(p2.x + diagonal_glow_offset.x, p2.y + diagonal_glow_offset.y),
                          diagonal_glow_color, 0.0f, 0, 2.0f);
 
       // Glow for stacked (outer)
-      ImU32 stacked_glow_color = IM_COL32(0, 255, 255, 100); // Semi-transparent cyan
-      ImVec2 stacked_glow_offset(5.0f, 5.0f);
+      ImU32 stacked_glow_color = IM_COL32(0, 255, 255, 120); // Semi-transparent cyan
+      ImVec2 stacked_glow_offset(6.0f, 6.0f);
       draw_list->AddRect(ImVec2(p1.x - stacked_glow_offset.x, p1.y - stacked_glow_offset.y),
                          ImVec2(p2.x + stacked_glow_offset.x, p2.y + stacked_glow_offset.y),
                          stacked_glow_color, 0.0f, 0, 2.0f);
     }
     // Only diagonal imbalance
     else if (is_diagonal) {
-      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow
+      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255); // Yellow for diagonal
       draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
 
-      // Enhanced glow effect for diagonal imbalance
-      ImU32 glow_color = IM_COL32(255, 255, 0, 150); // More prominent yellow glow
-      ImVec2 glow_offset(3.0f, 3.0f);
+      // Glow effect for diagonal imbalance
+      ImU32 glow_color = IM_COL32(255, 255, 0, 180); // Prominent yellow glow
+      ImVec2 glow_offset(4.0f, 4.0f);
       draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
                          ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y),
-                         glow_color, 0.0f, 0, 2.0f);
+                         glow_color, 0.0f, 0, 2.5f);
     }
     // Only stacked imbalance
     else if (is_stacked) {
-      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan
+      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255); // Cyan for stacked
       draw_list->AddRect(p1, p2, stacked_border_color, 0.0f, 0, border_thickness);
 
-      // Enhanced glow effect for stacked imbalance
-      ImU32 glow_color = IM_COL32(0, 255, 255, 150); // More prominent cyan glow
-      ImVec2 glow_offset(3.0f, 3.0f);
+      // Glow effect for stacked imbalance
+      ImU32 glow_color = IM_COL32(0, 255, 255, 180); // Prominent cyan glow
+      ImVec2 glow_offset(4.0f, 4.0f);
       draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
                          ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y),
-                         glow_color, 0.0f, 0, 2.0f);
+                         glow_color, 0.0f, 0, 2.5f);
     }
   } else {
     // Draw subtle border for cell separation (normal case)
@@ -714,16 +714,16 @@ void FootprintPanel::render() {
 
   ImGui::SameLine();
 
-  // Volume data type selector for footprint visualization (all 17 types)
+  // Volume data type selector for footprint visualization (all 16 types)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
     "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"
+    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"
   };
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
   if (ImGui::BeginCombo("Footprint Mode##VolumeDataTypeSelector", volume_data_type_names[current_vol_data_type])) {
-    for (int i = 0; i < 17; i++) {  // 17 types to match enum
+    for (int i = 0; i < 16; i++) {  // 16 types to match requirement
       bool is_selected = (current_vol_data_type == i);
       if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {
         current_vol_data_type = i;
@@ -1824,7 +1824,7 @@ void FootprintPanel::render() {
     const char* vol_type_names[] = {
       "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
       "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"  // 17 types
+      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types
     };
 
     // Time aggregation type names for display

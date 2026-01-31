@@ -1206,8 +1206,7 @@ void FootprintPanel::render() {
                     // Display maximum volume of a single trade
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
-                    cell.delta = cluster.tradeCount > 0 ?
-                        (static_cast<double>(cluster.bidVolume + cluster.askVolume) / static_cast<double>(cluster.tradeCount)) : 0.0;
+                    cell.delta = static_cast<double>(cluster.maxSingleTradeVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
@@ -1255,13 +1254,6 @@ void FootprintPanel::render() {
         }
     }
 
-    // ENHANCED: Post-process all visible cells to apply any additional transformations
-    // based on the active VolumeAnalysisType
-    for (auto& cell : all_cells) {
-        // All cells have already been processed according to the active VolumeAnalysisType
-        // Additional post-processing can be applied here if needed
-    }
-
     // ENHANCED: Perform additional optimizations and calculations based on the active VolumeAnalysisType
     // This allows for more sophisticated analysis depending on the selected view
     switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
@@ -1299,13 +1291,6 @@ void FootprintPanel::render() {
             break;
     }
 
-    // ENHANCED: Post-process all visible cells to apply any additional transformations
-    // based on the active VolumeAnalysisType
-    for (auto& cell : all_cells) {
-        // All cells have already been processed according to the active VolumeAnalysisType
-        // Additional post-processing can be applied here if needed
-    }
-
     // Detect imbalances
     std::vector<FootprintCell> diagonal_imbalances;
     std::vector<FootprintCell> stacked_imbalances;
@@ -1326,16 +1311,6 @@ void FootprintPanel::render() {
             // Using a more precise rounding method for better time alignment
             double time_key = std::round(cluster.centerX * 10.0) / 10.0; // Adjust precision as needed
             clusters_by_time[time_key].push_back(&cluster);
-        }
-    }
-
-    // OPTIMIZED: Efficiently iterate through visible time bars and price levels
-    // This creates a more structured approach to processing visible data
-    for (const auto& [time_key, time_clusters] : clusters_by_time) {
-        for (const auto* cluster : time_clusters) {
-            // Each cluster represents a specific price level within the time bar
-            // Process the cluster according to the active VolumeAnalysisType
-            // This ensures that only visible and relevant data is processed
         }
     }
 
@@ -1461,9 +1436,8 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
-                    // Estimate max single trade volume as total volume divided by trade count
-                    cluster_value = cluster->tradeCount > 0 ?
-                        (static_cast<double>(cluster->bidVolume + cluster->askVolume) / static_cast<double>(cluster->tradeCount)) : 0.0;
+                    // Use the actual max single trade volume from the cluster
+                    cluster_value = static_cast<double>(cluster->maxSingleTradeVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:

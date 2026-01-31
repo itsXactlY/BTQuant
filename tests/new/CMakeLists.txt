@@ -29,6 +29,7 @@ set(CORE_SOURCES
     src/utils/alert_manager.cpp
     src/utils/recovery_controller.cpp
     ../../dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp
+    ../../dependencies/BTQ_Render_Engine/src/analytics/cumulative_delta_tracker.cpp
 )
 
 # Source files - Detectors
@@ -63,6 +64,10 @@ target_link_libraries(multi_exchange_monitor PRIVATE btquant_detectors btquant_c
 # Analytics test
 add_executable(analytics_test src/analytics_test.cpp)
 target_link_libraries(analytics_test PRIVATE btquant_core)
+
+# Cumulative delta tracker test
+add_executable(cumulative_delta_tracker_test src/cumulative_delta_tracker_test.cpp)
+target_link_libraries(cumulative_delta_tracker_test PRIVATE btquant_core)
 
 # Install targets
 install(TARGETS manipulation_monitor simple_monitor multi_exchange_monitor

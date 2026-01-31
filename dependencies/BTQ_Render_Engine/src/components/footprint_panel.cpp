@@ -714,8 +714,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   }
 
   // Draw volume label if enabled and cell is large enough
-  // Implement LOD: skip text rendering when cell is too small
-  if (show_volume_labels_ && min_dimension_px >= 12.0f) {
+  // Implement LOD: skip text rendering when cell height < 12px
+  if (show_volume_labels_ && cell_height_px >= 12.0f) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 
@@ -726,7 +726,7 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   }
 
   // Draw delta indicator if enabled and cell is large enough
-  if (show_delta_indicator_ && min_dimension_px >= 8.0f) {
+  if (show_delta_indicator_ && cell_height_px >= 8.0f) {
     double max_vol = std::max(cell.bid_volume, cell.ask_volume);
     if (max_vol > 0.0) {
       double normalized_delta = cell.delta / max_vol;
@@ -798,8 +798,8 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.0f);
 
   // Draw volume label if enabled and cell is large enough
-  // Implement LOD: skip text rendering when cell is too small
-  if (show_volume_labels_ && min_dimension_px >= 12.0f) {
+  // Implement LOD: skip text rendering when cell height < 12px
+  if (show_volume_labels_ && cell_height_px >= 12.0f) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 

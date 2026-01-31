@@ -1,7 +1,0 @@
-set(NAME fix_advanced)
-project(${NAME})
-add_compile_definitions(CCAPI_ENABLE_SERVICE_FIX)
-add_compile_definitions(CCAPI_ENABLE_EXCHANGE_BINANCE)
-add_compile_definitions(CCAPI_ENABLE_LOG_TRACE)
-add_executable(${NAME} main.cpp)
-add_dependencies(${NAME} boost rapidjson hffix)

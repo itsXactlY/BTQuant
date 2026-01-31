@@ -1,30 +1,27 @@
 #pragma once
 
+#include <imgui.h>
+
+#include <memory>
+#include <vector>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "theme_manager.hpp"
-#include <imgui.h>
-#include <memory>
-#include <vector>
 
 namespace BTQuant {
 
 // Enum for profile mode
-enum class ProfileMode {
-    Step,
-    Right,
-    Left,
-    Custom
-};
+enum class ProfileMode { Step, Right, Left, Custom };
 
 // Struct for profile settings
 struct ProfileSettings {
-    double vaPercent = 70.0;        // Value Area percentage
-    int tickStep = 1;               // Tick step size
-    bool showPOC = true;            // Show Point of Control
-    bool showValueArea = true;      // Show Value Area
-    int colorScheme = 0;            // Color scheme index
+  double vaPercent = 70.0;    // Value Area percentage
+  int tickStep = 1;           // Tick step size
+  bool showPOC = true;        // Show Point of Control
+  bool showValueArea = true;  // Show Value Area
+  int colorScheme = 0;        // Color scheme index
 };
 
 /**
@@ -41,24 +38,23 @@ struct ProfileSettings {
  * - Point of Control (POC) highlighted
  */
 class VolumeProfilePanel : public PanelBase {
-public:
-  VolumeProfilePanel(
-      const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+ public:
+  VolumeProfilePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~VolumeProfilePanel() override;
 
   void render() override;
-  void set_symbol(uint32_t symbol_id, const std::string &symbol_name);
+  void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
   // Method to render mini histogram overlays on candlestick charts
   void render_mini_histograms_on_candles(ImDrawList* draw_list,
-                                       const std::vector<RenderEngine::OHLCVCandle>& candles,
-                                       const std::vector<double>& x_coords,
-                                       const std::vector<double>& y_coords_high,
-                                       const std::vector<double>& y_coords_low);
+                                         const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                         const std::vector<double>& x_coords,
+                                         const std::vector<double>& y_coords_high,
+                                         const std::vector<double>& y_coords_low);
 
-private:
+ private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -74,28 +70,28 @@ private:
   };
 
   std::vector<VolumeLevel> volume_profile_;
-  double poc_price_ = 0.0;  // Point of Control (highest volume price)
-  double max_volume_ = 0.0; // For scaling bars
-  double vah_price_ = 0.0;  // Value Area High
-  double val_price_ = 0.0;  // Value Area Low
+  double poc_price_ = 0.0;   // Point of Control (highest volume price)
+  double max_volume_ = 0.0;  // For scaling bars
+  double vah_price_ = 0.0;   // Value Area High
+  double val_price_ = 0.0;   // Value Area Low
 
   // Configuration
   static constexpr size_t NUM_PRICE_LEVELS = 20;
-  double price_bucket_size_ = 10.0; // Price range per level
+  double price_bucket_size_ = 10.0;  // Price range per level
 
   // Profile settings
   ProfileMode profile_mode_ = ProfileMode::Step;
-  int va_percent_ = 70; // Value Area percentage
+  ProfileSettings profile_settings_{};
 
   void build_volume_profile();
   void render_volume_bars();
   void render_controls();
-  void render_step_profile(const double* xs, const double* ys,
-                         const double* neg_ys, int count, double height);
+  void render_step_profile(const double* xs, const double* ys, const double* neg_ys, int count,
+                           double height);
   void calculate_value_area();
 
   // Subscribe to processor notifications
   void subscribe_to_updates();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

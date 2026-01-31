@@ -818,3 +818,23 @@ if(GTest_FOUND)
     add_test(NAME test_split_volume_display COMMAND test_split_volume_display)
 endif()
 
+# Unit test for Profile Settings functionality
+if(GTest_FOUND)
+    add_executable(test_profile_settings
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_profile_settings.cpp
+    )
+    target_include_directories(test_profile_settings PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_profile_settings PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_profile_settings COMMAND test_profile_settings)
+endif()
+

@@ -1,16 +1,18 @@
 #include "../../include/components/volume_profile_panel.hpp"
-#include "imgui.h"
-#include "implot.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
 
+#include "imgui.h"
+#include "implot.h"
+
 namespace BTQuant {
 
-VolumeProfilePanel::VolumeProfilePanel(
-    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+VolumeProfilePanel::VolumeProfilePanel(const PanelConfig& config,
+                                       std::shared_ptr<HotSpineDataBridge> bridge,
+                                       std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   volume_profile_.reserve(NUM_PRICE_LEVELS);
 
@@ -26,8 +28,7 @@ VolumeProfilePanel::~VolumeProfilePanel() {
 }
 
 void VolumeProfilePanel::subscribe_to_updates() {
-  if (!processor_ || symbol_id_ == 0)
-    return;
+  if (!processor_ || symbol_id_ == 0) return;
 
   // Unsubscribe from previous symbol if any
   if (subscription_id_ != 0) {
@@ -69,8 +70,7 @@ void VolumeProfilePanel::render() {
   end_panel_window();
 }
 
-void VolumeProfilePanel::set_symbol(uint32_t symbol_id,
-                                    const std::string &symbol_name) {
+void VolumeProfilePanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   volume_profile_.clear();
@@ -79,15 +79,14 @@ void VolumeProfilePanel::set_symbol(uint32_t symbol_id,
 
   // Re-subscribe to new symbol
   subscribe_to_updates();
-  markDirty(); // Force immediate build
+  markDirty();  // Force immediate build
 }
 
 void VolumeProfilePanel::build_volume_profile() {
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto &trades = analytics.recent_trades;
+  const auto& trades = analytics.recent_trades;
 
-  if (trades.empty())
-    return;
+  if (trades.empty()) return;
 
   // Check if we have an existing volume profile and if the new trades fit in the current range
   bool needs_rebuild = false;
@@ -95,7 +94,7 @@ void VolumeProfilePanel::build_volume_profile() {
   double max_price = std::numeric_limits<double>::lowest();
 
   // Find the range of new trades
-  for (const auto &trade : trades) {
+  for (const auto& trade : trades) {
     min_price = std::min(min_price, trade.price);
     max_price = std::max(max_price, trade.price);
   }
@@ -110,9 +109,10 @@ void VolumeProfilePanel::build_volume_profile() {
       needs_rebuild = true;
     } else {
       // Trades fit in existing range, update incrementally
-      for (const auto &trade : trades) {
+      for (const auto& trade : trades) {
         // Calculate which bucket this trade belongs to based on existing bucket size
-        size_t bucket_index = static_cast<size_t>((trade.price - current_min_price) / price_bucket_size_);
+        size_t bucket_index =
+            static_cast<size_t>((trade.price - current_min_price) / price_bucket_size_);
 
         if (bucket_index < volume_profile_.size()) {
           if (trade.is_buy) {
@@ -133,7 +133,7 @@ void VolumeProfilePanel::build_volume_profile() {
 
       // Update POC
       double poc_volume = 0;
-      for (const auto &level : volume_profile_) {
+      for (const auto& level : volume_profile_) {
         double total = level.buy_volume + level.sell_volume;
         if (total > poc_volume) {
           poc_volume = total;
@@ -144,21 +144,19 @@ void VolumeProfilePanel::build_volume_profile() {
       // Recalculate Value Area after incremental update
       calculate_value_area();
 
-      return; // Exit early since we've updated incrementally
+      return;  // Exit early since we've updated incrementally
     }
   } else {
-    needs_rebuild = true; // First time building, so we need to rebuild
+    needs_rebuild = true;  // First time building, so we need to rebuild
   }
 
   if (needs_rebuild || volume_profile_.empty()) {
-    if (max_price <= min_price)
-      return;
+    if (max_price <= min_price) return;
 
     // Compute bucket size
     double range = max_price - min_price;
     price_bucket_size_ = range / NUM_PRICE_LEVELS;
-    if (price_bucket_size_ <= 0)
-      price_bucket_size_ = 1.0;
+    if (price_bucket_size_ <= 0) price_bucket_size_ = 1.0;
 
     // Reset profile
     volume_profile_.clear();
@@ -172,9 +170,8 @@ void VolumeProfilePanel::build_volume_profile() {
     }
 
     // Aggregate trades into buckets
-    for (const auto &trade : trades) {
-      size_t bucket =
-          static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
+    for (const auto& trade : trades) {
+      size_t bucket = static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
       bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
 
       if (trade.is_buy) {
@@ -190,10 +187,9 @@ void VolumeProfilePanel::build_volume_profile() {
     poc_price_ = volume_profile_[0].price;
     double poc_volume = 0;
 
-    for (const auto &level : volume_profile_) {
+    for (const auto& level : volume_profile_) {
       double total = level.buy_volume + level.sell_volume;
-      max_volume_ =
-          std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
+      max_volume_ = std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
       if (total > poc_volume) {
         poc_volume = total;
         poc_price_ = level.price;
@@ -225,7 +221,7 @@ void VolumeProfilePanel::render_controls() {
 
   // Add VA% control
   ImGui::SameLine();
-  ImGui::SliderInt("VA%", &va_percent_, 50, 99);
+  ImGui::SliderInt("VA%", &profile_settings_.vaPercent, 50, 99);
 
   // Display VAH and VAL if available
   ImGui::SameLine();
@@ -241,8 +237,7 @@ void VolumeProfilePanel::render_volume_bars() {
   }
 
   ImVec2 region = ImGui::GetContentRegionAvail();
-  if (region.x < 100 || region.y < 100)
-    return;
+  if (region.x < 100 || region.y < 100) return;
 
   // Prepare data for ImPlot horizontal bars
   std::vector<double> prices;
@@ -253,22 +248,18 @@ void VolumeProfilePanel::render_volume_bars() {
   buy_volumes.reserve(volume_profile_.size());
   sell_volumes.reserve(volume_profile_.size());
 
-  for (const auto &level : volume_profile_) {
+  for (const auto& level : volume_profile_) {
     prices.push_back(level.price);
     buy_volumes.push_back(level.buy_volume);
-    sell_volumes.push_back(-level.sell_volume); // Negative for left side
+    sell_volumes.push_back(-level.sell_volume);  // Negative for left side
   }
 
   // Unique plot ID per panel instance to avoid ImGui ID conflicts
   char plot_id[64];
-  snprintf(plot_id, sizeof(plot_id), "##VolumeProfile_%s",
-           config_.title.c_str());
+  snprintf(plot_id, sizeof(plot_id), "##VolumeProfile_%s", config_.title.c_str());
 
-  if (ImPlot::BeginPlot(plot_id, region,
-                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend)) {
-
-    ImPlot::SetupAxes("Volume", "Price",
-                      ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_Invert,
+  if (ImPlot::BeginPlot(plot_id, region, ImPlotFlags_NoTitle | ImPlotFlags_NoLegend)) {
+    ImPlot::SetupAxes("Volume", "Price", ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_Invert,
                       ImPlotAxisFlags_AutoFit);
 
     // Bar height based on price bucket size
@@ -287,19 +278,21 @@ void VolumeProfilePanel::render_volume_bars() {
       ImVec2 plot_pos = ImPlot::GetPlotPos();
 
       // Draw semi-transparent rectangle for value area
-      // Note: In ImPlot coordinate system, y increases downward, so VAL should have a higher y value than VAH
+      // Note: In ImPlot coordinate system, y increases downward, so VAL should have a higher y
+      // value than VAH
       ImVec2 area_top_left = ImVec2(plot_pos.x, vah_pixel.y);
       ImVec2 area_bottom_right = ImVec2(plot_pos.x + plot_size.x, val_pixel.y);
 
       // Draw the value area overlay with semi-transparent color
-      draw_list->AddRectFilled(area_top_left, area_bottom_right, IM_COL32(138, 43, 226, 80)); // Semi-transparent purple
+      draw_list->AddRectFilled(area_top_left, area_bottom_right,
+                               IM_COL32(138, 43, 226, 80));  // Semi-transparent purple
     }
 
     // Render based on profile mode
     switch (profile_mode_) {
       case ProfileMode::Step:
         render_step_profile(prices.data(), buy_volumes.data(), sell_volumes.data(),
-                           static_cast<int>(prices.size()), bar_height);
+                            static_cast<int>(prices.size()), bar_height);
         break;
       case ProfileMode::Right: {
         // Right Profile: Anchor to right edge with bars extending left
@@ -312,40 +305,40 @@ void VolumeProfilePanel::render_volume_bars() {
         ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
-            if (buy_volumes[i] > 0) {
-                // Convert plot coordinates to pixel coordinates
-                ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
-                ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - buy_volumes[i], prices[i]);
+          if (buy_volumes[i] > 0) {
+            // Convert plot coordinates to pixel coordinates
+            ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
+            ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - buy_volumes[i], prices[i]);
 
-                // Calculate bar dimensions
-                float bar_top = right_edge.y - bar_height / 2.0;
-                float bar_bottom = right_edge.y + bar_height / 2.0;
-                float bar_right = right_edge.x;  // Right edge of chart
-                float bar_left = left_edge.x;    // Left extent of the bar
+            // Calculate bar dimensions
+            float bar_top = right_edge.y - bar_height / 2.0;
+            float bar_bottom = right_edge.y + bar_height / 2.0;
+            float bar_right = right_edge.x;  // Right edge of chart
+            float bar_left = left_edge.x;    // Left extent of the bar
 
-                // Draw the bar
-                draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                        IM_COL32(26, 204, 26, 179)); // Green with transparency
-            }
+            // Draw the bar
+            draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                     IM_COL32(26, 204, 26, 179));  // Green with transparency
+          }
         }
 
         // Draw sell bars (red) extending left from right edge
         for (size_t i = 0; i < sell_volumes.size(); ++i) {
-            if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
-                // Convert plot coordinates to pixel coordinates
-                ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
-                ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - std::abs(sell_volumes[i]), prices[i]);
+          if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
+            // Convert plot coordinates to pixel coordinates
+            ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
+            ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - std::abs(sell_volumes[i]), prices[i]);
 
-                // Calculate bar dimensions
-                float bar_top = right_edge.y - bar_height / 2.0;
-                float bar_bottom = right_edge.y + bar_height / 2.0;
-                float bar_right = right_edge.x;  // Right edge of chart
-                float bar_left = left_edge.x;    // Left extent of the bar
+            // Calculate bar dimensions
+            float bar_top = right_edge.y - bar_height / 2.0;
+            float bar_bottom = right_edge.y + bar_height / 2.0;
+            float bar_right = right_edge.x;  // Right edge of chart
+            float bar_left = left_edge.x;    // Left extent of the bar
 
-                // Draw the bar
-                draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                        IM_COL32(204, 26, 26, 179)); // Red with transparency
-            }
+            // Draw the bar
+            draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                     IM_COL32(204, 26, 26, 179));  // Red with transparency
+          }
         }
         break;
       }
@@ -358,40 +351,41 @@ void VolumeProfilePanel::render_volume_bars() {
         ImDrawList* draw_list_left = ImPlot::GetPlotDrawList();
 
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
-            if (buy_volumes[i] > 0) {
-                // Convert plot coordinates to pixel coordinates
-                ImVec2 left_edge = ImPlot::PlotToPixels(0, prices[i]);  // Start from left edge (0)
-                ImVec2 right_edge = ImPlot::PlotToPixels(buy_volumes[i], prices[i]);  // Extend right
+          if (buy_volumes[i] > 0) {
+            // Convert plot coordinates to pixel coordinates
+            ImVec2 left_edge = ImPlot::PlotToPixels(0, prices[i]);  // Start from left edge (0)
+            ImVec2 right_edge = ImPlot::PlotToPixels(buy_volumes[i], prices[i]);  // Extend right
 
-                // Calculate bar dimensions
-                float bar_top = left_edge.y - bar_height / 2.0;
-                float bar_bottom = left_edge.y + bar_height / 2.0;
-                float bar_left = left_edge.x;   // Left edge of chart
-                float bar_right = right_edge.x; // Right extent of the bar
+            // Calculate bar dimensions
+            float bar_top = left_edge.y - bar_height / 2.0;
+            float bar_bottom = left_edge.y + bar_height / 2.0;
+            float bar_left = left_edge.x;    // Left edge of chart
+            float bar_right = right_edge.x;  // Right extent of the bar
 
-                // Draw the bar
-                draw_list_left->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                            IM_COL32(26, 204, 26, 179)); // Green with transparency
-            }
+            // Draw the bar
+            draw_list_left->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                          IM_COL32(26, 204, 26, 179));  // Green with transparency
+          }
         }
 
         // Draw sell bars (red) extending right from left edge
         for (size_t i = 0; i < sell_volumes.size(); ++i) {
-            if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
-                // Convert plot coordinates to pixel coordinates
-                ImVec2 left_edge = ImPlot::PlotToPixels(0, prices[i]);  // Start from left edge (0)
-                ImVec2 right_edge = ImPlot::PlotToPixels(std::abs(sell_volumes[i]), prices[i]);  // Extend right
+          if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
+            // Convert plot coordinates to pixel coordinates
+            ImVec2 left_edge = ImPlot::PlotToPixels(0, prices[i]);  // Start from left edge (0)
+            ImVec2 right_edge =
+                ImPlot::PlotToPixels(std::abs(sell_volumes[i]), prices[i]);  // Extend right
 
-                // Calculate bar dimensions
-                float bar_top = left_edge.y - bar_height / 2.0;
-                float bar_bottom = left_edge.y + bar_height / 2.0;
-                float bar_left = left_edge.x;   // Left edge of chart
-                float bar_right = right_edge.x; // Right extent of the bar
+            // Calculate bar dimensions
+            float bar_top = left_edge.y - bar_height / 2.0;
+            float bar_bottom = left_edge.y + bar_height / 2.0;
+            float bar_left = left_edge.x;    // Left edge of chart
+            float bar_right = right_edge.x;  // Right extent of the bar
 
-                // Draw the bar
-                draw_list_left->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
-                                            IM_COL32(204, 26, 26, 179)); // Red with transparency
-            }
+            // Draw the bar
+            draw_list_left->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                                          IM_COL32(204, 26, 26, 179));  // Red with transparency
+          }
         }
         break;
       }
@@ -399,14 +393,12 @@ void VolumeProfilePanel::render_volume_bars() {
       default:
         // Default behavior - both buy and sell volumes
         ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
-        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
-                         static_cast<int>(prices.size()), bar_height,
-                         ImPlotBarsFlags_Horizontal);
+        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(), static_cast<int>(prices.size()),
+                         bar_height, ImPlotBarsFlags_Horizontal);
 
         ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
         ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
-                         static_cast<int>(prices.size()), bar_height,
-                         ImPlotBarsFlags_Horizontal);
+                         static_cast<int>(prices.size()), bar_height, ImPlotBarsFlags_Horizontal);
         break;
     }
 
@@ -423,7 +415,7 @@ void VolumeProfilePanel::render_volume_bars() {
     if (vah_price_ > 0) {
       double vah_line_x[2] = {-max_volume_, max_volume_};
       double vah_line_y[2] = {vah_price_, vah_price_};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f)); // Light blue
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
     }
@@ -431,7 +423,7 @@ void VolumeProfilePanel::render_volume_bars() {
     if (val_price_ > 0) {
       double val_line_x[2] = {-max_volume_, max_volume_};
       double val_line_y[2] = {val_price_, val_price_};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f)); // Light blue
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
     }
@@ -459,7 +451,7 @@ void VolumeProfilePanel::calculate_value_area() {
 
   // Calculate total volume in the profile
   double total_volume = 0.0;
-  for (const auto &level : volume_profile_) {
+  for (const auto& level : volume_profile_) {
     total_volume += level.total_volume;
   }
 
@@ -470,7 +462,7 @@ void VolumeProfilePanel::calculate_value_area() {
   }
 
   // Target volume for value area (70% of total volume)
-  double target_volume = (static_cast<double>(va_percent_) / 100.0) * total_volume;
+  double target_volume = (static_cast<double>(profile_settings_.vaPercent) / 100.0) * total_volume;
 
   // Find the POC index
   size_t poc_index = 0;
@@ -533,14 +525,13 @@ void VolumeProfilePanel::calculate_value_area() {
 }
 
 void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
-                                            const double* neg_ys, int count,
-                                            double height) {
+                                             const double* neg_ys, int count, double height) {
   if (count <= 0) return;
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-  const ImU32 col_pos = IM_COL32(0, 255, 0, 170);  // Green for positive
-  const ImU32 col_neg = IM_COL32(255, 0, 0, 170);  // Red for negative
-  const ImU32 col_poc = IM_COL32(255, 255, 0, 255); // Yellow for POC (Point of Control)
+  const ImU32 col_pos = IM_COL32(0, 255, 0, 170);    // Green for positive
+  const ImU32 col_neg = IM_COL32(255, 0, 0, 170);    // Red for negative
+  const ImU32 col_poc = IM_COL32(255, 255, 0, 255);  // Yellow for POC (Point of Control)
 
   // Find the POC (Point of Control) - the price level with highest total volume
   int poc_index = -1;
@@ -585,11 +576,10 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
 }
 
 // Method to render mini histogram overlays on candlestick charts
-void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list,
-                                                          const std::vector<RenderEngine::OHLCVCandle>& candles,
-                                                          const std::vector<double>& x_coords,
-                                                          const std::vector<double>& y_coords_high,
-                                                          const std::vector<double>& y_coords_low) {
+void VolumeProfilePanel::render_mini_histograms_on_candles(
+    ImDrawList* draw_list, const std::vector<RenderEngine::OHLCVCandle>& candles,
+    const std::vector<double>& x_coords, const std::vector<double>& y_coords_high,
+    const std::vector<double>& y_coords_low) {
   if (candles.empty() || x_coords.size() != candles.size() ||
       y_coords_high.size() != candles.size() || y_coords_low.size() != candles.size()) {
     return;
@@ -610,7 +600,7 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
     if (price_range <= 0) continue;
 
     // Determine number of price buckets for this candle's range
-    int num_buckets = 8; // Fixed number of buckets for mini histogram
+    int num_buckets = 8;  // Fixed number of buckets for mini histogram
     double bucket_size = price_range / num_buckets;
 
     // Get recent trades for this symbol to populate the histogram
@@ -635,7 +625,7 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
 
     // Find max volume in this candle's histogram for scaling
     double max_vol_in_candle = 0.0;
-    int poc_bucket_idx = 0; // Index of the bucket with highest volume (POC)
+    int poc_bucket_idx = 0;  // Index of the bucket with highest volume (POC)
 
     for (int j = 0; j < num_buckets; ++j) {
       if (bucket_volumes[j] > max_vol_in_candle) {
@@ -652,21 +642,22 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
     float y_low = static_cast<float>(y_coords_low[i]);
 
     // Calculate height of each bucket in screen coordinates
-    float total_height = y_low - y_high; // Height of the candle in screen space
+    float total_height = y_low - y_high;  // Height of the candle in screen space
     float bucket_height = total_height / num_buckets;
 
     // Draw mini histogram inside the candle
     for (int j = 0; j < num_buckets; ++j) {
       if (bucket_volumes[j] > 0) {
         // Calculate the fill percentage of this bucket
-        float fill_percentage = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
+        float fill_percentage =
+            static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
 
         // Calculate the top-left and bottom-right coordinates for this bucket
         float y_top = y_high + j * bucket_height;
         float y_bottom = y_high + (j + 1) * bucket_height;
 
         // Calculate width of the bar based on fill percentage
-        float bar_width = (y_bottom - y_top) * 0.8f; // Use 80% of height as width for visibility
+        float bar_width = (y_bottom - y_top) * 0.8f;  // Use 80% of height as width for visibility
         float filled_width = bar_width * fill_percentage;
 
         // Calculate the x positions for the bar
@@ -678,10 +669,10 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
         ImU32 color;
         if (j < num_buckets / 2) {
           // Lower half - potentially more selling pressure
-          color = IM_COL32(255, 100, 100, 150); // Reddish for sells
+          color = IM_COL32(255, 100, 100, 150);  // Reddish for sells
         } else {
           // Upper half - potentially more buying pressure
-          color = IM_COL32(100, 255, 100, 150); // Greenish for buys
+          color = IM_COL32(100, 255, 100, 150);  // Greenish for buys
         }
 
         // Draw the mini histogram bar
@@ -689,23 +680,21 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list
       }
     }
 
-    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
-    // Calculate the y-coordinate for the POC line
-    float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height; // Center of the POC bucket
+    // Draw POC (Point of Control) line - horizontal yellow line at the price level with highest
+    // volume Calculate the y-coordinate for the POC line
+    float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height;  // Center of the POC bucket
 
     // Draw horizontal yellow line across the candle width
-    float poc_line_half_width = (y_low - y_high) * 0.4f; // Same width as candle
+    float poc_line_half_width = (y_low - y_high) * 0.4f;  // Same width as candle
     float poc_x_left = x_center - poc_line_half_width;
     float poc_x_right = x_center + poc_line_half_width;
 
     // Draw the POC line as a horizontal yellow line
-    draw_list->AddLine(
-        ImVec2(poc_x_left, poc_y),
-        ImVec2(poc_x_right, poc_y),
-        IM_COL32(255, 255, 0, 255), // Yellow color for POC
-        2.0f // Line thickness
+    draw_list->AddLine(ImVec2(poc_x_left, poc_y), ImVec2(poc_x_right, poc_y),
+                       IM_COL32(255, 255, 0, 255),  // Yellow color for POC
+                       2.0f                         // Line thickness
     );
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

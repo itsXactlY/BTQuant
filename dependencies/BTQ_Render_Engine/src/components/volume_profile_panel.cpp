@@ -265,13 +265,108 @@ void VolumeProfilePanel::render_volume_bars() {
     // Bar height based on price bucket size
     double bar_height = price_bucket_size_ * 0.8;
 
+    // For Right and Left profiles, recalculate value area based on visible range during rendering
+    double local_vah_price = vah_price_;
+    double local_val_price = val_price_;
+
+    if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+      // Get the plot limits to determine what's currently visible
+      ImPlotRect plot_limits = ImPlot::GetPlotLimits();
+
+      // Create a temporary vector of visible levels with their volumes
+      std::vector<std::pair<double, double>> visible_levels; // {price, total_volume}
+      double total_volume = 0.0;
+
+      for (const auto& level : volume_profile_) {
+        if (level.price >= plot_limits.Y.Min && level.price <= plot_limits.Y.Max) {
+          visible_levels.push_back({level.price, level.total_volume});
+          total_volume += level.total_volume;
+        }
+      }
+
+      if (!visible_levels.empty() && total_volume > 0) {
+        // Target volume for value area (based on profile_settings_.vaPercent % of total volume)
+        double target_volume = (static_cast<double>(profile_settings_.vaPercent) / 100.0) * total_volume;
+
+        // Sort visible levels by volume in descending order to find POC
+        std::vector<std::pair<double, double>> sorted_levels = visible_levels;
+        std::sort(sorted_levels.begin(), sorted_levels.end(),
+                  [](const std::pair<double, double>& a, const std::pair<double, double>& b) {
+                    return a.second > b.second; // Sort by volume descending
+                  });
+
+        // Find the POC (Point of Control) - the price level with highest volume among visible levels
+        double poc_price = sorted_levels[0].first;
+
+        // Sort visible levels by price to make expansion easier
+        std::sort(visible_levels.begin(), visible_levels.end());
+
+        // Find the index of POC in the price-sorted array
+        size_t poc_idx_sorted = 0;
+        for (size_t i = 0; i < visible_levels.size(); ++i) {
+          if (std::abs(visible_levels[i].first - poc_price) < 0.000001) { // Use epsilon comparison for floating point
+            poc_idx_sorted = i;
+            break;
+          }
+        }
+
+        // Expand from POC outward to capture the required volume
+        size_t start_idx = poc_idx_sorted;
+        size_t end_idx = poc_idx_sorted;
+        double current_volume = visible_levels[poc_idx_sorted].second;
+
+        // Expand upward (higher prices) and downward (lower prices) alternately
+        // until we reach the target volume
+        while (current_volume < target_volume) {
+          // Decide whether to expand up or down
+          bool expand_up = false;
+          bool expand_down = false;
+
+          // Check if we can expand in each direction
+          if (start_idx > 0) expand_down = true;
+          if (end_idx < visible_levels.size() - 1) expand_up = true;
+
+          // If we can't expand in either direction, break
+          if (!expand_up && !expand_down) break;
+
+          // If we can only expand in one direction, do that
+          if (!expand_up && expand_down) {
+            start_idx--;
+            current_volume += visible_levels[start_idx].second;
+          } else if (expand_up && !expand_down) {
+            end_idx++;
+            current_volume += visible_levels[end_idx].second;
+          } else {
+            // We can expand in both directions - choose the direction with higher volume
+            double vol_up = visible_levels[end_idx + 1].second;
+            double vol_down = visible_levels[start_idx - 1].second;
+
+            if (vol_up >= vol_down) {
+              end_idx++;
+              current_volume += visible_levels[end_idx].second;
+            } else {
+              start_idx--;
+              current_volume += visible_levels[start_idx].second;
+            }
+          }
+
+          // If we've captured enough volume, break
+          if (current_volume >= target_volume) break;
+        }
+
+        // Set the local VAH and VAL prices for this render pass
+        local_vah_price = visible_levels[end_idx].first;
+        local_val_price = visible_levels[start_idx].first;
+      }
+    }
+
     // Draw Value Area overlay if we have valid VAH and VAL
-    if (vah_price_ > 0 && val_price_ > 0 && vah_price_ >= val_price_) {
+    if (local_vah_price > 0 && local_val_price > 0 && local_vah_price >= local_val_price) {
       ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
       // Convert value area prices to pixel coordinates
-      ImVec2 val_pixel = ImPlot::PlotToPixels(0, val_price_);  // Left side of plot at VAL price
-      ImVec2 vah_pixel = ImPlot::PlotToPixels(0, vah_price_);  // Left side of plot at VAH price
+      ImVec2 val_pixel = ImPlot::PlotToPixels(0, local_val_price);  // Left side of plot at VAL price
+      ImVec2 vah_pixel = ImPlot::PlotToPixels(0, local_vah_price);  // Left side of plot at VAH price
 
       // Get the plot area dimensions
       ImVec2 plot_size = ImPlot::GetPlotSize();
@@ -315,31 +410,40 @@ void VolumeProfilePanel::render_volume_bars() {
           }
         }
 
-        // Calculate the maximum volume for scaling (either aggregated or global max)
-        double max_vol = std::max(aggregated_buy_volume, aggregated_sell_volume);
-        if (max_vol <= 0) max_vol = max_volume_;  // Fallback to global max if no visible trades
+        // Calculate the maximum volume for scaling (global max volume for proper scaling)
+        double max_vol = max_volume_;
+        if (max_vol <= 0) max_vol = 1.0;  // Fallback to 1.0 if no volume data
 
-        // Define positions for the aggregated bars
+        // Define positions for the aggregated bars - anchored to the right edge of the plot
         double visible_center_price = (plot_limits.Y.Min + plot_limits.Y.Max) / 2.0;
-        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.4f;  // Use 40% of visible height for each bar
+        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.3f;  // Use 30% of visible height for each bar
+
+        // Calculate the rightmost x-coordinate in plot space (this will be our anchor)
+        // In horizontal bar charts, volume is on X-axis and price is on Y-axis
+        // So we want to anchor to the maximum X value (right edge of chart)
+        double right_anchor = max_vol;  // Anchor to the maximum volume value
 
         // Draw aggregated buy bar (green) extending left from right edge
         if (aggregated_buy_volume > 0) {
           // Position at upper portion of visible range
           double buy_bar_price = visible_center_price - bar_height_total * 0.75;  // Offset to separate from sell bar
 
-          // Convert plot coordinates to pixel coordinates
-          ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, buy_bar_price);
-          ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - aggregated_buy_volume, buy_bar_price);
+          // Calculate the left extent of the bar based on the aggregated volume
+          double buy_bar_left_extent = right_anchor - aggregated_buy_volume;
 
-          // Calculate bar dimensions
-          float bar_top = right_edge.y - bar_height_total / 2.0;
-          float bar_bottom = right_edge.y + bar_height_total / 2.0;
-          float bar_right = right_edge.x;  // Right edge of chart
-          float bar_left = left_edge.x;    // Left extent of the bar
+          // Draw the aggregated buy bar extending left from the right edge
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+          // Convert plot coordinates to pixel coordinates for the bar
+          ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, buy_bar_price);
+          ImVec2 left_edge_px = ImPlot::PlotToPixels(buy_bar_left_extent, buy_bar_price);
+
+          float bar_top = right_edge_px.y - bar_height_total / 2.0f;
+          float bar_bottom = right_edge_px.y + bar_height_total / 2.0f;
+          float bar_right = right_edge_px.x;  // Right edge of chart
+          float bar_left = left_edge_px.x;    // Left extent of the bar
 
           // Draw the aggregated buy bar
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(26, 204, 26, 179));  // Green with transparency
         }
@@ -349,18 +453,22 @@ void VolumeProfilePanel::render_volume_bars() {
           // Position at lower portion of visible range
           double sell_bar_price = visible_center_price + bar_height_total * 0.75;  // Offset to separate from buy bar
 
-          // Convert plot coordinates to pixel coordinates
-          ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, sell_bar_price);
-          ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - aggregated_sell_volume, sell_bar_price);
+          // Calculate the left extent of the bar based on the aggregated volume
+          double sell_bar_left_extent = right_anchor - aggregated_sell_volume;
 
-          // Calculate bar dimensions
-          float bar_top = right_edge.y - bar_height_total / 2.0;
-          float bar_bottom = right_edge.y + bar_height_total / 2.0;
-          float bar_right = right_edge.x;  // Right edge of chart
-          float bar_left = left_edge.x;    // Left extent of the bar
+          // Draw the aggregated sell bar extending left from the right edge
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+          // Convert plot coordinates to pixel coordinates for the bar
+          ImVec2 right_edge_px = ImPlot::PlotToPixels(right_anchor, sell_bar_price);
+          ImVec2 left_edge_px = ImPlot::PlotToPixels(sell_bar_left_extent, sell_bar_price);
+
+          float bar_top = right_edge_px.y - bar_height_total / 2.0f;
+          float bar_bottom = right_edge_px.y + bar_height_total / 2.0f;
+          float bar_right = right_edge_px.x;  // Right edge of chart
+          float bar_left = left_edge_px.x;    // Left extent of the bar
 
           // Draw the aggregated sell bar
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(204, 26, 26, 179));  // Red with transparency
         }
@@ -377,15 +485,15 @@ void VolumeProfilePanel::render_volume_bars() {
 
           // Position labels appropriately
           if (aggregated_buy_volume > 0) {
-            ImVec2 label_pos = ImPlot::PlotToPixels(max_vol - aggregated_buy_volume/2,
-                                                   visible_center_price - bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(label_pos.x, label_pos.y - 10), IM_COL32(255, 255, 255, 255), buy_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - aggregated_buy_volume/2,
+                                                    visible_center_price - bar_height_total * 0.75);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 10), IM_COL32(255, 255, 255, 255), buy_label);
           }
 
           if (aggregated_sell_volume > 0) {
-            ImVec2 label_pos = ImPlot::PlotToPixels(max_vol - aggregated_sell_volume/2,
-                                                   visible_center_price + bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(label_pos.x, label_pos.y - 10), IM_COL32(255, 255, 255, 255), sell_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - aggregated_sell_volume/2,
+                                                    visible_center_price + bar_height_total * 0.75);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 10), IM_COL32(255, 255, 255, 255), sell_label);
           }
         }
         break;
@@ -512,21 +620,61 @@ void VolumeProfilePanel::render_volume_bars() {
       }
     }
 
-    // VAH and VAL lines
-    if (vah_price_ > 0) {
+    // VAH and VAL lines - use local values for Right/Left profiles
+    if (local_vah_price > 0) {
       double vah_line_x[2] = {-max_volume_, max_volume_};
-      double vah_line_y[2] = {vah_price_, vah_price_};
+      double vah_line_y[2] = {local_vah_price, local_vah_price};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
+
+      // Add label for VAH line in Right/Left profile modes
+      if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+        ImVec2 plot_size = ImPlot::GetPlotSize();
+        ImVec2 plot_pos = ImPlot::GetPlotPos();
+
+        // Position label appropriately based on profile mode to avoid overlap with bars
+        ImVec2 vah_pos;
+        if (profile_mode_ == ProfileMode::Right) {
+          // For Right profile, place label on the left side to avoid overlapping with right-anchored bars
+          vah_pos = ImVec2(plot_pos.x + 10, ImPlot::PlotToPixels(0, local_vah_price).y - 10);
+        } else {
+          // For Left profile, place label on the right side to avoid overlapping with left-anchored bars
+          vah_pos = ImVec2(plot_pos.x + plot_size.x - 80, ImPlot::PlotToPixels(0, local_vah_price).y - 10);
+        }
+        char vah_label[32];
+        snprintf(vah_label, sizeof(vah_label), "VAH: %.4f", local_vah_price);
+        draw_list->AddText(vah_pos, IM_COL32(0, 255, 255, 255), vah_label);
+      }
     }
 
-    if (val_price_ > 0) {
+    if (local_val_price > 0) {
       double val_line_x[2] = {-max_volume_, max_volume_};
-      double val_line_y[2] = {val_price_, val_price_};
+      double val_line_y[2] = {local_val_price, local_val_price};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
+
+      // Add label for VAL line in Right/Left profile modes
+      if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+        ImVec2 plot_size = ImPlot::GetPlotSize();
+        ImVec2 plot_pos = ImPlot::GetPlotPos();
+
+        // Position label appropriately based on profile mode to avoid overlap with bars
+        ImVec2 val_pos;
+        if (profile_mode_ == ProfileMode::Right) {
+          // For Right profile, place label on the left side to avoid overlapping with right-anchored bars
+          val_pos = ImVec2(plot_pos.x + 10, ImPlot::PlotToPixels(0, local_val_price).y - 10);
+        } else {
+          // For Left profile, place label on the right side to avoid overlapping with left-anchored bars
+          val_pos = ImVec2(plot_pos.x + plot_size.x - 80, ImPlot::PlotToPixels(0, local_val_price).y - 10);
+        }
+        char val_label[32];
+        snprintf(val_label, sizeof(val_label), "VAL: %.4f", local_val_price);
+        draw_list->AddText(val_pos, IM_COL32(0, 255, 255, 255), val_label);
+      }
     }
 
     // Add VWAP line if available
@@ -550,7 +698,7 @@ void VolumeProfilePanel::calculate_value_area() {
     return;
   }
 
-  // Calculate total volume in the profile
+  // Calculate total volume in the profile for all modes
   double total_volume = 0.0;
   for (const auto& level : volume_profile_) {
     total_volume += level.total_volume;
@@ -562,7 +710,7 @@ void VolumeProfilePanel::calculate_value_area() {
     return;
   }
 
-  // Target volume for value area (70% of total volume)
+  // Target volume for value area (based on profile_settings_.vaPercent % of total volume)
   double target_volume = (static_cast<double>(profile_settings_.vaPercent) / 100.0) * total_volume;
 
   // Find the POC index
@@ -603,7 +751,7 @@ void VolumeProfilePanel::calculate_value_area() {
       end_idx++;
       current_volume += volume_profile_[end_idx].total_volume;
     } else {
-      // We can expand in both directions - choose the direction with more volume
+      // We can expand in both directions - choose the direction with higher volume
       double vol_up = volume_profile_[end_idx + 1].total_volume;
       double vol_down = volume_profile_[start_idx - 1].total_volume;
 
@@ -628,7 +776,6 @@ void VolumeProfilePanel::calculate_value_area() {
 void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
                                              const double* neg_ys, int count, double height) {
   if (count <= 0) return;
-
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
   const ImU32 col_pos = IM_COL32(0, 255, 0, 170);    // Green for positive
   const ImU32 col_neg = IM_COL32(255, 0, 0, 170);    // Red for negative

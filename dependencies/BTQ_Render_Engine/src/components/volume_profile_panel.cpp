@@ -532,9 +532,19 @@ void VolumeProfilePanel::render_volume_bars() {
         if (max_total_volume <= 0) max_total_volume = max_volume_;
         if (max_total_volume <= 0) max_total_volume = 1.0;
 
-        // For both Right and Left profiles, we use the same volume range for the overlay
-        left_x_coord = 0.0;
-        right_x_coord = max_total_volume;
+        if (profile_mode_ == ProfileMode::Right) {
+          // For Right profile: anchor to the right edge (max volume), bars extend left
+          left_x_coord = max_total_volume;  // Right anchor
+          right_x_coord = 0.0;              // Left extent
+        } else if (profile_mode_ == ProfileMode::Left) {
+          // For Left profile: anchor to the left edge (0), bars extend right
+          left_x_coord = 0.0;               // Left anchor
+          right_x_coord = max_total_volume; // Right extent
+        } else {
+          // For other profile modes, use the full range
+          left_x_coord = -max_volume_;
+          right_x_coord = max_volume_;
+        }
       } else {
         // For other profile modes, use the full range
         left_x_coord = -max_volume_;
@@ -600,7 +610,7 @@ void VolumeProfilePanel::render_volume_bars() {
 
             if (total_vol > 0) {
               // Calculate the left extent of the bar based on the total volume
-              double bar_left_extent = right_anchor - (total_vol / max_total_volume) * right_anchor;
+              double bar_left_extent = right_anchor - (total_vol / max_total_volume) * max_volume_;
 
               // Draw the horizontal bar extending left from the right anchor
               ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -649,7 +659,7 @@ void VolumeProfilePanel::render_volume_bars() {
         if (poc_price_ > 0) {
           // Only draw POC line if it's within the visible range
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
-            double poc_line_x[2] = {0, right_anchor};  // From left to right anchor
+            double poc_line_x[2] = {right_anchor - max_volume_, right_anchor};  // From left extent to right anchor
             double poc_line_y[2] = {poc_price_, poc_price_};
             ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
@@ -695,8 +705,8 @@ void VolumeProfilePanel::render_volume_bars() {
             if (total_vol > 0) {
               // Calculate the right extent of the bar based on the total volume
               // For left profile, bars extend right from the left edge (x=0)
-              // Use the same max reference as the right profile for consistency
-              double bar_right_extent = left_anchor + (total_vol / max_total_volume) * max_total_volume;
+              // Scale the bar extent based on the ratio of current volume to max volume
+              double bar_right_extent = left_anchor + (total_vol / max_total_volume) * max_volume_;
 
               // Draw the horizontal bar extending right from the left anchor
               ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -745,7 +755,7 @@ void VolumeProfilePanel::render_volume_bars() {
         if (poc_price_ > 0) {
           // Only draw POC line if it's within the visible range
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
-            double poc_line_x[2] = {0, max_total_volume};  // From left to right anchor
+            double poc_line_x[2] = {left_anchor, left_anchor + max_volume_};  // From left anchor to max volume extent
             double poc_line_y[2] = {poc_price_, poc_price_};
             ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);

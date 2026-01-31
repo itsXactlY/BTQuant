@@ -2459,4 +2459,16 @@ void VolumeProfilePanel::render_step_profile_histograms_on_candle_bars(ImDrawLis
   }
 }
 
+// Public method to render step profile histograms on candle bars - this can be called from other components
+void VolumeProfilePanel::drawMiniHistogramOverlay(ImDrawList* draw_list,
+                                                 const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                 const std::vector<double>& x_coords,
+                                                 const std::vector<double>& y_coords_high,
+                                                 const std::vector<double>& y_coords_low,
+                                                 bool show_poc_line,
+                                                 int num_buckets_per_candle) {
+  render_step_profile_histograms_on_candle_bars(draw_list, candles, x_coords, y_coords_high, y_coords_low,
+                                              show_poc_line, num_buckets_per_candle);
+}
+
 }  // namespace BTQuant

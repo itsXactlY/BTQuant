@@ -145,6 +145,15 @@ class VolumeProfilePanel : public PanelBase {
                                                    bool show_poc_line = true,
                                                    int num_buckets_per_candle = 8);
 
+  // Public method to render step profile histograms on candle bars - this can be called from other components
+  void drawMiniHistogramOverlay(ImDrawList* draw_list,
+                              const std::vector<RenderEngine::OHLCVCandle>& candles,
+                              const std::vector<double>& x_coords,
+                              const std::vector<double>& y_coords_high,
+                              const std::vector<double>& y_coords_low,
+                              bool show_poc_line = true,
+                              int num_buckets_per_candle = 8);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

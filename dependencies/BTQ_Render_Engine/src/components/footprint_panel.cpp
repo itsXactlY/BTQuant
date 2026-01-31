@@ -688,6 +688,32 @@ void FootprintPanel::render() {
     return;
   }
 
+  // Main data type selector (all 16 types from UnifiedDataPipeline::DataType)
+  const char* data_type_names[] = {
+    "OHLC", "Orderbook", "Trades", "VolumeProfile", "Footprint", "TPO",
+    "Metrics", "Alerts", "HeikinAshi", "Renko", "LineBreak", "Kagi",
+    "PointAndFigure", "RangeBars", "VolumeBars", "TickBars"
+  };
+
+  int current_data_type = static_cast<int>(data_type_);
+  if (ImGui::BeginCombo("Data Type##MainDataTypeSelector", data_type_names[current_data_type])) {
+    for (int i = 0; i < 16; i++) {  // 16 types to match enum
+      bool is_selected = (current_data_type == i);
+      if (ImGui::Selectable(data_type_names[i], is_selected)) {
+        current_data_type = i;
+        data_type_ = static_cast<Data::UnifiedDataPipeline::DataType>(i);
+        // Mark data as dirty to trigger immediate rendering update
+        data_dirty_.store(true, std::memory_order_release);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  ImGui::SameLine();
+
   // Volume data type selector for footprint visualization (all 17 types)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",

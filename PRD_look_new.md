@@ -36,8 +36,8 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 2a: Basic Rendering [Complexity: M]
-- [ ] Enhance footprint_panel.cpp main render loop to iterate visible time bars and price levels, retrieve ClusterCell data, and switch on active VolumeAnalysisType to determine displayed value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Implement adaptive heatmap coloring: calculate alpha based on cell_volume / max_bar_volume, support multiple color schemes (green-red gradient for delta, blue-red for buy/sell, yellow-orange for volume intensity) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Enhance footprint_panel.cpp main render loop to iterate visible time bars and price levels, retrieve ClusterCell data, and switch on active VolumeAnalysisType to determine displayed value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Implement adaptive heatmap coloring: calculate alpha based on cell_volume / max_bar_volume, support multiple color schemes (green-red gradient for delta, blue-red for buy/sell, yellow-orange for volume intensity) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Add data type selector dropdown in footprint panel header with all 16 types, update rendering immediately on selection in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 
 ### Phase 2b: Advanced Features [Complexity: M]

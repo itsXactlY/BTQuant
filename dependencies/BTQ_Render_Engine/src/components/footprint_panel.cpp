@@ -1012,8 +1012,10 @@ void FootprintPanel::render() {
             cell.end_time_ns = cluster.endTimeNs;
 
             // Calculate value based on active VolumeAnalysisType for this specific cell
+            // This is the core logic that determines what value is displayed in each cell
             switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
                 case BTQuant::Data::VolumeAnalysisType::Trades:
+                    // Display total number of trades in the cell
                     cell.bid_volume = static_cast<double>(cluster.tradeCount);
                     cell.ask_volume = 0.0; // Not applicable for trades count
                     cell.delta = static_cast<double>(cluster.tradeCount);
@@ -1054,36 +1056,42 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::Volume:
+                    // Display total volume (bid + ask)
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+                    // Display buy volume only
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = 0.0; // Not applicable for buy volume
                     cell.delta = static_cast<double>(cluster.bidVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::SellVolume:
+                    // Display sell volume only
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.bid_volume = 0.0; // Not applicable for sell volume
                     cell.delta = -static_cast<double>(cluster.askVolume); // Negative for sell volume
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+                    // Display difference between buy and sell volume (BuyVolume - SellVolume)
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::Delta:
+                    // Display net difference between buy and sell volume (BuyVolume - SellVolume)
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                    // Display delta as percentage of total volume
                     {
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                         cell.bid_volume = static_cast<double>(cluster.bidVolume);
@@ -1094,12 +1102,14 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                    // Display running sum of delta values
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::AverageSize:
+                    // Display average trade size
                     {
                         int total_count = cluster.tradeCount;
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
@@ -1110,6 +1120,7 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+                    // Display average size of buy trades
                     {
                         // Estimate buy count based on volume ratio
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
@@ -1126,6 +1137,7 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+                    // Display average size of sell trades
                     {
                         // Estimate sell count based on volume ratio
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
@@ -1142,7 +1154,7 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
-                    // Estimate max single trade volume as total volume divided by trade count
+                    // Display maximum volume of a single trade
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = cluster.tradeCount > 0 ?
@@ -1150,6 +1162,7 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+                    // Display percentage of buy volume
                     {
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                         cell.bid_volume = static_cast<double>(cluster.bidVolume);
@@ -1160,6 +1173,7 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+                    // Display percentage of sell volume
                     {
                         double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                         cell.bid_volume = static_cast<double>(cluster.bidVolume);
@@ -1170,12 +1184,14 @@ void FootprintPanel::render() {
                     break;
 
                 case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+                    // Display volume filtered by specific criteria
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
                     break;
 
                 default:
+                    // Default to total volume if unknown type
                     cell.bid_volume = static_cast<double>(cluster.bidVolume);
                     cell.ask_volume = static_cast<double>(cluster.askVolume);
                     cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);

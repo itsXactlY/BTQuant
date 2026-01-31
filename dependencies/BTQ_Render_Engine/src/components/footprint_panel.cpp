@@ -726,31 +726,6 @@ void FootprintPanel::render() {
     return;
   }
 
-  // Data type selector - 16 types (placed in header)
-  const char* data_type_names[] = {
-    "OHLC", "Order Book", "Trades", "Volume Profile", "Footprint", "TPO", "Metrics", "Alerts",
-    "Heikin Ashi", "Renko", "Line Break", "Kagi", "Point & Figure", "Range Bars", "Volume Bars", "Tick Bars"
-  };
-
-  int current_data_type = static_cast<int>(data_type_);
-  if (ImGui::BeginCombo("Data Type##DataTypeSelector", data_type_names[current_data_type])) {
-    for (int i = 0; i < 16; i++) {
-      bool is_selected = (current_data_type == i);
-      if (ImGui::Selectable(data_type_names[i], is_selected)) {
-        current_data_type = i;
-        data_type_ = static_cast<Data::UnifiedDataPipeline::DataType>(i);
-        // Mark data as dirty to trigger immediate rendering update
-        data_dirty_.store(true, std::memory_order_release);
-      }
-      if (is_selected) {
-        ImGui::SetItemDefaultFocus();
-      }
-    }
-    ImGui::EndCombo();
-  }
-
-  ImGui::SameLine();
-
   // Volume data type selector for footprint visualization (16 types as requested)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
@@ -1601,13 +1576,7 @@ void FootprintPanel::render() {
 
   // Enhanced Debug Overlay
   if (!clusters.empty()) {
-    // Data type names for display
-    const char* data_type_names[] = {
-      "OHLC", "Order Book", "Trades", "Volume Profile", "Footprint", "TPO", "Metrics", "Alerts",
-      "Heikin Ashi", "Renko", "Line Break", "Kagi", "Point & Figure", "Range Bars", "Volume Bars", "Tick Bars"
-    };
-
-    // Determine the current volume data type name for display
+    // Volume data type names for display
     const char* vol_type_names[] = {
       "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
       "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
@@ -1626,8 +1595,7 @@ void FootprintPanel::render() {
 
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                       "Data: %s | Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
-                       data_type_names[static_cast<int>(data_type_)],
+                       "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
                        vol_type_names[static_cast<int>(volume_data_type_)],
                        time_agg_names[static_cast<int>(time_aggregation_type_)],
                        price_agg_names[static_cast<int>(price_aggregation_type_)],

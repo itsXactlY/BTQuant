@@ -211,6 +211,15 @@ void VolumeProfilePanel::render_controls() {
   // Add level count control
   ImGui::SameLine();
   ImGui::Text("| Levels: %zu", volume_profile_.size());
+
+  // Add profile mode selection
+  ImGui::SameLine();
+  const char* profile_modes[] = {"Step", "Right", "Left", "Custom"};
+  ImGui::Combo("Profile Mode", reinterpret_cast<int*>(&profile_mode_), profile_modes, 4);
+
+  // Add VA% control
+  ImGui::SameLine();
+  ImGui::SliderInt("VA%", &va_percent_, 50, 99);
 }
 
 void VolumeProfilePanel::render_volume_bars() {
@@ -253,17 +262,52 @@ void VolumeProfilePanel::render_volume_bars() {
     // Bar height based on price bucket size
     double bar_height = price_bucket_size_ * 0.8;
 
-    // Buy bars (green, positive X) - using PlotBars with horizontal flag
-    ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
-    ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
-                     static_cast<int>(prices.size()), bar_height,
-                     ImPlotBarsFlags_Horizontal);
+    // Render based on profile mode
+    switch (profile_mode_) {
+      case ProfileMode::Step:
+        render_step_profile(prices.data(), buy_volumes.data(), sell_volumes.data(),
+                           static_cast<int>(prices.size()), bar_height);
+        break;
+      case ProfileMode::Right:
+        // Buy bars (green, positive X) - using PlotBars with horizontal flag
+        ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
 
-    // Sell bars (red, negative X)
-    ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
-    ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
-                     static_cast<int>(prices.size()), bar_height,
-                     ImPlotBarsFlags_Horizontal);
+        // Sell bars (red, negative X)
+        ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
+        break;
+      case ProfileMode::Left:
+        // Sell bars (red, negative X) - mirrored
+        ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
+
+        // Buy bars (green, positive X)
+        ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
+        break;
+      case ProfileMode::Custom:
+      default:
+        // Default behavior - both buy and sell volumes
+        ImPlot::SetNextFillStyle(ImVec4(0.1f, 0.8f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Buy", buy_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
+
+        ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.1f, 0.1f, 0.7f));
+        ImPlot::PlotBars("Sell", sell_volumes.data(), prices.data(),
+                         static_cast<int>(prices.size()), bar_height,
+                         ImPlotBarsFlags_Horizontal);
+        break;
+    }
 
     // POC line
     if (poc_price_ > 0) {
@@ -285,6 +329,142 @@ void VolumeProfilePanel::render_volume_bars() {
     }
 
     ImPlot::EndPlot();
+  }
+}
+
+void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
+                                            const double* neg_ys, int count,
+                                            double height) {
+  if (count <= 0) return;
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  const ImU32 col_pos = IM_COL32(0, 255, 0, 170);  // Green for positive
+  const ImU32 col_neg = IM_COL32(255, 0, 0, 170);  // Red for negative
+
+  for (int i = 0; i < count; ++i) {
+    if (ys[i] != 0) {
+      ImVec2 p1 = ImPlot::PlotToPixels(0, xs[i]);  // x-axis is volume, y-axis is price
+      ImVec2 p2 = ImPlot::PlotToPixels(ys[i], xs[i]);
+
+      // Draw step-style bar
+      ImVec2 bar_tl = ImVec2(std::min(p1.x, p2.x), p1.y - height / 2);
+      ImVec2 bar_br = ImVec2(std::max(p1.x, p2.x), p1.y + height / 2);
+
+      draw_list->AddRectFilled(bar_tl, bar_br, col_pos);
+    }
+
+    if (neg_ys[i] != 0) {
+      ImVec2 p1 = ImPlot::PlotToPixels(0, xs[i]);
+      ImVec2 p2 = ImPlot::PlotToPixels(neg_ys[i], xs[i]);
+
+      // Draw step-style bar for negative values
+      ImVec2 bar_tl = ImVec2(std::min(p1.x, p2.x), p1.y - height / 2);
+      ImVec2 bar_br = ImVec2(std::max(p1.x, p2.x), p1.y + height / 2);
+
+      draw_list->AddRectFilled(bar_tl, bar_br, col_neg);
+    }
+  }
+}
+
+// Method to render mini histogram overlays on candlestick charts
+void VolumeProfilePanel::render_mini_histograms_on_candles(ImDrawList* draw_list,
+                                                          const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                          const std::vector<double>& x_coords,
+                                                          const std::vector<double>& y_coords_high,
+                                                          const std::vector<double>& y_coords_low) {
+  if (candles.empty() || x_coords.size() != candles.size() ||
+      y_coords_high.size() != candles.size() || y_coords_low.size() != candles.size()) {
+    return;
+  }
+
+  // Get theme colors for consistent styling
+  const auto& colors = ThemeManager::getInstance().getColors();
+
+  // Iterate through each candle to draw mini volume profile histogram
+  for (size_t i = 0; i < candles.size(); ++i) {
+    const auto& candle = candles[i];
+
+    // Skip if candle has no volume
+    if (candle.volume <= 0) continue;
+
+    // Get the candle's price range (high - low)
+    double price_range = candle.high - candle.low;
+    if (price_range <= 0) continue;
+
+    // Determine number of price buckets for this candle's range
+    int num_buckets = 8; // Fixed number of buckets for mini histogram
+    double bucket_size = price_range / num_buckets;
+
+    // Get recent trades for this symbol to populate the histogram
+    auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+    const auto& trades = analytics.recent_trades;
+
+    // Create temporary buckets for this candle's price range
+    std::vector<double> bucket_volumes(num_buckets, 0.0);
+    std::vector<int> bucket_counts(num_buckets, 0);
+
+    // Aggregate trades into buckets based on price within this candle's range
+    for (const auto& trade : trades) {
+      if (trade.price >= candle.low && trade.price <= candle.high) {
+        int bucket_idx = static_cast<int>((trade.price - candle.low) / bucket_size);
+        // Ensure we don't exceed bounds
+        bucket_idx = std::max(0, std::min(bucket_idx, num_buckets - 1));
+
+        bucket_volumes[bucket_idx] += trade.size;
+        bucket_counts[bucket_idx]++;
+      }
+    }
+
+    // Find max volume in this candle's histogram for scaling
+    double max_vol_in_candle = 0.0;
+    for (double vol : bucket_volumes) {
+      if (vol > max_vol_in_candle) max_vol_in_candle = vol;
+    }
+
+    if (max_vol_in_candle <= 0) continue;
+
+    // Calculate screen coordinates for the mini histogram
+    float x_center = static_cast<float>(x_coords[i]);
+    float y_high = static_cast<float>(y_coords_high[i]);
+    float y_low = static_cast<float>(y_coords_low[i]);
+
+    // Calculate height of each bucket in screen coordinates
+    float total_height = y_low - y_high; // Height of the candle in screen space
+    float bucket_height = total_height / num_buckets;
+
+    // Draw mini histogram inside the candle
+    for (int j = 0; j < num_buckets; ++j) {
+      if (bucket_volumes[j] > 0) {
+        // Calculate the fill percentage of this bucket
+        float fill_percentage = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
+
+        // Calculate the top-left and bottom-right coordinates for this bucket
+        float y_top = y_high + j * bucket_height;
+        float y_bottom = y_high + (j + 1) * bucket_height;
+
+        // Calculate width of the bar based on fill percentage
+        float bar_width = (y_bottom - y_top) * 0.8f; // Use 80% of height as width for visibility
+        float filled_width = bar_width * fill_percentage;
+
+        // Calculate the x positions for the bar
+        float x_left = x_center - bar_width / 2.0f;
+        float x_right = x_left + filled_width;
+
+        // Choose color based on whether this is in the upper or lower half of the candle
+        // (to represent buy/sell pressure)
+        ImU32 color;
+        if (j < num_buckets / 2) {
+          // Lower half - potentially more selling pressure
+          color = IM_COL32(255, 100, 100, 150); // Reddish for sells
+        } else {
+          // Upper half - potentially more buying pressure
+          color = IM_COL32(100, 255, 100, 150); // Greenish for buys
+        }
+
+        // Draw the mini histogram bar
+        draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
+      }
+    }
   }
 }
 

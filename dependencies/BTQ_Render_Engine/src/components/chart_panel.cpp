@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/components/volume_profile_panel.hpp"
 
 namespace BTQuant {
 
@@ -1027,6 +1028,46 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
       // Draw body (filled rectangle)
       draw_list->AddRectFilled(body_tl, body_br, color);
+    }
+
+    // Render mini volume profile histograms on candles if enabled
+    if (indicator_config_.show_volume_profile) {
+      // Extract the visible candle data for the mini histograms
+      std::vector<RenderEngine::OHLCVCandle> visible_candles;
+      std::vector<double> x_coords;
+      std::vector<double> y_coords_high;
+      std::vector<double> y_coords_low;
+
+      for (size_t i = render_start_idx; i < render_end_idx; ++i) {
+        RenderEngine::OHLCVCandle candle;
+        candle.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert back to microseconds
+        candle.open = chart.opens[i];
+        candle.high = chart.highs[i];
+        candle.low = chart.lows[i];
+        candle.close = chart.closes[i];
+        candle.volume = chart.volumes[i];
+        candle.trade_count = 1; // Placeholder
+
+        visible_candles.push_back(candle);
+
+        // Calculate screen coordinates for this candle
+        ImVec2 wick_top = ImPlot::PlotToPixels(chart.dates[i], chart.highs[i]);
+        ImVec2 wick_bot = ImPlot::PlotToPixels(chart.dates[i], chart.lows[i]);
+
+        x_coords.push_back(wick_top.x);
+        y_coords_high.push_back(wick_top.y);
+        y_coords_low.push_back(wick_bot.y);
+      }
+
+      // Create a temporary volume profile panel to render the mini histograms
+      // In a real implementation, this would be accessed from the panel manager
+      // For now, we'll create a temporary instance with the necessary data
+      auto id_opt = chart_manager_->getSymbolId(symbol_);
+      if (id_opt) {
+        VolumeProfilePanel temp_vp(PanelConfig{}, bridge_, processor_);
+        temp_vp.set_symbol(*id_opt, symbol_);
+        temp_vp.render_mini_histograms_on_candles(draw_list, visible_candles, x_coords, y_coords_high, y_coords_low);
+      }
     }
 
     // Check for user interaction to break auto-follow

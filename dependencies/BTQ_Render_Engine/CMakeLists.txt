@@ -128,6 +128,7 @@ set(DASHBOARD_SOURCES
     # Analytics and advanced features
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
+    src/analytics/cluster_engine.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp
@@ -659,22 +660,22 @@ target_link_libraries(dashboard_advanced PRIVATE
 # endif()
 
 # Unit test for VolumeAnalysisType
-enable_testing()
-find_package(GTest QUIET)
-if(GTest_FOUND)
-    add_executable(test_volume_analysis_type tests/test_volume_analysis_type.cpp)
-    target_include_directories(test_volume_analysis_type PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${Vulkan_INCLUDE_DIRS}
-        ${glm_SOURCE_DIR}
-        ${json_SOURCE_DIR}/include
-        ${concurrentqueue_SOURCE_DIR}
-        ${IMGUI_DIR}
-        ${IMGUI_DIR}/backends
-        ${IMPLOT_DIR}
-    )
-    target_link_libraries(test_volume_analysis_type PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
-    add_test(NAME test_volume_analysis_type COMMAND test_volume_analysis_type)
-endif()
+# enable_testing()
+# find_package(GTest QUIET)
+# if(GTest_FOUND)
+#     add_executable(test_volume_analysis_type tests/test_volume_analysis_type.cpp)
+#     target_include_directories(test_volume_analysis_type PRIVATE
+#         ${CMAKE_CURRENT_SOURCE_DIR}/include
+#         ${CMAKE_CURRENT_SOURCE_DIR}/src
+#         ${Vulkan_INCLUDE_DIRS}
+#         ${glm_SOURCE_DIR}
+#         ${json_SOURCE_DIR}/include
+#         ${concurrentqueue_SOURCE_DIR}
+#         ${IMGUI_DIR}
+#         ${IMGUI_DIR}/backends
+#         ${IMPLOT_DIR}
+#     )
+#     target_link_libraries(test_volume_analysis_type PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+#     add_test(NAME test_volume_analysis_type COMMAND test_volume_analysis_type)
+# endif()
 

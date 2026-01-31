@@ -11,14 +11,14 @@
 namespace Analytics {
 
 struct ClusterCell {
-    double total_volume = 0.0;
-    double buy_volume = 0.0;
-    double sell_volume = 0.0;
-    int trade_count = 0;
-    int buy_trade_count = 0;
-    int sell_trade_count = 0;
-    double max_single_trade_volume = 0.0;
-    double sum_of_volumes = 0.0;  // for average calculations
+    std::atomic<double> total_volume{0.0};
+    std::atomic<double> buy_volume{0.0};
+    std::atomic<double> sell_volume{0.0};
+    std::atomic<int> trade_count{0};
+    std::atomic<int> buy_trade_count{0};
+    std::atomic<int> sell_trade_count{0};
+    std::atomic<double> max_single_trade_volume{0.0};
+    std::atomic<double> sum_of_volumes{0.0};  // for average calculations
 };
 
 }
@@ -92,6 +92,9 @@ public:
     }
   }
 
+  // Process trade with atomic updates to ClusterCell counters for given price level and time bucket
+  void processTrade(const MarketData::Trade& trade, int time_bucket);
+
   void snapshot_to_viewport(HotSpine::V3::ClusterColumn &out,
                             double center_price) {
     int64_t center_idx =
@@ -125,5 +128,8 @@ private:
   int64_t min_tick_index_;
   int64_t session_start_us_;
   std::vector<HotSpine::V3::VolumeNode> canvas_;
+
+  // Additional data structure for cluster cells with time buckets
+  std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]
 };
 } // namespace Analytics

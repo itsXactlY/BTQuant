@@ -560,8 +560,19 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   // Special handling for SplitVolume mode
   if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) ==
       Data::VolumeAnalysisType::SplitVolume) {
-    // Draw split volume: left half for buy volume, right half for sell volume
-    float mid_x = (p1.x + p2.x) * 0.5f;
+    // Draw split volume: proportional split based on buy/sell volumes
+    // Calculate the proportional split point based on relative volumes
+    double total_volume = cell.bid_volume + cell.ask_volume;
+    float split_x;
+
+    if (total_volume > 0.0) {
+      // Calculate proportional position: left side for buy volume, right side for sell volume
+      float buy_proportion = static_cast<float>(cell.bid_volume / total_volume);
+      split_x = p1.x + (p2.x - p1.x) * buy_proportion;
+    } else {
+      // If no volume, use center (equal split)
+      split_x = (p1.x + p2.x) * 0.5f;
+    }
 
     // Calculate colors for buy and sell volumes separately
     float buy_alpha =
@@ -578,19 +589,26 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
     ImU32 sell_color =
         IM_COL32(200, 0, 0, static_cast<int>(sell_alpha * 255));  // Red for sell volume
 
-    // Draw left half (buy volume)
+    // Draw left side (buy volume) - proportional to buy volume size
     if (cell.bid_volume > 0.0) {
-      draw_list->AddRectFilled(p1, ImVec2(mid_x, p2.y), buy_color);
+      draw_list->AddRectFilled(p1, ImVec2(split_x, p2.y), buy_color);
     }
 
-    // Draw right half (sell volume)
+    // Draw right side (sell volume) - proportional to sell volume size
     if (cell.ask_volume > 0.0) {
-      draw_list->AddRectFilled(ImVec2(mid_x, p1.y), p2, sell_color);
+      draw_list->AddRectFilled(ImVec2(split_x, p1.y), p2, sell_color);
     }
 
-    // Draw dividing line between buy and sell halves - make it more prominent
-    draw_list->AddLine(ImVec2(mid_x, p1.y), ImVec2(mid_x, p2.y), IM_COL32(255, 255, 255, 200),
-                       2.5f);
+    // Draw dividing line between buy and sell sections
+    // Only draw if both volumes exist to show the boundary clearly
+    if (cell.bid_volume > 0.0 && cell.ask_volume > 0.0) {
+      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 200),
+                         2.5f);
+    } else if (total_volume > 0.0) {
+      // If only one side has volume, still draw the boundary at the appropriate position
+      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 150),
+                         1.5f);
+    }
   } else {
     // Get cell color for other modes
     ImU32 color = getCellColor(cell, max_volume);

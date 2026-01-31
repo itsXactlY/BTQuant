@@ -72,6 +72,9 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
   double value_to_display = 0.0;
   double total_vol = cell.bid_volume + cell.ask_volume;
 
+  // Calculate adaptive alpha based on cell volume relative to max bar volume
+  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
+
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
     case Data::VolumeAnalysisType::Delta:
     case Data::VolumeAnalysisType::DeltaPercent:
@@ -82,34 +85,31 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
         double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
         normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
 
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
         if (std::abs(normalized_delta) > delta_threshold_) {
           // Use different colors based on the sign of the delta
           if (normalized_delta > 0) {
             // Positive delta - Green gradient
             float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
             return IM_COL32(
-                static_cast<int>(0),
-                static_cast<int>(50 + 205 * green_intensity),
-                static_cast<int>(0),
+                static_cast<int>(50), // Slight red base to avoid pure green
+                static_cast<int>(100 + 155 * green_intensity),
+                static_cast<int>(50), // Slight blue base
                 static_cast<int>(alpha * 255));
           } else {
             // Negative delta - Red gradient
             float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
             return IM_COL32(
-                static_cast<int>(50 + 205 * red_intensity),
-                static_cast<int>(0),
-                static_cast<int>(0),
+                static_cast<int>(100 + 155 * red_intensity),
+                static_cast<int>(50), // Slight green base
+                static_cast<int>(50), // Slight blue base
                 static_cast<int>(alpha * 255));
           }
         } else {
           // Neutral - Gray
           return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
+              static_cast<int>(100),
+              static_cast<int>(100),
+              static_cast<int>(100),
               static_cast<int>(alpha * 255));
         }
       }
@@ -133,33 +133,30 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
 
         normalized_value = std::clamp(normalized_value, -1.0, 1.0);
 
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
         if (std::abs(normalized_value) > delta_threshold_) {
           if (normalized_value > 0) {
-            // Positive - Blue gradient
+            // Positive - Blue gradient for buy volume
             float blue_intensity = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
             return IM_COL32(
-                static_cast<int>(0),
-                static_cast<int>(0),
-                static_cast<int>(50 + 205 * blue_intensity),
+                static_cast<int>(50), // Slight red base
+                static_cast<int>(50), // Slight green base
+                static_cast<int>(100 + 155 * blue_intensity),
                 static_cast<int>(alpha * 255));
           } else {
-            // Negative - Red gradient
+            // Negative - Red gradient for sell volume dominance
             float red_intensity = std::clamp(static_cast<float>(-normalized_value), 0.0f, 1.0f);
             return IM_COL32(
-                static_cast<int>(50 + 205 * red_intensity),
-                static_cast<int>(0),
-                static_cast<int>(0),
+                static_cast<int>(100 + 155 * red_intensity),
+                static_cast<int>(50), // Slight green base
+                static_cast<int>(50), // Slight blue base
                 static_cast<int>(alpha * 255));
           }
         } else {
           // Neutral - Gray
           return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
+              static_cast<int>(100),
+              static_cast<int>(100),
+              static_cast<int>(100),
               static_cast<int>(alpha * 255));
         }
       }
@@ -220,9 +217,6 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
         float intensity = max_possible_value > 0.0 ?
             std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f) : 0.0f;
 
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
         // Yellow-orange gradient for volume intensity
         return IM_COL32(
             static_cast<int>(255 * intensity),
@@ -239,9 +233,6 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     default:
       // For other metrics, use blue gradient
       {
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
         // Calculate normalized value for the specific metric
         double normalized_value = 0.0;
         double max_possible_value = 10000.0; // Default placeholder
@@ -293,9 +284,9 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
 
         float blue_intensity = std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f);
         return IM_COL32(
-            static_cast<int>(0),
-            static_cast<int>(0),
-            static_cast<int>(50 + 205 * blue_intensity),
+            static_cast<int>(50), // Slight red base
+            static_cast<int>(50), // Slight green base
+            static_cast<int>(100 + 155 * blue_intensity),
             static_cast<int>(alpha * 255));
       }
       break;

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <map>
 #include "analytics/cluster_engine.hpp"
+#include "../../include/analytics/cluster_engine.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -887,6 +888,7 @@ void FootprintPanel::render() {
 
   // Get clusters from renderer
   auto clusters = renderer_->getFootprintClusters();
+  auto cluster_cells = renderer_->getClusterCells(); // Get ClusterCell data
   auto stats = renderer_->getStats();
 
   // Base time for absolute labeling (relative to 30s window)
@@ -1082,6 +1084,115 @@ void FootprintPanel::render() {
 
             if (analysis_value > max_volume) {
                 max_volume = analysis_value;
+            }
+        }
+    }
+
+    // ENHANCED: Also process ClusterCell data if available
+    // This provides more granular data for advanced analysis
+    if (!cluster_cells.empty()) {
+        // Iterate through the ClusterCell data structure [price_level][time_bucket]
+        for (size_t price_idx = 0; price_idx < cluster_cells.size(); ++price_idx) {
+            const auto& time_buckets = cluster_cells[price_idx];
+
+            for (size_t time_idx = 0; time_idx < time_buckets.size(); ++time_idx) {
+                const auto& cell = time_buckets[time_idx];
+
+                // Calculate the price and time coordinates for this cell
+                // This is a simplified mapping - in a real implementation, you'd need to map
+                // the indices back to actual price/time coordinates
+                double price_level = y_min + (static_cast<double>(price_idx) / cluster_cells.size()) * (y_max - y_min);
+                double time_bucket = x_min + (static_cast<double>(time_idx) / time_buckets.size()) * (x_max - x_min);
+
+                // Check if this cell is within visible bounds
+                if (time_bucket >= x_min && time_bucket <= x_max &&
+                    price_level >= y_min && price_level <= y_max) {
+
+                    // Calculate analysis value based on active VolumeAnalysisType for ClusterCell data
+                    double analysis_value = 0.0;
+
+                    switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+                        case BTQuant::Data::VolumeAnalysisType::Trades:
+                            analysis_value = static_cast<double>(cell.trade_count.load());
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+                            analysis_value = static_cast<double>(cell.buy_trade_count.load());
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::SellTrades:
+                            analysis_value = static_cast<double>(cell.sell_trade_count.load());
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::Volume:
+                            analysis_value = cell.total_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+                            analysis_value = cell.buy_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::SellVolume:
+                            analysis_value = cell.sell_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+                            analysis_value = std::abs(cell.buy_volume - cell.sell_volume);
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::Delta:
+                            analysis_value = std::abs(cell.buy_volume - cell.sell_volume);
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                            {
+                                double total_vol = cell.total_volume;
+                                analysis_value = total_vol > 0.0 ?
+                                    std::abs(((cell.buy_volume - cell.sell_volume) / total_vol) * 100.0) : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                            analysis_value = cell.buy_volume - cell.sell_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::AverageSize:
+                            {
+                                int total_count = cell.trade_count.load();
+                                analysis_value = total_count > 0 ? cell.sum_of_volumes / static_cast<double>(total_count) : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+                            {
+                                int buy_count = cell.buy_trade_count.load();
+                                analysis_value = buy_count > 0 ? cell.buy_volume / static_cast<double>(buy_count) : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+                            {
+                                int sell_count = cell.sell_trade_count.load();
+                                analysis_value = sell_count > 0 ? cell.sell_volume / static_cast<double>(sell_count) : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+                            analysis_value = cell.max_single_trade_volume.load();
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+                            {
+                                double total_vol = cell.total_volume;
+                                analysis_value = total_vol > 0.0 ?
+                                    (cell.buy_volume / total_vol) * 100.0 : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+                            {
+                                double total_vol = cell.total_volume;
+                                analysis_value = total_vol > 0.0 ?
+                                    (cell.sell_volume / total_vol) * 100.0 : 0.0;
+                            }
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+                            analysis_value = cell.total_volume;
+                            break;
+                        default:
+                            analysis_value = cell.total_volume;
+                            break;
+                    }
+
+                    if (analysis_value > max_volume) {
+                        max_volume = analysis_value;
+                    }
+                }
             }
         }
     }

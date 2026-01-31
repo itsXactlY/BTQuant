@@ -6,6 +6,7 @@
 #include "hotspine_data_bridge.hpp"
 #include "trading/HotspineData.h"
 #include "data/VolumeDataTypes.h"
+#include "../../include/analytics/cluster_engine.hpp"
 #include <expected>
 #include <memory>
 #include <span>
@@ -134,6 +135,10 @@ public:
   // This utilizes ImGui_ImplVulkan_AddTexture manually
   void *getHeatmapTextureID();
 
+  // Get ClusterCell data for footprint analysis
+  // This provides access to the underlying ClusterCell data for advanced analysis
+  std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
+
 private:
   // Data Update Callback
   void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
@@ -226,6 +231,9 @@ private:
   // Price aggregation settings
   Data::PriceAggregationType price_aggregation_type_ = Data::PriceAggregationType::P_1TICK;
   double custom_price_aggregation_value_ = 0.1;
+
+  // Cluster Engine for advanced analytics
+  std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
 };
 
 // ============================================================================

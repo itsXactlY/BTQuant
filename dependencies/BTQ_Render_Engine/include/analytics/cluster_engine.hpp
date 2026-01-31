@@ -137,6 +137,9 @@ public:
   // Detect stacked imbalances by comparing buy/sell volumes at same price level across consecutive time bars
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_stacked_imbalances(double threshold = 3.0) const;
 
+  // Getter method to access the cluster canvas for visualization
+  const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
+
   void snapshot_to_viewport(HotSpine::V3::ClusterColumn &out,
                             double center_price) {
     int64_t center_idx =

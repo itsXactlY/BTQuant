@@ -18,6 +18,8 @@
 #include "../../include/symbol_registry.hpp"
 #include "../../include/trading/HotspineData.h"
 #include "../../include/vulkan_base_types.hpp"
+#include "../../include/analytics/cluster_engine.hpp"
+#include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
 #include <algorithm>
@@ -86,7 +88,11 @@ MarketMicrostructureRenderer::MarketMicrostructureRenderer(
     : vulkanCore_(vulkanCore), hotspineBridge_(std::move(hotspineBridge)),
       marketDataProcessor_(std::move(marketDataProcessor)), config_(config),
       lastFrameTime_(std::chrono::high_resolution_clock::now()),
-      initialized_(false) {}
+      initialized_(false) {
+    // Initialize the cluster engine with a default tick size
+    // In a real implementation, this would be based on the symbol's tick size
+    cluster_engine_ = std::make_unique<Analytics::ClusterEngine>(0.01); // Default tick size of 0.01
+  }
 
 MarketMicrostructureRenderer::~MarketMicrostructureRenderer() { cleanup(); }
 
@@ -468,6 +474,25 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id,
     for (const auto &t : analytics.recent_trades) {
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price),
                          static_cast<float>(t.size), t.symbol_id, t.is_buy);
+
+      // Process the trade with the cluster engine
+      // Convert to MarketData::Trade format for the cluster engine
+      MarketData::Trade trade_data;
+      trade_data.price = t.price;
+      trade_data.quantity = t.size;
+      trade_data.timestamp_us = t.timestamp;
+      trade_data.is_buyer_maker = t.is_buy; // Assuming buyer maker convention
+
+      // Calculate time bucket based on timestamp (30-minute intervals as an example)
+      constexpr int64_t INTERVAL_US = 30LL * 60 * 1000000; // 30 minutes in microseconds
+      int64_t elapsed = t.timestamp - analytics.last_update_time; // Using last_update_time as reference
+      int time_bucket = static_cast<int>(elapsed / INTERVAL_US);
+      if (time_bucket < 0) time_bucket = 0; // Ensure non-negative bucket index
+
+      // Process the trade with the cluster engine
+      if (cluster_engine_) {
+        cluster_engine_->processTrade(trade_data, time_bucket);
+      }
     }
 
     updateTradeData(ticks);
@@ -1156,6 +1181,15 @@ void *MarketMicrostructureRenderer::getHeatmapTextureID() {
   }
 
   return heatmapTextureID_;
+}
+
+std::vector<std::vector<Analytics::ClusterCell>> MarketMicrostructureRenderer::getClusterCells() const {
+  if (!cluster_engine_) {
+    return {}; // Return empty vector if cluster engine is not initialized
+  }
+
+  // Access the cluster canvas from the cluster engine using the getter method
+  return cluster_engine_->getClusterCanvas();
 }
 
 } // namespace BTQuant::RenderEngine

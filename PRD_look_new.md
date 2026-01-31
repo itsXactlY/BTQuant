@@ -53,7 +53,7 @@
 
 ### Phase 2d: Configuration Options [Complexity: M]
 - [ ] Implement time aggregation selector dropdown: 1min, 5min, 15min, 30min, 1hour, 2hour, 4hour, volume-based (every N contracts), tick-based (every N ticks) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Add price aggregation selector: 1 tick, 5 ticks, 10 ticks, 0.1%, 0.5%, 1%, custom value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Add price aggregation selector: 1 tick, 5 ticks, 10 ticks, 0.1%, 0.5%, 1%, custom value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Implement filtered volume threshold slider: only display cells where volume exceeds threshold, show greyed out cells for filtered values in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Add split volume display mode showing buy volume on left half of cell, sell volume on right half with divider line in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Implement cell size auto-adjustment based on zoom level: expand cells when zoomed in to show more detail, collapse to squares when zoomed out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]

@@ -87,6 +87,12 @@ public:
   void setTimeAggregationType(Data::TimeAggregationType agg_type) { time_aggregation_type_ = agg_type; }
   Data::TimeAggregationType getTimeAggregationType() const { return time_aggregation_type_; }
 
+  // Volume-based and Tick-based aggregation parameters
+  void setVolumeBasedNContracts(int n) { volume_based_n_contracts_ = std::max(1, n); }
+  int getVolumeBasedNContracts() const { return volume_based_n_contracts_; }
+  void setTickBasedNTicks(int n) { tick_based_n_ticks_ = std::max(1, n); }
+  int getTickBasedNTicks() const { return tick_based_n_ticks_; }
+
   // Price aggregation type selection
   void setPriceAggregationType(Data::PriceAggregationType agg_type) { price_aggregation_type_ = agg_type; }
   Data::PriceAggregationType getPriceAggregationType() const { return price_aggregation_type_; }
@@ -120,6 +126,10 @@ private:
 
   // Time Aggregation Type
   Data::TimeAggregationType time_aggregation_type_ = Data::TimeAggregationType::T_1MIN;
+
+  // Volume-based and Tick-based aggregation parameters
+  int volume_based_n_contracts_ = 1000;  // Default: every 1000 contracts
+  int tick_based_n_ticks_ = 100;         // Default: every 100 ticks
 
   // Price Aggregation Type
   Data::PriceAggregationType price_aggregation_type_ = Data::PriceAggregationType::P_1TICK;

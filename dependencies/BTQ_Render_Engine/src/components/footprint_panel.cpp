@@ -72,7 +72,9 @@ FootprintPanel::FootprintPanel(
     RenderEngine::MarketMicrostructureRenderer *renderer)
     : PanelBase(config), renderer_(renderer), data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT),
       volume_data_type_(Data::VolumeDataType::Delta),
-      time_aggregation_type_(Data::TimeAggregationType::T_1MIN) {}
+      time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
+      volume_based_n_contracts_(1000),
+      tick_based_n_ticks_(100) {}
 
 void FootprintPanel::update(float dt) {
   // Update logic if needed
@@ -756,6 +758,35 @@ void FootprintPanel::render() {
       }
     }
     ImGui::EndCombo();
+  }
+
+  // Show custom value inputs if volume-based or tick-based aggregation is selected
+  if (time_aggregation_type_ == Data::TimeAggregationType::VOLUME_BASED) {
+    ImGui::SameLine();
+    ImGui::Text("Every");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    int temp_volume_n = volume_based_n_contracts_;
+    if (ImGui::InputInt("##VolumeBasedN", &temp_volume_n, 1, 10)) {
+      volume_based_n_contracts_ = std::max(1, temp_volume_n); // Ensure minimum value of 1
+      // Mark data as dirty to trigger immediate rendering update
+      data_dirty_.store(true, std::memory_order_release);
+    }
+    ImGui::SameLine();
+    ImGui::Text("contracts");
+  } else if (time_aggregation_type_ == Data::TimeAggregationType::TICK_BASED) {
+    ImGui::SameLine();
+    ImGui::Text("Every");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    int temp_tick_n = tick_based_n_ticks_;
+    if (ImGui::InputInt("##TickBasedN", &temp_tick_n, 1, 10)) {
+      tick_based_n_ticks_ = std::max(1, temp_tick_n); // Ensure minimum value of 1
+      // Mark data as dirty to trigger immediate rendering update
+      data_dirty_.store(true, std::memory_order_release);
+    }
+    ImGui::SameLine();
+    ImGui::Text("ticks");
   }
 
   // Price aggregation selector
@@ -1673,12 +1704,30 @@ void FootprintPanel::render() {
     };
 
     ImGui::SetCursorPos(ImVec2(10, 30));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                       "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
-                       vol_type_names[static_cast<int>(volume_data_type_)],
-                       time_agg_names[static_cast<int>(time_aggregation_type_)],
-                       price_agg_names[static_cast<int>(price_aggregation_type_)],
-                       clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+    if (time_aggregation_type_ == Data::TimeAggregationType::VOLUME_BASED) {
+      ImGui::TextColored(ImVec4(1, 1, 0, 1),
+                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         vol_type_names[static_cast<int>(volume_data_type_)],
+                         time_agg_names[static_cast<int>(time_aggregation_type_)],
+                         volume_based_n_contracts_,
+                         price_agg_names[static_cast<int>(price_aggregation_type_)],
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+    } else if (time_aggregation_type_ == Data::TimeAggregationType::TICK_BASED) {
+      ImGui::TextColored(ImVec4(1, 1, 0, 1),
+                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         vol_type_names[static_cast<int>(volume_data_type_)],
+                         time_agg_names[static_cast<int>(time_aggregation_type_)],
+                         tick_based_n_ticks_,
+                         price_agg_names[static_cast<int>(price_aggregation_type_)],
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+    } else {
+      ImGui::TextColored(ImVec4(1, 1, 0, 1),
+                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         vol_type_names[static_cast<int>(volume_data_type_)],
+                         time_agg_names[static_cast<int>(time_aggregation_type_)],
+                         price_agg_names[static_cast<int>(price_aggregation_type_)],
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+    }
 
     // Calculate statistics based on selected volume data type
     double total_value = 0.0;

@@ -51,6 +51,7 @@ extern/
 node_modules/
 venv/
 .venv/
+**/*_deps
 
 # ===== IDE =====
 .vscode/

@@ -6,19 +6,54 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 #include <vector>
 
 namespace Analytics {
 
 struct ClusterCell {
-    std::atomic<double> total_volume{0.0};
-    std::atomic<double> buy_volume{0.0};
-    std::atomic<double> sell_volume{0.0};
+    mutable std::mutex volume_mutex;  // Mutex to protect double values
+    double total_volume{0.0};
+    double buy_volume{0.0};
+    double sell_volume{0.0};
     std::atomic<int> trade_count{0};
     std::atomic<int> buy_trade_count{0};
     std::atomic<int> sell_trade_count{0};
     std::atomic<double> max_single_trade_volume{0.0};
-    std::atomic<double> sum_of_volumes{0.0};  // for average calculations
+    double sum_of_volumes{0.0};  // for average calculations
+
+    // Define copy constructor and assignment operator to handle mutex properly
+    ClusterCell() = default;
+
+    // Copy constructor - only copies the data values, not the mutex
+    ClusterCell(const ClusterCell& other)
+        : total_volume(other.total_volume)
+        , buy_volume(other.buy_volume)
+        , sell_volume(other.sell_volume)
+        , trade_count(other.trade_count.load())
+        , buy_trade_count(other.buy_trade_count.load())
+        , sell_trade_count(other.sell_trade_count.load())
+        , max_single_trade_volume(other.max_single_trade_volume.load())
+        , sum_of_volumes(other.sum_of_volumes)
+    {}
+
+    // Assignment operator
+    ClusterCell& operator=(const ClusterCell& other) {
+        if (this != &other) {
+            std::lock_guard<std::mutex> lock_this(volume_mutex);
+            std::lock_guard<std::mutex> lock_other(other.volume_mutex);
+
+            total_volume = other.total_volume;
+            buy_volume = other.buy_volume;
+            sell_volume = other.sell_volume;
+            trade_count.store(other.trade_count.load());
+            buy_trade_count.store(other.buy_trade_count.load());
+            sell_trade_count.store(other.sell_trade_count.load());
+            max_single_trade_volume.store(other.max_single_trade_volume.load());
+            sum_of_volumes = other.sum_of_volumes;
+        }
+        return *this;
+    }
 };
 
 }
@@ -94,6 +129,9 @@ public:
 
   // Process trade with atomic updates to ClusterCell counters for given price level and time bucket
   void processTrade(const MarketData::Trade& trade, int time_bucket);
+
+  // Detect diagonal imbalances by comparing buy_volume at price P with sell_volume at price P-1
+  std::vector<std::tuple<int64_t, int, double, double, double>> detect_diagonal_imbalances(double threshold = 3.0) const;
 
   void snapshot_to_viewport(HotSpine::V3::ClusterColumn &out,
                             double center_price) {

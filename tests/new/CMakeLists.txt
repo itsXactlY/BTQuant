@@ -14,6 +14,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 include_directories(
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/include/config
+    ${PROJECT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/include
+    ${PROJECT_SOURCE_DIR}/../../dependencies/ccapi/example/src/market_data_collector
 )
 
 # Source files - Core
@@ -26,6 +28,7 @@ set(CORE_SOURCES
     src/utils/shm_health_monitor.cpp
     src/utils/alert_manager.cpp
     src/utils/recovery_controller.cpp
+    ../../dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp
 )
 
 # Source files - Detectors
@@ -56,6 +59,10 @@ target_link_libraries(simple_monitor PRIVATE btquant_detectors btquant_core)
 
 add_executable(multi_exchange_monitor examples/multi_exchange_monitor.cpp)
 target_link_libraries(multi_exchange_monitor PRIVATE btquant_detectors btquant_core)
+
+# Analytics test
+add_executable(analytics_test src/analytics_test.cpp)
+target_link_libraries(analytics_test PRIVATE btquant_core)
 
 # Install targets
 install(TARGETS manipulation_monitor simple_monitor multi_exchange_monitor

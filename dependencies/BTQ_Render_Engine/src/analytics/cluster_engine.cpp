@@ -1,5 +1,6 @@
 #include "../../../dependencies/BTQ_Render_Engine/include/analytics/cluster_engine.hpp"
 #include <mutex>
+#include <tuple>
 
 namespace Analytics {
 
@@ -47,15 +48,22 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
     // Get reference to the cluster cell for this price level and time bucket
     auto& cell = cluster_canvas_[relative_index][adjusted_time_bucket];
 
-    // Atomically update the counters
-    cell.total_volume.fetch_add(trade.quantity, std::memory_order_relaxed);
-    cell.sum_of_volumes.fetch_add(trade.quantity, std::memory_order_relaxed);
+    // Thread-safely update the counters
+    {
+        std::lock_guard<std::mutex> lock(cell.volume_mutex);
+        cell.total_volume += trade.quantity;
+        cell.sum_of_volumes += trade.quantity;
+
+        if (trade.is_buyer_maker) {
+            cell.sell_volume += trade.quantity;
+        } else {
+            cell.buy_volume += trade.quantity;
+        }
+    }
 
     if (trade.is_buyer_maker) {
-        cell.sell_volume.fetch_add(trade.quantity, std::memory_order_relaxed);
         cell.sell_trade_count.fetch_add(1, std::memory_order_relaxed);
     } else {
-        cell.buy_volume.fetch_add(trade.quantity, std::memory_order_relaxed);
         cell.buy_trade_count.fetch_add(1, std::memory_order_relaxed);
     }
 
@@ -69,6 +77,76 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
             break;
         }
     }
+}
+
+std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::detect_diagonal_imbalances(double threshold) const {
+    std::vector<std::tuple<int64_t, int, double, double, double>> imbalances;
+
+    // Iterate through price levels (rows) and time buckets (columns)
+    for (size_t price_idx = 1; price_idx < cluster_canvas_.size(); ++price_idx) {  // Start from 1 to compare with P-1
+        for (int time_bucket = 0; time_bucket < 16; ++time_bucket) {
+            // Get buy volume at current price level P (with mutex protection)
+            double buy_volume_at_p;
+            {
+                std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+                buy_volume_at_p = cluster_canvas_[price_idx][time_bucket].buy_volume;
+            }
+
+            // Get sell volume at previous price level P-1 (with mutex protection)
+            double sell_volume_at_p_minus_1;
+            {
+                std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 1][time_bucket].volume_mutex);
+                sell_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].sell_volume;
+            }
+
+            // Calculate ratio of buy_volume at P to sell_volume at P-1
+            if (sell_volume_at_p_minus_1 > 0) {
+                double ratio = buy_volume_at_p / sell_volume_at_p_minus_1;
+
+                // Check if ratio exceeds threshold
+                if (ratio > threshold) {
+                    // Store: price_index, time_bucket, buy_volume_at_P, sell_volume_at_P_minus_1, ratio
+                    imbalances.emplace_back(
+                        static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                        time_bucket,
+                        buy_volume_at_p,
+                        sell_volume_at_p_minus_1,
+                        ratio
+                    );
+                }
+            }
+
+            // Also check the reverse: sell_volume at P compared to buy_volume at P-1
+            double sell_volume_at_p;
+            {
+                std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
+                sell_volume_at_p = cluster_canvas_[price_idx][time_bucket].sell_volume;
+            }
+
+            double buy_volume_at_p_minus_1;
+            {
+                std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx - 1][time_bucket].volume_mutex);
+                buy_volume_at_p_minus_1 = cluster_canvas_[price_idx - 1][time_bucket].buy_volume;
+            }
+
+            if (buy_volume_at_p_minus_1 > 0) {
+                double reverse_ratio = sell_volume_at_p / buy_volume_at_p_minus_1;
+
+                if (reverse_ratio > threshold) {
+                    // Store: price_index, time_bucket, sell_volume_at_P, buy_volume_at_P_minus_1, ratio
+                    imbalances.emplace_back(
+                        static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                        time_bucket,
+                        sell_volume_at_p,
+                        buy_volume_at_p_minus_1,
+                        reverse_ratio
+                    );
+                }
+            }
+        }
+    }
+
+    return imbalances;
 }
 
 } // namespace Analytics

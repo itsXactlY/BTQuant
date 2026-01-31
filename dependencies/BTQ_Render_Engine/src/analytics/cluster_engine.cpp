@@ -207,7 +207,50 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
                         sell_volume_previous,
                         sell_ratio
                     );
+                }
             }
+
+            // Enhanced stacked imbalance detection: Vertical analysis comparing buy/sell at same price across consecutive bars
+            // This focuses on the relationship between buy and sell volumes at the same price level across time
+
+            // Current buy vs current sell (for comparison with previous bar's buy/sell ratio)
+            double current_buy_sell_ratio = 0.0;
+            if (sell_volume_current > 0) {
+                current_buy_sell_ratio = buy_volume_current / sell_volume_current;
+            }
+
+            double previous_buy_sell_ratio = 0.0;
+            if (sell_volume_previous > 0) {
+                previous_buy_sell_ratio = buy_volume_previous / sell_volume_previous;
+            }
+
+            // Detect shifts in buy/sell balance at the same price level across consecutive bars
+            if (previous_buy_sell_ratio > 0 && current_buy_sell_ratio > 0) {
+                // If the buy/sell ratio has increased significantly, it indicates strengthening bullish sentiment
+                double ratio_change = current_buy_sell_ratio / previous_buy_sell_ratio;
+                if (ratio_change > threshold) {
+                    // Bullish stacked imbalance: buy/sell ratio increased significantly from previous bar
+                    imbalances.emplace_back(
+                        static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                        time_bucket,
+                        buy_volume_current,  // Current buy volume
+                        sell_volume_current, // Current sell volume
+                        ratio_change         // Ratio of current buy/sell ratio to previous buy/sell ratio
+                    );
+                }
+
+                // If the buy/sell ratio has decreased significantly, it indicates strengthening bearish sentiment
+                double reverse_ratio_change = previous_buy_sell_ratio / current_buy_sell_ratio;
+                if (reverse_ratio_change > threshold) {
+                    // Bearish stacked imbalance: buy/sell ratio decreased significantly from previous bar
+                    imbalances.emplace_back(
+                        static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                        time_bucket,
+                        sell_volume_current, // Current sell volume
+                        buy_volume_current,  // Current buy volume
+                        reverse_ratio_change // Ratio of previous buy/sell ratio to current buy/sell ratio
+                    );
+                }
             }
 
             // Also check for opposite imbalances (potential reversal signals)

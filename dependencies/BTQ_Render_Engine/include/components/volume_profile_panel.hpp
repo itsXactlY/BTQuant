@@ -135,6 +135,16 @@ class VolumeProfilePanel : public PanelBase {
                                                           float bar_opacity = 1.0f,
                                                           bool use_transparent_background = false);
 
+  // Specific implementation for Step Profile rendering: draw mini histogram overlay on each candlestick bar
+  // showing volume distribution for that bar's price range - this is the main method for the task requirement
+  void render_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
+                                                   const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                   const std::vector<double>& x_coords,
+                                                   const std::vector<double>& y_coords_high,
+                                                   const std::vector<double>& y_coords_low,
+                                                   bool show_poc_line = true,
+                                                   int num_buckets_per_candle = 8);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

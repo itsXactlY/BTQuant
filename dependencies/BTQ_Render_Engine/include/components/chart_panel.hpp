@@ -124,6 +124,13 @@ class ChartPanel : public PanelBase {
   void render_macd_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_fibonacci_levels(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_crosshair_info(const ChartInstance& chart, double mouse_x, double mouse_y);
+  void render_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
+                                                   const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                   const std::vector<double>& x_coords,
+                                                   const std::vector<double>& y_coords_high,
+                                                   const std::vector<double>& y_coords_low,
+                                                   bool show_poc_line = true,
+                                                   int num_buckets_per_candle = 8);
 
   // Indicator calculation helpers
   std::vector<double> calculate_sma(const std::vector<float>& prices, int period);

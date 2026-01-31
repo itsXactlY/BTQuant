@@ -25,7 +25,7 @@
 - [x] Implement ClusterCell struct in `dependencies/BTQ_Render_Engine/include/analytics/cluster_engine.hpp` storing: total_volume, buy_volume, sell_volume, trade_count, buy_trade_count, sell_trade_count, max_single_trade_volume, sum_of_volumes (for average calculations) [Complexity: S]
 
 ### Phase 1b: Volume Calculations [Complexity: M]
-- [ ] Add ClusterEngine::processTrade method that atomically updates ClusterCell counters for given price level and time bucket in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
+- [x] Add ClusterEngine::processTrade method that atomically updates ClusterCell counters for given price level and time bucket in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
 - [ ] Implement VolumeCalculator utility class with static methods: calculateDelta, calculateDeltaPercent, calculateBuyVolumePercent, calculateSellVolumePercent, calculateAverageSize, calculateAverageBuySize, calculateAverageSellSize, calculateMaxOneTradeVolume, calculateFilteredVolume in `dependencies/BTQ_Render_Engine/src/analytics/volume_calculator.cpp` [Complexity: M]
 - [x] Add CumulativeDeltaTracker class that maintains running sum of delta across time bars with reset functionality for session boundaries in `dependencies/BTQ_Render_Engine/src/analytics/cumulative_delta_tracker.cpp` [Complexity: M]
 
@@ -41,7 +41,7 @@
 - [ ] Add data type selector dropdown in footprint panel header with all 16 types, update rendering immediately on selection in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 
 ### Phase 2b: Advanced Features [Complexity: M]
-- [ ] Implement diagonal imbalance detection algorithm: compare buy_volume at price P with sell_volume at price P-1, flag cells where ratio exceeds configurable threshold (default 3.0x) in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
+- [x] Implement diagonal imbalance detection algorithm: compare buy_volume at price P with sell_volume at price P-1, flag cells where ratio exceeds configurable threshold (default 3.0x) in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
 - [ ] Add stacked imbalance detection: vertical analysis comparing buy/sell at same price across consecutive bars in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
 - [ ] Add imbalance cell highlighting with colored borders (yellow for diagonal, cyan for stacked), thicker border width, and optional glow effect in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 

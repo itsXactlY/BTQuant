@@ -1810,11 +1810,17 @@ void FootprintPanel::render() {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3.0f, 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
 
+    // Scale the font down to make it smaller
+    ImGui::SetWindowFontScale(0.8f);
+
     // Render the footer with the requested information
     ImGui::Text("Trades: %d | Avg Size: %.2f | Max Single Trade: %.2f",
                 total_trades, avg_trade_size, max_single_trade_volume);
 
-    // Restore the original scale
+    // Restore the original font scale
+    ImGui::SetWindowFontScale(1.0f);
+
+    // Restore the original style
     ImGui::PopStyleVar(2); // Pop ItemSpacing and FramePadding
   }
 

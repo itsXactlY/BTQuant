@@ -141,6 +141,9 @@ void VolumeProfilePanel::build_volume_profile() {
         }
       }
 
+      // Recalculate Value Area after incremental update
+      calculate_value_area();
+
       return; // Exit early since we've updated incrementally
     }
   } else {
@@ -196,6 +199,9 @@ void VolumeProfilePanel::build_volume_profile() {
         poc_price_ = level.price;
       }
     }
+
+    // Calculate Value Area
+    calculate_value_area();
   }
 }
 
@@ -220,6 +226,12 @@ void VolumeProfilePanel::render_controls() {
   // Add VA% control
   ImGui::SameLine();
   ImGui::SliderInt("VA%", &va_percent_, 50, 99);
+
+  // Display VAH and VAL if available
+  ImGui::SameLine();
+  ImGui::Text("| VAH: %.4f", vah_price_);
+  ImGui::SameLine();
+  ImGui::Text("| VAL: %.4f", val_price_);
 }
 
 void VolumeProfilePanel::render_volume_bars() {
@@ -261,6 +273,27 @@ void VolumeProfilePanel::render_volume_bars() {
 
     // Bar height based on price bucket size
     double bar_height = price_bucket_size_ * 0.8;
+
+    // Draw Value Area overlay if we have valid VAH and VAL
+    if (vah_price_ > 0 && val_price_ > 0 && vah_price_ >= val_price_) {
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+      // Convert value area prices to pixel coordinates
+      ImVec2 val_pixel = ImPlot::PlotToPixels(0, val_price_);  // Left side of plot at VAL price
+      ImVec2 vah_pixel = ImPlot::PlotToPixels(0, vah_price_);  // Left side of plot at VAH price
+
+      // Get the plot area dimensions
+      ImVec2 plot_size = ImPlot::GetPlotSize();
+      ImVec2 plot_pos = ImPlot::GetPlotPos();
+
+      // Draw semi-transparent rectangle for value area
+      // Note: In ImPlot coordinate system, y increases downward, so VAL should have a higher y value than VAH
+      ImVec2 area_top_left = ImVec2(plot_pos.x, vah_pixel.y);
+      ImVec2 area_bottom_right = ImVec2(plot_pos.x + plot_size.x, val_pixel.y);
+
+      // Draw the value area overlay with semi-transparent color
+      draw_list->AddRectFilled(area_top_left, area_bottom_right, IM_COL32(138, 43, 226, 80)); // Semi-transparent purple
+    }
 
     // Render based on profile mode
     switch (profile_mode_) {
@@ -386,6 +419,23 @@ void VolumeProfilePanel::render_volume_bars() {
       ImPlot::PopStyleColor();
     }
 
+    // VAH and VAL lines
+    if (vah_price_ > 0) {
+      double vah_line_x[2] = {-max_volume_, max_volume_};
+      double vah_line_y[2] = {vah_price_, vah_price_};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f)); // Light blue
+      ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
+      ImPlot::PopStyleColor();
+    }
+
+    if (val_price_ > 0) {
+      double val_line_x[2] = {-max_volume_, max_volume_};
+      double val_line_y[2] = {val_price_, val_price_};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f)); // Light blue
+      ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
+      ImPlot::PopStyleColor();
+    }
+
     // Add VWAP line if available
     auto analytics = processor_->getSymbolAnalytics(symbol_id_);
     if (analytics.vwap > 0) {
@@ -398,6 +448,88 @@ void VolumeProfilePanel::render_volume_bars() {
 
     ImPlot::EndPlot();
   }
+}
+
+void VolumeProfilePanel::calculate_value_area() {
+  if (volume_profile_.empty()) {
+    vah_price_ = 0.0;
+    val_price_ = 0.0;
+    return;
+  }
+
+  // Calculate total volume in the profile
+  double total_volume = 0.0;
+  for (const auto &level : volume_profile_) {
+    total_volume += level.total_volume;
+  }
+
+  if (total_volume <= 0) {
+    vah_price_ = 0.0;
+    val_price_ = 0.0;
+    return;
+  }
+
+  // Target volume for value area (70% of total volume)
+  double target_volume = (static_cast<double>(va_percent_) / 100.0) * total_volume;
+
+  // Find the POC index
+  size_t poc_index = 0;
+  double max_total_volume = 0.0;
+  for (size_t i = 0; i < volume_profile_.size(); ++i) {
+    double total = volume_profile_[i].buy_volume + volume_profile_[i].sell_volume;
+    if (total > max_total_volume) {
+      max_total_volume = total;
+      poc_index = i;
+    }
+  }
+
+  // Expand from POC outward to capture the required volume
+  size_t start_idx = poc_index;
+  size_t end_idx = poc_index;
+  double current_volume = volume_profile_[poc_index].total_volume;
+
+  // Expand upward (higher prices) and downward (lower prices) alternately
+  // until we reach the target volume
+  while (current_volume < target_volume) {
+    // Decide whether to expand up or down
+    bool expand_up = false;
+    bool expand_down = false;
+
+    // Check if we can expand in each direction
+    if (start_idx > 0) expand_down = true;
+    if (end_idx < volume_profile_.size() - 1) expand_up = true;
+
+    // If we can't expand in either direction, break
+    if (!expand_up && !expand_down) break;
+
+    // If we can only expand in one direction, do that
+    if (!expand_up && expand_down) {
+      start_idx--;
+      current_volume += volume_profile_[start_idx].total_volume;
+    } else if (expand_up && !expand_down) {
+      end_idx++;
+      current_volume += volume_profile_[end_idx].total_volume;
+    } else {
+      // We can expand in both directions - choose the direction with more volume
+      double vol_up = volume_profile_[end_idx + 1].total_volume;
+      double vol_down = volume_profile_[start_idx - 1].total_volume;
+
+      if (vol_up >= vol_down) {
+        end_idx++;
+        current_volume += volume_profile_[end_idx].total_volume;
+      } else {
+        start_idx--;
+        current_volume += volume_profile_[start_idx].total_volume;
+      }
+    }
+
+    // If we've captured enough volume, break
+    if (current_volume >= target_volume) break;
+  }
+
+  // Set the VAH and VAL prices
+  vah_price_ = volume_profile_[end_idx].price;
+  val_price_ = volume_profile_[start_idx].price;
 }
 
 void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,

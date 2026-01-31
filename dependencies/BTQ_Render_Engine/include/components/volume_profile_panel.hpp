@@ -76,6 +76,8 @@ private:
   std::vector<VolumeLevel> volume_profile_;
   double poc_price_ = 0.0;  // Point of Control (highest volume price)
   double max_volume_ = 0.0; // For scaling bars
+  double vah_price_ = 0.0;  // Value Area High
+  double val_price_ = 0.0;  // Value Area Low
 
   // Configuration
   static constexpr size_t NUM_PRICE_LEVELS = 20;
@@ -90,6 +92,7 @@ private:
   void render_controls();
   void render_step_profile(const double* xs, const double* ys,
                          const double* neg_ys, int count, double height);
+  void calculate_value_area();
 
   // Subscribe to processor notifications
   void subscribe_to_updates();

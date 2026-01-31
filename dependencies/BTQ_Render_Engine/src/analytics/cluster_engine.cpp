@@ -84,6 +84,7 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
     std::vector<std::tuple<int64_t, int, double, double, double>> imbalances;
 
     // Iterate through price levels (rows) and time buckets (columns)
+    // Compare buy_volume at price P with sell_volume at price P-1
     for (size_t price_idx = 1; price_idx < cluster_canvas_.size(); ++price_idx) {  // Start from 1 to compare with P-1
         for (int time_bucket = 0; time_bucket < 16; ++time_bucket) {
             // Get buy volume at current price level P (with mutex protection)
@@ -106,7 +107,7 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
 
                 // Check if ratio exceeds threshold
                 if (ratio > threshold) {
-                    // Store: price_index, time_bucket, buy_volume_at_P, sell_volume_at_P_minus_1, ratio
+                    // Store: absolute_price_index, time_bucket, buy_volume_at_P, sell_volume_at_P_minus_1, ratio
                     imbalances.emplace_back(
                         static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
                         time_bucket,
@@ -117,7 +118,7 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
                 }
             }
 
-            // Also check the reverse: sell_volume at P compared to buy_volume at P-1
+            // Also check the reverse diagonal: sell_volume at price P with buy_volume at price P-1
             double sell_volume_at_p;
             {
                 std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket].volume_mutex);
@@ -134,7 +135,7 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
                 double reverse_ratio = sell_volume_at_p / buy_volume_at_p_minus_1;
 
                 if (reverse_ratio > threshold) {
-                    // Store: price_index, time_bucket, sell_volume_at_P, buy_volume_at_P_minus_1, ratio
+                    // Store: absolute_price_index, time_bucket, sell_volume_at_P, buy_volume_at_P_minus_1, ratio
                     imbalances.emplace_back(
                         static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
                         time_bucket,

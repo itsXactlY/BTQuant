@@ -10,6 +10,21 @@
 
 namespace Analytics {
 
+struct ClusterCell {
+    double total_volume = 0.0;
+    double buy_volume = 0.0;
+    double sell_volume = 0.0;
+    int trade_count = 0;
+    int buy_trade_count = 0;
+    int sell_trade_count = 0;
+    double max_single_trade_volume = 0.0;
+    double sum_of_volumes = 0.0;  // for average calculations
+};
+
+}
+
+namespace Analytics {
+
 class ClusterEngine {
 public:
   explicit ClusterEngine(double tick_size)

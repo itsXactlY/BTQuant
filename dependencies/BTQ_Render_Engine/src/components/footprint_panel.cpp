@@ -626,7 +626,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   }
 
   // Draw volume label if enabled and cell is large enough
-  if (show_volume_labels_ && (std::abs(p2.y - p1.y) > 18)) {
+  // Implement LOD: skip text rendering when cell height < 12px
+  if (show_volume_labels_ && (std::abs(p2.y - p1.y) >= 12.0f)) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 
@@ -705,7 +706,8 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.0f);
 
   // Draw volume label if enabled and cell is large enough
-  if (show_volume_labels_ && (std::abs(p2.y - p1.y) > 18)) {
+  // Implement LOD: skip text rendering when cell height < 12px
+  if (show_volume_labels_ && (std::abs(p2.y - p1.y) >= 12.0f)) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 

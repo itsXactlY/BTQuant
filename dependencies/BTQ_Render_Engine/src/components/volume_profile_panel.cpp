@@ -681,8 +681,33 @@ void VolumeProfilePanel::render_volume_bars() {
         // Get the plot limits to determine what's currently visible
         ImPlotRect plot_limits = ImPlot::GetPlotLimits();  // This gets the current visible range
 
-        // Find the maximum volume among ALL price levels to use as reference for scaling
-        // This ensures consistent scaling across the entire profile regardless of zoom level
+        // Aggregate all visible trades into a single total volume
+        double total_visible_buy_volume = 0.0;
+        double total_visible_sell_volume = 0.0;
+        double total_visible_volume = 0.0;
+
+        for (size_t i = 0; i < buy_volumes.size(); ++i) {
+          // Only include if the price level is within the visible range
+          if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
+            double buy_vol = std::abs(buy_volumes[i]);
+            double sell_vol = std::abs(sell_volumes[i]);
+            double total_vol = buy_vol + sell_vol;
+
+            if (total_vol > 0) {
+              total_visible_buy_volume += buy_vol;
+              total_visible_sell_volume += sell_vol;
+              total_visible_volume += total_vol;
+            }
+          }
+        }
+
+        // If no visible volume, nothing to draw
+        if (total_visible_volume <= 0) {
+          break;
+        }
+
+        // Calculate the leftmost x-coordinate in plot space (this will be our anchor)
+        // Use the maximum volume across the entire dataset for consistent scaling
         double max_total_volume = 0.0;
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
             double total_vol = std::abs(buy_volumes[i]) + std::abs(sell_volumes[i]);
@@ -695,75 +720,49 @@ void VolumeProfilePanel::render_volume_bars() {
         if (max_total_volume <= 0) max_total_volume = max_volume_;
         if (max_total_volume <= 0) max_total_volume = 1.0;  // Ultimate fallback
 
-        // Calculate the leftmost x-coordinate in plot space (this will be our anchor)
-        // In horizontal bar charts, volume is on X-axis and price is on Y-axis
-        // So we want to anchor to the minimum X value (left edge of chart)
-        double left_anchor = 0.0;  // Anchor to the left edge of the chart
+        // Anchor to the left edge
+        double left_anchor = 0.0;
 
-        // Draw individual horizontal bars for each visible price level
-        for (size_t i = 0; i < buy_volumes.size(); ++i) {
-          // Only draw if the price level is within the visible range
-          if (prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
-            double buy_vol = std::abs(buy_volumes[i]);  // Use absolute value to handle signs properly
-            double sell_vol = std::abs(sell_volumes[i]); // Convert to positive for visualization
+        // Draw a single horizontal bar representing the total volume of all visible trades
+        // The bar extends right from the left anchor, with width proportional to total volume
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-            // Calculate the total volume at this price level
-            double total_vol = buy_vol + sell_vol;
+        // Calculate the right extent based on total visible volume
+        double bar_right_extent = left_anchor + (total_visible_volume / max_total_volume) * max_total_volume;
 
-            if (total_vol > 0) {
-              // Calculate the right extent of the bar based on the total volume
-              // For left profile, bars extend right from the left edge (x=0)
-              // Scale the bar extent based on the ratio of current volume to max volume
-              double bar_right_extent = left_anchor + (total_vol / max_total_volume) * max_volume_;
+        // Determine the vertical range of the visible area (entire visible Y range)
+        float bar_top = ImPlot::PlotToPixels(0, plot_limits.Y.Min).y;  // Top of visible area (note: Y axis is inverted in plots)
+        float bar_bottom = ImPlot::PlotToPixels(0, plot_limits.Y.Max).y;  // Bottom of visible area (note: Y axis is inverted in plots)
+        float bar_left = ImPlot::PlotToPixels(left_anchor, (plot_limits.Y.Max + plot_limits.Y.Min) / 2).x;  // Left edge of chart
+        float bar_right = ImPlot::PlotToPixels(bar_right_extent, (plot_limits.Y.Max + plot_limits.Y.Min) / 2).x;  // Right extent of the bar
 
-              // Draw the horizontal bar extending right from the left anchor
-              ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-
-              // Convert plot coordinates to pixel coordinates for the bar
-              ImVec2 left_edge_px = ImPlot::PlotToPixels(left_anchor, prices[i]);
-              ImVec2 right_edge_px = ImPlot::PlotToPixels(bar_right_extent, prices[i]);
-
-              // Calculate bar height based on price bucket size
-              float bar_height = static_cast<float>(price_bucket_size_ * 0.8);
-
-              // Adjust bar height to ensure visibility
-              if (bar_height < 2.0f) bar_height = 2.0f;
-
-              float bar_top = left_edge_px.y - bar_height / 2.0f;
-              float bar_bottom = left_edge_px.y + bar_height / 2.0f;
-              float bar_left = left_edge_px.x;   // Left edge of chart
-              float bar_right = right_edge_px.x; // Right extent of the bar
-
-              // Determine color based on whether buy or sell volume dominates
-              ImU32 color;
-              if (buy_vol >= sell_vol) {
-                // More buy volume - use green with intensity based on dominance
-                float dominance = (total_vol > 0) ? static_cast<float>((buy_vol - sell_vol) / total_vol) : 0.0f;
-                int green = 200 + static_cast<int>(55 * dominance);  // Vary from 200 to 255
-                int red = 26 - static_cast<int>(26 * dominance);    // Vary from 26 to 0
-                color = IM_COL32(red, green, 26, 179);  // Green dominant
-              } else {
-                // More sell volume - use red with intensity based on dominance
-                float dominance = (total_vol > 0) ? static_cast<float>((sell_vol - buy_vol) / total_vol) : 0.0f;
-                int red = 200 + static_cast<int>(55 * dominance);   // Vary from 200 to 255
-                int green = 26 - static_cast<int>(26 * dominance);  // Vary from 26 to 0
-                color = IM_COL32(red, green, 26, 179);  // Red dominant
-              }
-
-              // Draw the horizontal bar
-              draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), color);
-
-              // Add a subtle border for better visibility
-              draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
-            }
-          }
+        // Determine color based on whether buy or sell volume dominates in the visible range
+        ImU32 color;
+        if (total_visible_buy_volume >= total_visible_sell_volume) {
+          // More buy volume - use green with intensity based on dominance
+          float dominance = (total_visible_volume > 0) ? static_cast<float>((total_visible_buy_volume - total_visible_sell_volume) / total_visible_volume) : 0.0f;
+          int green = 200 + static_cast<int>(55 * dominance);  // Vary from 200 to 255
+          int red = 26 - static_cast<int>(26 * dominance);    // Vary from 26 to 0
+          color = IM_COL32(red, green, 26, 179);  // Green dominant
+        } else {
+          // More sell volume - use red with intensity based on dominance
+          float dominance = (total_visible_volume > 0) ? static_cast<float>((total_visible_sell_volume - total_visible_buy_volume) / total_visible_volume) : 0.0f;
+          int red = 200 + static_cast<int>(55 * dominance);   // Vary from 200 to 255
+          int green = 26 - static_cast<int>(26 * dominance);  // Vary from 26 to 0
+          color = IM_COL32(red, green, 26, 179);  // Red dominant
         }
 
-        // Draw POC line for Left profile mode
+        // Draw the aggregated horizontal bar extending right from the left anchor
+        draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), color);
+
+        // Add a subtle border for better visibility
+        draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom), IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
+
+        // Draw POC line for Left profile mode based on the overall POC (not recalculated for visible range)
         if (poc_price_ > 0) {
           // Only draw POC line if it's within the visible range
           if (poc_price_ >= plot_limits.Y.Min && poc_price_ <= plot_limits.Y.Max) {
-            double poc_line_x[2] = {left_anchor, left_anchor + max_volume_};  // From left anchor to max volume extent
+            double poc_line_x[2] = {left_anchor, bar_right_extent};  // From left anchor to right extent
             double poc_line_y[2] = {poc_price_, poc_price_};
             ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
             ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
@@ -796,9 +795,43 @@ void VolumeProfilePanel::render_volume_bars() {
 
     // VAH and VAL lines - use local values for Right/Left profiles
     if (local_vah_price > 0) {
-      double vah_line_x[2] = {-max_volume_, max_volume_};
+      // For Right/Left profiles, calculate appropriate x-coordinates based on the profile type
+      double vah_line_x[2];
+      if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+        // For Right/Left profiles: find the maximum volume to determine the appropriate range
+        double max_total_volume = 0.0;
+        for (const auto& level : volume_profile_) {
+          double total_vol = level.buy_volume + level.sell_volume;
+          if (total_vol > max_total_volume) {
+            max_total_volume = total_vol;
+          }
+        }
+        if (max_total_volume <= 0) max_total_volume = max_volume_;
+        if (max_total_volume <= 0) max_total_volume = 1.0;
+
+        if (profile_mode_ == ProfileMode::Right) {
+          // For Right profile: line spans from 0 to max volume (full range of the profile)
+          vah_line_x[0] = 0.0;
+          vah_line_x[1] = max_total_volume;
+        } else if (profile_mode_ == ProfileMode::Left) {
+          // For Left profile: line spans from 0 to max volume (full range of the profile)
+          vah_line_x[0] = 0.0;
+          vah_line_x[1] = max_total_volume;
+        } else {
+          // For other profile modes, use the full range
+          vah_line_x[0] = -max_volume_;
+          vah_line_x[1] = max_volume_;
+        }
+      } else {
+        // For other profile modes, use the full range
+        vah_line_x[0] = -max_volume_;
+        vah_line_x[1] = max_volume_;
+      }
+
       double vah_line_y[2] = {local_vah_price, local_vah_price};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
+
+      // Use brighter color for VAH line to make it more visible
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
 
@@ -817,16 +850,65 @@ void VolumeProfilePanel::render_volume_bars() {
           // For Left profile, place label on the right side to avoid overlapping with left-anchored bars
           vah_pos = ImVec2(plot_pos.x + plot_size.x - 80, ImPlot::PlotToPixels(0, local_vah_price).y - 10);
         }
+
+        // Draw a more prominent label with background
         char vah_label[32];
         snprintf(vah_label, sizeof(vah_label), "VAH: %.4f", local_vah_price);
+
+        // Calculate text size for background rectangle
+        ImVec2 text_size = ImGui::CalcTextSize(vah_label);
+
+        // Draw background rectangle for better visibility
+        ImVec2 bg_min = ImVec2(vah_pos.x - 2, vah_pos.y - 2);
+        ImVec2 bg_max = ImVec2(vah_pos.x + text_size.x + 2, vah_pos.y + text_size.y);
+        draw_list->AddRectFilled(bg_min, bg_max, IM_COL32(0, 0, 0, 200)); // Dark background
+
+        // Draw border around label
+        draw_list->AddRect(bg_min, bg_max, IM_COL32(0, 255, 255, 200)); // Cyan border
+
+        // Draw the text
         draw_list->AddText(vah_pos, IM_COL32(0, 255, 255, 255), vah_label);
       }
     }
 
     if (local_val_price > 0) {
-      double val_line_x[2] = {-max_volume_, max_volume_};
+      // For Right/Left profiles, calculate appropriate x-coordinates based on the profile type
+      double val_line_x[2];
+      if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+        // For Right/Left profiles: find the maximum volume to determine the appropriate range
+        double max_total_volume = 0.0;
+        for (const auto& level : volume_profile_) {
+          double total_vol = level.buy_volume + level.sell_volume;
+          if (total_vol > max_total_volume) {
+            max_total_volume = total_vol;
+          }
+        }
+        if (max_total_volume <= 0) max_total_volume = max_volume_;
+        if (max_total_volume <= 0) max_total_volume = 1.0;
+
+        if (profile_mode_ == ProfileMode::Right) {
+          // For Right profile: line spans from 0 to max volume (full range of the profile)
+          val_line_x[0] = 0.0;
+          val_line_x[1] = max_total_volume;
+        } else if (profile_mode_ == ProfileMode::Left) {
+          // For Left profile: line spans from 0 to max volume (full range of the profile)
+          val_line_x[0] = 0.0;
+          val_line_x[1] = max_total_volume;
+        } else {
+          // For other profile modes, use the full range
+          val_line_x[0] = -max_volume_;
+          val_line_x[1] = max_volume_;
+        }
+      } else {
+        // For other profile modes, use the full range
+        val_line_x[0] = -max_volume_;
+        val_line_x[1] = max_volume_;
+      }
+
       double val_line_y[2] = {local_val_price, local_val_price};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 0.7f));  // Light blue
+
+      // Use brighter color for VAL line to make it more visible
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 1.0f, 1.0f));  // Bright cyan
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
 
@@ -845,8 +927,23 @@ void VolumeProfilePanel::render_volume_bars() {
           // For Left profile, place label on the right side to avoid overlapping with left-anchored bars
           val_pos = ImVec2(plot_pos.x + plot_size.x - 80, ImPlot::PlotToPixels(0, local_val_price).y - 10);
         }
+
+        // Draw a more prominent label with background
         char val_label[32];
         snprintf(val_label, sizeof(val_label), "VAL: %.4f", local_val_price);
+
+        // Calculate text size for background rectangle
+        ImVec2 text_size = ImGui::CalcTextSize(val_label);
+
+        // Draw background rectangle for better visibility
+        ImVec2 bg_min = ImVec2(val_pos.x - 2, val_pos.y - 2);
+        ImVec2 bg_max = ImVec2(val_pos.x + text_size.x + 2, val_pos.y + text_size.y);
+        draw_list->AddRectFilled(bg_min, bg_max, IM_COL32(0, 0, 0, 200)); // Dark background
+
+        // Draw border around label
+        draw_list->AddRect(bg_min, bg_max, IM_COL32(0, 255, 255, 200)); // Cyan border
+
+        // Draw the text
         draw_list->AddText(val_pos, IM_COL32(0, 255, 255, 255), val_label);
       }
     }

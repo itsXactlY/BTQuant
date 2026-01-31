@@ -299,13 +299,17 @@ void VolumeProfilePanel::render_volume_bars() {
         // Calculate the maximum volume to determine the right edge position
         double max_vol = max_volume_;
 
+        // Get the plot limits to determine what's currently visible
+        ImPlotRect plot_limits = ImPlot::GetPlotLimits();  // This gets the current visible range
+
         // Draw buy bars (green) extending left from right edge
         // For right profile, we want bars that start from the right edge and extend left
         // We'll use a custom approach with ImDrawList to draw bars anchored to the right
         ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
         for (size_t i = 0; i < buy_volumes.size(); ++i) {
-          if (buy_volumes[i] > 0) {
+          // Only draw if the price level is within the visible range
+          if (buy_volumes[i] > 0 && prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {
             // Convert plot coordinates to pixel coordinates
             ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
             ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - buy_volumes[i], prices[i]);
@@ -324,7 +328,8 @@ void VolumeProfilePanel::render_volume_bars() {
 
         // Draw sell bars (red) extending left from right edge
         for (size_t i = 0; i < sell_volumes.size(); ++i) {
-          if (sell_volumes[i] < 0) {  // Remember sell volumes are stored as negative
+          // Only draw if the price level is within the visible range
+          if (sell_volumes[i] < 0 && prices[i] >= plot_limits.Y.Min && prices[i] <= plot_limits.Y.Max) {  // Remember sell volumes are stored as negative
             // Convert plot coordinates to pixel coordinates
             ImVec2 right_edge = ImPlot::PlotToPixels(max_vol, prices[i]);
             ImVec2 left_edge = ImPlot::PlotToPixels(max_vol - std::abs(sell_volumes[i]), prices[i]);
@@ -402,13 +407,22 @@ void VolumeProfilePanel::render_volume_bars() {
         break;
     }
 
-    // POC line
+    // POC line - draw differently based on profile mode for consistency
     if (poc_price_ > 0) {
-      double poc_line_x[2] = {-max_volume_, max_volume_};
-      double poc_line_y[2] = {poc_price_, poc_price_};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
-      ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
-      ImPlot::PopStyleColor();
+      if (profile_mode_ == ProfileMode::Step) {
+        // For Step Profile mode, draw POC line using ImDrawList for consistency with bar drawing
+        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+        ImVec2 poc_start = ImPlot::PlotToPixels(-max_volume_, poc_price_);
+        ImVec2 poc_end = ImPlot::PlotToPixels(max_volume_, poc_price_);
+        draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 2.0f);
+      } else {
+        // For other modes, use ImPlot's PlotLine
+        double poc_line_x[2] = {-max_volume_, max_volume_};
+        double poc_line_y[2] = {poc_price_, poc_price_};
+        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+        ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+        ImPlot::PopStyleColor();
+      }
     }
 
     // VAH and VAL lines
@@ -572,6 +586,27 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
 
       draw_list->AddRectFilled(bar_tl, bar_br, current_col_neg);
     }
+  }
+
+  // Draw horizontal yellow POC line at the price level with highest volume
+  if (poc_index >= 0 && max_total_volume > 0) {
+    // Get the POC price
+    double poc_price = xs[poc_index];
+
+    // Calculate appropriate min/max x values for the line
+    // Find the actual min/max volumes in the dataset to determine line length
+    double min_vol = 0.0, max_vol = 0.0;
+    for (int i = 0; i < count; ++i) {
+      min_vol = std::min(min_vol, std::min(ys[i], neg_ys[i]));
+      max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
+    }
+
+    // Convert POC price to pixel coordinates
+    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, poc_price);
+    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, poc_price);
+
+    // Draw the horizontal POC line
+    draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 2.0f);
   }
 }
 

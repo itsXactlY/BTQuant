@@ -81,8 +81,18 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     case Data::VolumeAnalysisType::CumulativeDelta:
       // Green-red gradient for delta
       {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
+        // Use the delta value that was already calculated in the main render loop
+        double normalized_delta = cell.delta;
+
+        // For DeltaPercent, normalize the value to [-1, 1] range
+        if (volume_data_type_ == Data::VolumeAnalysisType::DeltaPercent) {
+            normalized_delta = std::clamp(normalized_delta, -100.0, 100.0) / 100.0;
+        } else {
+            // For other delta types, normalize based on the sum of volumes
+            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+            normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
+        }
+
         normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
 
         if (std::abs(normalized_delta) > delta_threshold_) {
@@ -120,17 +130,22 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     case Data::VolumeAnalysisType::BuySellVolume:
       // Blue-red gradient for buy/sell volume
       {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
         double normalized_value = 0.0;
 
         if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolume) {
-          normalized_value = max_vol > 0.0 ? cell.bid_volume / max_vol : 0.0;
+          // Use bid_volume which was already set in the main render loop
+          normalized_value = cell.bid_volume;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolume) {
-          normalized_value = max_vol > 0.0 ? cell.ask_volume / max_vol : 0.0;
+          // Use ask_volume which was already set in the main render loop
+          normalized_value = cell.ask_volume;
         } else { // BuySellVolume
-          normalized_value = max_vol > 0.0 ? (cell.bid_volume - cell.ask_volume) / max_vol : 0.0;
+          // Use the delta which was already calculated in the main render loop
+          normalized_value = cell.delta;
         }
 
+        // Normalize based on max volume
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        normalized_value = max_vol > 0.0 ? normalized_value / max_vol : 0.0;
         normalized_value = std::clamp(normalized_value, -1.0, 1.0);
 
         if (std::abs(normalized_value) > delta_threshold_) {
@@ -178,36 +193,25 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
           normalized_value = total_vol;
           max_possible_value = max_volume;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolumePercent) {
-          double total_vol_local = cell.bid_volume + cell.ask_volume;
-          normalized_value = total_vol_local > 0.0 ? (cell.bid_volume / total_vol_local) * 100.0 : 0.0;
+          // Use the delta which contains the percentage value
+          normalized_value = cell.delta;
           max_possible_value = 100.0;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolumePercent) {
-          double total_vol_local = cell.bid_volume + cell.ask_volume;
-          normalized_value = total_vol_local > 0.0 ? (cell.ask_volume / total_vol_local) * 100.0 : 0.0;
+          // Use the delta which contains the percentage value
+          normalized_value = cell.delta;
           max_possible_value = 100.0;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::Trades) {
-          normalized_value = static_cast<double>(cell.trade_count);
+          // Use bid_volume which was set to trade count in the main render loop
+          normalized_value = cell.bid_volume;
           // Estimate max possible trades based on max volume
           max_possible_value = 1000.0; // Placeholder - in a real scenario, this would come from stats
         } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyTrades) {
-          // Estimate buy trades based on volume ratio
-          double total_vol_local = cell.bid_volume + cell.ask_volume;
-          if (total_vol_local > 0) {
-            double buy_ratio = cell.bid_volume / total_vol_local;
-            normalized_value = static_cast<double>(static_cast<int>(cell.trade_count * buy_ratio));
-          } else {
-            normalized_value = static_cast<double>(static_cast<int>(cell.trade_count * 0.5)); // Equal split if no volume
-          }
+          // Use bid_volume which was set to buy trades count in the main render loop
+          normalized_value = cell.bid_volume;
           max_possible_value = 600.0; // Placeholder
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellTrades) {
-          // Estimate sell trades based on volume ratio
-          double total_vol_local = cell.bid_volume + cell.ask_volume;
-          if (total_vol_local > 0) {
-            double sell_ratio = cell.ask_volume / total_vol_local;
-            normalized_value = static_cast<double>(static_cast<int>(cell.trade_count * sell_ratio));
-          } else {
-            normalized_value = static_cast<double>(static_cast<int>(cell.trade_count * 0.5)); // Equal split if no volume
-          }
+          // Use ask_volume which was set to sell trades count in the main render loop
+          normalized_value = cell.ask_volume;
           max_possible_value = 400.0; // Placeholder
         } else { // FilteredVolume
           normalized_value = total_vol;
@@ -233,48 +237,26 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     default:
       // For other metrics, use blue gradient
       {
-        // Calculate normalized value for the specific metric
-        double normalized_value = 0.0;
+        // Use the delta value which was already calculated in the main render loop
+        double normalized_value = cell.delta;
         double max_possible_value = 10000.0; // Default placeholder
 
+        // Adjust max_possible_value based on the specific analysis type
         switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
           case Data::VolumeAnalysisType::AverageSize:
-            {
-              int total_count = cell.trade_count;
-              normalized_value = total_count > 0 ? (cell.bid_volume + cell.ask_volume) / static_cast<double>(total_count) : 0.0;
-            }
+            max_possible_value = 1000.0; // Reasonable max for average size
             break;
 
           case Data::VolumeAnalysisType::AverageBuySize:
-            {
-              // Estimate buy count based on volume ratio
-              double total_vol_local = cell.bid_volume + cell.ask_volume;
-              int buy_count = cell.trade_count; // Start with total count
-              if (total_vol_local > 0) {
-                double buy_ratio = cell.bid_volume / total_vol_local;
-                buy_count = static_cast<int>(static_cast<double>(cell.trade_count) * buy_ratio);
-              }
-              normalized_value = buy_count > 0 ? cell.bid_volume / static_cast<double>(buy_count) : 0.0;
-            }
+            max_possible_value = 1000.0; // Reasonable max for average buy size
             break;
 
           case Data::VolumeAnalysisType::AverageSellSize:
-            {
-              // Estimate sell count based on volume ratio
-              double total_vol_local = cell.bid_volume + cell.ask_volume;
-              int sell_count = cell.trade_count; // Start with total count
-              if (total_vol_local > 0) {
-                double sell_ratio = cell.ask_volume / total_vol_local;
-                sell_count = static_cast<int>(static_cast<double>(cell.trade_count) * sell_ratio);
-              }
-              normalized_value = sell_count > 0 ? cell.ask_volume / static_cast<double>(sell_count) : 0.0;
-            }
+            max_possible_value = 1000.0; // Reasonable max for average sell size
             break;
 
           case Data::VolumeAnalysisType::MaxOneTradeVolume:
-            // Estimate max single trade volume as total volume divided by trade count
-            normalized_value = cell.trade_count > 0 ?
-                (cell.bid_volume + cell.ask_volume) / static_cast<double>(cell.trade_count) : 0.0;
+            max_possible_value = max_volume; // Use max volume as reference
             break;
 
           default:
@@ -282,7 +264,8 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
             break;
         }
 
-        float blue_intensity = std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f);
+        float blue_intensity = max_possible_value > 0.0 ?
+            std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f) : 0.0f;
         return IM_COL32(
             static_cast<int>(50), // Slight red base
             static_cast<int>(50), // Slight green base
@@ -295,7 +278,8 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
 
 std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
   // Calculate values based on selected volume data type
-  double value_to_display = 0.0;
+  // Since the cell values were already updated in the main render loop based on the active VolumeAnalysisType,
+  // we can now use them directly
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
     case Data::VolumeAnalysisType::Trades:
@@ -303,129 +287,77 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
       return formatNumber(static_cast<double>(cell.trade_count), number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::BuyTrades:
-      // For buy trade counts, estimate based on volume ratio
-      {
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        if (total_vol > 0) {
-          double buy_ratio = cell.bid_volume / total_vol;
-          return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * buy_ratio)), number_format_, custom_decimal_places_);
-        } else {
-          return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * 0.5)), number_format_, custom_decimal_places_);
-        }
-      }
+      // Use bid_volume which was set to buy trades count in the main render loop
+      return formatNumber(cell.bid_volume, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::SellTrades:
-      // For sell trade counts, estimate based on volume ratio
-      {
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        if (total_vol > 0) {
-          double sell_ratio = cell.ask_volume / total_vol;
-          return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * sell_ratio)), number_format_, custom_decimal_places_);
-        } else {
-          return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * 0.5)), number_format_, custom_decimal_places_);
-        }
-      }
+      // Use ask_volume which was set to sell trades count in the main render loop
+      return formatNumber(cell.ask_volume, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::Volume:
-      value_to_display = cell.bid_volume + cell.ask_volume;
-      break;
+      // Use the sum of bid and ask volumes
+      return formatNumber(cell.bid_volume + cell.ask_volume, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::BuyVolume:
-      value_to_display = cell.bid_volume;
-      break;
+      // Use bid_volume which was already set in the main render loop
+      return formatNumber(cell.bid_volume, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::SellVolume:
-      value_to_display = cell.ask_volume;
-      break;
+      // Use ask_volume which was already set in the main render loop
+      return formatNumber(cell.ask_volume, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::BuySellVolume:
-      value_to_display = cell.bid_volume - cell.ask_volume;
-      break;
+      // Use the delta which was already calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::Delta:
-      value_to_display = cell.delta;
-      break;
+      // Use the delta which was already calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::DeltaPercent:
-      {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        value_to_display = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
-        return std::format("{:.1f}%", value_to_display);
-      }
+      // Use the delta which contains the percentage value calculated in the main render loop
+      return std::format("{:.1f}%", cell.delta);
 
     case Data::VolumeAnalysisType::BuyVolumePercent:
-      {
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        value_to_display = total_vol > 0.0 ? (cell.bid_volume / total_vol) * 100.0 : 0.0;
-        return std::format("{:.1f}%", value_to_display);
-      }
+      // Use the delta which contains the percentage value calculated in the main render loop
+      return std::format("{:.1f}%", cell.delta);
 
     case Data::VolumeAnalysisType::SellVolumePercent:
-      {
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        value_to_display = total_vol > 0.0 ? (cell.ask_volume / total_vol) * 100.0 : 0.0;
-        return std::format("{:.1f}%", value_to_display);
-      }
+      // Use the delta which contains the percentage value calculated in the main render loop
+      return std::format("{:.1f}%", cell.delta);
 
     case Data::VolumeAnalysisType::CumulativeDelta:
-      value_to_display = cell.delta; // Using same as delta for demo
-      break;
+      // Use the delta which was already calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::AverageSize:
-      {
-        int total_count = cell.trade_count;
-        value_to_display = total_count > 0 ? (cell.bid_volume + cell.ask_volume) / static_cast<double>(total_count) : 0.0;
-        break;
-      }
+      // Use the delta which contains the average size calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::AverageBuySize:
-      {
-        // Estimate buy count based on volume ratio
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        int buy_count = cell.trade_count; // Start with total count
-        if (total_vol > 0) {
-          double buy_ratio = cell.bid_volume / total_vol;
-          buy_count = static_cast<int>(static_cast<double>(cell.trade_count) * buy_ratio);
-        }
-        value_to_display = buy_count > 0 ? cell.bid_volume / static_cast<double>(buy_count) : 0.0;
-        break;
-      }
+      // Use the delta which contains the average buy size calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::AverageSellSize:
-      {
-        // Estimate sell count based on volume ratio
-        double total_vol = cell.bid_volume + cell.ask_volume;
-        int sell_count = cell.trade_count; // Start with total count
-        if (total_vol > 0) {
-          double sell_ratio = cell.ask_volume / total_vol;
-          sell_count = static_cast<int>(static_cast<double>(cell.trade_count) * sell_ratio);
-        }
-        value_to_display = sell_count > 0 ? cell.ask_volume / static_cast<double>(sell_count) : 0.0;
-        break;
-      }
+      // Use the delta which contains the average sell size calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::MaxOneTradeVolume:
-      // Estimate max single trade volume as total volume divided by trade count
-      value_to_display = cell.trade_count > 0 ?
-          (cell.bid_volume + cell.ask_volume) / static_cast<double>(cell.trade_count) : 0.0;
-      break;
+      // Use the delta which contains the max single trade volume calculated in the main render loop
+      return formatNumber(cell.delta, number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::FilteredVolume:
-      value_to_display = cell.bid_volume + cell.ask_volume; // Using same as total volume for demo
-      break;
+      // Use the sum of bid and ask volumes
+      return formatNumber(cell.bid_volume + cell.ask_volume, number_format_, custom_decimal_places_);
 
     default:
       // For other types, default to showing the larger of bid/ask volume
-      value_to_display = std::max(cell.bid_volume, cell.ask_volume);
-      break;
+      return formatNumber(std::max(cell.bid_volume, cell.ask_volume), number_format_, custom_decimal_places_);
   }
-
-  // Format the number using the selected formatting option
-  return formatNumber(value_to_display, number_format_, custom_decimal_places_);
 }
 
 std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
-  // Calculate delta percent
+  // Calculate delta percent based on the active analysis type
   double max_vol = std::max(cell.bid_volume, cell.ask_volume);
   double delta_percent = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
 
@@ -449,7 +381,87 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
   double max_single_trade = total_vol > 0 ? total_vol / cell.trade_count : 0.0;
 
   // Format the tooltip text with all required information
+  // Include information about the active analysis type
+  std::string analysis_type_label = "";
+  double analysis_value = 0.0;
+
+  switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+    case Data::VolumeAnalysisType::Trades:
+      analysis_type_label = "Trades";
+      analysis_value = static_cast<double>(cell.trade_count);
+      break;
+    case Data::VolumeAnalysisType::BuyTrades:
+      analysis_type_label = "Buy Trades";
+      analysis_value = cell.bid_volume; // Already set to buy trades count in main loop
+      break;
+    case Data::VolumeAnalysisType::SellTrades:
+      analysis_type_label = "Sell Trades";
+      analysis_value = cell.ask_volume; // Already set to sell trades count in main loop
+      break;
+    case Data::VolumeAnalysisType::Volume:
+      analysis_type_label = "Volume";
+      analysis_value = cell.bid_volume + cell.ask_volume;
+      break;
+    case Data::VolumeAnalysisType::BuyVolume:
+      analysis_type_label = "Buy Volume";
+      analysis_value = cell.bid_volume;
+      break;
+    case Data::VolumeAnalysisType::SellVolume:
+      analysis_type_label = "Sell Volume";
+      analysis_value = cell.ask_volume;
+      break;
+    case Data::VolumeAnalysisType::BuySellVolume:
+      analysis_type_label = "Buy-Sell Volume";
+      analysis_value = cell.delta; // Already set to buy-sell volume in main loop
+      break;
+    case Data::VolumeAnalysisType::Delta:
+      analysis_type_label = "Delta";
+      analysis_value = cell.delta;
+      break;
+    case Data::VolumeAnalysisType::DeltaPercent:
+      analysis_type_label = "Delta %";
+      analysis_value = cell.delta; // Already set to percentage in main loop
+      break;
+    case Data::VolumeAnalysisType::BuyVolumePercent:
+      analysis_type_label = "Buy Vol %";
+      analysis_value = cell.delta; // Already set to percentage in main loop
+      break;
+    case Data::VolumeAnalysisType::SellVolumePercent:
+      analysis_type_label = "Sell Vol %";
+      analysis_value = cell.delta; // Already set to percentage in main loop
+      break;
+    case Data::VolumeAnalysisType::CumulativeDelta:
+      analysis_type_label = "Cumulative Delta";
+      analysis_value = cell.delta;
+      break;
+    case Data::VolumeAnalysisType::AverageSize:
+      analysis_type_label = "Avg Size";
+      analysis_value = cell.delta; // Already set to average size in main loop
+      break;
+    case Data::VolumeAnalysisType::AverageBuySize:
+      analysis_type_label = "Avg Buy Size";
+      analysis_value = cell.delta; // Already set to average buy size in main loop
+      break;
+    case Data::VolumeAnalysisType::AverageSellSize:
+      analysis_type_label = "Avg Sell Size";
+      analysis_value = cell.delta; // Already set to average sell size in main loop
+      break;
+    case Data::VolumeAnalysisType::MaxOneTradeVolume:
+      analysis_type_label = "Max Trade Vol";
+      analysis_value = cell.delta; // Already set to max trade volume in main loop
+      break;
+    case Data::VolumeAnalysisType::FilteredVolume:
+      analysis_type_label = "Filtered Volume";
+      analysis_value = cell.bid_volume + cell.ask_volume;
+      break;
+    default:
+      analysis_type_label = "Volume";
+      analysis_value = cell.bid_volume + cell.ask_volume;
+      break;
+  }
+
   std::string tooltip = std::format(
+    "{}: {:.2f}\n"
     "Buy Volume: {:.2f}\n"
     "Sell Volume: {:.2f}\n"
     "Delta: {:.2f}\n"
@@ -458,6 +470,8 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
     "Sell Trades: {}\n"
     "Max Single Trade: {:.2f}\n"
     "Timestamp Range: {:.2f}-{:.2f}",
+    analysis_type_label,
+    analysis_value,
     cell.bid_volume,
     cell.ask_volume,
     cell.delta,
@@ -969,10 +983,178 @@ void FootprintPanel::render() {
                 cluster.vwap               // vwap
             );
 
-            // Update the cell's values based on the selected analysis type for visualization
-            cell.bid_volume = static_cast<double>(cluster.bidVolume);
-            cell.ask_volume = static_cast<double>(cluster.askVolume);
-            cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+            // Calculate value based on active VolumeAnalysisType for this specific cell
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+                case BTQuant::Data::VolumeAnalysisType::Trades:
+                    cell.bid_volume = static_cast<double>(cluster.tradeCount);
+                    cell.ask_volume = 0.0; // Not applicable for trades count
+                    cell.delta = static_cast<double>(cluster.tradeCount);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+                    // Estimate buy trades based on volume ratio
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        if (total_vol > 0) {
+                            double buy_ratio = static_cast<double>(cluster.bidVolume) / total_vol;
+                            cell.bid_volume = static_cast<double>(cluster.tradeCount) * buy_ratio;
+                            cell.ask_volume = 0.0; // Not applicable for buy trades count
+                            cell.delta = cell.bid_volume;
+                        } else {
+                            cell.bid_volume = static_cast<double>(cluster.tradeCount) * 0.5; // Equal split if no volume
+                            cell.ask_volume = 0.0;
+                            cell.delta = cell.bid_volume;
+                        }
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::SellTrades:
+                    // Estimate sell trades based on volume ratio
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        if (total_vol > 0) {
+                            double sell_ratio = static_cast<double>(cluster.askVolume) / total_vol;
+                            cell.ask_volume = static_cast<double>(cluster.tradeCount) * sell_ratio;
+                            cell.bid_volume = 0.0; // Not applicable for sell trades count
+                            cell.delta = -cell.ask_volume; // Negative for sell trades
+                        } else {
+                            cell.ask_volume = static_cast<double>(cluster.tradeCount) * 0.5; // Equal split if no volume
+                            cell.bid_volume = 0.0;
+                            cell.delta = -cell.ask_volume;
+                        }
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::Volume:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = 0.0; // Not applicable for buy volume
+                    cell.delta = static_cast<double>(cluster.bidVolume);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::SellVolume:
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.bid_volume = 0.0; // Not applicable for sell volume
+                    cell.delta = -static_cast<double>(cluster.askVolume); // Negative for sell volume
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::Delta:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.bidVolume - cluster.askVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::AverageSize:
+                    {
+                        int total_count = cluster.tradeCount;
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = total_count > 0 ? total_vol / static_cast<double>(total_count) : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+                    {
+                        // Estimate buy count based on volume ratio
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        int buy_count = cluster.tradeCount; // Start with total count
+                        if (total_vol > 0) {
+                            double buy_ratio = static_cast<double>(cluster.bidVolume) / total_vol;
+                            buy_count = static_cast<int>(static_cast<double>(cluster.tradeCount) * buy_ratio);
+                        }
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = buy_count > 0 ?
+                            static_cast<double>(cluster.bidVolume) / static_cast<double>(buy_count) : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+                    {
+                        // Estimate sell count based on volume ratio
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        int sell_count = cluster.tradeCount; // Start with total count
+                        if (total_vol > 0) {
+                            double sell_ratio = static_cast<double>(cluster.askVolume) / total_vol;
+                            sell_count = static_cast<int>(static_cast<double>(cluster.tradeCount) * sell_ratio);
+                        }
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = sell_count > 0 ?
+                            static_cast<double>(cluster.askVolume) / static_cast<double>(sell_count) : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+                    // Estimate max single trade volume as total volume divided by trade count
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = cluster.tradeCount > 0 ?
+                        (static_cast<double>(cluster.bidVolume + cluster.askVolume) / static_cast<double>(cluster.tradeCount)) : 0.0;
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.bidVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                        cell.ask_volume = static_cast<double>(cluster.askVolume);
+                        cell.delta = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.askVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
+
+                case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+
+                default:
+                    cell.bid_volume = static_cast<double>(cluster.bidVolume);
+                    cell.ask_volume = static_cast<double>(cluster.askVolume);
+                    cell.delta = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+            }
+
+            // Update the cell's trade count regardless of analysis type
             cell.trade_count = cluster.tradeCount;
 
             // Add to all cells for imbalance detection
@@ -1148,7 +1330,7 @@ void FootprintPanel::render() {
 
             // Update time bar summary values
             time_net_value += cluster_value;
-            time_total_value += cluster_value;
+            time_total_value += std::abs(cluster_value); // Use absolute value for total
 
             // Track max volume for POC calculation (still based on total volume)
             double cluster_total_vol = static_cast<double>(cluster->bidVolume + cluster->askVolume);
@@ -1168,7 +1350,7 @@ void FootprintPanel::render() {
         cumulative_values[time_key] = running_cumulative_value;
         time_bar_net_values[time_key] = time_net_value;
         time_bar_total_values[time_key] = time_total_value;
-        poc_info[time_key] = std::make_pair(poc_price, max_volume_in_time_bar);
+        poc_info[time_key] = std::make_pair(poc_price, max_analysis_value_in_time_bar); // Use analysis value for POC
     }
 
     // Render all cells with imbalance highlighting
@@ -1520,8 +1702,8 @@ void FootprintPanel::render() {
 
         case Data::VolumeAnalysisType::DeltaPercent:
           {
-            double max_vol = std::max(c.bidVolume, c.askVolume);
-            total_value += max_vol > 0.0 ? ((c.bidVolume - c.askVolume) / max_vol) * 100.0 : 0.0;
+            double total_vol = static_cast<double>(c.bidVolume + c.askVolume);
+            total_value += total_vol > 0.0 ? ((c.bidVolume - c.askVolume) / total_vol) * 100.0 : 0.0;
           }
           break;
 
@@ -1579,7 +1761,7 @@ void FootprintPanel::render() {
 
         case Data::VolumeAnalysisType::MaxOneTradeVolume:
           // Estimate max single trade volume as total volume divided by trade count
-          total_value = c.tradeCount > 0 ?
+          total_value += c.tradeCount > 0 ?
               (static_cast<double>(c.bidVolume + c.askVolume) / static_cast<double>(c.tradeCount)) : 0.0;
           break;
 

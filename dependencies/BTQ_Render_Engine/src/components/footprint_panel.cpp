@@ -73,7 +73,59 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
   double total_vol = cell.bid_volume + cell.ask_volume;
 
   // Calculate adaptive alpha based on cell_volume / max_bar_volume
-  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.05f, 1.0f) : 0.05f;
+  // Use the appropriate volume value based on the selected analysis type
+  double cell_volume = 0.0;
+
+  switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+    case Data::VolumeAnalysisType::Delta:
+    case Data::VolumeAnalysisType::DeltaPercent:
+    case Data::VolumeAnalysisType::CumulativeDelta:
+      // For delta types, use absolute delta value for alpha calculation
+      cell_volume = std::abs(cell.delta);
+      break;
+
+    case Data::VolumeAnalysisType::BuyVolume:
+    case Data::VolumeAnalysisType::SellVolume:
+    case Data::VolumeAnalysisType::BuySellVolume:
+      // For buy/sell types, use the respective volumes
+      if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolume) {
+        cell_volume = cell.bid_volume;
+      } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolume) {
+        cell_volume = cell.ask_volume;
+      } else { // BuySellVolume
+        cell_volume = std::abs(cell.delta);
+      }
+      break;
+
+    case Data::VolumeAnalysisType::Volume:
+    case Data::VolumeAnalysisType::BuyVolumePercent:
+    case Data::VolumeAnalysisType::SellVolumePercent:
+    case Data::VolumeAnalysisType::Trades:
+    case Data::VolumeAnalysisType::BuyTrades:
+    case Data::VolumeAnalysisType::SellTrades:
+    case Data::VolumeAnalysisType::FilteredVolume:
+      // For volume intensity types, use total volume or trade count
+      if (volume_data_type_ == Data::VolumeAnalysisType::Trades ||
+          volume_data_type_ == Data::VolumeAnalysisType::BuyTrades ||
+          volume_data_type_ == Data::VolumeAnalysisType::SellTrades) {
+        cell_volume = static_cast<double>(cell.trade_count);
+      } else {
+        cell_volume = total_vol;
+      }
+      break;
+
+    case Data::VolumeAnalysisType::AverageSize:
+    case Data::VolumeAnalysisType::AverageBuySize:
+    case Data::VolumeAnalysisType::AverageSellSize:
+    case Data::VolumeAnalysisType::MaxOneTradeVolume:
+    default:
+      // For other metrics, use the delta field which contains the calculated value
+      cell_volume = std::abs(cell.delta);
+      break;
+  }
+
+  // Calculate adaptive alpha based on cell_volume / max_bar_volume
+  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(cell_volume / max_volume), 0.05f, 1.0f) : 0.05f;
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
     case Data::VolumeAnalysisType::Delta:
@@ -89,10 +141,13 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
             normalized_delta = std::clamp(normalized_delta, -100.0, 100.0) / 100.0;
         } else {
             // For other delta types, normalize based on the sum of volumes
-            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-            normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
+            double total_vol = cell.bid_volume + cell.ask_volume;
+            normalized_delta = total_vol > 0.0 ? cell.delta / total_vol : 0.0;
+            // Clamp to [-1, 1] range to ensure proper color mapping
+            normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
         }
 
+        // Clamp to [-1, 1] range to ensure proper color mapping
         normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
 
         if (std::abs(normalized_delta) > delta_threshold_) {
@@ -131,27 +186,30 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
       // Blue-red gradient for buy/sell volume comparison
       {
         double normalized_value = 0.0;
+        double max_possible_value = 0.0;
 
         if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolume) {
           // Use bid_volume which was already set in the main render loop
           normalized_value = cell.bid_volume;
+          max_possible_value = max_volume; // Use the max volume passed to the function
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolume) {
           // Use ask_volume which was already set in the main render loop
           normalized_value = cell.ask_volume;
+          max_possible_value = max_volume; // Use the max volume passed to the function
         } else { // BuySellVolume
           // Use the delta which was already calculated in the main render loop
           normalized_value = cell.delta;
+          max_possible_value = max_volume; // Use the max volume passed to the function
         }
 
-        // Normalize based on max volume
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        normalized_value = max_vol > 0.0 ? normalized_value / max_vol : 0.0;
-        normalized_value = std::clamp(normalized_value, -1.0, 1.0);
+        // Normalize based on max possible value for this analysis type
+        double normalized_ratio = max_possible_value > 0.0 ?
+            std::clamp(normalized_value / max_possible_value, -1.0, 1.0) : 0.0;
 
-        if (std::abs(normalized_value) > delta_threshold_) {
-          if (normalized_value > 0) {
+        if (std::abs(normalized_ratio) > delta_threshold_) {
+          if (normalized_ratio > 0) {
             // Positive - Blue gradient for buy volume dominance
-            float blue_intensity = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
+            float blue_intensity = std::clamp(static_cast<float>(normalized_ratio), 0.0f, 1.0f);
             return IM_COL32(
                 static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce red as blue increases
                 static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce green as blue increases
@@ -159,7 +217,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
                 static_cast<int>(alpha * 255));
           } else {
             // Negative - Red gradient for sell volume dominance
-            float red_intensity = std::clamp(static_cast<float>(-normalized_value), 0.0f, 1.0f);
+            float red_intensity = std::clamp(static_cast<float>(-normalized_ratio), 0.0f, 1.0f);
             return IM_COL32(
                 static_cast<int>(100 + 155 * red_intensity),   // Full red range
                 static_cast<int>(50 * (1.0f - red_intensity)), // Reduce green as red increases
@@ -194,25 +252,24 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
           max_possible_value = max_volume;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolumePercent) {
           // Use the delta which contains the percentage value
-          normalized_value = cell.delta;
+          normalized_value = std::abs(cell.delta); // Use absolute value for color intensity
           max_possible_value = 100.0;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolumePercent) {
           // Use the delta which contains the percentage value
-          normalized_value = cell.delta;
+          normalized_value = std::abs(cell.delta); // Use absolute value for color intensity
           max_possible_value = 100.0;
         } else if (volume_data_type_ == Data::VolumeAnalysisType::Trades) {
-          // Use bid_volume which was set to trade count in the main render loop
-          normalized_value = cell.bid_volume;
-          // Estimate max possible trades based on max volume
-          max_possible_value = 1000.0; // Placeholder - in a real scenario, this would come from stats
+          // Use trade count
+          normalized_value = static_cast<double>(cell.trade_count);
+          max_possible_value = max_volume; // Use max volume as reference for scaling
         } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyTrades) {
           // Use bid_volume which was set to buy trades count in the main render loop
           normalized_value = cell.bid_volume;
-          max_possible_value = 600.0; // Placeholder
+          max_possible_value = max_volume; // Use max volume as reference for scaling
         } else if (volume_data_type_ == Data::VolumeAnalysisType::SellTrades) {
           // Use ask_volume which was set to sell trades count in the main render loop
           normalized_value = cell.ask_volume;
-          max_possible_value = 400.0; // Placeholder
+          max_possible_value = max_volume; // Use max volume as reference for scaling
         } else { // FilteredVolume
           normalized_value = total_vol;
           max_possible_value = max_volume;
@@ -240,24 +297,24 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     case Data::VolumeAnalysisType::AverageSellSize:
     case Data::VolumeAnalysisType::MaxOneTradeVolume:
     default:
-      // For other metrics, use blue gradient
+      // For other metrics, use yellow-orange gradient for volume intensity
       {
         // Use the delta value which was already calculated in the main render loop
-        double normalized_value = cell.delta;
-        double max_possible_value = 10000.0; // Default placeholder
+        double normalized_value = std::abs(cell.delta); // Use absolute value for color intensity
+        double max_possible_value = max_volume; // Use max volume as reference
 
         // Adjust max_possible_value based on the specific analysis type
         switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
           case Data::VolumeAnalysisType::AverageSize:
-            max_possible_value = 1000.0; // Reasonable max for average size
+            max_possible_value = max_volume; // Use max volume as reference
             break;
 
           case Data::VolumeAnalysisType::AverageBuySize:
-            max_possible_value = 1000.0; // Reasonable max for average buy size
+            max_possible_value = max_volume; // Use max volume as reference
             break;
 
           case Data::VolumeAnalysisType::AverageSellSize:
-            max_possible_value = 1000.0; // Reasonable max for average sell size
+            max_possible_value = max_volume; // Use max volume as reference
             break;
 
           case Data::VolumeAnalysisType::MaxOneTradeVolume:
@@ -265,16 +322,24 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
             break;
 
           default:
-            normalized_value = cell.bid_volume + cell.ask_volume;
+            normalized_value = std::abs(cell.bid_volume + cell.ask_volume);
+            max_possible_value = max_volume; // Use max volume as reference
             break;
         }
 
-        float blue_intensity = max_possible_value > 0.0 ?
+        float intensity = max_possible_value > 0.0 ?
             std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f) : 0.0f;
+
+        // Yellow-orange gradient for volume intensity - transitioning from yellow (low intensity) to orange (high intensity)
+        // Yellow: high R&G, low B; Orange: high R, medium G, low B
+        float red_val = 200.0f + 55.0f * intensity;      // Range: 200-255 (higher for more intensity)
+        float green_val = 150.0f + 105.0f * intensity;   // Range: 150-255 (increasing for more intensity)
+        float blue_val = 50.0f * (1.0f - intensity);     // Low blue that decreases with intensity for better contrast
+
         return IM_COL32(
-            static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce red as blue increases
-            static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce green as blue increases
-            static_cast<int>(100 + 155 * blue_intensity),   // Full blue range
+            static_cast<int>(std::min(255.0f, red_val)),
+            static_cast<int>(std::min(255.0f, green_val)),
+            static_cast<int>(std::min(255.0f, blue_val)),
             static_cast<int>(alpha * 255));
       }
       break;

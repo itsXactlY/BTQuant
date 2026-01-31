@@ -280,6 +280,58 @@ std::vector<std::tuple<int64_t, int, double, double, double>> ClusterEngine::det
                     );
                 }
             }
+
+            // Enhanced stacked imbalance detection: Look for momentum shifts
+            // Detect when the direction of volume flow changes significantly
+            double current_net_flow = buy_volume_current - sell_volume_current;
+            double previous_net_flow = buy_volume_previous - sell_volume_previous;
+
+            // Look for significant changes in net flow direction
+            if ((current_net_flow > 0 && previous_net_flow < 0) || (current_net_flow < 0 && previous_net_flow > 0)) {
+                double flow_magnitude_change = std::abs(current_net_flow) / std::max(std::abs(previous_net_flow), 1.0);
+                if (flow_magnitude_change > threshold) {
+                    imbalances.emplace_back(
+                        static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                        time_bucket,                                       // Current time bucket
+                        std::abs(current_net_flow),                        // Magnitude of current net flow
+                        std::abs(previous_net_flow),                       // Magnitude of previous net flow
+                        flow_magnitude_change                             // Change in flow magnitude
+                    );
+                }
+            }
+
+            // Detect accumulation of one-sided pressure over multiple time periods
+            // Look at cumulative volumes over the past few time buckets
+            if (time_bucket >= 2) {  // Need at least 3 time buckets to compare
+                double prev2_buy_volume, prev2_sell_volume;
+                {
+                    std::lock_guard<std::mutex> lock(cluster_canvas_[price_idx][time_bucket - 2].volume_mutex);
+                    prev2_buy_volume = cluster_canvas_[price_idx][time_bucket - 2].buy_volume;
+                    prev2_sell_volume = cluster_canvas_[price_idx][time_bucket - 2].sell_volume;
+                }
+
+                // Calculate trend in buy/sell pressure over 3 consecutive time buckets
+                double total_prev2_flow = prev2_buy_volume + prev2_sell_volume;
+                double total_prev1_flow = buy_volume_previous + sell_volume_previous;
+                double total_curr_flow = buy_volume_current + sell_volume_current;
+
+                if (total_prev2_flow > 0 && total_prev1_flow > 0 && total_curr_flow > 0) {
+                    // Look for acceleration in total volume flow
+                    double prev_acceleration = total_prev1_flow / total_prev2_flow;
+                    double curr_acceleration = total_curr_flow / total_prev1_flow;
+
+                    // Detect when volume acceleration is increasing significantly
+                    if (curr_acceleration > threshold && prev_acceleration > 1.0) {
+                        imbalances.emplace_back(
+                            static_cast<int64_t>(price_idx) + min_tick_index_,  // Absolute tick index
+                            time_bucket,                                       // Current time bucket
+                            total_curr_flow,                                   // Current total volume
+                            total_prev1_flow,                                  // Previous total volume
+                            curr_acceleration                                  // Acceleration rate
+                        );
+                    }
+                }
+            }
         }
     }
 

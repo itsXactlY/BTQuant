@@ -73,7 +73,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
   double total_vol = cell.bid_volume + cell.ask_volume;
 
   // Calculate adaptive alpha based on cell_volume / max_bar_volume
-  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.05f, 1.0f) : 0.5f;
+  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.05f, 1.0f) : 0.05f;
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
     case Data::VolumeAnalysisType::Delta:
@@ -221,10 +221,10 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
         float intensity = max_possible_value > 0.0 ?
             std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f) : 0.0f;
 
-        // Yellow-orange gradient for volume intensity - transitioning from orange (low intensity) to yellow (high intensity)
-        // Orange: high R, medium G, low B; Yellow: high R&G, low B
+        // Yellow-orange gradient for volume intensity - transitioning from yellow (low intensity) to orange (high intensity)
+        // Yellow: high R&G, low B; Orange: high R, medium G, low B
         float red_val = 200.0f + 55.0f * intensity;      // Range: 200-255 (higher for more intensity)
-        float green_val = 100.0f + 155.0f * intensity;   // Range: 100-255 (increasing for more intensity)
+        float green_val = 150.0f + 105.0f * intensity;   // Range: 150-255 (increasing for more intensity)
         float blue_val = 0.0f;                           // Keep blue low for yellow/orange tones
 
         return IM_COL32(

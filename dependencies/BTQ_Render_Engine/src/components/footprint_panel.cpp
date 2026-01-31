@@ -791,16 +791,16 @@ void FootprintPanel::render() {
     return;
   }
 
-  // Volume data type selector for footprint visualization (16 types as requested)
+  // Volume data type selector for footprint visualization (all 17 types)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
     "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"
+    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"
   };
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
   if (ImGui::BeginCombo("Footprint Mode##VolumeDataTypeSelector", volume_data_type_names[current_vol_data_type])) {
-    for (int i = 0; i < 16; i++) {  // 16 types as requested
+    for (int i = 0; i < 17; i++) {  // 17 types to match enum
       bool is_selected = (current_vol_data_type == i);
       if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {
         current_vol_data_type = i;
@@ -1636,7 +1636,7 @@ void FootprintPanel::render() {
     const char* vol_type_names[] = {
       "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
       "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
-      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types
+      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol", "FilteredVol"  // 17 types
     };
 
     // Time aggregation type names for display

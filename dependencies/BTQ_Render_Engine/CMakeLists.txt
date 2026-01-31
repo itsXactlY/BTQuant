@@ -664,22 +664,42 @@ target_link_libraries(dashboard_advanced PRIVATE
 # endif()
 
 # Unit test for VolumeAnalysisType
-# enable_testing()
-# find_package(GTest QUIET)
-# if(GTest_FOUND)
-#     add_executable(test_volume_analysis_type tests/test_volume_analysis_type.cpp)
-#     target_include_directories(test_volume_analysis_type PRIVATE
-#         ${CMAKE_CURRENT_SOURCE_DIR}/include
-#         ${CMAKE_CURRENT_SOURCE_DIR}/src
-#         ${Vulkan_INCLUDE_DIRS}
-#         ${glm_SOURCE_DIR}
-#         ${json_SOURCE_DIR}/include
-#         ${concurrentqueue_SOURCE_DIR}
-#         ${IMGUI_DIR}
-#         ${IMGUI_DIR}/backends
-#         ${IMPLOT_DIR}
-#     )
-#     target_link_libraries(test_volume_analysis_type PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
-#     add_test(NAME test_volume_analysis_type COMMAND test_volume_analysis_type)
-# endif()
+enable_testing()
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    add_executable(test_volume_analysis_type tests/test_volume_analysis_type.cpp)
+    target_include_directories(test_volume_analysis_type PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_volume_analysis_type PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_volume_analysis_type COMMAND test_volume_analysis_type)
+endif()
+
+# Unit test for Footprint Panel Zoom functionality (mathematical algorithm only)
+if(GTest_FOUND)
+    add_executable(test_footprint_zoom_math_only
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_footprint_zoom.cpp
+    )
+    target_include_directories(test_footprint_zoom_math_only PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_footprint_zoom_math_only PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_footprint_zoom_math_only COMMAND test_footprint_zoom_math_only)
+endif()
 

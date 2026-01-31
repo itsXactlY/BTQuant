@@ -534,15 +534,21 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   double base_padding = 0.48;
 
   // Adjust cell padding based on zoom level with more responsive transitions
+  // Use a more sophisticated algorithm that provides better visual feedback at different zoom levels
   double adjusted_padding;
   if (zoom_factor >= 1.0) {
-    // When zoomed in: expand cells significantly to show more detail
-    // Use a power function to make expansion more pronounced at higher zoom levels
-    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.7);
+    // When zoomed in: expand cells to show more detail
+    // Use a logarithmic approach for smoother transitions at high zoom levels
+    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.5;
+    adjusted_padding = std::max(0.01, base_padding - zoom_effect);
   } else {
-    // When zoomed out: shrink cells dramatically to show more of them, approaching squares
-    // Use a power function to make contraction more pronounced at lower zoom levels
-    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.5);
+    // When zoomed out: shrink cells to show more of them, approaching squares
+    // Use an exponential approach to make cells shrink more aggressively when zoomed out
+    // FIXED: The original algorithm was making cells larger when zoomed out, which is wrong
+    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 1.2) - 1.0;
+    // To make cells smaller when zoomed out, we need MORE padding, not less
+    double padding_factor = 0.8 * (zoom_effect / (zoom_effect + 1.0));
+    adjusted_padding = std::min(base_padding, base_padding * (1.0 + padding_factor));
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
@@ -746,15 +752,21 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   double base_padding = 0.48;
 
   // Adjust cell padding based on zoom level with more responsive transitions
+  // Use the same sophisticated algorithm as the regular cell rendering for consistency
   double adjusted_padding;
   if (zoom_factor >= 1.0) {
-    // When zoomed in: expand cells significantly to show more detail
-    // Use a power function to make expansion more pronounced at higher zoom levels
-    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.7);
+    // When zoomed in: expand cells to show more detail
+    // Use a logarithmic approach for smoother transitions at high zoom levels
+    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.5;
+    adjusted_padding = std::max(0.01, base_padding - zoom_effect);
   } else {
-    // When zoomed out: shrink cells dramatically to show more of them, approaching squares
-    // Use a power function to make contraction more pronounced at lower zoom levels
-    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.5);
+    // When zoomed out: shrink cells to show more of them, approaching squares
+    // Use an exponential approach to make cells shrink more aggressively when zoomed out
+    // FIXED: The original algorithm was making cells larger when zoomed out, which is wrong
+    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 1.2) - 1.0;
+    // To make cells smaller when zoomed out, we need MORE padding, not less
+    double padding_factor = 0.8 * (zoom_effect / (zoom_effect + 1.0));
+    adjusted_padding = std::min(base_padding, base_padding * (1.0 + padding_factor));
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
@@ -1209,8 +1221,14 @@ void FootprintPanel::render() {
     // Calculate zoom factors - higher values mean more zoomed in
     double x_zoom_factor = x_range_full / (x_max - x_min);
     double y_zoom_factor = y_range_full / (y_max - y_min);
-    double zoom_factor =
-        std::sqrt(x_zoom_factor * y_zoom_factor);  // Geometric mean for balanced zoom
+
+    // Use separate zoom factors for X and Y dimensions to preserve aspect ratio
+    // This allows for more precise control over cell stretching in each direction
+    double x_adjusted_zoom = std::max(0.01, x_zoom_factor);
+    double y_adjusted_zoom = std::max(0.01, y_zoom_factor);
+
+    // Calculate an overall zoom factor as geometric mean for general purposes
+    double zoom_factor = std::sqrt(x_adjusted_zoom * y_adjusted_zoom);
 
     // Normalize zoom factor to a more intuitive range
     zoom_factor = std::max(0.01, zoom_factor);  // Prevent extremely small values

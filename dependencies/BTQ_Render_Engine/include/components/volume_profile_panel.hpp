@@ -132,6 +132,13 @@ class VolumeProfilePanel : public PanelBase {
   ProfileMode profile_mode_ = ProfileMode::Step;
   ProfileSettings profile_settings_{};
 
+  // Profile anchor markers for Custom Profile mode
+  bool use_custom_time_range_ = false;  // Whether to use custom time range
+  double custom_start_time_ = 0.0;     // Start time for custom range
+  double custom_end_time_ = 0.0;       // End time for custom range
+  bool start_time_drag_active_ = false; // Whether start time drag handle is active
+  bool end_time_drag_active_ = false;   // Whether end time drag handle is active
+
   void build_volume_profile();
   void render_volume_bars();
   void render_controls();

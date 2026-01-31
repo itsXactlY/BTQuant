@@ -84,7 +84,20 @@ void VolumeProfilePanel::set_symbol(uint32_t symbol_id, const std::string& symbo
 
 void VolumeProfilePanel::build_volume_profile() {
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  const auto& trades = analytics.recent_trades;
+  auto trades = analytics.recent_trades;  // Copy to potentially filter
+
+  // Filter trades based on custom time range if enabled and in Custom Profile mode
+  if (use_custom_time_range_ && profile_mode_ == ProfileMode::Custom && !trades.empty()) {
+    std::vector<RenderEngine::TradeData> filtered_trades;
+
+    for (const auto& trade : trades) {
+      if (trade.timestamp >= custom_start_time_ && trade.timestamp <= custom_end_time_) {
+        filtered_trades.push_back(trade);
+      }
+    }
+
+    trades = std::move(filtered_trades);
+  }
 
   if (trades.empty()) return;
 
@@ -222,6 +235,64 @@ void VolumeProfilePanel::render_controls() {
   // Add VA% control
   ImGui::SameLine();
   ImGui::SliderInt("VA%", &profile_settings_.vaPercent, 50, 99);
+
+  // Add controls for Custom Profile range when Custom mode is selected
+  if (profile_mode_ == ProfileMode::Custom) {
+    ImGui::SameLine();
+    ImGui::Checkbox("Use Time Range", &use_custom_time_range_);
+
+    if (use_custom_time_range_) {
+      ImGui::Separator();
+
+      // Initialize start and end times if not already set
+      if (custom_start_time_ == 0.0 && custom_end_time_ == 0.0) {
+        // Get current time range from available data
+        auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+        const auto& trades = analytics.recent_trades;
+
+        if (!trades.empty()) {
+          // Find min and max timestamps
+          double min_time = trades[0].timestamp;
+          double max_time = trades[0].timestamp;
+
+          for (const auto& trade : trades) {
+            if (trade.timestamp < min_time) min_time = trade.timestamp;
+            if (trade.timestamp > max_time) max_time = trade.timestamp;
+          }
+
+          custom_start_time_ = min_time;
+          custom_end_time_ = max_time;
+        }
+      }
+
+      // Show controls for start and end times
+      ImGui::Text("Time Range:");
+      ImGui::SameLine();
+      ImGui::Text("Start: %.2f", custom_start_time_);
+      ImGui::SameLine();
+      ImGui::Text("End: %.2f", custom_end_time_);
+
+      // Buttons to reset to full range
+      if (ImGui::Button("Reset Time Range")) {
+        auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+        const auto& trades = analytics.recent_trades;
+
+        if (!trades.empty()) {
+          // Find min and max timestamps
+          double min_time = trades[0].timestamp;
+          double max_time = trades[0].timestamp;
+
+          for (const auto& trade : trades) {
+            if (trade.timestamp < min_time) min_time = trade.timestamp;
+            if (trade.timestamp > max_time) max_time = trade.timestamp;
+          }
+
+          custom_start_time_ = min_time;
+          custom_end_time_ = max_time;
+        }
+      }
+    }
+  }
 
   // Display VAH and VAL if available
   ImGui::SameLine();
@@ -729,6 +800,84 @@ void VolumeProfilePanel::render_volume_bars() {
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 0.5f, 1.0f, 1.0f));
       ImPlot::PlotLine("VWAP", vwap_line_x, vwap_line_y, 2);
       ImPlot::PopStyleColor();
+    }
+
+    // Add profile anchor markers for Custom Profile mode
+    if (profile_mode_ == ProfileMode::Custom && use_custom_time_range_) {
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+      // Get plot limits to determine the Y range for vertical lines
+      ImPlotRect plot_limits = ImPlot::GetPlotLimits();
+
+      // Draw start time vertical line (green)
+      if (custom_start_time_ > 0) {
+        double start_line_x[2] = {custom_start_time_, custom_start_time_};
+        double start_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
+
+        // Draw the vertical line
+        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 0.8f)); // Green
+        ImPlot::PlotLine("Start Time", start_line_x, start_line_y, 2);
+        ImPlot::PopStyleColor();
+
+        // Draw a draggable handle at the top of the line
+        ImVec2 handle_pos = ImPlot::PlotToPixels(custom_start_time_, plot_limits.Y.Max - (plot_limits.Y.Max - plot_limits.Y.Min) * 0.1);
+        ImVec2 handle_size = ImVec2(10.0f, 20.0f);
+        ImVec2 handle_tl = ImVec2(handle_pos.x - handle_size.x/2, handle_pos.y - handle_size.y/2);
+        ImVec2 handle_br = ImVec2(handle_pos.x + handle_size.x/2, handle_pos.y + handle_size.y/2);
+
+        // Draw the handle
+        draw_list->AddRectFilled(handle_tl, handle_br, IM_COL32(0, 255, 0, 200)); // Green handle
+        draw_list->AddRect(handle_tl, handle_br, IM_COL32(255, 255, 255, 255)); // White border
+
+        // Handle dragging for start time
+        ImGui::SetCursorScreenPos(handle_tl);
+        ImGui::InvisibleButton("start_handle", handle_size);
+        if (ImGui::IsItemActive()) {
+            start_time_drag_active_ = true;
+            double new_time = ImPlot::GetPlotMousePos().x;
+            // Constrain to valid range
+            if (new_time < custom_end_time_) {
+                custom_start_time_ = new_time;
+            }
+        } else if (start_time_drag_active_ && !ImGui::IsMouseDown(0)) {
+            start_time_drag_active_ = false;
+        }
+      }
+
+      // Draw end time vertical line (red)
+      if (custom_end_time_ > 0) {
+        double end_line_x[2] = {custom_end_time_, custom_end_time_};
+        double end_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
+
+        // Draw the vertical line
+        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.0f, 0.0f, 0.8f)); // Red
+        ImPlot::PlotLine("End Time", end_line_x, end_line_y, 2);
+        ImPlot::PopStyleColor();
+
+        // Draw a draggable handle at the top of the line
+        ImVec2 handle_pos = ImPlot::PlotToPixels(custom_end_time_, plot_limits.Y.Max - (plot_limits.Y.Max - plot_limits.Y.Min) * 0.1);
+        ImVec2 handle_size = ImVec2(10.0f, 20.0f);
+        ImVec2 handle_tl = ImVec2(handle_pos.x - handle_size.x/2, handle_pos.y - handle_size.y/2);
+        ImVec2 handle_br = ImVec2(handle_pos.x + handle_size.x/2, handle_pos.y + handle_size.y/2);
+
+        // Draw the handle
+        draw_list->AddRectFilled(handle_tl, handle_br, IM_COL32(255, 0, 0, 200)); // Red handle
+        draw_list->AddRect(handle_tl, handle_br, IM_COL32(255, 255, 255, 255)); // White border
+
+        // Handle dragging for end time
+        ImGui::SetCursorScreenPos(handle_tl);
+        ImGui::InvisibleButton("end_handle", handle_size);
+        if (ImGui::IsItemActive()) {
+            end_time_drag_active_ = true;
+            double new_time = ImPlot::GetPlotMousePos().x;
+            // Constrain to valid range
+            if (new_time > custom_start_time_) {
+                custom_end_time_ = new_time;
+            }
+        } else if (end_time_drag_active_ && !ImGui::IsMouseDown(0)) {
+            end_time_drag_active_ = false;
+        }
+      }
     }
 
     ImPlot::EndPlot();

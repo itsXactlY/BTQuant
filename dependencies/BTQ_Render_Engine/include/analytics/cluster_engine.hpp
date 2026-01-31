@@ -133,6 +133,9 @@ public:
   // Detect diagonal imbalances by comparing buy_volume at price P with sell_volume at price P-1
   std::vector<std::tuple<int64_t, int, double, double, double>> detect_diagonal_imbalances(double threshold = 3.0) const;
 
+  // Detect stacked imbalances by comparing buy/sell volumes at same price level across consecutive time bars
+  std::vector<std::tuple<int64_t, int, double, double, double>> detect_stacked_imbalances(double threshold = 3.0) const;
+
   void snapshot_to_viewport(HotSpine::V3::ClusterColumn &out,
                             double center_price) {
     int64_t center_idx =

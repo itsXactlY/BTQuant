@@ -155,13 +155,126 @@ void test_no_imbalance_below_threshold() {
     std::cout << "No imbalance below threshold test PASSED!" << std::endl;
 }
 
+void test_stacked_imbalance_detection() {
+    std::cout << "Testing stacked imbalance detection..." << std::endl;
+
+    // Create a ClusterEngine with tick size of 1.0 for simplicity
+    ClusterEngine engine(1.0);
+
+    // Create some test trades to simulate stacked imbalances
+    // Same price level (100), but across different time buckets
+    // Time bucket 0: moderate buy volume at price 100
+    Trade trade1;
+    trade1.price = 100.0;
+    trade1.quantity = 50.0;
+    trade1.is_buyer_maker = false;  // buyer taker -> contributes to buy_volume
+    trade1.timestamp_us = 1000000;
+
+    // Time bucket 1: much higher buy volume at same price level (100)
+    Trade trade2;
+    trade2.price = 100.0;
+    trade2.quantity = 200.0;  // Much higher volume
+    trade2.is_buyer_maker = false;  // buyer taker -> contributes to buy_volume
+    trade2.timestamp_us = 2000000;
+
+    // Process the trades in different time buckets
+    engine.processTrade(trade1, 0);  // time bucket 0
+    engine.processTrade(trade2, 1);  // time bucket 1
+
+    // Now detect stacked imbalances with threshold of 3.0
+    auto imbalances = engine.detect_stacked_imbalances(3.0);
+
+    std::cout << "Number of detected stacked imbalances: " << imbalances.size() << std::endl;
+
+    // We expect to find an imbalance where buy_volume at time bucket 1 is much higher than at time bucket 0
+    bool found_expected_imbalance = false;
+    for (const auto& imbalance : imbalances) {
+        auto [price_index, time_bucket, current_vol, previous_vol, ratio] = imbalance;
+
+        std::cout << "Stacked imbalance found: price_index=" << price_index
+                  << ", time_bucket=" << time_bucket
+                  << ", current_vol=" << current_vol
+                  << ", previous_vol=" << previous_vol
+                  << ", ratio=" << ratio << std::endl;
+
+        // Check if this is the expected imbalance (higher volume in current bucket vs previous)
+        if (price_index == 100 && time_bucket == 1) {  // time bucket 1 compared to time bucket 0
+            // The ratio should be current_vol / previous_vol = 200 / 50 = 4.0
+            if (ratio >= 3.0) {
+                found_expected_imbalance = true;
+            }
+        }
+    }
+
+    assert(found_expected_imbalance && "Expected stacked imbalance was not detected!");
+
+    std::cout << "Stacked imbalance detection test PASSED!" << std::endl;
+}
+
+void test_stacked_sell_imbalance_detection() {
+    std::cout << "Testing stacked sell imbalance detection..." << std::endl;
+
+    // Create a ClusterEngine with tick size of 1.0 for simplicity
+    ClusterEngine engine(1.0);
+
+    // Create some test trades to simulate stacked sell imbalances
+    // Time bucket 0: moderate sell volume at price 100
+    Trade trade1;
+    trade1.price = 100.0;
+    trade1.quantity = 30.0;
+    trade1.is_buyer_maker = true;  // seller taker -> contributes to sell_volume
+    trade1.timestamp_us = 1000000;
+
+    // Time bucket 1: much higher sell volume at same price level (100)
+    Trade trade2;
+    trade2.price = 100.0;
+    trade2.quantity = 150.0;  // Much higher volume
+    trade2.is_buyer_maker = true;  // seller taker -> contributes to sell_volume
+    trade2.timestamp_us = 2000000;
+
+    // Process the trades in different time buckets
+    engine.processTrade(trade1, 0);  // time bucket 0
+    engine.processTrade(trade2, 1);  // time bucket 1
+
+    // Now detect stacked imbalances with threshold of 4.0
+    auto imbalances = engine.detect_stacked_imbalances(4.0);
+
+    std::cout << "Number of detected stacked sell imbalances: " << imbalances.size() << std::endl;
+
+    // We expect to find an imbalance where sell_volume at time bucket 1 is much higher than at time bucket 0
+    bool found_expected_imbalance = false;
+    for (const auto& imbalance : imbalances) {
+        auto [price_index, time_bucket, current_vol, previous_vol, ratio] = imbalance;
+
+        std::cout << "Stacked sell imbalance found: price_index=" << price_index
+                  << ", time_bucket=" << time_bucket
+                  << ", current_vol=" << current_vol
+                  << ", previous_vol=" << previous_vol
+                  << ", ratio=" << ratio << std::endl;
+
+        // Check if this is the expected imbalance (higher sell volume in current bucket vs previous)
+        if (price_index == 100 && time_bucket == 1) {  // time bucket 1 compared to time bucket 0
+            // The ratio should be current_vol / previous_vol = 150 / 30 = 5.0
+            if (ratio >= 4.0) {
+                found_expected_imbalance = true;
+            }
+        }
+    }
+
+    assert(found_expected_imbalance && "Expected stacked sell imbalance was not detected!");
+
+    std::cout << "Stacked sell imbalance detection test PASSED!" << std::endl;
+}
+
 int main() {
-    std::cout << "Running ClusterEngine diagonal imbalance detection tests..." << std::endl;
-    
+    std::cout << "Running ClusterEngine diagonal and stacked imbalance detection tests..." << std::endl;
+
     test_diagonal_imbalance_detection();
     test_reverse_diagonal_imbalance_detection();
     test_no_imbalance_below_threshold();
-    
+    test_stacked_imbalance_detection();
+    test_stacked_sell_imbalance_detection();
+
     std::cout << "All tests PASSED!" << std::endl;
     return 0;
 }

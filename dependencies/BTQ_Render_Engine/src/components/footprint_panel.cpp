@@ -675,16 +675,16 @@ void FootprintPanel::render() {
 
   ImGui::SameLine();
 
-  // Volume data type selector for footprint visualization (16 types)
+  // Volume data type selector for footprint visualization (16 types as requested)
   const char* volume_data_type_names[] = {
     "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
-    "BuyVolume%", "SellVolume%", "BuySellVolume", "Delta", "Delta%", "CumulativeDelta",
-    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types (excluding FilteredVol)
+    "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
+    "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"
   };
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
   if (ImGui::BeginCombo("Footprint Mode", volume_data_type_names[current_vol_data_type])) {
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 16; i++) {  // 16 types as requested
       bool is_selected = (current_vol_data_type == i);
       if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {
         current_vol_data_type = i;
@@ -1216,8 +1216,8 @@ void FootprintPanel::render() {
     // Determine the current volume data type name for display
     const char* vol_type_names[] = {
       "Trades", "BuyTrades", "SellTrades", "Volume", "BuyVolume", "SellVolume",
-      "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulativeDelta",
-      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types (excluding FilteredVol)
+      "BuyVol%", "SellVol%", "BuySellVol", "Delta", "Delta%", "CumulDelta",
+      "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types
     };
 
     // Time aggregation type names for display

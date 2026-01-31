@@ -1060,15 +1060,24 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         y_coords_low.push_back(wick_bot.y);
       }
 
-      // Create a temporary volume profile panel to render the mini histograms
-      // In a real implementation, this would be accessed from the panel manager
-      // For now, we'll create a temporary instance with the necessary data
+      // Use the processor to get the volume profile data for this symbol and timeframe
+      // This will allow us to render the mini histograms with actual volume distribution data
       auto id_opt = chart_manager_->getSymbolId(symbol_);
       if (id_opt) {
-        VolumeProfilePanel temp_vp(PanelConfig{}, bridge_, processor_);
-        temp_vp.set_symbol(*id_opt, symbol_);
-        temp_vp.render_step_profile_histograms(draw_list, visible_candles, x_coords,
-                                               y_coords_high, y_coords_low, true, 8);
+        uint32_t symbol_id = *id_opt;
+
+        // Get recent trades for this symbol to populate the mini histograms
+        auto analytics = processor_->getSymbolAnalytics(symbol_id);
+        const auto& recent_trades = analytics.recent_trades;
+
+        // If we have recent trades, render the mini histograms showing volume distribution
+        if (!recent_trades.empty()) {
+          // Use the static method to render mini histograms directly without creating a temporary instance
+          // This is more efficient and avoids unnecessary object creation
+          VolumeProfilePanel::render_mini_histograms_direct(draw_list, visible_candles, x_coords,
+                                                         y_coords_high, y_coords_low, recent_trades,
+                                                         true, 8);
+        }
       }
     }
 

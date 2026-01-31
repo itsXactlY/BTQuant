@@ -73,6 +73,17 @@ class VolumeProfilePanel : public PanelBase {
                                         bool show_poc_line = true,
                                         int num_buckets = 8);
 
+  // Static utility method to render mini histograms directly without creating a panel instance
+  // This is more efficient for use in chart panels where we don't need the full panel functionality
+  static void render_mini_histograms_direct(ImDrawList* draw_list,
+                                           const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                           const std::vector<double>& x_coords,
+                                           const std::vector<double>& y_coords_high,
+                                           const std::vector<double>& y_coords_low,
+                                           const std::vector<RenderEngine::TradeData>& trades,
+                                           bool show_poc_line = true,
+                                           int num_buckets = 8);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

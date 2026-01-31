@@ -1054,10 +1054,8 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
     // Also update the global POC price to reflect the current calculation for display purposes
     poc_price_ = xs[poc_index];
   }
-
-  // Ensure the POC line is always visible and properly calculated for Step Profile mode
-  // This ensures that even if the local calculation didn't find a POC, we use the global one
-  if (poc_index < 0 && poc_price_ > 0) {
+  // If no POC was found locally but we have a global POC, draw that
+  else if (poc_price_ > 0) {
     // Calculate min/max x values for the line based on global data
     double min_vol = 0.0, max_vol = 0.0;
     for (int i = 0; i < count; ++i) {
@@ -1076,31 +1074,6 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
     ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, poc_price_);
 
     // Draw the horizontal POC line - make it more prominent with consistent styling
-    draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 3.0f);  // Bright yellow with increased thickness
-  }
-
-  // Additionally, ensure that the POC line is always drawn consistently regardless of local/global calculation
-  // This ensures the POC line appears for each bar in Step Profile mode as requested
-  if (poc_price_ > 0) {
-    // Calculate min/max x values for the line based on the current dataset
-    double min_vol = 0.0, max_vol = 0.0;
-    for (int i = 0; i < count; ++i) {
-      min_vol = std::min(min_vol, std::min(ys[i], neg_ys[i]));
-      max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
-    }
-
-    // Ensure we have valid min/max values for the line
-    if (max_vol <= min_vol) {
-      max_vol = max_volume_;
-      min_vol = -max_volume_;
-    }
-
-    // Draw the POC line using the global poc_price_ to ensure consistency
-    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, poc_price_);
-    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, poc_price_);
-
-    // Draw the horizontal POC line - make it more prominent with consistent styling
-    // Using bright yellow color to make it clearly visible
     draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 3.0f);  // Bright yellow with increased thickness
   }
 }

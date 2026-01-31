@@ -115,12 +115,12 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
                 static_cast<int>(alpha * 255));
           }
         } else {
-          // Neutral - Gray
+          // Neutral - Gray with reduced alpha
           return IM_COL32(
               static_cast<int>(100),
               static_cast<int>(100),
               static_cast<int>(100),
-              static_cast<int>(alpha * 255));
+              static_cast<int>(alpha * 100)); // Reduced alpha for neutral cells
         }
       }
       break;
@@ -167,12 +167,12 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
                 static_cast<int>(alpha * 255));
           }
         } else {
-          // Neutral - Gray
+          // Neutral - Gray with reduced alpha
           return IM_COL32(
               static_cast<int>(100),
               static_cast<int>(100),
               static_cast<int>(100),
-              static_cast<int>(alpha * 255));
+              static_cast<int>(alpha * 100)); // Reduced alpha for neutral cells
         }
       }
       break;

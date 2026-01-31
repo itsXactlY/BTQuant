@@ -1073,10 +1073,6 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
     // Use the same color as in other profile modes for consistency
     draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 204, 0, 255), 2.0f);  // Yellow with consistent thickness
 
-    // Add a subtle outline for better visibility on different backgrounds
-    draw_list->AddLine(ImVec2(poc_start.x - 1, poc_start.y), ImVec2(poc_end.x - 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
-    draw_list->AddLine(ImVec2(poc_start.x + 1, poc_start.y), ImVec2(poc_end.x + 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
-
     // Also update the global POC price to reflect the current calculation for display purposes
     poc_price_ = xs[poc_index];
   }
@@ -1103,10 +1099,6 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
 
     // Draw the horizontal POC line - make it more prominent with consistent styling
     draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 204, 0, 255), 2.0f);  // Yellow with consistent thickness
-
-    // Add a subtle outline for better visibility on different backgrounds
-    draw_list->AddLine(ImVec2(poc_start.x - 1, poc_start.y), ImVec2(poc_end.x - 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
-    draw_list->AddLine(ImVec2(poc_start.x + 1, poc_start.y), ImVec2(poc_end.x + 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
   }
 }
 

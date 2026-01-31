@@ -6,6 +6,7 @@
 #include "data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
 #include <memory>
 #include <vector>
+#include <atomic>
 
 namespace BTQuant {
 
@@ -125,6 +126,9 @@ private:
 
   // Custom price aggregation value
   double custom_price_aggregation_value_ = 0.1;
+
+  // Data dirty flag for immediate rendering updates
+  std::atomic<bool> data_dirty_{true};
 
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;

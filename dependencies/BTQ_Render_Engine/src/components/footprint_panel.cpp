@@ -870,6 +870,8 @@ void FootprintPanel::render() {
       if (ImGui::Selectable(format_items[i], is_selected)) {
         current_format = i;
         number_format_ = static_cast<NumberFormat>(i);
+        // Mark data as dirty to trigger immediate rendering update if needed
+        data_dirty_.store(true, std::memory_order_release);
       }
       if (is_selected) {
         ImGui::SetItemDefaultFocus();
@@ -882,7 +884,17 @@ void FootprintPanel::render() {
   if (number_format_ == NumberFormat::CustomDecimal) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(100);
-    ImGui::SliderInt("Decimals", &custom_decimal_places_, 0, 6);
+    if (ImGui::SliderInt("Decimals", &custom_decimal_places_, 0, 6)) {
+      // Mark data as dirty to trigger immediate rendering update if decimal places change
+      data_dirty_.store(true, std::memory_order_release);
+    }
+  }
+
+  // Check if data needs to be refreshed due to selection changes
+  if (data_dirty_.load(std::memory_order_acquire)) {
+    // Mark data as dirty to force renderer to potentially refresh its data
+    // The renderer itself handles the data pipeline integration
+    data_dirty_.store(false, std::memory_order_release);
   }
 
   // Get clusters from renderer

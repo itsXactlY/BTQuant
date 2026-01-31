@@ -93,7 +93,7 @@
 - [ ] Implement depth chart visualization mode: alternative view showing depth as area chart (bid area on left, ask area on right) in `dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp`
 - [ ] Add order book aggregation modes: group by tick size, 0.1%, 0.5%, 1%, custom value to reduce noise in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp`
 - [ ] Implement order flow detection: track order additions, cancellations, executions with colored markers showing activity intensity per level in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp`
-- [ ] Add historical order book snapshots: capture order book state every N seconds, allow playback and comparison with current state in `dependencies/BTQ_Render_Engine/src/components/orderbook_history.cpp`
+- [x] Add historical order book snapshots: capture order book state every N seconds, allow playback and comparison with current state in `dependencies/BTQ_Render_Engine/src/components/orderbook_history.cpp`
 - [ ] Implement order book delta column showing net change in volume at each level over last N seconds in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp`
 
 ## Phase 7: Time & Sales Panel - Complete Implementation

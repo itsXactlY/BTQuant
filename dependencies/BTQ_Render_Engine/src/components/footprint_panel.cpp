@@ -19,21 +19,27 @@ namespace BTQuant {
 std::string FootprintPanel::formatNumber(double value, NumberFormat format, int decimal_places) {
   std::ostringstream oss;
 
+  // Limit decimal places to reasonable range to prevent overflow issues
+  decimal_places = std::max(0, std::min(10, decimal_places));
+
   switch (format) {
     case NumberFormat::Raw:
       oss << std::fixed << std::setprecision(decimal_places) << value;
       break;
 
     case NumberFormat::ThousandsK:
-      if (std::abs(value) >= 1000000000.0) {
+      if (std::abs(value) >= 1e12) {
+        // Trillions
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
+      } else if (std::abs(value) >= 1e9) {
         // Billions
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000000.0) << "B";
-      } else if (std::abs(value) >= 1000000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e9) << "B";
+      } else if (std::abs(value) >= 1e6) {
         // Millions
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
-      } else if (std::abs(value) >= 1000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e6) << "M";
+      } else if (std::abs(value) >= 1e3) {
         // Thousands
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e3) << "K";
       } else {
         // Raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
@@ -41,12 +47,15 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::MillionsM:
-      if (std::abs(value) >= 1000000000.0) {
+      if (std::abs(value) >= 1e12) {
+        // Trillions - show as trillions
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
+      } else if (std::abs(value) >= 1e9) {
         // Billions - show as billions
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000000.0) << "B";
-      } else if (std::abs(value) >= 1000000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e9) << "B";
+      } else if (std::abs(value) >= 1e6) {
         // Millions - show as millions
-        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e6) << "M";
       } else {
         // Values less than 1 million - show as raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
@@ -414,9 +423,9 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
 }
 
 std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
-  // Calculate delta percent based on the actual values
+  // Calculate delta percent based on the actual buy and sell volumes
   double total_vol = cell.bid_volume + cell.ask_volume;
-  double delta_percent = total_vol > 0.0 ? (cell.delta / total_vol) * 100.0 : 0.0;
+  double delta_percent = total_vol > 0.0 ? ((cell.bid_volume - cell.ask_volume) / total_vol) * 100.0 : 0.0;
 
   // Convert nanosecond timestamps to readable format (seconds with decimals)
   double start_time_sec = static_cast<double>(cell.start_time_ns) / 1'000'000'000.0;
@@ -434,7 +443,7 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
     "Timestamp Range: {:.3f}-{:.3f}",
     cell.bid_volume,           // exact buy volume
     cell.ask_volume,           // exact sell volume
-    cell.delta,                // delta
+    cell.bid_volume - cell.ask_volume,  // delta (actual buy - sell)
     delta_percent,             // delta percent
     cell.buy_trade_count,      // number of buy trades
     cell.sell_trade_count,     // number of sell trades
@@ -593,6 +602,43 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
     }
   }
 
+}
+
+void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list, double max_volume) {
+  // Calculate cell corners in plot coordinates
+  double x1 = cell.x - cell.width * 0.48;
+  double x2 = cell.x + cell.width * 0.48;
+  double y1 = cell.y - cell.height * 0.48;
+  double y2 = cell.y + cell.height * 0.48;
+
+  // Convert to pixel coordinates
+  ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
+  ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
+
+  // Draw greyed-out cell for values below threshold
+  // Use a light grey color with low alpha to indicate filtered cells
+  ImU32 greyed_out_color = IM_COL32(128, 128, 128, 64); // Grey with transparency
+
+  // Draw filled cell with greyed-out appearance
+  draw_list->AddRectFilled(p1, p2, greyed_out_color);
+
+  // Draw subtle border for cell separation (normal case)
+  ImU32 border_color = IM_COL32(128, 128, 128, 40); // Grey, low alpha
+  draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.0f);
+
+  // Draw volume label if enabled and cell is large enough
+  if (show_volume_labels_ && (std::abs(p2.y - p1.y) > 18)) {
+    std::string label = getCellLabel(cell);
+    ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+
+    // Center text in cell
+    ImVec2 text_pos(
+        (p1.x + p2.x - text_size.x) * 0.5f,
+        (p1.y + p2.y - text_size.y) * 0.5f);
+
+    // Use a lighter grey text for filtered cells
+    draw_list->AddText(text_pos, IM_COL32(200, 200, 200, 128), label.c_str()); // Light grey text with transparency
+  }
 }
 
 bool FootprintPanel::isDiagonalImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const {
@@ -876,6 +922,11 @@ void FootprintPanel::render() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
   ImGui::SliderFloat("Delta Thresh", &delta_threshold_, 0.0f, 1.0f, "%.2f");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(120);
+  double min_thresh = 0.0;
+  double max_thresh = 100000.0;
+  ImGui::SliderScalar("Vol Thresh", ImGuiDataType_Double, &volume_threshold_, &min_thresh, &max_thresh, "%.0f");
 
   // Number formatting options
   ImGui::Separator();
@@ -1224,6 +1275,43 @@ void FootprintPanel::render() {
                     if (analysis_value > max_volume) {
                         max_volume = analysis_value;
                     }
+
+                    // Add this ClusterCell to all_cells for tooltip and imbalance detection
+                    FootprintCell converted_cell(
+                        time_bucket,           // x (time)
+                        price_level,           // y (price)
+                        (x_max - x_min) / static_cast<double>(time_buckets.size()),  // width (time duration)
+                        (y_max - y_min) / static_cast<double>(cluster_cells.size()), // height (price range)
+                        cell.buy_volume,       // bid_volume
+                        cell.sell_volume,      // ask_volume
+                        cell.trade_count.load(), // trade_count
+                        0.0                    // vwap placeholder
+                    );
+
+                    // Populate the extended fields from the ClusterCell
+                    converted_cell.buy_trade_count = cell.buy_trade_count.load();
+                    converted_cell.sell_trade_count = cell.sell_trade_count.load();
+                    converted_cell.max_single_trade_volume = cell.max_single_trade_volume.load();
+
+                    // Set delta based on active VolumeAnalysisType
+                    switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+                        case BTQuant::Data::VolumeAnalysisType::Delta:
+                        case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                            converted_cell.delta = cell.buy_volume - cell.sell_volume;
+                            break;
+                        case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                            {
+                                double total_vol = cell.total_volume;
+                                converted_cell.delta = total_vol > 0.0 ?
+                                    ((cell.buy_volume - cell.sell_volume) / total_vol) * 100.0 : 0.0;
+                            }
+                            break;
+                        default:
+                            converted_cell.delta = cell.buy_volume - cell.sell_volume;
+                            break;
+                    }
+
+                    all_cells.push_back(converted_cell);
                 }
             }
         }
@@ -1690,11 +1778,77 @@ void FootprintPanel::render() {
         poc_info[time_key] = std::make_pair(poc_price, max_analysis_value_in_time_bar); // Use analysis value for POC
     }
 
-    // ENHANCED: Render all cells with imbalance highlighting
+    // ENHANCED: Render all cells with volume threshold filtering
     // Apply the calculated max volume for adaptive alpha and highlight imbalances
     for (const auto &cell : all_cells) {
-      // Render the cell with the calculated max volume for adaptive alpha
-      renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances);
+      // Calculate the volume value based on the active VolumeAnalysisType for threshold comparison
+      double cell_volume = 0.0;
+
+      switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+        case BTQuant::Data::VolumeAnalysisType::Trades:
+          cell_volume = static_cast<double>(cell.trade_count);
+          break;
+        case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+          cell_volume = cell.bid_volume; // Already contains buy trades estimate
+          break;
+        case BTQuant::Data::VolumeAnalysisType::SellTrades:
+          cell_volume = cell.ask_volume; // Already contains sell trades estimate
+          break;
+        case BTQuant::Data::VolumeAnalysisType::Volume:
+          cell_volume = cell.bid_volume + cell.ask_volume;
+          break;
+        case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+          cell_volume = cell.bid_volume;
+          break;
+        case BTQuant::Data::VolumeAnalysisType::SellVolume:
+          cell_volume = cell.ask_volume;
+          break;
+        case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+          cell_volume = std::abs(cell.bid_volume - cell.ask_volume);
+          break;
+        case BTQuant::Data::VolumeAnalysisType::Delta:
+          cell_volume = std::abs(cell.delta);
+          break;
+        case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+          cell_volume = std::abs(cell.delta); // Delta already contains percentage
+          break;
+        case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+          cell_volume = std::abs(cell.delta);
+          break;
+        case BTQuant::Data::VolumeAnalysisType::AverageSize:
+          cell_volume = std::abs(cell.delta); // Delta contains average size
+          break;
+        case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+          cell_volume = std::abs(cell.delta); // Delta contains average buy size
+          break;
+        case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+          cell_volume = std::abs(cell.delta); // Delta contains average sell size
+          break;
+        case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+          cell_volume = cell.max_single_trade_volume;
+          break;
+        case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+          cell_volume = std::abs(cell.delta); // Delta contains percentage
+          break;
+        case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+          cell_volume = std::abs(cell.delta); // Delta contains percentage
+          break;
+        case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+          cell_volume = cell.bid_volume + cell.ask_volume;
+          break;
+        default:
+          cell_volume = cell.bid_volume + cell.ask_volume; // Default to total volume
+          break;
+      }
+
+      // Only render cells that meet the volume threshold, or render greyed-out for filtered cells
+      if (cell_volume >= volume_threshold_) {
+        // Render the cell normally with the calculated max volume for adaptive alpha
+        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances);
+      } else {
+        // Render greyed-out cell for values below threshold
+        renderFilteredCell(cell, draw_list, max_volume);
+      }
     }
 
     // Handle tooltip for the cell under the mouse cursor
@@ -1710,8 +1864,74 @@ void FootprintPanel::render() {
 
         if (mouse_pos_plot.x >= x1 && mouse_pos_plot.x <= x2 &&
             mouse_pos_plot.y >= y1 && mouse_pos_plot.y <= y2) {
-          // Show tooltip for this cell
-          ImGui::SetTooltip("%s", getCellTooltip(cell).c_str());
+          // Calculate the volume value based on the active VolumeAnalysisType for threshold comparison
+          double cell_volume = 0.0;
+
+          switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+            case BTQuant::Data::VolumeAnalysisType::Trades:
+              cell_volume = static_cast<double>(cell.trade_count);
+              break;
+            case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+              cell_volume = cell.bid_volume; // Already contains buy trades estimate
+              break;
+            case BTQuant::Data::VolumeAnalysisType::SellTrades:
+              cell_volume = cell.ask_volume; // Already contains sell trades estimate
+              break;
+            case BTQuant::Data::VolumeAnalysisType::Volume:
+              cell_volume = cell.bid_volume + cell.ask_volume;
+              break;
+            case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+              cell_volume = cell.bid_volume;
+              break;
+            case BTQuant::Data::VolumeAnalysisType::SellVolume:
+              cell_volume = cell.ask_volume;
+              break;
+            case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+              cell_volume = std::abs(cell.bid_volume - cell.ask_volume);
+              break;
+            case BTQuant::Data::VolumeAnalysisType::Delta:
+              cell_volume = std::abs(cell.delta);
+              break;
+            case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+              cell_volume = std::abs(cell.delta); // Delta already contains percentage
+              break;
+            case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+              cell_volume = std::abs(cell.delta);
+              break;
+            case BTQuant::Data::VolumeAnalysisType::AverageSize:
+              cell_volume = std::abs(cell.delta); // Delta contains average size
+              break;
+            case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+              cell_volume = std::abs(cell.delta); // Delta contains average buy size
+              break;
+            case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+              cell_volume = std::abs(cell.delta); // Delta contains average sell size
+              break;
+            case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+              cell_volume = cell.max_single_trade_volume;
+              break;
+            case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+              cell_volume = std::abs(cell.delta); // Delta contains percentage
+              break;
+            case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+              cell_volume = std::abs(cell.delta); // Delta contains percentage
+              break;
+            case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+              cell_volume = cell.bid_volume + cell.ask_volume;
+              break;
+            default:
+              cell_volume = cell.bid_volume + cell.ask_volume; // Default to total volume
+              break;
+          }
+
+          // Show tooltip for this cell regardless of whether it meets the threshold
+          // Add info about whether the cell is filtered
+          std::string tooltip = getCellTooltip(cell);
+          if (cell_volume < volume_threshold_) {
+            tooltip += "\n[Filtered: Below volume threshold]";
+          }
+
+          ImGui::SetTooltip("%s", tooltip.c_str());
           break; // Only show tooltip for the first cell found under cursor
         }
       }
@@ -1865,27 +2085,27 @@ void FootprintPanel::render() {
     ImGui::SetCursorPos(ImVec2(10, 30));
     if (time_aggregation_type_ == Data::TimeAggregationType::VOLUME_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          volume_based_n_contracts_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
     } else if (time_aggregation_type_ == Data::TimeAggregationType::TICK_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          tick_based_n_ticks_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
     } else {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
     }
 
     // Calculate statistics based on selected volume data type

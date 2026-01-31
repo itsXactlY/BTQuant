@@ -101,6 +101,10 @@ public:
   void setCustomPriceAggregationValue(double value) { custom_price_aggregation_value_ = value; }
   double getCustomPriceAggregationValue() const { return custom_price_aggregation_value_; }
 
+  // Volume threshold for filtering
+  void setVolumeThreshold(double threshold) { volume_threshold_ = threshold; }
+  double getVolumeThreshold() const { return volume_threshold_; }
+
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t symbol_id_ = 0;
@@ -137,6 +141,11 @@ private:
   // Custom price aggregation value
   double custom_price_aggregation_value_ = 0.1;
 
+  // Volume threshold for filtering cells
+  double volume_threshold_ = 0.0; // Default: no filtering
+  static constexpr double min_volume_threshold_ = 0.0;
+  static constexpr double max_volume_threshold_ = 100000.0;
+
   // Data dirty flag for immediate rendering updates
   std::atomic<bool> data_dirty_{true};
 
@@ -153,6 +162,7 @@ private:
   void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume,
                  const std::vector<FootprintCell> &diagonal_imbalances,
                  const std::vector<FootprintCell> &stacked_imbalances);
+  void renderFilteredCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0);
   std::string getCellTooltip(const FootprintCell &cell) const;
 
   // Imbalance Detection

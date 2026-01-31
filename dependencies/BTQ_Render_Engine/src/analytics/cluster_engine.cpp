@@ -48,7 +48,7 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
     // Get reference to the cluster cell for this price level and time bucket
     auto& cell = cluster_canvas_[relative_index][adjusted_time_bucket];
 
-    // Thread-safely update the counters
+    // Thread-safely update the volume counters using mutex
     {
         std::lock_guard<std::mutex> lock(cell.volume_mutex);
         cell.total_volume += trade.quantity;
@@ -61,6 +61,7 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
         }
     }
 
+    // Atomically update trade count counters
     if (trade.is_buyer_maker) {
         cell.sell_trade_count.fetch_add(1, std::memory_order_relaxed);
     } else {
@@ -69,11 +70,11 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
 
     cell.trade_count.fetch_add(1, std::memory_order_relaxed);
 
-    // Update max single trade volume atomically
-    double current_max = cell.max_single_trade_volume.load(std::memory_order_relaxed);
+    // Atomically update max single trade volume using compare-and-swap
+    double current_max = cell.max_single_trade_volume.load(std::memory_order_acquire);
     double new_value = trade.quantity;
     while (new_value > current_max) {
-        if (cell.max_single_trade_volume.compare_exchange_weak(current_max, new_value, std::memory_order_relaxed)) {
+        if (cell.max_single_trade_volume.compare_exchange_weak(current_max, new_value, std::memory_order_release, std::memory_order_acquire)) {
             break;
         }
     }

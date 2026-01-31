@@ -73,34 +73,66 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
   double total_vol = cell.bid_volume + cell.ask_volume;
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
-    case Data::VolumeAnalysisType::Trades:
-      value_to_display = static_cast<double>(cell.trade_count);
-      break;
+    case Data::VolumeAnalysisType::Delta:
+    case Data::VolumeAnalysisType::DeltaPercent:
+    case Data::VolumeAnalysisType::CumulativeDelta:
+      // Green-red gradient for delta
+      {
+        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+        double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
+        normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
 
-    case Data::VolumeAnalysisType::Volume:
-      value_to_display = total_vol;
+        // Calculate adaptive alpha based on total volume relative to max possible volume
+        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
+
+        if (normalized_delta > delta_threshold_) {
+          // Positive delta - Green gradient
+          float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(0),
+              static_cast<int>(50 + 205 * green_intensity),
+              static_cast<int>(0),
+              static_cast<int>(alpha * 255));
+        } else if (normalized_delta < -delta_threshold_) {
+          // Negative delta - Red gradient
+          float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
+          return IM_COL32(
+              static_cast<int>(50 + 205 * red_intensity),
+              static_cast<int>(0),
+              static_cast<int>(0),
+              static_cast<int>(alpha * 255));
+        } else {
+          // Neutral - Gray
+          return IM_COL32(
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(80),
+              static_cast<int>(alpha * 255));
+        }
+      }
       break;
 
     case Data::VolumeAnalysisType::BuyVolume:
-      value_to_display = cell.bid_volume;
-      break;
-
     case Data::VolumeAnalysisType::SellVolume:
-      value_to_display = cell.ask_volume;
-      break;
-
     case Data::VolumeAnalysisType::BuySellVolume:
-      value_to_display = cell.bid_volume - cell.ask_volume;
-      // For BuySellVolume, normalize based on max of bid/ask volume
+      // Blue-red gradient for buy/sell volume
       {
         double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        double normalized_value = max_vol > 0.0 ? value_to_display / max_vol : 0.0;
+        double normalized_value = 0.0;
+
+        if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolume) {
+          normalized_value = max_vol > 0.0 ? cell.bid_volume / max_vol : 0.0;
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolume) {
+          normalized_value = max_vol > 0.0 ? cell.ask_volume / max_vol : 0.0;
+        } else { // BuySellVolume
+          normalized_value = max_vol > 0.0 ? (cell.bid_volume - cell.ask_volume) / max_vol : 0.0;
+        }
+
         normalized_value = std::clamp(normalized_value, -1.0, 1.0);
 
         // Calculate adaptive alpha based on total volume relative to max possible volume
         float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
 
-        // Return color based on sign of value using blue-red gradient
         if (normalized_value > delta_threshold_) {
           // Positive - Blue gradient
           float blue_intensity = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
@@ -128,254 +160,112 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
       }
       break;
 
-    case Data::VolumeAnalysisType::Delta:
-    default: // Default to Delta
-      value_to_display = cell.delta;
-      // Calculate normalized delta for color coding
-      {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
-        normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
-
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
-        // Green-red gradient for delta
-        if (normalized_delta > delta_threshold_) {
-          // Positive delta - Green gradient
-          float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(0),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(alpha * 255));
-        } else if (normalized_delta < -delta_threshold_) {
-          // Negative delta - Red gradient
-          float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(50 + 205 * red_intensity),
-              static_cast<int>(0),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else {
-          // Neutral - Gray
-          return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(alpha * 255));
-        }
-      }
-      break;
-
-    case Data::VolumeAnalysisType::DeltaPercent:
-      {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        value_to_display = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
-        double normalized_delta = std::clamp(value_to_display / 100.0, -1.0, 1.0);
-
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
-        if (normalized_delta > delta_threshold_) {
-          // Positive delta - Green gradient
-          float green_intensity = std::clamp(static_cast<float>(normalized_delta/100.0), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(0),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(alpha * 255));
-        } else if (normalized_delta < -delta_threshold_) {
-          // Negative delta - Red gradient
-          float red_intensity = std::clamp(static_cast<float>(-normalized_delta/100.0), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(50 + 205 * red_intensity),
-              static_cast<int>(0),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else {
-          // Neutral - Gray
-          return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(alpha * 255));
-        }
-      }
-      break;
-
-    case Data::VolumeAnalysisType::BuyTrades:
-      value_to_display = static_cast<double>(cell.trade_count) * 0.6; // Placeholder
-      break;
-
-    case Data::VolumeAnalysisType::SellTrades:
-      value_to_display = static_cast<double>(cell.trade_count) * 0.4; // Placeholder
-      break;
-
+    case Data::VolumeAnalysisType::Volume:
     case Data::VolumeAnalysisType::BuyVolumePercent:
-      {
-        double total_vol_local = cell.bid_volume + cell.ask_volume;
-        value_to_display = total_vol_local > 0.0 ? (cell.bid_volume / total_vol_local) * 100.0 : 0.0;
-        double normalized_val = std::clamp(value_to_display / 100.0, -1.0, 1.0);
-
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
-        if (normalized_val > delta_threshold_) {
-          // Positive - Yellow gradient for volume intensity
-          float yellow_intensity = std::clamp(static_cast<float>(normalized_val), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(255 * yellow_intensity),
-              static_cast<int>(255 * yellow_intensity),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else if (normalized_val < -delta_threshold_) {
-          // Negative - Orange gradient for volume intensity
-          float orange_intensity = std::clamp(static_cast<float>(-normalized_val), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(255 * orange_intensity),
-              static_cast<int>(165 * orange_intensity),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else {
-          // Neutral - Gray
-          return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(alpha * 255));
-        }
-      }
-      break;
-
     case Data::VolumeAnalysisType::SellVolumePercent:
+    case Data::VolumeAnalysisType::Trades:
+    case Data::VolumeAnalysisType::BuyTrades:
+    case Data::VolumeAnalysisType::SellTrades:
+    case Data::VolumeAnalysisType::FilteredVolume:
+      // Yellow-orange gradient for volume intensity
       {
-        double total_vol_local = cell.bid_volume + cell.ask_volume;
-        value_to_display = total_vol_local > 0.0 ? (cell.ask_volume / total_vol_local) * 100.0 : 0.0;
-        double normalized_val = std::clamp(value_to_display / 100.0, -1.0, 1.0);
+        double normalized_value = 0.0;
+        double max_possible_value = 0.0;
+
+        if (volume_data_type_ == Data::VolumeAnalysisType::Volume) {
+          normalized_value = total_vol;
+          max_possible_value = max_volume;
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyVolumePercent) {
+          double total_vol_local = cell.bid_volume + cell.ask_volume;
+          normalized_value = total_vol_local > 0.0 ? (cell.bid_volume / total_vol_local) * 100.0 : 0.0;
+          max_possible_value = 100.0;
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::SellVolumePercent) {
+          double total_vol_local = cell.bid_volume + cell.ask_volume;
+          normalized_value = total_vol_local > 0.0 ? (cell.ask_volume / total_vol_local) * 100.0 : 0.0;
+          max_possible_value = 100.0;
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::Trades) {
+          normalized_value = static_cast<double>(cell.trade_count);
+          // Estimate max possible trades based on max volume
+          max_possible_value = 1000.0; // Placeholder - in a real scenario, this would come from stats
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::BuyTrades) {
+          normalized_value = static_cast<double>(cell.trade_count) * 0.6; // Placeholder
+          max_possible_value = 600.0; // Placeholder
+        } else if (volume_data_type_ == Data::VolumeAnalysisType::SellTrades) {
+          normalized_value = static_cast<double>(cell.trade_count) * 0.4; // Placeholder
+          max_possible_value = 400.0; // Placeholder
+        } else { // FilteredVolume
+          normalized_value = total_vol;
+          max_possible_value = max_volume;
+        }
+
+        float intensity = max_possible_value > 0.0 ?
+            std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f) : 0.0f;
 
         // Calculate adaptive alpha based on total volume relative to max possible volume
         float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
 
-        if (normalized_val > delta_threshold_) {
-          // Positive - Yellow gradient for volume intensity
-          float yellow_intensity = std::clamp(static_cast<float>(normalized_val), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(255 * yellow_intensity),
-              static_cast<int>(255 * yellow_intensity),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else if (normalized_val < -delta_threshold_) {
-          // Negative - Orange gradient for volume intensity
-          float orange_intensity = std::clamp(static_cast<float>(-normalized_val), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(255 * orange_intensity),
-              static_cast<int>(165 * orange_intensity),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else {
-          // Neutral - Gray
-          return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(alpha * 255));
-        }
-      }
-      break;
-
-    case Data::VolumeAnalysisType::CumulativeDelta:
-      value_to_display = cell.delta; // Using same as delta for demo
-      // Calculate normalized delta for color coding
-      {
-        double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-        double normalized_delta = max_vol > 0.0 ? cell.delta / max_vol : 0.0;
-        normalized_delta = std::clamp(normalized_delta, -1.0, 1.0);
-
-        // Calculate adaptive alpha based on total volume relative to max possible volume
-        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
-        // Green-red gradient for cumulative delta
-        if (normalized_delta > delta_threshold_) {
-          // Positive delta - Green gradient
-          float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(0),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(50 + 205 * green_intensity),
-              static_cast<int>(alpha * 255));
-        } else if (normalized_delta < -delta_threshold_) {
-          // Negative delta - Red gradient
-          float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
-          return IM_COL32(
-              static_cast<int>(50 + 205 * red_intensity),
-              static_cast<int>(0),
-              static_cast<int>(0),
-              static_cast<int>(alpha * 255));
-        } else {
-          // Neutral - Gray
-          return IM_COL32(
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(80),
-              static_cast<int>(alpha * 255));
-        }
+        // Yellow-orange gradient for volume intensity
+        return IM_COL32(
+            static_cast<int>(255 * intensity),
+            static_cast<int>(165 * intensity),
+            static_cast<int>(0),
+            static_cast<int>(alpha * 255));
       }
       break;
 
     case Data::VolumeAnalysisType::AverageSize:
-      {
-        int total_count = cell.trade_count;
-        value_to_display = total_count > 0 ? (cell.bid_volume + cell.ask_volume) / static_cast<double>(total_count) : 0.0;
-      }
-      break;
-
     case Data::VolumeAnalysisType::AverageBuySize:
-      {
-        int buy_count = static_cast<int>(cell.trade_count * 0.6); // Placeholder
-        value_to_display = buy_count > 0 ? cell.bid_volume / static_cast<double>(buy_count) : 0.0;
-      }
-      break;
-
     case Data::VolumeAnalysisType::AverageSellSize:
+    case Data::VolumeAnalysisType::MaxOneTradeVolume:
+    default:
+      // For other metrics, use blue gradient
       {
-        int sell_count = static_cast<int>(cell.trade_count * 0.4); // Placeholder
-        value_to_display = sell_count > 0 ? cell.ask_volume / static_cast<double>(sell_count) : 0.0;
+        // Calculate adaptive alpha based on total volume relative to max possible volume
+        float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
+
+        // Calculate normalized value for the specific metric
+        double normalized_value = 0.0;
+        double max_possible_value = 10000.0; // Default placeholder
+
+        switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+          case Data::VolumeAnalysisType::AverageSize:
+            {
+              int total_count = cell.trade_count;
+              normalized_value = total_count > 0 ? (cell.bid_volume + cell.ask_volume) / static_cast<double>(total_count) : 0.0;
+            }
+            break;
+
+          case Data::VolumeAnalysisType::AverageBuySize:
+            {
+              int buy_count = static_cast<int>(cell.trade_count * 0.6); // Placeholder
+              normalized_value = buy_count > 0 ? cell.bid_volume / static_cast<double>(buy_count) : 0.0;
+            }
+            break;
+
+          case Data::VolumeAnalysisType::AverageSellSize:
+            {
+              int sell_count = static_cast<int>(cell.trade_count * 0.4); // Placeholder
+              normalized_value = sell_count > 0 ? cell.ask_volume / static_cast<double>(sell_count) : 0.0;
+            }
+            break;
+
+          case Data::VolumeAnalysisType::MaxOneTradeVolume:
+            normalized_value = (cell.bid_volume + cell.ask_volume) * 0.1; // Placeholder
+            break;
+
+          default:
+            normalized_value = cell.bid_volume + cell.ask_volume;
+            break;
+        }
+
+        float blue_intensity = std::clamp(static_cast<float>(normalized_value / max_possible_value), 0.0f, 1.0f);
+        return IM_COL32(
+            static_cast<int>(0),
+            static_cast<int>(0),
+            static_cast<int>(50 + 205 * blue_intensity),
+            static_cast<int>(alpha * 255));
       }
       break;
-
-    case Data::VolumeAnalysisType::MaxOneTradeVolume:
-      value_to_display = (cell.bid_volume + cell.ask_volume) * 0.1; // Placeholder
-      break;
-
-    case Data::VolumeAnalysisType::FilteredVolume:
-      value_to_display = cell.bid_volume + cell.ask_volume; // Using same as total volume for demo
-      break;
-  }
-
-  // Calculate adaptive alpha based on total volume relative to max possible volume
-  float alpha = max_volume > 0.0 ? std::clamp(static_cast<float>(total_vol / max_volume), 0.1f, 1.0f) : 0.5f;
-
-  // For scalar values (Trades, Volume, BuyVolume, SellVolume), use yellow-orange gradient for volume intensity
-  if (volume_data_type_ == Data::VolumeAnalysisType::Volume ||
-      volume_data_type_ == Data::VolumeAnalysisType::BuyVolume ||
-      volume_data_type_ == Data::VolumeAnalysisType::SellVolume ||
-      volume_data_type_ == Data::VolumeAnalysisType::FilteredVolume) {
-    // Yellow-orange gradient for volume intensity
-    float volume_intensity = std::clamp(static_cast<float>(value_to_display / 10000.0f), 0.0f, 1.0f);
-    return IM_COL32(
-        static_cast<int>(255 * volume_intensity),
-        static_cast<int>(165 * volume_intensity),
-        static_cast<int>(0),
-        static_cast<int>(alpha * 255));
-  } else {
-    // Blue gradient for trades and other metrics
-    float blue_intensity = std::clamp(static_cast<float>(value_to_display / 10000.0f), 0.0f, 1.0f);
-    return IM_COL32(
-        static_cast<int>(0),
-        static_cast<int>(0),
-        static_cast<int>(50 + 205 * blue_intensity),
-        static_cast<int>(alpha * 255));
   }
 }
 
@@ -983,11 +873,18 @@ void FootprintPanel::render() {
 
     // Calculate max volume across all visible cells for adaptive alpha calculation
     double max_volume = 0.0;
+
+    // Iterate through visible time bars and price levels to find max volume
     for (const auto &cluster : clusters) {
-      double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-      if (total_vol > max_volume) {
-        max_volume = total_vol;
-      }
+        // Check if cluster is within visible bounds
+        if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
+            cluster.centerY >= y_min && cluster.centerY <= y_max) {
+
+            double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+            if (total_vol > max_volume) {
+                max_volume = total_vol;
+            }
+        }
     }
 
     // Prevent division by zero
@@ -995,136 +892,140 @@ void FootprintPanel::render() {
         max_volume = 1.0; // Default to 1 to prevent division by zero
     }
 
-    // Collect all cells for imbalance detection
+    // Collect all visible cells for imbalance detection
     std::vector<FootprintCell> all_cells;
 
-    // Iterate through existing clusters and render them
-    // In a real implementation, we would iterate through visible time bars and price levels
-    // and retrieve ClusterCell data from the cluster engine
+    // Iterate through visible time bars and price levels
+    // Retrieve ClusterCell data and switch on active VolumeAnalysisType to determine displayed value
     for (const auto &cluster : clusters) {
-      // Convert cluster to footprint cell
-      FootprintCell cell(
-          cluster.centerX,           // x (time)
-          cluster.centerY,           // y (price)
-          cluster.width,            // width (time duration)
-          cluster.height,           // height (price range)
-          static_cast<double>(cluster.bidVolume),        // bid_volume
-          static_cast<double>(cluster.askVolume),        // ask_volume
-          cluster.tradeCount,       // trade_count
-          cluster.vwap             // vwap
-      );
+        // Check if cluster is within visible bounds
+        if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
+            cluster.centerY >= y_min && cluster.centerY <= y_max) {
 
-      // Apply volume analysis based on active VolumeAnalysisType
-      // This is where we switch on the active VolumeAnalysisType to determine displayed value
-      double value_for_display = 0.0;
+            // Convert cluster to footprint cell
+            FootprintCell cell(
+                cluster.centerX,           // x (time)
+                cluster.centerY,           // y (price)
+                cluster.width,            // width (time duration)
+                cluster.height,           // height (price range)
+                static_cast<double>(cluster.bidVolume),        // bid_volume
+                static_cast<double>(cluster.askVolume),        // ask_volume
+                cluster.tradeCount,       // trade_count
+                cluster.vwap             // vwap
+            );
 
-      switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
-          case BTQuant::Data::VolumeAnalysisType::Trades:
-              value_for_display = static_cast<double>(cluster.tradeCount);
-              break;
+            // Apply volume analysis based on active VolumeAnalysisType
+            // Switch on active VolumeAnalysisType to determine displayed value
+            double value_for_display = 0.0;
 
-          case BTQuant::Data::VolumeAnalysisType::BuyTrades:
-              // For this case, we'd need buy trade count from the cluster engine
-              value_for_display = static_cast<double>(cluster.tradeCount) * 0.6; // Placeholder
-              break;
+            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
+                case BTQuant::Data::VolumeAnalysisType::Trades:
+                    value_for_display = static_cast<double>(cluster.tradeCount);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::SellTrades:
-              // For this case, we'd need sell trade count from the cluster engine
-              value_for_display = static_cast<double>(cluster.tradeCount) * 0.4; // Placeholder
-              break;
+                case BTQuant::Data::VolumeAnalysisType::BuyTrades:
+                    // For this case, we'd need buy trade count from the cluster engine
+                    value_for_display = static_cast<double>(cluster.tradeCount) * 0.6; // Placeholder
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::Volume:
-              value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::SellTrades:
+                    // For this case, we'd need sell trade count from the cluster engine
+                    value_for_display = static_cast<double>(cluster.tradeCount) * 0.4; // Placeholder
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::BuyVolume:
-              value_for_display = static_cast<double>(cluster.bidVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::Volume:
+                    value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::SellVolume:
-              value_for_display = static_cast<double>(cluster.askVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::BuyVolume:
+                    value_for_display = static_cast<double>(cluster.bidVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
-              value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::SellVolume:
+                    value_for_display = static_cast<double>(cluster.askVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::Delta:
-              value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
+                    value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
-              {
-                  double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-                  value_for_display = total_vol > 0.0 ?
-                      (static_cast<double>(cluster.bidVolume - cluster.askVolume) / total_vol) * 100.0 : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::Delta:
+                    value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
-              // For demo purposes, use the same calculation as Delta
-              value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
-              break;
+                case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        value_for_display = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.bidVolume - cluster.askVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::AverageSize:
-              {
-                  int total_count = cluster.tradeCount;
-                  double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-                  value_for_display = total_count > 0 ? total_vol / static_cast<double>(total_count) : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
+                    // For demo purposes, use the same calculation as Delta
+                    value_for_display = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
-              {
-                  int buy_count = static_cast<int>(cluster.tradeCount * 0.6); // Placeholder
-                  value_for_display = buy_count > 0 ?
-                      static_cast<double>(cluster.bidVolume) / static_cast<double>(buy_count) : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::AverageSize:
+                    {
+                        int total_count = cluster.tradeCount;
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        value_for_display = total_count > 0 ? total_vol / static_cast<double>(total_count) : 0.0;
+                    }
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
-              {
-                  int sell_count = static_cast<int>(cluster.tradeCount * 0.4); // Placeholder
-                  value_for_display = sell_count > 0 ?
-                      static_cast<double>(cluster.askVolume) / static_cast<double>(sell_count) : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
+                    {
+                        int buy_count = static_cast<int>(cluster.tradeCount * 0.6); // Placeholder
+                        value_for_display = buy_count > 0 ?
+                            static_cast<double>(cluster.bidVolume) / static_cast<double>(buy_count) : 0.0;
+                    }
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
-              // For demo purposes, use a fraction of total volume
-              value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume) * 0.1; // Placeholder
-              break;
+                case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
+                    {
+                        int sell_count = static_cast<int>(cluster.tradeCount * 0.4); // Placeholder
+                        value_for_display = sell_count > 0 ?
+                            static_cast<double>(cluster.askVolume) / static_cast<double>(sell_count) : 0.0;
+                    }
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
-              {
-                  double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-                  value_for_display = total_vol > 0.0 ?
-                      (static_cast<double>(cluster.bidVolume) / total_vol) * 100.0 : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
+                    // For demo purposes, use a fraction of total volume
+                    value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume) * 0.1; // Placeholder
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
-              {
-                  double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-                  value_for_display = total_vol > 0.0 ?
-                      (static_cast<double>(cluster.askVolume) / total_vol) * 100.0 : 0.0;
-              }
-              break;
+                case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        value_for_display = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.bidVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
 
-          case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
-              // For demo purposes, use total volume
-              value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-              break;
-      }
+                case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
+                    {
+                        double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                        value_for_display = total_vol > 0.0 ?
+                            (static_cast<double>(cluster.askVolume) / total_vol) * 100.0 : 0.0;
+                    }
+                    break;
 
-      // Update the cell's values based on the selected analysis type for visualization
-      cell.bid_volume = static_cast<double>(cluster.bidVolume);
-      cell.ask_volume = static_cast<double>(cluster.askVolume);
-      cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
-      cell.trade_count = cluster.tradeCount;
+                case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
+                    // For demo purposes, use total volume
+                    value_for_display = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+                    break;
+            }
 
-      // Add to all cells for imbalance detection
-      all_cells.push_back(cell);
+            // Update the cell's values based on the selected analysis type for visualization
+            cell.bid_volume = static_cast<double>(cluster.bidVolume);
+            cell.ask_volume = static_cast<double>(cluster.askVolume);
+            cell.delta = static_cast<double>(cluster.bidVolume - cluster.askVolume);
+            cell.trade_count = cluster.tradeCount;
+
+            // Add to all cells for imbalance detection
+            all_cells.push_back(cell);
+        }
     }
 
     // Detect imbalances
@@ -1132,12 +1033,16 @@ void FootprintPanel::render() {
     std::vector<FootprintCell> stacked_imbalances;
     detectImbalances(all_cells, diagonal_imbalances, stacked_imbalances);
 
-    // Group clusters by time (x-coordinate) to calculate time-bar summaries
+    // Group only visible clusters by time (x-coordinate) to calculate time-bar summaries
     std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;
     for (const auto &cluster : clusters) {
-      // Round x to nearest time unit to group clusters by time bar
-      double time_key = std::round(cluster.centerX * 10.0) / 10.0; // Adjust precision as needed
-      clusters_by_time[time_key].push_back(&cluster);
+        // Check if cluster is within visible bounds before grouping
+        if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
+            cluster.centerY >= y_min && cluster.centerY <= y_max) {
+            // Round x to nearest time unit to group clusters by time bar
+            double time_key = std::round(cluster.centerX * 10.0) / 10.0; // Adjust precision as needed
+            clusters_by_time[time_key].push_back(&cluster);
+        }
     }
 
     // Calculate cumulative delta and other summaries for each time bar
@@ -1199,72 +1104,75 @@ void FootprintPanel::render() {
       }
     }
 
-    // Render header summaries above each time bar
+    // Render header summaries above each visible time bar
     for (const auto& [time_key, time_clusters] : clusters_by_time) {
-        // Get the summary information for this time bar
-        double total_volume = time_bar_total_volumes[time_key];
-        double net_delta = time_bar_net_deltas[time_key];
-        double cumulative_delta = cumulative_deltas[time_key];
-        double poc_price = poc_info[time_key].first;
+        // Only render headers for time bars that are actually visible
+        if (time_key >= x_min && time_key <= x_max) {
+            // Get the summary information for this time bar
+            double total_volume = time_bar_total_volumes[time_key];
+            double net_delta = time_bar_net_deltas[time_key];
+            double cumulative_delta = cumulative_deltas[time_key];
+            double poc_price = poc_info[time_key].first;
 
-        // Convert time to pixel coordinates for header positioning
-        ImVec2 header_pos = ImPlot::PlotToPixels(time_key, y_max + 5.0); // Position header slightly above the highest price
+            // Convert time to pixel coordinates for header positioning
+            ImVec2 header_pos = ImPlot::PlotToPixels(time_key, y_max + 5.0); // Position header slightly above the highest price
 
-        // Format the header text
-        char header_text[256];
-        snprintf(header_text, sizeof(header_text),
-                 "Vol:%.0f D:%+.0f CD:%+.0f POC:%.2f",
-                 total_volume, net_delta, cumulative_delta, poc_price);
+            // Format the header text
+            char header_text[256];
+            snprintf(header_text, sizeof(header_text),
+                     "Vol:%.0f D:%+.0f CD:%+.0f POC:%.2f",
+                     total_volume, net_delta, cumulative_delta, poc_price);
 
-        // Use monospace font for alignment
-        ImFont* mono_font = nullptr;
-        // First, try to find a monospace font by name
-        for (int i = 0; i < ImGui::GetIO().Fonts->Fonts.Size; i++) {
-            const char* font_name = ImGui::GetIO().Fonts->Fonts[i]->GetDebugName();
-            if (font_name && (strstr(font_name, "Mono") != nullptr ||
-                             strstr(font_name, "Consolas") != nullptr ||
-                             strstr(font_name, "Courier") != nullptr)) {
-                mono_font = ImGui::GetIO().Fonts->Fonts[i];
-                break;
+            // Use monospace font for alignment
+            ImFont* mono_font = nullptr;
+            // First, try to find a monospace font by name
+            for (int i = 0; i < ImGui::GetIO().Fonts->Fonts.Size; i++) {
+                const char* font_name = ImGui::GetIO().Fonts->Fonts[i]->GetDebugName();
+                if (font_name && (strstr(font_name, "Mono") != nullptr ||
+                                 strstr(font_name, "Consolas") != nullptr ||
+                                 strstr(font_name, "Courier") != nullptr)) {
+                    mono_font = ImGui::GetIO().Fonts->Fonts[i];
+                    break;
+                }
             }
-        }
 
-        // If no monospace font found, try to use the default font
-        if (mono_font) {
-            ImGui::PushFont(mono_font);
-        }
+            // If no monospace font found, try to use the default font
+            if (mono_font) {
+                ImGui::PushFont(mono_font);
+            }
 
-        // Calculate text size for background rectangle
-        ImVec2 text_size = ImGui::CalcTextSize(header_text);
+            // Calculate text size for background rectangle
+            ImVec2 text_size = ImGui::CalcTextSize(header_text);
 
-        // Draw background rectangle for header
-        draw_list->AddRectFilled(
-            ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
-            ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
-            IM_COL32(30, 30, 40, 220)); // Dark semi-transparent background with border
+            // Draw background rectangle for header
+            draw_list->AddRectFilled(
+                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
+                ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
+                IM_COL32(30, 30, 40, 220)); // Dark semi-transparent background with border
 
-        // Draw border around the header
-        draw_list->AddRect(
-            ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
-            ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
-            IM_COL32(100, 100, 150, 200)); // Border color
+            // Draw border around the header
+            draw_list->AddRect(
+                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
+                ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
+                IM_COL32(100, 100, 150, 200)); // Border color
 
-        // Draw the header text
-        if (mono_font) {
-            // When using PushFont/PopFont, AddText uses the current font automatically
-            draw_list->AddText(
-                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
-                IM_COL32(255, 255, 255, 255), // White text
-                header_text);
-        } else {
-            draw_list->AddText(
-                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
-                IM_COL32(255, 255, 255, 255), // White text
-                header_text);
-        }
+            // Draw the header text
+            if (mono_font) {
+                // When using PushFont/PopFont, AddText uses the current font automatically
+                draw_list->AddText(
+                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
+                    IM_COL32(255, 255, 255, 255), // White text
+                    header_text);
+            } else {
+                draw_list->AddText(
+                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
+                    IM_COL32(255, 255, 255, 255), // White text
+                    header_text);
+            }
 
-        if (mono_font) {
-            ImGui::PopFont();
+            if (mono_font) {
+                ImGui::PopFont();
+            }
         }
     }
 

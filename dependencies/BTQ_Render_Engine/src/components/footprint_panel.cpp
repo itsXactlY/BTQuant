@@ -726,14 +726,14 @@ void FootprintPanel::render() {
     return;
   }
 
-  // Data type selector - 16 types
+  // Data type selector - 16 types (placed in header)
   const char* data_type_names[] = {
     "OHLC", "Order Book", "Trades", "Volume Profile", "Footprint", "TPO", "Metrics", "Alerts",
     "Heikin Ashi", "Renko", "Line Break", "Kagi", "Point & Figure", "Range Bars", "Volume Bars", "Tick Bars"
   };
 
   int current_data_type = static_cast<int>(data_type_);
-  if (ImGui::BeginCombo("Data Type", data_type_names[current_data_type])) {
+  if (ImGui::BeginCombo("Data Type##DataTypeSelector", data_type_names[current_data_type])) {
     for (int i = 0; i < 16; i++) {
       bool is_selected = (current_data_type == i);
       if (ImGui::Selectable(data_type_names[i], is_selected)) {
@@ -759,7 +759,7 @@ void FootprintPanel::render() {
   };
 
   int current_vol_data_type = static_cast<int>(volume_data_type_);
-  if (ImGui::BeginCombo("Footprint Mode", volume_data_type_names[current_vol_data_type])) {
+  if (ImGui::BeginCombo("Footprint Mode##VolumeDataTypeSelector", volume_data_type_names[current_vol_data_type])) {
     for (int i = 0; i < 16; i++) {  // 16 types as requested
       bool is_selected = (current_vol_data_type == i);
       if (ImGui::Selectable(volume_data_type_names[i], is_selected)) {

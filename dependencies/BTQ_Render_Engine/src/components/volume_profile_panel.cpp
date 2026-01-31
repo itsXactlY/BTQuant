@@ -529,13 +529,15 @@ void VolumeProfilePanel::render_volume_bars() {
           }
         }
 
-        // Calculate the maximum volume for scaling (global max volume for proper scaling)
-        double max_vol = max_volume_;
-        if (max_vol <= 0) max_vol = 1.0;  // Fallback to 1.0 if no volume data
+        // Calculate the maximum volume for scaling - use the aggregated max to ensure proper display
+        double max_vol = std::max(aggregated_buy_volume, aggregated_sell_volume);
+        if (max_vol <= 0) max_vol = max_volume_;  // Fallback to global max if aggregated volumes are zero
+        if (max_vol <= 0) max_vol = 1.0;  // Ultimate fallback to 1.0 if no volume data
 
         // Define positions for the aggregated bars - anchored to the right edge of the plot
         double visible_center_price = (plot_limits.Y.Min + plot_limits.Y.Max) / 2.0;
-        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.3f;  // Use 30% of visible height for each bar
+        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.25f;  // Use 25% of visible height for each bar
+        float bar_spacing = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.05f;      // Small spacing between bars
 
         // Calculate the rightmost x-coordinate in plot space (this will be our anchor)
         // In horizontal bar charts, volume is on X-axis and price is on Y-axis
@@ -545,10 +547,10 @@ void VolumeProfilePanel::render_volume_bars() {
         // Draw aggregated buy bar (green) extending left from right edge
         if (aggregated_buy_volume > 0) {
           // Position at upper portion of visible range
-          double buy_bar_price = visible_center_price - bar_height_total * 0.75;  // Offset to separate from sell bar
+          double buy_bar_price = visible_center_price - (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from sell bar
 
           // Calculate the left extent of the bar based on the aggregated volume
-          double buy_bar_left_extent = right_anchor - aggregated_buy_volume;
+          double buy_bar_left_extent = right_anchor - (aggregated_buy_volume / max_vol) * max_vol;
 
           // Draw the aggregated buy bar extending left from the right edge
           ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -565,15 +567,19 @@ void VolumeProfilePanel::render_volume_bars() {
           // Draw the aggregated buy bar
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(26, 204, 26, 179));  // Green with transparency
+
+          // Add border for better visibility
+          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
         }
 
         // Draw aggregated sell bar (red) extending left from right edge
         if (aggregated_sell_volume > 0) {
           // Position at lower portion of visible range
-          double sell_bar_price = visible_center_price + bar_height_total * 0.75;  // Offset to separate from buy bar
+          double sell_bar_price = visible_center_price + (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from buy bar
 
           // Calculate the left extent of the bar based on the aggregated volume
-          double sell_bar_left_extent = right_anchor - aggregated_sell_volume;
+          double sell_bar_left_extent = right_anchor - (aggregated_sell_volume / max_vol) * max_vol;
 
           // Draw the aggregated sell bar extending left from the right edge
           ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -590,6 +596,10 @@ void VolumeProfilePanel::render_volume_bars() {
           // Draw the aggregated sell bar
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(204, 26, 26, 179));  // Red with transparency
+
+          // Add border for better visibility
+          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
         }
 
         // Draw labels for the aggregated bars
@@ -599,20 +609,20 @@ void VolumeProfilePanel::render_volume_bars() {
           // Draw text labels
           char buy_label[64];
           char sell_label[64];
-          snprintf(buy_label, sizeof(buy_label), "%.2f", aggregated_buy_volume);
-          snprintf(sell_label, sizeof(sell_label), "%.2f", aggregated_sell_volume);
+          snprintf(buy_label, sizeof(buy_label), "B: %.2f", aggregated_buy_volume);
+          snprintf(sell_label, sizeof(sell_label), "S: %.2f", aggregated_sell_volume);
 
           // Position labels appropriately
           if (aggregated_buy_volume > 0) {
-            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - aggregated_buy_volume/2,
-                                                    visible_center_price - bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 10), IM_COL32(255, 255, 255, 255), buy_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - ((aggregated_buy_volume / max_vol) * max_vol)/2,
+                                                    visible_center_price - (bar_height_total + bar_spacing) * 0.5);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), buy_label);
           }
 
           if (aggregated_sell_volume > 0) {
-            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - aggregated_sell_volume/2,
-                                                    visible_center_price + bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 10), IM_COL32(255, 255, 255, 255), sell_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(right_anchor - ((aggregated_sell_volume / max_vol) * max_vol)/2,
+                                                    visible_center_price + (bar_height_total + bar_spacing) * 0.5);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), sell_label);
           }
         }
         break;

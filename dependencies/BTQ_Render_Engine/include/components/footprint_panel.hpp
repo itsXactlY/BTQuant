@@ -29,6 +29,15 @@ struct FootprintCell {
         vwap(vwap_price) {}
 };
 
+// Number Formatting Options
+enum class NumberFormat {
+  Raw,           // Raw numbers without any formatting
+  ThousandsK,    // Format with K suffix for thousands
+  MillionsM,     // Format with M suffix for millions
+  Scientific,    // Scientific notation
+  CustomDecimal  // Custom decimal places
+};
+
 class FootprintPanel : public PanelBase {
 public:
   FootprintPanel(const PanelConfig &config,
@@ -53,6 +62,12 @@ public:
   void setShowDeltaIndicator(bool show) { show_delta_indicator_ = show; }
   void setDeltaThreshold(float threshold) { delta_threshold_ = threshold; }
 
+  // Number formatting options
+  void setNumberFormat(NumberFormat format) { number_format_ = format; }
+  NumberFormat getNumberFormat() const { return number_format_; }
+  void setCustomDecimalPlaces(int places) { custom_decimal_places_ = places; }
+  int getCustomDecimalPlaces() const { return custom_decimal_places_; }
+
   // Data type selection
   void setDataType(Data::UnifiedDataPipeline::DataType type) { data_type_ = type; }
   Data::UnifiedDataPipeline::DataType getDataType() const { return data_type_; }
@@ -60,6 +75,18 @@ public:
   // Volume data type selection for footprint visualization
   void setVolumeDataType(Data::VolumeDataType vol_type) { volume_data_type_ = vol_type; }
   Data::VolumeDataType getVolumeDataType() const { return volume_data_type_; }
+
+  // Time aggregation type selection
+  void setTimeAggregationType(Data::TimeAggregationType agg_type) { time_aggregation_type_ = agg_type; }
+  Data::TimeAggregationType getTimeAggregationType() const { return time_aggregation_type_; }
+
+  // Price aggregation type selection
+  void setPriceAggregationType(Data::PriceAggregationType agg_type) { price_aggregation_type_ = agg_type; }
+  Data::PriceAggregationType getPriceAggregationType() const { return price_aggregation_type_; }
+
+  // Custom price aggregation value
+  void setCustomPriceAggregationValue(double value) { custom_price_aggregation_value_ = value; }
+  double getCustomPriceAggregationValue() const { return custom_price_aggregation_value_; }
 
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
@@ -80,6 +107,19 @@ private:
   bool show_delta_indicator_ = true;
   float delta_threshold_ = 0.0f; // Threshold for delta coloring
 
+  // Number Formatting Options
+  NumberFormat number_format_ = NumberFormat::ThousandsK;  // Default to K suffix
+  int custom_decimal_places_ = 2;  // Default decimal places for custom format
+
+  // Time Aggregation Type
+  Data::TimeAggregationType time_aggregation_type_ = Data::TimeAggregationType::T_1MIN;
+
+  // Price Aggregation Type
+  Data::PriceAggregationType price_aggregation_type_ = Data::PriceAggregationType::P_1TICK;
+
+  // Custom price aggregation value
+  double custom_price_aggregation_value_ = 0.1;
+
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;
 
@@ -91,6 +131,9 @@ private:
                  const std::vector<FootprintCell> &diagonal_imbalances,
                  const std::vector<FootprintCell> &stacked_imbalances);
   std::string getCellTooltip(const FootprintCell &cell) const;
+
+  // Number formatting helper
+  static std::string formatNumber(double value, NumberFormat format, int decimal_places);
 
   // Imbalance Detection
   bool isDiagonalImbalance(const FootprintCell& cell, const std::vector<FootprintCell>& all_cells) const;

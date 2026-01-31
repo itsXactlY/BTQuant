@@ -9,14 +9,58 @@
 #include <cmath>
 #include <map>
 #include "analytics/cluster_engine.hpp"
+#include <sstream>
+#include <iomanip>
 
 namespace BTQuant {
+
+// Helper function to format numbers according to the selected format
+std::string FootprintPanel::formatNumber(double value, NumberFormat format, int decimal_places) {
+  std::ostringstream oss;
+
+  switch (format) {
+    case NumberFormat::Raw:
+      oss << std::fixed << std::setprecision(decimal_places) << value;
+      break;
+
+    case NumberFormat::ThousandsK:
+      if (std::abs(value) >= 1000000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
+      } else if (std::abs(value) >= 1000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
+      } else {
+        oss << std::fixed << std::setprecision(decimal_places) << value;
+      }
+      break;
+
+    case NumberFormat::MillionsM:
+      if (std::abs(value) >= 1000000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000000.0) << "M";
+      } else if (std::abs(value) >= 1000.0) {
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1000.0) << "K";
+      } else {
+        oss << std::fixed << std::setprecision(decimal_places) << value;
+      }
+      break;
+
+    case NumberFormat::Scientific:
+      oss << std::scientific << std::setprecision(decimal_places) << value;
+      break;
+
+    case NumberFormat::CustomDecimal:
+      oss << std::fixed << std::setprecision(decimal_places) << value;
+      break;
+  }
+
+  return oss.str();
+}
 
 FootprintPanel::FootprintPanel(
     const PanelConfig &config,
     RenderEngine::MarketMicrostructureRenderer *renderer)
     : PanelBase(config), renderer_(renderer), data_type_(Data::UnifiedDataPipeline::DataType::FOOTPRINT),
-      volume_data_type_(Data::VolumeDataType::Delta) {}
+      volume_data_type_(Data::VolumeDataType::Delta),
+      time_aggregation_type_(Data::TimeAggregationType::T_1MIN) {}
 
 void FootprintPanel::update(float dt) {
   // Update logic if needed
@@ -340,7 +384,8 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
 
   switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
     case Data::VolumeAnalysisType::Trades:
-      return std::format("{}", cell.trade_count);
+      // For trade counts, we'll use the number formatting
+      return formatNumber(static_cast<double>(cell.trade_count), number_format_, custom_decimal_places_);
 
     case Data::VolumeAnalysisType::Volume:
       value_to_display = cell.bid_volume + cell.ask_volume;
@@ -370,10 +415,12 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
       }
 
     case Data::VolumeAnalysisType::BuyTrades:
-      return std::format("{}", static_cast<int>(cell.trade_count * 0.6)); // Placeholder
+      // For trade counts, we'll use the number formatting
+      return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * 0.6)), number_format_, custom_decimal_places_); // Placeholder
 
     case Data::VolumeAnalysisType::SellTrades:
-      return std::format("{}", static_cast<int>(cell.trade_count * 0.4)); // Placeholder
+      // For trade counts, we'll use the number formatting
+      return formatNumber(static_cast<double>(static_cast<int>(cell.trade_count * 0.4)), number_format_, custom_decimal_places_); // Placeholder
 
     case Data::VolumeAnalysisType::BuyVolumePercent:
       {
@@ -428,14 +475,8 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
       break;
   }
 
-  // Format based on value size
-  if (std::abs(value_to_display) >= 1000.0) {
-    return std::format("{:.1f}K", value_to_display / 1000.0);
-  } else if (std::abs(value_to_display) >= 100.0) {
-    return std::format("{:.0f}", value_to_display);
-  } else {
-    return std::format("{:.1f}", value_to_display);
-  }
+  // Format the number using the selected formatting option
+  return formatNumber(value_to_display, number_format_, custom_decimal_places_);
 }
 
 std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
@@ -782,6 +823,62 @@ void FootprintPanel::render() {
   static bool show_grid = true;
   ImGui::Checkbox("Grid", &show_grid);
 
+  // Time aggregation selector
+  const char* time_agg_names[] = {
+    "1min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "Volume-based", "Tick-based"
+  };
+
+  int current_time_agg = static_cast<int>(time_aggregation_type_);
+  if (ImGui::BeginCombo("Time Agg", time_agg_names[current_time_agg])) {
+    for (int i = 0; i < 9; i++) {
+      bool is_selected = (current_time_agg == i);
+      if (ImGui::Selectable(time_agg_names[i], is_selected)) {
+        current_time_agg = i;
+        time_aggregation_type_ = static_cast<Data::TimeAggregationType>(i);
+        // Mark data as dirty to trigger immediate rendering update
+        data_dirty_.store(true, std::memory_order_release);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  // Price aggregation selector
+  const char* price_agg_names[] = {
+    "1 Tick", "5 Ticks", "10 Ticks", "0.1%", "0.5%", "1%", "Custom"
+  };
+
+  int current_price_agg = static_cast<int>(price_aggregation_type_);
+  if (ImGui::BeginCombo("Price Agg", price_agg_names[current_price_agg])) {
+    for (int i = 0; i < 7; i++) {
+      bool is_selected = (current_price_agg == i);
+      if (ImGui::Selectable(price_agg_names[i], is_selected)) {
+        current_price_agg = i;
+        price_aggregation_type_ = static_cast<Data::PriceAggregationType>(i);
+        // Mark data as dirty to trigger immediate rendering update
+        data_dirty_.store(true, std::memory_order_release);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  // Show custom value input if custom price aggregation is selected
+  if (price_aggregation_type_ == Data::PriceAggregationType::P_CUSTOM) {
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    double temp_custom_value = custom_price_aggregation_value_;
+    if (ImGui::InputDouble("##CustomPriceAgg", &temp_custom_value, 0.01, 0.1, "%.4f")) {
+      custom_price_aggregation_value_ = temp_custom_value;
+      // Mark data as dirty to trigger immediate rendering update
+      data_dirty_.store(true, std::memory_order_release);
+    }
+  }
+
   // Grid size configuration
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
@@ -792,6 +889,35 @@ void FootprintPanel::render() {
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
   ImGui::SliderFloat("Delta Thresh", &delta_threshold_, 0.0f, 1.0f, "%.2f");
+
+  // Number formatting options
+  ImGui::Separator();
+  ImGui::Text("Number Formatting:");
+  ImGui::SameLine();
+
+  // Combo box for number format selection
+  const char* format_items[] = { "Raw", "K (Thousands)", "M (Millions)", "Scientific", "Custom Decimal" };
+  int current_format = static_cast<int>(number_format_);
+  if (ImGui::BeginCombo("Format", format_items[current_format])) {
+    for (int i = 0; i < 5; i++) {
+      bool is_selected = (current_format == i);
+      if (ImGui::Selectable(format_items[i], is_selected)) {
+        current_format = i;
+        number_format_ = static_cast<NumberFormat>(i);
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  // Slider for custom decimal places (only shown when Custom Decimal is selected)
+  if (number_format_ == NumberFormat::CustomDecimal) {
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(100);
+    ImGui::SliderInt("Decimals", &custom_decimal_places_, 0, 6);
+  }
 
   // Get clusters from renderer
   auto clusters = renderer_->getFootprintClusters();
@@ -1055,7 +1181,7 @@ void FootprintPanel::render() {
 
     // Handle tooltip for the cell under the mouse cursor
     if (ImPlot::IsPlotHovered()) {
-      ImVec2 mouse_pos_plot = ImPlot::GetPlotMousePos();
+      ImPlotPoint mouse_pos_plot = ImPlot::GetPlotMousePos();
 
       // Find the cell under the mouse cursor
       for (const auto &cell : all_cells) {
@@ -1186,10 +1312,22 @@ void FootprintPanel::render() {
       "AvgSize", "AvgBuySize", "AvgSellSize", "MaxTradeVol"  // 16 types (excluding FilteredVol)
     };
 
+    // Time aggregation type names for display
+    const char* time_agg_names[] = {
+      "1min", "5min", "15min", "30min", "1hour", "2hour", "4hour", "Volume-based", "Tick-based"
+    };
+
+    // Price aggregation type names for display
+    const char* price_agg_names[] = {
+      "1 Tick", "5 Ticks", "10 Ticks", "0.1%", "0.5%", "1%", "Custom"
+    };
+
     ImGui::SetCursorPos(ImVec2(10, 30));
     ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                       "Mode: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
+                       "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | Thresh: %.2f",
                        vol_type_names[static_cast<int>(volume_data_type_)],
+                       time_agg_names[static_cast<int>(time_aggregation_type_)],
+                       price_agg_names[static_cast<int>(price_aggregation_type_)],
                        clusters.size(), grid_cols_, grid_rows_, delta_threshold_);
 
     // Calculate statistics based on selected volume data type

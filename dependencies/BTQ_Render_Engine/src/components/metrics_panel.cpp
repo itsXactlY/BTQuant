@@ -1,20 +1,23 @@
 #include "../../include/components/metrics_panel.hpp"
-#include "../../include/symbol_registry.hpp"
-#include "imgui.h"
+
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
 
+#include "../../include/symbol_registry.hpp"
+#include "imgui.h"
+
 namespace BTQuant {
 
-MetricsPanel::MetricsPanel(
-    const PanelConfig &config,
-    std::shared_ptr<PositionManager> position_manager,
-    std::shared_ptr<RiskAssessment> risk_assessment,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), position_manager_(position_manager),
-      risk_assessment_(risk_assessment), processor_(processor) {
+MetricsPanel::MetricsPanel(const PanelConfig& config,
+                           std::shared_ptr<PositionManager> position_manager,
+                           std::shared_ptr<RiskAssessment> risk_assessment,
+                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    : PanelBase(config),
+      position_manager_(position_manager),
+      risk_assessment_(risk_assessment),
+      processor_(processor) {
   update_metrics();
 }
 
@@ -64,10 +67,10 @@ void MetricsPanel::render_debug_info() {
 
   // Symbol Registry Info
   ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Symbol Registry:");
-  auto &registry = SymbolRegistry::instance();
+  auto& registry = SymbolRegistry::instance();
   auto exchanges = registry.get_exchanges();
   ImGui::Text("  Exchanges loaded: %zu", exchanges.size());
-  for (const auto &exchange : exchanges) {
+  for (const auto& exchange : exchanges) {
     auto symbols = registry.get_exchange_symbols(exchange);
     ImGui::Text("    %s: %zu symbols", exchange.c_str(), symbols.size());
   }
@@ -98,7 +101,7 @@ void MetricsPanel::render_debug_info() {
 }
 
 void MetricsPanel::render_metric_grid() {}
-void MetricsPanel::render_metric_card(const Metric &metric, float width) {
+void MetricsPanel::render_metric_card(const Metric& metric, float width) {
   (void)metric;
   (void)width;
 }
@@ -108,4 +111,4 @@ ImVec4 MetricsPanel::get_metric_color(float value, bool is_positive_good) {
   return {1, 1, 1, 1};
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

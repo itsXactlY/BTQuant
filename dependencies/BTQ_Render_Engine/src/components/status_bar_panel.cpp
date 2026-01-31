@@ -1,14 +1,16 @@
 #include "../../include/components/status_bar_panel.hpp"
-#include "imgui.h"
+
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 
+#include "imgui.h"
+
 namespace BTQuant {
 
-StatusBarPanel::StatusBarPanel(
-    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+StatusBarPanel::StatusBarPanel(const PanelConfig& config,
+                               std::shared_ptr<HotSpineDataBridge> bridge,
+                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   config_.resizable = false;
   config_.movable = false;
@@ -42,10 +44,9 @@ void StatusBarPanel::render() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 
-  ImGuiWindowFlags flags =
-      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-      ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
 
   ImGui::Begin("StatusBar", nullptr, flags);
 
@@ -91,8 +92,7 @@ void StatusBarPanel::update_connection_status() {
   // Check data freshness via processor metrics
   if (processor_) {
     auto metrics = processor_->getPerformanceMetrics();
-    bool data_flowing =
-        (metrics.trades_per_second > 0 || metrics.orderbooks_per_second > 0);
+    bool data_flowing = (metrics.trades_per_second > 0 || metrics.orderbooks_per_second > 0);
     connection_status_ = data_flowing;
     connection_text_ = data_flowing ? "Live" : "Stale";
   } else {
@@ -108,8 +108,8 @@ void StatusBarPanel::update_performance_metrics() {
 }
 
 void StatusBarPanel::render_connection_status() {
-  ImVec4 color = connection_status_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                                    : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+  ImVec4 color =
+      connection_status_ ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
   ImGui::TextColored(color, "●");
   ImGui::SameLine();
   ImGui::Text("%s", connection_text_.c_str());
@@ -136,4 +136,4 @@ void StatusBarPanel::render_time_display() {
   ImGui::Text("%s", ss.str().c_str());
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

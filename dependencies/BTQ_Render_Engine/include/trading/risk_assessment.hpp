@@ -1,15 +1,16 @@
 #pragma once
 
-#include "order_manager.hpp"
-#include "position_manager.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "order_manager.hpp"
+#include "position_manager.hpp"
+
 namespace BTQuant {
 
 class RiskAssessment {
-public:
+ public:
   struct RiskLimits {
     double max_position_size;
     double max_portfolio_value;
@@ -63,52 +64,40 @@ public:
   };
 
   RiskAssessment();
-  void set_risk_limits(const RiskLimits &limits);
+  void set_risk_limits(const RiskLimits& limits);
   RiskLimits get_risk_limits() const;
   RiskMetrics get_risk_metrics() const;
-  RiskMetrics calculate_risk_metrics(
-      const PositionManager::PortfolioSummary &summary,
-      const std::vector<PositionManager::Position> &positions);
-  std::vector<RiskAlert>
-  check_risk_limits(const RiskMetrics &metrics,
-                    const PositionManager::PortfolioSummary &portfolio,
-                    const std::vector<PositionManager::Position> &positions);
-  bool
-  validate_order_risk(const OrderManager::Order &order,
-                      const PositionManager::PortfolioSummary &portfolio,
-                      const std::vector<PositionManager::Position> &positions);
-  bool validate_order(const OrderManager::Order &order,
-                     const PositionManager::Position &position,
-                     const RiskMetrics &metrics);
-  bool is_risk_compliant(const RiskMetrics &metrics) const;
-  RiskReport
-  generate_risk_report(const PositionManager::PortfolioSummary &portfolio,
-                       const std::vector<PositionManager::Position> &positions);
+  RiskMetrics calculate_risk_metrics(const PositionManager::PortfolioSummary& summary,
+                                     const std::vector<PositionManager::Position>& positions);
+  std::vector<RiskAlert> check_risk_limits(const RiskMetrics& metrics,
+                                           const PositionManager::PortfolioSummary& portfolio,
+                                           const std::vector<PositionManager::Position>& positions);
+  bool validate_order_risk(const OrderManager::Order& order,
+                           const PositionManager::PortfolioSummary& portfolio,
+                           const std::vector<PositionManager::Position>& positions);
+  bool validate_order(const OrderManager::Order& order, const PositionManager::Position& position,
+                      const RiskMetrics& metrics);
+  bool is_risk_compliant(const RiskMetrics& metrics) const;
+  RiskReport generate_risk_report(const PositionManager::PortfolioSummary& portfolio,
+                                  const std::vector<PositionManager::Position>& positions);
 
-private:
+ private:
   RiskLimits risk_limits_;
   void initialize_default_limits();
-  double calculate_portfolio_var(
-      const std::vector<PositionManager::Position> &positions);
-  double calculate_concentration_risk(
-      const std::vector<PositionManager::Position> &positions,
-      double total_value);
+  double calculate_portfolio_var(const std::vector<PositionManager::Position>& positions);
+  double calculate_concentration_risk(const std::vector<PositionManager::Position>& positions,
+                                      double total_value);
   double calculate_leverage_risk(double leverage);
-  double calculate_volatility_risk(
-      const std::vector<PositionManager::Position> &positions);
-  double calculate_liquidity_risk(
-      const std::vector<PositionManager::Position> &positions);
+  double calculate_volatility_risk(const std::vector<PositionManager::Position>& positions);
+  double calculate_liquidity_risk(const std::vector<PositionManager::Position>& positions);
   PositionManager::Position simulate_order_impact(
-      const OrderManager::Order &order,
-      const std::vector<PositionManager::Position> &positions);
-  std::vector<std::string>
-  generate_recommendations(const RiskMetrics &metrics,
-                           const std::vector<RiskAlert> &alerts);
-  double
-  calculate_max_trade_size(const PositionManager::PortfolioSummary &portfolio,
-                           const RiskMetrics &metrics);
-  double calculate_symbol_risk_score(const PositionManager::Position &position);
+      const OrderManager::Order& order, const std::vector<PositionManager::Position>& positions);
+  std::vector<std::string> generate_recommendations(const RiskMetrics& metrics,
+                                                    const std::vector<RiskAlert>& alerts);
+  double calculate_max_trade_size(const PositionManager::PortfolioSummary& portfolio,
+                                  const RiskMetrics& metrics);
+  double calculate_symbol_risk_score(const PositionManager::Position& position);
   uint64_t get_current_timestamp();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

@@ -13,6 +13,7 @@
  */
 
 #include "../../include/components/VulkanSynchronization.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -39,16 +40,16 @@ enum class SyncError {
 
 [[nodiscard]] constexpr auto to_string(SyncError error) -> std::string_view {
   switch (error) {
-  case SyncError::SemaphoreCreationFailed:
-    return "Semaphore creation failed";
-  case SyncError::FenceCreationFailed:
-    return "Fence creation failed";
-  case SyncError::WaitTimeout:
-    return "Wait timeout";
-  case SyncError::SubmissionFailed:
-    return "Command buffer submission failed";
-  case SyncError::NoAvailableSlots:
-    return "No available slots";
+    case SyncError::SemaphoreCreationFailed:
+      return "Semaphore creation failed";
+    case SyncError::FenceCreationFailed:
+      return "Fence creation failed";
+    case SyncError::WaitTimeout:
+      return "Wait timeout";
+    case SyncError::SubmissionFailed:
+      return "Command buffer submission failed";
+    case SyncError::NoAvailableSlots:
+      return "No available slots";
   }
   return "Unknown error";
 }
@@ -58,19 +59,15 @@ enum class SyncError {
 // ============================================
 
 TimelineSemaphore::TimelineSemaphore(VkDevice device) : device_(device) {
-  VkSemaphoreTypeCreateInfo timelineInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-      .pNext = nullptr,
-      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-      .initialValue = 0};
+  VkSemaphoreTypeCreateInfo timelineInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                                         .pNext = nullptr,
+                                         .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+                                         .initialValue = 0};
 
-  VkSemaphoreCreateInfo createInfo{.sType =
-                                       VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-                                   .pNext = &timelineInfo,
-                                   .flags = 0};
+  VkSemaphoreCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = &timelineInfo, .flags = 0};
 
-  if (auto result =
-          vkCreateSemaphore(device_, &createInfo, nullptr, &semaphore_);
+  if (auto result = vkCreateSemaphore(device_, &createInfo, nullptr, &semaphore_);
       result != VK_SUCCESS) [[unlikely]] {
     throw std::runtime_error("Failed to create timeline semaphore: " +
                              std::to_string(static_cast<int>(result)));
@@ -87,12 +84,11 @@ TimelineSemaphore::~TimelineSemaphore() {
   }
 }
 
-TimelineSemaphore::TimelineSemaphore(TimelineSemaphore &&other) noexcept
+TimelineSemaphore::TimelineSemaphore(TimelineSemaphore&& other) noexcept
     : device_(std::exchange(other.device_, VK_NULL_HANDLE)),
       semaphore_(std::exchange(other.semaphore_, VK_NULL_HANDLE)) {}
 
-TimelineSemaphore &
-TimelineSemaphore::operator=(TimelineSemaphore &&other) noexcept {
+TimelineSemaphore& TimelineSemaphore::operator=(TimelineSemaphore&& other) noexcept {
   if (this != &other) {
     if (semaphore_ != VK_NULL_HANDLE) {
       vkDestroySemaphore(device_, semaphore_, nullptr);
@@ -105,15 +101,13 @@ TimelineSemaphore::operator=(TimelineSemaphore &&other) noexcept {
 
 [[nodiscard]] uint64_t TimelineSemaphore::getCurrentValue() const {
   uint64_t value = 0;
-  if (vkGetSemaphoreCounterValue(device_, semaphore_, &value) != VK_SUCCESS)
-      [[unlikely]] {
+  if (vkGetSemaphoreCounterValue(device_, semaphore_, &value) != VK_SUCCESS) [[unlikely]] {
     return 0;
   }
   return value;
 }
 
-[[nodiscard]] bool TimelineSemaphore::waitForValue(uint64_t value,
-                                                   uint64_t timeoutNs) const {
+[[nodiscard]] bool TimelineSemaphore::waitForValue(uint64_t value, uint64_t timeoutNs) const {
   VkSemaphoreWaitInfo waitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
                                .pNext = nullptr,
                                .flags = 0,
@@ -125,8 +119,7 @@ TimelineSemaphore::operator=(TimelineSemaphore &&other) noexcept {
 }
 
 [[nodiscard]] bool TimelineSemaphore::signalValue(uint64_t value) {
-  VkSemaphoreSignalInfo signalInfo{.sType =
-                                       VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+  VkSemaphoreSignalInfo signalInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
                                    .pNext = nullptr,
                                    .semaphore = semaphore_,
                                    .value = value};
@@ -148,10 +141,9 @@ FenceManager::FenceManager(VkDevice device, uint32_t maxFrames)
 
   for (uint32_t i = 0; i < maxFrames; ++i) {
     VkFence fence{};
-    if (vkCreateFence(device_, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-        [[unlikely]] {
+    if (vkCreateFence(device_, &fenceInfo, nullptr, &fence) != VK_SUCCESS) [[unlikely]] {
       // Cleanup already created fences
-      for (auto &createdFence : fences_) {
+      for (auto& createdFence : fences_) {
         vkDestroyFence(device_, createdFence, nullptr);
       }
       throw std::runtime_error("Failed to create fence manager");
@@ -162,7 +154,7 @@ FenceManager::FenceManager(VkDevice device, uint32_t maxFrames)
 
 FenceManager::~FenceManager() {
   waitAll();
-  for (auto &fence : fences_) {
+  for (auto& fence : fences_) {
     vkDestroyFence(device_, fence, nullptr);
   }
 }
@@ -182,12 +174,12 @@ FenceManager::~FenceManager() {
       return static_cast<int32_t>(i);
     }
   }
-  return -1; // All fences in use
+  return -1;  // All fences in use
 }
 
 void FenceManager::waitAll() const {
-  vkWaitForFences(device_, static_cast<uint32_t>(fences_.size()),
-                  fences_.data(), VK_TRUE, UINT64_MAX);
+  vkWaitForFences(device_, static_cast<uint32_t>(fences_.size()), fences_.data(), VK_TRUE,
+                  UINT64_MAX);
 }
 
 void FenceManager::resetAll() const {
@@ -210,20 +202,17 @@ CommandBufferPool::~CommandBufferPool() {
   }
 }
 
-[[nodiscard]] VkCommandBuffer
-CommandBufferPool::acquireCommandBuffer(bool isPrimary) {
+[[nodiscard]] VkCommandBuffer CommandBufferPool::acquireCommandBuffer(bool isPrimary) {
   if (freeBuffers_.empty()) [[unlikely]] {
     VkCommandBufferAllocateInfo allocInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = nullptr,
         .commandPool = pool_,
-        .level = isPrimary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY
-                           : VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+        .level = isPrimary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY,
         .commandBufferCount = 1};
 
     VkCommandBuffer cmdBuffer{};
-    if (vkAllocateCommandBuffers(device_, &allocInfo, &cmdBuffer) != VK_SUCCESS)
-        [[unlikely]] {
+    if (vkAllocateCommandBuffers(device_, &allocInfo, &cmdBuffer) != VK_SUCCESS) [[unlikely]] {
       throw std::runtime_error("Failed to allocate command buffer");
     }
     freeBuffers_.push_back(cmdBuffer);
@@ -247,39 +236,35 @@ void CommandBufferPool::releaseCommandBuffer(VkCommandBuffer cmdBuffer) {
 // VulkanSyncContext Implementation
 // ============================================
 
-VulkanSyncContext::VulkanSyncContext(VkDevice device, VkCommandPool cmdPool)
-    : device_(device) {
+VulkanSyncContext::VulkanSyncContext(VkDevice device, VkCommandPool cmdPool) : device_(device) {
   cmdPool_ = std::make_unique<CommandBufferPool>(device_, cmdPool);
   fenceManager_ = std::make_unique<FenceManager>(device_, MAX_FRAMES_IN_FLIGHT);
   frameStates_.resize(MAX_FRAMES_IN_FLIGHT);
 
   VkSemaphoreCreateInfo semaphoreInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0};
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = nullptr, .flags = 0};
 
   VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                               .pNext = nullptr,
                               .flags = VK_FENCE_CREATE_SIGNALED_BIT};
 
-  for (auto &state : frameStates_) {
-    if (vkCreateSemaphore(device_, &semaphoreInfo, nullptr,
-                          &state.imageAvailableSemaphore) != VK_SUCCESS ||
-        vkCreateSemaphore(device_, &semaphoreInfo, nullptr,
-                          &state.renderFinishedSemaphore) != VK_SUCCESS)
-        [[unlikely]] {
+  for (auto& state : frameStates_) {
+    if (vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &state.imageAvailableSemaphore) !=
+            VK_SUCCESS ||
+        vkCreateSemaphore(device_, &semaphoreInfo, nullptr, &state.renderFinishedSemaphore) !=
+            VK_SUCCESS) [[unlikely]] {
       throw std::runtime_error("Failed to create render pass semaphores");
     }
 
-    if (vkCreateFence(device_, &fenceInfo, nullptr, &state.inFlightFence) !=
-        VK_SUCCESS) [[unlikely]] {
+    if (vkCreateFence(device_, &fenceInfo, nullptr, &state.inFlightFence) != VK_SUCCESS)
+        [[unlikely]] {
       throw std::runtime_error("Failed to create in-flight fence");
     }
   }
 }
 
 VulkanSyncContext::~VulkanSyncContext() {
-  for (const auto &state : frameStates_) {
+  for (const auto& state : frameStates_) {
     vkDestroySemaphore(device_, state.imageAvailableSemaphore, nullptr);
     vkDestroySemaphore(device_, state.renderFinishedSemaphore, nullptr);
     vkDestroyFence(device_, state.inFlightFence, nullptr);
@@ -287,14 +272,13 @@ VulkanSyncContext::~VulkanSyncContext() {
 }
 
 [[nodiscard]] bool VulkanSyncContext::prepareFrame(
-    uint32_t currentFrame,
-    [[maybe_unused]] TimelineSemaphore &timelineSemaphore) {
-  auto &state = frameStates_[currentFrame % MAX_FRAMES_IN_FLIGHT];
+    uint32_t currentFrame, [[maybe_unused]] TimelineSemaphore& timelineSemaphore) {
+  auto& state = frameStates_[currentFrame % MAX_FRAMES_IN_FLIGHT];
 
   if (!state.isFirstFrame) [[likely]] {
-    constexpr uint64_t FRAME_TIMEOUT_NS = 1'000'000'000; // 1 second
-    if (auto waitResult = vkWaitForFences(device_, 1, &state.inFlightFence,
-                                          VK_TRUE, FRAME_TIMEOUT_NS);
+    constexpr uint64_t FRAME_TIMEOUT_NS = 1'000'000'000;  // 1 second
+    if (auto waitResult =
+            vkWaitForFences(device_, 1, &state.inFlightFence, VK_TRUE, FRAME_TIMEOUT_NS);
         waitResult != VK_SUCCESS) [[unlikely]] {
       std::cerr << "Frame preparation timeout\n";
       return false;
@@ -307,11 +291,8 @@ VulkanSyncContext::~VulkanSyncContext() {
 }
 
 [[nodiscard]] bool VulkanSyncContext::submitCommandBuffer(
-    VkQueue queue, VkCommandBuffer cmdBuffer,
-    [[maybe_unused]] TimelineSemaphore &timelineSemaphore,
-    [[maybe_unused]] uint64_t signalValue,
-    [[maybe_unused]] uint64_t waitValue) {
-
+    VkQueue queue, VkCommandBuffer cmdBuffer, [[maybe_unused]] TimelineSemaphore& timelineSemaphore,
+    [[maybe_unused]] uint64_t signalValue, [[maybe_unused]] uint64_t waitValue) {
   VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                           .pNext = nullptr,
                           .waitSemaphoreCount = 0,
@@ -329,10 +310,9 @@ VulkanSyncContext::~VulkanSyncContext() {
   }
 
   auto fence = fenceManager_->getFence(static_cast<uint32_t>(acquireFence));
-  if (auto result = vkQueueSubmit(queue, 1, &submitInfo, fence);
-      result != VK_SUCCESS) [[unlikely]] {
-    std::cerr << "Failed to submit command buffer: " << static_cast<int>(result)
-              << "\n";
+  if (auto result = vkQueueSubmit(queue, 1, &submitInfo, fence); result != VK_SUCCESS)
+      [[unlikely]] {
+    std::cerr << "Failed to submit command buffer: " << static_cast<int>(result) << "\n";
     fenceManager_->releaseSlot(static_cast<uint32_t>(acquireFence));
     return false;
   }
@@ -348,80 +328,70 @@ void VulkanSyncContext::reset() const { fenceManager_->resetAll(); }
 // HotspineBarrierManager Implementation
 // ============================================
 
-HotspineBarrierManager::HotspineBarrierManager(VkDevice device)
-    : device_(device) {}
+HotspineBarrierManager::HotspineBarrierManager(VkDevice device) : device_(device) {}
 
 [[nodiscard]] VkMemoryBarrier HotspineBarrierManager::createBufferMemoryBarrier(
     [[maybe_unused]] VkPipelineStageFlags srcStage,
     [[maybe_unused]] VkPipelineStageFlags dstStage) const {
   return VkMemoryBarrier{.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
                          .pNext = nullptr,
-                         .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT |
-                                          VK_ACCESS_HOST_WRITE_BIT,
+                         .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
                          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
 }
 
-[[nodiscard]] VkBufferMemoryBarrier
-HotspineBarrierManager::createSSBOBufferBarrier(VkBuffer buffer,
-                                                VkDeviceSize offset,
-                                                VkDeviceSize size) const {
-  return VkBufferMemoryBarrier{.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-                               .pNext = nullptr,
-                               .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT |
-                                                VK_ACCESS_HOST_WRITE_BIT,
-                               .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                               .buffer = buffer,
-                               .offset = offset,
-                               .size = size};
-}
-
-[[nodiscard]] VkImageMemoryBarrier
-HotspineBarrierManager::createHeatmapImageBarrier(
-    VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const {
-  return VkImageMemoryBarrier{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+[[nodiscard]] VkBufferMemoryBarrier HotspineBarrierManager::createSSBOBufferBarrier(
+    VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size) const {
+  return VkBufferMemoryBarrier{
+      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
       .pNext = nullptr,
-      .srcAccessMask = (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-                           ? VkAccessFlags{0}
-                           : VK_ACCESS_SHADER_WRITE_BIT,
+      .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
       .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-      .oldLayout = oldLayout,
-      .newLayout = newLayout,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                           .baseMipLevel = 0,
-                           .levelCount = 1,
-                           .baseArrayLayer = 0,
-                           .layerCount = 1}};
+      .buffer = buffer,
+      .offset = offset,
+      .size = size};
 }
 
-void HotspineBarrierManager::recordHotspineUpdateBarrier(
-    VkCommandBuffer cmdBuffer, VkBuffer buffer, VkDeviceSize offset,
-    VkDeviceSize size) const {
+[[nodiscard]] VkImageMemoryBarrier HotspineBarrierManager::createHeatmapImageBarrier(
+    VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const {
+  return VkImageMemoryBarrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                              .pNext = nullptr,
+                              .srcAccessMask = (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED)
+                                                   ? VkAccessFlags{0}
+                                                   : VK_ACCESS_SHADER_WRITE_BIT,
+                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                              .oldLayout = oldLayout,
+                              .newLayout = newLayout,
+                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                              .image = image,
+                              .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                   .baseMipLevel = 0,
+                                                   .levelCount = 1,
+                                                   .baseArrayLayer = 0,
+                                                   .layerCount = 1}};
+}
+
+void HotspineBarrierManager::recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer, VkBuffer buffer,
+                                                         VkDeviceSize offset,
+                                                         VkDeviceSize size) const {
   auto bufferBarrier = createSSBOBufferBarrier(buffer, offset, size);
 
-  vkCmdPipelineBarrier(
-      cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-      0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
+  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
 }
 
 // ============================================
 // RingBufferSyncManager Implementation
 // ============================================
 
-RingBufferSyncManager::RingBufferSyncManager(VkDevice device,
-                                             uint32_t slotCount,
+RingBufferSyncManager::RingBufferSyncManager(VkDevice device, uint32_t slotCount,
                                              VkDeviceSize slotSize)
-    : device_(device), slotCount_(slotCount), slotSize_(slotSize),
-      slots_(slotCount) {
+    : device_(device), slotCount_(slotCount), slotSize_(slotSize), slots_(slotCount) {
   // Initialize all slots as available
-  for (auto &slot : slots_) {
+  for (auto& slot : slots_) {
     slot.isAvailable = true;
     slot.lastUsed = 0;
   }
@@ -433,9 +403,8 @@ RingBufferSyncManager::~RingBufferSyncManager() { waitForSlot(UINT64_MAX); }
   auto currentTime = currentTime_.fetch_add(1, std::memory_order_relaxed);
 
   for (uint32_t i = 0; i < slotCount_; ++i) {
-    auto index =
-        (currentIndex_.load(std::memory_order_relaxed) + i) % slotCount_;
-    auto &slot = slots_[index];
+    auto index = (currentIndex_.load(std::memory_order_relaxed) + i) % slotCount_;
+    auto& slot = slots_[index];
 
     if (slot.isAvailable) [[likely]] {
       slot.isAvailable = false;
@@ -476,17 +445,14 @@ void RingBufferSyncManager::releaseSlot(uint32_t slotIndex) {
 // SyncDebugUtils Implementation
 // ============================================
 
-[[nodiscard]] uint64_t
-SyncDebugUtils::measureExecutionTime([[maybe_unused]] VkDevice device,
-                                     [[maybe_unused]] VkCommandBuffer cmdBuffer,
-                                     [[maybe_unused]] VkQueue queue,
-                                     [[maybe_unused]] const char *name) {
+[[nodiscard]] uint64_t SyncDebugUtils::measureExecutionTime(
+    [[maybe_unused]] VkDevice device, [[maybe_unused]] VkCommandBuffer cmdBuffer,
+    [[maybe_unused]] VkQueue queue, [[maybe_unused]] const char* name) {
   // Placeholder - real implementation would use timestamp queries
   return 0;
 }
 
-void SyncDebugUtils::logSyncState(
-    [[maybe_unused]] const VulkanSyncContext &context) {
+void SyncDebugUtils::logSyncState([[maybe_unused]] const VulkanSyncContext& context) {
   std::cout << "Sync context state logged\n";
 }
 
@@ -496,25 +462,26 @@ SyncDebugUtils::PerformanceStats SyncDebugUtils::performanceStats = {};
 // RingBufferManager Implementation
 // ============================================
 
-RingBufferManager::RingBufferManager(
-    VkDevice device, [[maybe_unused]] VkPhysicalDevice physicalDevice)
-    : device_(device), bufferAllocation_{.buffer = VK_NULL_HANDLE,
-                                         .memory = VK_NULL_HANDLE,
-                                         .mapped_ptr = nullptr,
-                                         .size = SLOT_SIZE * NUM_SLOTS,
-                                         .offset = 0,
-                                         .is_mapped = false,
-                                         .pool_id = 0} {}
+RingBufferManager::RingBufferManager(VkDevice device,
+                                     [[maybe_unused]] VkPhysicalDevice physicalDevice)
+    : device_(device),
+      bufferAllocation_{.buffer = VK_NULL_HANDLE,
+                        .memory = VK_NULL_HANDLE,
+                        .mapped_ptr = nullptr,
+                        .size = SLOT_SIZE * NUM_SLOTS,
+                        .offset = 0,
+                        .is_mapped = false,
+                        .pool_id = 0} {}
 
-RingBufferManager::RingBufferManager(VkDevice device, uint32_t slotCount,
-                                     VkDeviceSize slotSize)
-    : device_(device), bufferAllocation_{.buffer = VK_NULL_HANDLE,
-                                         .memory = VK_NULL_HANDLE,
-                                         .mapped_ptr = nullptr,
-                                         .size = slotSize * slotCount,
-                                         .offset = 0,
-                                         .is_mapped = false,
-                                         .pool_id = 0} {
+RingBufferManager::RingBufferManager(VkDevice device, uint32_t slotCount, VkDeviceSize slotSize)
+    : device_(device),
+      bufferAllocation_{.buffer = VK_NULL_HANDLE,
+                        .memory = VK_NULL_HANDLE,
+                        .mapped_ptr = nullptr,
+                        .size = slotSize * slotCount,
+                        .offset = 0,
+                        .is_mapped = false,
+                        .pool_id = 0} {
   availableSlots_.store(slotCount, std::memory_order_release);
 }
 
@@ -537,8 +504,7 @@ RingBufferManager::~RingBufferManager() {
   // Lock-free slot acquisition with CAS
   while (currentSlots > 0) {
     if (availableSlots_.compare_exchange_weak(currentSlots, currentSlots - 1,
-                                              std::memory_order_acq_rel))
-        [[likely]] {
+                                              std::memory_order_acq_rel)) [[likely]] {
       return writeIndex_.fetch_add(1, std::memory_order_relaxed) % NUM_SLOTS;
     }
   }
@@ -553,4 +519,4 @@ void RingBufferManager::releaseSlot(uint32_t slotIndex) {
   availableSlots_.fetch_add(1, std::memory_order_release);
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

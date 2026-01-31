@@ -36,7 +36,7 @@ enum class PanelType {
   CUSTOM
 };
 
-class LayoutPresetManager; // Forward declaration
+class LayoutPresetManager;  // Forward declaration
 
 class DashboardLayoutManager {
  public:
@@ -107,7 +107,7 @@ class DashboardLayoutManager {
   std::unordered_map<std::string, DashboardLayout> layouts_;
   std::string current_layout_name_;
   std::string layouts_directory_;
-  LayoutPresetManager* preset_manager_ = nullptr; // Reference to preset manager
+  LayoutPresetManager* preset_manager_ = nullptr;  // Reference to preset manager
 
   void initialize_layouts_directory();
   void load_all_layouts();

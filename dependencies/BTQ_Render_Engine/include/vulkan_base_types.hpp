@@ -1,7 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
-#include <functional> // Added
+#include <functional>  // Added
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -26,21 +26,20 @@ class VulkanDashboard;
 struct VulkanDashboardConfig {
   // Vulkan configuration
   bool enable_validation_layers = false;
-  bool enable_msaa =
-      false; // Disable MSAA for better performance in sub-second charts
+  bool enable_msaa = false;  // Disable MSAA for better performance in sub-second charts
   VkSampleCountFlagBits msaa_samples = VK_SAMPLE_COUNT_1_BIT;
-  bool enable_hdr = false; // Disable HDR for better performance
+  bool enable_hdr = false;  // Disable HDR for better performance
   VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
   // Performance targets
-  uint32_t target_fps = 144;        // Higher target FPS for sub-second charts
-  uint32_t max_ui_elements = 500;   // Reduce UI element count for performance
-  float max_data_latency_ms = 0.5f; // Lower latency target
+  uint32_t target_fps = 144;         // Higher target FPS for sub-second charts
+  uint32_t max_ui_elements = 500;    // Reduce UI element count for performance
+  float max_data_latency_ms = 0.5f;  // Lower latency target
 
   // Memory configuration (increased for higher data rates)
-  size_t vertex_pool_size = 128 * 1024 * 1024; // 128MB
-  size_t uniform_pool_size = 32 * 1024 * 1024; // 32MB
-  size_t storage_pool_size = 64 * 1024 * 1024; // 64MB
+  size_t vertex_pool_size = 128 * 1024 * 1024;  // 128MB
+  size_t uniform_pool_size = 32 * 1024 * 1024;  // 32MB
+  size_t storage_pool_size = 64 * 1024 * 1024;  // 64MB
 
   // HotSpine integration
   std::string shm_name = "/btquant_hotspine";
@@ -55,28 +54,25 @@ struct VulkanDashboardConfig {
 struct BufferAllocation {
   VkBuffer buffer = VK_NULL_HANDLE;
   VkDeviceMemory memory = VK_NULL_HANDLE;
-  void *mapped_ptr = nullptr;
+  void* mapped_ptr = nullptr;
   VkDeviceSize size = 0;
   VkDeviceSize offset = 0;
   bool is_mapped = false;
-  uint32_t pool_id =
-      0; // 0: None, 1: Vertex, 2: Uniform, 3: Storage, 4: Staging
+  uint32_t pool_id = 0;  // 0: None, 1: Vertex, 2: Uniform, 3: Storage, 4: Staging
 };
 
 class VulkanException : public std::runtime_error {
-public:
-  VulkanException(VkResult result, const std::string &operation)
-      : std::runtime_error("Vulkan error"), result_(result),
-        operation_(operation) {
-    message_ = "Vulkan error in " + operation + ": " +
-               std::to_string(static_cast<int>(result));
+ public:
+  VulkanException(VkResult result, const std::string& operation)
+      : std::runtime_error("Vulkan error"), result_(result), operation_(operation) {
+    message_ = "Vulkan error in " + operation + ": " + std::to_string(static_cast<int>(result));
   }
 
-  const char *what() const noexcept override { return message_.c_str(); }
+  const char* what() const noexcept override { return message_.c_str(); }
   VkResult result() const { return result_; }
-  const std::string &operation() const { return operation_; }
+  const std::string& operation() const { return operation_; }
 
-private:
+ private:
   VkResult result_;
   std::string operation_;
   std::string message_;
@@ -84,8 +80,8 @@ private:
 
 // Forward declaration of class needed in many headers
 class VulkanErrorHandler {
-public:
-  static void check_result(VkResult result, const std::string &operation) {
+ public:
+  static void check_result(VkResult result, const std::string& operation) {
     if (result != VK_SUCCESS) {
       throw VulkanException(result, operation);
     }
@@ -95,37 +91,33 @@ public:
   static VKAPI_ATTR VkBool32 VKAPI_CALL
   debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
                  VkDebugUtilsMessageTypeFlagsEXT message_type,
-                 const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-                 void *user_data);
+                 const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
 
   static VkDebugUtilsMessengerEXT debug_messenger_;
 };
 
 class MemoryPool {
-public:
-  MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
-             VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-             VkDeviceSize pool_size);
+ public:
+  MemoryPool(VkDevice device, VkPhysicalDevice physical_device, VkBufferUsageFlags usage,
+             VkMemoryPropertyFlags properties, VkDeviceSize pool_size);
   ~MemoryPool();
 
   BufferAllocation allocate(VkDeviceSize size, VkDeviceSize alignment = 1);
-  void deallocate(const BufferAllocation &allocation);
+  void deallocate(const BufferAllocation& allocation);
 
   VkDeviceSize get_total_size() const { return pool_size_; }
   VkDeviceSize get_used_size() const { return used_size_; }
   VkBuffer get_pool_buffer() const { return pool_buffer_; }
-  float get_usage_percentage() const {
-    return static_cast<float>(used_size_) / pool_size_;
-  }
+  float get_usage_percentage() const { return static_cast<float>(used_size_) / pool_size_; }
 
-private:
+ private:
   VkDevice device_;
   VkPhysicalDevice physical_device_;
   VkBufferUsageFlags usage_;
   VkMemoryPropertyFlags properties_;
   VkBuffer pool_buffer_;
   VkDeviceMemory pool_memory_;
-  void *mapped_ptr_;
+  void* mapped_ptr_;
   VkDeviceSize pool_size_;
   std::atomic<VkDeviceSize> used_size_{0};
 
@@ -138,15 +130,14 @@ private:
   std::vector<VkBuffer> cleanup_buffers_;
   std::vector<VkDeviceMemory> cleanup_memories_;
 
-  uint32_t find_memory_type(VkPhysicalDevice physical_device,
-                            uint32_t type_filter,
+  uint32_t find_memory_type(VkPhysicalDevice physical_device, uint32_t type_filter,
                             VkMemoryPropertyFlags properties);
 };
 
 class GPUMemoryManager {
-public:
+ public:
   GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
-                   const VulkanDashboardConfig &config);
+                   const VulkanDashboardConfig& config);
   ~GPUMemoryManager();
 
   // Specialized allocators for different buffer types
@@ -156,7 +147,7 @@ public:
   BufferAllocation allocate_storage_buffer(VkDeviceSize size);
   BufferAllocation allocate_staging_buffer(VkDeviceSize size);
 
-  void deallocate_buffer(const BufferAllocation &allocation);
+  void deallocate_buffer(const BufferAllocation& allocation);
 
   // Memory usage statistics
   struct MemoryStats {
@@ -169,7 +160,7 @@ public:
   };
   MemoryStats get_memory_stats() const;
 
-private:
+ private:
   VkDevice device_;
   VkPhysicalDevice physical_device_;
   std::unique_ptr<MemoryPool> vertex_pool_;
@@ -178,26 +169,23 @@ private:
 };
 
 class VulkanCore {
-public:
-  VulkanCore(const VulkanDashboardConfig &config);
+ public:
+  VulkanCore(const VulkanDashboardConfig& config);
   ~VulkanCore();
 
   // Initialization and cleanup
-  void initialize(GLFWwindow *window, uint32_t width, uint32_t height);
+  void initialize(GLFWwindow* window, uint32_t width, uint32_t height);
   // Robust Frame Rendering API (User Requested)
-  VkResult PrepareFrame(uint32_t &imageIndex);
+  VkResult PrepareFrame(uint32_t& imageIndex);
   VkResult PresentFrame(uint32_t imageIndex);
-  void RecordCommandBuffer(
-      uint32_t imageIndex, ImDrawData *drawData,
-      std::function<void(VkCommandBuffer)> graphicsCallback = nullptr);
-  void RecreateSwapchain(); // Uses internal width_/height_
+  void RecordCommandBuffer(uint32_t imageIndex, ImDrawData* drawData,
+                           std::function<void(VkCommandBuffer)> graphicsCallback = nullptr);
+  void RecreateSwapchain();  // Uses internal width_/height_
 
   // Legacy/Internal frame rendering
   void begin_main_render_pass();
   void end_frame();
-  VkCommandBuffer get_current_command_buffer() const {
-    return current_command_buffer_;
-  }
+  VkCommandBuffer get_current_command_buffer() const { return current_command_buffer_; }
 
   // Resource access
   VkDevice get_device() const { return device_; }
@@ -210,7 +198,7 @@ public:
   VkExtent2D get_swapchain_extent() const { return swapchain_extent_; }
 
   // Memory management
-  GPUMemoryManager &get_memory_manager() { return *memory_manager_; }
+  GPUMemoryManager& get_memory_manager() { return *memory_manager_; }
 
   // Synchronization
   VkDescriptorPool get_descriptor_pool() const { return descriptor_pool_; }
@@ -219,8 +207,7 @@ public:
   // Swapchain management
   void recreate_swapchain(uint32_t width, uint32_t height);
 
-  uint32_t find_memory_type(uint32_t type_filter,
-                            VkMemoryPropertyFlags properties);
+  uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
   // Helper methods for single-time commands
   VkCommandBuffer begin_single_time_commands();
@@ -234,7 +221,7 @@ public:
   float get_frame_time_ms() const { return frame_time_ms_; }
   float get_fps() const { return fps_; }
 
-private:
+ private:
   VulkanDashboardConfig config_;
 
   // Core Vulkan objects
@@ -309,7 +296,7 @@ private:
   void create_instance();
   void select_physical_device();
   void create_logical_device();
-  void create_surface(GLFWwindow *window);
+  void create_surface(GLFWwindow* window);
   void create_swapchain(uint32_t width, uint32_t height);
   void create_image_views();
   void create_render_pass();
@@ -322,12 +309,11 @@ private:
   void create_sync_objects();
 
   // Helper methods
-  std::vector<const char *> get_required_extensions();
+  std::vector<const char*> get_required_extensions();
   bool check_validation_layer_support();
   bool is_device_suitable(VkPhysicalDevice device);
   VkSampleCountFlagBits get_max_usable_sample_count();
-  VkFormat find_supported_format(const std::vector<VkFormat> &candidates,
-                                 VkImageTiling tiling,
+  VkFormat find_supported_format(const std::vector<VkFormat>& candidates, VkImageTiling tiling,
                                  VkFormatFeatureFlags features);
   VkFormat find_depth_format();
 
@@ -347,4 +333,4 @@ private:
   void release_command_buffer(VkCommandBuffer cmd_buf);
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

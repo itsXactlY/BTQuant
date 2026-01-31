@@ -8,7 +8,7 @@
 namespace BTQuant {
 
 class TechnicalIndicator {
-public:
+ public:
   virtual ~TechnicalIndicator() = default;
   virtual void update(float value) = 0;
   virtual float get_value() const = 0;
@@ -17,7 +17,7 @@ public:
 };
 
 class EMAIndicator : public TechnicalIndicator {
-public:
+ public:
   EMAIndicator(int period) : period_(period), alpha_(2.0f / (period + 1.0f)) {}
 
   void update(float value) override {
@@ -38,7 +38,7 @@ public:
     count_ = 0;
   }
 
-private:
+ private:
   int period_;
   float alpha_;
   float current_ema_ = 0.0f;
@@ -47,7 +47,7 @@ private:
 };
 
 class SMAIndicator : public TechnicalIndicator {
-public:
+ public:
   SMAIndicator(int period) : period_(period) {}
 
   void update(float value) override {
@@ -59,23 +59,21 @@ public:
     }
   }
 
-  float get_value() const override {
-    return history_.empty() ? 0.0f : sum_ / history_.size();
-  }
+  float get_value() const override { return history_.empty() ? 0.0f : sum_ / history_.size(); }
   bool is_ready() const override { return history_.size() >= period_; }
   void reset() override {
     history_.clear();
     sum_ = 0.0f;
   }
 
-private:
+ private:
   size_t period_;
   std::deque<float> history_;
   float sum_ = 0.0f;
 };
 
 class RSIIndicator : public TechnicalIndicator {
-public:
+ public:
   RSIIndicator(int period) : period_(period), alpha_(1.0f / period) {}
 
   void update(float value) override {
@@ -103,8 +101,7 @@ public:
   }
 
   float get_value() const override {
-    if (!initialized_ || avg_loss_ == 0.0f)
-      return 100.0f;
+    if (!initialized_ || avg_loss_ == 0.0f) return 100.0f;
     float rs = avg_gain_ / avg_loss_;
     return 100.0f - (100.0f / (1.0f + rs));
   }
@@ -118,7 +115,7 @@ public:
     count_ = 0;
   }
 
-private:
+ private:
   size_t period_;
   float alpha_;
   float avg_gain_ = 0.0f;
@@ -130,7 +127,7 @@ private:
 };
 
 class MACDIndicator : public TechnicalIndicator {
-public:
+ public:
   MACDIndicator(int fast_p = 12, int slow_p = 26, int signal_p = 9)
       : fast_ema_(fast_p), slow_ema_(slow_p), signal_ema_(signal_p) {}
 
@@ -143,15 +140,12 @@ public:
     }
   }
 
-  float get_value() const override {
-    return fast_ema_.get_value() - slow_ema_.get_value();
-  }
+  float get_value() const override { return fast_ema_.get_value() - slow_ema_.get_value(); }
   float get_signal() const { return signal_ema_.get_value(); }
   float get_histogram() const { return get_value() - get_signal(); }
 
   bool is_ready() const override {
-    return fast_ema_.is_ready() && slow_ema_.is_ready() &&
-           signal_ema_.is_ready();
+    return fast_ema_.is_ready() && slow_ema_.is_ready() && signal_ema_.is_ready();
   }
   void reset() override {
     fast_ema_.reset();
@@ -159,8 +153,8 @@ public:
     signal_ema_.reset();
   }
 
-private:
+ private:
   EMAIndicator fast_ema_, slow_ema_, signal_ema_;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

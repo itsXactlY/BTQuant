@@ -5,11 +5,11 @@
 namespace BTQuant {
 
 class HistogramPanel : public PanelBase {
-public:
-    HistogramPanel(const PanelConfig &config);
+ public:
+  HistogramPanel(const PanelConfig& config);
 
-    void initialize() override;
-    void render() override;
+  void initialize() override;
+  void render() override;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

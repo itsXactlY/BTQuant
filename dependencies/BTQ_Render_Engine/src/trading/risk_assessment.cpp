@@ -1,30 +1,22 @@
 #include "trading/risk_assessment.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 
 namespace BTQuant {
 
-RiskAssessment::RiskAssessment() {
-  initialize_default_limits();
-}
+RiskAssessment::RiskAssessment() { initialize_default_limits(); }
 
-void RiskAssessment::set_risk_limits(const RiskLimits &limits) {
-  risk_limits_ = limits;
-}
+void RiskAssessment::set_risk_limits(const RiskLimits& limits) { risk_limits_ = limits; }
 
-RiskAssessment::RiskLimits RiskAssessment::get_risk_limits() const {
-  return risk_limits_;
-}
+RiskAssessment::RiskLimits RiskAssessment::get_risk_limits() const { return risk_limits_; }
 
-RiskAssessment::RiskMetrics RiskAssessment::get_risk_metrics() const {
-  return RiskMetrics();
-}
+RiskAssessment::RiskMetrics RiskAssessment::get_risk_metrics() const { return RiskMetrics(); }
 
-RiskAssessment::RiskMetrics
-RiskAssessment::calculate_risk_metrics(
-    const PositionManager::PortfolioSummary &summary,
-    const std::vector<PositionManager::Position> &positions) {
+RiskAssessment::RiskMetrics RiskAssessment::calculate_risk_metrics(
+    const PositionManager::PortfolioSummary& summary,
+    const std::vector<PositionManager::Position>& positions) {
   RiskMetrics metrics;
 
   // Calculate VaR (simplified)
@@ -42,7 +34,8 @@ RiskAssessment::calculate_risk_metrics(
   }
 
   // Calculate leverage
-  metrics.current_leverage = summary.total_value / (summary.cash_balance + summary.total_unrealized_pnl);
+  metrics.current_leverage =
+      summary.total_value / (summary.cash_balance + summary.total_unrealized_pnl);
 
   // Calculate concentration risk
   metrics.concentration_risk = calculate_concentration_risk(positions, summary.total_value);
@@ -58,7 +51,7 @@ RiskAssessment::calculate_risk_metrics(
 
   // Calculate largest position percentage
   double max_position_pct = 0;
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     if (summary.total_value > 0) {
       double pct = pos.market_value / summary.total_value;
       if (pct > max_position_pct) {
@@ -83,14 +76,13 @@ RiskAssessment::calculate_risk_metrics(
   return metrics;
 }
 
-std::vector<RiskAssessment::RiskAlert>
-RiskAssessment::check_risk_limits(const RiskMetrics &metrics,
-                                   const PositionManager::PortfolioSummary & /*portfolio*/,
-                                   const std::vector<PositionManager::Position> &positions) {
+std::vector<RiskAssessment::RiskAlert> RiskAssessment::check_risk_limits(
+    const RiskMetrics& metrics, const PositionManager::PortfolioSummary& /*portfolio*/,
+    const std::vector<PositionManager::Position>& positions) {
   std::vector<RiskAlert> alerts;
 
   // Check position size limits
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     auto symbol_limit_it = risk_limits_.symbol_limits.find(pos.symbol);
     if (symbol_limit_it != risk_limits_.symbol_limits.end()) {
       if (pos.market_value > symbol_limit_it->second) {
@@ -167,18 +159,17 @@ RiskAssessment::check_risk_limits(const RiskMetrics &metrics,
   return alerts;
 }
 
-bool RiskAssessment::validate_order_risk(
-    const OrderManager::Order &order,
-    const PositionManager::PortfolioSummary &portfolio,
-    const std::vector<PositionManager::Position> &positions) {
+bool RiskAssessment::validate_order_risk(const OrderManager::Order& order,
+                                         const PositionManager::PortfolioSummary& portfolio,
+                                         const std::vector<PositionManager::Position>& positions) {
   PositionManager::Position simulated = simulate_order_impact(order, positions);
   RiskMetrics metrics = calculate_risk_metrics(portfolio, positions);
   return validate_order(order, simulated, metrics);
 }
 
-bool RiskAssessment::validate_order(const OrderManager::Order & /*order*/,
-                                     const PositionManager::Position & /*position*/,
-                                     const RiskMetrics &metrics) {
+bool RiskAssessment::validate_order(const OrderManager::Order& /*order*/,
+                                    const PositionManager::Position& /*position*/,
+                                    const RiskMetrics& metrics) {
   // Check leverage impact
   if (metrics.current_leverage > risk_limits_.max_leverage * 0.8) {
     // Near leverage limit, reject additional orders
@@ -194,7 +185,7 @@ bool RiskAssessment::validate_order(const OrderManager::Order & /*order*/,
   return true;
 }
 
-bool RiskAssessment::is_risk_compliant(const RiskMetrics &metrics) const {
+bool RiskAssessment::is_risk_compliant(const RiskMetrics& metrics) const {
   if (metrics.concentration_risk > 0.5) {
     return false;
   }
@@ -207,9 +198,9 @@ bool RiskAssessment::is_risk_compliant(const RiskMetrics &metrics) const {
   return true;
 }
 
-RiskAssessment::RiskReport
-RiskAssessment::generate_risk_report(const PositionManager::PortfolioSummary &portfolio,
-                                      const std::vector<PositionManager::Position> &positions) {
+RiskAssessment::RiskReport RiskAssessment::generate_risk_report(
+    const PositionManager::PortfolioSummary& portfolio,
+    const std::vector<PositionManager::Position>& positions) {
   RiskReport report;
 
   report.metrics = calculate_risk_metrics(portfolio, positions);
@@ -218,7 +209,8 @@ RiskAssessment::generate_risk_report(const PositionManager::PortfolioSummary &po
 
   // Calculate risk-adjusted return
   if (report.metrics.sharpe_ratio > 0) {
-    report.risk_adjusted_return = report.metrics.sharpe_ratio * (100 - report.metrics.overall_risk_score) / 100;
+    report.risk_adjusted_return =
+        report.metrics.sharpe_ratio * (100 - report.metrics.overall_risk_score) / 100;
   } else {
     report.risk_adjusted_return = report.metrics.sharpe_ratio;
   }
@@ -227,7 +219,7 @@ RiskAssessment::generate_risk_report(const PositionManager::PortfolioSummary &po
   report.maximum_trade_size = calculate_max_trade_size(portfolio, report.metrics);
 
   // Calculate symbol risk scores
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     report.symbol_risk_scores[pos.symbol] = calculate_symbol_risk_score(pos);
   }
 
@@ -245,13 +237,13 @@ void RiskAssessment::initialize_default_limits() {
 }
 
 double RiskAssessment::calculate_portfolio_var(
-    const std::vector<PositionManager::Position> &positions) {
+    const std::vector<PositionManager::Position>& positions) {
   if (positions.empty()) {
     return 0.0;
   }
 
   double total_var = 0.0;
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     total_var += pos.var_95 * pos.var_95;
   }
 
@@ -259,13 +251,13 @@ double RiskAssessment::calculate_portfolio_var(
 }
 
 double RiskAssessment::calculate_concentration_risk(
-    const std::vector<PositionManager::Position> &positions, double total_value) {
+    const std::vector<PositionManager::Position>& positions, double total_value) {
   if (total_value <= 0 || positions.empty()) {
     return 0.0;
   }
 
   double max_concentration = 0.0;
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     double concentration = pos.market_value / total_value;
     if (concentration > max_concentration) {
       max_concentration = concentration;
@@ -286,7 +278,7 @@ double RiskAssessment::calculate_leverage_risk(double leverage) {
 }
 
 double RiskAssessment::calculate_volatility_risk(
-    const std::vector<PositionManager::Position> &positions) {
+    const std::vector<PositionManager::Position>& positions) {
   // Simplified volatility risk calculation
   if (positions.empty()) {
     return 0.0;
@@ -295,7 +287,7 @@ double RiskAssessment::calculate_volatility_risk(
   double avg_volatility = 0.0;
   int count = 0;
 
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     // Use beta as a proxy for volatility
     avg_volatility += pos.beta;
     count++;
@@ -309,12 +301,12 @@ double RiskAssessment::calculate_volatility_risk(
 }
 
 double RiskAssessment::calculate_liquidity_risk(
-    const std::vector<PositionManager::Position> &positions) {
+    const std::vector<PositionManager::Position>& positions) {
   // Simplified liquidity risk calculation
   // In a real implementation, this would use actual volume data
   double liquidity_risk = 0.0;
 
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     if (pos.market_value > 100000) {
       liquidity_risk += 0.1;
     }
@@ -324,11 +316,10 @@ double RiskAssessment::calculate_liquidity_risk(
 }
 
 PositionManager::Position RiskAssessment::simulate_order_impact(
-    const OrderManager::Order &order,
-    const std::vector<PositionManager::Position> &positions) {
+    const OrderManager::Order& order, const std::vector<PositionManager::Position>& positions) {
   PositionManager::Position simulated;
 
-  for (const auto &pos : positions) {
+  for (const auto& pos : positions) {
     if (pos.symbol == order.symbol) {
       simulated = pos;
       if (order.side == OrderManager::OrderSide::Buy) {
@@ -342,20 +333,19 @@ PositionManager::Position RiskAssessment::simulate_order_impact(
 
   // New position
   simulated.symbol = order.symbol;
-  simulated.quantity = order.side == OrderManager::OrderSide::Buy
-                          ? order.quantity
-                          : -order.quantity;
+  simulated.quantity =
+      order.side == OrderManager::OrderSide::Buy ? order.quantity : -order.quantity;
   simulated.average_price = order.price;
 
   return simulated;
 }
 
 std::vector<std::string> RiskAssessment::generate_recommendations(
-    const RiskMetrics &metrics, const std::vector<RiskAlert> &alerts) {
+    const RiskMetrics& metrics, const std::vector<RiskAlert>& alerts) {
   std::vector<std::string> recommendations;
 
   // Generate recommendations based on alerts
-  for (const auto &alert : alerts) {
+  for (const auto& alert : alerts) {
     if (alert.severity == RiskAlert::Severity::Critical) {
       recommendations.push_back("URGENT: " + alert.message);
     } else if (alert.severity == RiskAlert::Severity::Warning) {
@@ -379,9 +369,8 @@ std::vector<std::string> RiskAssessment::generate_recommendations(
   return recommendations;
 }
 
-double RiskAssessment::calculate_max_trade_size(
-    const PositionManager::PortfolioSummary &portfolio,
-    const RiskMetrics &metrics) {
+double RiskAssessment::calculate_max_trade_size(const PositionManager::PortfolioSummary& portfolio,
+                                                const RiskMetrics& metrics) {
   double max_size = risk_limits_.max_position_size;
 
   // Adjust based on available buying power
@@ -407,7 +396,7 @@ double RiskAssessment::calculate_max_trade_size(
   return std::max(0.0, max_size);
 }
 
-double RiskAssessment::calculate_symbol_risk_score(const PositionManager::Position &position) {
+double RiskAssessment::calculate_symbol_risk_score(const PositionManager::Position& position) {
   double risk_score = 0.0;
 
   // Beta contributes to risk
@@ -428,8 +417,7 @@ double RiskAssessment::calculate_symbol_risk_score(const PositionManager::Positi
 
 uint64_t RiskAssessment::get_current_timestamp() {
   auto now = std::chrono::system_clock::now();
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-      now.time_since_epoch()).count();
+  return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

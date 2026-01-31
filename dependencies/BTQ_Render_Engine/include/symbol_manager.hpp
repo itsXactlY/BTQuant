@@ -1,6 +1,5 @@
 #pragma once
 
-#include "symbol_registry.hpp"
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -10,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "symbol_registry.hpp"
+
 namespace BTQuant {
 namespace RenderEngine {
 
@@ -17,7 +18,7 @@ namespace RenderEngine {
 struct SymbolMetadata {
   std::string base_currency;
   std::string quote_currency;
-  std::string market_type; // "spot", "futures", "options"
+  std::string market_type;  // "spot", "futures", "options"
   double tick_size = 0.0;
   double min_quantity = 0.0;
   double max_quantity = 0.0;
@@ -30,23 +31,22 @@ struct SymbolMetadata {
 enum class SymbolSortCriteria { ALPHABETICAL, EXCHANGE, VOLUME, ACTIVITY };
 
 struct SymbolFilter {
-  std::vector<std::string> exchanges; // Filter by specific exchanges
-  std::string symbol_pattern;         // Pattern matching for symbol names
-  std::string base_currency;          // Filter by base currency (e.g., "BTC")
-  std::string quote_currency;         // Filter by quote currency (e.g., "USDT")
-  bool active_only = false;           // Only show active symbols
+  std::vector<std::string> exchanges;  // Filter by specific exchanges
+  std::string symbol_pattern;          // Pattern matching for symbol names
+  std::string base_currency;           // Filter by base currency (e.g., "BTC")
+  std::string quote_currency;          // Filter by quote currency (e.g., "USDT")
+  bool active_only = false;            // Only show active symbols
   SymbolSortCriteria sort_by = SymbolSortCriteria::ALPHABETICAL;
-  size_t limit = 0; // Limit number of results (0 = no limit)
+  size_t limit = 0;  // Limit number of results (0 = no limit)
 };
 
 // Exchange-specific filtering and configuration
 struct ExchangeFilter {
   bool enabled = true;
   size_t max_symbols = 1000;
-  std::vector<std::string>
-      priority_symbols; // High-priority symbols to always include
-  std::vector<std::string> excluded_symbols; // Symbols to exclude
-  std::string market_type_filter;            // Filter by market type
+  std::vector<std::string> priority_symbols;  // High-priority symbols to always include
+  std::vector<std::string> excluded_symbols;  // Symbols to exclude
+  std::string market_type_filter;             // Filter by market type
 };
 
 // Exchange statistics
@@ -66,59 +66,52 @@ struct SymbolManagerStatistics {
 };
 
 class SymbolManager {
-public:
+ public:
   SymbolManager();
   ~SymbolManager();
 
-  SymbolManager(const SymbolManager &) = delete;
-  SymbolManager &operator=(const SymbolManager &) = delete;
-  SymbolManager(SymbolManager &&) = delete;
-  SymbolManager &operator=(SymbolManager &&) = delete;
+  SymbolManager(const SymbolManager&) = delete;
+  SymbolManager& operator=(const SymbolManager&) = delete;
+  SymbolManager(SymbolManager&&) = delete;
+  SymbolManager& operator=(SymbolManager&&) = delete;
 
-  bool
-  initialize(const std::string &symbols_file = "/dev/shm/btquant_symbols.json",
-             const std::string &config_file = "");
+  bool initialize(const std::string& symbols_file = "/dev/shm/btquant_symbols.json",
+                  const std::string& config_file = "");
 
   void startAutoDiscovery();
   void stopAutoDiscovery();
 
   std::vector<SymbolInfo> getAllSymbols() const;
-  std::vector<SymbolInfo> getExchangeSymbols(const std::string &exchange) const;
-  std::vector<SymbolInfo> getFilteredSymbols(const SymbolFilter &filter) const;
+  std::vector<SymbolInfo> getExchangeSymbols(const std::string& exchange) const;
+  std::vector<SymbolInfo> getFilteredSymbols(const SymbolFilter& filter) const;
   std::vector<std::string> getAvailableExchanges() const;
 
   std::optional<SymbolInfo> getSymbolInfo(uint32_t symbol_id) const;
-  std::optional<uint32_t> getSymbolId(const std::string &exchange,
-                                      const std::string &symbol) const;
+  std::optional<uint32_t> getSymbolId(const std::string& exchange, const std::string& symbol) const;
 
-  uint32_t registerSymbol(const std::string &exchange,
-                          const std::string &symbol,
-                          const SymbolMetadata &metadata = {});
+  uint32_t registerSymbol(const std::string& exchange, const std::string& symbol,
+                          const SymbolMetadata& metadata = {});
 
-  bool updateSymbolMetadata(uint32_t symbol_id, const SymbolMetadata &metadata);
+  bool updateSymbolMetadata(uint32_t symbol_id, const SymbolMetadata& metadata);
   std::optional<SymbolMetadata> getSymbolMetadata(uint32_t symbol_id) const;
 
-  ExchangeStatistics getExchangeStatistics(const std::string &exchange) const;
+  ExchangeStatistics getExchangeStatistics(const std::string& exchange) const;
   std::vector<ExchangeStatistics> getAllExchangeStatistics() const;
 
   bool saveSymbolMappings() const;
   bool reloadSymbolMappings();
 
-  void setExchangeFilter(const std::string &exchange,
-                         const ExchangeFilter &filter);
-  std::optional<ExchangeFilter>
-  getExchangeFilter(const std::string &exchange) const;
+  void setExchangeFilter(const std::string& exchange, const ExchangeFilter& filter);
+  std::optional<ExchangeFilter> getExchangeFilter(const std::string& exchange) const;
 
   void enableAutoDiscovery(bool enabled);
   void setUpdateInterval(uint32_t interval_ms);
-  void setMaxSymbolsPerExchange(size_t max_symbols) {
-    max_symbols_per_exchange_ = max_symbols;
-  }
+  void setMaxSymbolsPerExchange(size_t max_symbols) { max_symbols_per_exchange_ = max_symbols; }
 
   SymbolManagerStatistics getStatistics() const;
 
-private:
-  BTQuant::SymbolRegistry *symbol_registry_;
+ private:
+  BTQuant::SymbolRegistry* symbol_registry_;
 
   std::string symbols_file_;
   std::string config_file_;
@@ -140,15 +133,14 @@ private:
 
   void autoDiscoveryLoop();
   void discoverNewSymbols();
-  void updateExchangeStatistics(const std::string &exchange);
+  void updateExchangeStatistics(const std::string& exchange);
   void updateAllExchangeStatistics();
-  bool matchesFilter(const SymbolInfo &symbol,
-                     const SymbolFilter &filter) const;
-  std::string extractBaseCurrency(const std::string &symbol) const;
-  std::string extractQuoteCurrency(const std::string &symbol) const;
+  bool matchesFilter(const SymbolInfo& symbol, const SymbolFilter& filter) const;
+  std::string extractBaseCurrency(const std::string& symbol) const;
+  std::string extractQuoteCurrency(const std::string& symbol) const;
   void initializeExchangeFilters();
-  bool loadConfiguration(const std::string &config_file);
+  bool loadConfiguration(const std::string& config_file);
 };
 
-} // namespace RenderEngine
-} // namespace BTQuant
+}  // namespace RenderEngine
+}  // namespace BTQuant

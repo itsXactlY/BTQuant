@@ -17,7 +17,7 @@ enum class ProfileMode { Step, Right, Left, Custom };
 
 // Struct for profile settings
 struct ProfileSettings {
-  double vaPercent = 70.0;    // Value Area percentage
+  int vaPercent = 70;         // Value Area percentage
   int tickStep = 1;           // Tick step size
   bool showPOC = true;        // Show Point of Control
   bool showValueArea = true;  // Show Value Area
@@ -53,6 +53,15 @@ class VolumeProfilePanel : public PanelBase {
                                          const std::vector<double>& x_coords,
                                          const std::vector<double>& y_coords_high,
                                          const std::vector<double>& y_coords_low);
+
+  // Enhanced method to render step profile histograms on candlesticks
+  void render_step_profile_histograms(ImDrawList* draw_list,
+                                      const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                      const std::vector<double>& x_coords,
+                                      const std::vector<double>& y_coords_high,
+                                      const std::vector<double>& y_coords_low,
+                                      bool show_poc_line = true,
+                                      int num_buckets = 8);
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

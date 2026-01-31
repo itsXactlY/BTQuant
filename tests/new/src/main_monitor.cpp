@@ -78,25 +78,26 @@ public:
     // Remove timestamp pattern if present (e.g., "[12:34:56.789]")
     size_t timestamp_start = core_message.find('[');
     if (timestamp_start != std::string::npos) {
-        size_t timestamp_end = core_message.find(']', timestamp_start);
-        if (timestamp_end != std::string::npos) {
-            core_message = core_message.substr(timestamp_end + 1);
-            // Remove leading/trailing whitespace
-            core_message.erase(0, core_message.find_first_not_of(" \t"));
-            core_message.erase(core_message.find_last_not_of(" \t") + 1);
-        }
+      size_t timestamp_end = core_message.find(']', timestamp_start);
+      if (timestamp_end != std::string::npos) {
+        core_message = core_message.substr(timestamp_end + 1);
+        // Remove leading/trailing whitespace
+        core_message.erase(0, core_message.find_first_not_of(" \t"));
+        core_message.erase(core_message.find_last_not_of(" \t") + 1);
+      }
     }
     std::string key = type + ":" + core_message;
     auto now = std::chrono::steady_clock::now();
 
     std::lock_guard<std::mutex> lock(mutex_);
 
-    *debug_log_ << "Attempting to add alert: " << type << " " << message << std::endl;
+    *debug_log_ << "Attempting to add alert: " << type << " " << message
+                << std::endl;
 
     // Cleanup old dedupe entries
     for (auto it = dedupe_cache_.begin(); it != dedupe_cache_.end();) {
       if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second)
-              .count() > 30) {  // Increased from 5 to 30 seconds
+              .count() > 30) { // Increased from 5 to 30 seconds
         it = dedupe_cache_.erase(it);
       } else {
         ++it;
@@ -114,7 +115,8 @@ public:
     if (alerts_.size() > 15) {
       alerts_.pop_back();
     }
-    *debug_log_ << "Alerts deque size after add: " << alerts_.size() << std::endl;
+    *debug_log_ << "Alerts deque size after add: " << alerts_.size()
+                << std::endl;
   }
 
   void render() {
@@ -142,7 +144,7 @@ private:
   std::map<std::string, std::chrono::steady_clock::time_point> dedupe_cache_;
   std::mutex mutex_;
   std::chrono::steady_clock::time_point start_time_;
-  std::ofstream* debug_log_ = nullptr;
+  std::ofstream *debug_log_ = nullptr;
 
   // Formatting helpers
   std::string color_green(const std::string &s) {
@@ -168,9 +170,10 @@ private:
     int m = (uptime % 3600) / 60;
     int s = uptime % 60;
 
-    // ss << bold("╔════════════════════════════════════════════════════════════╗")
+    // ss <<
+    // bold("╔════════════════════════════════════════════════════════════╗")
     //    << "\033[K\n";
-    // ss << bold("║      BTQuant Market Manipulation Detector v2.0             ║")
+    // ss << bold("║      BTQuant Market Manipulation Detector v2.0 ║")
     ss << bold("      BTQuant Market Manipulation Detector v2.0             ")
        << "\033[K\n";
     // ss << bold("║      ") << std::left << std::setw(54)
@@ -179,7 +182,8 @@ private:
            " | Uptime: " + std::to_string(h) + "h " + std::to_string(m) + "m " +
            std::to_string(s) + "s")
        // << bold("║") << "\033[K\n";
-    // ss << bold("╚════════════════════════════════════════════════════════════╝")
+       // ss <<
+       // bold("╚════════════════════════════════════════════════════════════╝")
        // << "\033[K\n\n";
        << "\033K\n\n";
   }
@@ -281,7 +285,8 @@ private:
   void render_alerts(std::stringstream &ss) {
     ss << bold("Recent Alerts (Last 15):") << "\033[K\n";
     std::lock_guard<std::mutex> lock(mutex_);
-    *debug_log_ << "Rendering alerts, deque size: " << alerts_.size() << std::endl;
+    *debug_log_ << "Rendering alerts, deque size: " << alerts_.size()
+                << std::endl;
     if (alerts_.empty()) {
       ss << "  (No alerts detected)\033[K\n";
     } else {
@@ -524,7 +529,8 @@ int main(int argc, char *argv[]) {
           // 5. Spoofing Detection (per exchange)
           spoofing.update_orderbook(exchange, symbol);
           if (auto signal = spoofing.detect(exchange, symbol)) {
-            debug_log << "Detected SPOOFING for " << symbol << " on " << exchange << std::endl;
+            debug_log << "Detected SPOOFING for " << symbol << " on "
+                      << exchange << std::endl;
             dashboard.add_alert("SPOOFING", signal->to_string());
           }
         }

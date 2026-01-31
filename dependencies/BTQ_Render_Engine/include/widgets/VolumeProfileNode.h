@@ -4,12 +4,12 @@
 #include <cstdint>
 
 struct VolumeProfileNode {
-    double priceLevel;
-    double totalVolume;
-    double buyVolume;
-    double sellVolume;
-    double delta;
-    uint32_t numTrades;
+  double priceLevel;
+  double totalVolume;
+  double buyVolume;
+  double sellVolume;
+  double delta;
+  uint32_t numTrades;
 };
 
-#endif // VOLUME_PROFILE_NODE_H
+#endif  // VOLUME_PROFILE_NODE_H

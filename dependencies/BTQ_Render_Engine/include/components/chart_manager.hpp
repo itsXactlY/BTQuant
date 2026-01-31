@@ -1,9 +1,5 @@
 #pragma once
 
-#include "hotspine_data_bridge.hpp"
-#include "imgui.h"
-#include "implot.h"
-#include "market_data_processor.hpp"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -12,11 +8,16 @@
 #include <unordered_map>
 #include <vector>
 
+#include "hotspine_data_bridge.hpp"
+#include "imgui.h"
+#include "implot.h"
+#include "market_data_processor.hpp"
+
 namespace BTQuant {
 
 struct ChartInstance {
   std::string symbol_name;
-  std::string exchange_name; // To prevent collisions
+  std::string exchange_name;  // To prevent collisions
   RenderEngine::TimeFrame timeframe;
   uint32_t symbol_id;
   uint32_t chart_id;
@@ -39,31 +40,29 @@ struct ChartInstance {
 };
 
 class ChartManager {
-public:
+ public:
   ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
                std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  uint32_t create_chart(const std::string &symbol_name,
-                        const std::string &exchange_name, uint32_t symbol_id,
-                        RenderEngine::TimeFrame timeframe);
+  uint32_t create_chart(const std::string& symbol_name, const std::string& exchange_name,
+                        uint32_t symbol_id, RenderEngine::TimeFrame timeframe);
   void destroy_chart(uint32_t chart_id);
   void toggle_chart_visibility(uint32_t chart_id);
   void toggle_chart_minimization(uint32_t chart_id);
-  void update_chart_position(uint32_t chart_id, const ImVec2 &position);
-  void update_chart_size(uint32_t chart_id, const ImVec2 &size);
+  void update_chart_position(uint32_t chart_id, const ImVec2& position);
+  void update_chart_size(uint32_t chart_id, const ImVec2& size);
 
-  const std::unordered_map<uint32_t, ChartInstance> &get_charts() const;
+  const std::unordered_map<uint32_t, ChartInstance>& get_charts() const;
   std::vector<ChartInstance> get_visible_charts() const;
-  std::vector<ChartInstance>
-  get_charts_for_symbol(const std::string &symbol_name) const;
+  std::vector<ChartInstance> get_charts_for_symbol(const std::string& symbol_name) const;
 
   void update();
   void populate_chart_data(uint32_t chart_id);
 
   // Helper to map symbol name to ID
-  std::optional<uint32_t> getSymbolId(const std::string &symbol_name) const;
+  std::optional<uint32_t> getSymbolId(const std::string& symbol_name) const;
 
-private:
+ private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::unordered_map<uint32_t, ChartInstance> charts_;
@@ -74,4 +73,4 @@ private:
   mutable std::mutex id_map_mutex_;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

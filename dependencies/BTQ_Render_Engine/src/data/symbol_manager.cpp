@@ -1,4 +1,5 @@
 #include "symbol_manager.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -13,23 +14,23 @@ namespace RenderEngine {
 
 SymbolManager::SymbolManager()
     : symbol_registry_(&BTQuant::SymbolRegistry::instance()),
-      auto_discovery_enabled_(true), max_symbols_per_exchange_(500),
+      auto_discovery_enabled_(true),
+      max_symbols_per_exchange_(500),
       symbol_update_interval_ms_(1000) {
   std::cout << "[SymbolManager] Initialized" << std::endl;
 }
 
 SymbolManager::~SymbolManager() { stopAutoDiscovery(); }
 
-bool SymbolManager::initialize(const std::string &symbols_file,
-                               const std::string &config_file) {
+bool SymbolManager::initialize(const std::string& symbols_file, const std::string& config_file) {
   symbols_file_ = symbols_file;
   config_file_ = config_file;
 
   // Load existing symbol mappings
   if (!symbols_file_.empty()) {
     if (!symbol_registry_->load_from_file(symbols_file_)) {
-      std::cout << "[SymbolManager] Warning: Could not load symbols from "
-                << symbols_file_ << std::endl;
+      std::cout << "[SymbolManager] Warning: Could not load symbols from " << symbols_file_
+                << std::endl;
     }
   }
 
@@ -41,9 +42,8 @@ bool SymbolManager::initialize(const std::string &symbols_file,
   // Initialize exchange filters
   initializeExchangeFilters();
 
-  std::cout << "[SymbolManager] Initialized with "
-            << symbol_registry_->get_all_symbols().size() << " symbols across "
-            << symbol_registry_->get_exchanges().size() << " exchanges"
+  std::cout << "[SymbolManager] Initialized with " << symbol_registry_->get_all_symbols().size()
+            << " symbols across " << symbol_registry_->get_exchanges().size() << " exchanges"
             << std::endl;
 
   return true;
@@ -69,17 +69,15 @@ std::vector<SymbolInfo> SymbolManager::getAllSymbols() const {
   return symbol_registry_->get_all_symbols();
 }
 
-std::vector<SymbolInfo>
-SymbolManager::getExchangeSymbols(const std::string &exchange) const {
+std::vector<SymbolInfo> SymbolManager::getExchangeSymbols(const std::string& exchange) const {
   return symbol_registry_->get_exchange_symbols(exchange);
 }
 
-std::vector<SymbolInfo>
-SymbolManager::getFilteredSymbols(const SymbolFilter &filter) const {
+std::vector<SymbolInfo> SymbolManager::getFilteredSymbols(const SymbolFilter& filter) const {
   auto all_symbols = symbol_registry_->get_all_symbols();
   std::vector<SymbolInfo> filtered_symbols;
 
-  for (const auto &symbol : all_symbols) {
+  for (const auto& symbol : all_symbols) {
     if (matchesFilter(symbol, filter)) {
       filtered_symbols.push_back(symbol);
     }
@@ -88,12 +86,10 @@ SymbolManager::getFilteredSymbols(const SymbolFilter &filter) const {
   // Apply sorting
   if (filter.sort_by == SymbolSortCriteria::ALPHABETICAL) {
     std::sort(filtered_symbols.begin(), filtered_symbols.end(),
-              [](const SymbolInfo &a, const SymbolInfo &b) {
-                return a.symbol < b.symbol;
-              });
+              [](const SymbolInfo& a, const SymbolInfo& b) { return a.symbol < b.symbol; });
   } else if (filter.sort_by == SymbolSortCriteria::EXCHANGE) {
     std::sort(filtered_symbols.begin(), filtered_symbols.end(),
-              [](const SymbolInfo &a, const SymbolInfo &b) {
+              [](const SymbolInfo& a, const SymbolInfo& b) {
                 if (a.exchange != b.exchange) {
                   return a.exchange < b.exchange;
                 }
@@ -113,20 +109,17 @@ std::vector<std::string> SymbolManager::getAvailableExchanges() const {
   return symbol_registry_->get_exchanges();
 }
 
-std::optional<SymbolInfo>
-SymbolManager::getSymbolInfo(uint32_t symbol_id) const {
+std::optional<SymbolInfo> SymbolManager::getSymbolInfo(uint32_t symbol_id) const {
   return symbol_registry_->get_symbol_info(symbol_id);
 }
 
-std::optional<uint32_t>
-SymbolManager::getSymbolId(const std::string &exchange,
-                           const std::string &symbol) const {
+std::optional<uint32_t> SymbolManager::getSymbolId(const std::string& exchange,
+                                                   const std::string& symbol) const {
   return symbol_registry_->get_symbol_id(exchange, symbol);
 }
 
-uint32_t SymbolManager::registerSymbol(const std::string &exchange,
-                                       const std::string &symbol,
-                                       const SymbolMetadata &metadata) {
+uint32_t SymbolManager::registerSymbol(const std::string& exchange, const std::string& symbol,
+                                       const SymbolMetadata& metadata) {
   std::lock_guard lock(symbols_mutex_);
 
   // Register with symbol registry
@@ -138,14 +131,13 @@ uint32_t SymbolManager::registerSymbol(const std::string &exchange,
   // Update statistics
   updateExchangeStatistics(exchange);
 
-  std::cout << "[SymbolManager] Registered symbol " << exchange << ":" << symbol
-            << " with ID " << symbol_id << std::endl;
+  std::cout << "[SymbolManager] Registered symbol " << exchange << ":" << symbol << " with ID "
+            << symbol_id << std::endl;
 
   return symbol_id;
 }
 
-bool SymbolManager::updateSymbolMetadata(uint32_t symbol_id,
-                                         const SymbolMetadata &metadata) {
+bool SymbolManager::updateSymbolMetadata(uint32_t symbol_id, const SymbolMetadata& metadata) {
   std::lock_guard lock(symbols_mutex_);
 
   auto it = symbol_metadata_.find(symbol_id);
@@ -157,8 +149,7 @@ bool SymbolManager::updateSymbolMetadata(uint32_t symbol_id,
   return false;
 }
 
-std::optional<SymbolMetadata>
-SymbolManager::getSymbolMetadata(uint32_t symbol_id) const {
+std::optional<SymbolMetadata> SymbolManager::getSymbolMetadata(uint32_t symbol_id) const {
   std::lock_guard lock(symbols_mutex_);
 
   auto it = symbol_metadata_.find(symbol_id);
@@ -169,8 +160,7 @@ SymbolManager::getSymbolMetadata(uint32_t symbol_id) const {
   return std::nullopt;
 }
 
-ExchangeStatistics
-SymbolManager::getExchangeStatistics(const std::string &exchange) const {
+ExchangeStatistics SymbolManager::getExchangeStatistics(const std::string& exchange) const {
   std::lock_guard lock(stats_mutex_);
 
   auto it = exchange_stats_.find(exchange);
@@ -181,14 +171,13 @@ SymbolManager::getExchangeStatistics(const std::string &exchange) const {
   return ExchangeStatistics{};
 }
 
-std::vector<ExchangeStatistics>
-SymbolManager::getAllExchangeStatistics() const {
+std::vector<ExchangeStatistics> SymbolManager::getAllExchangeStatistics() const {
   std::lock_guard lock(stats_mutex_);
 
   std::vector<ExchangeStatistics> stats;
   stats.reserve(exchange_stats_.size());
 
-  for (const auto &[exchange, stat] : exchange_stats_) {
+  for (const auto& [exchange, stat] : exchange_stats_) {
     stats.push_back(stat);
   }
 
@@ -197,8 +186,7 @@ SymbolManager::getAllExchangeStatistics() const {
 
 bool SymbolManager::saveSymbolMappings() const {
   if (symbols_file_.empty()) {
-    std::cerr << "[SymbolManager] No symbols file configured for saving"
-              << std::endl;
+    std::cerr << "[SymbolManager] No symbols file configured for saving" << std::endl;
     return false;
   }
 
@@ -207,28 +195,24 @@ bool SymbolManager::saveSymbolMappings() const {
 
 bool SymbolManager::reloadSymbolMappings() {
   if (symbols_file_.empty()) {
-    std::cerr << "[SymbolManager] No symbols file configured for reloading"
-              << std::endl;
+    std::cerr << "[SymbolManager] No symbols file configured for reloading" << std::endl;
     return false;
   }
 
-  std::cout << "[SymbolManager] Reloading symbol mappings from "
-            << symbols_file_ << std::endl;
+  std::cout << "[SymbolManager] Reloading symbol mappings from " << symbols_file_ << std::endl;
   return symbol_registry_->load_from_file(symbols_file_);
 }
 
-void SymbolManager::setExchangeFilter(const std::string &exchange,
-                                      const ExchangeFilter &filter) {
+void SymbolManager::setExchangeFilter(const std::string& exchange, const ExchangeFilter& filter) {
   std::lock_guard lock(filters_mutex_);
   exchange_filters_[exchange] = filter;
 
   std::cout << "[SymbolManager] Set filter for exchange " << exchange
-            << " (enabled: " << filter.enabled
-            << ", max_symbols: " << filter.max_symbols << ")" << std::endl;
+            << " (enabled: " << filter.enabled << ", max_symbols: " << filter.max_symbols << ")"
+            << std::endl;
 }
 
-std::optional<ExchangeFilter>
-SymbolManager::getExchangeFilter(const std::string &exchange) const {
+std::optional<ExchangeFilter> SymbolManager::getExchangeFilter(const std::string& exchange) const {
   std::lock_guard lock(filters_mutex_);
 
   auto it = exchange_filters_.find(exchange);
@@ -248,14 +232,13 @@ void SymbolManager::enableAutoDiscovery(bool enabled) {
     stopAutoDiscovery();
   }
 
-  std::cout << "[SymbolManager] Auto-discovery "
-            << (enabled ? "enabled" : "disabled") << std::endl;
+  std::cout << "[SymbolManager] Auto-discovery " << (enabled ? "enabled" : "disabled") << std::endl;
 }
 
 void SymbolManager::setUpdateInterval(uint32_t interval_ms) {
-  symbol_update_interval_ms_ = std::max(100u, interval_ms); // Minimum 100ms
-  std::cout << "[SymbolManager] Set update interval to "
-            << symbol_update_interval_ms_ << "ms" << std::endl;
+  symbol_update_interval_ms_ = std::max(100u, interval_ms);  // Minimum 100ms
+  std::cout << "[SymbolManager] Set update interval to " << symbol_update_interval_ms_ << "ms"
+            << std::endl;
 }
 
 SymbolManagerStatistics SymbolManager::getStatistics() const {
@@ -267,7 +250,7 @@ SymbolManagerStatistics SymbolManager::getStatistics() const {
 
   // Count symbols by exchange
   std::unordered_map<std::string, size_t> exchange_counts;
-  for (const auto &symbol : all_symbols) {
+  for (const auto& symbol : all_symbols) {
     exchange_counts[symbol.exchange]++;
   }
 
@@ -293,18 +276,16 @@ void SymbolManager::autoDiscoveryLoop() {
 
       // Save updated mappings periodically
       static int save_counter = 0;
-      if (++save_counter % 60 == 0) { // Save every 60 iterations
+      if (++save_counter % 60 == 0) {  // Save every 60 iterations
         saveSymbolMappings();
       }
 
-    } catch (const std::exception &e) {
-      std::cerr << "[SymbolManager] Auto-discovery error: " << e.what()
-                << std::endl;
+    } catch (const std::exception& e) {
+      std::cerr << "[SymbolManager] Auto-discovery error: " << e.what() << std::endl;
     }
 
     // Sleep for the configured interval
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(symbol_update_interval_ms_));
+    std::this_thread::sleep_for(std::chrono::milliseconds(symbol_update_interval_ms_));
   }
 
   std::cout << "[SymbolManager] Auto-discovery loop stopped" << std::endl;
@@ -324,10 +305,10 @@ void SymbolManager::discoverNewSymbols() {
   // This would be integrated with the HotSpine data bridge
 }
 
-void SymbolManager::updateExchangeStatistics(const std::string &exchange) {
+void SymbolManager::updateExchangeStatistics(const std::string& exchange) {
   std::lock_guard lock(stats_mutex_);
 
-  auto &stats = exchange_stats_[exchange];
+  auto& stats = exchange_stats_[exchange];
   stats.exchange_name = exchange;
 
   auto exchange_symbols = symbol_registry_->get_all_symbols();
@@ -339,12 +320,12 @@ void SymbolManager::updateExchangeStatistics(const std::string &exchange) {
   auto now = std::chrono::high_resolution_clock::now();
 
   std::lock_guard symbols_lock(symbols_mutex_);
-  for (const auto &symbol : exchange_symbols) {
+  for (const auto& symbol : exchange_symbols) {
     auto metadata_it = symbol_metadata_.find(symbol.id);
     if (metadata_it != symbol_metadata_.end()) {
-      auto time_diff = std::chrono::duration_cast<std::chrono::minutes>(
-          now - metadata_it->second.last_seen);
-      if (time_diff.count() < 5) { // Active if seen within 5 minutes
+      auto time_diff =
+          std::chrono::duration_cast<std::chrono::minutes>(now - metadata_it->second.last_seen);
+      if (time_diff.count() < 5) {  // Active if seen within 5 minutes
         stats.active_symbols++;
       }
     }
@@ -353,17 +334,16 @@ void SymbolManager::updateExchangeStatistics(const std::string &exchange) {
 
 void SymbolManager::updateAllExchangeStatistics() {
   auto exchanges = symbol_registry_->get_exchanges();
-  for (const auto &exchange : exchanges) {
+  for (const auto& exchange : exchanges) {
     updateExchangeStatistics(exchange);
   }
 }
 
-bool SymbolManager::matchesFilter(const SymbolInfo &symbol,
-                                  const SymbolFilter &filter) const {
+bool SymbolManager::matchesFilter(const SymbolInfo& symbol, const SymbolFilter& filter) const {
   // Check exchange filter
   if (!filter.exchanges.empty()) {
-    if (std::find(filter.exchanges.begin(), filter.exchanges.end(),
-                  symbol.exchange) == filter.exchanges.end()) {
+    if (std::find(filter.exchanges.begin(), filter.exchanges.end(), symbol.exchange) ==
+        filter.exchanges.end()) {
       return false;
     }
   }
@@ -398,26 +378,24 @@ bool SymbolManager::matchesFilter(const SymbolInfo &symbol,
     auto metadata_it = symbol_metadata_.find(symbol.id);
     if (metadata_it != symbol_metadata_.end()) {
       auto now = std::chrono::high_resolution_clock::now();
-      auto time_diff = std::chrono::duration_cast<std::chrono::minutes>(
-          now - metadata_it->second.last_seen);
-      if (time_diff.count() >= 5) { // Not active if not seen within 5 minutes
+      auto time_diff =
+          std::chrono::duration_cast<std::chrono::minutes>(now - metadata_it->second.last_seen);
+      if (time_diff.count() >= 5) {  // Not active if not seen within 5 minutes
         return false;
       }
     } else if (filter.active_only) {
-      return false; // No metadata means not active
+      return false;  // No metadata means not active
     }
   }
 
   return true;
 }
 
-std::string
-SymbolManager::extractBaseCurrency(const std::string &symbol) const {
+std::string SymbolManager::extractBaseCurrency(const std::string& symbol) const {
   // Simple heuristic: assume common quote currencies and extract base
-  std::vector<std::string> common_quotes = {"USDT", "USDC", "BTC", "ETH",
-                                            "BNB",  "USD",  "EUR"};
+  std::vector<std::string> common_quotes = {"USDT", "USDC", "BTC", "ETH", "BNB", "USD", "EUR"};
 
-  for (const auto &quote : common_quotes) {
+  for (const auto& quote : common_quotes) {
     if (symbol.length() > quote.length() &&
         symbol.substr(symbol.length() - quote.length()) == quote) {
       return symbol.substr(0, symbol.length() - quote.length());
@@ -428,13 +406,11 @@ SymbolManager::extractBaseCurrency(const std::string &symbol) const {
   return symbol.substr(0, std::min(4ul, symbol.length()));
 }
 
-std::string
-SymbolManager::extractQuoteCurrency(const std::string &symbol) const {
+std::string SymbolManager::extractQuoteCurrency(const std::string& symbol) const {
   // Simple heuristic: assume common quote currencies
-  std::vector<std::string> common_quotes = {"USDT", "USDC", "BTC", "ETH",
-                                            "BNB",  "USD",  "EUR"};
+  std::vector<std::string> common_quotes = {"USDT", "USDC", "BTC", "ETH", "BNB", "USD", "EUR"};
 
-  for (const auto &quote : common_quotes) {
+  for (const auto& quote : common_quotes) {
     if (symbol.length() > quote.length() &&
         symbol.substr(symbol.length() - quote.length()) == quote) {
       return quote;
@@ -447,26 +423,23 @@ SymbolManager::extractQuoteCurrency(const std::string &symbol) const {
 
 void SymbolManager::initializeExchangeFilters() {
   // Initialize default filters for known exchanges
-  std::vector<std::string> known_exchanges = {"binance", "okx", "coinbase",
-                                              "kraken", "bybit"};
+  std::vector<std::string> known_exchanges = {"binance", "okx", "coinbase", "kraken", "bybit"};
 
-  for (const auto &exchange : known_exchanges) {
+  for (const auto& exchange : known_exchanges) {
     ExchangeFilter filter;
     filter.enabled = true;
     filter.max_symbols = max_symbols_per_exchange_;
-    filter.priority_symbols = {"BTC", "ETH", "USDT",
-                               "BNB"}; // High priority symbols
+    filter.priority_symbols = {"BTC", "ETH", "USDT", "BNB"};  // High priority symbols
 
     std::lock_guard lock(filters_mutex_);
     exchange_filters_[exchange] = filter;
   }
 }
 
-bool SymbolManager::loadConfiguration(const std::string &config_file) {
+bool SymbolManager::loadConfiguration(const std::string& config_file) {
   std::ifstream file(config_file);
   if (!file.is_open()) {
-    std::cerr << "[SymbolManager] Could not open config file: " << config_file
-              << std::endl;
+    std::cerr << "[SymbolManager] Could not open config file: " << config_file << std::endl;
     return false;
   }
 
@@ -474,8 +447,7 @@ bool SymbolManager::loadConfiguration(const std::string &config_file) {
   // parser)
   std::string line;
   while (std::getline(file, line)) {
-    if (line.empty() || line[0] == '#')
-      continue;
+    if (line.empty() || line[0] == '#') continue;
 
     std::istringstream iss(line);
     std::string key, value;
@@ -490,10 +462,9 @@ bool SymbolManager::loadConfiguration(const std::string &config_file) {
     }
   }
 
-  std::cout << "[SymbolManager] Loaded configuration from " << config_file
-            << std::endl;
+  std::cout << "[SymbolManager] Loaded configuration from " << config_file << std::endl;
   return true;
 }
 
-} // namespace RenderEngine
-} // namespace BTQuant
+}  // namespace RenderEngine
+}  // namespace BTQuant

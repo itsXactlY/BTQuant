@@ -26,6 +26,15 @@
  */
 
 // Include modular headers
+#include <imgui.h>
+
+#include <expected>
+#include <glm/glm.hpp>
+#include <memory>
+#include <print>
+#include <string>
+#include <vector>
+
 #include "analytics/technical_analysis.hpp"
 #include "components/VulkanSynchronization.h"
 #include "components/theme_manager.hpp"
@@ -37,14 +46,6 @@
 #include "ui/ui_base.hpp"
 #include "vulkan_base_types.hpp"
 
-#include <expected>
-#include <glm/glm.hpp>
-#include <imgui.h>
-#include <memory>
-#include <print>
-#include <string>
-#include <vector>
-
 namespace BTQuant {
 
 // Global RenderEngine namespace for data structures
@@ -54,12 +55,10 @@ struct OrderBookLevel {
   double size;
 };
 class MarketMicrostructureRenderer;
-} // namespace RenderEngine
+}  // namespace RenderEngine
 
 // Helper: Convert ImVec4 to glm::vec4
-inline glm::vec4 to_glm(const ImVec4 &v) {
-  return glm::vec4(v.x, v.y, v.z, v.w);
-}
+inline glm::vec4 to_glm(const ImVec4& v) { return glm::vec4(v.x, v.y, v.z, v.w); }
 
 // ============================================================================
 // Gesture \u0026 Touch Types
@@ -129,10 +128,10 @@ struct AlertRule {
 };
 
 class AlertManager {
-public:
+ public:
   void update(float dt);
-  void add_alert(const AlertRule &rule);
-  void check_alerts(const std::string &symbol, double price);
+  void add_alert(const AlertRule& rule);
+  void check_alerts(const std::string& symbol, double price);
   std::vector<AlertRule> get_alerts();
   void remove_alert(size_t index);
 };
@@ -143,8 +142,8 @@ class QuantWorkspaceComponent;
 class RealtimeDashboardComponent;
 
 class ResizablePanel : public UIComponent {
-public:
-  ResizablePanel(const glm::vec2 &p, const glm::vec2 &s, const std::string &t)
+ public:
+  ResizablePanel(const glm::vec2& p, const glm::vec2& s, const std::string& t)
       : UIComponent(p, s), title_(t) {}
   void set_resizable(bool r) { resizable_ = r; }
   void set_snap_to_grid(bool s, float g) {
@@ -154,7 +153,7 @@ public:
   void update(float) override {}
   void render_gui() override {}
 
-private:
+ private:
   std::string title_;
   bool resizable_ = true;
   bool snap_to_grid_ = false;
@@ -162,19 +161,19 @@ private:
 };
 
 class LayoutManager {
-public:
+ public:
   void create_default_layouts();
-  void save_layout(const std::string &name, const std::string &desc);
+  void save_layout(const std::string& name, const std::string& desc);
 };
 
 class SearchEngine {
-public:
-  void index_symbol(const std::string &s, const std::string &d);
-  std::vector<std::string> search(const std::string &q);
+ public:
+  void index_symbol(const std::string& s, const std::string& d);
+  std::vector<std::string> search(const std::string& q);
 };
 
 class DataFilter {
-public:
+ public:
   enum class FilterType { Text, Numeric, Boolean };
   enum class ComparisonOperator { Equals, NotEquals, Greater, Less, Contains };
   struct FilterCriteria {
@@ -183,7 +182,7 @@ public:
     ComparisonOperator operator_;
     std::string value;
   };
-  void add_filter(const FilterCriteria &c);
+  void add_filter(const FilterCriteria& c);
 };
 
 // ============================================================================
@@ -191,27 +190,27 @@ public:
 // ============================================================================
 
 struct StrategyControlComponent : public UIComponent {
-  StrategyControlComponent(const glm::vec2 &p, const glm::vec2 &s);
+  StrategyControlComponent(const glm::vec2& p, const glm::vec2& s);
   void update(float dt) override;
   void render_gui() override;
   void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore *core) override;
+  void initialize_vulkan_resources(VulkanCore* core) override;
 };
 
 struct RiskManagerComponent : public UIComponent {
-  RiskManagerComponent(const glm::vec2 &p, const glm::vec2 &s);
+  RiskManagerComponent(const glm::vec2& p, const glm::vec2& s);
   void update(float dt) override;
   void render_gui() override;
   void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore *core) override;
+  void initialize_vulkan_resources(VulkanCore* core) override;
 };
 
 struct TradingInterfaceComponent : public UIComponent {
-  TradingInterfaceComponent(const glm::vec2 &p, const glm::vec2 &s);
+  TradingInterfaceComponent(const glm::vec2& p, const glm::vec2& s);
   void update(float dt) override;
   void render_gui() override;
   void clear_data() override;
-  void initialize_vulkan_resources(VulkanCore *core) override;
+  void initialize_vulkan_resources(VulkanCore* core) override;
 };
 
 // Forward declarations for other archived components
@@ -242,7 +241,7 @@ struct MarketDepthChartComponent;
  * management.
  */
 class VulkanDashboard {
-public:
+ public:
   /**
    * @brief Construct a new VulkanDashboard object
    * @param width Window width in pixels
@@ -251,10 +250,9 @@ public:
    * @param processor Shared pointer to the market data processor
    * @param config Configuration object for dashboard settings
    */
-  VulkanDashboard(uint32_t width, uint32_t height,
-                  std::shared_ptr<HotSpineDataBridge> bridge,
+  VulkanDashboard(uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                  const VulkanDashboardConfig &config);
+                  const VulkanDashboardConfig& config);
 
   /// @brief Destructor - cleans up all allocated resources
   ~VulkanDashboard();
@@ -278,13 +276,13 @@ public:
   bool should_close() const;
 
   /// @brief Set the currently active trading symbol
-  void set_active_symbol(const std::string &s) { active_symbol_ = s; }
+  void set_active_symbol(const std::string& s) { active_symbol_ = s; }
 
   /// @brief Get the currently active trading symbol
   std::string get_active_symbol() const { return active_symbol_; }
 
   /// @brief Get access to the underlying Vulkan core
-  VulkanCore *get_vulkan_core() { return m_vulkanCore.get(); }
+  VulkanCore* get_vulkan_core() { return m_vulkanCore.get(); }
 
   /// @brief Set a callback to render custom ImGui menu items
   void set_custom_menubar_callback(std::function<void()> callback) {
@@ -292,16 +290,12 @@ public:
   }
 
   /// @brief Get the workspace component
-  QuantWorkspaceComponent *get_workspace_component() {
-    return m_workspace.get();
-  }
+  QuantWorkspaceComponent* get_workspace_component() { return m_workspace.get(); }
 
   /// @brief Toggle performance overlay
-  void set_show_performance_overlay(bool show) {
-    show_performance_overlay_ = show;
-  }
+  void set_show_performance_overlay(bool show) { show_performance_overlay_ = show; }
 
-private:
+ private:
   /// @brief Initialize all UI components
   void init_components();
 
@@ -341,9 +335,8 @@ private:
    * @param width New width
    * @param height New height
    */
-  static void framebuffer_size_callback(GLFWwindow *window, int width,
-                                        int height);
-  GLFWwindow *window_ = nullptr;
+  static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+  GLFWwindow* window_ = nullptr;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

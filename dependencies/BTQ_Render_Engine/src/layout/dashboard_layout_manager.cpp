@@ -1,11 +1,12 @@
 #include "layout/dashboard_layout_manager.hpp"
-#include "layout/layout_presets.hpp"
 
 #include <algorithm>  // for std::remove_if
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
+#include "layout/layout_presets.hpp"
 
 #ifdef HAS_NLOHMANN_JSON
 #include <nlohmann/json.hpp>

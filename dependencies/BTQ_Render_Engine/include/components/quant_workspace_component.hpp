@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../symbol_registry.hpp"
@@ -11,27 +13,26 @@
 #include "imgui.h"
 #include "implot.h"
 #include "panel_manager.hpp"
-#include <memory>
 
 namespace BTQuant {
 
 class QuantWorkspaceComponent : public UIComponent {
-public:
+ public:
   explicit QuantWorkspaceComponent(
       std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-      RenderEngine::MarketMicrostructureRenderer *micro_renderer = nullptr);
+      RenderEngine::MarketMicrostructureRenderer* micro_renderer = nullptr);
   virtual ~QuantWorkspaceComponent() = default;
 
   void update(float dt) override;
   void render_gui() override;
 
-  PanelManager *getPanelManager() { return panel_manager_.get(); }
+  PanelManager* getPanelManager() { return panel_manager_.get(); }
 
-  void initialize_vulkan_resources(VulkanCore *core) override;
+  void initialize_vulkan_resources(VulkanCore* core) override;
   void clear_data() override;
 
-private:
+ private:
   // Core systems
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -55,8 +56,8 @@ private:
   double order_quantity_ = 1.0;
   double order_price_ = 0.0;
   std::string selected_symbol_ = "BTC/USDT";
-  int selected_order_side_ = 0; // 0 = Buy, 1 = Sell
-  int selected_order_type_ = 0; // 0 = Market, 1 = Limit
+  int selected_order_side_ = 0;  // 0 = Buy, 1 = Sell
+  int selected_order_type_ = 0;  // 0 = Market, 1 = Limit
   std::vector<std::string> order_sides_ = {"Buy", "Sell"};
   std::vector<std::string> order_types_ = {"Market", "Limit"};
 
@@ -66,4 +67,4 @@ private:
   void render_positions_panel();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

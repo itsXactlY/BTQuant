@@ -6,9 +6,9 @@
 #include <iostream>
 #include <numeric>
 
+#include "../../include/components/volume_profile_panel.hpp"
 #include "imgui.h"
 #include "implot.h"
-#include "../../include/components/volume_profile_panel.hpp"
 
 namespace BTQuant {
 
@@ -1040,13 +1040,14 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
       for (size_t i = render_start_idx; i < render_end_idx; ++i) {
         RenderEngine::OHLCVCandle candle;
-        candle.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert back to microseconds
+        candle.timestamp =
+            static_cast<uint64_t>(chart.dates[i] * 1000000);  // Convert back to microseconds
         candle.open = chart.opens[i];
         candle.high = chart.highs[i];
         candle.low = chart.lows[i];
         candle.close = chart.closes[i];
         candle.volume = chart.volumes[i];
-        candle.trade_count = 1; // Placeholder
+        candle.trade_count = 1;  // Placeholder
 
         visible_candles.push_back(candle);
 
@@ -1066,7 +1067,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       if (id_opt) {
         VolumeProfilePanel temp_vp(PanelConfig{}, bridge_, processor_);
         temp_vp.set_symbol(*id_opt, symbol_);
-        temp_vp.render_mini_histograms_on_candles(draw_list, visible_candles, x_coords, y_coords_high, y_coords_low);
+        temp_vp.render_step_profile_histograms(draw_list, visible_candles, x_coords,
+                                               y_coords_high, y_coords_low, true, 8);
       }
     }
 

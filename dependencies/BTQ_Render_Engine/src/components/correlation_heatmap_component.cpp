@@ -11,22 +11,23 @@
  */
 
 #include "../../include/components/correlation_heatmap_component.hpp"
-#include "../../include/symbol_registry.hpp"
-#include "imgui.h"
-#include "implot.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <numeric>
+
+#include "../../include/symbol_registry.hpp"
+#include "imgui.h"
+#include "implot.h"
 
 namespace BTQuant {
 
 // Constants
 namespace {
 constexpr float UPDATE_INTERVAL_SECONDS = 5.0f;
-constexpr std::array<const char *, 5> EXCHANGES = {"Binance", "OKX", "Bybit",
-                                                   "Coinbase", "Kraken"};
-} // namespace
+constexpr std::array<const char*, 5> EXCHANGES = {"Binance", "OKX", "Bybit", "Coinbase", "Kraken"};
+}  // namespace
 
 CorrelationHeatmapComponent::CorrelationHeatmapComponent(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
@@ -47,8 +48,7 @@ void CorrelationHeatmapComponent::update(float dt) {
 }
 
 void CorrelationHeatmapComponent::render_gui() {
-  if (!visible_)
-    return;
+  if (!visible_) return;
 
   ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
   if (ImGui::Begin("Correlation Heatmap", &visible_)) {
@@ -59,8 +59,7 @@ void CorrelationHeatmapComponent::render_gui() {
   ImGui::End();
 }
 
-void CorrelationHeatmapComponent::set_symbols(
-    const std::vector<std::string> &symbols) {
+void CorrelationHeatmapComponent::set_symbols(const std::vector<std::string>& symbols) {
   symbols_ = symbols;
   update_correlation_matrix();
 }
@@ -68,11 +67,9 @@ void CorrelationHeatmapComponent::set_symbols(
 void CorrelationHeatmapComponent::render_controls() {
   if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
     // Timeframe selection - use correct timeframe names
-    const char *timeframes[] = {"1ms",  "10ms", "100ms", "500ms",
-                                "1sec", "3sec", "5sec",  "15sec"};
+    const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1sec", "3sec", "5sec", "15sec"};
     int selected = static_cast<int>(timeframe_);
-    if (ImGui::Combo("Timeframe", &selected, timeframes,
-                     IM_ARRAYSIZE(timeframes))) {
+    if (ImGui::Combo("Timeframe", &selected, timeframes, IM_ARRAYSIZE(timeframes))) {
       timeframe_ = static_cast<RenderEngine::TimeFrame>(selected);
       update_correlation_matrix();
     }
@@ -97,16 +94,14 @@ void CorrelationHeatmapComponent::render_controls() {
 void CorrelationHeatmapComponent::render_heatmap() {
   std::lock_guard<std::mutex> lock(data_mutex_);
 
-  if (correlation_matrix_.matrix.empty() ||
-      correlation_matrix_.labels.empty()) {
+  if (correlation_matrix_.matrix.empty() || correlation_matrix_.labels.empty()) {
     ImGui::Text("No correlation data available");
     ImGui::Text("Waiting for market data...");
     return;
   }
 
   int n = static_cast<int>(correlation_matrix_.labels.size());
-  if (n == 0)
-    return;
+  if (n == 0) return;
 
   // Flatten the matrix for ImPlot::PlotHeatmap
   std::vector<double> flat_data;
@@ -124,16 +119,15 @@ void CorrelationHeatmapComponent::render_heatmap() {
                         ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
     // Set up axes with labels
     ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_NoDecorations);
-    ImPlot::SetupAxis(ImAxis_Y1, nullptr,
-                      ImPlotAxisFlags_NoDecorations | ImPlotAxisFlags_Invert);
+    ImPlot::SetupAxis(ImAxis_Y1, nullptr, ImPlotAxisFlags_NoDecorations | ImPlotAxisFlags_Invert);
 
     // Set axis limits
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, n, ImGuiCond_Always);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 0, n, ImGuiCond_Always);
 
     // Plot heatmap - correct signature
-    ImPlot::PlotHeatmap("Correlation", flat_data.data(), n, n, -1.0, 1.0,
-                        "%.2f", ImPlotPoint(0, 0), ImPlotPoint(n, n));
+    ImPlot::PlotHeatmap("Correlation", flat_data.data(), n, n, -1.0, 1.0, "%.2f", ImPlotPoint(0, 0),
+                        ImPlotPoint(n, n));
 
     ImPlot::EndPlot();
   }
@@ -149,8 +143,7 @@ void CorrelationHeatmapComponent::render_heatmap() {
   for (int i = 0; i < n; ++i) {
     ImGui::SameLine();
     ImGui::Text("%s", correlation_matrix_.labels[i].c_str());
-    if (i < n - 1)
-      ImGui::SameLine();
+    if (i < n - 1) ImGui::SameLine();
   }
 
   // Display correlation values on hover info
@@ -169,21 +162,18 @@ void CorrelationHeatmapComponent::update_correlation_matrix() {
     for (int j = i; j < n; ++j) {
       double corr = calculate_correlation(symbols_[i], symbols_[j]);
       correlation_matrix_.matrix[i][j] = corr;
-      correlation_matrix_.matrix[j][i] = corr; // Symmetric
+      correlation_matrix_.matrix[j][i] = corr;  // Symmetric
     }
   }
 
-  correlation_matrix_.last_update =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::system_clock::now().time_since_epoch())
-          .count();
+  correlation_matrix_.last_update = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
 }
 
-double
-CorrelationHeatmapComponent::calculate_correlation(const std::string &symbol1,
-                                                   const std::string &symbol2) {
-  if (symbol1 == symbol2)
-    return 1.0;
+double CorrelationHeatmapComponent::calculate_correlation(const std::string& symbol1,
+                                                          const std::string& symbol2) {
+  if (symbol1 == symbol2) return 1.0;
 
   auto returns1 = get_returns(symbol1);
   auto returns2 = get_returns(symbol2);
@@ -206,17 +196,14 @@ CorrelationHeatmapComponent::calculate_correlation(const std::string &symbol1,
   }
 
   double numerator = n * sum_xy - sum_x * sum_y;
-  double denominator =
-      std::sqrt((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y));
+  double denominator = std::sqrt((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y));
 
-  if (denominator == 0.0)
-    return 0.0;
+  if (denominator == 0.0) return 0.0;
 
   return numerator / denominator;
 }
 
-std::vector<double>
-CorrelationHeatmapComponent::get_returns(const std::string &symbol) {
+std::vector<double> CorrelationHeatmapComponent::get_returns(const std::string& symbol) {
   std::vector<double> returns;
 
   // Look up symbol_id from the registry
@@ -230,8 +217,7 @@ CorrelationHeatmapComponent::get_returns(const std::string &symbol) {
   // Get candles using correct API: getCandles(symbol_id, timeframe)
   auto candles = processor_->getCandles(symbol_id, timeframe_);
 
-  if (candles.size() < 2)
-    return returns;
+  if (candles.size() < 2) return returns;
 
   // Limit to lookback periods
   size_t start_idx = 0;
@@ -250,16 +236,15 @@ CorrelationHeatmapComponent::get_returns(const std::string &symbol) {
   return returns;
 }
 
-std::optional<uint32_t>
-CorrelationHeatmapComponent::get_symbol_id(const std::string &symbol) {
+std::optional<uint32_t> CorrelationHeatmapComponent::get_symbol_id(const std::string& symbol) {
   // Try to get symbol ID from the registry
   // Symbol format is typically "BTC-USDT" - we need to parse exchange
-  auto &registry = SymbolRegistry::instance();
+  auto& registry = SymbolRegistry::instance();
 
   // Try common exchanges
-  static const std::vector<std::string> exchanges = {"Binance", "OKX", "Bybit",
-                                                     "Coinbase", "Kraken"};
-  for (const auto &exchange : exchanges) {
+  static const std::vector<std::string> exchanges = {"Binance", "OKX", "Bybit", "Coinbase",
+                                                     "Kraken"};
+  for (const auto& exchange : exchanges) {
     auto id_opt = registry.get_symbol_id(exchange, symbol);
     if (id_opt.has_value()) {
       return id_opt.value();
@@ -276,8 +261,7 @@ CorrelationHeatmapComponent::get_symbol_id(const std::string &symbol) {
   return std::nullopt;
 }
 
-ImVec4
-CorrelationHeatmapComponent::get_correlation_color(double correlation) const {
+ImVec4 CorrelationHeatmapComponent::get_correlation_color(double correlation) const {
   // Normalize correlation from [-1, 1] to [0, 1]
   float t = static_cast<float>((correlation + 1.0) / 2.0);
 
@@ -289,11 +273,10 @@ CorrelationHeatmapComponent::get_correlation_color(double correlation) const {
   }
 }
 
-std::string
-CorrelationHeatmapComponent::format_correlation_value(double value) const {
+std::string CorrelationHeatmapComponent::format_correlation_value(double value) const {
   char buf[32];
   snprintf(buf, sizeof(buf), "%.3f", value);
   return std::string(buf);
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

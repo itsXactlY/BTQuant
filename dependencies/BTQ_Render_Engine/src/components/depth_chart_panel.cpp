@@ -1,15 +1,17 @@
 #include "../../include/components/depth_chart_panel.hpp"
-#include "imgui.h"
-#include "implot.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 
+#include "imgui.h"
+#include "implot.h"
+
 namespace BTQuant {
 
-DepthChartPanel::DepthChartPanel(
-    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+DepthChartPanel::DepthChartPanel(const PanelConfig& config,
+                                 std::shared_ptr<HotSpineDataBridge> bridge,
+                                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   // Pre-allocate vectors for typical orderbook depth
   bid_prices_.reserve(50);
@@ -29,8 +31,7 @@ DepthChartPanel::~DepthChartPanel() {
 }
 
 void DepthChartPanel::subscribe_to_updates() {
-  if (!processor_ || symbol_id_ == 0)
-    return;
+  if (!processor_ || symbol_id_ == 0) return;
 
   // Unsubscribe from previous symbol if any
   if (subscription_id_ != 0) {
@@ -94,8 +95,8 @@ void DepthChartPanel::render() {
 }
 
 void DepthChartPanel::compute_depth_data() {
-  const auto &bids = cached_orderbook_.bids;
-  const auto &asks = cached_orderbook_.asks;
+  const auto& bids = cached_orderbook_.bids;
+  const auto& asks = cached_orderbook_.asks;
 
   // Clear and repopulate
   bid_prices_.clear();
@@ -113,7 +114,7 @@ void DepthChartPanel::compute_depth_data() {
     // 1. Calculate cumulative depth from Best -> Worst (Descending Price)
     //    Best Bid (High Price) has small depth. Worst Bid (Low Price) has max
     //    depth.
-    for (const auto &level : bids) {
+    for (const auto& level : bids) {
       cumulative += level.size;
       temp_points.push_back({level.price, cumulative});
     }
@@ -156,7 +157,7 @@ void DepthChartPanel::compute_depth_data() {
     // 1. Calculate cumulative depth from Best -> Worst (Ascending Price)
     //    Best Ask (Low Price) has small depth. Worst Ask (High Price) has max
     //    depth.
-    for (const auto &level : asks) {
+    for (const auto& level : asks) {
       cumulative += level.size;
       temp_points.push_back({level.price, cumulative});
     }
@@ -177,7 +178,7 @@ void DepthChartPanel::compute_depth_data() {
       ask_cumulative_.push_back(0.0);
 
       // B. Points
-      for (const auto &p : temp_points) {
+      for (const auto& p : temp_points) {
         ask_prices_.push_back(p.first);
         ask_cumulative_.push_back(p.second);
       }
@@ -195,14 +196,11 @@ void DepthChartPanel::compute_depth_data() {
 
   max_depth_ = 1.0;
   // Check cumulative vectors for max depth (ignoring the 0 points)
-  for (double d : bid_cumulative_)
-    max_depth_ = std::max(max_depth_, d);
-  for (double d : ask_cumulative_)
-    max_depth_ = std::max(max_depth_, d);
+  for (double d : bid_cumulative_) max_depth_ = std::max(max_depth_, d);
+  for (double d : ask_cumulative_) max_depth_ = std::max(max_depth_, d);
 }
 
-void DepthChartPanel::set_symbol(uint32_t symbol_id,
-                                 const std::string &symbol_name) {
+void DepthChartPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   cached_orderbook_ = {};
@@ -213,7 +211,7 @@ void DepthChartPanel::set_symbol(uint32_t symbol_id,
 
   // Re-subscribe to new symbol
   subscribe_to_updates();
-  markDirty(); // Force immediate rebuild
+  markDirty();  // Force immediate rebuild
 }
 
 void DepthChartPanel::render_stats() {
@@ -221,20 +219,16 @@ void DepthChartPanel::render_stats() {
   ImGui::SameLine();
 
   // Color-coded spread
-  ImVec4 spread_color = cached_orderbook_.spread_percent < 0.1f
-                            ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                            : ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
-  ImGui::TextColored(spread_color, "| Spread: %.4f (%.3f%%)",
-                     cached_orderbook_.spread,
+  ImVec4 spread_color = cached_orderbook_.spread_percent < 0.1f ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
+                                                                : ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
+  ImGui::TextColored(spread_color, "| Spread: %.4f (%.3f%%)", cached_orderbook_.spread,
                      cached_orderbook_.spread_percent);
   ImGui::SameLine();
 
   // Color-coded imbalance
-  ImVec4 imbalance_color = cached_orderbook_.imbalance > 0
-                               ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                               : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-  ImGui::TextColored(imbalance_color, "| Imbalance: %+.2f",
-                     cached_orderbook_.imbalance);
+  ImVec4 imbalance_color = cached_orderbook_.imbalance > 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
+                                                           : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+  ImGui::TextColored(imbalance_color, "| Imbalance: %+.2f", cached_orderbook_.imbalance);
 }
 
 void DepthChartPanel::render_depth_chart_implot() {
@@ -246,8 +240,7 @@ void DepthChartPanel::render_depth_chart_implot() {
   }
 
   ImVec2 region = ImGui::GetContentRegionAvail();
-  if (region.x < 50 || region.y < 50)
-    return;
+  if (region.x < 50 || region.y < 50) return;
 
   // Calculate axis limits
   double price_min = mid_price_ * 0.995;
@@ -265,7 +258,7 @@ void DepthChartPanel::render_depth_chart_implot() {
   snprintf(plot_id, sizeof(plot_id), "##DepthChart_%s", config_.title.c_str());
 
   // Styling: Neon Financial Colors (Green/Red) from ThemeManager
-  const auto &colors = ThemeManager::getInstance().getColors();
+  const auto& colors = ThemeManager::getInstance().getColors();
   ImVec4 col_bid_fill = colors.accent_green;
   col_bid_fill.w = 0.2f;
   ImVec4 col_bid_line = colors.accent_green;
@@ -275,10 +268,8 @@ void DepthChartPanel::render_depth_chart_implot() {
 
   // Setup Plot Flags for clean look
   if (ImPlot::BeginPlot(plot_id, region,
-                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend |
-                            ImPlotFlags_NoMouseText | ImPlotFlags_NoBoxSelect |
-                            ImPlotFlags_NoMenus)) {
-
+                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText |
+                            ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMenus)) {
     // Set axis limits - cleaner look without labels
     ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoLabel,
                       ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_Opposite);
@@ -318,12 +309,12 @@ void DepthChartPanel::render_depth_chart_implot() {
       // Annotation for mid price
       char mid_label[32];
       snprintf(mid_label, sizeof(mid_label), "Mid: %.2f", mid_price_);
-      ImPlot::Annotation(mid_price_, max_depth_ * 0.9, ImVec4(1, 1, 1, 1),
-                         ImVec2(5, -5), true, "%s", mid_label);
+      ImPlot::Annotation(mid_price_, max_depth_ * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5), true,
+                         "%s", mid_label);
     }
 
     ImPlot::EndPlot();
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

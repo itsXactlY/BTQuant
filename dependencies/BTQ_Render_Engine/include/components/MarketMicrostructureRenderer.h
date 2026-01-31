@@ -1,17 +1,18 @@
 #pragma once
 
-#include "../../include/market_data_processor.hpp"
-#include "../vulkan_base_types.hpp"
-#include "VulkanSynchronization.h"
-#include "hotspine_data_bridge.hpp"
-#include "trading/HotspineData.h"
-#include "data/VolumeDataTypes.h"
-#include "../../include/analytics/cluster_engine.hpp"
 #include <expected>
 #include <memory>
 #include <span>
 #include <string_view>
 #include <vector>
+
+#include "../../include/analytics/cluster_engine.hpp"
+#include "../../include/market_data_processor.hpp"
+#include "../vulkan_base_types.hpp"
+#include "VulkanSynchronization.h"
+#include "data/VolumeDataTypes.h"
+#include "hotspine_data_bridge.hpp"
+#include "trading/HotspineData.h"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -32,23 +33,22 @@ enum class RendererError {
   ShaderCompilationFailed
 };
 
-[[nodiscard]] constexpr std::string_view
-to_string(RendererError error) noexcept {
+[[nodiscard]] constexpr std::string_view to_string(RendererError error) noexcept {
   switch (error) {
-  case RendererError::NotInitialized:
-    return "Renderer not initialized";
-  case RendererError::NullVulkanCore:
-    return "VulkanCore is null";
-  case RendererError::PipelineCreationFailed:
-    return "Pipeline creation failed";
-  case RendererError::BufferAllocationFailed:
-    return "Buffer allocation failed";
-  case RendererError::TooManyClusters:
-    return "Too many clusters provided";
-  case RendererError::ShaderLoadFailed:
-    return "Shader load failed";
-  case RendererError::ShaderCompilationFailed:
-    return "Shader compilation failed";
+    case RendererError::NotInitialized:
+      return "Renderer not initialized";
+    case RendererError::NullVulkanCore:
+      return "VulkanCore is null";
+    case RendererError::PipelineCreationFailed:
+      return "Pipeline creation failed";
+    case RendererError::BufferAllocationFailed:
+      return "Buffer allocation failed";
+    case RendererError::TooManyClusters:
+      return "Too many clusters provided";
+    case RendererError::ShaderLoadFailed:
+      return "Shader load failed";
+    case RendererError::ShaderCompilationFailed:
+      return "Shader compilation failed";
   }
   return "Unknown error";
 }
@@ -58,12 +58,11 @@ to_string(RendererError error) noexcept {
 // ============================================================================
 
 class MarketMicrostructureRenderer {
-public:
-  MarketMicrostructureRenderer(
-      VulkanCore *vulkanCore,
-      std::shared_ptr<HotSpineDataBridge> hotspineBridge,
-      std::shared_ptr<MarketDataProcessor> marketDataProcessor,
-      const RendererConfig &config = RendererConfig());
+ public:
+  MarketMicrostructureRenderer(VulkanCore* vulkanCore,
+                               std::shared_ptr<HotSpineDataBridge> hotspineBridge,
+                               std::shared_ptr<MarketDataProcessor> marketDataProcessor,
+                               const RendererConfig& config = RendererConfig());
 
   ~MarketMicrostructureRenderer();
 
@@ -83,7 +82,7 @@ public:
   void executeGraphics(VkCommandBuffer cmdBuffer);
 
   // Update order book data
-  void updateLOBData(const HotspineOrderBookSnapshot &snapshot);
+  void updateLOBData(const HotspineOrderBookSnapshot& snapshot);
 
   // Update trade data
   void updateTradeData(std::span<const HotspineTradeTick> trades);
@@ -92,10 +91,10 @@ public:
   void updateFootprintClusters(std::span<const CandleCluster> clusters);
 
   // Get renderer configuration
-  const RendererConfig &getConfig() const { return config_; }
+  const RendererConfig& getConfig() const { return config_; }
 
   // Update renderer configuration
-  void updateConfig(const RendererConfig &config);
+  void updateConfig(const RendererConfig& config);
 
   // Get footprint clusters for UI labels
   std::vector<CandleCluster> getFootprintClusters() const {
@@ -151,19 +150,19 @@ public:
 
   // Get ImGui Texture ID for the LOB Heatmap
   // This utilizes ImGui_ImplVulkan_AddTexture manually
-  void *getHeatmapTextureID();
+  void* getHeatmapTextureID();
 
   // Get ClusterCell data for footprint analysis
   // This provides access to the underlying ClusterCell data for advanced analysis
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
-private:
+ private:
   // Data Update Callback
   void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
 
   uint32_t current_symbol_id_ = 0;
   uint64_t subscription_id_ = 0;
-  uint64_t subscription_id_lob_ = 0; // Separate subscription for LOB if needed
+  uint64_t subscription_id_lob_ = 0;  // Separate subscription for LOB if needed
 
   // Vulkan resource creation
   // Vulkan resource creation
@@ -189,8 +188,8 @@ private:
   // Performance tracking
   void recordFrameStats();
 
-private:
-  VulkanCore *vulkanCore_ = nullptr;
+ private:
+  VulkanCore* vulkanCore_ = nullptr;
   std::shared_ptr<HotSpineDataBridge> hotspineBridge_;
   std::shared_ptr<MarketDataProcessor> marketDataProcessor_;
   RendererConfig config_;
@@ -243,7 +242,7 @@ private:
   mutable std::mutex dataMutex_;
 
   // ImGui Texture state
-  void *heatmapTextureID_ = nullptr;
+  void* heatmapTextureID_ = nullptr;
   VkDescriptorSet heatmapDescriptorSet_ = VK_NULL_HANDLE;
 
   // Price aggregation settings
@@ -285,14 +284,14 @@ inline RendererConfig createDefaultRendererConfig() {
 }
 
 // Calculate heatmap dimensions based on config
-inline VkExtent2D getHeatmapExtent(const LOBHeatmapConfig &config) {
+inline VkExtent2D getHeatmapExtent(const LOBHeatmapConfig& config) {
   return {config.width, config.height};
 }
 
 // Calculate texture size for heatmap
-inline VkDeviceSize getHeatmapTextureSize(const LOBHeatmapConfig &config) {
-  return config.width * config.height * 4; // RGBA 8-bit per channel
+inline VkDeviceSize getHeatmapTextureSize(const LOBHeatmapConfig& config) {
+  return config.width * config.height * 4;  // RGBA 8-bit per channel
 }
 
-} // namespace RenderEngine
-} // namespace BTQuant
+}  // namespace RenderEngine
+}  // namespace BTQuant

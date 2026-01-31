@@ -5,15 +5,15 @@
 namespace BTQuant {
 
 class KeyboardShortcutsComponent : public UIComponent {
-public:
-  KeyboardShortcutsComponent(const glm::vec2 &position, const glm::vec2 &size);
+ public:
+  KeyboardShortcutsComponent(const glm::vec2& position, const glm::vec2& size);
   ~KeyboardShortcutsComponent() override;
 
-  void initialize_vulkan_resources(VulkanCore *) override;
+  void initialize_vulkan_resources(VulkanCore*) override;
   void update(float dt) override;
   void render_gui() override;
   void clear_data() override;
-  void handle_input(const InputEvent &event) override;
+  void handle_input(const InputEvent& event) override;
 
   struct Shortcut {
     std::string name;
@@ -23,14 +23,14 @@ public:
     bool active;
   };
 
-  void add_shortcut(const Shortcut &shortcut);
-  void remove_shortcut(const std::string &name);
-  void enable_shortcut(const std::string &name, bool enabled);
-  bool is_shortcut_active(const std::string &name) const;
+  void add_shortcut(const Shortcut& shortcut);
+  void remove_shortcut(const std::string& name);
+  void enable_shortcut(const std::string& name, bool enabled);
+  bool is_shortcut_active(const std::string& name) const;
 
-private:
+ private:
   void initialize_default_shortcuts();
-  void execute_shortcut(const std::string &name);
+  void execute_shortcut(const std::string& name);
   bool handle_key_event(int keycode, bool pressed, uint32_t modifiers);
 
   std::unordered_map<std::string, Shortcut> shortcuts_;
@@ -41,4 +41,4 @@ private:
   mutable std::mutex data_mutex_;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

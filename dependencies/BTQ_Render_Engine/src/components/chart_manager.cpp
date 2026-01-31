@@ -1,22 +1,22 @@
 #include "../../include/components/chart_manager.hpp"
-#include "../../include/hotspine_data_bridge.hpp"
-#include "../../include/market_data_processor.hpp"
-#include "../../include/symbol_registry.hpp"
-#include "imgui.h"
+
 #include <iostream>
 #include <unordered_map>
 #include <vector>
 
+#include "../../include/hotspine_data_bridge.hpp"
+#include "../../include/market_data_processor.hpp"
+#include "../../include/symbol_registry.hpp"
+#include "imgui.h"
+
 namespace BTQuant {
 
-ChartManager::ChartManager(
-    std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
+                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : bridge_(bridge), processor_(processor), next_chart_id_(0) {}
 
-uint32_t ChartManager::create_chart(const std::string &symbol_name,
-                                    const std::string &exchange_name,
-                                    uint32_t symbol_id,
+uint32_t ChartManager::create_chart(const std::string& symbol_name,
+                                    const std::string& exchange_name, uint32_t symbol_id,
                                     RenderEngine::TimeFrame timeframe) {
   ChartInstance chart;
   chart.symbol_name = symbol_name;
@@ -53,30 +53,28 @@ void ChartManager::toggle_chart_minimization(uint32_t chart_id) {
   }
 }
 
-void ChartManager::update_chart_position(uint32_t chart_id,
-                                         const ImVec2 &position) {
+void ChartManager::update_chart_position(uint32_t chart_id, const ImVec2& position) {
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.position = position;
   }
 }
 
-void ChartManager::update_chart_size(uint32_t chart_id, const ImVec2 &size) {
+void ChartManager::update_chart_size(uint32_t chart_id, const ImVec2& size) {
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.size = size;
   }
 }
 
-const std::unordered_map<uint32_t, ChartInstance> &
-ChartManager::get_charts() const {
+const std::unordered_map<uint32_t, ChartInstance>& ChartManager::get_charts() const {
   return charts_;
 }
 
 std::vector<ChartInstance> ChartManager::get_visible_charts() const {
   std::vector<ChartInstance> visible_charts;
   visible_charts.reserve(charts_.size());
-  for (const auto &[id, chart] : charts_) {
+  for (const auto& [id, chart] : charts_) {
     if (chart.visible) {
       visible_charts.push_back(chart);
     }
@@ -84,10 +82,10 @@ std::vector<ChartInstance> ChartManager::get_visible_charts() const {
   return visible_charts;
 }
 
-std::vector<ChartInstance>
-ChartManager::get_charts_for_symbol(const std::string &symbol_name) const {
+std::vector<ChartInstance> ChartManager::get_charts_for_symbol(
+    const std::string& symbol_name) const {
   std::vector<ChartInstance> symbol_charts;
-  for (const auto &[id, chart] : charts_) {
+  for (const auto& [id, chart] : charts_) {
     if (chart.symbol_name == symbol_name) {
       symbol_charts.push_back(chart);
     }
@@ -95,8 +93,7 @@ ChartManager::get_charts_for_symbol(const std::string &symbol_name) const {
   return symbol_charts;
 }
 
-std::optional<uint32_t>
-ChartManager::getSymbolId(const std::string &symbol_name) const {
+std::optional<uint32_t> ChartManager::getSymbolId(const std::string& symbol_name) const {
   std::lock_guard<std::mutex> lock(id_map_mutex_);
 
   auto it = symbol_id_map_.find(symbol_name);
@@ -106,14 +103,14 @@ ChartManager::getSymbolId(const std::string &symbol_name) const {
 
   // Query SymbolRegistry for the actual ID used by HotSpine
   auto all_symbols = SymbolRegistry::instance().get_all_symbols();
-  for (const auto &info : all_symbols) {
+  for (const auto& info : all_symbols) {
     if (info.symbol == symbol_name) {
       symbol_id_map_[symbol_name] = info.id;
       return info.id;
     }
   }
 
-  return std::nullopt; // Unknown symbol
+  return std::nullopt;  // Unknown symbol
 }
 
 void ChartManager::update() {
@@ -124,7 +121,7 @@ void ChartManager::update() {
 
     bool has_chart = false;
     uint32_t chart_id = 0;
-    for (const auto &[id, chart] : charts_) {
+    for (const auto& [id, chart] : charts_) {
       if (chart.symbol_name == symbol_str && chart.symbol_id == symbol_id) {
         has_chart = true;
         chart_id = id;
@@ -139,8 +136,7 @@ void ChartManager::update() {
         exchange = info->exchange;
       }
 
-      chart_id = create_chart(symbol_str, exchange, symbol_id,
-                              RenderEngine::TimeFrame::TF_1SEC);
+      chart_id = create_chart(symbol_str, exchange, symbol_id, RenderEngine::TimeFrame::TF_1SEC);
     }
 
     populate_chart_data(chart_id);
@@ -149,10 +145,9 @@ void ChartManager::update() {
 
 void ChartManager::populate_chart_data(uint32_t chart_id) {
   auto it = charts_.find(chart_id);
-  if (it == charts_.end())
-    return;
+  if (it == charts_.end()) return;
 
-  auto &chart = it->second;
+  auto& chart = it->second;
   uint32_t symbol_id = chart.symbol_id;
 
   auto candles = processor_->getCandles(symbol_id, chart.timeframe);
@@ -170,7 +165,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
     chart.closes.reserve(candles.size());
     chart.volumes.reserve(candles.size());
 
-    for (const auto &candle : candles) {
+    for (const auto& candle : candles) {
       chart.dates.push_back(static_cast<double>(candle.timestamp) / 1000000.0);
       chart.opens.push_back(static_cast<float>(candle.open));
       chart.highs.push_back(static_cast<float>(candle.high));
@@ -205,9 +200,8 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
       // If we didn't find an overlap, it could be a gap or a reset.
       // APPEND if the new data is strictly after our last data.
       if (!candles.empty() &&
-          (static_cast<double>(candles[0].timestamp) / 1000000.0 >
-           last_stored_ts)) {
-        start_idx = 0; // Prepare to append everything from the new batch
+          (static_cast<double>(candles[0].timestamp) / 1000000.0 > last_stored_ts)) {
+        start_idx = 0;  // Prepare to append everything from the new batch
       } else {
         // Real reset or backwards jump, clear and re-populate
         chart.dates.clear();
@@ -223,8 +217,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
 
   // Append ONLY new candles (or all if reset/gap)
   for (size_t i = start_idx; i < candles.size(); ++i) {
-    chart.dates.push_back(static_cast<double>(candles[i].timestamp) /
-                          1000000.0);
+    chart.dates.push_back(static_cast<double>(candles[i].timestamp) / 1000000.0);
     chart.opens.push_back(static_cast<float>(candles[i].open));
     chart.highs.push_back(static_cast<float>(candles[i].high));
     chart.lows.push_back(static_cast<float>(candles[i].low));
@@ -233,4 +226,4 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

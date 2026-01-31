@@ -1,10 +1,12 @@
 #pragma once
 
-#include "vulkan_base_types.hpp"
+#include <imgui.h>
+
 #include <chrono>
 #include <glm/glm.hpp>
-#include <imgui.h>
 #include <string>
+
+#include "vulkan_base_types.hpp"
 
 namespace BTQuant {
 
@@ -13,30 +15,15 @@ class VulkanCore;
 namespace RenderEngine {
 struct TradeData;
 struct OrderbookData;
-} // namespace RenderEngine
+}  // namespace RenderEngine
 
 // ============================================================================
 // Input \u0026 Event Types
 // ============================================================================
 
-enum class InputEventType {
-  KeyDown,
-  KeyUp,
-  MouseMove,
-  MouseButton,
-  Scroll,
-  Resize,
-  Focus,
-  Blur
-};
+enum class InputEventType { KeyDown, KeyUp, MouseMove, MouseButton, Scroll, Resize, Focus, Blur };
 
-enum class MouseButton {
-  Left = 1,
-  Middle = 2,
-  Right = 3,
-  ScrollUp = 4,
-  ScrollDown = 5
-};
+enum class MouseButton { Left = 1, Middle = 2, Right = 3, ScrollUp = 4, ScrollDown = 5 };
 
 struct InputEvent {
   InputEventType type;
@@ -68,7 +55,7 @@ struct DashboardTheme {
   ImVec4 border_color = {0.2f, 0.2f, 0.2f, 1.0f};
   ImVec4 text_primary = {0.9f, 0.9f, 0.9f, 1.0f};
   ImVec4 text_muted = {0.5f, 0.5f, 0.5f, 1.0f};
-  void *monospace_font = nullptr;
+  void* monospace_font = nullptr;
 };
 
 // ============================================================================
@@ -76,18 +63,18 @@ struct DashboardTheme {
 // ============================================================================
 
 struct UIComponent {
-  UIComponent(const glm::vec2 &p, const glm::vec2 &s)
+  UIComponent(const glm::vec2& p, const glm::vec2& s)
       : position_(p), size_(s), visible_(true), dirty_frames_(3) {}
   virtual ~UIComponent() = default;
-  virtual void initialize_vulkan_resources(VulkanCore *) {}
+  virtual void initialize_vulkan_resources(VulkanCore*) {}
   virtual void update(float dt) = 0;
   virtual void render_gui() = 0;
   virtual void clear_data() {}
   void mark_dirty() { dirty_frames_ = 3; }
   bool is_dirty() const { return dirty_frames_ > 0; }
-  virtual void handle_trade(const RenderEngine::TradeData &) {}
-  virtual void handle_orderbook(const RenderEngine::OrderbookData &) {}
-  virtual void handle_input(const InputEvent &) {}
+  virtual void handle_trade(const RenderEngine::TradeData&) {}
+  virtual void handle_orderbook(const RenderEngine::OrderbookData&) {}
+  virtual void handle_input(const InputEvent&) {}
   bool is_visible() const { return visible_; }
   glm::vec2 get_position() const { return position_; }
   glm::vec2 get_size() const { return size_; }
@@ -96,4 +83,4 @@ struct UIComponent {
   int dirty_frames_;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

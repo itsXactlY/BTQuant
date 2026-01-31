@@ -1,38 +1,39 @@
-#include "../../include/vulkan_base_types.hpp"
+#include <algorithm>
 #include <iostream>
-#include <mutex> // For std::lock_guard
+#include <mutex>  // For std::lock_guard
 #include <stdexcept>
 #include <vector>
-#include <algorithm>
+
+#include "../../include/vulkan_base_types.hpp"
 
 namespace BTQuant {
 
 // Helper function to find memory type (could be a static method of MemoryPool
 // or global)
-uint32_t MemoryPool::find_memory_type(VkPhysicalDevice physical_device,
-                                      uint32_t type_filter,
+uint32_t MemoryPool::find_memory_type(VkPhysicalDevice physical_device, uint32_t type_filter,
                                       VkMemoryPropertyFlags properties) {
   VkPhysicalDeviceMemoryProperties memProperties;
   vkGetPhysicalDeviceMemoryProperties(physical_device, &memProperties);
 
   for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
     if ((type_filter & (1 << i)) &&
-        (memProperties.memoryTypes[i].propertyFlags & properties) ==
-            properties) {
+        (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
       return i;
     }
   }
   throw std::runtime_error("failed to find suitable memory type!");
 }
 
-MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
-                       VkBufferUsageFlags usage,
+MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device, VkBufferUsageFlags usage,
                        VkMemoryPropertyFlags properties, VkDeviceSize pool_size)
-    : device_(device), physical_device_(physical_device), usage_(usage), properties_(properties), pool_size_(pool_size), used_size_(0) {
-
+    : device_(device),
+      physical_device_(physical_device),
+      usage_(usage),
+      properties_(properties),
+      pool_size_(pool_size),
+      used_size_(0) {
   if (device == VK_NULL_HANDLE) {
-    throw std::runtime_error(
-        "Cannot create MemoryPool with VK_NULL_HANDLE device");
+    throw std::runtime_error("Cannot create MemoryPool with VK_NULL_HANDLE device");
   }
 
   // Create Pool Buffer
@@ -42,8 +43,7 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
   bufferInfo.usage = usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  if (vkCreateBuffer(device, &bufferInfo, nullptr, &pool_buffer_) !=
-      VK_SUCCESS) {
+  if (vkCreateBuffer(device, &bufferInfo, nullptr, &pool_buffer_) != VK_SUCCESS) {
     throw std::runtime_error("failed to create pool buffer!");
   }
 
@@ -54,19 +54,17 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
   VkMemoryAllocateInfo allocInfo{};
   allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = find_memory_type(
-      physical_device, memRequirements.memoryTypeBits, properties);
+  allocInfo.memoryTypeIndex =
+      find_memory_type(physical_device, memRequirements.memoryTypeBits, properties);
 
-  if (vkAllocateMemory(device, &allocInfo, nullptr, &pool_memory_) !=
-      VK_SUCCESS) {
+  if (vkAllocateMemory(device, &allocInfo, nullptr, &pool_memory_) != VK_SUCCESS) {
     throw std::runtime_error("failed to allocate pool memory!");
   }
 
   vkBindBufferMemory(device, pool_buffer_, pool_memory_, 0);
 
   if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-    if (vkMapMemory(device, pool_memory_, 0, pool_size, 0, &mapped_ptr_) !=
-        VK_SUCCESS) {
+    if (vkMapMemory(device, pool_memory_, 0, pool_size, 0, &mapped_ptr_) != VK_SUCCESS) {
       throw std::runtime_error("failed to map pool memory!");
     }
   } else {
@@ -77,101 +75,96 @@ MemoryPool::MemoryPool(VkDevice device, VkPhysicalDevice physical_device,
 }
 
 MemoryPool::~MemoryPool() {
-  if (mapped_ptr_)
-    vkUnmapMemory(device_, pool_memory_);
+  if (mapped_ptr_) vkUnmapMemory(device_, pool_memory_);
   vkDestroyBuffer(device_, pool_buffer_, nullptr);
   vkFreeMemory(device_, pool_memory_, nullptr);
 }
 
-BufferAllocation MemoryPool::allocate(VkDeviceSize size,
-                                       VkDeviceSize alignment) {
-    std::lock_guard<std::mutex> lock(allocation_mutex_);
+BufferAllocation MemoryPool::allocate(VkDeviceSize size, VkDeviceSize alignment) {
+  std::lock_guard<std::mutex> lock(allocation_mutex_);
 
-    for (auto it = free_blocks_.begin(); it != free_blocks_.end(); ++it) {
-        VkDeviceSize aligned_offset =
-            (it->offset + alignment - 1) & ~(alignment - 1);
-        VkDeviceSize padding = aligned_offset - it->offset;
+  for (auto it = free_blocks_.begin(); it != free_blocks_.end(); ++it) {
+    VkDeviceSize aligned_offset = (it->offset + alignment - 1) & ~(alignment - 1);
+    VkDeviceSize padding = aligned_offset - it->offset;
 
-        if (it->size >= size + padding) {
-            BufferAllocation alloc{};
-            alloc.buffer = pool_buffer_;
-            alloc.memory = pool_memory_;
-            alloc.offset = aligned_offset;
-            alloc.size = size;
-            alloc.mapped_ptr = mapped_ptr_
-                                 ? static_cast<char *>(mapped_ptr_) + aligned_offset
-                                 : nullptr;
+    if (it->size >= size + padding) {
+      BufferAllocation alloc{};
+      alloc.buffer = pool_buffer_;
+      alloc.memory = pool_memory_;
+      alloc.offset = aligned_offset;
+      alloc.size = size;
+      alloc.mapped_ptr = mapped_ptr_ ? static_cast<char*>(mapped_ptr_) + aligned_offset : nullptr;
 
-            // Update free blocks
-            VkDeviceSize remaining_size_after_alloc = it->size - (size + padding);
-            if (remaining_size_after_alloc > 0) {
-                it->offset = aligned_offset + size;
-                it->size = remaining_size_after_alloc;
-            } else {
-                free_blocks_.erase(it);
-            }
+      // Update free blocks
+      VkDeviceSize remaining_size_after_alloc = it->size - (size + padding);
+      if (remaining_size_after_alloc > 0) {
+        it->offset = aligned_offset + size;
+        it->size = remaining_size_after_alloc;
+      } else {
+        free_blocks_.erase(it);
+      }
 
-            // If there's padding, create a new free block for it
-            if (padding > 0) {
-                free_blocks_.push_back({it->offset, padding});
-            }
+      // If there's padding, create a new free block for it
+      if (padding > 0) {
+        free_blocks_.push_back({it->offset, padding});
+      }
 
-            used_size_ += size;
-            return alloc;
-        }
+      used_size_ += size;
+      return alloc;
     }
+  }
 
-    // If no suitable block found, try to allocate a new buffer
-    // This is a fallback mechanism for when the pool is exhausted
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage_;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  // If no suitable block found, try to allocate a new buffer
+  // This is a fallback mechanism for when the pool is exhausted
+  VkBufferCreateInfo bufferInfo{};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = size;
+  bufferInfo.usage = usage_;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkBuffer newBuffer;
-    if (vkCreateBuffer(device_, &bufferInfo, nullptr, &newBuffer) != VK_SUCCESS) {
-        return BufferAllocation{}; // Failed to create buffer
-    }
+  VkBuffer newBuffer;
+  if (vkCreateBuffer(device_, &bufferInfo, nullptr, &newBuffer) != VK_SUCCESS) {
+    return BufferAllocation{};  // Failed to create buffer
+  }
 
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(device_, newBuffer, &memRequirements);
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(device_, newBuffer, &memRequirements);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = find_memory_type(
-        physical_device_, memRequirements.memoryTypeBits, properties_);
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  allocInfo.memoryTypeIndex =
+      find_memory_type(physical_device_, memRequirements.memoryTypeBits, properties_);
 
-    VkDeviceMemory newMemory;
-    if (vkAllocateMemory(device_, &allocInfo, nullptr, &newMemory) != VK_SUCCESS) {
-        vkDestroyBuffer(device_, newBuffer, nullptr);
-        return BufferAllocation{}; // Failed to allocate memory
-    }
+  VkDeviceMemory newMemory;
+  if (vkAllocateMemory(device_, &allocInfo, nullptr, &newMemory) != VK_SUCCESS) {
+    vkDestroyBuffer(device_, newBuffer, nullptr);
+    return BufferAllocation{};  // Failed to allocate memory
+  }
 
-    if (vkBindBufferMemory(device_, newBuffer, newMemory, 0) != VK_SUCCESS) {
-        vkDestroyBuffer(device_, newBuffer, nullptr);
-        vkFreeMemory(device_, newMemory, nullptr);
-        return BufferAllocation{}; // Failed to bind memory
-    }
+  if (vkBindBufferMemory(device_, newBuffer, newMemory, 0) != VK_SUCCESS) {
+    vkDestroyBuffer(device_, newBuffer, nullptr);
+    vkFreeMemory(device_, newMemory, nullptr);
+    return BufferAllocation{};  // Failed to bind memory
+  }
 
-    // Create a new allocation for the new buffer
-    BufferAllocation alloc{};
-    alloc.buffer = newBuffer;
-    alloc.memory = newMemory;
-    alloc.offset = 0;
-    alloc.size = size;
-    alloc.mapped_ptr = nullptr; // Not mapped by default
+  // Create a new allocation for the new buffer
+  BufferAllocation alloc{};
+  alloc.buffer = newBuffer;
+  alloc.memory = newMemory;
+  alloc.offset = 0;
+  alloc.size = size;
+  alloc.mapped_ptr = nullptr;  // Not mapped by default
 
-    // Add to cleanup list
-    cleanup_buffers_.push_back(newBuffer);
-    cleanup_memories_.push_back(newMemory);
+  // Add to cleanup list
+  cleanup_buffers_.push_back(newBuffer);
+  cleanup_memories_.push_back(newMemory);
 
-    used_size_ += size;
-    return alloc;
+  used_size_ += size;
+  return alloc;
 }
 
-void MemoryPool::deallocate(const BufferAllocation &allocation) {
+void MemoryPool::deallocate(const BufferAllocation& allocation) {
   std::lock_guard<std::mutex> lock(allocation_mutex_);
   // Simple deallocation (append to free blocks, no merging for now)
   // A more robust allocator would merge adjacent free blocks.
@@ -179,13 +172,11 @@ void MemoryPool::deallocate(const BufferAllocation &allocation) {
   used_size_ -= allocation.size;
 }
 
-GPUMemoryManager::GPUMemoryManager(VkDevice device,
-                                    VkPhysicalDevice physical_device,
-                                    const VulkanDashboardConfig &config)
+GPUMemoryManager::GPUMemoryManager(VkDevice device, VkPhysicalDevice physical_device,
+                                   const VulkanDashboardConfig& config)
     : device_(device), physical_device_(physical_device) {
   if (device == VK_NULL_HANDLE) {
-    throw std::runtime_error(
-        "GPUMemoryManager initialized with VK_NULL_HANDLE device");
+    throw std::runtime_error("GPUMemoryManager initialized with VK_NULL_HANDLE device");
   }
   // Initialize memory pools
   vertex_pool_ = std::make_unique<MemoryPool>(
@@ -198,8 +189,7 @@ GPUMemoryManager::GPUMemoryManager(VkDevice device,
       device, physical_device,
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
       config.uniform_pool_size);
 
   storage_pool_ = std::make_unique<MemoryPool>(
@@ -213,13 +203,11 @@ GPUMemoryManager::~GPUMemoryManager() {
 }
 
 BufferAllocation GPUMemoryManager::allocate_vertex_buffer(VkDeviceSize size) {
-  return vertex_pool_->allocate(
-      size, 256); // Assuming a common alignment for vertex buffers
+  return vertex_pool_->allocate(size, 256);  // Assuming a common alignment for vertex buffers
 }
 
 BufferAllocation GPUMemoryManager::allocate_index_buffer(VkDeviceSize size) {
-  return vertex_pool_->allocate(
-      size, 256); // Index buffers can often share the vertex pool
+  return vertex_pool_->allocate(size, 256);  // Index buffers can often share the vertex pool
 }
 
 BufferAllocation GPUMemoryManager::allocate_uniform_buffer(VkDeviceSize size) {
@@ -228,8 +216,7 @@ BufferAllocation GPUMemoryManager::allocate_uniform_buffer(VkDeviceSize size) {
 }
 
 BufferAllocation GPUMemoryManager::allocate_storage_buffer(VkDeviceSize size) {
-  return storage_pool_->allocate(
-      size, 256); // Assuming a common alignment for storage buffers
+  return storage_pool_->allocate(size, 256);  // Assuming a common alignment for storage buffers
 }
 
 BufferAllocation GPUMemoryManager::allocate_staging_buffer(VkDeviceSize size) {
@@ -238,7 +225,7 @@ BufferAllocation GPUMemoryManager::allocate_staging_buffer(VkDeviceSize size) {
   return uniform_pool_->allocate(size, 256);
 }
 
-void GPUMemoryManager::deallocate_buffer(const BufferAllocation &allocation) {
+void GPUMemoryManager::deallocate_buffer(const BufferAllocation& allocation) {
   // Determine which pool the allocation came from and deallocate
   // This requires tracking the origin of the allocation, or checking buffer
   // handles. For simplicity, we'll assume we know which pool it belongs to
@@ -252,8 +239,7 @@ void GPUMemoryManager::deallocate_buffer(const BufferAllocation &allocation) {
     storage_pool_->deallocate(allocation);
   } else {
     // This should not happen if all allocations come from these pools
-    std::cerr << "Warning: Deallocating buffer not recognized by any pool."
-              << std::endl;
+    std::cerr << "Warning: Deallocating buffer not recognized by any pool." << std::endl;
   }
 }
 
@@ -268,4 +254,4 @@ GPUMemoryManager::MemoryStats GPUMemoryManager::get_memory_stats() const {
   return stats;
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

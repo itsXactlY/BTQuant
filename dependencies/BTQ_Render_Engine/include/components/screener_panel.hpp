@@ -5,11 +5,11 @@
 namespace BTQuant {
 
 class ScreenerPanel : public PanelBase {
-public:
-    ScreenerPanel(const PanelConfig &config);
+ public:
+  ScreenerPanel(const PanelConfig& config);
 
-    void initialize() override;
-    void render() override;
+  void initialize() override;
+  void render() override;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

@@ -8,27 +8,25 @@
 // Define a simple 2D vector type if GLM is not available
 #ifndef USE_GLM
 struct SimpleVec2 {
-    float x = 0.0f;
-    float y = 0.0f;
+  float x = 0.0f;
+  float y = 0.0f;
 
-    SimpleVec2(float x = 0.0f, float y = 0.0f) : x(x), y(y) {}
+  SimpleVec2(float x = 0.0f, float y = 0.0f) : x(x), y(y) {}
 
-    SimpleVec2 operator+(const SimpleVec2& other) const {
-        return SimpleVec2(x + other.x, y + other.y);
-    }
+  SimpleVec2 operator+(const SimpleVec2& other) const {
+    return SimpleVec2(x + other.x, y + other.y);
+  }
 
-    SimpleVec2 operator-(const SimpleVec2& other) const {
-        return SimpleVec2(x - other.x, y - other.y);
-    }
+  SimpleVec2 operator-(const SimpleVec2& other) const {
+    return SimpleVec2(x - other.x, y - other.y);
+  }
 
-    SimpleVec2 operator*(float scalar) const {
-        return SimpleVec2(x * scalar, y * scalar);
-    }
+  SimpleVec2 operator*(float scalar) const { return SimpleVec2(x * scalar, y * scalar); }
 };
 
 // Use our simple vector instead of GLM
 using glm = struct {
-    using vec2 = SimpleVec2;
+  using vec2 = SimpleVec2;
 };
 #else
 #include <glm/glm.hpp>
@@ -70,7 +68,7 @@ enum class EasingFunction {
 };
 
 class AnimationSystem {
-public:
+ public:
   static AnimationSystem& getInstance() {
     static AnimationSystem instance;
     return instance;
@@ -141,9 +139,9 @@ public:
   // Check if animation is playing
   bool is_animation_playing(int id) const;
 
-private:
-  AnimationSystem() = default;  // Private constructor for singleton
-  ~AnimationSystem() = default; // Private destructor for singleton
+ private:
+  AnimationSystem() = default;   // Private constructor for singleton
+  ~AnimationSystem() = default;  // Private destructor for singleton
 
   std::vector<Animation> animations_;
   int next_id_ = 1;
@@ -154,7 +152,7 @@ private:
 
 // Predefined animation presets
 class AnimationPresets {
-public:
+ public:
   // Fade in/out animations
   static int fade_in(void* target, float duration = 0.3f);
   static int fade_out(void* target, float duration = 0.3f);
@@ -183,5 +181,5 @@ public:
   static int symbol_switch_transition(void* chart_element, float duration = 0.4f);
 };
 
-} // namespace UI
-} // namespace BTQuant
+}  // namespace UI
+}  // namespace BTQuant

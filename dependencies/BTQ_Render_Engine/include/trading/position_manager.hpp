@@ -1,15 +1,16 @@
 #pragma once
 
-#include "order_manager.hpp"
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "order_manager.hpp"
+
 namespace BTQuant {
 
 class PositionManager {
-public:
+ public:
   struct Position {
     std::string symbol;
     double quantity = 0;
@@ -46,17 +47,16 @@ public:
   };
 
   PositionManager();
-  void update_position(const OrderManager::OrderExecution &execution);
-  void update_market_price(const std::string &symbol, double price);
-  void
-  update_market_prices(const std::unordered_map<std::string, double> &prices);
+  void update_position(const OrderManager::OrderExecution& execution);
+  void update_market_price(const std::string& symbol, double price);
+  void update_market_prices(const std::unordered_map<std::string, double>& prices);
   std::vector<Position> get_positions() const;
   std::vector<Position> get_all_positions() const;
-  Position get_position(const std::string &symbol) const;
+  Position get_position(const std::string& symbol) const;
   PortfolioSummary get_portfolio_summary() const;
   void set_cash_balance(double balance);
 
-  using PositionUpdateCallback = std::function<void(const Position &)>;
+  using PositionUpdateCallback = std::function<void(const Position&)>;
   void set_position_update_callback(PositionUpdateCallback callback);
 
   // Analytics integration
@@ -72,25 +72,26 @@ public:
     bool is_buy;
   };
 
-  TradeRecord create_trade_record(const OrderManager::OrderExecution &execution, double realized_pnl = 0.0);
+  TradeRecord create_trade_record(const OrderManager::OrderExecution& execution,
+                                  double realized_pnl = 0.0);
 
-private:
+ private:
   std::unordered_map<std::string, Position> positions_;
   std::unordered_map<std::string, double> market_prices_;
   std::unordered_map<std::string, std::string> order_symbols_;
   PositionUpdateCallback position_update_callback_;
   double cash_balance_ = 100000.0;
 
-  std::string get_symbol_from_order(const std::string &order_id);
-  bool is_buy_execution(const OrderManager::OrderExecution &execution);
+  std::string get_symbol_from_order(const std::string& order_id);
+  bool is_buy_execution(const OrderManager::OrderExecution& execution);
   void update_market_values();
-  void calculate_risk_metrics(Position &position);
+  void calculate_risk_metrics(Position& position);
   double calculate_buying_power() const;
   double calculate_margin_used() const;
   double calculate_portfolio_beta() const;
   double calculate_portfolio_var() const;
   double calculate_portfolio_sharpe() const;
-  void notify_position_update(const Position &position);
+  void notify_position_update(const Position& position);
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

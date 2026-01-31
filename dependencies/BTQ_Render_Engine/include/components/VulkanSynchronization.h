@@ -1,10 +1,11 @@
 #pragma once
 
-#include "../vulkan_base_types.hpp"
 #include <atomic>
 #include <chrono>
 #include <memory>
 #include <vector>
+
+#include "../vulkan_base_types.hpp"
 
 namespace BTQuant {
 
@@ -13,12 +14,12 @@ namespace BTQuant {
 // ============================================================================
 
 class TimelineSemaphore {
-public:
+ public:
   TimelineSemaphore(VkDevice device);
   ~TimelineSemaphore();
 
-  TimelineSemaphore(TimelineSemaphore &&other) noexcept;
-  TimelineSemaphore &operator=(TimelineSemaphore &&other) noexcept;
+  TimelineSemaphore(TimelineSemaphore&& other) noexcept;
+  TimelineSemaphore& operator=(TimelineSemaphore&& other) noexcept;
 
   // Get current timeline value (atomic)
   uint64_t getCurrentValue() const;
@@ -31,9 +32,9 @@ public:
 
   // Get the Vulkan semaphore handle
   VkSemaphore getHandle() const { return semaphore_; }
-  VkSemaphore handle() const { return semaphore_; } // Alias for compatibility
+  VkSemaphore handle() const { return semaphore_; }  // Alias for compatibility
 
-private:
+ private:
   VkDevice device_;
   VkSemaphore semaphore_ = VK_NULL_HANDLE;
   std::atomic<uint64_t> currentValue_ = 0;
@@ -44,7 +45,7 @@ private:
 // ============================================================================
 
 class FenceManager {
-public:
+ public:
   FenceManager(VkDevice device, uint32_t maxFrames);
   ~FenceManager();
 
@@ -65,7 +66,7 @@ public:
   // Release a fence slot
   void releaseSlot([[maybe_unused]] uint32_t index) { /* placeholder */ }
 
-private:
+ private:
   VkDevice device_;
   uint32_t maxFrames_;
   std::vector<VkFence> fences_;
@@ -77,7 +78,7 @@ private:
 // ============================================================================
 
 class CommandBufferPool {
-public:
+ public:
   CommandBufferPool(VkDevice device, VkCommandPool pool);
   ~CommandBufferPool();
 
@@ -87,7 +88,7 @@ public:
   // Release a command buffer
   void releaseCommandBuffer(VkCommandBuffer cmdBuffer);
 
-private:
+ private:
   VkDevice device_;
   VkCommandPool pool_;
   std::vector<VkCommandBuffer> freeBuffers_;
@@ -111,28 +112,25 @@ struct RenderPassSyncState {
 // ============================================================================
 
 class VulkanSyncContext {
-public:
+ public:
   static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 3;
 
   VulkanSyncContext(VkDevice device, VkCommandPool commandPool);
   ~VulkanSyncContext();
 
   // Prepare for next frame - wait for previous frame to complete
-  bool prepareFrame(uint32_t currentFrame,
-                    TimelineSemaphore &timelineSemaphore);
+  bool prepareFrame(uint32_t currentFrame, TimelineSemaphore& timelineSemaphore);
 
   // Acquire command buffer for current frame
   VkCommandBuffer acquireCommandBuffer();
 
   // Submit command buffer with timeline synchronization
   bool submitCommandBuffer(VkQueue queue, VkCommandBuffer cmdBuffer,
-                           TimelineSemaphore &timelineSemaphore,
-                           uint64_t signalValue, uint64_t waitValue);
+                           TimelineSemaphore& timelineSemaphore, uint64_t signalValue,
+                           uint64_t waitValue);
 
   // Get current frame's sync state
-  RenderPassSyncState &getSyncState(uint32_t frameIndex) {
-    return frameStates_[frameIndex];
-  }
+  RenderPassSyncState& getSyncState(uint32_t frameIndex) { return frameStates_[frameIndex]; }
 
   // Wait for all operations to complete
   void waitForCompletion() const;
@@ -140,7 +138,7 @@ public:
   // Reset all fences
   void reset() const;
 
-private:
+ private:
   VkDevice device_;
   std::unique_ptr<CommandBufferPool> cmdPool_;
   std::unique_ptr<FenceManager> fenceManager_;
@@ -152,14 +150,13 @@ private:
 // ============================================================================
 
 class SyncDebugUtils {
-public:
+ public:
   // Measure command buffer execution time
-  static uint64_t measureExecutionTime(VkDevice device,
-                                       VkCommandBuffer cmdBuffer, VkQueue queue,
-                                       const char *name);
+  static uint64_t measureExecutionTime(VkDevice device, VkCommandBuffer cmdBuffer, VkQueue queue,
+                                       const char* name);
 
   // Log synchronization state
-  static void logSyncState(const VulkanSyncContext &context);
+  static void logSyncState(const VulkanSyncContext& context);
 
   // Performance profiling
   struct PerformanceStats {
@@ -169,17 +166,12 @@ public:
     uint32_t frameCount = 0;
 
     double getAverageTimeMs() const {
-      return static_cast<double>(totalExecutionTimeNs) /
-             (frameCount * 1000000.0);
+      return static_cast<double>(totalExecutionTimeNs) / (frameCount * 1000000.0);
     }
 
-    double getMinTimeMs() const {
-      return static_cast<double>(minExecutionTimeNs) / 1000000.0;
-    }
+    double getMinTimeMs() const { return static_cast<double>(minExecutionTimeNs) / 1000000.0; }
 
-    double getMaxTimeMs() const {
-      return static_cast<double>(maxExecutionTimeNs) / 1000000.0;
-    }
+    double getMaxTimeMs() const { return static_cast<double>(maxExecutionTimeNs) / 1000000.0; }
   };
 
   static PerformanceStats performanceStats;
@@ -190,28 +182,24 @@ public:
 // ============================================================================
 
 class HotspineBarrierManager {
-public:
+ public:
   explicit HotspineBarrierManager(VkDevice device);
 
   // Create memory barriers for Hotspine data synchronization
-  VkMemoryBarrier
-  createBufferMemoryBarrier(VkPipelineStageFlags srcStage,
-                            VkPipelineStageFlags dstStage) const;
+  VkMemoryBarrier createBufferMemoryBarrier(VkPipelineStageFlags srcStage,
+                                            VkPipelineStageFlags dstStage) const;
 
-  VkBufferMemoryBarrier createSSBOBufferBarrier(VkBuffer buffer,
-                                                VkDeviceSize offset,
+  VkBufferMemoryBarrier createSSBOBufferBarrier(VkBuffer buffer, VkDeviceSize offset,
                                                 VkDeviceSize size) const;
 
-  VkImageMemoryBarrier createHeatmapImageBarrier(VkImage image,
-                                                 VkImageLayout oldLayout,
+  VkImageMemoryBarrier createHeatmapImageBarrier(VkImage image, VkImageLayout oldLayout,
                                                  VkImageLayout newLayout) const;
 
   // Record barrier commands
-  void recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer, VkBuffer buffer,
-                                   VkDeviceSize offset,
+  void recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer, VkBuffer buffer, VkDeviceSize offset,
                                    VkDeviceSize size) const;
 
-private:
+ private:
   VkDevice device_;
 };
 
@@ -220,9 +208,8 @@ private:
 // ============================================================================
 
 class RingBufferSyncManager {
-public:
-  RingBufferSyncManager(VkDevice device, uint32_t slotCount,
-                        VkDeviceSize slotSize);
+ public:
+  RingBufferSyncManager(VkDevice device, uint32_t slotCount, VkDeviceSize slotSize);
   ~RingBufferSyncManager();
 
   // Acquire a slot in the ring buffer
@@ -234,7 +221,7 @@ public:
   // Wait for a slot to become available
   int32_t waitForSlot(uint64_t timeoutNs);
 
-private:
+ private:
   struct Slot {
     bool isAvailable = true;
     uint64_t lastUsed = 0;
@@ -253,9 +240,9 @@ private:
 // ============================================================================
 
 class RingBufferManager {
-public:
-  static constexpr size_t SLOT_SIZE = 1024 * 1024; // 1MB slots
-  static constexpr uint32_t NUM_SLOTS = 2;         // Dual slot ring buffer
+ public:
+  static constexpr size_t SLOT_SIZE = 1024 * 1024;  // 1MB slots
+  static constexpr uint32_t NUM_SLOTS = 2;          // Dual slot ring buffer
 
   RingBufferManager(VkDevice device, VkPhysicalDevice physicalDevice);
   RingBufferManager(VkDevice device, uint32_t slotCount, VkDeviceSize slotSize);
@@ -268,16 +255,12 @@ public:
   void releaseSlot(uint32_t slotIndex);
 
   // Get buffer allocation
-  const BufferAllocation &getBufferAllocation() const {
-    return bufferAllocation_;
-  }
+  const BufferAllocation& getBufferAllocation() const { return bufferAllocation_; }
 
   // Get available slot count
-  uint32_t getAvailableSlots() const {
-    return availableSlots_.load(std::memory_order_acquire);
-  }
+  uint32_t getAvailableSlots() const { return availableSlots_.load(std::memory_order_acquire); }
 
-private:
+ private:
   VkDevice device_;
   BufferAllocation bufferAllocation_;
   std::atomic<uint32_t> availableSlots_ = NUM_SLOTS;
@@ -285,4 +268,4 @@ private:
   std::atomic<uint32_t> readIndex_ = 0;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

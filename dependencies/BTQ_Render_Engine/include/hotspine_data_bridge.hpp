@@ -14,7 +14,7 @@
 namespace BTQuant {
 namespace RenderEngine {
 class MarketDataProcessor;
-} // namespace RenderEngine
+}  // namespace RenderEngine
 
 // ============================================================================
 // Zero-Copy Shared Memory Data Structures
@@ -27,7 +27,7 @@ struct HotTrade {
   double price;
   double size;
   uint32_t symbol_id;
-  uint8_t side; // 0=Buy, 1=Sell
+  uint8_t side;  // 0=Buy, 1=Sell
   uint8_t padding[3];
 };
 
@@ -48,14 +48,14 @@ struct HotOrderbookSnapshot {
 };
 
 struct SharedMemoryHeader {
-  uint32_t magic;   // "BTQU"
-  uint32_t version; // 2
+  uint32_t magic;    // "BTQU"
+  uint32_t version;  // 2
   uint64_t capacity;
-  uint64_t write_index; // Atomic access via intrinsics
+  uint64_t write_index;  // Atomic access via intrinsics
   uint64_t read_index;
   uint64_t lost_count;
 
-  uint64_t orderbook_write_index; // Atomic access via intrinsics
+  uint64_t orderbook_write_index;  // Atomic access via intrinsics
   uint64_t orderbook_read_index;
   uint64_t orderbook_lost_count;
   uint64_t orderbook_capacity;
@@ -80,7 +80,7 @@ struct InstrumentStore {
   std::map<double, double> m_vol_profile;
 
   // Latest Snapshot for Heatmap/Orderbook - Atomic for thread-safety
-  std::atomic<HotOrderbookSnapshot *> latest_snapshot{nullptr};
+  std::atomic<HotOrderbookSnapshot*> latest_snapshot{nullptr};
 
   InstrumentStore() = default;
   ~InstrumentStore() {
@@ -90,7 +90,7 @@ struct InstrumentStore {
   }
 
   // Copy constructor for lock-free duplication
-  InstrumentStore(const InstrumentStore &other) {
+  InstrumentStore(const InstrumentStore& other) {
     symbol = other.symbol;
     exchange = other.exchange;
     symbol_id.store(other.symbol_id.load());
@@ -101,7 +101,7 @@ struct InstrumentStore {
     closes = other.closes;
     volumes = other.volumes;
     m_vol_profile = other.m_vol_profile;
-    HotOrderbookSnapshot *snap = other.latest_snapshot.load();
+    HotOrderbookSnapshot* snap = other.latest_snapshot.load();
     if (snap) {
       latest_snapshot.store(new HotOrderbookSnapshot(*snap));
     }
@@ -113,17 +113,16 @@ struct InstrumentStore {
 // ============================================================================
 
 class HotSpineDataBridge {
-public:
-  HotSpineDataBridge(const std::string &shm_path = "/btquant");
+ public:
+  HotSpineDataBridge(const std::string& shm_path = "/btquant");
   ~HotSpineDataBridge();
 
   [[nodiscard]] std::expected<void, std::string> start();
   void stop();
-  void sync(); // Performs real-time synchronization
+  void sync();  // Performs real-time synchronization
 
   // Direkter Zugriff auf MarketDataProcessor für alle Datenoperationen
-  void setMarketDataProcessor(
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
+  void setMarketDataProcessor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
     m_data_processor = processor;
   }
 
@@ -138,27 +137,27 @@ public:
   std::string getSymbolName(uint32_t symbol_id) const;
   std::string getExchangeName(uint32_t symbol_id) const;
 
-private:
+ private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> m_data_processor;
   std::string m_shm_path;
   int m_shm_fd = -1;
-  void *m_shm_ptr = nullptr;
+  void* m_shm_ptr = nullptr;
   size_t m_shm_size = 0;
 
   std::atomic<bool> m_running{false};
-  std::jthread m_sync_thread; // Real-time sync thread
+  std::jthread m_sync_thread;  // Real-time sync thread
 
   // Ring Buffer Pointers
-  SharedMemoryHeader *m_header = nullptr;
-  HotTrade *m_trades = nullptr;
-  HotOrderbookSnapshot *m_books = nullptr;
+  SharedMemoryHeader* m_header = nullptr;
+  HotTrade* m_trades = nullptr;
+  HotOrderbookSnapshot* m_books = nullptr;
 
   // Local tracking of read progress
   std::atomic<uint64_t> m_last_read_idx{0};
   std::atomic<uint64_t> m_last_book_read_idx{0};
 
   void sync_shm();
-  void sync_loop(); // Real-time sync loop with high priority
+  void sync_loop();  // Real-time sync loop with high priority
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

@@ -1,25 +1,27 @@
 #include "trading/position_manager.hpp"
-#include "trading/order_manager.hpp"
+
 #include <algorithm>
 #include <cmath>
+
+#include "trading/order_manager.hpp"
 
 namespace BTQuant {
 
 PositionManager::PositionManager() : cash_balance_(100000.0) {}
 
-void PositionManager::update_position(const OrderManager::OrderExecution &execution) {
+void PositionManager::update_position(const OrderManager::OrderExecution& execution) {
   std::string symbol = get_symbol_from_order(execution.order_id);
   if (symbol.empty()) {
     return;
   }
 
-  Position &position = positions_[symbol];
+  Position& position = positions_[symbol];
   bool is_buy = is_buy_execution(execution);
 
   // Determine if this execution is reducing the position size (closing)
   double execution_qty = is_buy ? execution.quantity : -execution.quantity;
-  bool is_closing = (position.quantity > 0 && execution_qty < 0) ||
-                    (position.quantity < 0 && execution_qty > 0);
+  bool is_closing =
+      (position.quantity > 0 && execution_qty < 0) || (position.quantity < 0 && execution_qty > 0);
 
   if (position.quantity == 0) {
     // New position
@@ -80,7 +82,7 @@ void PositionManager::update_position(const OrderManager::OrderExecution &execut
     } else if (position.quantity < 0) {
       position.unrealized_pnl = position.cost_basis - position.market_value;
     } else {
-      position.unrealized_pnl = 0; // No position
+      position.unrealized_pnl = 0;  // No position
     }
   }
 
@@ -91,13 +93,13 @@ void PositionManager::update_position(const OrderManager::OrderExecution &execut
   notify_position_update(position);
 }
 
-void PositionManager::update_market_price(const std::string &symbol, double price) {
+void PositionManager::update_market_price(const std::string& symbol, double price) {
   market_prices_[symbol] = price;
   update_market_values();
 }
 
-void PositionManager::update_market_prices(const std::unordered_map<std::string, double> &prices) {
-  for (const auto &pair : prices) {
+void PositionManager::update_market_prices(const std::unordered_map<std::string, double>& prices) {
+  for (const auto& pair : prices) {
     market_prices_[pair.first] = pair.second;
   }
   update_market_values();
@@ -106,7 +108,7 @@ void PositionManager::update_market_prices(const std::unordered_map<std::string,
 std::vector<PositionManager::Position> PositionManager::get_positions() const {
   std::vector<Position> result;
 
-  for (const auto &pair : positions_) {
+  for (const auto& pair : positions_) {
     if (pair.second.quantity != 0) {
       result.push_back(pair.second);
     }
@@ -118,14 +120,14 @@ std::vector<PositionManager::Position> PositionManager::get_positions() const {
 std::vector<PositionManager::Position> PositionManager::get_all_positions() const {
   std::vector<Position> result;
 
-  for (const auto &pair : positions_) {
+  for (const auto& pair : positions_) {
     result.push_back(pair.second);
   }
 
   return result;
 }
 
-PositionManager::Position PositionManager::get_position(const std::string &symbol) const {
+PositionManager::Position PositionManager::get_position(const std::string& symbol) const {
   auto it = positions_.find(symbol);
   if (it != positions_.end()) {
     return it->second;
@@ -140,8 +142,8 @@ PositionManager::PortfolioSummary PositionManager::get_portfolio_summary() const
   summary.position_count = 0;
   summary.trade_count = 0;
 
-  for (const auto &pair : positions_) {
-    const Position &pos = pair.second;
+  for (const auto& pair : positions_) {
+    const Position& pos = pair.second;
 
     if (pos.quantity != 0) {
       summary.total_value += pos.market_value;
@@ -162,15 +164,13 @@ PositionManager::PortfolioSummary PositionManager::get_portfolio_summary() const
   return summary;
 }
 
-void PositionManager::set_cash_balance(double balance) {
-  cash_balance_ = balance;
-}
+void PositionManager::set_cash_balance(double balance) { cash_balance_ = balance; }
 
 void PositionManager::set_position_update_callback(PositionUpdateCallback callback) {
   position_update_callback_ = std::move(callback);
 }
 
-std::string PositionManager::get_symbol_from_order(const std::string &order_id) {
+std::string PositionManager::get_symbol_from_order(const std::string& order_id) {
   auto it = order_symbols_.find(order_id);
   if (it != order_symbols_.end()) {
     return it->second;
@@ -178,16 +178,16 @@ std::string PositionManager::get_symbol_from_order(const std::string &order_id) 
   return "";
 }
 
-bool PositionManager::is_buy_execution(const OrderManager::OrderExecution &execution) {
+bool PositionManager::is_buy_execution(const OrderManager::OrderExecution& execution) {
   // For simulation, assume buy by default if we can't determine
   // In a real implementation, this would be stored with the execution
-  (void)execution; // Suppress unused parameter warning
+  (void)execution;  // Suppress unused parameter warning
   return true;
 }
 
 void PositionManager::update_market_values() {
-  for (auto &pair : positions_) {
-    Position &position = pair.second;
+  for (auto& pair : positions_) {
+    Position& position = pair.second;
     auto price_it = market_prices_.find(position.symbol);
 
     if (price_it != market_prices_.end()) {
@@ -206,7 +206,7 @@ void PositionManager::update_market_values() {
   }
 }
 
-void PositionManager::calculate_risk_metrics(Position &position) {
+void PositionManager::calculate_risk_metrics(Position& position) {
   if (position.quantity == 0) {
     return;
   }
@@ -220,11 +220,11 @@ void PositionManager::calculate_risk_metrics(Position &position) {
   }
 
   // Calculate VaR (simplified)
-  position.var_95 = position.market_value * 0.02; // 2% daily VaR
+  position.var_95 = position.market_value * 0.02;  // 2% daily VaR
 
   // Calculate Sharpe ratio (simplified)
   if (position.market_value > 0) {
-    position.sharpe_ratio = position.unrealized_pnl / position.market_value * 252; // Annualized
+    position.sharpe_ratio = position.unrealized_pnl / position.market_value * 252;  // Annualized
   }
 
   // Beta relative to market (simplified - assume market beta is 1.0)
@@ -244,11 +244,11 @@ double PositionManager::calculate_buying_power() const {
 double PositionManager::calculate_margin_used() const {
   double margin = 0.0;
 
-  for (const auto &pair : positions_) {
-    const Position &pos = pair.second;
+  for (const auto& pair : positions_) {
+    const Position& pos = pair.second;
     if (pos.quantity < 0) {
       // Short position requires margin
-      margin += pos.market_value * 0.5; // 50% initial margin
+      margin += pos.market_value * 0.5;  // 50% initial margin
     }
   }
 
@@ -263,8 +263,8 @@ double PositionManager::calculate_portfolio_beta() const {
   double weighted_beta = 0.0;
   double total_value = 0.0;
 
-  for (const auto &pair : positions_) {
-    const Position &pos = pair.second;
+  for (const auto& pair : positions_) {
+    const Position& pos = pair.second;
     if (pos.quantity != 0) {
       weighted_beta += pos.beta * std::abs(pos.market_value);
       total_value += std::abs(pos.market_value);
@@ -281,10 +281,10 @@ double PositionManager::calculate_portfolio_var() const {
 
   double total_var = 0.0;
 
-  for (const auto &pair : positions_) {
-    const Position &pos = pair.second;
+  for (const auto& pair : positions_) {
+    const Position& pos = pair.second;
     if (pos.quantity != 0) {
-      total_var += pos.var_95 * pos.var_95; // Simplified VaR calculation
+      total_var += pos.var_95 * pos.var_95;  // Simplified VaR calculation
     }
   }
 
@@ -296,13 +296,14 @@ double PositionManager::calculate_portfolio_sharpe() const {
   return summary.sharpe_ratio;
 }
 
-void PositionManager::notify_position_update(const Position &position) {
+void PositionManager::notify_position_update(const Position& position) {
   if (position_update_callback_) {
     position_update_callback_(position);
   }
 }
 
-PositionManager::TradeRecord PositionManager::create_trade_record(const OrderManager::OrderExecution &execution, double realized_pnl) {
+PositionManager::TradeRecord PositionManager::create_trade_record(
+    const OrderManager::OrderExecution& execution, double realized_pnl) {
   TradeRecord record;
   record.trade_id = execution.execution_id;
   record.symbol = get_symbol_from_order(execution.order_id);
@@ -317,4 +318,4 @@ PositionManager::TradeRecord PositionManager::create_trade_record(const OrderMan
   return record;
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

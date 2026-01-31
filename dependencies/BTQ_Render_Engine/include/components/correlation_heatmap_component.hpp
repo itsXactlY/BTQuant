@@ -1,8 +1,5 @@
 #pragma once
 
-#include "imgui.h"
-#include "market_data_processor.hpp"
-#include "vulkan_base_types.hpp"
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -10,12 +7,15 @@
 #include <unordered_map>
 #include <vector>
 
+#include "imgui.h"
+#include "market_data_processor.hpp"
+#include "vulkan_base_types.hpp"
+
 namespace BTQuant {
 
 class CorrelationHeatmapComponent {
-public:
-  CorrelationHeatmapComponent(
-      std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+ public:
+  CorrelationHeatmapComponent(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt);
   void render_gui();
@@ -24,13 +24,11 @@ public:
   bool is_visible() const { return visible_; }
 
   // Configuration
-  void set_symbols(const std::vector<std::string> &symbols);
-  void set_timeframe(RenderEngine::TimeFrame timeframe) {
-    timeframe_ = timeframe;
-  }
+  void set_symbols(const std::vector<std::string>& symbols);
+  void set_timeframe(RenderEngine::TimeFrame timeframe) { timeframe_ = timeframe; }
   void set_lookback_period(int periods) { lookback_periods_ = periods; }
 
-private:
+ private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   bool visible_ = true;
 
@@ -55,14 +53,13 @@ private:
 
   // Data processing
   void update_correlation_matrix();
-  double calculate_correlation(const std::string &symbol1,
-                               const std::string &symbol2);
-  std::vector<double> get_returns(const std::string &symbol);
-  std::optional<uint32_t> get_symbol_id(const std::string &symbol);
+  double calculate_correlation(const std::string& symbol1, const std::string& symbol2);
+  std::vector<double> get_returns(const std::string& symbol);
+  std::optional<uint32_t> get_symbol_id(const std::string& symbol);
 
   // Color mapping
   ImVec4 get_correlation_color(double correlation) const;
   std::string format_correlation_value(double value) const;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

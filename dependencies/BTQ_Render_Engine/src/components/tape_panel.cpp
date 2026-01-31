@@ -1,13 +1,14 @@
 #include "../../include/components/tape_panel.hpp"
-#include "imgui.h"
+
 #include <algorithm>
 #include <ctime>
 
+#include "imgui.h"
+
 namespace BTQuant {
 
-TapePanel::TapePanel(
-    const PanelConfig &config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
@@ -23,8 +24,7 @@ TapePanel::~TapePanel() {
 }
 
 void TapePanel::subscribe_to_updates() {
-  if (!processor_ || symbol_id_ == 0)
-    return;
+  if (!processor_ || symbol_id_ == 0) return;
 
   // Unsubscribe from previous symbol if any
   if (subscription_id_ != 0) {
@@ -61,8 +61,7 @@ void TapePanel::render() {
       // Keep only most recent trades for display
       if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
         cached_trades_.erase(cached_trades_.begin(),
-                             cached_trades_.begin() +
-                                 (cached_trades_.size() - MAX_VISIBLE_TRADES));
+                             cached_trades_.begin() + (cached_trades_.size() - MAX_VISIBLE_TRADES));
       }
     }
   }
@@ -72,14 +71,14 @@ void TapePanel::render() {
   end_panel_window();
 }
 
-void TapePanel::set_symbol(uint32_t symbol_id, const std::string &symbol_name) {
+void TapePanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   cached_trades_.clear();
 
   // Re-subscribe to new symbol
   subscribe_to_updates();
-  markDirty(); // Force immediate refresh
+  markDirty();  // Force immediate refresh
 }
 
 void TapePanel::render_controls() {
@@ -97,9 +96,7 @@ void TapePanel::render_trade_table() {
 
   if (ImGui::BeginTable(table_id, 4,
                         ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_BordersInnerV |
-                            ImGuiTableFlags_Resizable)) {
-
+                            ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
     ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
     ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
@@ -108,9 +105,8 @@ void TapePanel::render_trade_table() {
 
     // Render trades in reverse order (newest first)
     int row_index = 0;
-    for (auto it = cached_trades_.rbegin(); it != cached_trades_.rend();
-         ++it, ++row_index) {
-      const auto &trade = *it;
+    for (auto it = cached_trades_.rbegin(); it != cached_trades_.rend(); ++it, ++row_index) {
+      const auto& trade = *it;
 
       // Push unique ID for this row to avoid conflicts
       ImGui::PushID(row_index);
@@ -119,7 +115,7 @@ void TapePanel::render_trade_table() {
       // Time column (HH:MM:SS.mmm)
       ImGui::TableSetColumnIndex(0);
       if (trade.timestamp > 0) {
-        time_t time_sec = trade.timestamp / 1000000; // micros to seconds
+        time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
         uint64_t millis = (trade.timestamp / 1000) % 1000;
         char time_str[16];
         strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
@@ -130,9 +126,8 @@ void TapePanel::render_trade_table() {
 
       // Price column
       ImGui::TableSetColumnIndex(1);
-      const auto &colors = ThemeManager::getInstance().getColors();
-      ImVec4 price_color =
-          trade.is_buy ? colors.accent_green : colors.accent_red;
+      const auto& colors = ThemeManager::getInstance().getColors();
+      ImVec4 price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
       ImGui::TextColored(price_color, "%.4f", trade.price);
 
       // Size column
@@ -159,4 +154,4 @@ void TapePanel::render_trade_table() {
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

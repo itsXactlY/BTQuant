@@ -6,7 +6,6 @@
  * optimization.
  */
 
-#include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -17,6 +16,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include "../../include/vulkan_dashboard_advanced.hpp"
+
 namespace BTQuant {
 
 // ============================================================================
@@ -24,12 +25,12 @@ namespace BTQuant {
 // ============================================================================
 
 class LODManager {
-public:
+ public:
   enum class LODLevel {
-    High = 0,   // Full detail
-    Medium = 1, // Reduced detail
-    Low = 2,    // Minimal detail
-    Culled = 3  // Not rendered
+    High = 0,    // Full detail
+    Medium = 1,  // Reduced detail
+    Low = 2,     // Minimal detail
+    Culled = 3   // Not rendered
   };
 
   struct LODSettings {
@@ -57,8 +58,7 @@ public:
 
   LODManager() { initialize_default_settings(); }
 
-  void update(float delta_time, float current_fps,
-              const glm::vec3 &camera_position) {
+  void update(float delta_time, float current_fps, const glm::vec3& camera_position) {
     current_fps_ = current_fps;
     camera_position_ = camera_position;
 
@@ -74,8 +74,7 @@ public:
     update_lod_levels();
   }
 
-  LODLevel calculate_lod_level(const glm::vec3 &object_position,
-                               float object_size = 1.0f) const {
+  LODLevel calculate_lod_level(const glm::vec3& object_position, float object_size = 1.0f) const {
     float distance = glm::length(object_position - camera_position_);
 
     // Adjust distance based on object size
@@ -95,12 +94,11 @@ public:
     }
   }
 
-  const LODSettings::QualitySettings &
-  get_quality_settings(LODLevel level) const {
+  const LODSettings::QualitySettings& get_quality_settings(LODLevel level) const {
     return settings_.quality_levels[static_cast<int>(level)];
   }
 
-  void set_settings(const LODSettings &settings) { settings_ = settings; }
+  void set_settings(const LODSettings& settings) { settings_ = settings; }
 
   float get_global_lod_bias() const { return global_lod_bias_; }
 
@@ -115,7 +113,7 @@ public:
 
   LODStats get_stats() const { return current_stats_; }
 
-private:
+ private:
   LODSettings settings_;
   glm::vec3 camera_position_{0.0f};
   float current_fps_ = 60.0f;
@@ -168,18 +166,18 @@ private:
 // ============================================================================
 
 class FrustumCuller {
-public:
+ public:
   struct Plane {
     glm::vec3 normal;
     float distance;
 
-    float distance_to_point(const glm::vec3 &point) const {
+    float distance_to_point(const glm::vec3& point) const {
       return glm::dot(normal, point) + distance;
     }
   };
 
   struct Frustum {
-    std::array<Plane, 6> planes; // left, right, bottom, top, near, far
+    std::array<Plane, 6> planes;  // left, right, bottom, top, near, far
   };
 
   struct BoundingBox {
@@ -192,19 +190,19 @@ public:
 
   FrustumCuller() = default;
 
-  void update_frustum(const glm::mat4 &view_projection_matrix) {
+  void update_frustum(const glm::mat4& view_projection_matrix) {
     extract_frustum_planes(view_projection_matrix, current_frustum_);
   }
 
-  bool is_box_in_frustum(const BoundingBox &box) const {
+  bool is_box_in_frustum(const BoundingBox& box) const {
     return test_box_against_frustum(box, current_frustum_);
   }
 
-  bool is_sphere_in_frustum(const glm::vec3 &center, float radius) const {
+  bool is_sphere_in_frustum(const glm::vec3& center, float radius) const {
     return test_sphere_against_frustum(center, radius, current_frustum_);
   }
 
-  bool is_point_in_frustum(const glm::vec3 &point) const {
+  bool is_point_in_frustum(const glm::vec3& point) const {
     return test_point_against_frustum(point, current_frustum_);
   }
 
@@ -226,13 +224,11 @@ public:
   void end_culling_frame() {
     auto end_time = std::chrono::high_resolution_clock::now();
     current_stats_.culling_time =
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            end_time - culling_start_time_);
+        std::chrono::duration_cast<std::chrono::microseconds>(end_time - culling_start_time_);
 
     if (current_stats_.total_objects > 0) {
       current_stats_.culling_efficiency =
-          static_cast<float>(current_stats_.culled_objects) /
-          current_stats_.total_objects;
+          static_cast<float>(current_stats_.culled_objects) / current_stats_.total_objects;
     }
   }
 
@@ -245,12 +241,12 @@ public:
     }
   }
 
-private:
+ private:
   Frustum current_frustum_;
   CullingStats current_stats_;
   std::chrono::high_resolution_clock::time_point culling_start_time_;
 
-  void extract_frustum_planes(const glm::mat4 &mvp, Frustum &frustum) {
+  void extract_frustum_planes(const glm::mat4& mvp, Frustum& frustum) {
     // Extract frustum planes from view-projection matrix
     // Left plane
     frustum.planes[0].normal.x = mvp[0][3] + mvp[0][0];
@@ -289,51 +285,49 @@ private:
     frustum.planes[5].distance = mvp[3][3] - mvp[3][2];
 
     // Normalize planes
-    for (auto &plane : frustum.planes) {
+    for (auto& plane : frustum.planes) {
       float length = glm::length(plane.normal);
       plane.normal /= length;
       plane.distance /= length;
     }
   }
 
-  bool test_box_against_frustum(const BoundingBox &box,
-                                const Frustum &frustum) const {
+  bool test_box_against_frustum(const BoundingBox& box, const Frustum& frustum) const {
     glm::vec3 center = box.center();
     glm::vec3 extents = box.extents();
 
-    for (const auto &plane : frustum.planes) {
+    for (const auto& plane : frustum.planes) {
       float distance = plane.distance_to_point(center);
       float radius = glm::dot(extents, glm::abs(plane.normal));
 
       if (distance < -radius) {
-        return false; // Box is completely outside this plane
+        return false;  // Box is completely outside this plane
       }
     }
 
-    return true; // Box is at least partially inside frustum
+    return true;  // Box is at least partially inside frustum
   }
 
-  bool test_sphere_against_frustum(const glm::vec3 &center, float radius,
-                                   const Frustum &frustum) const {
-    for (const auto &plane : frustum.planes) {
+  bool test_sphere_against_frustum(const glm::vec3& center, float radius,
+                                   const Frustum& frustum) const {
+    for (const auto& plane : frustum.planes) {
       float distance = plane.distance_to_point(center);
       if (distance < -radius) {
-        return false; // Sphere is completely outside this plane
+        return false;  // Sphere is completely outside this plane
       }
     }
 
-    return true; // Sphere is at least partially inside frustum
+    return true;  // Sphere is at least partially inside frustum
   }
 
-  bool test_point_against_frustum(const glm::vec3 &point,
-                                  const Frustum &frustum) const {
-    for (const auto &plane : frustum.planes) {
+  bool test_point_against_frustum(const glm::vec3& point, const Frustum& frustum) const {
+    for (const auto& plane : frustum.planes) {
       if (plane.distance_to_point(point) < 0) {
-        return false; // Point is outside this plane
+        return false;  // Point is outside this plane
       }
     }
 
-    return true; // Point is inside frustum
+    return true;  // Point is inside frustum
   }
 };
 
@@ -342,16 +336,16 @@ private:
 // ============================================================================
 
 class AdaptiveQualityScaler {
-public:
+ public:
   struct QualitySettings {
-    float render_scale = 1.0f; // 0.5 to 2.0
-    int msaa_samples = 4;      // 1, 2, 4, 8
+    float render_scale = 1.0f;  // 0.5 to 2.0
+    int msaa_samples = 4;       // 1, 2, 4, 8
     bool enable_bloom = true;
     bool enable_ssao = true;
     bool enable_motion_blur = false;
-    float shadow_quality = 1.0f;  // 0.0 to 1.0
-    float texture_quality = 1.0f; // 0.0 to 1.0
-    int max_lights = 8;           // 1 to 16
+    float shadow_quality = 1.0f;   // 0.0 to 1.0
+    float texture_quality = 1.0f;  // 0.0 to 1.0
+    int max_lights = 8;            // 1 to 16
     bool enable_vsync = true;
   };
 
@@ -372,7 +366,7 @@ public:
     fps_tolerance_ = 5.0f;
   }
 
-  void update(const PerformanceMetrics &metrics) {
+  void update(const PerformanceMetrics& metrics) {
     current_metrics_ = metrics;
 
     // Update FPS history
@@ -401,13 +395,11 @@ public:
     }
   }
 
-  const QualitySettings &get_current_settings() const {
-    return current_settings_;
-  }
+  const QualitySettings& get_current_settings() const { return current_settings_; }
 
   void set_target_fps(float target_fps) { target_fps_ = target_fps; }
 
-  void set_quality_preset(const std::string &preset_name) {
+  void set_quality_preset(const std::string& preset_name) {
     auto it = quality_presets_.find(preset_name);
     if (it != quality_presets_.end()) {
       current_settings_ = it->second;
@@ -417,7 +409,7 @@ public:
 
   std::vector<std::string> get_available_presets() const {
     std::vector<std::string> presets;
-    for (const auto &pair : quality_presets_) {
+    for (const auto& pair : quality_presets_) {
       presets.push_back(pair.first);
     }
     return presets;
@@ -441,14 +433,14 @@ public:
     return stats;
   }
 
-private:
+ private:
   std::unordered_map<std::string, QualitySettings> quality_presets_;
   QualitySettings current_settings_;
   std::string current_preset_ = "High";
 
   PerformanceMetrics current_metrics_;
   std::deque<float> fps_history_;
-  static constexpr size_t fps_history_size_ = 60; // 1 second at 60 FPS
+  static constexpr size_t fps_history_size_ = 60;  // 1 second at 60 FPS
 
   float target_fps_ = 60.0f;
   float fps_tolerance_ = 5.0f;
@@ -518,35 +510,31 @@ private:
   }
 
   bool should_decrease_quality(float avg_fps) {
-    if (emergency_mode_)
-      return false; // Already at minimum
+    if (emergency_mode_) return false;  // Already at minimum
 
     auto now = std::chrono::high_resolution_clock::now();
     if (now - last_adjustment_time_ < min_adjustment_interval_) {
-      return false; // Too soon since last adjustment
+      return false;  // Too soon since last adjustment
     }
 
     return avg_fps < target_fps_ - fps_tolerance_;
   }
 
   bool should_increase_quality(float avg_fps) {
-    if (current_preset_ == "Ultra")
-      return false; // Already at maximum
+    if (current_preset_ == "Ultra") return false;  // Already at maximum
 
     auto now = std::chrono::high_resolution_clock::now();
     if (now - last_adjustment_time_ < min_adjustment_interval_ * 2) {
-      return false; // Wait longer before increasing quality
+      return false;  // Wait longer before increasing quality
     }
 
     return avg_fps > target_fps_ + fps_tolerance_ * 2;
   }
 
   void decrease_quality() {
-    std::vector<std::string> quality_order = {"Ultra", "High", "Medium", "Low",
-                                              "Performance"};
+    std::vector<std::string> quality_order = {"Ultra", "High", "Medium", "Low", "Performance"};
 
-    auto it =
-        std::find(quality_order.begin(), quality_order.end(), current_preset_);
+    auto it = std::find(quality_order.begin(), quality_order.end(), current_preset_);
     if (it != quality_order.end() && it + 1 != quality_order.end()) {
       set_quality_preset(*(it + 1));
       quality_adjustments_++;
@@ -555,11 +543,9 @@ private:
   }
 
   void increase_quality() {
-    std::vector<std::string> quality_order = {"Performance", "Low", "Medium",
-                                              "High", "Ultra"};
+    std::vector<std::string> quality_order = {"Performance", "Low", "Medium", "High", "Ultra"};
 
-    auto it =
-        std::find(quality_order.begin(), quality_order.end(), current_preset_);
+    auto it = std::find(quality_order.begin(), quality_order.end(), current_preset_);
     if (it != quality_order.end() && it + 1 != quality_order.end()) {
       set_quality_preset(*(it + 1));
       quality_adjustments_++;
@@ -606,7 +592,7 @@ private:
 // ============================================================================
 
 class CommandBufferOptimizer {
-public:
+ public:
   struct DrawCall {
     VkPipeline pipeline;
     VkDescriptorSet descriptor_set;
@@ -630,7 +616,7 @@ public:
     batched_draws_ = 0;
   }
 
-  void add_draw_call(const DrawCall &draw_call) {
+  void add_draw_call(const DrawCall& draw_call) {
     DrawCall optimized_call = draw_call;
     optimized_call.sort_key = generate_sort_key(draw_call);
     draw_calls_.push_back(optimized_call);
@@ -639,9 +625,7 @@ public:
   void optimize_and_submit(VkCommandBuffer cmd) {
     // Sort draw calls to minimize state changes
     std::sort(draw_calls_.begin(), draw_calls_.end(),
-              [](const DrawCall &a, const DrawCall &b) {
-                return a.sort_key < b.sort_key;
-              });
+              [](const DrawCall& a, const DrawCall& b) { return a.sort_key < b.sort_key; });
 
     // Submit optimized draw calls
     VkPipeline current_pipeline = VK_NULL_HANDLE;
@@ -649,20 +633,18 @@ public:
     VkBuffer current_vertex_buffer = VK_NULL_HANDLE;
     VkBuffer current_index_buffer = VK_NULL_HANDLE;
 
-    for (const auto &draw_call : draw_calls_) {
+    for (const auto& draw_call : draw_calls_) {
       // Bind pipeline if changed
       if (draw_call.pipeline != current_pipeline) {
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          draw_call.pipeline);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_call.pipeline);
         current_pipeline = draw_call.pipeline;
         state_changes_++;
       }
 
       // Bind descriptor set if changed
       if (draw_call.descriptor_set != current_descriptor_set) {
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                VK_NULL_HANDLE, 0, 1, &draw_call.descriptor_set,
-                                0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, VK_NULL_HANDLE, 0, 1,
+                                &draw_call.descriptor_set, 0, nullptr);
         current_descriptor_set = draw_call.descriptor_set;
         state_changes_++;
       }
@@ -677,8 +659,7 @@ public:
 
       // Bind index buffer if changed
       if (draw_call.index_buffer != current_index_buffer) {
-        vkCmdBindIndexBuffer(cmd, draw_call.index_buffer, 0,
-                             VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(cmd, draw_call.index_buffer, 0, VK_INDEX_TYPE_UINT32);
         current_index_buffer = draw_call.index_buffer;
         state_changes_++;
       }
@@ -686,8 +667,7 @@ public:
       // Submit draw call
       if (draw_call.instance_count > 1) {
         vkCmdDrawIndexed(cmd, draw_call.index_count, draw_call.instance_count,
-                         draw_call.first_index, draw_call.vertex_offset,
-                         draw_call.first_instance);
+                         draw_call.first_index, draw_call.vertex_offset, draw_call.first_instance);
       } else {
         vkCmdDrawIndexed(cmd, draw_call.index_count, 1, draw_call.first_index,
                          draw_call.vertex_offset, 0);
@@ -710,19 +690,18 @@ public:
 
     if (stats.total_draw_calls > 0) {
       stats.optimization_ratio =
-          1.0f -
-          (static_cast<float>(stats.state_changes) / stats.total_draw_calls);
+          1.0f - (static_cast<float>(stats.state_changes) / stats.total_draw_calls);
     }
 
     return stats;
   }
 
-private:
+ private:
   std::vector<DrawCall> draw_calls_;
   int state_changes_ = 0;
   int batched_draws_ = 0;
 
-  uint64_t generate_sort_key(const DrawCall &draw_call) {
+  uint64_t generate_sort_key(const DrawCall& draw_call) {
     // Generate sort key to minimize state changes
     // Higher priority for pipeline changes, then descriptor sets, then buffers
 
@@ -732,8 +711,7 @@ private:
     key |= (reinterpret_cast<uint64_t>(draw_call.pipeline) & 0xFFFF) << 48;
 
     // Descriptor set
-    key |= (reinterpret_cast<uint64_t>(draw_call.descriptor_set) & 0xFFFF)
-           << 32;
+    key |= (reinterpret_cast<uint64_t>(draw_call.descriptor_set) & 0xFFFF) << 32;
 
     // Vertex buffer
     key |= (reinterpret_cast<uint64_t>(draw_call.vertex_buffer) & 0xFFFF) << 16;
@@ -750,7 +728,7 @@ private:
 // ============================================================================
 
 class MemoryPoolOptimizer {
-public:
+ public:
   struct PoolStats {
     size_t total_size = 0;
     size_t used_size = 0;
@@ -763,7 +741,7 @@ public:
 
   MemoryPoolOptimizer() = default;
 
-  void optimize_pools(GPUMemoryManager &memory_manager) {
+  void optimize_pools(GPUMemoryManager& memory_manager) {
     // Analyze memory usage patterns
     auto stats = memory_manager.get_memory_stats();
 
@@ -781,22 +759,19 @@ public:
     resize_pools_if_needed(memory_manager);
   }
 
-  void record_allocation(size_t size, const std::string &pool_name) {
-    allocation_history_.push_back(
-        {size, pool_name, std::chrono::high_resolution_clock::now()});
+  void record_allocation(size_t size, const std::string& pool_name) {
+    allocation_history_.push_back({size, pool_name, std::chrono::high_resolution_clock::now()});
 
     // Keep only recent history
-    auto cutoff =
-        std::chrono::high_resolution_clock::now() - std::chrono::minutes(5);
-    allocation_history_.erase(
-        std::remove_if(allocation_history_.begin(), allocation_history_.end(),
-                       [cutoff](const AllocationRecord &record) {
-                         return record.timestamp < cutoff;
-                       }),
-        allocation_history_.end());
+    auto cutoff = std::chrono::high_resolution_clock::now() - std::chrono::minutes(5);
+    allocation_history_.erase(std::remove_if(allocation_history_.begin(), allocation_history_.end(),
+                                             [cutoff](const AllocationRecord& record) {
+                                               return record.timestamp < cutoff;
+                                             }),
+                              allocation_history_.end());
   }
 
-  PoolStats get_pool_stats(const std::string &pool_name) const {
+  PoolStats get_pool_stats(const std::string& pool_name) const {
     auto it = pool_stats_.find(pool_name);
     if (it != pool_stats_.end()) {
       return it->second;
@@ -822,7 +797,7 @@ public:
     return report;
   }
 
-private:
+ private:
   struct AllocationRecord {
     size_t size;
     std::string pool_name;
@@ -841,13 +816,12 @@ private:
     size_t total_free = 0;
     size_t largest_free = 0;
 
-    for (const auto &pair : pool_stats_) {
+    for (const auto& pair : pool_stats_) {
       total_free += pair.second.free_size;
       largest_free = std::max(largest_free, pair.second.largest_free_block);
     }
 
-    if (total_free == 0)
-      return 0.0f;
+    if (total_free == 0) return 0.0f;
 
     return 1.0f - (static_cast<float>(largest_free) / total_free);
   }
@@ -856,34 +830,31 @@ private:
     size_t total_size = 0;
     size_t used_size = 0;
 
-    for (const auto &pair : pool_stats_) {
+    for (const auto& pair : pool_stats_) {
       total_size += pair.second.total_size;
       used_size += pair.second.used_size;
     }
 
-    if (total_size == 0)
-      return 0.0f;
+    if (total_size == 0) return 0.0f;
 
     return static_cast<float>(used_size) / total_size;
   }
 
-  bool should_defragment() const {
-    return calculate_fragmentation_ratio() > 0.5f;
-  }
+  bool should_defragment() const { return calculate_fragmentation_ratio() > 0.5f; }
 
-  void trigger_garbage_collection(GPUMemoryManager &memory_manager) {
+  void trigger_garbage_collection(GPUMemoryManager& memory_manager) {
     // Implement garbage collection logic
     garbage_collections_++;
   }
 
-  void defragment_pools(GPUMemoryManager &memory_manager) {
+  void defragment_pools(GPUMemoryManager& memory_manager) {
     // Implement memory defragmentation
     defragmentations_++;
   }
 
-  void resize_pools_if_needed(GPUMemoryManager &memory_manager) {
+  void resize_pools_if_needed(GPUMemoryManager& memory_manager) {
     // Analyze allocation patterns and resize pools accordingly
-    for (const auto &record : allocation_history_) {
+    for (const auto& record : allocation_history_) {
       // Implementation would analyze patterns and suggest pool resizing
     }
   }
@@ -894,10 +865,10 @@ private:
 // ============================================================================
 
 class PerformanceOptimizer {
-public:
+ public:
   PerformanceOptimizer() = default;
 
-  void initialize(VulkanCore *vulkan_core) {
+  void initialize(VulkanCore* vulkan_core) {
     vulkan_core_ = vulkan_core;
 
     // Initialize subsystems
@@ -936,8 +907,7 @@ public:
     }
   }
 
-  void begin_frame(const glm::mat4 &view_projection_matrix,
-                   const glm::vec3 &camera_position) {
+  void begin_frame(const glm::mat4& view_projection_matrix, const glm::vec3& camera_position) {
     camera_position_ = camera_position;
 
     // Update frustum culling
@@ -954,8 +924,8 @@ public:
     frustum_culler_->end_culling_frame();
 
     auto frame_end_time = std::chrono::high_resolution_clock::now();
-    auto frame_duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        frame_end_time - frame_start_time_);
+    auto frame_duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(frame_end_time - frame_start_time_);
 
     current_metrics_.frame_time_ms = frame_duration.count() / 1000.0f;
     current_metrics_.fps = 1000.0f / current_metrics_.frame_time_ms;
@@ -968,13 +938,11 @@ public:
   }
 
   // Subsystem access
-  LODManager &get_lod_manager() { return *lod_manager_; }
-  FrustumCuller &get_frustum_culler() { return *frustum_culler_; }
-  AdaptiveQualityScaler &get_quality_scaler() { return *quality_scaler_; }
-  CommandBufferOptimizer &get_command_optimizer() {
-    return *command_optimizer_;
-  }
-  MemoryPoolOptimizer &get_memory_optimizer() { return *memory_optimizer_; }
+  LODManager& get_lod_manager() { return *lod_manager_; }
+  FrustumCuller& get_frustum_culler() { return *frustum_culler_; }
+  AdaptiveQualityScaler& get_quality_scaler() { return *quality_scaler_; }
+  CommandBufferOptimizer& get_command_optimizer() { return *command_optimizer_; }
+  MemoryPoolOptimizer& get_memory_optimizer() { return *memory_optimizer_; }
 
   struct OverallPerformanceStats {
     float current_fps = 60.0f;
@@ -1014,8 +982,8 @@ public:
     return stats;
   }
 
-private:
-  VulkanCore *vulkan_core_ = nullptr;
+ private:
+  VulkanCore* vulkan_core_ = nullptr;
 
   // Subsystems
   std::unique_ptr<LODManager> lod_manager_;
@@ -1078,12 +1046,12 @@ private:
 
   float get_cpu_usage() {
     // Platform-specific CPU usage monitoring
-    return 30.0f; // Placeholder
+    return 30.0f;  // Placeholder
   }
 
   float get_gpu_usage() {
     // Platform-specific GPU usage monitoring
-    return 50.0f; // Placeholder
+    return 50.0f;  // Placeholder
   }
 
   float get_vram_usage() {
@@ -1091,19 +1059,17 @@ private:
     auto memory_stats = vulkan_core_->get_memory_manager().get_memory_stats();
 
     // Calculate total usage percentage
-    float total_used = memory_stats.vertex_pool_used +
-                       memory_stats.uniform_pool_used +
+    float total_used = memory_stats.vertex_pool_used + memory_stats.uniform_pool_used +
                        memory_stats.storage_pool_used;
 
     // Estimate total VRAM (this would need to be queried from Vulkan)
-    float estimated_total_vram = 1024 * 1024 * 1024; // 1GB placeholder
+    float estimated_total_vram = 1024 * 1024 * 1024;  // 1GB placeholder
 
     return (total_used / estimated_total_vram) * 100.0f;
   }
 
   float calculate_average_fps() const {
-    if (frame_times_.empty())
-      return 60.0f;
+    if (frame_times_.empty()) return 60.0f;
 
     float total_time = 0.0f;
     for (float time : frame_times_) {
@@ -1136,19 +1102,17 @@ private:
 
     // Resource usage score (lower is better)
     float resource_score =
-        1.0f -
-        ((current_metrics_.cpu_usage + current_metrics_.gpu_usage) / 200.0f);
+        1.0f - ((current_metrics_.cpu_usage + current_metrics_.gpu_usage) / 200.0f);
     score += std::max(resource_score, 0.0f) * 0.3f;
 
     // Quality score
     score += quality_scaler_->get_stats().quality_score * 0.2f;
 
     // Memory efficiency score
-    score +=
-        memory_optimizer_->get_optimization_report().memory_efficiency * 0.1f;
+    score += memory_optimizer_->get_optimization_report().memory_efficiency * 0.1f;
 
     return std::clamp(score, 0.0f, 1.0f);
   }
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

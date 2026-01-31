@@ -5,11 +5,12 @@
  * resizable panels, customizable layouts, filtering, search, and themes.
  */
 
-#include "../../include/vulkan_dashboard_advanced.hpp"
 #include <algorithm>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <regex>
+
+#include "../../include/vulkan_dashboard_advanced.hpp"
 
 namespace BTQuant {
 
@@ -18,7 +19,7 @@ namespace BTQuant {
 // ============================================================================
 
 class ResizablePanel : public UIComponent {
-public:
+ public:
   enum class ResizeHandle {
     NONE,
     TOP,
@@ -31,8 +32,7 @@ public:
     BOTTOM_RIGHT
   };
 
-  ResizablePanel(const glm::vec2 &position, const glm::vec2 &size,
-                 const std::string &title)
+  ResizablePanel(const glm::vec2& position, const glm::vec2& size, const std::string& title)
       : UIComponent(position, size), title_(title) {
     min_size_ = glm::vec2(100.0f, 50.0f);
     max_size_ = glm::vec2(2000.0f, 1500.0f);
@@ -46,8 +46,8 @@ public:
   }
 
   void set_resizable(bool resizable) { resizable_ = resizable; }
-  void set_min_size(const glm::vec2 &min_size) { min_size_ = min_size; }
-  void set_max_size(const glm::vec2 &max_size) { max_size_ = max_size; }
+  void set_min_size(const glm::vec2& min_size) { min_size_ = min_size; }
+  void set_max_size(const glm::vec2& max_size) { max_size_ = max_size; }
   void set_snap_to_grid(bool snap, float grid_size = 10.0f) {
     snap_to_grid_ = snap;
     grid_size_ = grid_size;
@@ -61,14 +61,12 @@ public:
     // Update resize animation
     if (resize_animation_active_) {
       resize_animation_time_ += delta_time;
-      float t =
-          std::min(resize_animation_time_ / resize_animation_duration_, 1.0f);
+      float t = std::min(resize_animation_time_ / resize_animation_duration_, 1.0f);
 
       // Smooth easing function
       t = t * t * (3.0f - 2.0f * t);
 
-      glm::vec2 current_size =
-          glm::mix(resize_start_size_, resize_target_size_, t);
+      glm::vec2 current_size = glm::mix(resize_start_size_, resize_target_size_, t);
       set_size(current_size);
 
       if (t >= 1.0f) {
@@ -100,9 +98,8 @@ public:
     }
   }
 
-  void handle_input(const InputEvent &event) override {
-    if (!visible_)
-      return;
+  void handle_input(const InputEvent& event) override {
+    if (!visible_) return;
 
     // Handle resize operations
     if (resizable_ && handle_resize_input(event)) {
@@ -122,7 +119,7 @@ public:
     }
   }
 
-  void animate_resize(const glm::vec2 &target_size, float duration = 0.3f) {
+  void animate_resize(const glm::vec2& target_size, float duration = 0.3f) {
     resize_start_size_ = size_;
     resize_target_size_ = clamp_size(target_size);
     resize_animation_duration_ = duration;
@@ -130,7 +127,7 @@ public:
     resize_animation_active_ = true;
   }
 
-private:
+ private:
   std::string title_;
   std::unique_ptr<UIComponent> content_;
 
@@ -169,7 +166,7 @@ private:
   VkPipeline [[maybe_unused]] panel_pipeline_ = VK_NULL_HANDLE;
   VkPipeline [[maybe_unused]] handle_pipeline_ = VK_NULL_HANDLE;
 
-  ResizeHandle get_resize_handle_at_position(const glm::vec2 &pos) {
+  ResizeHandle get_resize_handle_at_position(const glm::vec2& pos) {
     glm::vec2 relative_pos = pos - position_;
 
     // Check corners first (larger hit area)
@@ -178,16 +175,13 @@ private:
     if (relative_pos.x <= corner_size && relative_pos.y <= corner_size) {
       return ResizeHandle::TOP_LEFT;
     }
-    if (relative_pos.x >= size_.x - corner_size &&
-        relative_pos.y <= corner_size) {
+    if (relative_pos.x >= size_.x - corner_size && relative_pos.y <= corner_size) {
       return ResizeHandle::TOP_RIGHT;
     }
-    if (relative_pos.x <= corner_size &&
-        relative_pos.y >= size_.y - corner_size) {
+    if (relative_pos.x <= corner_size && relative_pos.y >= size_.y - corner_size) {
       return ResizeHandle::BOTTOM_LEFT;
     }
-    if (relative_pos.x >= size_.x - corner_size &&
-        relative_pos.y >= size_.y - corner_size) {
+    if (relative_pos.x >= size_.x - corner_size && relative_pos.y >= size_.y - corner_size) {
       return ResizeHandle::BOTTOM_RIGHT;
     }
 
@@ -208,7 +202,7 @@ private:
     return ResizeHandle::NONE;
   }
 
-  bool handle_resize_input(const InputEvent &event) {
+  bool handle_resize_input(const InputEvent& event) {
     if (event.type == InputEventType::MouseMove) {
       ResizeHandle handle = get_resize_handle_at_position(event.position);
       hovered_ = (handle != ResizeHandle::NONE);
@@ -244,18 +238,16 @@ private:
     return false;
   }
 
-  bool handle_title_bar_input(const InputEvent &event) {
+  bool handle_title_bar_input(const InputEvent& event) {
     glm::vec2 title_bar_min = position_;
     glm::vec2 title_bar_max = position_ + glm::vec2(size_.x, title_bar_height_);
 
     bool in_title_bar = event.position.x >= title_bar_min.x &&
                         event.position.x <= title_bar_max.x &&
-                        event.position.y >= title_bar_min.y &&
-                        event.position.y <= title_bar_max.y;
+                        event.position.y >= title_bar_min.y && event.position.y <= title_bar_max.y;
 
-    if (event.type == InputEventType::MouseButton &&
-        event.mouse_button == MouseButton::Left && in_title_bar) {
-
+    if (event.type == InputEventType::MouseButton && event.mouse_button == MouseButton::Left &&
+        in_title_bar) {
       dragging_title_ = true;
       drag_offset_ = event.position - position_;
       return true;
@@ -282,46 +274,46 @@ private:
     return false;
   }
 
-  void perform_resize(const glm::vec2 &mouse_pos) {
+  void perform_resize(const glm::vec2& mouse_pos) {
     glm::vec2 delta = mouse_pos - resize_start_pos_;
     glm::vec2 new_size = resize_start_size_;
     glm::vec2 new_position = position_;
 
     switch (active_handle_) {
-    case ResizeHandle::NONE:
-      // No resize
-      break;
-    case ResizeHandle::RIGHT:
-      new_size.x += delta.x;
-      break;
-    case ResizeHandle::BOTTOM:
-      new_size.y += delta.y;
-      break;
-    case ResizeHandle::LEFT:
-      new_size.x -= delta.x;
-      new_position.x += delta.x;
-      break;
-    case ResizeHandle::TOP:
-      new_size.y -= delta.y;
-      new_position.y += delta.y;
-      break;
-    case ResizeHandle::BOTTOM_RIGHT:
-      new_size += delta;
-      break;
-    case ResizeHandle::BOTTOM_LEFT:
-      new_size.x -= delta.x;
-      new_size.y += delta.y;
-      new_position.x += delta.x;
-      break;
-    case ResizeHandle::TOP_RIGHT:
-      new_size.x += delta.x;
-      new_size.y -= delta.y;
-      new_position.y += delta.y;
-      break;
-    case ResizeHandle::TOP_LEFT:
-      new_size -= delta;
-      new_position += delta;
-      break;
+      case ResizeHandle::NONE:
+        // No resize
+        break;
+      case ResizeHandle::RIGHT:
+        new_size.x += delta.x;
+        break;
+      case ResizeHandle::BOTTOM:
+        new_size.y += delta.y;
+        break;
+      case ResizeHandle::LEFT:
+        new_size.x -= delta.x;
+        new_position.x += delta.x;
+        break;
+      case ResizeHandle::TOP:
+        new_size.y -= delta.y;
+        new_position.y += delta.y;
+        break;
+      case ResizeHandle::BOTTOM_RIGHT:
+        new_size += delta;
+        break;
+      case ResizeHandle::BOTTOM_LEFT:
+        new_size.x -= delta.x;
+        new_size.y += delta.y;
+        new_position.x += delta.x;
+        break;
+      case ResizeHandle::TOP_RIGHT:
+        new_size.x += delta.x;
+        new_size.y -= delta.y;
+        new_position.y += delta.y;
+        break;
+      case ResizeHandle::TOP_LEFT:
+        new_size -= delta;
+        new_position += delta;
+        break;
     }
 
     // Clamp size
@@ -338,16 +330,14 @@ private:
     update_content_layout();
   }
 
-  glm::vec2 clamp_size(const glm::vec2 &size) {
-    return glm::clamp(size, min_size_, max_size_);
-  }
+  glm::vec2 clamp_size(const glm::vec2& size) { return glm::clamp(size, min_size_, max_size_); }
 
-  glm::vec2 snap_to_grid_position(const glm::vec2 &pos) {
+  glm::vec2 snap_to_grid_position(const glm::vec2& pos) {
     return glm::vec2(std::round(pos.x / grid_size_) * grid_size_,
                      std::round(pos.y / grid_size_) * grid_size_);
   }
 
-  glm::vec2 snap_to_grid_size(const glm::vec2 &size) {
+  glm::vec2 snap_to_grid_size(const glm::vec2& size) {
     return glm::vec2(std::round(size.x / grid_size_) * grid_size_,
                      std::round(size.y / grid_size_) * grid_size_);
   }
@@ -357,12 +347,12 @@ private:
     // Implementation would set appropriate cursor
   }
 
-  bool is_point_in_content_area(const glm::vec2 &point) {
+  bool is_point_in_content_area(const glm::vec2& point) {
     glm::vec2 content_min = position_ + glm::vec2(0, title_bar_height_);
     glm::vec2 content_max = position_ + size_;
 
-    return point.x >= content_min.x && point.x <= content_max.x &&
-           point.y >= content_min.y && point.y <= content_max.y;
+    return point.x >= content_min.x && point.x <= content_max.x && point.y >= content_min.y &&
+           point.y <= content_max.y;
   }
 
   glm::vec2 get_content_offset() { return glm::vec2(0, title_bar_height_); }
@@ -397,7 +387,7 @@ private:
 // ============================================================================
 
 class LayoutManager {
-public:
+ public:
   struct LayoutPreset {
     std::string name;
     std::string description;
@@ -406,14 +396,13 @@ public:
     std::chrono::system_clock::time_point modified_time;
   };
 
-  LayoutManager(const std::string &presets_directory = "layouts/")
+  LayoutManager(const std::string& presets_directory = "layouts/")
       : presets_directory_(presets_directory) {
     create_directory_if_not_exists(presets_directory_);
     load_all_presets();
   }
 
-  void save_layout(const std::string &name,
-                   const std::string &description = "") {
+  void save_layout(const std::string& name, const std::string& description = "") {
     LayoutPreset preset;
     preset.name = name;
     preset.description = description;
@@ -425,7 +414,7 @@ public:
     save_preset_to_file(preset);
   }
 
-  bool load_layout(const std::string &name) {
+  bool load_layout(const std::string& name) {
     auto it = presets_.find(name);
     if (it == presets_.end()) {
       return false;
@@ -434,7 +423,7 @@ public:
     return deserialize_layout(it->second.layout_data);
   }
 
-  void delete_layout(const std::string &name) {
+  void delete_layout(const std::string& name) {
     auto it = presets_.find(name);
     if (it != presets_.end()) {
       std::string filename = presets_directory_ + name + ".json";
@@ -445,15 +434,14 @@ public:
 
   std::vector<LayoutPreset> get_all_presets() const {
     std::vector<LayoutPreset> result;
-    for (const auto &pair : presets_) {
+    for (const auto& pair : presets_) {
       result.push_back(pair.second);
     }
 
     // Sort by modified time (most recent first)
-    std::sort(result.begin(), result.end(),
-              [](const LayoutPreset &a, const LayoutPreset &b) {
-                return a.modified_time > b.modified_time;
-              });
+    std::sort(result.begin(), result.end(), [](const LayoutPreset& a, const LayoutPreset& b) {
+      return a.modified_time > b.modified_time;
+    });
 
     return result;
   }
@@ -469,12 +457,11 @@ public:
     create_monitoring_layout();
   }
 
-private:
+ private:
   std::string presets_directory_;
   std::unordered_map<std::string, LayoutPreset> presets_;
 
-  void
-  create_directory_if_not_exists([[maybe_unused]] const std::string &path) {
+  void create_directory_if_not_exists([[maybe_unused]] const std::string& path) {
     // Implementation would create directory
   }
 
@@ -482,7 +469,7 @@ private:
     // Implementation would scan directory and load all preset files
   }
 
-  void save_preset_to_file(const LayoutPreset &preset) {
+  void save_preset_to_file(const LayoutPreset& preset) {
     std::string filename = presets_directory_ + preset.name + ".json";
     std::ofstream file(filename);
 
@@ -490,14 +477,12 @@ private:
     root["name"] = preset.name;
     root["description"] = preset.description;
     root["layout"] = preset.layout_data;
-    root["created_time"] =
-        static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
-                                 preset.created_time.time_since_epoch())
-                                 .count());
-    root["modified_time"] =
-        static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
-                                 preset.modified_time.time_since_epoch())
-                                 .count());
+    root["created_time"] = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(preset.created_time.time_since_epoch())
+            .count());
+    root["modified_time"] = static_cast<int64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(preset.modified_time.time_since_epoch())
+            .count());
 
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "  ";
@@ -514,7 +499,7 @@ private:
     return layout;
   }
 
-  bool deserialize_layout([[maybe_unused]] const Json::Value &layout_data) {
+  bool deserialize_layout([[maybe_unused]] const Json::Value& layout_data) {
     // Deserialize and recreate layout from JSON data
     return true;
   }
@@ -665,7 +650,7 @@ private:
 // ============================================================================
 
 class DataFilter {
-public:
+ public:
   enum class FilterType { Text, Numeric, Date, Boolean, Enum };
 
   enum class ComparisonOperator {
@@ -692,9 +677,7 @@ public:
 
   DataFilter() = default;
 
-  void add_filter(const FilterCriteria &criteria) {
-    filters_.push_back(criteria);
-  }
+  void add_filter(const FilterCriteria& criteria) { filters_.push_back(criteria); }
 
   void remove_filter(size_t index) {
     if (index < filters_.size()) {
@@ -711,10 +694,10 @@ public:
   }
 
   template <typename T>
-  std::vector<T> apply_filters(const std::vector<T> &data) const {
+  std::vector<T> apply_filters(const std::vector<T>& data) const {
     std::vector<T> result;
 
-    for (const auto &item : data) {
+    for (const auto& item : data) {
       if (matches_all_filters(item)) {
         result.push_back(item);
       }
@@ -723,15 +706,15 @@ public:
     return result;
   }
 
-  const std::vector<FilterCriteria> &get_filters() const { return filters_; }
+  const std::vector<FilterCriteria>& get_filters() const { return filters_; }
 
-private:
+ private:
   std::vector<FilterCriteria> filters_;
 
-  template <typename T> bool matches_all_filters(const T &item) const {
-    for (const auto &filter : filters_) {
-      if (!filter.enabled)
-        continue;
+  template <typename T>
+  bool matches_all_filters(const T& item) const {
+    for (const auto& filter : filters_) {
+      if (!filter.enabled) continue;
 
       if (!matches_filter(item, filter)) {
         return false;
@@ -741,130 +724,120 @@ private:
   }
 
   template <typename T>
-  bool matches_filter(const T &item, const FilterCriteria &filter) const {
+  bool matches_filter(const T& item, const FilterCriteria& filter) const {
     // Get field value from item (implementation would depend on data structure)
     std::string field_value = get_field_value(item, filter.field_name);
 
     switch (filter.type) {
-    case FilterType::Text:
-      return matches_text_filter(field_value, filter);
-    case FilterType::Numeric:
-      return matches_numeric_filter(field_value, filter);
-    case FilterType::Date:
-      return matches_date_filter(field_value, filter);
-    case FilterType::Boolean:
-      return matches_boolean_filter(field_value, filter);
-    case FilterType::Enum:
-      return matches_enum_filter(field_value, filter);
+      case FilterType::Text:
+        return matches_text_filter(field_value, filter);
+      case FilterType::Numeric:
+        return matches_numeric_filter(field_value, filter);
+      case FilterType::Date:
+        return matches_date_filter(field_value, filter);
+      case FilterType::Boolean:
+        return matches_boolean_filter(field_value, filter);
+      case FilterType::Enum:
+        return matches_enum_filter(field_value, filter);
     }
 
     return false;
   }
 
   template <typename T>
-  std::string
-  get_field_value([[maybe_unused]] const T &item,
-                  [[maybe_unused]] const std::string &field_name) const {
+  std::string get_field_value([[maybe_unused]] const T& item,
+                              [[maybe_unused]] const std::string& field_name) const {
     // Implementation would extract field value based on field name
     // This is a placeholder
     return "";
   }
 
-  bool matches_text_filter(const std::string &value,
-                           const FilterCriteria &filter) const {
+  bool matches_text_filter(const std::string& value, const FilterCriteria& filter) const {
     std::string filter_value = filter.value;
     std::string test_value = value;
 
     if (!filter.case_sensitive) {
-      std::transform(filter_value.begin(), filter_value.end(),
-                     filter_value.begin(), ::tolower);
-      std::transform(test_value.begin(), test_value.end(), test_value.begin(),
-                     ::tolower);
+      std::transform(filter_value.begin(), filter_value.end(), filter_value.begin(), ::tolower);
+      std::transform(test_value.begin(), test_value.end(), test_value.begin(), ::tolower);
     }
 
     switch (filter.operator_) {
-    case ComparisonOperator::Equal:
-      return test_value == filter_value;
-    case ComparisonOperator::NotEqual:
-      return test_value != filter_value;
-    case ComparisonOperator::Contains:
-      return test_value.find(filter_value) != std::string::npos;
-    case ComparisonOperator::StartsWith:
-      return test_value.substr(0, filter_value.length()) == filter_value;
-    case ComparisonOperator::EndsWith:
-      return test_value.length() >= filter_value.length() &&
-             test_value.substr(test_value.length() - filter_value.length()) ==
-                 filter_value;
-    case ComparisonOperator::Regex:
-      try {
-        std::regex pattern(filter_value);
-        return std::regex_search(test_value, pattern);
-      } catch (const std::regex_error &) {
+      case ComparisonOperator::Equal:
+        return test_value == filter_value;
+      case ComparisonOperator::NotEqual:
+        return test_value != filter_value;
+      case ComparisonOperator::Contains:
+        return test_value.find(filter_value) != std::string::npos;
+      case ComparisonOperator::StartsWith:
+        return test_value.substr(0, filter_value.length()) == filter_value;
+      case ComparisonOperator::EndsWith:
+        return test_value.length() >= filter_value.length() &&
+               test_value.substr(test_value.length() - filter_value.length()) == filter_value;
+      case ComparisonOperator::Regex:
+        try {
+          std::regex pattern(filter_value);
+          return std::regex_search(test_value, pattern);
+        } catch (const std::regex_error&) {
+          return false;
+        }
+      default:
         return false;
-      }
-    default:
-      return false;
     }
   }
 
-  bool matches_numeric_filter(const std::string &value,
-                              const FilterCriteria &filter) const {
+  bool matches_numeric_filter(const std::string& value, const FilterCriteria& filter) const {
     try {
       double test_value = std::stod(value);
       double filter_value = std::stod(filter.value);
 
       switch (filter.operator_) {
-      case ComparisonOperator::Equal:
-        return std::abs(test_value - filter_value) < 1e-9;
-      case ComparisonOperator::NotEqual:
-        return std::abs(test_value - filter_value) >= 1e-9;
-      case ComparisonOperator::Greater:
-        return test_value > filter_value;
-      case ComparisonOperator::GreaterEqual:
-        return test_value >= filter_value;
-      case ComparisonOperator::Less:
-        return test_value < filter_value;
-      case ComparisonOperator::LessEqual:
-        return test_value <= filter_value;
-      default:
-        return false;
+        case ComparisonOperator::Equal:
+          return std::abs(test_value - filter_value) < 1e-9;
+        case ComparisonOperator::NotEqual:
+          return std::abs(test_value - filter_value) >= 1e-9;
+        case ComparisonOperator::Greater:
+          return test_value > filter_value;
+        case ComparisonOperator::GreaterEqual:
+          return test_value >= filter_value;
+        case ComparisonOperator::Less:
+          return test_value < filter_value;
+        case ComparisonOperator::LessEqual:
+          return test_value <= filter_value;
+        default:
+          return false;
       }
-    } catch (const std::exception &) {
+    } catch (const std::exception&) {
       return false;
     }
   }
 
-  bool
-  matches_date_filter([[maybe_unused]] const std::string &value,
-                      [[maybe_unused]] const FilterCriteria &filter) const {
+  bool matches_date_filter([[maybe_unused]] const std::string& value,
+                           [[maybe_unused]] const FilterCriteria& filter) const {
     // Implementation for date comparison
     return false;
   }
 
-  bool matches_boolean_filter(const std::string &value,
-                              const FilterCriteria &filter) const {
+  bool matches_boolean_filter(const std::string& value, const FilterCriteria& filter) const {
     bool test_value = (value == "true" || value == "1" || value == "yes");
-    bool filter_value = (filter.value == "true" || filter.value == "1" ||
-                         filter.value == "yes");
+    bool filter_value = (filter.value == "true" || filter.value == "1" || filter.value == "yes");
 
     switch (filter.operator_) {
-    case ComparisonOperator::Equal:
-      return test_value == filter_value;
-    case ComparisonOperator::NotEqual:
-      return test_value != filter_value;
-    default:
-      return false;
+      case ComparisonOperator::Equal:
+        return test_value == filter_value;
+      case ComparisonOperator::NotEqual:
+        return test_value != filter_value;
+      default:
+        return false;
     }
   }
 
-  bool matches_enum_filter(const std::string &value,
-                           const FilterCriteria &filter) const {
+  bool matches_enum_filter(const std::string& value, const FilterCriteria& filter) const {
     return matches_text_filter(value, filter);
   }
 };
 
 class SearchEngine {
-public:
+ public:
   struct SearchResult {
     std::string type;
     std::string title;
@@ -876,8 +849,7 @@ public:
 
   SearchEngine() = default;
 
-  std::vector<SearchResult> search(const std::string &query,
-                                   size_t max_results = 50) {
+  std::vector<SearchResult> search(const std::string& query, size_t max_results = 50) {
     std::vector<SearchResult> results;
 
     // Search symbols
@@ -886,8 +858,7 @@ public:
 
     // Search indicators
     auto indicator_results = search_indicators(query);
-    results.insert(results.end(), indicator_results.begin(),
-                   indicator_results.end());
+    results.insert(results.end(), indicator_results.begin(), indicator_results.end());
 
     // Search layouts
     auto layout_results = search_layouts(query);
@@ -898,10 +869,9 @@ public:
     results.insert(results.end(), help_results.begin(), help_results.end());
 
     // Sort by relevance score
-    std::sort(results.begin(), results.end(),
-              [](const SearchResult &a, const SearchResult &b) {
-                return a.relevance_score > b.relevance_score;
-              });
+    std::sort(results.begin(), results.end(), [](const SearchResult& a, const SearchResult& b) {
+      return a.relevance_score > b.relevance_score;
+    });
 
     // Limit results
     if (results.size() > max_results) {
@@ -911,28 +881,27 @@ public:
     return results;
   }
 
-  void index_symbol(const std::string &symbol, const std::string &description) {
+  void index_symbol(const std::string& symbol, const std::string& description) {
     symbol_index_[symbol] = description;
   }
 
-  void index_indicator(const std::string &name,
-                       const std::string &description) {
+  void index_indicator(const std::string& name, const std::string& description) {
     indicator_index_[name] = description;
   }
 
-  void index_layout(const std::string &name, const std::string &description) {
+  void index_layout(const std::string& name, const std::string& description) {
     layout_index_[name] = description;
   }
 
-private:
+ private:
   std::unordered_map<std::string, std::string> symbol_index_;
   std::unordered_map<std::string, std::string> indicator_index_;
   std::unordered_map<std::string, std::string> layout_index_;
 
-  std::vector<SearchResult> search_symbols(const std::string &query) {
+  std::vector<SearchResult> search_symbols(const std::string& query) {
     std::vector<SearchResult> results;
 
-    for (const auto &pair : symbol_index_) {
+    for (const auto& pair : symbol_index_) {
       float score = calculate_relevance_score(query, pair.first, pair.second);
       if (score > 0.1f) {
         SearchResult result;
@@ -941,8 +910,7 @@ private:
         result.description = pair.second;
         result.data = pair.first;
         result.relevance_score = score;
-        result.highlight_ranges =
-            find_highlight_ranges(query, pair.first + " " + pair.second);
+        result.highlight_ranges = find_highlight_ranges(query, pair.first + " " + pair.second);
         results.push_back(result);
       }
     }
@@ -950,10 +918,10 @@ private:
     return results;
   }
 
-  std::vector<SearchResult> search_indicators(const std::string &query) {
+  std::vector<SearchResult> search_indicators(const std::string& query) {
     std::vector<SearchResult> results;
 
-    for (const auto &pair : indicator_index_) {
+    for (const auto& pair : indicator_index_) {
       float score = calculate_relevance_score(query, pair.first, pair.second);
       if (score > 0.1f) {
         SearchResult result;
@@ -962,8 +930,7 @@ private:
         result.description = pair.second;
         result.data = pair.first;
         result.relevance_score = score;
-        result.highlight_ranges =
-            find_highlight_ranges(query, pair.first + " " + pair.second);
+        result.highlight_ranges = find_highlight_ranges(query, pair.first + " " + pair.second);
         results.push_back(result);
       }
     }
@@ -971,10 +938,10 @@ private:
     return results;
   }
 
-  std::vector<SearchResult> search_layouts(const std::string &query) {
+  std::vector<SearchResult> search_layouts(const std::string& query) {
     std::vector<SearchResult> results;
 
-    for (const auto &pair : layout_index_) {
+    for (const auto& pair : layout_index_) {
       float score = calculate_relevance_score(query, pair.first, pair.second);
       if (score > 0.1f) {
         SearchResult result;
@@ -983,8 +950,7 @@ private:
         result.description = pair.second;
         result.data = pair.first;
         result.relevance_score = score;
-        result.highlight_ranges =
-            find_highlight_ranges(query, pair.first + " " + pair.second);
+        result.highlight_ranges = find_highlight_ranges(query, pair.first + " " + pair.second);
         results.push_back(result);
       }
     }
@@ -992,8 +958,7 @@ private:
     return results;
   }
 
-  std::vector<SearchResult>
-  search_help([[maybe_unused]] const std::string &query) {
+  std::vector<SearchResult> search_help([[maybe_unused]] const std::string& query) {
     std::vector<SearchResult> results;
 
     // Search help content (implementation would search help database)
@@ -1001,16 +966,13 @@ private:
     return results;
   }
 
-  float calculate_relevance_score(const std::string &query,
-                                  const std::string &title,
-                                  const std::string &description) {
+  float calculate_relevance_score(const std::string& query, const std::string& title,
+                                  const std::string& description) {
     std::string combined = title + " " + description;
-    std::transform(combined.begin(), combined.end(), combined.begin(),
-                   ::tolower);
+    std::transform(combined.begin(), combined.end(), combined.begin(), ::tolower);
 
     std::string lower_query = query;
-    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(),
-                   ::tolower);
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
 
     float score = 0.0f;
 
@@ -1036,16 +998,14 @@ private:
     return score;
   }
 
-  std::vector<std::pair<size_t, size_t>>
-  find_highlight_ranges(const std::string &query, const std::string &text) {
+  std::vector<std::pair<size_t, size_t>> find_highlight_ranges(const std::string& query,
+                                                               const std::string& text) {
     std::vector<std::pair<size_t, size_t>> ranges;
 
     std::string lower_text = text;
     std::string lower_query = query;
-    std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(),
-                   ::tolower);
-    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(),
-                   ::tolower);
+    std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(), ::tolower);
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
 
     size_t pos = 0;
     while ((pos = lower_text.find(lower_query, pos)) != std::string::npos) {
@@ -1062,7 +1022,7 @@ private:
 // ============================================================================
 
 class ThemeManager {
-public:
+ public:
   struct ColorScheme {
     std::string name;
     std::string description;
@@ -1076,7 +1036,7 @@ public:
     current_theme_ = "Dark Professional";
   }
 
-  void set_theme(const std::string &theme_name) {
+  void set_theme(const std::string& theme_name) {
     auto it = themes_.find(theme_name);
     if (it != themes_.end()) {
       current_theme_ = theme_name;
@@ -1084,18 +1044,17 @@ public:
     }
   }
 
-  const std::string &get_current_theme() const { return current_theme_; }
+  const std::string& get_current_theme() const { return current_theme_; }
 
   std::vector<std::string> get_available_themes() const {
     std::vector<std::string> names;
-    for (const auto &pair : themes_) {
+    for (const auto& pair : themes_) {
       names.push_back(pair.first);
     }
     return names;
   }
 
-  void create_custom_theme(const std::string &name,
-                           const DashboardTheme &theme) {
+  void create_custom_theme(const std::string& name, const DashboardTheme& theme) {
     ColorScheme scheme;
     scheme.name = name;
     scheme.description = "Custom theme";
@@ -1106,7 +1065,7 @@ public:
     save_theme_to_file(scheme);
   }
 
-  void customize_color(const std::string &color_name, const glm::vec4 &color) {
+  void customize_color(const std::string& color_name, const glm::vec4& color) {
     auto it = themes_.find(current_theme_);
     if (it != themes_.end()) {
       it->second.custom_colors[color_name] = color;
@@ -1114,7 +1073,7 @@ public:
     }
   }
 
-  glm::vec4 get_color(const std::string &color_name) const {
+  glm::vec4 get_color(const std::string& color_name) const {
     auto it = themes_.find(current_theme_);
     if (it != themes_.end()) {
       auto custom_it = it->second.custom_colors.find(color_name);
@@ -1127,10 +1086,10 @@ public:
       return glm::vec4(c.x, c.y, c.z, c.w);
     }
 
-    return glm::vec4(1.0f); // Default white
+    return glm::vec4(1.0f);  // Default white
   }
 
-private:
+ private:
   std::unordered_map<std::string, ColorScheme> themes_;
   std::string current_theme_;
 
@@ -1248,8 +1207,8 @@ private:
     scheme.theme.background_secondary = ImVec4(0.05f, 0.05f, 0.1f, 1.0f);
     scheme.theme.background_panel = ImVec4(0.0f, 0.0f, 0.05f, 1.0f);
 
-    scheme.theme.text_primary = ImVec4(1.0f, 0.6f, 0.0f, 1.0f);   // Orange text
-    scheme.theme.text_secondary = ImVec4(0.8f, 0.8f, 0.0f, 1.0f); // Yellow text
+    scheme.theme.text_primary = ImVec4(1.0f, 0.6f, 0.0f, 1.0f);    // Orange text
+    scheme.theme.text_secondary = ImVec4(0.8f, 0.8f, 0.0f, 1.0f);  // Yellow text
     scheme.theme.text_muted = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
     scheme.theme.price_up = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -1296,54 +1255,38 @@ private:
     themes_[scheme.name] = scheme;
   }
 
-  void apply_theme([[maybe_unused]] const ColorScheme &scheme) {
+  void apply_theme([[maybe_unused]] const ColorScheme& scheme) {
     // Apply theme to all UI components
     // This would update the global theme and notify all components
   }
 
-  void apply_custom_color([[maybe_unused]] const std::string &color_name,
-                          [[maybe_unused]] const glm::vec4 &color) {
+  void apply_custom_color([[maybe_unused]] const std::string& color_name,
+                          [[maybe_unused]] const glm::vec4& color) {
     // Apply custom color override
   }
 
-  ImVec4 get_theme_color(const DashboardTheme &theme,
-                         const std::string &color_name) const {
+  ImVec4 get_theme_color(const DashboardTheme& theme, const std::string& color_name) const {
     // Map color name to theme color
-    if (color_name == "background_primary")
-      return theme.background_primary;
-    if (color_name == "background_secondary")
-      return theme.background_secondary;
-    if (color_name == "background_panel")
-      return theme.background_panel;
-    if (color_name == "text_primary")
-      return theme.text_primary;
-    if (color_name == "text_secondary")
-      return theme.text_secondary;
-    if (color_name == "text_muted")
-      return theme.text_muted;
-    if (color_name == "price_up")
-      return theme.price_up;
-    if (color_name == "price_down")
-      return theme.price_down;
-    if (color_name == "price_neutral")
-      return theme.price_neutral;
-    if (color_name == "accent_primary")
-      return theme.accent_primary;
-    if (color_name == "accent_secondary")
-      return theme.accent_secondary;
-    if (color_name == "border_color")
-      return theme.border_color;
-    if (color_name == "status_connected")
-      return theme.status_connected;
-    if (color_name == "status_disconnected")
-      return theme.status_disconnected;
-    if (color_name == "status_warning")
-      return theme.status_warning;
+    if (color_name == "background_primary") return theme.background_primary;
+    if (color_name == "background_secondary") return theme.background_secondary;
+    if (color_name == "background_panel") return theme.background_panel;
+    if (color_name == "text_primary") return theme.text_primary;
+    if (color_name == "text_secondary") return theme.text_secondary;
+    if (color_name == "text_muted") return theme.text_muted;
+    if (color_name == "price_up") return theme.price_up;
+    if (color_name == "price_down") return theme.price_down;
+    if (color_name == "price_neutral") return theme.price_neutral;
+    if (color_name == "accent_primary") return theme.accent_primary;
+    if (color_name == "accent_secondary") return theme.accent_secondary;
+    if (color_name == "border_color") return theme.border_color;
+    if (color_name == "status_connected") return theme.status_connected;
+    if (color_name == "status_disconnected") return theme.status_disconnected;
+    if (color_name == "status_warning") return theme.status_warning;
 
-    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default
+    return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);  // Default
   }
 
-  void save_theme_to_file(const ColorScheme &scheme) {
+  void save_theme_to_file(const ColorScheme& scheme) {
     // Save theme to JSON file
     std::string filename = "themes/" + scheme.name + ".json";
 
@@ -1354,12 +1297,9 @@ private:
 
     // Save theme colors
     Json::Value theme_json;
-    theme_json["background_primary"] =
-        color_to_json(scheme.theme.background_primary);
-    theme_json["background_secondary"] =
-        color_to_json(scheme.theme.background_secondary);
-    theme_json["background_panel"] =
-        color_to_json(scheme.theme.background_panel);
+    theme_json["background_primary"] = color_to_json(scheme.theme.background_primary);
+    theme_json["background_secondary"] = color_to_json(scheme.theme.background_secondary);
+    theme_json["background_panel"] = color_to_json(scheme.theme.background_panel);
     theme_json["text_primary"] = color_to_json(scheme.theme.text_primary);
     theme_json["text_secondary"] = color_to_json(scheme.theme.text_secondary);
     theme_json["text_muted"] = color_to_json(scheme.theme.text_muted);
@@ -1367,20 +1307,17 @@ private:
     theme_json["price_down"] = color_to_json(scheme.theme.price_down);
     theme_json["price_neutral"] = color_to_json(scheme.theme.price_neutral);
     theme_json["accent_primary"] = color_to_json(scheme.theme.accent_primary);
-    theme_json["accent_secondary"] =
-        color_to_json(scheme.theme.accent_secondary);
+    theme_json["accent_secondary"] = color_to_json(scheme.theme.accent_secondary);
     theme_json["border_color"] = color_to_json(scheme.theme.border_color);
-    theme_json["status_connected"] =
-        color_to_json(scheme.theme.status_connected);
-    theme_json["status_disconnected"] =
-        color_to_json(scheme.theme.status_disconnected);
+    theme_json["status_connected"] = color_to_json(scheme.theme.status_connected);
+    theme_json["status_disconnected"] = color_to_json(scheme.theme.status_disconnected);
     theme_json["status_warning"] = color_to_json(scheme.theme.status_warning);
 
     root["theme"] = theme_json;
 
     // Save custom colors
     Json::Value custom_colors_json;
-    for (const auto &pair : scheme.custom_colors) {
+    for (const auto& pair : scheme.custom_colors) {
       custom_colors_json[pair.first] = color_to_json(pair.second);
     }
     root["custom_colors"] = custom_colors_json;
@@ -1392,7 +1329,7 @@ private:
     writer->write(root, &file);
   }
 
-  Json::Value color_to_json(const ImVec4 &color) {
+  Json::Value color_to_json(const ImVec4& color) {
     Json::Value json_color;
     json_color["r"] = color.x;
     json_color["g"] = color.y;
@@ -1401,7 +1338,7 @@ private:
     return json_color;
   }
 
-  Json::Value color_to_json(const glm::vec4 &color) {
+  Json::Value color_to_json(const glm::vec4& color) {
     Json::Value json_color;
     json_color["r"] = color.r;
     json_color["g"] = color.g;
@@ -1411,4 +1348,4 @@ private:
   }
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

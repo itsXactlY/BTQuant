@@ -28,32 +28,32 @@ enum class VolumeAnalysisType {
   SplitVolume         // Split volume display: buy volume on left half, sell volume on right half
 };
 
-  // Alias for backward compatibility
-  using VolumeDataType = VolumeAnalysisType;
+// Alias for backward compatibility
+using VolumeDataType = VolumeAnalysisType;
 
 // Time Aggregation Type Enum for time-based grouping of data
 enum class TimeAggregationType {
-  T_1MIN,      // 1 minute aggregation
-  T_5MIN,      // 5 minute aggregation
-  T_15MIN,     // 15 minute aggregation
-  T_30MIN,     // 30 minute aggregation
-  T_1HOUR,     // 1 hour aggregation
-  T_2HOUR,     // 2 hour aggregation
-  T_4HOUR,     // 4 hour aggregation
-  VOLUME_BASED, // Volume-based aggregation (every N contracts)
-  TICK_BASED    // Tick-based aggregation (every N ticks)
+  T_1MIN,        // 1 minute aggregation
+  T_5MIN,        // 5 minute aggregation
+  T_15MIN,       // 15 minute aggregation
+  T_30MIN,       // 30 minute aggregation
+  T_1HOUR,       // 1 hour aggregation
+  T_2HOUR,       // 2 hour aggregation
+  T_4HOUR,       // 4 hour aggregation
+  VOLUME_BASED,  // Volume-based aggregation (every N contracts)
+  TICK_BASED     // Tick-based aggregation (every N ticks)
 };
 
-  // Price Aggregation Type Enum for price-based grouping of data
-  enum class PriceAggregationType {
-    P_1TICK,      // 1 tick aggregation
-    P_5TICKS,     // 5 ticks aggregation
-    P_10TICKS,    // 10 ticks aggregation
-    P_POINT1_PCT, // 0.1% aggregation
-    P_POINT5_PCT, // 0.5% aggregation
-    P_1_PCT,      // 1% aggregation
-    P_CUSTOM      // Custom value aggregation
-  };
+// Price Aggregation Type Enum for price-based grouping of data
+enum class PriceAggregationType {
+  P_1TICK,       // 1 tick aggregation
+  P_5TICKS,      // 5 ticks aggregation
+  P_10TICKS,     // 10 ticks aggregation
+  P_POINT1_PCT,  // 0.1% aggregation
+  P_POINT5_PCT,  // 0.5% aggregation
+  P_1_PCT,       // 1% aggregation
+  P_CUSTOM       // Custom value aggregation
+};
 
 }  // namespace Data
 }  // namespace BTQuant

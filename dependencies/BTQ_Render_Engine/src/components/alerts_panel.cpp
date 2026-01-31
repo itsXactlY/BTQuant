@@ -1,11 +1,13 @@
 #include "../../include/components/alerts_panel.hpp"
-#include "imgui.h"
+
 #include <ctime>
 #include <format>
 
+#include "imgui.h"
+
 namespace BTQuant {
 
-AlertsPanel::AlertsPanel(const PanelConfig &config) : PanelBase(config) {
+AlertsPanel::AlertsPanel(const PanelConfig& config) : PanelBase(config) {
   // Add some dummy data for testing
   rules_.push_back({.id = "rule_1",
                     .name = "BTC Breakout",
@@ -23,10 +25,10 @@ AlertsPanel::AlertsPanel(const PanelConfig &config) : PanelBase(config) {
 
   // Dummy logs
   auto now = std::chrono::system_clock::now();
-  logs_.push_back({now - std::chrono::minutes(5), "BTC Breakout", "BTCUSDT",
-                   98005.50, "Price crossed 98000"});
-  logs_.push_back({now - std::chrono::minutes(12), "High Volume", "SOLUSDT",
-                   145.20, "Volume spike detected"});
+  logs_.push_back(
+      {now - std::chrono::minutes(5), "BTC Breakout", "BTCUSDT", 98005.50, "Price crossed 98000"});
+  logs_.push_back(
+      {now - std::chrono::minutes(12), "High Volume", "SOLUSDT", 145.20, "Volume spike detected"});
 }
 
 void AlertsPanel::update(float dt) {
@@ -59,7 +61,7 @@ void AlertsPanel::render() {
   ImGui::Separator();
 
   ImGui::TextDisabled("Recent Alerts");
-  ImGui::BeginChild("LogsList", ImVec2(0, 0), true); // Remaining height
+  ImGui::BeginChild("LogsList", ImVec2(0, 0), true);  // Remaining height
   render_alert_logs();
   ImGui::EndChild();
 
@@ -69,9 +71,9 @@ void AlertsPanel::render() {
 }
 
 void AlertsPanel::render_rules_table() {
-  if (ImGui::BeginTable("RulesTable", 5,
-                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_Resizable)) {
+  if (ImGui::BeginTable(
+          "RulesTable", 5,
+          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
     ImGui::TableSetupColumn("Name");
     ImGui::TableSetupColumn("Expression");
     ImGui::TableSetupColumn("Target");
@@ -80,7 +82,7 @@ void AlertsPanel::render_rules_table() {
     ImGui::TableHeadersRow();
 
     for (size_t i = 0; i < rules_.size(); ++i) {
-      auto &rule = rules_[i];
+      auto& rule = rules_[i];
       ImGui::TableNextRow();
       ImGui::PushID(static_cast<int>(i));
 
@@ -91,30 +93,29 @@ void AlertsPanel::render_rules_table() {
       ImGui::TextUnformatted(rule.expression.c_str());
 
       ImGui::TableSetColumnIndex(2);
-      ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "%s",
-                         rule.target_symbol.c_str());
+      ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "%s", rule.target_symbol.c_str());
 
       ImGui::TableSetColumnIndex(3);
-      const char *status_str = "Unknown";
+      const char* status_str = "Unknown";
       ImVec4 status_col = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 
       switch (rule.status) {
-      case AlertStatus::ACTIVE:
-        status_str = "Active";
-        status_col = ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
-        break;
-      case AlertStatus::TRIGGERED:
-        status_str = "Triggered";
-        status_col = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-        break;
-      case AlertStatus::DISABLED:
-        status_str = "Disabled";
-        status_col = ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
-        break;
-      case AlertStatus::COOLDOWN:
-        status_str = "Cooldown";
-        status_col = ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
-        break;
+        case AlertStatus::ACTIVE:
+          status_str = "Active";
+          status_col = ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
+          break;
+        case AlertStatus::TRIGGERED:
+          status_str = "Triggered";
+          status_col = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+          break;
+        case AlertStatus::DISABLED:
+          status_str = "Disabled";
+          status_col = ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+          break;
+        case AlertStatus::COOLDOWN:
+          status_str = "Cooldown";
+          status_col = ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
+          break;
       }
       ImGui::TextColored(status_col, "%s", status_str);
 
@@ -133,16 +134,16 @@ void AlertsPanel::render_rules_table() {
 }
 
 void AlertsPanel::render_alert_logs() {
-  if (ImGui::BeginTable("LogsTable", 4,
-                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_Resizable)) {
+  if (ImGui::BeginTable(
+          "LogsTable", 4,
+          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
     ImGui::TableSetupColumn("Time");
     ImGui::TableSetupColumn("Rule");
     ImGui::TableSetupColumn("Symbol");
     ImGui::TableSetupColumn("Message");
     ImGui::TableHeadersRow();
 
-    for (const auto &log : logs_) {
+    for (const auto& log : logs_) {
       ImGui::TableNextRow();
 
       ImGui::TableSetColumnIndex(0);
@@ -183,13 +184,12 @@ void AlertsPanel::render_create_rule_modal() {
     ImGui::Separator();
 
     if (ImGui::Button("Create", ImVec2(120, 0))) {
-      rules_.push_back(
-          {.id = std::format("rule_{}", std::rand()), // Simple ID generation
-           .name = new_rule_name_,
-           .expression = new_rule_expr_,
-           .target_symbol = new_rule_symbol_,
-           .status = AlertStatus::ACTIVE,
-           .actions = {"log"}});
+      rules_.push_back({.id = std::format("rule_{}", std::rand()),  // Simple ID generation
+                        .name = new_rule_name_,
+                        .expression = new_rule_expr_,
+                        .target_symbol = new_rule_symbol_,
+                        .status = AlertStatus::ACTIVE,
+                        .actions = {"log"}});
       show_create_modal_ = false;
       ImGui::CloseCurrentPopup();
     }
@@ -203,4 +203,4 @@ void AlertsPanel::render_create_rule_modal() {
   }
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

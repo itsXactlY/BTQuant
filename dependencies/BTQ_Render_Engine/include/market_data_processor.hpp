@@ -1,6 +1,7 @@
 #pragma once
 
-#include "hotspine_data_bridge.hpp"
+#include <immintrin.h>  // For SIMD intrinsics
+
 #include <atomic>
 #include <chrono>
 #include <coroutine>
@@ -10,7 +11,6 @@
 #include <experimental/simd>
 #include <functional>
 #include <future>
-#include <immintrin.h> // For SIMD intrinsics
 #include <map>
 #include <memory>
 #include <mutex>
@@ -20,6 +20,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#include "hotspine_data_bridge.hpp"
 // Lock-free queue (header-only, fetched by CMake)
 #include <concurrentqueue.h>
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
@@ -79,12 +81,12 @@ struct OrderbookData {
   double bid_depth;
   double ask_depth;
   double total_depth;
-  double imbalance; // (bid_depth - ask_depth) / total_depth
+  double imbalance;  // (bid_depth - ask_depth) / total_depth
 };
 
 // OHLCV Candle Data for Charting
 struct OHLCVCandle {
-  uint64_t timestamp; // Start time of the candle in microseconds
+  uint64_t timestamp;  // Start time of the candle in microseconds
   double open;
   double high;
   double low;
@@ -96,14 +98,14 @@ struct OHLCVCandle {
 // Time frame definitions for OHLCV aggregation
 // Sub-second focus: 1ms-15sec only (>5min removed per user requirement)
 enum class TimeFrame {
-  TF_1MS,   // 1 millisecond
-  TF_10MS,  // 10 milliseconds
-  TF_100MS, // 100 milliseconds
-  TF_500MS, // 500 milliseconds
-  TF_1SEC,  // 1 second
-  TF_3SEC,  // 3 seconds
-  TF_5SEC,  // 5 seconds
-  TF_15SEC  // 15 seconds
+  TF_1MS,    // 1 millisecond
+  TF_10MS,   // 10 milliseconds
+  TF_100MS,  // 100 milliseconds
+  TF_500MS,  // 500 milliseconds
+  TF_1SEC,   // 1 second
+  TF_3SEC,   // 3 seconds
+  TF_5SEC,   // 5 seconds
+  TF_15SEC   // 15 seconds
 };
 
 // Indicator cache entry
@@ -126,8 +128,7 @@ struct SymbolAnalytics {
 
   // OHLCV candle data for multiple time frames
   std::unordered_map<TimeFrame, std::vector<OHLCVCandle>> candles;
-  std::unordered_map<TimeFrame, OHLCVCandle>
-      current_candles; // In-progress candles
+  std::unordered_map<TimeFrame, OHLCVCandle> current_candles;  // In-progress candles
 
   // Trade analytics
   std::vector<TradeData> recent_trades;
@@ -144,24 +145,24 @@ struct SymbolAnalytics {
   double sell_volume = 0.0;
   uint64_t buy_count = 0;
   uint64_t sell_count = 0;
-  double buy_sell_ratio = 0.5; // 0.5 = balanced, >0.5 = more buying
+  double buy_sell_ratio = 0.5;  // 0.5 = balanced, >0.5 = more buying
 
   // Price analytics
-  double vwap = 0.0;              // Volume Weighted Average Price
-  double vwap_deviation = 0.0;    // Current price deviation from VWAP (%)
-  double momentum = 0.0;          // Price momentum (%)
-  double momentum_strength = 0.0; // Volatility of momentum
+  double vwap = 0.0;               // Volume Weighted Average Price
+  double vwap_deviation = 0.0;     // Current price deviation from VWAP (%)
+  double momentum = 0.0;           // Price momentum (%)
+  double momentum_strength = 0.0;  // Volatility of momentum
   double price_min = 0.0;
   double price_max = 0.0;
-  double price_position = 0.0; // Position between min/max (0-100%)
+  double price_position = 0.0;  // Position between min/max (0-100%)
 
   // Volatility analytics
-  double volatility = 0.0;   // Annualized volatility
-  double sharpe_ratio = 0.0; // Return/volatility ratio
+  double volatility = 0.0;    // Annualized volatility
+  double sharpe_ratio = 0.0;  // Return/volatility ratio
 
   // Trade size analytics
   double avg_trade_size = 0.0;
-  uint64_t large_trade_count = 0; // Trades > 2x average size
+  uint64_t large_trade_count = 0;  // Trades > 2x average size
 
   // L2 Orderbook Aggregation (Price -> Size)
   // We use functional comparators: std::greater for Bids (Desc), std::less for
@@ -220,14 +221,13 @@ struct MarketSummary {
 enum class NotificationType { TRADE, ORDERBOOK, CANDLE, ANALYTICS };
 
 // Callback signature for push notifications
-using SymbolCallback =
-    std::function<void(uint32_t symbol_id, NotificationType type)>;
+using SymbolCallback = std::function<void(uint32_t symbol_id, NotificationType type)>;
 
 // Subscription entry for reactive updates
 struct Subscription {
   uint64_t id;
-  uint32_t symbol_id;      // 0 = all symbols
-  NotificationType filter; // Which events to receive
+  uint32_t symbol_id;       // 0 = all symbols
+  NotificationType filter;  // Which events to receive
   SymbolCallback callback;
 };
 
@@ -250,34 +250,34 @@ struct Subscription {
  * - Support for sub-second time frames
  */
 class MarketDataProcessor {
-public:
+ public:
   MarketDataProcessor();
   ~MarketDataProcessor();
 
   // Non-copyable, non-movable
-  MarketDataProcessor(const MarketDataProcessor &) = delete;
-  MarketDataProcessor &operator=(const MarketDataProcessor &) = delete;
-  MarketDataProcessor(MarketDataProcessor &&) = delete;
-  MarketDataProcessor &operator=(MarketDataProcessor &&) = delete;
+  MarketDataProcessor(const MarketDataProcessor&) = delete;
+  MarketDataProcessor& operator=(const MarketDataProcessor&) = delete;
+  MarketDataProcessor(MarketDataProcessor&&) = delete;
+  MarketDataProcessor& operator=(MarketDataProcessor&&) = delete;
 
   /**
    * Process a trade update (asynchronous)
    * @param update Market data update containing trade information
    */
-  void processTradeUpdate(const MarketDataUpdate &update);
+  void processTradeUpdate(const MarketDataUpdate& update);
 
   /**
    * Process multiple trade updates in a single batch (synchronous)
    * Designed for high-performance initial loading and HFT bursts.
    * @param updates Vector of market data updates
    */
-  void processTradeUpdates(const std::vector<MarketDataUpdate> &updates);
+  void processTradeUpdates(const std::vector<MarketDataUpdate>& updates);
 
   /**
    * Process an orderbook update (asynchronous)
    * @param update Market data update containing orderbook information
    */
-  void processOrderbookUpdate(const MarketDataUpdate &update);
+  void processOrderbookUpdate(const MarketDataUpdate& update);
 
   /**
    * Get comprehensive analytics for a symbol (thread-safe)
@@ -309,8 +309,7 @@ public:
    * @param limit Maximum number of results (0 = no limit)
    * @return Vector of ranked symbols
    */
-  std::vector<SymbolRanking> getRankings(RankingCriteria criteria,
-                                         size_t limit = 0) const;
+  std::vector<SymbolRanking> getRankings(RankingCriteria criteria, size_t limit = 0) const;
 
   /**
    * Get OHLCV candles for a symbol and time frame (cached, thread-safe)
@@ -318,8 +317,7 @@ public:
    * @param timeframe Time frame of the candles
    * @return Vector of OHLCV candles
    */
-  std::vector<OHLCVCandle> getCandles(uint32_t symbol_id,
-                                      TimeFrame timeframe) const;
+  std::vector<OHLCVCandle> getCandles(uint32_t symbol_id, TimeFrame timeframe) const;
 
   /**
    * Get current (in-progress) candle for a symbol and time frame (thread-safe)
@@ -327,8 +325,7 @@ public:
    * @param timeframe Time frame of the candle
    * @return Current OHLCV candle if available, empty optional otherwise
    */
-  std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id,
-                                              TimeFrame timeframe) const;
+  std::optional<OHLCVCandle> getCurrentCandle(uint32_t symbol_id, TimeFrame timeframe) const;
 
   /**
    * Get latest orderbook data for a symbol (thread-safe)
@@ -337,10 +334,8 @@ public:
    */
   std::optional<OrderbookData> getOrderbookData(uint32_t symbol_id) const;
 
-  std::vector<OrderbookData> getHistoricalOrderbooks(uint32_t symbol_id,
-                                                     size_t count) const;
-  std::vector<VolumeProfileLevel> getVolumeProfile(uint32_t symbol_id,
-                                                   TimeFrame timeframe) const;
+  std::vector<OrderbookData> getHistoricalOrderbooks(uint32_t symbol_id, size_t count) const;
+  std::vector<VolumeProfileLevel> getVolumeProfile(uint32_t symbol_id, TimeFrame timeframe) const;
 
   /**
    * Get market summary statistics (thread-safe)
@@ -376,8 +371,7 @@ public:
   /**
    * Indicator cache methods
    */
-  void clearIndicatorCache(uint32_t symbol_id,
-                           const std::string &indicator_name);
+  void clearIndicatorCache(uint32_t symbol_id, const std::string& indicator_name);
   void clearAllIndicatorCaches();
 
   /**
@@ -398,8 +392,7 @@ public:
    * @param callback Function to call when data updates
    * @return Subscription ID for later unsubscription
    */
-  uint64_t subscribe(uint32_t symbol_id, NotificationType filter,
-                     SymbolCallback callback);
+  uint64_t subscribe(uint32_t symbol_id, NotificationType filter, SymbolCallback callback);
 
   /**
    * Unsubscribe from updates (lock-free)
@@ -407,7 +400,7 @@ public:
    */
   void unsubscribe(uint64_t subscription_id);
 
-private:
+ private:
   // Configuration parameters
   size_t vwap_window_size_;
   size_t momentum_window_size_;
@@ -446,8 +439,7 @@ private:
   struct AtomicPerformanceMetrics {
     std::atomic<uint64_t> total_trades_processed{0};
     std::atomic<uint64_t> total_orderbooks_processed{0};
-    std::atomic<std::chrono::high_resolution_clock::time_point::rep>
-        last_update_time{0};
+    std::atomic<std::chrono::high_resolution_clock::time_point::rep> last_update_time{0};
     std::atomic<double> trades_per_second{0.0};
     std::atomic<double> orderbooks_per_second{0.0};
     std::atomic<double> avg_latency_ms{0.0};
@@ -458,8 +450,7 @@ private:
       result.total_trades_processed = total_trades_processed.load();
       result.total_orderbooks_processed = total_orderbooks_processed.load();
       result.last_update_time = std::chrono::high_resolution_clock::time_point(
-          std::chrono::high_resolution_clock::duration(
-              last_update_time.load()));
+          std::chrono::high_resolution_clock::duration(last_update_time.load()));
       result.trades_per_second = trades_per_second.load();
       result.orderbooks_per_second = orderbooks_per_second.load();
       result.avg_latency_ms = avg_latency_ms.load();
@@ -467,7 +458,7 @@ private:
       return result;
     }
 
-    void fromNonAtomic(const ProcessorPerformanceMetrics &other) {
+    void fromNonAtomic(const ProcessorPerformanceMetrics& other) {
       total_trades_processed.store(other.total_trades_processed);
       total_orderbooks_processed.store(other.total_orderbooks_processed);
       last_update_time.store(other.last_update_time.time_since_epoch().count());
@@ -486,50 +477,43 @@ private:
   mutable uint64_t last_performance_update_us_ = 0;
 
   // Private calculation methods
-  void updateVWAP(SymbolAnalytics &symbol_data);
-  void updateMomentum(SymbolAnalytics &symbol_data);
-  void updateVolatility(SymbolAnalytics &symbol_data);
-  void updateTradingMetrics(SymbolAnalytics &symbol_data,
-                            const TradeData &trade);
-  void updateSpreadAnalysis(SymbolAnalytics &symbol_data);
+  void updateVWAP(SymbolAnalytics& symbol_data);
+  void updateMomentum(SymbolAnalytics& symbol_data);
+  void updateVolatility(SymbolAnalytics& symbol_data);
+  void updateTradingMetrics(SymbolAnalytics& symbol_data, const TradeData& trade);
+  void updateSpreadAnalysis(SymbolAnalytics& symbol_data);
 
   // OHLCV aggregation methods
-  void updateCandles(SymbolAnalytics &symbol_data, const TradeData &trade);
-  void updateCandleForTimeframe(SymbolAnalytics &symbol_data,
-                                const TradeData &trade, TimeFrame timeframe);
-  OHLCVCandle createNewCandle(uint64_t timestamp, double price,
-                              double size) const;
-  bool isTradeInCurrentCandle(const OHLCVCandle &candle,
-                              uint64_t trade_timestamp,
+  void updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade);
+  void updateCandleForTimeframe(SymbolAnalytics& symbol_data, const TradeData& trade,
+                                TimeFrame timeframe);
+  OHLCVCandle createNewCandle(uint64_t timestamp, double price, double size) const;
+  bool isTradeInCurrentCandle(const OHLCVCandle& candle, uint64_t trade_timestamp,
                               TimeFrame timeframe) const;
-  void updateCandle(OHLCVCandle &candle, double price, double size) const;
+  void updateCandle(OHLCVCandle& candle, double price, double size) const;
 
   // Helper methods
-  double calculateMarketDepth(const std::vector<PriceLevel> &levels) const;
-  double calculateVolumeInWindow(const std::vector<TradeData> &trades,
-                                 uint64_t window_us) const;
+  double calculateMarketDepth(const std::vector<PriceLevel>& levels) const;
+  double calculateVolumeInWindow(const std::vector<TradeData>& trades, uint64_t window_us) const;
 
   // Worker Loop
   void processQueueLoop();
-  void processUpdate(const MarketDataUpdate &update);
+  void processUpdate(const MarketDataUpdate& update);
 
   // Helper to get shard for a symbol
-  Shard &getShard(uint32_t symbol_id) const {
-    return *shards_[symbol_id % NUM_SHARDS];
-  }
+  Shard& getShard(uint32_t symbol_id) const { return *shards_[symbol_id % NUM_SHARDS]; }
 
   // C++26 Lock-free subscriber access using copy-on-read pattern
   // Writes (subscribe/unsubscribe) are rare, reads (notify) are frequent
   // Take mutex only for write, copy shared_ptr for lock-free iteration
   using SubscriberList = std::vector<Subscription>;
   mutable std::mutex subscribers_mutex_;
-  std::shared_ptr<SubscriberList> subscribers_{
-      std::make_shared<SubscriberList>()};
+  std::shared_ptr<SubscriberList> subscribers_{std::make_shared<SubscriberList>()};
   std::atomic<uint64_t> next_subscription_id_{1};
 
   // Notify all relevant subscribers (called from worker threads)
   void notifySubscribers(uint32_t symbol_id, NotificationType type) const;
 };
 
-} // namespace RenderEngine
-} // namespace BTQuant
+}  // namespace RenderEngine
+}  // namespace BTQuant

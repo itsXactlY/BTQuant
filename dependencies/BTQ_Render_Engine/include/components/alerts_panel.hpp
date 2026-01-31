@@ -1,9 +1,10 @@
 #pragma once
 
-#include "panel_base.hpp"
 #include <chrono>
 #include <string>
 #include <vector>
+
+#include "panel_base.hpp"
 
 namespace BTQuant {
 
@@ -12,10 +13,10 @@ enum class AlertStatus { ACTIVE, TRIGGERED, DISABLED, COOLDOWN };
 struct AlertRule {
   std::string id;
   std::string name;
-  std::string expression; // e.g. "price > 100000"
+  std::string expression;  // e.g. "price > 100000"
   std::string target_symbol;
   AlertStatus status = AlertStatus::ACTIVE;
-  std::vector<std::string> actions; // e.g. "log", "sound"
+  std::vector<std::string> actions;  // e.g. "log", "sound"
 
   // Runtime state
   std::chrono::system_clock::time_point last_triggered;
@@ -31,14 +32,14 @@ struct AlertLog {
 };
 
 class AlertsPanel : public PanelBase {
-public:
-  AlertsPanel(const PanelConfig &config);
+ public:
+  AlertsPanel(const PanelConfig& config);
   ~AlertsPanel() override = default;
 
   void update(float dt) override;
   void render() override;
 
-private:
+ private:
   void render_rules_table();
   void render_alert_logs();
   void render_create_rule_modal();
@@ -53,4 +54,4 @@ private:
   char new_rule_symbol_[32] = "";
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

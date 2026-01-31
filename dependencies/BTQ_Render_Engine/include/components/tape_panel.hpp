@@ -1,10 +1,12 @@
 #pragma once
 
+#include <imgui.h>
+
+#include <memory>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
-#include <imgui.h>
-#include <memory>
 
 namespace BTQuant {
 
@@ -23,17 +25,16 @@ namespace BTQuant {
  * - Side (colored: green=buy, red=sell)
  */
 class TapePanel : public PanelBase {
-public:
-  TapePanel(const PanelConfig &config,
-            std::shared_ptr<HotSpineDataBridge> bridge,
+ public:
+  TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
             std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~TapePanel() override;
 
   void render() override;
-  void set_symbol(uint32_t symbol_id, const std::string &symbol_name);
+  void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
-private:
+ private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -52,4 +53,4 @@ private:
   void subscribe_to_updates();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

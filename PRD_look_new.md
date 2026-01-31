@@ -57,9 +57,9 @@
 - [x] Implement time aggregation selector dropdown: 1min, 5min, 15min, 30min, 1hour, 2hour, 4hour, volume-based (every N contracts), tick-based (every N ticks) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [x] Add price aggregation selector: 1 tick, 5 ticks, 10 ticks, 0.1%, 0.5%, 1%, custom value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [x] Implement filtered volume threshold slider: only display cells where volume exceeds threshold, show greyed out cells for filtered values in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Add split volume display mode showing buy volume on left half of cell, sell volume on right half with divider line in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Implement cell size auto-adjustment based on zoom level: expand cells when zoomed in to show more detail, collapse to squares when zoomed out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Implement Level of Detail (LOD) rendering: skip text rendering when cell height < 12px, show only heatmap colors at extreme zoom out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Add split volume display mode showing buy volume on left half of cell, sell volume on right half with divider line in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Implement cell size auto-adjustment based on zoom level: expand cells when zoomed in to show more detail, collapse to squares when zoomed out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Implement Level of Detail (LOD) rendering: skip text rendering when cell height < 12px, show only heatmap colors at extreme zoom out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 
 ---
 
@@ -68,7 +68,7 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 3a: Profile Types [Complexity: M]
-- [ ] Add ProfileMode enum to volume_profile_panel.hpp: Step, Right, Left, Custom with ProfileSettings struct containing: vaPercent (default 70.0), tickStep, showPOC, showValueArea, colorScheme in `dependencies/BTQ_Render_Engine/include/components/volume_profile_panel.hpp` [Complexity: S]
+- [x] Add ProfileMode enum to volume_profile_panel.hpp: Step, Right, Left, Custom with ProfileSettings struct containing: vaPercent (default 70.0), tickStep, showPOC, showValueArea, colorScheme in `dependencies/BTQ_Render_Engine/include/components/volume_profile_panel.hpp` [Complexity: S]
 - [ ] Implement Step Profile rendering: draw mini histogram overlay on each candlestick bar showing volume distribution for that bar's price range in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
 - [ ] Calculate and render POC (Point of Control) line for each bar in Step Profile mode: horizontal yellow line at price with highest volume in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
 - [ ] Implement Right Profile: aggregate all visible trades into single histogram anchored to right edge of chart, use horizontal bars extending left in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]

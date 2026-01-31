@@ -1,11 +1,12 @@
 #pragma once
 
-#include "../hotspine_data_bridge.hpp"
-#include "../market_data_processor.hpp"
-#include "imgui.h"
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "../hotspine_data_bridge.hpp"
+#include "../market_data_processor.hpp"
+#include "imgui.h"
 
 namespace BTQuant {
 
@@ -24,26 +25,24 @@ struct SymbolSelectorState {
 
 // Unified symbol selector component for all charts
 class SymbolSelector {
-public:
+ public:
   // Renders combo boxes for exchange, symbol, and timeframe
   // Returns true if selection changed
-  bool render(SymbolSelectorState &state);
+  bool render(SymbolSelectorState& state);
 
   // Refresh available symbols from the data bridge
-  void
-  refresh_symbols(SymbolSelectorState &state,
-                  std::shared_ptr<HotSpineDataBridge> bridge,
-                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  void refresh_symbols(SymbolSelectorState& state, std::shared_ptr<HotSpineDataBridge> bridge,
+                       std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   // Get timeframe display names
-  static const char *get_timeframe_name(RenderEngine::TimeFrame tf);
+  static const char* get_timeframe_name(RenderEngine::TimeFrame tf);
   static RenderEngine::TimeFrame get_timeframe_from_index(int index);
   static int get_timeframe_count();
 
-private:
+ private:
   // Default symbols for when no live data available
-  static const std::vector<std::string> &get_default_symbols();
-  static const std::vector<std::string> &get_default_exchanges();
+  static const std::vector<std::string>& get_default_symbols();
+  static const std::vector<std::string>& get_default_exchanges();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

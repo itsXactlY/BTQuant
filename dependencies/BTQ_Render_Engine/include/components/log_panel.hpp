@@ -5,11 +5,11 @@
 namespace BTQuant {
 
 class LogPanel : public PanelBase {
-public:
-    LogPanel(const PanelConfig &config);
+ public:
+  LogPanel(const PanelConfig& config);
 
-    void initialize() override;
-    void render() override;
+  void initialize() override;
+  void render() override;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

@@ -1,23 +1,23 @@
 #pragma once
 
+#include <chrono>
+#include <string>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
-#include <chrono>
-#include <string>
 
 namespace BTQuant {
 
 class StatusBarPanel : public PanelBase {
-public:
-  StatusBarPanel(const PanelConfig &config,
-                 std::shared_ptr<HotSpineDataBridge> bridge,
+ public:
+  StatusBarPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt) override;
   void render() override;
 
-private:
+ private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -38,4 +38,4 @@ private:
   void render_time_display();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

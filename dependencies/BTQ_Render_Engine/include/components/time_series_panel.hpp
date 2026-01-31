@@ -5,11 +5,11 @@
 namespace BTQuant {
 
 class TimeSeriesPanel : public PanelBase {
-public:
-    TimeSeriesPanel(const PanelConfig &config);
+ public:
+  TimeSeriesPanel(const PanelConfig& config);
 
-    void initialize() override;
-    void render() override;
+  void initialize() override;
+  void render() override;
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

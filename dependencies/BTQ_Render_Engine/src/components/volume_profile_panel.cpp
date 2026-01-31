@@ -664,10 +664,12 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(
         float x_left = x_center - bar_width / 2.0f;
         float x_right = x_left + filled_width;
 
-        // Choose color based on whether this is in the upper or lower half of the candle
-        // (to represent buy/sell pressure)
+        // Choose color based on whether this is the POC bucket or not
         ImU32 color;
-        if (j < num_buckets / 2) {
+        if (j == poc_bucket_idx) {
+          // Highlight POC bucket with yellow
+          color = IM_COL32(255, 255, 0, 200);  // Yellow for POC
+        } else if (j < num_buckets / 2) {
           // Lower half - potentially more selling pressure
           color = IM_COL32(255, 100, 100, 150);  // Reddish for sells
         } else {
@@ -694,6 +696,137 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(
                        IM_COL32(255, 255, 0, 255),  // Yellow color for POC
                        2.0f                         // Line thickness
     );
+  }
+}
+
+void VolumeProfilePanel::render_step_profile_histograms(ImDrawList* draw_list,
+                                                       const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                       const std::vector<double>& x_coords,
+                                                       const std::vector<double>& y_coords_high,
+                                                       const std::vector<double>& y_coords_low,
+                                                       bool show_poc_line,
+                                                       int num_buckets) {
+  if (candles.empty() || x_coords.size() != candles.size() ||
+      y_coords_high.size() != candles.size() || y_coords_low.size() != candles.size()) {
+    return;
+  }
+
+  // Get theme colors for consistent styling
+  const auto& colors = ThemeManager::getInstance().getColors();
+
+  // Iterate through each candle to draw step profile histogram
+  for (size_t i = 0; i < candles.size(); ++i) {
+    const auto& candle = candles[i];
+
+    // Skip if candle has no volume
+    if (candle.volume <= 0) continue;
+
+    // Get the candle's price range (high - low)
+    double price_range = candle.high - candle.low;
+    if (price_range <= 0) continue;
+
+    // Calculate bucket size for this candle's range
+    double bucket_size = price_range / num_buckets;
+
+    // Get recent trades for this symbol to populate the histogram
+    auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+    const auto& trades = analytics.recent_trades;
+
+    // Create temporary buckets for this candle's price range
+    std::vector<double> bucket_volumes(num_buckets, 0.0);
+    std::vector<int> bucket_counts(num_buckets, 0);
+
+    // Aggregate trades into buckets based on price within this candle's range
+    for (const auto& trade : trades) {
+      if (trade.price >= candle.low && trade.price <= candle.high) {
+        int bucket_idx = static_cast<int>((trade.price - candle.low) / bucket_size);
+        // Ensure we don't exceed bounds
+        bucket_idx = std::max(0, std::min(bucket_idx, num_buckets - 1));
+
+        bucket_volumes[bucket_idx] += trade.size;
+        bucket_counts[bucket_idx]++;
+      }
+    }
+
+    // Find max volume in this candle's histogram for scaling
+    double max_vol_in_candle = 0.0;
+    int poc_bucket_idx = 0;  // Index of the bucket with highest volume (POC)
+
+    for (int j = 0; j < num_buckets; ++j) {
+      if (bucket_volumes[j] > max_vol_in_candle) {
+        max_vol_in_candle = bucket_volumes[j];
+        poc_bucket_idx = j;
+      }
+    }
+
+    if (max_vol_in_candle <= 0) continue;
+
+    // Calculate screen coordinates for the step profile histogram
+    float x_center = static_cast<float>(x_coords[i]);
+    float y_high = static_cast<float>(y_coords_high[i]);
+    float y_low = static_cast<float>(y_coords_low[i]);
+
+    // Calculate height of each bucket in screen coordinates
+    float total_height = y_low - y_high;  // Height of the candle in screen space
+    float bucket_height = total_height / num_buckets;
+
+    // Draw step profile histogram inside the candle
+    for (int j = 0; j < num_buckets; ++j) {
+      if (bucket_volumes[j] > 0) {
+        // Calculate the fill percentage of this bucket
+        float fill_percentage =
+            static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
+
+        // Calculate the top-left and bottom-right coordinates for this bucket
+        float y_top = y_high + j * bucket_height;
+        float y_bottom = y_high + (j + 1) * bucket_height;
+
+        // Calculate width of the bar based on fill percentage
+        float bar_width = (y_bottom - y_top) * 0.8f;  // Use 80% of height as width for visibility
+        float filled_width = bar_width * fill_percentage;
+
+        // Calculate the x positions for the bar
+        float x_left = x_center - bar_width / 2.0f;
+        float x_right = x_left + filled_width;
+
+        // Choose color based on whether this is the POC bucket or not
+        ImU32 color;
+        if (j == poc_bucket_idx) {
+          // Highlight POC bucket with yellow
+          color = IM_COL32(255, 255, 0, 220);  // Brighter yellow for POC
+        } else {
+          // Use gradient colors based on position in the candle
+          float position_ratio = static_cast<float>(j) / static_cast<float>(num_buckets - 1);
+          if (position_ratio < 0.5f) {
+            // Lower half - red for selling pressure
+            color = IM_COL32(255, 100, 100, 150);
+          } else {
+            // Upper half - green for buying pressure
+            color = IM_COL32(100, 255, 100, 150);
+          }
+        }
+
+        // Draw the step profile histogram bar
+        draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
+      }
+    }
+
+    // Optionally draw POC (Point of Control) line - horizontal yellow line at the price level with highest volume
+    if (show_poc_line) {
+      // Calculate the y-coordinate for the POC line
+      float poc_y = y_high + (poc_bucket_idx + 0.5f) * bucket_height;  // Center of the POC bucket
+
+      // Draw horizontal yellow line across the candle width
+      float poc_line_half_width = (y_low - y_high) * 0.4f;  // Same width as candle
+      float poc_x_left = x_center - poc_line_half_width;
+      float poc_x_right = x_center + poc_line_half_width;
+
+      // Draw the POC line as a horizontal yellow line
+      draw_list->AddLine(ImVec2(poc_x_left, poc_y), ImVec2(poc_x_right, poc_y),
+                         IM_COL32(255, 255, 0, 255),  // Yellow color for POC
+                         2.0f                         // Line thickness
+      );
+    }
   }
 }
 

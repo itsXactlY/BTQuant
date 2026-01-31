@@ -1,11 +1,13 @@
 #pragma once
 
+#include <imgui.h>
+
+#include <memory>
+#include <vector>
+
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
-#include <imgui.h>
-#include <memory>
-#include <vector>
 
 namespace BTQuant {
 
@@ -23,17 +25,16 @@ namespace BTQuant {
  * - Gradient fills with alpha
  */
 class DepthChartPanel : public PanelBase {
-public:
-  DepthChartPanel(const PanelConfig &config,
-                  std::shared_ptr<HotSpineDataBridge> bridge,
+ public:
+  DepthChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~DepthChartPanel() override;
 
   void render() override;
-  void set_symbol(uint32_t symbol_id, const std::string &symbol_name);
+  void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
-private:
+ private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
@@ -57,4 +58,4 @@ private:
   void subscribe_to_updates();
 };
 
-} // namespace BTQuant
+}  // namespace BTQuant

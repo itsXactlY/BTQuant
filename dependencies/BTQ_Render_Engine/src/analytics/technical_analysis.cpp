@@ -1,4 +1,5 @@
 #include "analytics/technical_analysis.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -10,9 +11,8 @@ namespace BTQuant {
 // Technical Indicators Implementation
 // ============================================================================
 
-TechnicalIndicators::IndicatorResult
-TechnicalIndicators::simple_moving_average(const std::vector<OHLCV> &data,
-                                            int period) {
+TechnicalIndicators::IndicatorResult TechnicalIndicators::simple_moving_average(
+    const std::vector<OHLCV>& data, int period) {
   IndicatorResult result;
   result.name = "SMA";
   result.parameters["period"] = period;
@@ -40,9 +40,8 @@ TechnicalIndicators::simple_moving_average(const std::vector<OHLCV> &data,
   return result;
 }
 
-TechnicalIndicators::IndicatorResult
-TechnicalIndicators::exponential_moving_average(const std::vector<OHLCV> &data,
-                                                 int period) {
+TechnicalIndicators::IndicatorResult TechnicalIndicators::exponential_moving_average(
+    const std::vector<OHLCV>& data, int period) {
   IndicatorResult result;
   result.name = "EMA";
   result.parameters["period"] = period;
@@ -73,9 +72,8 @@ TechnicalIndicators::exponential_moving_average(const std::vector<OHLCV> &data,
   return result;
 }
 
-std::vector<TechnicalIndicators::IndicatorResult>
-TechnicalIndicators::bollinger_bands(const std::vector<OHLCV> &data, int period,
-                                      double std_dev) {
+std::vector<TechnicalIndicators::IndicatorResult> TechnicalIndicators::bollinger_bands(
+    const std::vector<OHLCV>& data, int period, double std_dev) {
   std::vector<IndicatorResult> results;
 
   IndicatorResult middle = simple_moving_average(data, period);
@@ -127,8 +125,8 @@ TechnicalIndicators::bollinger_bands(const std::vector<OHLCV> &data, int period,
   return results;
 }
 
-TechnicalIndicators::IndicatorResult
-TechnicalIndicators::rsi(const std::vector<OHLCV> &data, int period) {
+TechnicalIndicators::IndicatorResult TechnicalIndicators::rsi(const std::vector<OHLCV>& data,
+                                                              int period) {
   IndicatorResult result;
   result.name = "RSI";
   result.parameters["period"] = period;
@@ -174,9 +172,8 @@ TechnicalIndicators::rsi(const std::vector<OHLCV> &data, int period) {
   return result;
 }
 
-std::vector<TechnicalIndicators::IndicatorResult>
-TechnicalIndicators::macd(const std::vector<OHLCV> &data, int fast_period,
-                          int slow_period, int signal_period) {
+std::vector<TechnicalIndicators::IndicatorResult> TechnicalIndicators::macd(
+    const std::vector<OHLCV>& data, int fast_period, int slow_period, int signal_period) {
   std::vector<IndicatorResult> results;
 
   IndicatorResult fast_ema = exponential_moving_average(data, fast_period);
@@ -210,12 +207,11 @@ TechnicalIndicators::macd(const std::vector<OHLCV> &data, int fast_period,
 
   // Calculate signal line (EMA of MACD line)
   if (macd_line.values.size() >= static_cast<size_t>(signal_period)) {
-    double sum = std::accumulate(macd_line.values.begin(),
-                                  macd_line.values.begin() + signal_period, 0.0);
+    double sum =
+        std::accumulate(macd_line.values.begin(), macd_line.values.begin() + signal_period, 0.0);
     double signal = sum / signal_period;
     signal_line.values.push_back(signal);
-    signal_line.timestamps.push_back(
-        macd_line.timestamps[signal_period - 1]);
+    signal_line.timestamps.push_back(macd_line.timestamps[signal_period - 1]);
 
     double multiplier = 2.0 / (signal_period + 1);
     for (size_t i = signal_period; i < macd_line.values.size(); ++i) {
@@ -243,9 +239,8 @@ TechnicalIndicators::macd(const std::vector<OHLCV> &data, int fast_period,
   return results;
 }
 
-std::vector<TechnicalIndicators::IndicatorResult>
-TechnicalIndicators::stochastic(const std::vector<OHLCV> &data, int k_period,
-                                int d_period) {
+std::vector<TechnicalIndicators::IndicatorResult> TechnicalIndicators::stochastic(
+    const std::vector<OHLCV>& data, int k_period, int d_period) {
   std::vector<IndicatorResult> results;
 
   IndicatorResult k_line;
@@ -289,7 +284,7 @@ TechnicalIndicators::stochastic(const std::vector<OHLCV> &data, int k_period,
   if (k_line.values.size() >= static_cast<size_t>(d_period)) {
     for (size_t i = d_period - 1; i < k_line.values.size(); ++i) {
       double sum = std::accumulate(k_line.values.begin() + i - d_period + 1,
-                                    k_line.values.begin() + i + 1, 0.0);
+                                   k_line.values.begin() + i + 1, 0.0);
       double d = sum / d_period;
       d_line.values.push_back(d);
       d_line.timestamps.push_back(k_line.timestamps[i]);
@@ -306,27 +301,24 @@ TechnicalIndicators::stochastic(const std::vector<OHLCV> &data, int k_period,
 // Volume Profile Analyzer Implementation - Simplified
 // ============================================================================
 
-VolumeProfileAnalyzer::VolumeProfileAnalyzer(double tick_size)
-    : tick_size_(tick_size) {}
+VolumeProfileAnalyzer::VolumeProfileAnalyzer(double tick_size) : tick_size_(tick_size) {}
 
-VolumeProfileAnalyzer::VolumeProfile
-VolumeProfileAnalyzer::calculate_volume_profile(
-    const std::vector<TechnicalIndicators::OHLCV> & /*candles*/,
-    const std::vector<RenderEngine::TradeData> & /*trades*/) {
+VolumeProfileAnalyzer::VolumeProfile VolumeProfileAnalyzer::calculate_volume_profile(
+    const std::vector<TechnicalIndicators::OHLCV>& /*candles*/,
+    const std::vector<RenderEngine::TradeData>& /*trades*/) {
   VolumeProfile profile;
   // Note: TradeData is forward-declared, so we can't access its members
   // This is a placeholder implementation
   return profile;
 }
 
-void VolumeProfileAnalyzer::calculate_value_area(
-    const std::vector<VolumeNode> & /*nodes*/, VolumeProfile & /*profile*/) {
+void VolumeProfileAnalyzer::calculate_value_area(const std::vector<VolumeNode>& /*nodes*/,
+                                                 VolumeProfile& /*profile*/) {
   // Placeholder implementation
 }
 
-std::vector<VolumeProfileAnalyzer::VolumeImbalance>
-VolumeProfileAnalyzer::detect_volume_imbalances(const VolumeProfile & /*profile*/,
-                                                 double /*threshold*/) {
+std::vector<VolumeProfileAnalyzer::VolumeImbalance> VolumeProfileAnalyzer::detect_volume_imbalances(
+    const VolumeProfile& /*profile*/, double /*threshold*/) {
   return {};
 }
 
@@ -334,46 +326,45 @@ VolumeProfileAnalyzer::detect_volume_imbalances(const VolumeProfile & /*profile*
 // Market Depth Analyzer Implementation - Simplified
 // ============================================================================
 
-MarketDepthAnalyzer::MarketDepthSnapshot
-MarketDepthAnalyzer::create_depth_snapshot(const RenderEngine::OrderbookData & /*orderbook*/) {
+MarketDepthAnalyzer::MarketDepthSnapshot MarketDepthAnalyzer::create_depth_snapshot(
+    const RenderEngine::OrderbookData& /*orderbook*/) {
   MarketDepthSnapshot snapshot;
   // Note: OrderbookData is forward-declared, so we can't access its members
   // This is a placeholder implementation
   return snapshot;
 }
 
-MarketDepthAnalyzer::DepthAnalysis
-MarketDepthAnalyzer::analyze_market_depth(const MarketDepthSnapshot & /*snapshot*/) {
+MarketDepthAnalyzer::DepthAnalysis MarketDepthAnalyzer::analyze_market_depth(
+    const MarketDepthSnapshot& /*snapshot*/) {
   DepthAnalysis analysis;
   // Placeholder implementation
   return analysis;
 }
 
-double MarketDepthAnalyzer::find_support_level(const std::vector<DepthLevel> & /*bids*/) {
+double MarketDepthAnalyzer::find_support_level(const std::vector<DepthLevel>& /*bids*/) {
   return 0;
 }
 
-double MarketDepthAnalyzer::find_resistance_level(const std::vector<DepthLevel> & /*asks*/) {
+double MarketDepthAnalyzer::find_resistance_level(const std::vector<DepthLevel>& /*asks*/) {
   return 0;
 }
 
-double MarketDepthAnalyzer::calculate_liquidity_score(const MarketDepthSnapshot & /*snapshot*/) {
+double MarketDepthAnalyzer::calculate_liquidity_score(const MarketDepthSnapshot& /*snapshot*/) {
   return 0;
 }
 
-double MarketDepthAnalyzer::estimate_market_impact(const MarketDepthSnapshot & /*snapshot*/,
-                                                    double /*order_value*/) {
+double MarketDepthAnalyzer::estimate_market_impact(const MarketDepthSnapshot& /*snapshot*/,
+                                                   double /*order_value*/) {
   return 0;
 }
 
 std::vector<double> MarketDepthAnalyzer::find_significant_levels(
-    const MarketDepthSnapshot & /*snapshot*/) {
+    const MarketDepthSnapshot& /*snapshot*/) {
   return {};
 }
 
-std::vector<MarketDepthAnalyzer::LiquidityGap>
-MarketDepthAnalyzer::detect_liquidity_gaps(const MarketDepthSnapshot & /*snapshot*/,
-                                            double /*min_gap_size*/) {
+std::vector<MarketDepthAnalyzer::LiquidityGap> MarketDepthAnalyzer::detect_liquidity_gaps(
+    const MarketDepthSnapshot& /*snapshot*/, double /*min_gap_size*/) {
   return {};
 }
 
@@ -381,8 +372,8 @@ MarketDepthAnalyzer::detect_liquidity_gaps(const MarketDepthSnapshot & /*snapsho
 // Pattern Recognizer Implementation
 // ============================================================================
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_patterns(const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_patterns(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   if (data.size() < 10) {
@@ -404,8 +395,8 @@ PatternRecognizer::detect_patterns(const std::vector<TechnicalIndicators::OHLCV>
   return patterns;
 }
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_double_top(const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_double_top(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   auto peaks = find_peaks(data, true);
@@ -429,11 +420,9 @@ PatternRecognizer::detect_double_top(const std::vector<TechnicalIndicators::OHLC
       pattern.entry_price = data[trough].close;
       pattern.target_price = data[trough].close - (data[peak1].close - data[trough].close);
       pattern.stop_loss = data[peak1].close + (data[peak1].close - data[trough].close) * 0.1;
-      pattern.key_points = {
-          {static_cast<double>(peak1), data[peak1].close},
-          {static_cast<double>(trough), data[trough].close},
-          {static_cast<double>(peak2), data[peak2].close}
-      };
+      pattern.key_points = {{static_cast<double>(peak1), data[peak1].close},
+                            {static_cast<double>(trough), data[trough].close},
+                            {static_cast<double>(peak2), data[peak2].close}};
       pattern.description = "Double top pattern indicating potential reversal";
       patterns.push_back(pattern);
     }
@@ -442,8 +431,8 @@ PatternRecognizer::detect_double_top(const std::vector<TechnicalIndicators::OHLC
   return patterns;
 }
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_double_bottom(const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_double_bottom(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   auto troughs = find_peaks(data, false);
@@ -467,11 +456,9 @@ PatternRecognizer::detect_double_bottom(const std::vector<TechnicalIndicators::O
       pattern.entry_price = data[peak].close;
       pattern.target_price = data[peak].close + (data[peak].close - data[trough1].close);
       pattern.stop_loss = data[trough1].close - (data[peak].close - data[trough1].close) * 0.1;
-      pattern.key_points = {
-          {static_cast<double>(trough1), data[trough1].close},
-          {static_cast<double>(peak), data[peak].close},
-          {static_cast<double>(trough2), data[trough2].close}
-      };
+      pattern.key_points = {{static_cast<double>(trough1), data[trough1].close},
+                            {static_cast<double>(peak), data[peak].close},
+                            {static_cast<double>(trough2), data[trough2].close}};
       pattern.description = "Double bottom pattern indicating potential reversal";
       patterns.push_back(pattern);
     }
@@ -480,9 +467,8 @@ PatternRecognizer::detect_double_bottom(const std::vector<TechnicalIndicators::O
   return patterns;
 }
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_head_and_shoulders(
-    const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_head_and_shoulders(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   auto peaks = find_peaks(data, true);
@@ -508,30 +494,28 @@ PatternRecognizer::detect_head_and_shoulders(
     bool head_valid = head_high > left_shoulder_high && head_high > right_shoulder_high;
 
     // Shoulders should be roughly equal (within 2%)
-    bool shoulders_equal = std::abs(left_shoulder_high - right_shoulder_high) /
-                           left_shoulder_high < 0.02;
+    bool shoulders_equal =
+        std::abs(left_shoulder_high - right_shoulder_high) / left_shoulder_high < 0.02;
 
     // Necklines should be roughly equal
-    bool necklines_equal = std::abs(left_neck_low - right_neck_low) /
-                           left_neck_low < 0.02;
+    bool necklines_equal = std::abs(left_neck_low - right_neck_low) / left_neck_low < 0.02;
 
     if (head_valid && shoulders_equal && necklines_equal) {
       Pattern pattern;
       pattern.type = PatternType::HeadAndShoulders;
       pattern.name = "Head and Shoulders";
-      pattern.confidence = calculate_head_shoulders_confidence(data, left_shoulder, head, right_shoulder);
+      pattern.confidence =
+          calculate_head_shoulders_confidence(data, left_shoulder, head, right_shoulder);
       pattern.start_time = data[left_shoulder].timestamp;
       pattern.end_time = data[right_shoulder].timestamp;
       pattern.entry_price = (left_neck_low + right_neck_low) / 2;
       pattern.target_price = pattern.entry_price - (head_high - pattern.entry_price);
       pattern.stop_loss = head_high + (head_high - pattern.entry_price) * 0.1;
-      pattern.key_points = {
-          {static_cast<double>(left_shoulder), left_shoulder_high},
-          {static_cast<double>(left_neck), left_neck_low},
-          {static_cast<double>(head), head_high},
-          {static_cast<double>(right_neck), right_neck_low},
-          {static_cast<double>(right_shoulder), right_shoulder_high}
-      };
+      pattern.key_points = {{static_cast<double>(left_shoulder), left_shoulder_high},
+                            {static_cast<double>(left_neck), left_neck_low},
+                            {static_cast<double>(head), head_high},
+                            {static_cast<double>(right_neck), right_neck_low},
+                            {static_cast<double>(right_shoulder), right_shoulder_high}};
       pattern.description = "Head and shoulders pattern indicating bearish reversal";
       patterns.push_back(pattern);
     }
@@ -540,8 +524,8 @@ PatternRecognizer::detect_head_and_shoulders(
   return patterns;
 }
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_triangles(const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_triangles(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   if (data.size() < 20) {
@@ -567,12 +551,10 @@ PatternRecognizer::detect_triangles(const std::vector<TechnicalIndicators::OHLCV
       pattern.start_time = data[i].timestamp;
       pattern.end_time = data[i + 19].timestamp;
       pattern.entry_price = (high_start + low_start) / 2;
-      pattern.key_points = {
-          {static_cast<double>(i), high_start},
-          {static_cast<double>(i), low_start},
-          {static_cast<double>(i + 19), high_end},
-          {static_cast<double>(i + 19), low_end}
-      };
+      pattern.key_points = {{static_cast<double>(i), high_start},
+                            {static_cast<double>(i), low_start},
+                            {static_cast<double>(i + 19), high_end},
+                            {static_cast<double>(i + 19), low_end}};
       pattern.description = "Symmetrical triangle pattern - continuation pattern";
       patterns.push_back(pattern);
     }
@@ -581,14 +563,13 @@ PatternRecognizer::detect_triangles(const std::vector<TechnicalIndicators::OHLCV
   return patterns;
 }
 
-std::vector<PatternRecognizer::Pattern>
-PatternRecognizer::detect_candlestick_patterns(
-    const std::vector<TechnicalIndicators::OHLCV> &data) {
+std::vector<PatternRecognizer::Pattern> PatternRecognizer::detect_candlestick_patterns(
+    const std::vector<TechnicalIndicators::OHLCV>& data) {
   std::vector<Pattern> patterns;
 
   for (size_t i = 1; i < data.size(); ++i) {
-    const auto &prev = data[i - 1];
-    const auto &curr = data[i];
+    const auto& prev = data[i - 1];
+    const auto& curr = data[i];
 
     if (is_hammer(curr)) {
       Pattern pattern;
@@ -643,13 +624,11 @@ PatternRecognizer::detect_candlestick_patterns(
 }
 
 std::vector<size_t> PatternRecognizer::find_peaks(
-    const std::vector<TechnicalIndicators::OHLCV> &data, bool find_highs) {
+    const std::vector<TechnicalIndicators::OHLCV>& data, bool find_highs) {
   std::vector<size_t> peaks;
 
   for (size_t i = 2; i + 2 < data.size(); ++i) {
-    bool is_peak = find_highs
-                       ? is_local_high(data, i)
-                       : is_local_low(data, i);
+    bool is_peak = find_highs ? is_local_high(data, i) : is_local_low(data, i);
 
     if (is_peak) {
       peaks.push_back(i);
@@ -659,8 +638,8 @@ std::vector<size_t> PatternRecognizer::find_peaks(
   return peaks;
 }
 
-double PatternRecognizer::find_valley_between(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t start, size_t end) {
+double PatternRecognizer::find_valley_between(const std::vector<TechnicalIndicators::OHLCV>& data,
+                                              size_t start, size_t end) {
   double min_price = data[start].low;
 
   for (size_t i = start; i <= end && i < data.size(); ++i) {
@@ -670,8 +649,8 @@ double PatternRecognizer::find_valley_between(
   return min_price;
 }
 
-bool PatternRecognizer::is_local_high(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t index) {
+bool PatternRecognizer::is_local_high(const std::vector<TechnicalIndicators::OHLCV>& data,
+                                      size_t index) {
   double current_high = data[index].high;
 
   bool higher_than_left = true;
@@ -694,8 +673,8 @@ bool PatternRecognizer::is_local_high(
   return higher_than_left && higher_than_right;
 }
 
-bool PatternRecognizer::is_local_low(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t index) {
+bool PatternRecognizer::is_local_low(const std::vector<TechnicalIndicators::OHLCV>& data,
+                                     size_t index) {
   double current_low = data[index].low;
 
   bool lower_than_left = true;
@@ -719,7 +698,7 @@ bool PatternRecognizer::is_local_low(
 }
 
 std::pair<double, double> PatternRecognizer::calculate_trend_line(
-    const std::vector<glm::vec2> &points) {
+    const std::vector<glm::vec2>& points) {
   if (points.size() < 2) {
     return {0, 0};
   }
@@ -727,7 +706,7 @@ std::pair<double, double> PatternRecognizer::calculate_trend_line(
   double sum_x = 0, sum_y = 0, sum_xy = 0, sum_xx = 0;
   int n = static_cast<int>(points.size());
 
-  for (const auto &p : points) {
+  for (const auto& p : points) {
     sum_x += p.x;
     sum_y += p.y;
     sum_xy += p.x * p.y;
@@ -740,7 +719,7 @@ std::pair<double, double> PatternRecognizer::calculate_trend_line(
   return {slope, intercept};
 }
 
-bool PatternRecognizer::is_hammer(const TechnicalIndicators::OHLCV &candle) {
+bool PatternRecognizer::is_hammer(const TechnicalIndicators::OHLCV& candle) {
   double body_size = std::abs(candle.close - candle.open);
   double upper_wick = candle.high - std::max(candle.open, candle.close);
   double lower_wick = std::min(candle.open, candle.close) - candle.low;
@@ -756,7 +735,7 @@ bool PatternRecognizer::is_hammer(const TechnicalIndicators::OHLCV &candle) {
   return small_body && long_lower_wick && small_upper_wick;
 }
 
-bool PatternRecognizer::is_doji(const TechnicalIndicators::OHLCV &candle) {
+bool PatternRecognizer::is_doji(const TechnicalIndicators::OHLCV& candle) {
   double body_size = std::abs(candle.close - candle.open);
   double range = candle.high - candle.low;
 
@@ -766,8 +745,8 @@ bool PatternRecognizer::is_doji(const TechnicalIndicators::OHLCV &candle) {
   return body_size < range * 0.05;
 }
 
-bool PatternRecognizer::is_bullish_engulfing(
-    const TechnicalIndicators::OHLCV &prev, const TechnicalIndicators::OHLCV &curr) {
+bool PatternRecognizer::is_bullish_engulfing(const TechnicalIndicators::OHLCV& prev,
+                                             const TechnicalIndicators::OHLCV& curr) {
   bool prev_bearish = prev.close < prev.open;
   bool curr_bullish = curr.close > curr.open;
 
@@ -776,8 +755,8 @@ bool PatternRecognizer::is_bullish_engulfing(
   return prev_bearish && curr_bullish && engulfing;
 }
 
-bool PatternRecognizer::is_bearish_engulfing(
-    const TechnicalIndicators::OHLCV &prev, const TechnicalIndicators::OHLCV &curr) {
+bool PatternRecognizer::is_bearish_engulfing(const TechnicalIndicators::OHLCV& prev,
+                                             const TechnicalIndicators::OHLCV& curr) {
   bool prev_bullish = prev.close > prev.open;
   bool curr_bearish = curr.close < curr.open;
 
@@ -787,14 +766,16 @@ bool PatternRecognizer::is_bearish_engulfing(
 }
 
 double PatternRecognizer::calculate_double_top_confidence(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t peak1,
-    size_t trough, size_t peak2) {
+    const std::vector<TechnicalIndicators::OHLCV>& data, size_t peak1, size_t trough,
+    size_t peak2) {
   double base_confidence = 0.7;
 
   // Adjust based on distance between peaks
   double distance = static_cast<double>(peak2 - peak1);
-  if (distance < 10) base_confidence -= 0.1;
-  else if (distance > 50) base_confidence -= 0.15;
+  if (distance < 10)
+    base_confidence -= 0.1;
+  else if (distance > 50)
+    base_confidence -= 0.15;
 
   // Adjust based on trough depth
   double trough_depth = (data[peak1].close - data[trough].close) / data[peak1].close;
@@ -804,14 +785,16 @@ double PatternRecognizer::calculate_double_top_confidence(
 }
 
 double PatternRecognizer::calculate_double_bottom_confidence(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t trough1,
-    size_t peak, size_t trough2) {
+    const std::vector<TechnicalIndicators::OHLCV>& data, size_t trough1, size_t peak,
+    size_t trough2) {
   double base_confidence = 0.7;
 
   // Adjust based on distance between troughs
   double distance = static_cast<double>(trough2 - trough1);
-  if (distance < 10) base_confidence -= 0.1;
-  else if (distance > 50) base_confidence -= 0.15;
+  if (distance < 10)
+    base_confidence -= 0.1;
+  else if (distance > 50)
+    base_confidence -= 0.15;
 
   // Adjust based on peak height
   double peak_height = (data[peak].close - data[trough1].close) / data[trough1].close;
@@ -821,14 +804,14 @@ double PatternRecognizer::calculate_double_bottom_confidence(
 }
 
 double PatternRecognizer::calculate_head_shoulders_confidence(
-    const std::vector<TechnicalIndicators::OHLCV> &data, size_t left,
-    size_t head, size_t right) {
+    const std::vector<TechnicalIndicators::OHLCV>& data, size_t left, size_t head, size_t right) {
   double base_confidence = 0.75;
 
   // Check symmetry
   double left_height = data[left].close - data[left + 1].close;
   double right_height = data[right].close - data[right + 1].close;
-  double symmetry = 1.0 - std::abs(left_height - right_height) / std::abs(left_height + right_height + 0.001);
+  double symmetry =
+      1.0 - std::abs(left_height - right_height) / std::abs(left_height + right_height + 0.001);
 
   base_confidence *= symmetry;
 
@@ -840,4 +823,4 @@ double PatternRecognizer::calculate_head_shoulders_confidence(
   return std::min(base_confidence, 0.95);
 }
 
-} // namespace BTQuant
+}  // namespace BTQuant

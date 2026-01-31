@@ -33,8 +33,22 @@ struct DataSubscription {
 class UnifiedDataPipeline {
  public:
   enum class DataType {
-    OHLC, ORDERBOOK, TRADES, VOLUME_PROFILE, FOOTPRINT, TPO, METRICS, ALERTS,
-    HEIKIN_ASHI, RENKO, LINEBREAK, KAGI, POINT_AND_FIGURE, RANGE_BARS, VOLUME_BARS, TICK_BARS
+    OHLC,
+    ORDERBOOK,
+    TRADES,
+    VOLUME_PROFILE,
+    FOOTPRINT,
+    TPO,
+    METRICS,
+    ALERTS,
+    HEIKIN_ASHI,
+    RENKO,
+    LINEBREAK,
+    KAGI,
+    POINT_AND_FIGURE,
+    RANGE_BARS,
+    VOLUME_BARS,
+    TICK_BARS
   };
 
   struct DataEvent {

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <chrono>
-#include <vector>
-#include <string>
-#include <mutex>
 #include <atomic>
+#include <chrono>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace BTQuant {
 
@@ -19,7 +19,7 @@ struct PerformanceMetric {
 };
 
 class PerformanceMonitor {
-public:
+ public:
   PerformanceMonitor();
   ~PerformanceMonitor() = default;
 
@@ -75,7 +75,7 @@ public:
   double get_min_frame_time() const;
   double get_max_frame_time() const;
 
-private:
+ private:
   // Frame timing
   std::chrono::high_resolution_clock::time_point frame_start_;
   double current_frame_time_ms_;
@@ -107,4 +107,4 @@ private:
 // Global performance monitor instance
 extern PerformanceMonitor g_performance_monitor;
 
-} // namespace BTQuant
+}  // namespace BTQuant

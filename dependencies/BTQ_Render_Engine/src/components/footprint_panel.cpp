@@ -463,17 +463,17 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
 
   // Format the tooltip text with all required information in a clean, organized way
   std::string tooltip = std::format(
-    "📊 CELL DETAILS\n"
-    "-------------\n"
-    "Exact Buy Volume: {:.2f}\n"
-    "Exact Sell Volume: {:.2f}\n"
-    "Delta: {:.2f}\n"
-    "Delta %: {:.2f}%\n"
-    "-------------\n"
-    "Number of Buy Trades: {}\n"
-    "Number of Sell Trades: {}\n"
-    "Max Single Trade: {:.2f}\n"
-    "Timestamp Range: {:.3f}s - {:.3f}s",
+    "📊 FOOTPRINT CELL DATA\n"
+    "═════════════════════\n"
+    "• Exact Buy Volume: {:.2f}\n"
+    "• Exact Sell Volume: {:.2f}\n"
+    "• Delta (B-S): {:.2f}\n"
+    "• Delta %: {:.2f}%\n"
+    "═════════════════════\n"
+    "• # Buy Trades: {}\n"
+    "• # Sell Trades: {}\n"
+    "• Max Single Trade: {:.2f}\n"
+    "• Time Range: {:.3f}s - {:.3f}s",
     cell.bid_volume,           // exact buy volume
     cell.ask_volume,           // exact sell volume
     cell.bid_volume - cell.ask_volume,  // delta (actual buy - sell)

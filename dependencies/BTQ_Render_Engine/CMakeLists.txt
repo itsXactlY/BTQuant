@@ -703,6 +703,26 @@ if(GTest_FOUND)
     add_test(NAME test_footprint_zoom_math_only COMMAND test_footprint_zoom_math_only)
 endif()
 
+# Unit test for Improved Footprint Panel Zoom functionality
+if(GTest_FOUND)
+    add_executable(test_improved_footprint_zoom
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_improved_footprint_zoom.cpp
+    )
+    target_include_directories(test_improved_footprint_zoom PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_improved_footprint_zoom PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_improved_footprint_zoom COMMAND test_improved_footprint_zoom)
+endif()
+
 # Unit test for Split Volume Display functionality
 if(GTest_FOUND)
     add_executable(test_split_volume_display

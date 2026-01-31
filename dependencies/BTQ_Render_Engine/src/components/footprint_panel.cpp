@@ -540,16 +540,15 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   if (zoom_factor >= 1.0) {
     // When zoomed in: expand cells to show more detail
     // Use a logarithmic approach for smoother transitions at high zoom levels
-    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.5;
-    adjusted_padding = std::max(0.01, base_padding - zoom_effect);
+    // The higher the zoom, the less padding (larger cells)
+    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.3;
+    adjusted_padding = std::max(0.05, base_padding - zoom_effect);
   } else {
     // When zoomed out: shrink cells to show more of them, approaching squares
-    // Use an exponential approach to make cells shrink more aggressively when zoomed out
-    // FIXED: The original algorithm was making cells larger when zoomed out, which is wrong
-    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 1.2) - 1.0;
-    // To make cells smaller when zoomed out, we need MORE padding, not less
-    double padding_factor = 0.8 * (zoom_effect / (zoom_effect + 1.0));
-    adjusted_padding = std::min(base_padding, base_padding * (1.0 + padding_factor));
+    // Use an inverse approach to make cells smaller when zoomed out
+    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 0.8) - 1.0;
+    // Increase padding to make cells appear smaller when zoomed out
+    adjusted_padding = std::min(0.48, base_padding + zoom_effect * 0.15);
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
@@ -563,6 +562,11 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   // Convert to pixel coordinates
   ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
   ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
+
+  // Calculate cell dimensions in pixels for level-of-detail decisions
+  float cell_width_px = std::abs(p2.x - p1.x);
+  float cell_height_px = std::abs(p2.y - p1.y);
+  float min_dimension_px = std::min(cell_width_px, cell_height_px);
 
   // Special handling for SplitVolume mode
   if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) ==
@@ -710,8 +714,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   }
 
   // Draw volume label if enabled and cell is large enough
-  // Implement LOD: skip text rendering when cell height < 12px
-  if (show_volume_labels_ && (std::abs(p2.y - p1.y) >= 12.0f)) {
+  // Implement LOD: skip text rendering when cell is too small
+  if (show_volume_labels_ && min_dimension_px >= 12.0f) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 
@@ -721,8 +725,8 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
     draw_list->AddText(text_pos, IM_COL32_WHITE, label.c_str());
   }
 
-  // Draw delta indicator if enabled
-  if (show_delta_indicator_) {
+  // Draw delta indicator if enabled and cell is large enough
+  if (show_delta_indicator_ && min_dimension_px >= 8.0f) {
     double max_vol = std::max(cell.bid_volume, cell.ask_volume);
     if (max_vol > 0.0) {
       double normalized_delta = cell.delta / max_vol;
@@ -754,16 +758,15 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   if (zoom_factor >= 1.0) {
     // When zoomed in: expand cells to show more detail
     // Use a logarithmic approach for smoother transitions at high zoom levels
-    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.5;
-    adjusted_padding = std::max(0.01, base_padding - zoom_effect);
+    // The higher the zoom, the less padding (larger cells)
+    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.3;
+    adjusted_padding = std::max(0.05, base_padding - zoom_effect);
   } else {
     // When zoomed out: shrink cells to show more of them, approaching squares
-    // Use an exponential approach to make cells shrink more aggressively when zoomed out
-    // FIXED: The original algorithm was making cells larger when zoomed out, which is wrong
-    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 1.2) - 1.0;
-    // To make cells smaller when zoomed out, we need MORE padding, not less
-    double padding_factor = 0.8 * (zoom_effect / (zoom_effect + 1.0));
-    adjusted_padding = std::min(base_padding, base_padding * (1.0 + padding_factor));
+    // Use an inverse approach to make cells smaller when zoomed out
+    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 0.8) - 1.0;
+    // Increase padding to make cells appear smaller when zoomed out
+    adjusted_padding = std::min(0.48, base_padding + zoom_effect * 0.15);
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
@@ -778,6 +781,11 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
   ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
 
+  // Calculate cell dimensions in pixels for level-of-detail decisions
+  float cell_width_px = std::abs(p2.x - p1.x);
+  float cell_height_px = std::abs(p2.y - p1.y);
+  float min_dimension_px = std::min(cell_width_px, cell_height_px);
+
   // Draw greyed-out cell for values below threshold
   // Use a light grey color with low alpha to indicate filtered cells
   ImU32 greyed_out_color = IM_COL32(128, 128, 128, 64);  // Grey with transparency
@@ -790,8 +798,8 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.0f);
 
   // Draw volume label if enabled and cell is large enough
-  // Implement LOD: skip text rendering when cell height < 12px
-  if (show_volume_labels_ && (std::abs(p2.y - p1.y) >= 12.0f)) {
+  // Implement LOD: skip text rendering when cell is too small
+  if (show_volume_labels_ && min_dimension_px >= 12.0f) {
     std::string label = getCellLabel(cell);
     ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
 

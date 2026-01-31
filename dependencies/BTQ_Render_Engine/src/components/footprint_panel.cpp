@@ -362,28 +362,9 @@ std::string FootprintPanel::getCellLabel(const FootprintCell& cell) const {
 }
 
 std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
-  // Calculate delta percent based on the active analysis type
-  double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-  double delta_percent = max_vol > 0.0 ? (cell.delta / max_vol) * 100.0 : 0.0;
-
-  // For buy/sell trades, we'll estimate based on volume ratios
-  // In a real implementation, we'd need separate counters for buy/sell trades
+  // Calculate delta percent based on the actual values
   double total_vol = cell.bid_volume + cell.ask_volume;
-  int buy_trades = 0;
-  int sell_trades = 0;
-
-  if (total_vol > 0) {
-    buy_trades = static_cast<int>(cell.trade_count * (cell.bid_volume / total_vol));
-    sell_trades = cell.trade_count - buy_trades;
-  } else {
-    // If no volume, split trades equally
-    buy_trades = cell.trade_count / 2;
-    sell_trades = cell.trade_count - buy_trades;
-  }
-
-  // For max single trade, we'll estimate as a portion of total volume
-  // In a real implementation, we'd need the actual max trade size
-  double max_single_trade = total_vol > 0 ? total_vol / cell.trade_count : 0.0;
+  double delta_percent = total_vol > 0.0 ? (cell.delta / total_vol) * 100.0 : 0.0;
 
   // Format the tooltip text with all required information
   // Include information about the active analysis type
@@ -465,6 +446,11 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
       break;
   }
 
+  // Convert nanosecond timestamps to readable format (seconds with decimals)
+  double start_time_sec = static_cast<double>(cell.start_time_ns) / 1'000'000'000.0;
+  double end_time_sec = static_cast<double>(cell.end_time_ns) / 1'000'000'000.0;
+
+  // Use exact values from the extended FootprintCell structure
   std::string tooltip = std::format(
     "{}: {:.2f}\n"
     "Buy Volume: {:.2f}\n"
@@ -474,18 +460,18 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
     "Buy Trades: {}\n"
     "Sell Trades: {}\n"
     "Max Single Trade: {:.2f}\n"
-    "Timestamp Range: {:.2f}-{:.2f}",
+    "Timestamp Range: {:.3f}-{:.3f}",
     analysis_type_label,
     analysis_value,
     cell.bid_volume,
     cell.ask_volume,
     cell.delta,
     delta_percent,
-    buy_trades,
-    sell_trades,
-    max_single_trade,
-    cell.x - cell.width/2.0, // Start time
-    cell.x + cell.width/2.0  // End time
+    cell.buy_trade_count,
+    cell.sell_trade_count,
+    cell.max_single_trade_volume,
+    start_time_sec, // Start timestamp in seconds
+    end_time_sec   // End timestamp in seconds
   );
 
   return tooltip;
@@ -1003,6 +989,13 @@ void FootprintPanel::render() {
                 cluster.vwap               // vwap
             );
 
+            // Populate the extended fields from the cluster
+            cell.buy_trade_count = cluster.buyTradeCount;
+            cell.sell_trade_count = cluster.sellTradeCount;
+            cell.max_single_trade_volume = static_cast<double>(cluster.maxSingleTradeVolume);
+            cell.start_time_ns = cluster.startTimeNs;
+            cell.end_time_ns = cluster.endTimeNs;
+
             // Calculate value based on active VolumeAnalysisType for this specific cell
             switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
                 case BTQuant::Data::VolumeAnalysisType::Trades:
@@ -1413,142 +1406,16 @@ void FootprintPanel::render() {
         // Only render headers for time bars that are actually visible
         if (time_key >= x_min && time_key <= x_max) {
             // Get the summary information for this time bar based on active VolumeAnalysisType
-            double total_value = time_bar_total_values[time_key];
-            double net_value = time_bar_net_values[time_key];
-            double cumulative_value = cumulative_values[time_key];
+            double total_volume = time_bar_total_values[time_key];
+            double net_delta = time_bar_net_values[time_key];
+            double cumulative_delta = cumulative_values[time_key];
             double poc_price = poc_info[time_key].first;
 
-            // Format the header text based on the active VolumeAnalysisType
+            // Format the header text to show total volume, net delta, cumulative delta, and POC price
             char header_text[256];
-            const char* analysis_type_label = "";
-
-            switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
-                case BTQuant::Data::VolumeAnalysisType::Trades:
-                    analysis_type_label = "T";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::BuyTrades:
-                    analysis_type_label = "BT";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::SellTrades:
-                    analysis_type_label = "ST";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::Volume:
-                    analysis_type_label = "Vol";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::BuyVolume:
-                    analysis_type_label = "BV";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::SellVolume:
-                    analysis_type_label = "SV";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::BuySellVolume:
-                    analysis_type_label = "BSV";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::Delta:
-                    analysis_type_label = "D";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::DeltaPercent:
-                    analysis_type_label = "DP%";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.1f%% NV:%+.1f%% CV:%+.1f%% POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::CumulativeDelta:
-                    analysis_type_label = "CD";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::AverageSize:
-                    analysis_type_label = "AS";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.2f NV:%+.2f CV:%+.2f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::AverageBuySize:
-                    analysis_type_label = "ABS";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.2f NV:%+.2f CV:%+.2f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::AverageSellSize:
-                    analysis_type_label = "ASS";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.2f NV:%+.2f CV:%+.2f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::MaxOneTradeVolume:
-                    analysis_type_label = "MOTV";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.2f NV:%+.2f CV:%+.2f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::BuyVolumePercent:
-                    analysis_type_label = "BVP%";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.1f%% NV:%+.1f%% CV:%+.1f%% POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::SellVolumePercent:
-                    analysis_type_label = "SVP%";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.1f%% NV:%+.1f%% CV:%+.1f%% POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                case BTQuant::Data::VolumeAnalysisType::FilteredVolume:
-                    analysis_type_label = "FV";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-
-                default:
-                    analysis_type_label = "Vol";
-                    snprintf(header_text, sizeof(header_text),
-                             "%s:%.0f NV:%+.0f CV:%+.0f POC:%.2f",
-                             analysis_type_label, total_value, net_value, cumulative_value, poc_price);
-                    break;
-            }
+            snprintf(header_text, sizeof(header_text),
+                     "TV:%.0f ND:%+.0f CD:%+.0f POC:%.2f",
+                     total_volume, net_delta, cumulative_delta, poc_price);
 
             // Convert time to pixel coordinates for header positioning
             ImVec2 header_pos = ImPlot::PlotToPixels(time_key, y_max + 5.0); // Position header slightly above the highest price
@@ -1560,7 +1427,8 @@ void FootprintPanel::render() {
                 const char* font_name = ImGui::GetIO().Fonts->Fonts[i]->GetDebugName();
                 if (font_name && (strstr(font_name, "Mono") != nullptr ||
                                  strstr(font_name, "Consolas") != nullptr ||
-                                 strstr(font_name, "Courier") != nullptr)) {
+                                 strstr(font_name, "Courier") != nullptr ||
+                                 strstr(font_name, "Fixed") != nullptr)) {
                     mono_font = ImGui::GetIO().Fonts->Fonts[i];
                     break;
                 }
@@ -1636,8 +1504,13 @@ void FootprintPanel::render() {
     // Temporarily reduce font size for the footer using text scaling
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 3.0f));
+
+    // Use smaller font by pushing text wrap position to make text appear smaller
+    // Alternative approach: use ImGui::PushFont if a smaller font is available
     ImGui::Text("Trades: %d | Avg Size: %.2f | Max Trade: %.2f",
                 total_trades, avg_trade_size, max_single_trade_volume);
+
+    // Restore the original scale
     ImGui::PopStyleVar(2);
   }
 

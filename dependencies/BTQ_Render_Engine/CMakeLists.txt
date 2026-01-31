@@ -149,11 +149,14 @@ target_include_directories(dashboard_advanced PRIVATE
     ${concurrentqueue_SOURCE_DIR}
 )
 
+find_package(TBB REQUIRED)
+
 target_link_libraries(dashboard_advanced PRIVATE
     Vulkan::Vulkan
     glfw
     dl
     pthread
+    TBB::tbb
 )
 
 # Optimization

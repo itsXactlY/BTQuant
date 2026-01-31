@@ -20,13 +20,19 @@ struct FootprintCell {
   double delta;         // Delta (bid_volume - ask_volume)
   uint32_t trade_count; // Number of trades
   double vwap;          // Volume-weighted average price
+  uint32_t buy_trade_count;      // Number of buy trades
+  uint32_t sell_trade_count;     // Number of sell trades
+  double max_single_trade_volume; // Maximum single trade volume
+  uint64_t start_time_ns;        // Start timestamp in nanoseconds
+  uint64_t end_time_ns;          // End timestamp in nanoseconds
 
   // Constructor
   FootprintCell(double x_pos, double y_pos, double w, double h, double bid_vol,
                 double ask_vol, uint32_t count, double vwap_price)
       : x(x_pos), y(y_pos), width(w), height(h), bid_volume(bid_vol),
         ask_volume(ask_vol), delta(bid_vol - ask_vol), trade_count(count),
-        vwap(vwap_price) {}
+        vwap(vwap_price), buy_trade_count(0), sell_trade_count(0),
+        max_single_trade_volume(0.0), start_time_ns(0), end_time_ns(0) {}
 };
 
 // Number Formatting Options

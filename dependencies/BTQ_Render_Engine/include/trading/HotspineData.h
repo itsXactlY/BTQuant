@@ -61,6 +61,11 @@ struct alignas(16) CandleCluster {
   uint32_t tradeCount; // Number of trades
   float vwap;          // Volume-weighted average price
   bool hasTrades;      // Trade activity indicator
+  uint32_t buyTradeCount;      // Number of buy trades
+  uint32_t sellTradeCount;     // Number of sell trades
+  float maxSingleTradeVolume;  // Maximum single trade volume
+  uint64_t startTimeNs;        // Start timestamp in nanoseconds
+  uint64_t endTimeNs;          // End timestamp in nanoseconds
 
   CandleCluster() = default;
 
@@ -68,7 +73,18 @@ struct alignas(16) CandleCluster {
                 uint32_t askVol, uint32_t tradeCnt, float vw, bool hasTrades)
       : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol),
         askVolume(askVol), tradeCount(tradeCnt), vwap(vw),
-        hasTrades(hasTrades) {}
+        hasTrades(hasTrades), buyTradeCount(0), sellTradeCount(0),
+        maxSingleTradeVolume(0.0f), startTimeNs(0), endTimeNs(0) {}
+
+  // Extended constructor with all fields
+  CandleCluster(float x, float y, float w, float h, uint32_t bidVol,
+                uint32_t askVol, uint32_t tradeCnt, float vw, bool hasTrades,
+                uint32_t buyTrades, uint32_t sellTrades, float maxTradeVol,
+                uint64_t startNs, uint64_t endNs)
+      : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol),
+        askVolume(askVol), tradeCount(tradeCnt), vwap(vw),
+        hasTrades(hasTrades), buyTradeCount(buyTrades), sellTradeCount(sellTrades),
+        maxSingleTradeVolume(maxTradeVol), startTimeNs(startNs), endTimeNs(endNs) {}
 };
 
 static_assert(GpuAlignable<CandleCluster>,

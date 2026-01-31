@@ -410,6 +410,10 @@ void VulkanDashboard::pollDataToRenderer() {
       uint32_t bidVol = 0;
       uint32_t askVol = 0;
       uint32_t count = 0;
+      uint32_t buyCount = 0;      // Number of buy trades
+      uint32_t sellCount = 0;     // Number of sell trades
+      float maxTradeVol = 0.0f;   // Maximum single trade volume
+      float totalTradeSize = 0.0f; // For calculating VWAP
     };
     std::map<ClusterKey, ClusterValue> aggregator;
 
@@ -423,10 +427,17 @@ void VulkanDashboard::pollDataToRenderer() {
           static_cast<int32_t>(std::round(t.price / tickSize));
 
       auto &val = aggregator[ClusterKey{timeBin, priceBin}];
-      if (t.is_buy) [[likely]]
-        val.askVol += static_cast<uint32_t>(t.size);
-      else
-        val.bidVol += static_cast<uint32_t>(t.size);
+      if (t.is_buy) [[likely]] {
+        val.bidVol += static_cast<uint32_t>(t.size);  // Buy trade contributes to bid volume
+        val.buyCount++;  // Increment buy trade count
+        if (t.size > val.maxTradeVol) val.maxTradeVol = static_cast<float>(t.size);  // Track max trade volume
+        val.totalTradeSize += static_cast<float>(t.size);
+      } else {
+        val.askVol += static_cast<uint32_t>(t.size);  // Sell trade contributes to ask volume
+        val.sellCount++;  // Increment sell trade count
+        if (t.size > val.maxTradeVol) val.maxTradeVol = static_cast<float>(t.size);  // Track max trade volume
+        val.totalTradeSize += static_cast<float>(t.size);
+      }
       val.count++;
     }
 
@@ -440,7 +451,9 @@ void VulkanDashboard::pollDataToRenderer() {
       clusters.emplace_back(
           rel_time_sec, static_cast<float>(key.price_bin) * tickSize,
           static_cast<float>(timeframe_us) / 1'000'000.0f * 0.9f,
-          tickSize * 0.9f, val.bidVol, val.askVol, val.count, 0.0f, true);
+          tickSize * 0.9f, val.bidVol, val.askVol, val.count, 0.0f, true,
+          val.buyCount, val.sellCount, val.maxTradeVol,
+          (key.time - timeframe_us) * 1000, key.time * 1000);  // Convert to nanoseconds
     }
 
     if (!clusters.empty()) {

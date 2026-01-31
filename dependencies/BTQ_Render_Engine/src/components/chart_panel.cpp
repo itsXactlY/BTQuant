@@ -1070,13 +1070,13 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         auto analytics = processor_->getSymbolAnalytics(symbol_id);
         const auto& recent_trades = analytics.recent_trades;
 
-        // If we have recent trades, render the mini histograms showing volume distribution
+        // If we have recent trades, render the enhanced step profile histograms showing volume distribution
         if (!recent_trades.empty()) {
-          // Use the static method to render mini histograms directly without creating a temporary instance
-          // This is more efficient and avoids unnecessary object creation
-          VolumeProfilePanel::render_mini_histograms_direct(draw_list, visible_candles, x_coords,
-                                                         y_coords_high, y_coords_low, recent_trades,
-                                                         true, 8);
+          // Use the enhanced static method to render step profile histograms directly without creating a temporary instance
+          // This is more efficient and provides better visualization of volume distribution
+          VolumeProfilePanel::render_enhanced_step_profile_on_candles(draw_list, visible_candles, x_coords,
+                                                                     y_coords_high, y_coords_low, recent_trades,
+                                                                     true, 8, 0.7f);  // Use 70% opacity for better visibility
         }
       }
     }

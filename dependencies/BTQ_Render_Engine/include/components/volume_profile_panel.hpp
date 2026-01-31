@@ -103,6 +103,17 @@ class VolumeProfilePanel : public PanelBase {
                                                   bool show_poc_line = true,
                                                   int num_buckets_per_candle = 8);
 
+  // Enhanced method to render step profile histograms on candlesticks with additional features
+  static void render_enhanced_step_profile_on_candles(ImDrawList* draw_list,
+                                                    const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                    const std::vector<double>& x_coords,
+                                                    const std::vector<double>& y_coords_high,
+                                                    const std::vector<double>& y_coords_low,
+                                                    const std::vector<RenderEngine::TradeData>& trades,
+                                                    bool show_poc_line = true,
+                                                    int num_buckets_per_candle = 8,
+                                                    float opacity_factor = 1.0f);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

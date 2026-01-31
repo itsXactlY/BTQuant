@@ -470,17 +470,36 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   // Call the overloaded version with empty imbalance vectors
   std::vector<FootprintCell> empty_diagonal;
   std::vector<FootprintCell> empty_stacked;
-  renderCell(cell, draw_list, max_volume, empty_diagonal, empty_stacked);
+  renderCell(cell, draw_list, max_volume, empty_diagonal, empty_stacked, 1.0); // Default zoom factor of 1.0
 }
 
 void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list, double max_volume,
                                const std::vector<FootprintCell> &diagonal_imbalances,
-                               const std::vector<FootprintCell> &stacked_imbalances) {
-  // Calculate cell corners in plot coordinates
-  double x1 = cell.x - cell.width * 0.48;
-  double x2 = cell.x + cell.width * 0.48;
-  double y1 = cell.y - cell.height * 0.48;
-  double y2 = cell.y + cell.height * 0.48;
+                               const std::vector<FootprintCell> &stacked_imbalances,
+                               double zoom_factor) {
+  // Calculate cell corners in plot coordinates with zoom-based adjustment
+  // At low zoom (zoom_factor < 1), cells collapse to squares to show more cells
+  // At high zoom (zoom_factor > 1), cells expand to show more detail
+  double base_padding = 0.48;
+
+  // Adjust cell padding based on zoom level with smoother transitions
+  double adjusted_padding;
+  if (zoom_factor >= 1.0) {
+      // When zoomed in: gradually expand cells to show more detail
+      // Use a square root function to make expansion more gradual
+      adjusted_padding = base_padding / std::pow(zoom_factor, 0.3);
+  } else {
+      // When zoomed out: shrink cells to show more of them, approaching squares
+      adjusted_padding = base_padding * std::pow(zoom_factor, 0.7);
+  }
+
+  // Ensure padding stays within reasonable bounds
+  adjusted_padding = std::max(0.1, std::min(0.48, adjusted_padding));
+
+  double x1 = cell.x - cell.width * adjusted_padding;
+  double x2 = cell.x + cell.width * adjusted_padding;
+  double y1 = cell.y - cell.height * adjusted_padding;
+  double y2 = cell.y + cell.height * adjusted_padding;
 
   // Convert to pixel coordinates
   ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
@@ -647,12 +666,28 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
 
 }
 
-void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list, double max_volume) {
-  // Calculate cell corners in plot coordinates
-  double x1 = cell.x - cell.width * 0.48;
-  double x2 = cell.x + cell.width * 0.48;
-  double y1 = cell.y - cell.height * 0.48;
-  double y2 = cell.y + cell.height * 0.48;
+void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list, double max_volume, double zoom_factor) {
+  // Calculate cell corners in plot coordinates with zoom-based adjustment
+  double base_padding = 0.48;
+
+  // Adjust cell padding based on zoom level with smoother transitions
+  double adjusted_padding;
+  if (zoom_factor >= 1.0) {
+      // When zoomed in: gradually expand cells to show more detail
+      // Use a square root function to make expansion more gradual
+      adjusted_padding = base_padding / std::pow(zoom_factor, 0.3);
+  } else {
+      // When zoomed out: shrink cells to show more of them, approaching squares
+      adjusted_padding = base_padding * std::pow(zoom_factor, 0.7);
+  }
+
+  // Ensure padding stays within reasonable bounds
+  adjusted_padding = std::max(0.1, std::min(0.48, adjusted_padding));
+
+  double x1 = cell.x - cell.width * adjusted_padding;
+  double x2 = cell.x + cell.width * adjusted_padding;
+  double y1 = cell.y - cell.height * adjusted_padding;
+  double y2 = cell.y + cell.height * adjusted_padding;
 
   // Convert to pixel coordinates
   ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
@@ -1074,6 +1109,27 @@ void FootprintPanel::render() {
     double x_max = limits.X.Max;
     double y_min = limits.Y.Min;
     double y_max = limits.Y.Max;
+
+    // Calculate zoom factors for adaptive cell sizing
+    double x_range_full = 30.0; // Assuming 30-second window as per base_time_sec setup
+    double y_range_full = 1000.0; // Placeholder - will be replaced by actual data range
+    if (!clusters.empty()) {
+        float p_min = clusters[0].centerY;
+        float p_max = clusters[0].centerY;
+        for (const auto &c : clusters) {
+            p_min = std::min(p_min, (float)c.centerY);
+            p_max = std::max(p_max, (float)c.centerY);
+        }
+        y_range_full = p_max - p_min + 20; // Add some padding
+    }
+
+    // Calculate zoom factors - higher values mean more zoomed in
+    double x_zoom_factor = x_range_full / (x_max - x_min);
+    double y_zoom_factor = y_range_full / (y_max - y_min);
+    double zoom_factor = std::sqrt(x_zoom_factor * y_zoom_factor); // Geometric mean for balanced zoom
+
+    // Normalize zoom factor to a more intuitive range
+    zoom_factor = std::max(0.1, zoom_factor); // Prevent extremely small values
 
     // Calculate max volume across all visible cells for adaptive alpha calculation
     double max_volume = 0.0;
@@ -1911,10 +1967,10 @@ void FootprintPanel::render() {
       // Only render cells that meet the volume threshold, or render greyed-out for filtered cells
       if (cell_volume >= volume_threshold_) {
         // Render the cell normally with the calculated max volume for adaptive alpha
-        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances);
+        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances, zoom_factor);
       } else {
         // Render greyed-out cell for values below threshold
-        renderFilteredCell(cell, draw_list, max_volume);
+        renderFilteredCell(cell, draw_list, max_volume, zoom_factor);
       }
     }
 

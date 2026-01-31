@@ -161,8 +161,9 @@ private:
   void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0);
   void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume,
                  const std::vector<FootprintCell> &diagonal_imbalances,
-                 const std::vector<FootprintCell> &stacked_imbalances);
-  void renderFilteredCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0);
+                 const std::vector<FootprintCell> &stacked_imbalances,
+                 double zoom_factor = 1.0);
+  void renderFilteredCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0, double zoom_factor = 1.0);
   std::string getCellTooltip(const FootprintCell &cell) const;
 
   // Imbalance Detection

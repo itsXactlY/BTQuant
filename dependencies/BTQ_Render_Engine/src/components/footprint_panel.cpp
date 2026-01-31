@@ -973,10 +973,24 @@ void FootprintPanel::render() {
 
     // ENHANCED MAIN RENDER LOOP: Iterate through visible time bars and price levels
     // Retrieve ClusterCell data and switch on active VolumeAnalysisType to determine displayed value
+
+    // First, collect all visible clusters and organize them by time and price levels
+    std::map<double, std::map<double, const RenderEngine::CandleCluster*>> visible_clusters;
+
     for (const auto &cluster : clusters) {
         // Check if cluster is within visible bounds
         if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
             cluster.centerY >= y_min && cluster.centerY <= y_max) {
+
+            // Organize clusters by time (x-axis) and price (y-axis) for efficient iteration
+            visible_clusters[cluster.centerX][cluster.centerY] = &cluster;
+        }
+    }
+
+    // Iterate through visible time bars and price levels
+    for (const auto &[time_level, price_clusters] : visible_clusters) {
+        for (const auto &[price_level, cluster_ptr] : price_clusters) {
+            const auto &cluster = *cluster_ptr;
 
             // Convert cluster to footprint cell
             FootprintCell cell(

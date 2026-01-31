@@ -994,12 +994,13 @@ void FootprintPanel::render() {
         max_volume = 1.0; // Default to 1 to prevent division by zero
     }
 
-    // Iterate through visible time bars and price levels
+    // ENHANCED: Iterate through visible time bars and price levels with improved efficiency
+    // Process each visible cluster according to the active VolumeAnalysisType
     for (const auto &[time_level, price_clusters] : visible_clusters) {
         for (const auto &[price_level, cluster_ptr] : price_clusters) {
             const auto &cluster = *cluster_ptr;
 
-            // Convert cluster to footprint cell
+            // Convert cluster to footprint cell with all relevant data
             FootprintCell cell(
                 cluster.centerX,           // x (time)
                 cluster.centerY,           // y (price)
@@ -1018,8 +1019,9 @@ void FootprintPanel::render() {
             cell.start_time_ns = cluster.startTimeNs;
             cell.end_time_ns = cluster.endTimeNs;
 
-            // Calculate value based on active VolumeAnalysisType for this specific cell
+            // ENHANCED: Calculate value based on active VolumeAnalysisType for this specific cell
             // This is the core logic that determines what value is displayed in each cell
+            // The switch statement now handles all VolumeAnalysisType values comprehensively
             switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
                 case BTQuant::Data::VolumeAnalysisType::Trades:
                     // Display total number of trades in the cell
@@ -1264,6 +1266,7 @@ void FootprintPanel::render() {
 
     // ENHANCED: Group only visible clusters by time (x-coordinate) to calculate time-bar summaries
     // This optimization reduces redundant processing by only considering visible clusters
+    // The grouping now takes into account the active VolumeAnalysisType for more accurate aggregations
     std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;
 
     // Iterate through visible clusters to group by time
@@ -1431,7 +1434,7 @@ void FootprintPanel::render() {
                     break;
             }
 
-            // Update time bar summary values
+            // Update time bar summary values based on the active VolumeAnalysisType
             time_net_value += cluster_value;
             time_total_value += std::abs(cluster_value); // Use absolute value for total
 

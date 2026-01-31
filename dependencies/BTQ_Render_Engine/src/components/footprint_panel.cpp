@@ -950,24 +950,6 @@ void FootprintPanel::render() {
     // Calculate max volume across all visible cells for adaptive alpha calculation
     double max_volume = 0.0;
 
-    // Iterate through visible time bars and price levels to find max volume
-    for (const auto &cluster : clusters) {
-        // Check if cluster is within visible bounds
-        if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
-            cluster.centerY >= y_min && cluster.centerY <= y_max) {
-
-            double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
-            if (total_vol > max_volume) {
-                max_volume = total_vol;
-            }
-        }
-    }
-
-    // Prevent division by zero
-    if (max_volume <= 0.0) {
-        max_volume = 1.0; // Default to 1 to prevent division by zero
-    }
-
     // Collect all visible cells for imbalance detection
     std::vector<FootprintCell> all_cells;
 
@@ -984,7 +966,18 @@ void FootprintPanel::render() {
 
             // Organize clusters by time (x-axis) and price (y-axis) for efficient iteration
             visible_clusters[cluster.centerX][cluster.centerY] = &cluster;
+
+            // Also calculate max volume for adaptive alpha calculation
+            double total_vol = static_cast<double>(cluster.bidVolume + cluster.askVolume);
+            if (total_vol > max_volume) {
+                max_volume = total_vol;
+            }
         }
+    }
+
+    // Prevent division by zero
+    if (max_volume <= 0.0) {
+        max_volume = 1.0; // Default to 1 to prevent division by zero
     }
 
     // Iterate through visible time bars and price levels
@@ -1206,10 +1199,11 @@ void FootprintPanel::render() {
         }
     }
 
-    // ENHANCED: Explicit iteration through visible time bars and price levels
-    // This section processes each visible cell individually based on the active VolumeAnalysisType
+    // ENHANCED: Post-process all visible cells to apply any additional transformations
+    // based on the active VolumeAnalysisType
     for (auto& cell : all_cells) {
-        // Each cell has already been processed according to the active VolumeAnalysisType
+        // All cells have already been processed according to the active VolumeAnalysisType
+        // Additional post-processing can be applied here if needed
     }
 
     // Detect imbalances

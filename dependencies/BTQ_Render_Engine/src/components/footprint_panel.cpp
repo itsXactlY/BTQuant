@@ -47,17 +47,23 @@ std::string FootprintPanel::formatNumber(double value, NumberFormat format, int 
       break;
 
     case NumberFormat::MillionsM:
-      if (std::abs(value) >= 1e12) {
-        // Trillions - show as trillions
+      if (std::abs(value) >= 1e15) {
+        // Quadrillions
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e15) << "Q";
+      } else if (std::abs(value) >= 1e12) {
+        // Trillions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e12) << "T";
       } else if (std::abs(value) >= 1e9) {
-        // Billions - show as billions
+        // Billions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e9) << "B";
       } else if (std::abs(value) >= 1e6) {
         // Millions - show as millions
         oss << std::fixed << std::setprecision(decimal_places) << (value / 1e6) << "M";
+      } else if (std::abs(value) >= 1e3) {
+        // Thousands - show as thousands
+        oss << std::fixed << std::setprecision(decimal_places) << (value / 1e3) << "K";
       } else {
-        // Values less than 1 million - show as raw value
+        // Values less than 1 thousand - show as raw value
         oss << std::fixed << std::setprecision(decimal_places) << value;
       }
       break;

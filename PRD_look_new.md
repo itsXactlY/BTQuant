@@ -21,7 +21,7 @@
 **Prerequisites:** Basic understanding of trade data structures  
 
 ### Phase 1a: Volume Data Types [Complexity: M]
-- [ ] Define complete VolumeAnalysisType enum with all 16 types: Trades, BuyTrades, SellTrades, Volume, BuyVolume, SellVolume, BuyVolumePercent, SellVolumePercent, BuySellVolume, Delta, DeltaPercent, CumulativeDelta, AverageSize, AverageBuySize, AverageSellSize, MaxOneTradeVolume, FilteredVolume in `dependencies/BTQ_Render_Engine/include/data/VolumeDataTypes.h` [Complexity: S]
+- [x] Define complete VolumeAnalysisType enum with all 16 types: Trades, BuyTrades, SellTrades, Volume, BuyVolume, SellVolume, BuyVolumePercent, SellVolumePercent, BuySellVolume, Delta, DeltaPercent, CumulativeDelta, AverageSize, AverageBuySize, AverageSellSize, MaxOneTradeVolume, FilteredVolume in `dependencies/BTQ_Render_Engine/include/data/VolumeDataTypes.h` [Complexity: S]
 - [ ] Create optimized TradeData struct with timestamp (uint64_t), price (double), volume (float), side (enum Buy/Sell), exchange_id (uint8_t), flags (uint8_t bitmask) in `dependencies/BTQ_Render_Engine/include/data/TradeData.h` [Complexity: S]
 - [ ] Implement ClusterCell struct in `dependencies/BTQ_Render_Engine/include/analytics/cluster_engine.hpp` storing: total_volume, buy_volume, sell_volume, trade_count, buy_trade_count, sell_trade_count, max_single_trade_volume, sum_of_volumes (for average calculations) [Complexity: S]
 

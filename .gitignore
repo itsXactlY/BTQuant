@@ -88,3 +88,5 @@ dependencies/BTQ_Render_Engine/imgui.ini
 
 install_ralph.sh
 dependencies/BTQ_Render_Engine/.ralphy-sandboxes/
+.ralphy-worktrees/
+.ralphy-sandboxes/

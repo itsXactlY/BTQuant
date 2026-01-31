@@ -506,26 +506,56 @@ void VolumeProfilePanel::render_volume_bars() {
     }
 
     // Draw Value Area overlay if we have valid VAH and VAL
-    if (local_vah_price > 0 && local_val_price > 0 && local_vah_price >= local_val_price) {
-      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    // Use local values for Right/Left profiles, global values for others
+    double overlay_vah = (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) ? local_vah_price : vah_price_;
+    double overlay_val = (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) ? local_val_price : val_price_;
 
-      // Convert value area prices to pixel coordinates
-      ImVec2 val_pixel = ImPlot::PlotToPixels(0, local_val_price);  // Left side of plot at VAL price
-      ImVec2 vah_pixel = ImPlot::PlotToPixels(0, local_vah_price);  // Left side of plot at VAH price
+    if (overlay_vah > 0 && overlay_val > 0 && overlay_vah >= overlay_val) {
+      ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
       // Get the plot area dimensions
       ImVec2 plot_size = ImPlot::GetPlotSize();
       ImVec2 plot_pos = ImPlot::GetPlotPos();
 
+      // For Right/Left profiles, we need to calculate the appropriate x-coordinates based on the profile type
+      double left_x_coord, right_x_coord;
+
+      if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
+        // For Right/Left profiles: find the maximum volume to determine the appropriate range
+        double max_total_volume = 0.0;
+        for (const auto& level : volume_profile_) {
+          double total_vol = level.buy_volume + level.sell_volume;
+          if (total_vol > max_total_volume) {
+            max_total_volume = total_vol;
+          }
+        }
+        if (max_total_volume <= 0) max_total_volume = max_volume_;
+        if (max_total_volume <= 0) max_total_volume = 1.0;
+
+        // For both Right and Left profiles, we use the same volume range for the overlay
+        left_x_coord = 0.0;
+        right_x_coord = max_total_volume;
+      } else {
+        // For other profile modes, use the full range
+        left_x_coord = -max_volume_;
+        right_x_coord = max_volume_;
+      }
+
+      // Convert value area prices to pixel coordinates using the appropriate x-coordinates
+      ImVec2 val_top_pixel = ImPlot::PlotToPixels(left_x_coord, overlay_val);
+      ImVec2 val_bottom_pixel = ImPlot::PlotToPixels(right_x_coord, overlay_val);
+      ImVec2 vah_top_pixel = ImPlot::PlotToPixels(left_x_coord, overlay_vah);
+      ImVec2 vah_bottom_pixel = ImPlot::PlotToPixels(right_x_coord, overlay_vah);
+
       // Draw semi-transparent rectangle for value area
       // Note: In ImPlot coordinate system, y increases downward, so VAL should have a higher y
       // value than VAH
-      ImVec2 area_top_left = ImVec2(plot_pos.x, vah_pixel.y);
-      ImVec2 area_bottom_right = ImVec2(plot_pos.x + plot_size.x, val_pixel.y);
+      ImVec2 area_top_left = ImVec2(std::min(vah_top_pixel.x, vah_bottom_pixel.x), vah_top_pixel.y);
+      ImVec2 area_bottom_right = ImVec2(std::max(val_top_pixel.x, val_bottom_pixel.x), val_bottom_pixel.y);
 
       // Draw the value area overlay with semi-transparent color
       draw_list->AddRectFilled(area_top_left, area_bottom_right,
-                               IM_COL32(138, 43, 226, 80));  // Semi-transparent purple
+                               IM_COL32(138, 43, 226, 60));  // Semi-transparent purple (reduced opacity for better visibility)
     }
 
     // Render based on profile mode

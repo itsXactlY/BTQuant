@@ -73,6 +73,15 @@ class VolumeProfilePanel : public PanelBase {
                                         bool show_poc_line = true,
                                         int num_buckets = 8);
 
+  // Enhanced method to render step profile directly on candles with improved visualization
+  void render_step_profile_on_candles(ImDrawList* draw_list,
+                                     const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                     const std::vector<double>& x_coords,
+                                     const std::vector<double>& y_coords_high,
+                                     const std::vector<double>& y_coords_low,
+                                     bool show_poc_line = true,
+                                     int num_buckets_per_candle = 8);
+
   // Static utility method to render mini histograms directly without creating a panel instance
   // This is more efficient for use in chart panels where we don't need the full panel functionality
   static void render_mini_histograms_direct(ImDrawList* draw_list,
@@ -83,6 +92,16 @@ class VolumeProfilePanel : public PanelBase {
                                            const std::vector<RenderEngine::TradeData>& trades,
                                            bool show_poc_line = true,
                                            int num_buckets = 8);
+
+  // Static method to render step profile directly on candles with improved visualization
+  static void render_step_profile_on_candles_static(ImDrawList* draw_list,
+                                                  const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                  const std::vector<double>& x_coords,
+                                                  const std::vector<double>& y_coords_high,
+                                                  const std::vector<double>& y_coords_low,
+                                                  const std::vector<RenderEngine::TradeData>& trades,
+                                                  bool show_poc_line = true,
+                                                  int num_buckets_per_candle = 8);
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -118,6 +137,8 @@ class VolumeProfilePanel : public PanelBase {
   void render_controls();
   void render_step_profile(const double* xs, const double* ys, const double* neg_ys, int count,
                            double height);
+  void render_split_profile(const double* xs, const double* buy_vols, const double* sell_vols,
+                           int count, double height);
   void calculate_value_area();
 
   // Subscribe to processor notifications

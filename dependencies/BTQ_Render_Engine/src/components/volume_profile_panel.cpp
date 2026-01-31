@@ -664,6 +664,8 @@ void VolumeProfilePanel::render_volume_bars() {
 
             if (total_vol > 0) {
               // Calculate the right extent of the bar based on the total volume
+              // For left profile, bars extend right from the left edge (x=0)
+              // Use the same max reference as the right profile for consistency
               double bar_right_extent = left_anchor + (total_vol / max_total_volume) * max_total_volume;
 
               // Draw the horizontal bar extending right from the left anchor

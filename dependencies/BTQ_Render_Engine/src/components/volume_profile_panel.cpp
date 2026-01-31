@@ -455,13 +455,13 @@ void VolumeProfilePanel::render_volume_bars() {
           }
         }
 
-        // Expand from POC outward to capture the required volume
+        // Expand from POC outward to capture the required volume, centered around POC
         size_t start_idx = poc_idx_sorted;
         size_t end_idx = poc_idx_sorted;
         double current_volume = visible_levels[poc_idx_sorted].second;
 
         // Expand upward (higher prices) and downward (lower prices) alternately
-        // until we reach the target volume
+        // until we reach the target volume, keeping the expansion balanced around POC
         while (current_volume < target_volume) {
           // Decide whether to expand up or down
           bool expand_up = false;
@@ -482,16 +482,33 @@ void VolumeProfilePanel::render_volume_bars() {
             end_idx++;
             current_volume += visible_levels[end_idx].second;
           } else {
-            // We can expand in both directions - choose the direction with higher volume
+            // We can expand in both directions - try to keep it centered around POC
+            // Calculate potential volumes for each direction
             double vol_up = visible_levels[end_idx + 1].second;
             double vol_down = visible_levels[start_idx - 1].second;
 
-            if (vol_up >= vol_down) {
+            // To center around POC, we should try to balance the expansion
+            // If both sides have similar volume, expand the side that currently has a smaller range
+            size_t current_upper_range = end_idx - poc_idx_sorted;
+            size_t current_lower_range = poc_idx_sorted - start_idx;
+
+            if (current_lower_range < current_upper_range) {
+              // Current lower range is smaller, expand downward to balance
+              start_idx--;
+              current_volume += visible_levels[start_idx].second;
+            } else if (current_upper_range < current_lower_range) {
+              // Current upper range is smaller, expand upward to balance
               end_idx++;
               current_volume += visible_levels[end_idx].second;
             } else {
-              start_idx--;
-              current_volume += visible_levels[start_idx].second;
+              // Ranges are equal, expand toward the side with more volume to capture more volume efficiently
+              if (vol_up >= vol_down) {
+                end_idx++;
+                current_volume += visible_levels[end_idx].second;
+              } else {
+                start_idx--;
+                current_volume += visible_levels[start_idx].second;
+              }
             }
           }
 
@@ -513,12 +530,8 @@ void VolumeProfilePanel::render_volume_bars() {
     if (overlay_vah > 0 && overlay_val > 0 && overlay_vah >= overlay_val) {
       ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-      // Get the plot area dimensions
-      ImVec2 plot_size = ImPlot::GetPlotSize();
-      ImVec2 plot_pos = ImPlot::GetPlotPos();
-
       // For Right/Left profiles, we need to calculate the appropriate x-coordinates based on the profile type
-      double left_x_coord, right_x_coord;
+      double left_x_limit, right_x_limit;
 
       if (profile_mode_ == ProfileMode::Right || profile_mode_ == ProfileMode::Left) {
         // For Right/Left profiles: find the maximum volume to determine the appropriate range
@@ -533,38 +546,32 @@ void VolumeProfilePanel::render_volume_bars() {
         if (max_total_volume <= 0) max_total_volume = 1.0;
 
         if (profile_mode_ == ProfileMode::Right) {
-          // For Right profile: anchor to the right edge (max volume), bars extend left
-          left_x_coord = max_total_volume;  // Right anchor
-          right_x_coord = 0.0;              // Left extent
+          // For Right profile: overlay spans from 0 to max volume (full range of the profile)
+          left_x_limit = 0.0;
+          right_x_limit = max_total_volume;
         } else if (profile_mode_ == ProfileMode::Left) {
-          // For Left profile: anchor to the left edge (0), bars extend right
-          left_x_coord = 0.0;               // Left anchor
-          right_x_coord = max_total_volume; // Right extent
+          // For Left profile: overlay spans from 0 to max volume (full range of the profile)
+          left_x_limit = 0.0;
+          right_x_limit = max_total_volume;
         } else {
           // For other profile modes, use the full range
-          left_x_coord = -max_volume_;
-          right_x_coord = max_volume_;
+          left_x_limit = -max_volume_;
+          right_x_limit = max_volume_;
         }
       } else {
         // For other profile modes, use the full range
-        left_x_coord = -max_volume_;
-        right_x_coord = max_volume_;
+        left_x_limit = -max_volume_;
+        right_x_limit = max_volume_;
       }
 
-      // Convert value area prices to pixel coordinates using the appropriate x-coordinates
-      ImVec2 val_top_pixel = ImPlot::PlotToPixels(left_x_coord, overlay_val);
-      ImVec2 val_bottom_pixel = ImPlot::PlotToPixels(right_x_coord, overlay_val);
-      ImVec2 vah_top_pixel = ImPlot::PlotToPixels(left_x_coord, overlay_vah);
-      ImVec2 vah_bottom_pixel = ImPlot::PlotToPixels(right_x_coord, overlay_vah);
+      // Convert value area prices to pixel coordinates
+      // For the overlay, we want to draw a horizontal band from overlay_val to overlay_vah
+      ImVec2 top_left = ImPlot::PlotToPixels(left_x_limit, overlay_vah);
+      ImVec2 bottom_right = ImPlot::PlotToPixels(right_x_limit, overlay_val);
 
-      // Draw semi-transparent rectangle for value area
-      // Note: In ImPlot coordinate system, y increases downward, so VAL should have a higher y
-      // value than VAH
-      ImVec2 area_top_left = ImVec2(std::min(vah_top_pixel.x, vah_bottom_pixel.x), vah_top_pixel.y);
-      ImVec2 area_bottom_right = ImVec2(std::max(val_top_pixel.x, val_bottom_pixel.x), val_bottom_pixel.y);
-
-      // Draw the value area overlay with semi-transparent color
-      draw_list->AddRectFilled(area_top_left, area_bottom_right,
+      // Draw semi-transparent rectangle for value area - horizontal band spanning the volume range
+      // The overlay should cover the entire horizontal span of the profile within the VAH/VAL range
+      draw_list->AddRectFilled(top_left, bottom_right,
                                IM_COL32(138, 43, 226, 60));  // Semi-transparent purple (reduced opacity for better visibility)
     }
 
@@ -957,7 +964,7 @@ void VolumeProfilePanel::calculate_value_area() {
   // Target volume for value area (based on profile_settings_.vaPercent % of total volume)
   double target_volume = (static_cast<double>(profile_settings_.vaPercent) / 100.0) * total_volume;
 
-  // Find the POC index
+  // Find the POC index (Point of Control - highest volume)
   size_t poc_index = 0;
   double max_total_volume = 0.0;
   for (size_t i = 0; i < volume_profile_.size(); ++i) {
@@ -968,13 +975,13 @@ void VolumeProfilePanel::calculate_value_area() {
     }
   }
 
-  // Expand from POC outward to capture the required volume
+  // Expand from POC outward to capture the required volume, centered around POC
   size_t start_idx = poc_index;
   size_t end_idx = poc_index;
   double current_volume = volume_profile_[poc_index].total_volume;
 
   // Expand upward (higher prices) and downward (lower prices) alternately
-  // until we reach the target volume
+  // until we reach the target volume, keeping the expansion balanced around POC
   while (current_volume < target_volume) {
     // Decide whether to expand up or down
     bool expand_up = false;
@@ -995,16 +1002,33 @@ void VolumeProfilePanel::calculate_value_area() {
       end_idx++;
       current_volume += volume_profile_[end_idx].total_volume;
     } else {
-      // We can expand in both directions - choose the direction with higher volume
+      // We can expand in both directions - try to keep it centered around POC
+      // Calculate potential volumes for each direction
       double vol_up = volume_profile_[end_idx + 1].total_volume;
       double vol_down = volume_profile_[start_idx - 1].total_volume;
 
-      if (vol_up >= vol_down) {
+      // To center around POC, we should try to balance the expansion
+      // If both sides have similar volume, expand the side that currently has a smaller range
+      size_t current_upper_range = end_idx - poc_index;
+      size_t current_lower_range = poc_index - start_idx;
+
+      if (current_lower_range < current_upper_range) {
+        // Current lower range is smaller, expand downward to balance
+        start_idx--;
+        current_volume += volume_profile_[start_idx].total_volume;
+      } else if (current_upper_range < current_lower_range) {
+        // Current upper range is smaller, expand upward to balance
         end_idx++;
         current_volume += volume_profile_[end_idx].total_volume;
       } else {
-        start_idx--;
-        current_volume += volume_profile_[start_idx].total_volume;
+        // Ranges are equal, expand toward the side with more volume to capture more volume efficiently
+        if (vol_up >= vol_down) {
+          end_idx++;
+          current_volume += volume_profile_[end_idx].total_volume;
+        } else {
+          start_idx--;
+          current_volume += volume_profile_[start_idx].total_volume;
+        }
       }
     }
 

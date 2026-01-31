@@ -1617,62 +1617,70 @@ void FootprintPanel::render() {
             // Format the header text to show total volume, net delta, cumulative delta, and POC price
             char header_text[256];
             snprintf(header_text, sizeof(header_text),
-                     "TV:%.0f ND:%+.0f CD:%+.0f POC:%.2f",
+                     "VOL:%.0f Δ:%+.0f ΣΔ:%+.0f POC:%.2f",
                      total_volume, net_delta, cumulative_delta, poc_price);
 
             // Convert time to pixel coordinates for header positioning
             ImVec2 header_pos = ImPlot::PlotToPixels(time_key, y_max + 5.0); // Position header slightly above the highest price
 
-            // Use monospace font for alignment
+            // Try to use monospace font for alignment
             ImFont* mono_font = nullptr;
-            // First, try to find a monospace font by name
+
+            // Look for a monospace font in the loaded fonts
             for (int i = 0; i < ImGui::GetIO().Fonts->Fonts.Size; i++) {
-                const char* font_name = ImGui::GetIO().Fonts->Fonts[i]->GetDebugName();
-                if (font_name && (strstr(font_name, "Mono") != nullptr ||
-                                 strstr(font_name, "Consolas") != nullptr ||
-                                 strstr(font_name, "Courier") != nullptr ||
-                                 strstr(font_name, "Fixed") != nullptr)) {
-                    mono_font = ImGui::GetIO().Fonts->Fonts[i];
+                ImFont* font = ImGui::GetIO().Fonts->Fonts[i];
+                const char* font_name = font->GetDebugName();
+
+                // Check if this looks like a monospace font by name
+                if (font_name && (
+                    strstr(font_name, "Mono") != nullptr ||
+                    strstr(font_name, "Consolas") != nullptr ||
+                    strstr(font_name, "Courier") != nullptr ||
+                    strstr(font_name, "Fixed") != nullptr ||
+                    strstr(font_name, "Code") != nullptr)) {
+                    mono_font = font;
                     break;
                 }
             }
 
-            // If no monospace font found, try to use the default font
+            // Calculate text size for background rectangle (with potential font)
+            ImVec2 text_size;
             if (mono_font) {
                 ImGui::PushFont(mono_font);
+                text_size = ImGui::CalcTextSize(header_text);
+                ImGui::PopFont();
+            } else {
+                text_size = ImGui::CalcTextSize(header_text);
             }
 
-            // Calculate text size for background rectangle
-            ImVec2 text_size = ImGui::CalcTextSize(header_text);
-
-            // Draw background rectangle for header
+            // Draw background rectangle for header with padding
+            float padding_x = 6.0f;
+            float padding_y = 4.0f;
             draw_list->AddRectFilled(
-                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
-                ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
-                IM_COL32(30, 30, 40, 220)); // Dark semi-transparent background with border
+                ImVec2(header_pos.x - text_size.x/2.0f - padding_x, header_pos.y - text_size.y - padding_y),
+                ImVec2(header_pos.x + text_size.x/2.0f + padding_x, header_pos.y + padding_y),
+                IM_COL32(40, 40, 50, 220)); // Dark semi-transparent background
 
             // Draw border around the header
             draw_list->AddRect(
-                ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
-                ImVec2(header_pos.x + text_size.x/2.0f, header_pos.y + 2.0f),
-                IM_COL32(100, 100, 150, 200)); // Border color
+                ImVec2(header_pos.x - text_size.x/2.0f - padding_x, header_pos.y - text_size.y - padding_y),
+                ImVec2(header_pos.x + text_size.x/2.0f + padding_x, header_pos.y + padding_y),
+                IM_COL32(120, 120, 160, 200)); // Border color
 
-            // Draw the header text
+            // Draw the header text with monospace font if available
             if (mono_font) {
-                // When using PushFont/PopFont, AddText uses the current font automatically
+                ImGui::PushFont(mono_font);
                 draw_list->AddText(
-                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
-                    IM_COL32(255, 255, 255, 255), // White text
+                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
+                    IM_COL32(220, 220, 255, 255), // Light blue-white text for better contrast
                     header_text);
-            } else {
-                draw_list->AddText(
-                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y),
-                    IM_COL32(255, 255, 255, 255), // White text
-                    header_text);
-            }
-
-            if (mono_font) {
                 ImGui::PopFont();
+            } else {
+                // If no monospace font found, use regular text but try to load one
+                draw_list->AddText(
+                    ImVec2(header_pos.x - text_size.x/2.0f, header_pos.y - text_size.y - 2.0f),
+                    IM_COL32(220, 220, 255, 255), // Light blue-white text
+                    header_text);
             }
         }
     }

@@ -26,7 +26,7 @@
 
 ### Phase 1b: Volume Calculations [Complexity: M]
 - [x] Add ClusterEngine::processTrade method that atomically updates ClusterCell counters for given price level and time bucket in `dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp` [Complexity: M]
-- [ ] Implement VolumeCalculator utility class with static methods: calculateDelta, calculateDeltaPercent, calculateBuyVolumePercent, calculateSellVolumePercent, calculateAverageSize, calculateAverageBuySize, calculateAverageSellSize, calculateMaxOneTradeVolume, calculateFilteredVolume in `dependencies/BTQ_Render_Engine/src/analytics/volume_calculator.cpp` [Complexity: M]
+- [x] Implement VolumeCalculator utility class with static methods: calculateDelta, calculateDeltaPercent, calculateBuyVolumePercent, calculateSellVolumePercent, calculateAverageSize, calculateAverageBuySize, calculateAverageSellSize, calculateMaxOneTradeVolume, calculateFilteredVolume in `dependencies/BTQ_Render_Engine/src/analytics/volume_calculator.cpp` [Complexity: M]
 - [x] Add CumulativeDeltaTracker class that maintains running sum of delta across time bars with reset functionality for session boundaries in `dependencies/BTQ_Render_Engine/src/analytics/cumulative_delta_tracker.cpp` [Complexity: M]
 
 ---

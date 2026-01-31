@@ -409,93 +409,12 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
   double total_vol = cell.bid_volume + cell.ask_volume;
   double delta_percent = total_vol > 0.0 ? (cell.delta / total_vol) * 100.0 : 0.0;
 
-  // Format the tooltip text with all required information
-  // Include information about the active analysis type
-  std::string analysis_type_label = "";
-  double analysis_value = 0.0;
-
-  switch (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_)) {
-    case Data::VolumeAnalysisType::Trades:
-      analysis_type_label = "Trades";
-      analysis_value = static_cast<double>(cell.trade_count);
-      break;
-    case Data::VolumeAnalysisType::BuyTrades:
-      analysis_type_label = "Buy Trades";
-      analysis_value = cell.bid_volume; // Already set to buy trades count in main loop
-      break;
-    case Data::VolumeAnalysisType::SellTrades:
-      analysis_type_label = "Sell Trades";
-      analysis_value = cell.ask_volume; // Already set to sell trades count in main loop
-      break;
-    case Data::VolumeAnalysisType::Volume:
-      analysis_type_label = "Volume";
-      analysis_value = cell.bid_volume + cell.ask_volume;
-      break;
-    case Data::VolumeAnalysisType::BuyVolume:
-      analysis_type_label = "Buy Volume";
-      analysis_value = cell.bid_volume;
-      break;
-    case Data::VolumeAnalysisType::SellVolume:
-      analysis_type_label = "Sell Volume";
-      analysis_value = cell.ask_volume;
-      break;
-    case Data::VolumeAnalysisType::BuySellVolume:
-      analysis_type_label = "Buy-Sell Volume";
-      analysis_value = cell.delta; // Already set to buy-sell volume in main loop
-      break;
-    case Data::VolumeAnalysisType::Delta:
-      analysis_type_label = "Delta";
-      analysis_value = cell.delta;
-      break;
-    case Data::VolumeAnalysisType::DeltaPercent:
-      analysis_type_label = "Delta %";
-      analysis_value = cell.delta; // Already set to percentage in main loop
-      break;
-    case Data::VolumeAnalysisType::BuyVolumePercent:
-      analysis_type_label = "Buy Vol %";
-      analysis_value = cell.delta; // Already set to percentage in main loop
-      break;
-    case Data::VolumeAnalysisType::SellVolumePercent:
-      analysis_type_label = "Sell Vol %";
-      analysis_value = cell.delta; // Already set to percentage in main loop
-      break;
-    case Data::VolumeAnalysisType::CumulativeDelta:
-      analysis_type_label = "Cumulative Delta";
-      analysis_value = cell.delta;
-      break;
-    case Data::VolumeAnalysisType::AverageSize:
-      analysis_type_label = "Avg Size";
-      analysis_value = cell.delta; // Already set to average size in main loop
-      break;
-    case Data::VolumeAnalysisType::AverageBuySize:
-      analysis_type_label = "Avg Buy Size";
-      analysis_value = cell.delta; // Already set to average buy size in main loop
-      break;
-    case Data::VolumeAnalysisType::AverageSellSize:
-      analysis_type_label = "Avg Sell Size";
-      analysis_value = cell.delta; // Already set to average sell size in main loop
-      break;
-    case Data::VolumeAnalysisType::MaxOneTradeVolume:
-      analysis_type_label = "Max Trade Vol";
-      analysis_value = cell.delta; // Already set to max trade volume in main loop
-      break;
-    case Data::VolumeAnalysisType::FilteredVolume:
-      analysis_type_label = "Filtered Volume";
-      analysis_value = cell.bid_volume + cell.ask_volume;
-      break;
-    default:
-      analysis_type_label = "Volume";
-      analysis_value = cell.bid_volume + cell.ask_volume;
-      break;
-  }
-
   // Convert nanosecond timestamps to readable format (seconds with decimals)
   double start_time_sec = static_cast<double>(cell.start_time_ns) / 1'000'000'000.0;
   double end_time_sec = static_cast<double>(cell.end_time_ns) / 1'000'000'000.0;
 
-  // Use exact values from the extended FootprintCell structure
+  // Format the tooltip text with all required information in a clean, organized way
   std::string tooltip = std::format(
-    "{}: {:.2f}\n"
     "Buy Volume: {:.2f}\n"
     "Sell Volume: {:.2f}\n"
     "Delta: {:.2f}\n"
@@ -504,17 +423,15 @@ std::string FootprintPanel::getCellTooltip(const FootprintCell& cell) const {
     "Sell Trades: {}\n"
     "Max Single Trade: {:.2f}\n"
     "Timestamp Range: {:.3f}-{:.3f}",
-    analysis_type_label,
-    analysis_value,
-    cell.bid_volume,
-    cell.ask_volume,
-    cell.delta,
-    delta_percent,
-    cell.buy_trade_count,
-    cell.sell_trade_count,
-    cell.max_single_trade_volume,
-    start_time_sec, // Start timestamp in seconds
-    end_time_sec   // End timestamp in seconds
+    cell.bid_volume,           // exact buy volume
+    cell.ask_volume,           // exact sell volume
+    cell.delta,                // delta
+    delta_percent,             // delta percent
+    cell.buy_trade_count,      // number of buy trades
+    cell.sell_trade_count,     // number of sell trades
+    cell.max_single_trade_volume, // max single trade
+    start_time_sec,            // start timestamp
+    end_time_sec               // end timestamp
   );
 
   return tooltip;
@@ -1698,9 +1615,9 @@ void FootprintPanel::render() {
     double cluster_total_volume = static_cast<double>(c.bidVolume + c.askVolume);
     total_volume += cluster_total_volume;
 
-    // Update max single trade volume if this cluster has a larger volume
-    if (cluster_total_volume > max_single_trade_volume) {
-      max_single_trade_volume = cluster_total_volume;
+    // Update max single trade volume from the cluster's max single trade volume
+    if (static_cast<double>(c.maxSingleTradeVolume) > max_single_trade_volume) {
+      max_single_trade_volume = static_cast<double>(c.maxSingleTradeVolume);
     }
   }
 
@@ -1712,17 +1629,16 @@ void FootprintPanel::render() {
     // Create a separator line above the footer
     ImGui::Separator();
 
-    // Temporarily reduce font size for the footer using text scaling
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 3.0f));
+    // Temporarily reduce font size for the footer using smaller padding
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
 
-    // Use smaller font by pushing text wrap position to make text appear smaller
-    // Alternative approach: use ImGui::PushFont if a smaller font is available
-    ImGui::Text("Trades: %d | Avg Size: %.2f | Max Trade: %.2f",
+    // Render the footer with the requested information
+    ImGui::Text("Trades: %d | Avg Size: %.2f | Max Single Trade: %.2f",
                 total_trades, avg_trade_size, max_single_trade_volume);
 
     // Restore the original scale
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(2); // Pop ItemSpacing and FramePadding
   }
 
   // Enhanced Debug Overlay

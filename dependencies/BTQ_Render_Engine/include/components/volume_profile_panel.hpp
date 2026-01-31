@@ -63,6 +63,16 @@ class VolumeProfilePanel : public PanelBase {
                                       bool show_poc_line = true,
                                       int num_buckets = 8);
 
+  // Method to render step profile histograms specifically for candlestick volume distribution
+  // This is the main method for implementing the Step Profile rendering feature
+  void render_candle_volume_distribution(ImDrawList* draw_list,
+                                        const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                        const std::vector<double>& x_coords,
+                                        const std::vector<double>& y_coords_high,
+                                        const std::vector<double>& y_coords_low,
+                                        bool show_poc_line = true,
+                                        int num_buckets = 8);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

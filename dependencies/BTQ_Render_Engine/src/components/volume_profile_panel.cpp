@@ -703,17 +703,27 @@ void VolumeProfilePanel::render_mini_histograms_on_candles(
         ImU32 color;
         if (j == poc_bucket_idx) {
           // Highlight POC bucket with yellow
-          color = IM_COL32(255, 255, 0, 200);  // Yellow for POC
-        } else if (j < num_buckets / 2) {
-          // Lower half - potentially more selling pressure
-          color = IM_COL32(255, 100, 100, 150);  // Reddish for sells
+          color = IM_COL32(255, 255, 0, 220);  // Brighter yellow for POC
         } else {
-          // Upper half - potentially more buying pressure
-          color = IM_COL32(100, 255, 100, 150);  // Greenish for buys
+          // Use gradient colors based on volume intensity and position in the candle
+          float volume_ratio = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
+          float position_ratio = static_cast<float>(j) / static_cast<float>(num_buckets - 1);
+
+          // Create a color gradient based on volume intensity and position
+          if (position_ratio < 0.5f) {
+            // Lower half - red for selling pressure, with intensity based on volume
+            color = IM_COL32(255, static_cast<int>(100 * volume_ratio), static_cast<int>(100 * volume_ratio), 150);
+          } else {
+            // Upper half - green for buying pressure, with intensity based on volume
+            color = IM_COL32(static_cast<int>(100 * volume_ratio), 255, static_cast<int>(100 * volume_ratio), 150);
+          }
         }
 
-        // Draw the mini histogram bar
+        // Draw the mini histogram bar with a slight outline for better visibility
         draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
+
+        // Add a subtle border to make individual bars more distinguishable
+        draw_list->AddRect(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), IM_COL32(0, 0, 0, 50));
       }
     }
 
@@ -830,19 +840,25 @@ void VolumeProfilePanel::render_step_profile_histograms(ImDrawList* draw_list,
           // Highlight POC bucket with yellow
           color = IM_COL32(255, 255, 0, 220);  // Brighter yellow for POC
         } else {
-          // Use gradient colors based on position in the candle
+          // Use gradient colors based on volume intensity and position in the candle
+          float volume_ratio = static_cast<float>(bucket_volumes[j]) / static_cast<float>(max_vol_in_candle);
           float position_ratio = static_cast<float>(j) / static_cast<float>(num_buckets - 1);
+
+          // Create a color gradient based on volume intensity and position
           if (position_ratio < 0.5f) {
-            // Lower half - red for selling pressure
-            color = IM_COL32(255, 100, 100, 150);
+            // Lower half - red for selling pressure, with intensity based on volume
+            color = IM_COL32(255, static_cast<int>(100 * volume_ratio), static_cast<int>(100 * volume_ratio), 150);
           } else {
-            // Upper half - green for buying pressure
-            color = IM_COL32(100, 255, 100, 150);
+            // Upper half - green for buying pressure, with intensity based on volume
+            color = IM_COL32(static_cast<int>(100 * volume_ratio), 255, static_cast<int>(100 * volume_ratio), 150);
           }
         }
 
-        // Draw the step profile histogram bar
+        // Draw the step profile histogram bar with a slight outline for better visibility
         draw_list->AddRectFilled(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), color);
+
+        // Add a subtle border to make individual bars more distinguishable
+        draw_list->AddRect(ImVec2(x_left, y_top), ImVec2(x_right, y_bottom), IM_COL32(0, 0, 0, 50));
       }
     }
 
@@ -863,6 +879,19 @@ void VolumeProfilePanel::render_step_profile_histograms(ImDrawList* draw_list,
       );
     }
   }
+}
+
+void VolumeProfilePanel::render_candle_volume_distribution(ImDrawList* draw_list,
+                                                        const std::vector<RenderEngine::OHLCVCandle>& candles,
+                                                        const std::vector<double>& x_coords,
+                                                        const std::vector<double>& y_coords_high,
+                                                        const std::vector<double>& y_coords_low,
+                                                        bool show_poc_line,
+                                                        int num_buckets) {
+  // This method implements the Step Profile rendering: draw mini histogram overlay
+  // on each candlestick bar showing volume distribution for that bar's price range
+  render_step_profile_histograms(draw_list, candles, x_coords, y_coords_high, y_coords_low,
+                                show_poc_line, num_buckets);
 }
 
 }  // namespace BTQuant

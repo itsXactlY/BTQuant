@@ -100,12 +100,16 @@ FootprintPanel::FootprintPanel(
       volume_data_type_(Data::VolumeDataType::Delta),
       time_aggregation_type_(Data::TimeAggregationType::T_1MIN),
       volume_based_n_contracts_(1000),
-      tick_based_n_ticks_(100) {
-    // Initialize renderer with the current time aggregation settings
+      tick_based_n_ticks_(100),
+      price_aggregation_type_(Data::PriceAggregationType::P_1TICK),
+      custom_price_aggregation_value_(0.1) {
+    // Initialize renderer with the current aggregation settings
     if (renderer_) {
       renderer_->setTimeAggregationType(time_aggregation_type_);
       renderer_->setVolumeBasedNContracts(volume_based_n_contracts_);
       renderer_->setTickBasedNTicks(tick_based_n_ticks_);
+      renderer_->setPriceAggregationType(price_aggregation_type_);
+      renderer_->setCustomPriceAggregationValue(custom_price_aggregation_value_);
     }
 }
 

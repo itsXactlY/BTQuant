@@ -9,6 +9,23 @@
 
 namespace BTQuant {
 
+// Enum for profile mode
+enum class ProfileMode {
+    Step,
+    Right,
+    Left,
+    Custom
+};
+
+// Struct for profile settings
+struct ProfileSettings {
+    double vaPercent = 70.0;        // Value Area percentage
+    int tickStep = 1;               // Tick step size
+    bool showPOC = true;            // Show Point of Control
+    bool showValueArea = true;      // Show Value Area
+    int colorScheme = 0;            // Color scheme index
+};
+
 /**
  * VolumeProfilePanel - Volume at Price display
  *

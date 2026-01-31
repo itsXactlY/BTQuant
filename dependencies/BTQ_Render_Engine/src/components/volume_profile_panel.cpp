@@ -648,54 +648,77 @@ void VolumeProfilePanel::render_volume_bars() {
           }
         }
 
-        // Calculate the maximum volume for scaling (either aggregated or global max)
+        // Calculate the maximum volume for scaling - use the aggregated max to ensure proper display
         double max_vol = std::max(aggregated_buy_volume, aggregated_sell_volume);
-        if (max_vol <= 0) max_vol = max_volume_;  // Fallback to global max if no visible trades
+        if (max_vol <= 0) max_vol = max_volume_;  // Fallback to global max if aggregated volumes are zero
+        if (max_vol <= 0) max_vol = 1.0;  // Ultimate fallback to 1.0 if no volume data
 
-        // Define positions for the aggregated bars
+        // Define positions for the aggregated bars - anchored to the left edge of the plot
         double visible_center_price = (plot_limits.Y.Min + plot_limits.Y.Max) / 2.0;
-        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.4f;  // Use 40% of visible height for each bar
+        float bar_height_total = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.25f;  // Use 25% of visible height for each bar
+        float bar_spacing = (plot_limits.Y.Max - plot_limits.Y.Min) * 0.05f;      // Small spacing between bars
+
+        // Calculate the leftmost x-coordinate in plot space (this will be our anchor)
+        // In horizontal bar charts, volume is on X-axis and price is on Y-axis
+        // So we want to anchor to the minimum X value (left edge of chart)
+        double left_anchor = 0.0;  // Anchor to the left edge (0)
 
         // Draw aggregated buy bar (green) extending right from left edge
         if (aggregated_buy_volume > 0) {
           // Position at upper portion of visible range
-          double buy_bar_price = visible_center_price - bar_height_total * 0.75;  // Offset to separate from sell bar
+          double buy_bar_price = visible_center_price - (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from sell bar
 
-          // Convert plot coordinates to pixel coordinates
-          ImVec2 left_edge = ImPlot::PlotToPixels(0, buy_bar_price);  // Start from left edge (0)
-          ImVec2 right_edge = ImPlot::PlotToPixels(aggregated_buy_volume, buy_bar_price);  // Extend right
+          // Calculate the right extent of the bar based on the aggregated volume
+          double buy_bar_right_extent = left_anchor + (aggregated_buy_volume / max_vol) * max_vol;
 
-          // Calculate bar dimensions
-          float bar_top = left_edge.y - bar_height_total / 2.0;
-          float bar_bottom = left_edge.y + bar_height_total / 2.0;
-          float bar_left = left_edge.x;    // Left edge of chart
-          float bar_right = right_edge.x;  // Right extent of the bar
+          // Draw the aggregated buy bar extending right from the left edge
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+          // Convert plot coordinates to pixel coordinates for the bar
+          ImVec2 left_edge_px = ImPlot::PlotToPixels(left_anchor, buy_bar_price);
+          ImVec2 right_edge_px = ImPlot::PlotToPixels(buy_bar_right_extent, buy_bar_price);
+
+          float bar_top = left_edge_px.y - bar_height_total / 2.0f;
+          float bar_bottom = left_edge_px.y + bar_height_total / 2.0f;
+          float bar_left = left_edge_px.x;   // Left edge of chart
+          float bar_right = right_edge_px.x; // Right extent of the bar
 
           // Draw the aggregated buy bar
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(26, 204, 26, 179));  // Green with transparency
+
+          // Add border for better visibility
+          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
         }
 
         // Draw aggregated sell bar (red) extending right from left edge
         if (aggregated_sell_volume > 0) {
           // Position at lower portion of visible range
-          double sell_bar_price = visible_center_price + bar_height_total * 0.75;  // Offset to separate from buy bar
+          double sell_bar_price = visible_center_price + (bar_height_total + bar_spacing) * 0.5;  // Offset to separate from buy bar
 
-          // Convert plot coordinates to pixel coordinates
-          ImVec2 left_edge = ImPlot::PlotToPixels(0, sell_bar_price);  // Start from left edge (0)
-          ImVec2 right_edge = ImPlot::PlotToPixels(aggregated_sell_volume, sell_bar_price);  // Extend right
+          // Calculate the right extent of the bar based on the aggregated volume
+          double sell_bar_right_extent = left_anchor + (aggregated_sell_volume / max_vol) * max_vol;
 
-          // Calculate bar dimensions
-          float bar_top = left_edge.y - bar_height_total / 2.0;
-          float bar_bottom = left_edge.y + bar_height_total / 2.0;
-          float bar_left = left_edge.x;    // Left edge of chart
-          float bar_right = right_edge.x;  // Right extent of the bar
+          // Draw the aggregated sell bar extending right from the left edge
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+          // Convert plot coordinates to pixel coordinates for the bar
+          ImVec2 left_edge_px = ImPlot::PlotToPixels(left_anchor, sell_bar_price);
+          ImVec2 right_edge_px = ImPlot::PlotToPixels(sell_bar_right_extent, sell_bar_price);
+
+          float bar_top = left_edge_px.y - bar_height_total / 2.0f;
+          float bar_bottom = left_edge_px.y + bar_height_total / 2.0f;
+          float bar_left = left_edge_px.x;   // Left edge of chart
+          float bar_right = right_edge_px.x; // Right extent of the bar
 
           // Draw the aggregated sell bar
-          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
           draw_list->AddRectFilled(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
                                    IM_COL32(204, 26, 26, 179));  // Red with transparency
+
+          // Add border for better visibility
+          draw_list->AddRect(ImVec2(bar_left, bar_top), ImVec2(bar_right, bar_bottom),
+                             IM_COL32(0, 0, 0, 100), 0.0f, 0, 1.0f);
         }
 
         // Draw labels for the aggregated bars
@@ -705,20 +728,20 @@ void VolumeProfilePanel::render_volume_bars() {
           // Draw text labels
           char buy_label[64];
           char sell_label[64];
-          snprintf(buy_label, sizeof(buy_label), "%.2f", aggregated_buy_volume);
-          snprintf(sell_label, sizeof(sell_label), "%.2f", aggregated_sell_volume);
+          snprintf(buy_label, sizeof(buy_label), "B: %.2f", aggregated_buy_volume);
+          snprintf(sell_label, sizeof(sell_label), "S: %.2f", aggregated_sell_volume);
 
           // Position labels appropriately
           if (aggregated_buy_volume > 0) {
-            ImVec2 label_pos = ImPlot::PlotToPixels(aggregated_buy_volume/2,
-                                                   visible_center_price - bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(label_pos.x, label_pos.y - 10), IM_COL32(255, 255, 255, 255), buy_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(((aggregated_buy_volume / max_vol) * max_vol)/2,
+                                                    visible_center_price - (bar_height_total + bar_spacing) * 0.5);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), buy_label);
           }
 
           if (aggregated_sell_volume > 0) {
-            ImVec2 label_pos = ImPlot::PlotToPixels(aggregated_sell_volume/2,
-                                                   visible_center_price + bar_height_total * 0.75);
-            draw_list->AddText(ImVec2(label_pos.x, label_pos.y - 10), IM_COL32(255, 255, 255, 255), sell_label);
+            ImVec2 center_pos = ImPlot::PlotToPixels(((aggregated_sell_volume / max_vol) * max_vol)/2,
+                                                    visible_center_price + (bar_height_total + bar_spacing) * 0.5);
+            draw_list->AddText(ImVec2(center_pos.x, center_pos.y - 8), IM_COL32(255, 255, 255, 255), sell_label);
           }
         }
         break;

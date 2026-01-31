@@ -627,8 +627,8 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
   }
 
   // Draw horizontal yellow POC line at the price level with highest volume
-  // Use the globally calculated POC price for consistency
-  if (poc_price_ > 0 && max_volume_ > 0) {
+  // Use the locally calculated POC for consistency with highlighted bar
+  if (poc_index >= 0 && max_total_volume > 0) {
     // Calculate appropriate min/max x values for the line
     // Find the actual min/max volumes in the dataset to determine line length
     double min_vol = 0.0, max_vol = 0.0;
@@ -637,12 +637,15 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
       max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
     }
 
-    // Convert POC price to pixel coordinates using the globally calculated poc_price_
-    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, poc_price_);
-    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, poc_price_);
+    // Use the locally calculated POC price (xs[poc_index]) instead of global poc_price_
+    ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, xs[poc_index]);
+    ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, xs[poc_index]);
 
     // Draw the horizontal POC line
     draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 2.0f);
+
+    // Also update the global POC price to reflect the current calculation for display purposes
+    poc_price_ = xs[poc_index];
   }
 }
 

@@ -1026,17 +1026,23 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
       max_vol = std::max(max_vol, std::max(ys[i], neg_ys[i]));
     }
 
+    // Ensure we have valid min/max values for the line
+    if (max_vol <= min_vol) {
+      max_vol = max_volume_;
+      min_vol = -max_volume_;
+    }
+
     // Use the locally calculated POC price (xs[poc_index]) instead of global poc_price_
     ImVec2 poc_start = ImPlot::PlotToPixels(min_vol, xs[poc_index]);
     ImVec2 poc_end = ImPlot::PlotToPixels(max_vol, xs[poc_index]);
 
     // Draw the horizontal POC line - make it more prominent with consistent styling
-    draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 255, 0, 255), 2.5f);  // Increased thickness
+    // Use the same color as in other profile modes for consistency
+    draw_list->AddLine(poc_start, poc_end, IM_COL32(255, 204, 0, 255), 2.0f);  // Yellow with consistent thickness
 
-    // Add a subtle glow effect by drawing the line twice with slight offset
-    ImVec2 poc_start_offset = ImVec2(poc_start.x, poc_start.y + 1);
-    ImVec2 poc_end_offset = ImVec2(poc_end.x, poc_end.y + 1);
-    draw_list->AddLine(poc_start_offset, poc_end_offset, IM_COL32(255, 200, 0, 150), 2.5f);
+    // Add a subtle outline for better visibility on different backgrounds
+    draw_list->AddLine(ImVec2(poc_start.x - 1, poc_start.y), ImVec2(poc_end.x - 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
+    draw_list->AddLine(ImVec2(poc_start.x + 1, poc_start.y), ImVec2(poc_end.x + 1, poc_end.y), IM_COL32(0, 0, 0, 150), 2.0f); // Black shadow
 
     // Also update the global POC price to reflect the current calculation for display purposes
     poc_price_ = xs[poc_index];

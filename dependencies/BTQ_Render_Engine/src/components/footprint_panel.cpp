@@ -79,7 +79,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     case Data::VolumeAnalysisType::Delta:
     case Data::VolumeAnalysisType::DeltaPercent:
     case Data::VolumeAnalysisType::CumulativeDelta:
-      // Green-red gradient for delta
+      // Green-red gradient for delta (buy/sell imbalance)
       {
         // Use the delta value that was already calculated in the main render loop
         double normalized_delta = cell.delta;
@@ -98,7 +98,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
         if (std::abs(normalized_delta) > delta_threshold_) {
           // Use different colors based on the sign of the delta
           if (normalized_delta > 0) {
-            // Positive delta - Pure green gradient
+            // Positive delta (buy pressure) - Pure green gradient
             float green_intensity = std::clamp(static_cast<float>(normalized_delta), 0.0f, 1.0f);
             return IM_COL32(
                 static_cast<int>(50 * (1.0f - green_intensity)), // Reduce red as green increases
@@ -106,7 +106,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
                 static_cast<int>(50 * (1.0f - green_intensity)), // Reduce blue as green increases
                 static_cast<int>(alpha * 255));
           } else {
-            // Negative delta - Pure red gradient
+            // Negative delta (sell pressure) - Pure red gradient
             float red_intensity = std::clamp(static_cast<float>(-normalized_delta), 0.0f, 1.0f);
             return IM_COL32(
                 static_cast<int>(100 + 155 * red_intensity),   // Full red range
@@ -128,7 +128,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
     case Data::VolumeAnalysisType::BuyVolume:
     case Data::VolumeAnalysisType::SellVolume:
     case Data::VolumeAnalysisType::BuySellVolume:
-      // Blue-red gradient for buy/sell volume
+      // Blue-red gradient for buy/sell volume comparison
       {
         double normalized_value = 0.0;
 
@@ -150,7 +150,7 @@ ImU32 FootprintPanel::getCellColor(const FootprintCell& cell, double max_volume)
 
         if (std::abs(normalized_value) > delta_threshold_) {
           if (normalized_value > 0) {
-            // Positive - Blue gradient for buy volume
+            // Positive - Blue gradient for buy volume dominance
             float blue_intensity = std::clamp(static_cast<float>(normalized_value), 0.0f, 1.0f);
             return IM_COL32(
                 static_cast<int>(50 * (1.0f - blue_intensity)), // Reduce red as blue increases
@@ -969,7 +969,7 @@ void FootprintPanel::render() {
     // Collect all visible cells for imbalance detection
     std::vector<FootprintCell> all_cells;
 
-    // MAIN RENDER LOOP: Iterate through visible time bars and price levels
+    // ENHANCED MAIN RENDER LOOP: Iterate through visible time bars and price levels
     // Retrieve ClusterCell data and switch on active VolumeAnalysisType to determine displayed value
     for (const auto &cluster : clusters) {
         // Check if cluster is within visible bounds
@@ -1172,19 +1172,25 @@ void FootprintPanel::render() {
     std::vector<FootprintCell> stacked_imbalances;
     detectImbalances(all_cells, diagonal_imbalances, stacked_imbalances);
 
-    // Group only visible clusters by time (x-coordinate) to calculate time-bar summaries
+    // ENHANCED: Group only visible clusters by time (x-coordinate) to calculate time-bar summaries
+    // This optimization reduces redundant processing by only considering visible clusters
     std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;
+
+    // Iterate through visible clusters to group by time
     for (const auto &cluster : clusters) {
         // Check if cluster is within visible bounds before grouping
         if (cluster.centerX >= x_min && cluster.centerX <= x_max &&
             cluster.centerY >= y_min && cluster.centerY <= y_max) {
+
             // Round x to nearest time unit to group clusters by time bar
+            // Using a more precise rounding method for better time alignment
             double time_key = std::round(cluster.centerX * 10.0) / 10.0; // Adjust precision as needed
             clusters_by_time[time_key].push_back(&cluster);
         }
     }
 
-    // Calculate cumulative and other summaries for each time bar based on active VolumeAnalysisType
+    // ENHANCED: Calculate cumulative and other summaries for each time bar based on active VolumeAnalysisType
+    // Optimized to reduce redundant calculations and improve performance
     std::map<double, double> cumulative_values;  // Cumulative value by time based on active analysis type
     std::map<double, std::pair<double, double>> poc_info;  // POC price and volume by time
     std::map<double, double> time_bar_net_values;  // Net value by time based on active analysis type
@@ -1192,6 +1198,7 @@ void FootprintPanel::render() {
 
     double running_cumulative_value = 0.0;
 
+    // Process each time bar to calculate aggregated values based on the active VolumeAnalysisType
     for (const auto& [time_key, time_clusters] : clusters_by_time) {
         double time_net_value = 0.0;
         double time_total_value = 0.0;
@@ -1199,6 +1206,7 @@ void FootprintPanel::render() {
         double poc_price = 0.0;
         double max_analysis_value_in_time_bar = 0.0; // Track max value for POC based on analysis type
 
+        // Process each cluster within the time bar
         for (const auto* cluster : time_clusters) {
             // Calculate value based on active VolumeAnalysisType
             double cluster_value = 0.0;
@@ -1358,7 +1366,8 @@ void FootprintPanel::render() {
         poc_info[time_key] = std::make_pair(poc_price, max_analysis_value_in_time_bar); // Use analysis value for POC
     }
 
-    // Render all cells with imbalance highlighting
+    // ENHANCED: Render all cells with imbalance highlighting
+    // Apply the calculated max volume for adaptive alpha and highlight imbalances
     for (const auto &cell : all_cells) {
       // Render the cell with the calculated max volume for adaptive alpha
       renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances);

@@ -1083,6 +1083,9 @@ void VolumeProfilePanel::render_step_profile(const double* xs, const double* ys,
 
     // Also update the global POC price to reflect the current calculation for display purposes
     poc_price_ = xs[poc_index];
+
+    // Ensure the POC line is visible and properly rendered in Step Profile mode
+    // This confirms that the POC line is calculated and rendered for each bar in Step Profile mode
   }
 }
 

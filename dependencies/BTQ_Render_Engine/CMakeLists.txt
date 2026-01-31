@@ -129,6 +129,7 @@ set(DASHBOARD_SOURCES
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp
+    src/analytics/volume_calculator.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp

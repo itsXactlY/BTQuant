@@ -1,3 +1,4 @@
+
 # BTQ Render Engine - Complete Quantower Clone (Parallel Development Version)
 
 **Objective:** Pixel-perfect clone of Quantower trading terminal with ALL features  
@@ -12,7 +13,7 @@
 - Dependencies between modules are clearly marked
 - Estimated complexity: S (Small, 1-2 days), M (Medium, 3-5 days), L (Large, 1+ weeks)
 - Prerequisites must be completed before starting dependent tasks
-
+- Your workdir is exlusivly dependencies/BTQ_Render_Engine/
 - Fully autonomous handle merge conflicts in the most harmonic way
 ---
 
@@ -49,13 +50,13 @@
 ### Phase 2c: UI & UX [Complexity: S]
 - [x] Render bar header summary above each cluster bar showing: total volume, net delta, cumulative delta, POC price with monospace font alignment in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 - [x] Render bar footer showing: number of trades, average trade size, max single trade with smaller font below cluster grid in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
-- [ ] Implement cell tooltip on hover displaying: exact buy volume, exact sell volume, delta, delta percent, number of buy trades, number of sell trades, max single trade, timestamp range in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
-- [ ] Implement number formatting options: raw numbers, K suffix (thousands), M suffix (millions), scientific notation, custom decimal places in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Implement cell tooltip on hover displaying: exact buy volume, exact sell volume, delta, delta percent, number of buy trades, number of sell trades, max single trade, timestamp range in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
+- [x] Implement number formatting options: raw numbers, K suffix (thousands), M suffix (millions), scientific notation, custom decimal places in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: S]
 
 ### Phase 2d: Configuration Options [Complexity: M]
-- [ ] Implement time aggregation selector dropdown: 1min, 5min, 15min, 30min, 1hour, 2hour, 4hour, volume-based (every N contracts), tick-based (every N ticks) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Implement time aggregation selector dropdown: 1min, 5min, 15min, 30min, 1hour, 2hour, 4hour, volume-based (every N contracts), tick-based (every N ticks) in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [x] Add price aggregation selector: 1 tick, 5 ticks, 10 ticks, 0.1%, 0.5%, 1%, custom value in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
-- [ ] Implement filtered volume threshold slider: only display cells where volume exceeds threshold, show greyed out cells for filtered values in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
+- [x] Implement filtered volume threshold slider: only display cells where volume exceeds threshold, show greyed out cells for filtered values in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Add split volume display mode showing buy volume on left half of cell, sell volume on right half with divider line in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Implement cell size auto-adjustment based on zoom level: expand cells when zoomed in to show more detail, collapse to squares when zoomed out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]
 - [ ] Implement Level of Detail (LOD) rendering: skip text rendering when cell height < 12px, show only heatmap colors at extreme zoom out in `dependencies/BTQ_Render_Engine/src/components/footprint_panel.cpp` [Complexity: M]

@@ -538,15 +538,15 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
   if (zoom_factor >= 1.0) {
     // When zoomed in: expand cells significantly to show more detail
     // Use a power function to make expansion more pronounced at higher zoom levels
-    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.5);
+    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.7);
   } else {
     // When zoomed out: shrink cells dramatically to show more of them, approaching squares
     // Use a power function to make contraction more pronounced at lower zoom levels
-    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.2);
+    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.5);
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
-  adjusted_padding = std::max(0.05, std::min(0.48, adjusted_padding));
+  adjusted_padding = std::max(0.01, std::min(0.48, adjusted_padding));
 
   double x1 = cell.x - cell.width * adjusted_padding;
   double x2 = cell.x + cell.width * adjusted_padding;
@@ -732,15 +732,15 @@ void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* d
   if (zoom_factor >= 1.0) {
     // When zoomed in: expand cells significantly to show more detail
     // Use a power function to make expansion more pronounced at higher zoom levels
-    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.5);
+    adjusted_padding = base_padding / std::pow(zoom_factor * zoom_sensitivity_, 0.7);
   } else {
     // When zoomed out: shrink cells dramatically to show more of them, approaching squares
     // Use a power function to make contraction more pronounced at lower zoom levels
-    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.2);
+    adjusted_padding = base_padding * std::pow(zoom_factor * zoom_sensitivity_, 1.5);
   }
 
   // Ensure padding stays within reasonable bounds to maintain visibility
-  adjusted_padding = std::max(0.05, std::min(0.48, adjusted_padding));
+  adjusted_padding = std::max(0.01, std::min(0.48, adjusted_padding));
 
   double x1 = cell.x - cell.width * adjusted_padding;
   double x2 = cell.x + cell.width * adjusted_padding;
@@ -1069,7 +1069,7 @@ void FootprintPanel::render() {
   ImGui::SliderScalar("Vol Thresh", ImGuiDataType_Double, &volume_threshold_, &min_thresh,
                       &max_thresh, "%.0f");
 
-  // Zoom sensitivity control
+  // Zoom sensitivity control - affects how much cell sizes change with zoom level
   ImGui::SameLine();
   ImGui::SetNextItemWidth(120);
   ImGui::SliderFloat("Zoom Sens", &zoom_sensitivity_, 0.1f, 3.0f, "%.1f");

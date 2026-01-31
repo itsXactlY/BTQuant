@@ -105,6 +105,10 @@ public:
   void setVolumeThreshold(double threshold) { volume_threshold_ = threshold; }
   double getVolumeThreshold() const { return volume_threshold_; }
 
+  // Volume filter enable/disable
+  void setEnableVolumeFilter(bool enable) { enable_volume_filter_ = enable; }
+  bool getEnableVolumeFilter() const { return enable_volume_filter_; }
+
 private:
   RenderEngine::MarketMicrostructureRenderer *renderer_;
   uint32_t symbol_id_ = 0;
@@ -122,6 +126,7 @@ private:
   // Visualization Options
   bool show_volume_labels_ = true;
   bool show_delta_indicator_ = true;
+  bool enable_volume_filter_ = false; // Whether volume filtering is enabled
   float delta_threshold_ = 0.0f; // Threshold for delta coloring
 
   // Number Formatting Options

@@ -1029,6 +1029,8 @@ void FootprintPanel::render() {
   ImGui::SetNextItemWidth(100);
   ImGui::SliderFloat("Delta Thresh", &delta_threshold_, 0.0f, 1.0f, "%.2f");
   ImGui::SameLine();
+  ImGui::Checkbox("Vol Filter", &enable_volume_filter_);
+  ImGui::SameLine();
   ImGui::SetNextItemWidth(120);
   double min_thresh = 0.0;
   double max_thresh = 100000.0;
@@ -1992,13 +1994,13 @@ void FootprintPanel::render() {
           break;
       }
 
-      // Only render cells that meet the volume threshold, or render greyed-out for filtered cells
-      if (cell_volume >= volume_threshold_) {
-        // Render the cell normally with the calculated max volume for adaptive alpha
-        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances, zoom_factor);
-      } else {
+      // Only apply volume threshold filtering if the feature is enabled
+      if (enable_volume_filter_ && cell_volume < volume_threshold_) {
         // Render greyed-out cell for values below threshold
         renderFilteredCell(cell, draw_list, max_volume, zoom_factor);
+      } else {
+        // Render the cell normally with the calculated max volume for adaptive alpha
+        renderCell(cell, draw_list, max_volume, diagonal_imbalances, stacked_imbalances, zoom_factor);
       }
     }
 
@@ -2082,7 +2084,7 @@ void FootprintPanel::render() {
           // Show tooltip for this cell regardless of whether it meets the threshold
           // Add info about whether the cell is filtered
           std::string tooltip = getCellTooltip(cell);
-          if (cell_volume < volume_threshold_) {
+          if (enable_volume_filter_ && cell_volume < volume_threshold_) {
             tooltip += "\n[Filtered: Below volume threshold]";
           }
 
@@ -2240,27 +2242,30 @@ void FootprintPanel::render() {
     ImGui::SetCursorPos(ImVec2(10, 30));
     if (time_aggregation_type_ == Data::TimeAggregationType::VOLUME_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
+                         "Mode: %s | Time Agg: %s (%d contracts) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          volume_based_n_contracts_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
+                         enable_volume_filter_ ? "ON" : "OFF");
     } else if (time_aggregation_type_ == Data::TimeAggregationType::TICK_BASED) {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
+                         "Mode: %s | Time Agg: %s (%d ticks) | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          tick_based_n_ticks_,
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
+                         enable_volume_filter_ ? "ON" : "OFF");
     } else {
       ImGui::TextColored(ImVec4(1, 1, 0, 1),
-                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f",
+                         "Mode: %s | Time Agg: %s | Price Agg: %s | Clusters: %zu | Grid: %dx%d | δThresh: %.2f | VolThresh: %.0f | VolFilt: %s",
                          vol_type_names[static_cast<int>(volume_data_type_)],
                          time_agg_names[static_cast<int>(time_aggregation_type_)],
                          price_agg_names[static_cast<int>(price_aggregation_type_)],
-                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_);
+                         clusters.size(), grid_cols_, grid_rows_, delta_threshold_, volume_threshold_,
+                         enable_volume_filter_ ? "ON" : "OFF");
     }
 
     // Calculate statistics based on selected volume data type

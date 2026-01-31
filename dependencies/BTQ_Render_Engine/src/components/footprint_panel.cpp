@@ -801,6 +801,11 @@ void FootprintPanel::render() {
       if (ImGui::Selectable(price_agg_names[i], is_selected)) {
         current_price_agg = i;
         price_aggregation_type_ = static_cast<Data::PriceAggregationType>(i);
+        // Update renderer with new price aggregation type
+        if (renderer_) {
+          renderer_->setPriceAggregationType(price_aggregation_type_);
+          renderer_->notifyPriceAggregationChanged();
+        }
         // Mark data as dirty to trigger immediate rendering update
         data_dirty_.store(true, std::memory_order_release);
       }
@@ -818,6 +823,11 @@ void FootprintPanel::render() {
     double temp_custom_value = custom_price_aggregation_value_;
     if (ImGui::InputDouble("##CustomPriceAgg", &temp_custom_value, 0.01, 0.1, "%.4f")) {
       custom_price_aggregation_value_ = temp_custom_value;
+      // Update renderer with new custom price aggregation value
+      if (renderer_) {
+        renderer_->setCustomPriceAggregationValue(custom_price_aggregation_value_);
+        renderer_->notifyPriceAggregationChanged();
+      }
       // Mark data as dirty to trigger immediate rendering update
       data_dirty_.store(true, std::memory_order_release);
     }

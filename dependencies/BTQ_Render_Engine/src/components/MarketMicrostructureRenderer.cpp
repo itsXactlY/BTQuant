@@ -305,6 +305,15 @@ void MarketMicrostructureRenderer::updateFootprintClusters(
   }
 }
 
+void MarketMicrostructureRenderer::notifyPriceAggregationChanged() {
+  // This method should trigger a recalculation of clusters with the new price aggregation settings
+  // In a complete implementation, this would notify the data pipeline to regenerate clusters
+  // For now, we'll just clear the current clusters to force a refresh when new data comes in
+  std::lock_guard lock(dataMutex_);
+  currentFootprintClusters_.clear();
+  currentClusterCount_ = 0;
+}
+
 void MarketMicrostructureRenderer::updateConfig(const RendererConfig &config) {
   std::lock_guard lock(statsMutex_);
 

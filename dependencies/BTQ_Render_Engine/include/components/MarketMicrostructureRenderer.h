@@ -5,6 +5,7 @@
 #include "VulkanSynchronization.h"
 #include "hotspine_data_bridge.hpp"
 #include "trading/HotspineData.h"
+#include "data/VolumeDataTypes.h"
 #include <expected>
 #include <memory>
 #include <span>
@@ -114,6 +115,21 @@ public:
   // This will subscribe to market data for the given symbol
   void setSymbol(uint32_t symbol_id);
 
+  // Set price aggregation type for footprint charts
+  void setPriceAggregationType(Data::PriceAggregationType type) { price_aggregation_type_ = type; }
+
+  // Get price aggregation type
+  Data::PriceAggregationType getPriceAggregationType() const { return price_aggregation_type_; }
+
+  // Set custom price aggregation value
+  void setCustomPriceAggregationValue(double value) { custom_price_aggregation_value_ = value; }
+
+  // Get custom price aggregation value
+  double getCustomPriceAggregationValue() const { return custom_price_aggregation_value_; }
+
+  // Notify that price aggregation settings have changed and clusters need to be recalculated
+  void notifyPriceAggregationChanged();
+
   // Get ImGui Texture ID for the LOB Heatmap
   // This utilizes ImGui_ImplVulkan_AddTexture manually
   void *getHeatmapTextureID();
@@ -206,6 +222,10 @@ private:
   // ImGui Texture state
   void *heatmapTextureID_ = nullptr;
   VkDescriptorSet heatmapDescriptorSet_ = VK_NULL_HANDLE;
+
+  // Price aggregation settings
+  Data::PriceAggregationType price_aggregation_type_ = Data::PriceAggregationType::P_1TICK;
+  double custom_price_aggregation_value_ = 0.1;
 };
 
 // ============================================================================

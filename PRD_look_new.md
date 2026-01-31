@@ -13,7 +13,7 @@
 - Dependencies between modules are clearly marked
 - Estimated complexity: S (Small, 1-2 days), M (Medium, 3-5 days), L (Large, 1+ weeks)
 - Prerequisites must be completed before starting dependent tasks
-
+- Fully autonomous handle merge conflicts in the most harmonic way
 ---
 
 ## Module 1: Core Data Infrastructure [Complexity: L]

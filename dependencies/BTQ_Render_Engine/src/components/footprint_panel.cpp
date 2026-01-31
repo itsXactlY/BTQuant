@@ -1210,8 +1210,6 @@ void FootprintPanel::render() {
     // This section processes each visible cell individually based on the active VolumeAnalysisType
     for (auto& cell : all_cells) {
         // Each cell has already been processed according to the active VolumeAnalysisType
-        // The values in the cell now reflect the selected analysis type
-        // This ensures that all rendering functions (color, label, tooltip) use the correct values
     }
 
     // Detect imbalances

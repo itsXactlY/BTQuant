@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string>
+#include <cstdint>
 
 namespace BTQuant {
 namespace Data {
@@ -17,16 +17,17 @@ enum class TradeSide {
 struct TradeData {
     uint64_t timestamp;      // Unix timestamp in milliseconds
     double price;            // Price of the trade
-    double volume;           // Volume of the trade
+    float volume;            // Volume of the trade
     TradeSide side;          // Side of the trade (BUY/SELL)
-    std::string exchange;    // Exchange where the trade occurred
-    
+    uint8_t exchange_id;     // ID of the exchange where the trade occurred
+    uint8_t flags;           // Bitmask for additional trade flags
+
     // Default constructor
-    TradeData() : timestamp(0), price(0.0), volume(0.0), side(TradeSide::BUY) {}
-    
+    TradeData() : timestamp(0), price(0.0), volume(0.0f), side(TradeSide::BUY), exchange_id(0), flags(0) {}
+
     // Parameterized constructor
-    TradeData(uint64_t ts, double p, double v, TradeSide s, const std::string& ex) 
-        : timestamp(ts), price(p), volume(v), side(s), exchange(ex) {}
+    TradeData(uint64_t ts, double p, float v, TradeSide s, uint8_t ex_id, uint8_t f = 0)
+        : timestamp(ts), price(p), volume(v), side(s), exchange_id(ex_id), flags(f) {}
 };
 
 }  // namespace Data

@@ -69,6 +69,7 @@ test/strategy_*.py
 .ralph/
 scripts/ralph/.state/
 [BROKEN]/
+.ralphy-sandboxes
 
 # ===== Misc =====
 TODO.rst

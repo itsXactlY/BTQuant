@@ -135,6 +135,9 @@ private:
 
   // Rendering Helpers
   ImU32 getCellColor(const FootprintCell &cell, double max_volume = 10000.0) const;
+  ImU32 getDeltaColor(const FootprintCell &cell, float alpha) const;
+  ImU32 getBuySellColor(const FootprintCell &cell, double max_volume, float alpha) const;
+  ImU32 getVolumeIntensityColor(const FootprintCell &cell, double max_volume, float alpha) const;
   std::string getCellLabel(const FootprintCell &cell) const;
   void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume = 10000.0);
   void renderCell(const FootprintCell &cell, ImDrawList *draw_list, double max_volume,

@@ -66,6 +66,7 @@ public:
       : tick_size_(tick_size), min_tick_index_(0), session_start_us_(0) {
     // Reserve some initial space to avoid immediate reallocations
     canvas_.reserve(10000);
+    cluster_canvas_.reserve(10000);  // Reserve similar space for cluster canvas
   }
 
   void set_session_start(int64_t start_us) { session_start_us_ = start_us; }

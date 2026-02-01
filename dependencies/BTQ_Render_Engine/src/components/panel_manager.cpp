@@ -650,6 +650,40 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         }
         break;
       }
+      case PanelType::TIME_AND_SALES: {
+        if (auto* tas = dynamic_cast<TimeAndSalesPanel*>(it->second.get())) {
+          // Find the symbol ID for the given symbol name
+          uint32_t symbol_id = 0;
+          if (bridge_) {
+            // Use SymbolRegistry to find the symbol ID
+            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+            if (symbol_info_opt) {
+              symbol_id = symbol_info_opt->id;
+            }
+          }
+          if (symbol_id != 0) {
+            tas->set_symbol(symbol_id, symbol);
+          }
+        }
+        break;
+      }
+      case PanelType::HISTORICAL_TIME_SALES: {
+        if (auto* hts = dynamic_cast<HistoricalTimeSalesPanel*>(it->second.get())) {
+          // Find the symbol ID for the given symbol name
+          uint32_t symbol_id = 0;
+          if (bridge_) {
+            // Use SymbolRegistry to find the symbol ID
+            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+            if (symbol_info_opt) {
+              symbol_id = symbol_info_opt->id;
+            }
+          }
+          if (symbol_id != 0) {
+            hts->set_symbol(symbol_id, symbol);
+          }
+        }
+        break;
+      }
       default:
         break;
     }
@@ -955,6 +989,46 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
         }
         break;
       }
+      case PanelType::TIME_AND_SALES: {
+        if (auto* tas = dynamic_cast<TimeAndSalesPanel*>(panel.get())) {
+          tas->set_symbol(symbol_id, symbol_name);
+        }
+        break;
+      }
+      case PanelType::HISTORICAL_TIME_SALES: {
+        if (auto* hts = dynamic_cast<HistoricalTimeSalesPanel*>(panel.get())) {
+          hts->set_symbol(symbol_id, symbol_name);
+        }
+        break;
+      }
+      case PanelType::CHART_REPLAY: {
+        // Chart replay panels don't need direct symbol updates as they manage their own replay data
+        break;
+      }
+      case PanelType::TIME_STATISTICS: {
+        // Time statistics panels are typically linked to charts and don't need direct symbol updates
+        break;
+      }
+      case PanelType::TIME_HISTOGRAM: {
+        // Time histogram panels don't typically require symbol-specific data
+        break;
+      }
+      case PanelType::SCATTER_PLOT: {
+        // Scatter plot panels don't typically require symbol-specific data
+        break;
+      }
+      case PanelType::TIME_SERIES: {
+        // Time series panels don't typically require symbol-specific data
+        break;
+      }
+      case PanelType::HISTOGRAM: {
+        // Histogram panels don't typically require symbol-specific data
+        break;
+      }
+      case PanelType::SCREENER: {
+        // Screener panels don't typically require symbol-specific data
+        break;
+      }
       case PanelType::PERFORMANCE_MONITOR: {
         // Performance monitor doesn't need symbol-specific data
         break;
@@ -966,5 +1040,23 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
 }
 
 size_t PanelManager::get_panel_count() const { return panels_.size(); }
+
+void PanelManager::save_all_panel_configs(const std::string& config_file) const {
+  for (const auto& [id, panel] : panels_) {
+    // Check if the panel is a WatchlistPanel and save its configuration
+    if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
+      watchlist->save_watchlist_order_to_config(config_file);
+    }
+  }
+}
+
+void PanelManager::load_all_panel_configs(const std::string& config_file) {
+  for (auto& [id, panel] : panels_) {
+    // Check if the panel is a WatchlistPanel and load its configuration
+    if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
+      watchlist->load_watchlist_order_from_config(config_file);
+    }
+  }
+}
 
 }  // namespace BTQuant

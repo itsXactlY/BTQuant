@@ -24,6 +24,13 @@ ChartReplay::ChartReplay(std::shared_ptr<HotSpineDataBridge> bridge,
     config_.timeframe = RenderEngine::TimeFrame::TF_1MIN;
     config_.symbol_name = "BTC-USDT";
     config_.exchange_name = "Binance";
+    config_.enable_step_by_step = false;
+    config_.enable_manual_control = false;
+    config_.show_performance_metrics = true;
+
+    // Initialize metrics
+    metrics_.start_time = std::chrono::steady_clock::now();
+    metrics_.current_time = metrics_.start_time;
 }
 
 ChartReplay::~ChartReplay() {
@@ -111,7 +118,7 @@ void ChartReplay::seek_to_time(uint64_t timestamp) {
     if (historical_candles_.empty()) {
         return;
     }
-    
+
     // Find the closest bar to the requested timestamp
     for (size_t i = 0; i < historical_candles_.size(); ++i) {
         if (historical_candles_[i].timestamp >= timestamp) {
@@ -120,19 +127,74 @@ void ChartReplay::seek_to_time(uint64_t timestamp) {
             break;
         }
     }
-    
+
     // Update the chart with the new position
     update_chart_with_current_data();
 }
 
-bool ChartReplay::load_historical_data(const std::string& symbol, const std::string& exchange, 
-                                      RenderEngine::TimeFrame timeframe, 
+void ChartReplay::step_forward() {
+    if (historical_candles_.empty() || current_bar_index_ >= historical_candles_.size()) {
+        return;
+    }
+
+    // Move to next bar
+    current_bar_index_++;
+    if (current_bar_index_ < historical_candles_.size()) {
+        current_time_ = historical_candles_[current_bar_index_].timestamp;
+        update_chart_with_current_data();
+        update_performance_metrics();
+    }
+}
+
+void ChartReplay::step_backward() {
+    if (historical_candles_.empty() || current_bar_index_ == 0) {
+        return;
+    }
+
+    // Move to previous bar
+    current_bar_index_--;
+    current_time_ = historical_candles_[current_bar_index_].timestamp;
+    update_chart_with_current_data();
+    update_performance_metrics();
+}
+
+BacktestMetrics ChartReplay::get_performance_metrics() const {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+    return metrics_;
+}
+
+void ChartReplay::update_performance_metrics() {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+
+    metrics_.current_bar_index = current_bar_index_;
+    metrics_.total_bars = historical_candles_.size();
+    metrics_.current_time = std::chrono::steady_clock::now();
+
+    if (metrics_.total_bars > 0) {
+        metrics_.progress_percentage = (static_cast<double>(current_bar_index_) /
+                                       static_cast<double>(metrics_.total_bars)) * 100.0;
+    }
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        metrics_.current_time - metrics_.start_time).count();
+    metrics_.elapsed_seconds = duration / 1000.0;
+
+    // Calculate actual replay speed if we have processed some bars
+    if (metrics_.elapsed_seconds > 0) {
+        metrics_.replay_speed_actual = static_cast<double>(current_bar_index_) / metrics_.elapsed_seconds;
+    }
+
+    metrics_.total_bars_processed = current_bar_index_;
+}
+
+bool ChartReplay::load_historical_data(const std::string& symbol, const std::string& exchange,
+                                      RenderEngine::TimeFrame timeframe,
                                       uint64_t start_time, uint64_t end_time) {
     // In a real implementation, this would load historical data from a database or file
     // For now, we'll simulate loading by generating synthetic data
-    
+
     historical_candles_.clear();
-    
+
     // Determine the time interval based on the timeframe
     uint64_t interval_ms = 0;
     switch (timeframe) {
@@ -159,45 +221,117 @@ bool ChartReplay::load_historical_data(const std::string& symbol, const std::str
         case RenderEngine::TimeFrame::TF_1WEEK:   interval_ms = 604800000; break;
         default:                                  interval_ms = 60000; break; // Default to 1 minute
     }
-    
+
     // Generate synthetic data for demonstration
     uint64_t current_time = start_time;
     float current_price = 40000.0f; // Starting price
-    
+
     while (current_time <= end_time && historical_candles_.size() < 10000) { // Limit to 10k bars
         RenderEngine::OHLCVCandle candle;
         candle.timestamp = current_time;
-        
+
         // Generate random price movements
         float volatility = 0.002f; // 0.2% volatility per bar
         float rand_change = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 2.0f * volatility;
         float new_price = current_price * (1.0f + rand_change);
-        
+
         // Set OHLC values
         float high_multiplier = 1.0f + (static_cast<float>(rand()) / RAND_MAX) * 0.005f;
         float low_multiplier = 1.0f - (static_cast<float>(rand()) / RAND_MAX) * 0.005f;
         float open_close_diff = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.002f;
-        
+
         candle.open = current_price;
         candle.high = std::max(current_price, new_price) * high_multiplier;
         candle.low = std::min(current_price, new_price) * low_multiplier;
         candle.close = new_price;
         candle.volume = 100.0f + (static_cast<float>(rand()) / RAND_MAX) * 900.0f; // Random volume
-        
+        candle.trade_count = static_cast<uint64_t>(candle.volume); // Simplified trade count
+
         historical_candles_.push_back(candle);
-        
+
         current_time += interval_ms;
         current_price = new_price;
     }
-    
+
     std::cout << "Loaded " << historical_candles_.size() << " historical candles for replay." << std::endl;
-    
+
     // Reset to beginning
     current_bar_index_ = 0;
     if (!historical_candles_.empty()) {
         current_time_ = historical_candles_[0].timestamp;
     }
-    
+
+    // Update metrics
+    update_performance_metrics();
+
+    return !historical_candles_.empty();
+}
+
+bool ChartReplay::load_from_csv(const std::string& csv_file_path,
+                               const std::string& symbol,
+                               RenderEngine::TimeFrame timeframe) {
+    historical_candles_.clear();
+
+    std::ifstream file(csv_file_path);
+    if (!file.is_open()) {
+        std::cerr << "Could not open CSV file: " << csv_file_path << std::endl;
+        return false;
+    }
+
+    std::string line;
+    bool header_skipped = false;
+
+    while (std::getline(file, line)) {
+        if (!header_skipped) {
+            header_skipped = true; // Skip header row
+            continue;
+        }
+
+        std::istringstream iss(line);
+        std::string token;
+        std::vector<std::string> tokens;
+
+        while (std::getline(iss, token, ',')) {
+            tokens.push_back(token);
+        }
+
+        // Expected format: timestamp,open,high,low,close,volume
+        if (tokens.size() < 6) {
+            continue; // Skip malformed lines
+        }
+
+        try {
+            RenderEngine::OHLCVCandle candle;
+
+            // Parse timestamp (assuming it's in milliseconds)
+            candle.timestamp = static_cast<uint64_t>(std::stoull(tokens[0]));
+            candle.open = static_cast<double>(std::stod(tokens[1]));
+            candle.high = static_cast<double>(std::stod(tokens[2]));
+            candle.low = static_cast<double>(std::stod(tokens[3]));
+            candle.close = static_cast<double>(std::stod(tokens[4]));
+            candle.volume = static_cast<double>(std::stod(tokens[5]));
+            candle.trade_count = tokens.size() > 6 ? static_cast<uint64_t>(std::stoull(tokens[6])) : 1;
+
+            historical_candles_.push_back(candle);
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing CSV line: " << line << " - " << e.what() << std::endl;
+            continue;
+        }
+    }
+
+    file.close();
+
+    std::cout << "Loaded " << historical_candles_.size() << " candles from CSV file: " << csv_file_path << std::endl;
+
+    // Reset to beginning
+    current_bar_index_ = 0;
+    if (!historical_candles_.empty()) {
+        current_time_ = historical_candles_[0].timestamp;
+    }
+
+    // Update metrics
+    update_performance_metrics();
+
     return !historical_candles_.empty();
 }
 
@@ -278,31 +412,39 @@ void ChartReplay::process_next_bar() {
             return;
         }
     }
-    
+
     // Update current time
     current_time_ = historical_candles_[current_bar_index_].timestamp;
-    
+
     // Update the chart with current data
     update_chart_with_current_data();
-    
+
     // Move to next bar
     current_bar_index_++;
+
+    // Update performance metrics
+    update_performance_metrics();
+
+    // If in step-by-step mode, pause after each bar
+    if (config_.enable_step_by_step) {
+        is_paused_ = true;
+    }
 }
 
 void ChartReplay::update_chart_with_current_data() {
-    if (replay_chart_id_ == 0 || historical_candles_.empty() || current_bar_index_ == 0) {
+    if (replay_chart_id_ == 0 || historical_candles_.empty()) {
         return;
     }
-    
+
     // Get the chart instance
     auto& charts = const_cast<std::unordered_map<uint32_t, ChartInstance>&>(chart_manager_->get_charts());
     auto it = charts.find(replay_chart_id_);
     if (it == charts.end()) {
         return;
     }
-    
+
     ChartInstance& chart = it->second;
-    
+
     // Clear previous data
     chart.dates.clear();
     chart.opens.clear();
@@ -310,32 +452,38 @@ void ChartReplay::update_chart_with_current_data() {
     chart.lows.clear();
     chart.closes.clear();
     chart.volumes.clear();
-    
+
     // Add data up to the current bar index
-    size_t end_index = std::min(current_bar_index_, historical_candles_.size());
+    size_t end_index = std::min(current_bar_index_ + 1, historical_candles_.size()); // Include current bar
     for (size_t i = 0; i < end_index; ++i) {
         const auto& candle = historical_candles_[i];
         chart.dates.push_back(static_cast<double>(candle.timestamp));
-        chart.opens.push_back(candle.open);
-        chart.highs.push_back(candle.high);
-        chart.lows.push_back(candle.low);
-        chart.closes.push_back(candle.close);
-        chart.volumes.push_back(candle.volume);
+        chart.opens.push_back(static_cast<float>(candle.open));
+        chart.highs.push_back(static_cast<float>(candle.high));
+        chart.lows.push_back(static_cast<float>(candle.low));
+        chart.closes.push_back(static_cast<float>(candle.close));
+        chart.volumes.push_back(static_cast<float>(candle.volume));
     }
 }
 
 void ChartReplay::render_replay_controls() {
     ImGui::SeparatorText("Replay Controls");
-    
+
     // Playback speed slider
     float speed = static_cast<float>(config_.playback_speed);
     if (ImGui::SliderFloat("Speed", &speed, 0.1f, 10.0f, "%.1fx", ImGuiSliderFlags_Logarithmic)) {
         config_.playback_speed = static_cast<double>(speed);
     }
-    
+
     // Loop checkbox
     ImGui::Checkbox("Loop", &config_.loop_enabled);
-    
+
+    // Step-by-step mode
+    ImGui::Checkbox("Step-by-step mode", &config_.enable_step_by_step);
+
+    // Manual control option
+    ImGui::Checkbox("Manual control", &config_.enable_manual_control);
+
     // Control buttons
     if (ImGui::Button(is_playing_ ? "Pause" : "Play")) {
         if (is_playing_) {
@@ -344,76 +492,123 @@ void ChartReplay::render_replay_controls() {
             start_replay();
         }
     }
-    
+
     ImGui::SameLine();
     if (ImGui::Button("Stop")) {
         stop_replay();
         reset_replay();
     }
-    
+
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
         reset_replay();
     }
-    
+
+    // Step controls (only visible in manual control mode)
+    if (config_.enable_manual_control) {
+        ImGui::SameLine();
+        if (ImGui::Button("<< Prev")) {
+            step_backward();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Next >>")) {
+            step_forward();
+        }
+    }
+
     // Seek slider
     if (!historical_candles_.empty()) {
         int seek_pos = static_cast<int>(current_bar_index_);
         int max_pos = static_cast<int>(historical_candles_.size() - 1);
-        
+
         if (ImGui::SliderInt("Progress", &seek_pos, 0, max_pos)) {
             if (static_cast<size_t>(seek_pos) < historical_candles_.size()) {
                 current_bar_index_ = static_cast<size_t>(seek_pos);
                 current_time_ = historical_candles_[current_bar_index_].timestamp;
-                update_chart_with_current_data();
+
+                if (!is_playing_) {
+                    update_chart_with_current_data();
+                }
             }
         }
     }
-    
+
     // Status display
-    ImGui::Text("Status: %s", 
-                is_playing_ ? "Playing" : 
+    ImGui::Text("Status: %s",
+                is_playing_ ? "Playing" :
                 is_paused_ ? "Paused" : "Stopped");
-    
+
     if (!historical_candles_.empty() && current_bar_index_ < historical_candles_.size()) {
         ImGui::Text("Current Bar: %zu/%zu", current_bar_index_, historical_candles_.size());
         ImGui::Text("Current Time: %llu", static_cast<unsigned long long>(current_time_));
     }
-    
+
+    // Performance metrics display
+    if (config_.show_performance_metrics && !historical_candles_.empty()) {
+        ImGui::SeparatorText("Performance Metrics");
+
+        auto metrics = get_performance_metrics();
+        ImGui::Text("Progress: %.2f%%", metrics.progress_percentage);
+        ImGui::Text("Bars Processed: %llu/%llu", metrics.total_bars_processed, metrics.total_bars);
+        ImGui::Text("Elapsed Time: %.2fs", metrics.elapsed_seconds);
+        ImGui::Text("Actual Speed: %.2f bars/sec", metrics.replay_speed_actual);
+    }
+
     // Load historical data section
     ImGui::SeparatorText("Load Historical Data");
-    
+
     static char symbol_buffer[64] = "BTC-USDT";
     static char exchange_buffer[64] = "Binance";
     static uint64_t start_time_input = 0;
     static uint64_t end_time_input = 0;
-    
+
     ImGui::InputText("Symbol", symbol_buffer, sizeof(symbol_buffer));
     ImGui::InputText("Exchange", exchange_buffer, sizeof(exchange_buffer));
-    
+
     ImGui::InputScalar("Start Time", ImGuiDataType_U64, &start_time_input);
     ImGui::InputScalar("End Time", ImGuiDataType_U64, &end_time_input);
-    
+
     // Timeframe selection
     const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s", "30s", "1m", "2m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"};
     int selected_timeframe = static_cast<int>(config_.timeframe);
     if (ImGui::Combo("Timeframe", &selected_timeframe, timeframes, IM_ARRAYSIZE(timeframes))) {
         config_.timeframe = static_cast<RenderEngine::TimeFrame>(selected_timeframe);
     }
-    
+
     if (ImGui::Button("Load Data")) {
         stop_replay();
         reset_replay();
-        
-        if (load_historical_data(std::string(symbol_buffer), std::string(exchange_buffer), 
+
+        if (load_historical_data(std::string(symbol_buffer), std::string(exchange_buffer),
                                 config_.timeframe, start_time_input, end_time_input)) {
             std::cout << "Historical data loaded successfully!" << std::endl;
-            
+
             // Update config with loaded parameters
             config_.symbol_name = std::string(symbol_buffer);
             config_.exchange_name = std::string(exchange_buffer);
         } else {
             std::cerr << "Failed to load historical data!" << std::endl;
+        }
+    }
+
+    // CSV loading section
+    ImGui::SeparatorText("Load from CSV");
+
+    static char csv_path_buffer[256] = "./data/historical_data.csv";
+    ImGui::InputText("CSV File Path", csv_path_buffer, sizeof(csv_path_buffer));
+
+    if (ImGui::Button("Load from CSV")) {
+        stop_replay();
+        reset_replay();
+
+        if (load_from_csv(std::string(csv_path_buffer), std::string(symbol_buffer), config_.timeframe)) {
+            std::cout << "Historical data loaded from CSV successfully!" << std::endl;
+
+            // Update config with loaded parameters
+            config_.symbol_name = std::string(symbol_buffer);
+        } else {
+            std::cerr << "Failed to load historical data from CSV!" << std::endl;
         }
     }
 }

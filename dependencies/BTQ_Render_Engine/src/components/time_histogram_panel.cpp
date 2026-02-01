@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <random>
+#include <sstream>
+#include <iomanip>
 
 #include "imgui.h"
 #include "implot.h"
@@ -71,6 +73,38 @@ void TimeHistogramPanel::render() {
     // Configure the plot axes
     ImPlot::SetupAxes("Time", "Volume", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
 
+    // Helper function to add tooltip to bars
+    auto addBarTooltip = [](const char* label_id, const double* xs, const double* ys, int count, double bar_size) {
+        // Check if mouse is hovering over the plot
+        if (ImPlot::IsPlotHovered()) {
+            double mouse_x = ImPlot::GetPlotMousePos().x;
+            double mouse_y = ImPlot::GetPlotMousePos().y;
+
+            // Find the closest bar to the mouse position
+            for (int i = 0; i < count; ++i) {
+                double bar_center_x = xs[i];
+                double bar_value = ys[i];
+
+                // Check if mouse is horizontally within the bar
+                if (mouse_x >= bar_center_x - bar_size/2.0 && mouse_x <= bar_center_x + bar_size/2.0) {
+                    // For bars that extend from y=0, check if mouse is vertically within the bar bounds
+                    double bar_bottom = std::min(0.0, bar_value);
+                    double bar_top = std::max(0.0, bar_value);
+
+                    if (mouse_y >= bar_bottom && mouse_y <= bar_top) {
+                        // Show tooltip with exact value
+                        std::stringstream ss;
+                        ss << std::fixed << std::setprecision(2) << "Value: " << bar_value;
+
+                        // Create a unique ID for the tooltip
+                        ImGui::SetTooltip("%s", ss.str().c_str());
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
     // Handle different volume analysis types
     switch (static_cast<Data::VolumeAnalysisType>(volume_data_type_)) {
       case Data::VolumeAnalysisType::Trades: {
@@ -83,6 +117,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 1.0f, 0.7f));  // Blue fill
         ImPlot::PlotBars("Trades", x_data, trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Trades", x_data, trades_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::BuyTrades: {
@@ -95,6 +132,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Trades", x_data, buy_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Buy Trades", x_data, buy_trades_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::SellTrades: {
@@ -107,6 +147,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Trades", x_data, sell_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Sell Trades", x_data, sell_trades_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::Volume: {
@@ -118,6 +161,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 1.0f, 0.0f, 0.7f));  // Yellow fill
         ImPlot::PlotBars("Total Volume", x_data, total_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Total Volume", x_data, total_vol_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::BuyVolume: {
@@ -125,6 +171,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Buy Volume", x_data, buy_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::SellVolume: {
@@ -132,6 +181,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_data, sell_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Sell Volume", x_data, sell_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::BuyVolumePercent: {
@@ -148,6 +200,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume %", x_data, buy_vol_percent, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Buy Volume %", x_data, buy_vol_percent, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::SellVolumePercent: {
@@ -164,6 +219,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume %", x_data, sell_vol_percent, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Sell Volume %", x_data, sell_vol_percent, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::BuySellVolume: {
@@ -180,13 +238,15 @@ void TimeHistogramPanel::render() {
         // Plot buy volume (green) above x-axis
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_stack, 100, 0.8);
-        ImPlot::PopStyleColor();
 
         // Plot sell volume (red) below x-axis
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_data, sell_stack, 100, 0.8);
         ImPlot::PopStyleColor();
 
+        // Add tooltip functionality for both buy and sell volumes
+        addBarTooltip("Buy Volume", x_data, buy_stack, 100, 0.8);
+        addBarTooltip("Sell Volume", x_data, sell_stack, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::Delta: {
@@ -212,13 +272,15 @@ void TimeHistogramPanel::render() {
         // Plot positive delta values (green)
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Positive Delta", x_data, pos_values, 100, 0.8);
-        ImPlot::PopStyleColor();
 
         // Plot negative delta values (red)
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Negative Delta", x_data, neg_values, 100, 0.8);
         ImPlot::PopStyleColor();
 
+        // Add tooltip functionality for both positive and negative deltas
+        addBarTooltip("Positive Delta", x_data, pos_values, 100, 0.8);
+        addBarTooltip("Negative Delta", x_data, neg_values, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::DeltaPercent: {
@@ -248,12 +310,15 @@ void TimeHistogramPanel::render() {
         // Plot positive delta percent values (green)
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Positive Delta %", x_data, pos_values, 100, 0.8);
-        ImPlot::PopStyleColor();
 
         // Plot negative delta percent values (red)
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Negative Delta %", x_data, neg_values, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality for both positive and negative delta percentages
+        addBarTooltip("Positive Delta %", x_data, pos_values, 100, 0.8);
+        addBarTooltip("Negative Delta %", x_data, neg_values, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::CumulativeDelta: {
@@ -360,6 +425,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.7f, 0.3f, 1.0f, 0.7f));  // Purple fill
         ImPlot::PlotBars("Avg Size", x_data, avg_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Avg Size", x_data, avg_size_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::AverageBuySize: {
@@ -372,6 +440,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.8f, 0.0f, 0.7f));  // Dark green fill
         ImPlot::PlotBars("Avg Buy Size", x_data, avg_buy_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Avg Buy Size", x_data, avg_buy_size_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::AverageSellSize: {
@@ -384,6 +455,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.8f, 0.0f, 0.0f, 0.7f));  // Dark red fill
         ImPlot::PlotBars("Avg Sell Size", x_data, avg_sell_size_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Avg Sell Size", x_data, avg_sell_size_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::MaxOneTradeVolume: {
@@ -396,6 +470,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.5f, 0.0f, 0.7f));  // Orange fill
         ImPlot::PlotBars("Max Trade Vol", x_data, max_trade_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Max Trade Vol", x_data, max_trade_vol_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::FilteredVolume: {
@@ -408,6 +485,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.7f, 0.7f, 0.7f));  // Teal fill
         ImPlot::PlotBars("Filtered Volume", x_data, filtered_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
+
+        // Add tooltip functionality
+        addBarTooltip("Filtered Volume", x_data, filtered_vol_data, 100, 0.8);
         break;
       }
       case Data::VolumeAnalysisType::SplitVolume: {
@@ -425,7 +505,6 @@ void TimeHistogramPanel::render() {
         // Plot buy volume (green)
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_split, 100, 0.4);  // Narrower bars
-        ImPlot::PopStyleColor();
 
         // Plot sell volume (red) shifted slightly to the right
         static double x_shifted[100];
@@ -436,6 +515,9 @@ void TimeHistogramPanel::render() {
         ImPlot::PlotBars("Sell Volume", x_shifted, sell_split, 100, 0.4);  // Narrower bars
         ImPlot::PopStyleColor();
 
+        // Add tooltip functionality for both buy and sell volumes
+        addBarTooltip("Buy Volume", x_data, buy_split, 100, 0.4);
+        addBarTooltip("Sell Volume", x_shifted, sell_split, 100, 0.4);
         break;
       }
       default: {
@@ -445,6 +527,9 @@ void TimeHistogramPanel::render() {
           y_data[i] = buy_data[i] - sell_data[i];  // Simple difference as fallback
         }
         ImPlot::PlotBars("Time Histogram", x_data, y_data, 100, 0.8);
+
+        // Add tooltip functionality
+        addBarTooltip("Time Histogram", x_data, y_data, 100, 0.8);
         break;
       }
     }

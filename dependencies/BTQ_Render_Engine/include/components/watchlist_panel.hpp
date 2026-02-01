@@ -89,6 +89,7 @@ class WatchlistPanel : public PanelBase {
   void add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
                       double target_price, WatchlistPriceAlert::Direction direction);
   void remove_alerts_for_symbol(uint32_t symbol_id);
+  void ensure_default_groups_order();
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

@@ -187,6 +187,9 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   create_group("Crypto");
   create_group("Stocks");
 
+  // Ensure default groups are at the beginning of the group names list in the right order
+  ensure_default_groups_order();
+
   // Set default group to "Stocks" initially
   current_group_name_ = "Stocks";
 
@@ -851,22 +854,47 @@ void WatchlistPanel::update_watchlist_data() {
 }
 
 void WatchlistPanel::render_group_tabs() {
-  // Create tabs for different watchlist groups
+  // Create tabs for different watchlist groups with enhanced styling
+  ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 4.0f);  // Round the tab corners slightly
+  ImGui::PushStyleVar(ImGuiStyleVar_TabBorderSize, 1.0f); // Add border to tabs
+
   if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_None)) {
     for (const auto& group_name : group_names_) {
       bool is_selected = (group_name == current_group_name_);
 
-      if (ImGui::BeginTabItem(group_name.c_str())) {
+      // Set tab item flags for better appearance
+      ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
+
+      // Create the tab item with enhanced styling
+      if (ImGui::BeginTabItem(group_name.c_str(), nullptr, tab_flags)) {
         if (!is_selected) {
           // Switch to this group
           switch_to_group(group_name);
         }
         ImGui::EndTabItem();
       }
+
+      // Add tooltip to each tab
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text("Switch to %s watchlist group", group_name.c_str());
+
+        // Show count of symbols in this group
+        auto it = watchlist_groups_.find(group_name);
+        if (it != watchlist_groups_.end()) {
+          ImGui::Text("Symbols in this group: %zu", it->second.size());
+        }
+        ImGui::EndTooltip();
+      }
     }
 
-    // Add a '+' button to create new groups
-    if (ImGui::Button("+")) {
+    // Add a '+' button to create new groups with better styling
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));      // Dark gray background
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f)); // Slightly lighter when hovered
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));  // Even lighter when active
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+
+    if (ImGui::Button("+##AddGroup")) {
       // Create a new group with a default name
       static int new_group_counter = 1;
       std::string new_group_name = "Group " + std::to_string(new_group_counter++);
@@ -874,8 +902,19 @@ void WatchlistPanel::render_group_tabs() {
       switch_to_group(new_group_name);
     }
 
+    // Add tooltip to the add group button
+    if (ImGui::IsItemHovered()) {
+      ImGui::BeginTooltip();
+      ImGui::Text("Create a new watchlist group");
+      ImGui::EndTooltip();
+    }
+
+    ImGui::PopStyleColor(4); // Pop all 4 color styles
+
     ImGui::EndTabBar();
   }
+
+  ImGui::PopStyleVar(2); // Pop the style variables
 }
 
 void WatchlistPanel::render_filter_input() {
@@ -2864,6 +2903,30 @@ void WatchlistPanel::remove_alerts_for_symbol(uint32_t symbol_id) {
   if (alert_manager_) {
     alert_manager_->remove_alerts_for_symbol(symbol_id);
   }
+}
+
+void WatchlistPanel::ensure_default_groups_order() {
+  // Create a temporary vector to hold the reordered group names
+  std::vector<std::string> reordered_groups;
+
+  // Add the default groups in the desired order first
+  std::vector<std::string> default_groups = {"Futures", "Crypto", "Stocks"};
+
+  for (const auto& default_group : default_groups) {
+    if (std::find(group_names_.begin(), group_names_.end(), default_group) != group_names_.end()) {
+      reordered_groups.push_back(default_group);
+    }
+  }
+
+  // Add any other groups after the default ones
+  for (const auto& group_name : group_names_) {
+    if (std::find(default_groups.begin(), default_groups.end(), group_name) == default_groups.end()) {
+      reordered_groups.push_back(group_name);
+    }
+  }
+
+  // Update the group_names_ vector with the reordered groups
+  group_names_ = reordered_groups;
 }
 
 }  // namespace BTQuant

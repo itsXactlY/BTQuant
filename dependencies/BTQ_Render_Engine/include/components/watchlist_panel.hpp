@@ -73,6 +73,10 @@ class WatchlistPanel : public PanelBase {
   uint32_t selected_symbol_id_ = 0;
   SymbolSelectedCallback on_symbol_selected_;
 
+  // Delete confirmation state
+  uint32_t symbol_to_delete_ = 0;
+  bool show_delete_confirmation_ = false;
+
   // Real-time subscription ID
   uint64_t subscription_id_ = 0;
 

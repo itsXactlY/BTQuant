@@ -99,11 +99,12 @@ void WatchlistPanel::render() {
 
   render_panel_header();
 
-  // Input field for adding new symbols by name
+  // Section for adding new symbols - enhanced UI with better visual grouping
   ImGui::Text("Add Symbol:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(150);
   bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+
   // Add tooltip to explain the input field
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
@@ -112,13 +113,54 @@ void WatchlistPanel::render() {
   }
   ImGui::SameLine();
 
-  // Button to add symbol by name
-  bool add_clicked = ImGui::Button("Add");
+  // Button to add symbol by name with improved styling
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));      // Green background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f)); // Lighter green when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));  // Even lighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+
+  bool add_clicked = ImGui::Button("Add Symbol");
+
   // Add tooltip to explain the button
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
     ImGui::Text("Add the symbol entered above to the watchlist");
     ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleColor(4); // Pop all 4 color styles
+
+  // Alternative symbol selector dropdown
+  if (bridge_) {
+    auto active_symbols = bridge_->getActiveSymbols();
+    if (!active_symbols.empty()) {
+      ImGui::SameLine();
+      ImGui::SetNextItemWidth(200);
+      if (ImGui::BeginCombo("##SymbolSelector", "Or select...")) {
+        for (uint32_t sym_id : active_symbols) {
+          std::string sym_name = bridge_->getSymbolName(sym_id);
+          std::string exchange = bridge_->getExchangeName(sym_id);
+          if (sym_name.empty()) continue;
+
+          // Check if already in watchlist
+          bool already_added = (watchlist_.find(sym_id) != watchlist_.end());
+
+          std::string label = exchange + "/" + sym_name;
+          if (already_added) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+            ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_Disabled);
+            ImGui::PopStyleColor();
+          } else {
+            if (ImGui::Selectable(label.c_str())) {
+              add_symbol(sym_id, sym_name, exchange);
+            }
+          }
+        }
+        ImGui::EndCombo();
+      }
+      ImGui::SameLine();
+      ImGui::Text("(%zu in watchlist, %zu available)", watchlist_.size(), active_symbols.size());
+    }
   }
 
   // Show error message if symbol not found
@@ -157,39 +199,6 @@ void WatchlistPanel::render() {
     }
   }
 
-  // Symbol Selector Dropdown - add symbols from all available in bridge
-  if (bridge_) {
-    auto active_symbols = bridge_->getActiveSymbols();
-    if (!active_symbols.empty()) {
-      ImGui::Text("Or select:");
-      ImGui::SameLine();
-      ImGui::SetNextItemWidth(200);
-      if (ImGui::BeginCombo("##SymbolSelector", "Select Symbol...")) {
-        for (uint32_t sym_id : active_symbols) {
-          std::string sym_name = bridge_->getSymbolName(sym_id);
-          std::string exchange = bridge_->getExchangeName(sym_id);
-          if (sym_name.empty()) continue;
-
-          // Check if already in watchlist
-          bool already_added = (watchlist_.find(sym_id) != watchlist_.end());
-
-          std::string label = exchange + "/" + sym_name;
-          if (already_added) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-            ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_Disabled);
-            ImGui::PopStyleColor();
-          } else {
-            if (ImGui::Selectable(label.c_str())) {
-              add_symbol(sym_id, sym_name, exchange);
-            }
-          }
-        }
-        ImGui::EndCombo();
-      }
-      ImGui::SameLine();
-      ImGui::Text("(%zu in watchlist, %zu available)", watchlist_.size(), active_symbols.size());
-    }
-  }
 
   // Filter input
   render_filter_input();
@@ -228,6 +237,38 @@ void WatchlistPanel::render() {
     if (ImGui::MenuItem("Clear Watchlist")) {
       clear_watchlist();
     }
+    ImGui::EndPopup();
+  }
+
+  // Delete confirmation dialog
+  if (show_delete_confirmation_) {
+    ImGui::OpenPopup("Confirm Delete?");
+  }
+
+  if (ImGui::BeginPopupModal("Confirm Delete?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Are you sure you want to remove this symbol from the watchlist?");
+
+    // Find the symbol name to display in the confirmation
+    auto it = watchlist_.find(symbol_to_delete_);
+    if (it != watchlist_.end()) {
+      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Symbol: %s", it->second.symbol.c_str()); // Highlight the symbol name
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Yes, Remove", ImVec2(80, 0))) {
+      remove_symbol(symbol_to_delete_);
+      show_delete_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+      show_delete_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
     ImGui::EndPopup();
   }
 
@@ -545,11 +586,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
 
   // Make the delete button smaller and more compact
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 3.0f)); // Small padding but slightly larger for better click area
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f)); // Small padding but slightly larger for better click area
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
 
-  if (ImGui::Button("X##DeleteBtn")) {  // Use X instead of × for better font support
-    remove_symbol(entry.symbol_id);
+  if (ImGui::Button("×##DeleteBtn")) {  // Use × symbol for better visual representation
+    // Show confirmation dialog before deleting
+    symbol_to_delete_ = entry.symbol_id;
+    show_delete_confirmation_ = true;
   }
 
   // Add tooltip to explain the delete button

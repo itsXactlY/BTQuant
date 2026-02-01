@@ -1032,16 +1032,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(5);
   // Apply color coding to volume based on comparison with previous volume if available
-  ImVec4 volume_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
-
-  // Calculate color based on volume change (green for increase, red for decrease)
+  double volume_change_pct = 0.0;
   if (entry.previous_volume != 0.0) {
     double volume_change = entry.volume_24h - entry.previous_volume;
-    double volume_change_pct = (entry.previous_volume != 0.0) ? ((volume_change / entry.previous_volume) * 100.0) : 0.0;
-
-    // Use the same color calculation as other change indicators
-    volume_color = calculateChangeColor(volume_change_pct, false);
+    volume_change_pct = (entry.previous_volume != 0.0) ? ((volume_change / entry.previous_volume) * 100.0) : 0.0;
   }
+
+  ImVec4 volume_color = calculateChangeColor(volume_change_pct, false);
 
   // Apply smooth animation effect to volume if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -1052,13 +1049,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
-    if (entry.volume_24h >= entry.previous_volume) {
-      // Volume increased - enhance green component during animation
+    if (volume_change_pct >= 0.0) {
+      // Positive change - enhance green component during animation
       volume_color.x = volume_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
       volume_color.y = std::min(1.0f, volume_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
       volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
-      // Volume decreased - enhance red component during animation
+      // Negative change - enhance red component during animation
       volume_color.x = std::min(1.0f, volume_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
       volume_color.y = volume_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
       volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
@@ -1076,9 +1073,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
       // Draw a more prominent background highlight
-      ImVec4 highlight_color = (entry.volume_24h >= entry.previous_volume) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for increase
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for decrease
+      ImVec4 highlight_color = (volume_change_pct >= 0.0) ?
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1108,12 +1105,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(6);
   // Apply color coding to High based on comparison with current price
-  ImVec4 high_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
   double high_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
     high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
-    high_color = calculateChangeColor(high_diff_pct, true);
   }
+
+  ImVec4 high_color = calculateChangeColor(high_diff_pct, true);
 
   // Apply smooth animation effect to high if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -1178,12 +1175,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(7);
   // Apply color coding to Low based on comparison with current price
-  ImVec4 low_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
   double low_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
     low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
-    low_color = calculateChangeColor(low_diff_pct, true);
   }
+
+  ImVec4 low_color = calculateChangeColor(low_diff_pct, true);
 
   // Apply smooth animation effect to low if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -1248,12 +1245,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(8);
   // Apply color coding to Open based on comparison with current price
-  ImVec4 open_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
   double open_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
     open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
-    open_color = calculateChangeColor(open_diff_pct, true);
   }
+
+  ImVec4 open_color = calculateChangeColor(open_diff_pct, true);
 
   // Apply smooth animation effect to open if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -1318,16 +1315,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(9);
   // Apply color coding to VWAP based on change from previous value (green for increase, red for decrease)
-  ImVec4 vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
-
-  // Calculate color based on VWAP change (green for increase, red for decrease)
+  double vwap_change_pct = 0.0;
   if (entry.previous_vwap != 0.0) {
     double vwap_change = entry.vwap - entry.previous_vwap;
-    double vwap_change_pct = (entry.previous_vwap != 0.0) ? ((vwap_change / entry.previous_vwap) * 100.0) : 0.0;
-
-    // Use the same color calculation as other change indicators
-    vwap_color = calculateChangeColor(vwap_change_pct, true);
+    vwap_change_pct = (entry.previous_vwap != 0.0) ? ((vwap_change / entry.previous_vwap) * 100.0) : 0.0;
   }
+
+  ImVec4 vwap_color = calculateChangeColor(vwap_change_pct, true);
 
   // Apply smooth animation effect on top of color coding if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -1340,25 +1334,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Calculate flash intensity using the enhanced function
     float flash_intensity = calculateFlashIntensity(progress);
 
-    // Enhanced VWAP animation with more visual feedback
-    // Calculate if VWAP increased or decreased from previous value
-    double current_vwap = entry.vwap;
-    double previous_vwap = entry.previous_vwap;
-    if (current_vwap > previous_vwap) {
-      // VWAP went up - green highlight
-      float green_intensity = 0.4f + 0.6f * flash_intensity; // From 40% to 100% intensity
-      float red_intensity = 0.2f * (1.0f - flash_intensity); // Fade from red to none
-      float blue_intensity = 0.2f * (1.0f - flash_intensity); // Fade from blue to none
-      vwap_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
-    } else if (current_vwap < previous_vwap) {
-      // VWAP went down - red highlight
-      float red_intensity = 0.4f + 0.6f * flash_intensity; // From 40% to 100% intensity
-      float green_intensity = 0.2f * (1.0f - flash_intensity); // Fade from green to none
-      float blue_intensity = 0.2f * (1.0f - flash_intensity); // Fade from blue to none
-      vwap_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
+    // Enhance the color intensity during animation
+    if (vwap_change_pct >= 0.0) {
+      // Positive change - enhance green component during animation
+      vwap_color.x = vwap_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      vwap_color.y = std::min(1.0f, vwap_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
-      // No significant change in VWAP - light blue tint
-      vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
+      // Negative change - enhance red component during animation
+      vwap_color.x = std::min(1.0f, vwap_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      vwap_color.y = vwap_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
@@ -1373,7 +1359,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
       // Draw a more prominent background highlight
-      ImVec4 highlight_color = (current_vwap > previous_vwap) ?
+      ImVec4 highlight_color = (vwap_change_pct >= 0.0) ?
         ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
         ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 

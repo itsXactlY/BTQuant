@@ -76,11 +76,23 @@ void WatchlistPanel::render() {
   ImGui::Text("Add Symbol:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(150);
-  bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "Enter symbol...", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+  bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+  // Add tooltip to explain the input field
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Enter a symbol name (e.g., AAPL, MSFT) to add to watchlist");
+    ImGui::EndTooltip();
+  }
   ImGui::SameLine();
 
   // Button to add symbol by name
-  bool add_clicked = ImGui::Button("Add");
+  bool add_clicked = ImGui::Button("Add Symbol");
+  // Add tooltip to explain the button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Add the symbol entered above to the watchlist");
+    ImGui::EndTooltip();
+  }
   if (add_clicked || input_entered) {
     std::string symbol_to_add = new_symbol_buffer_;
     if (!symbol_to_add.empty() && bridge_) {
@@ -447,9 +459,24 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
+  // Style the delete button to be more visually distinct
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));      // Red background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.1f, 0.1f, 1.0f)); // Darker red when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));   // Even brighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+
   if (ImGui::Button("×")) {  // Use × symbol for cleaner look
     remove_symbol(entry.symbol_id);
   }
+
+  // Add tooltip to explain the delete button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Remove '%s' from watchlist", entry.symbol.c_str());
+    ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleColor(4); // Pop all 4 color styles
   ImGui::PopID();
 }
 

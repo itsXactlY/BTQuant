@@ -117,6 +117,9 @@ int main(int argc, char** argv) {
       panel_mgr->add_panel(BTQuant::PanelType::PERFORMANCE_MONITOR, "Performance Monitor", 0, 7, 6,
                            2);
 
+      // Add Alerts panel
+      panel_mgr->add_panel(BTQuant::PanelType::ALERTS, "Alerts", 4, 5, 2, 2);
+
       panel_mgr->auto_arrange_panels();
 
       // Load saved layout if available to override

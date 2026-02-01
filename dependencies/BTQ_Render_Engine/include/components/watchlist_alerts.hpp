@@ -77,12 +77,22 @@ public:
     // Set the alerts panel to send notifications to
     void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) {
         alerts_panel_ = alerts_panel;
+        // When setting shared_ptr, also clear the raw pointer to avoid duplicate notifications
+        alerts_panel_raw_ = nullptr;
+    }
+
+    // Set the alerts panel using a raw pointer (for internal use by panel manager)
+    void set_alerts_panel_raw(AlertsPanel* alerts_panel) {
+        alerts_panel_raw_ = alerts_panel;
+        // When setting raw pointer, also clear the shared_ptr to avoid duplicate notifications
+        alerts_panel_ = nullptr;
     }
 
 private:
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     std::shared_ptr<AlertsPanel> alerts_panel_;
+    AlertsPanel* alerts_panel_raw_ = nullptr;  // Raw pointer for panel manager connections
     std::map<std::string, WatchlistPriceAlert> alerts_;
     AlertTriggeredCallback on_alert_triggered_;
 

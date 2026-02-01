@@ -3247,6 +3247,15 @@ void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel)
   }
 }
 
+void WatchlistPanel::set_alerts_panel_raw(AlertsPanel* alerts_panel) {
+  if (alert_manager_) {
+    // Update the alerts panel reference in the alert manager
+    // Since we have a raw pointer, we need to be careful about lifetime management
+    // We'll use a lambda that captures the raw pointer and checks if it's valid
+    alert_manager_->set_alerts_panel_raw(alerts_panel);
+  }
+}
+
 void WatchlistPanel::add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
                                     double target_price, WatchlistPriceAlert::Direction direction) {
   if (alert_manager_) {

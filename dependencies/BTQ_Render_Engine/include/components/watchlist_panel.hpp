@@ -90,6 +90,7 @@ class WatchlistPanel : public PanelBase {
 
   // Alert management methods
   void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel);
+  void set_alerts_panel_raw(AlertsPanel* alerts_panel);
   void add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
                       double target_price, WatchlistPriceAlert::Direction direction);
   void remove_alerts_for_symbol(uint32_t symbol_id);

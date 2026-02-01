@@ -17,7 +17,7 @@ WatchlistAlertManager::WatchlistAlertManager(
 
     // Set up default callback to handle alerts even when alerts_panel_ is nullptr initially
     on_alert_triggered_ = [this](const WatchlistPriceAlert& alert, double current_price) {
-        // Log the alert in the alerts panel if available
+        // Log the alert in the alerts panel if available (try shared_ptr first)
         if (alerts_panel_) {
             auto now = std::chrono::system_clock::now();
             std::string message = std::string("Price ") +
@@ -34,6 +34,24 @@ WatchlistAlertManager::WatchlistAlertManager(
 
             // Add the log entry to the alerts panel
             alerts_panel_->add_alert_log(log_entry);
+        }
+        // If shared_ptr is not available, try raw pointer
+        else if (alerts_panel_raw_) {
+            auto now = std::chrono::system_clock::now();
+            std::string message = std::string("Price ") +
+                                 (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
+                                 std::string(" target: ") + std::to_string(alert.target_price);
+
+            // Create a new alert log entry
+            AlertLog log_entry;
+            log_entry.time = now;
+            log_entry.rule_name = alert.symbol_name + " Price Alert";
+            log_entry.symbol = alert.symbol_name;
+            log_entry.price = current_price;
+            log_entry.message = message;
+
+            // Add the log entry to the alerts panel using raw pointer
+            alerts_panel_raw_->add_alert_log(log_entry);
         }
 
         // Also output to console for debugging

@@ -273,7 +273,29 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     panels_[panel_id] = std::move(panel);
 
     // Special handling for connecting watchlist and alerts panels
-    // This connection happens at the application level where both panels are available as shared_ptr
+    // Check if we now have both panels and connect them
+    if (type == PanelType::WATCHLIST || type == PanelType::ALERTS) {
+      WatchlistPanel* watchlist_panel = nullptr;
+      AlertsPanel* alerts_panel = nullptr;
+
+      // Look for both panels in the collection
+      for (auto& [id, existing_panel] : panels_) {
+        if (existing_panel->get_config().type == PanelType::WATCHLIST) {
+          watchlist_panel = dynamic_cast<WatchlistPanel*>(existing_panel.get());
+        } else if (existing_panel->get_config().type == PanelType::ALERTS) {
+          alerts_panel = dynamic_cast<AlertsPanel*>(existing_panel.get());
+        }
+
+        if (watchlist_panel && alerts_panel) {
+          break; // Both found, exit early
+        }
+      }
+
+      // If both panels exist, connect them using a raw pointer (the panel manager owns both)
+      if (watchlist_panel && alerts_panel) {
+        watchlist_panel->set_alerts_panel_raw(alerts_panel);
+      }
+    }
 
     // Notify all registered callbacks about the new panel
     for (const auto& callback : panel_added_callbacks_) {
@@ -403,7 +425,29 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     panels_[panel_id] = std::move(panel);
 
     // Special handling for connecting watchlist and alerts panels
-    // This connection happens at the application level where both panels are available as shared_ptr
+    // Check if we now have both panels and connect them
+    if (type == PanelType::WATCHLIST || type == PanelType::ALERTS) {
+      WatchlistPanel* watchlist_panel = nullptr;
+      AlertsPanel* alerts_panel = nullptr;
+
+      // Look for both panels in the collection
+      for (auto& [id, existing_panel] : panels_) {
+        if (existing_panel->get_config().type == PanelType::WATCHLIST) {
+          watchlist_panel = dynamic_cast<WatchlistPanel*>(existing_panel.get());
+        } else if (existing_panel->get_config().type == PanelType::ALERTS) {
+          alerts_panel = dynamic_cast<AlertsPanel*>(existing_panel.get());
+        }
+
+        if (watchlist_panel && alerts_panel) {
+          break; // Both found, exit early
+        }
+      }
+
+      // If both panels exist, connect them using a raw pointer (the panel manager owns both)
+      if (watchlist_panel && alerts_panel) {
+        watchlist_panel->set_alerts_panel_raw(alerts_panel);
+      }
+    }
 
     // Notify all registered callbacks about the new panel
     for (const auto& callback : panel_added_callbacks_) {

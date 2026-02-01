@@ -16,6 +16,11 @@
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 
+// Forward declaration for AlertsPanel
+namespace BTQuant {
+    class AlertsPanel;
+}
+
 namespace BTQuant {
 
 struct GridLayout {
@@ -86,9 +91,14 @@ class PanelManager {
   // Get panel by ID
   PanelBase* get_panel_by_id(uint32_t panel_id) const;
 
+
   // Serialization
   std::string serialize_layout() const;
   void deserialize_layout(const std::string& layout_json);
+
+  // Config management
+  void save_all_panel_configs(const std::string& config_file) const;
+  void load_all_panel_configs(const std::string& config_file);
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

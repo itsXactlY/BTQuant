@@ -3034,6 +3034,9 @@ void WatchlistPanel::clear_group(const std::string& group_name) {
 void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) {
   if (alert_manager_) {
     // Update the alerts panel reference in the alert manager
+    alert_manager_->set_alerts_panel(alerts_panel);
+
+    // Also set up the callback for additional processing if needed
     alert_manager_->set_alert_triggered_callback([alerts_panel](const WatchlistPriceAlert& alert, double current_price) {
       if (alerts_panel) {
         auto now = std::chrono::system_clock::now();
@@ -3049,9 +3052,9 @@ void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel)
         log_entry.price = current_price;
         log_entry.message = message;
 
-        // Note: Since we can't directly access the logs_ vector in AlertsPanel,
-        // we would need to add a public method to AlertsPanel to add logs
-        // For now, we'll just log to console
+        // Add the log entry to the alerts panel
+        alerts_panel->add_alert_log(log_entry);
+
         std::cout << "[WatchlistAlert] Triggered: " << alert.symbol_name
                   << " price alert at " << current_price << " (target: " << alert.target_price << ")" << std::endl;
       }

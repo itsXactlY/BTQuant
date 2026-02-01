@@ -272,6 +272,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
+    // Special handling for connecting watchlist and alerts panels
+    // This connection happens at the application level where both panels are available as shared_ptr
+
     // Notify all registered callbacks about the new panel
     for (const auto& callback : panel_added_callbacks_) {
       if (callback) {
@@ -399,6 +402,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     panel->initialize();
     panels_[panel_id] = std::move(panel);
 
+    // Special handling for connecting watchlist and alerts panels
+    // This connection happens at the application level where both panels are available as shared_ptr
+
     // Notify all registered callbacks about the new panel
     for (const auto& callback : panel_added_callbacks_) {
       if (callback) {
@@ -423,6 +429,10 @@ PanelBase* PanelManager::get_panel_by_id(uint32_t panel_id) const {
   auto it = panels_.find(panel_id);
   return it != panels_.end() ? it->second.get() : nullptr;
 }
+
+// This method is not needed since we handle panel connections differently
+// The connection happens in the set_alerts_panel method of WatchlistPanel
+// when both panels are available
 
 void PanelManager::remove_panel(uint32_t panel_id) {
   auto it = panels_.find(panel_id);

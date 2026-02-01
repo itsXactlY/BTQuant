@@ -74,6 +74,11 @@ public:
         on_alert_triggered_ = std::move(callback);
     }
 
+    // Set the alerts panel to send notifications to
+    void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) {
+        alerts_panel_ = alerts_panel;
+    }
+
 private:
     std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

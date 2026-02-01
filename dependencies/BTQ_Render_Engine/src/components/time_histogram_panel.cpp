@@ -16,6 +16,33 @@ void TimeHistogramPanel::initialize() { PanelBase::initialize(); }
 void TimeHistogramPanel::render() {
   begin_panel_window();
 
+  // Add volume analysis type selector
+  const char* volume_analysis_types[] = {
+    "Trades",             // Total number of trades
+    "BuyTrades",          // Number of buy trades
+    "SellTrades",         // Number of sell trades
+    "Volume",             // Total volume (bid + ask)
+    "BuyVolume",          // Volume of buy trades
+    "SellVolume",         // Volume of sell trades
+    "BuyVolumePercent",   // Percentage of buy volume
+    "SellVolumePercent",  // Percentage of sell volume
+    "BuySellVolume",      // Difference between buy and sell volume (BuyVolume - SellVolume)
+    "Delta",              // Net difference between buy and sell volume (BuyVolume - SellVolume)
+    "DeltaPercent",       // Delta as percentage of total volume
+    "CumulativeDelta",    // Running sum of delta values
+    "AverageSize",        // Average trade size
+    "AverageBuySize",     // Average size of buy trades
+    "AverageSellSize",    // Average size of sell trades
+    "MaxOneTradeVolume",  // Maximum volume of a single trade
+    "FilteredVolume",     // Volume filtered by specific criteria
+    "SplitVolume"         // Split volume display: buy volume on left half, sell volume on right half
+  };
+
+  int current_type = static_cast<int>(volume_data_type_);
+  if (ImGui::Combo("Volume Analysis Type", &current_type, volume_analysis_types, IM_ARRAYSIZE(volume_analysis_types))) {
+    volume_data_type_ = static_cast<Data::VolumeDataType>(current_type);
+  }
+
   if (ImPlot::BeginPlot("Time Histogram", "Time", "Volume", ImVec2(-1, -1), ImPlotFlags_None, ImPlotAxisFlags_None, ImPlotAxisFlags_None)) {
     // Generate sample time-based histogram data for demonstration
     static double x_data[100], buy_data[100], sell_data[100];
@@ -46,6 +73,99 @@ void TimeHistogramPanel::render() {
 
     // Handle different volume analysis types
     switch (static_cast<Data::VolumeAnalysisType>(volume_data_type_)) {
+      case Data::VolumeAnalysisType::Trades: {
+        // Total number of trades - using a constant value for demonstration
+        static double trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate trade counts with some variation
+          trades_data[i] = 10.0 + 5.0 * sin(i * 0.1) + 2.0 * cos(i * 0.3);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 1.0f, 0.7f));  // Blue fill
+        ImPlot::PlotBars("Trades", x_data, trades_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyTrades: {
+        // Number of buy trades - using a constant value for demonstration
+        static double buy_trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate buy trade counts with some variation
+          buy_trades_data[i] = 5.0 + 3.0 * sin(i * 0.15) + 1.5 * cos(i * 0.25);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Buy Trades", x_data, buy_trades_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::SellTrades: {
+        // Number of sell trades - using a constant value for demonstration
+        static double sell_trades_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate sell trade counts with some variation
+          sell_trades_data[i] = 5.0 + 3.0 * cos(i * 0.15) + 1.5 * sin(i * 0.25);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Sell Trades", x_data, sell_trades_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::Volume: {
+        // Total volume (bid + ask) - sum of buy and sell volumes
+        static double total_vol_data[100];
+        for (int i = 0; i < 100; ++i) {
+          total_vol_data[i] = buy_data[i] + sell_data[i];
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 1.0f, 0.0f, 0.7f));  // Yellow fill
+        ImPlot::PlotBars("Total Volume", x_data, total_vol_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyVolume: {
+        // Volume of buy trades
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Buy Volume", x_data, buy_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::SellVolume: {
+        // Volume of sell trades
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Sell Volume", x_data, sell_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::BuyVolumePercent: {
+        // Percentage of buy volume relative to total volume
+        static double buy_vol_percent[100];
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          if (total > 0) {
+            buy_vol_percent[i] = (buy_data[i] / total) * 100.0;
+          } else {
+            buy_vol_percent[i] = 0.0;
+          }
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Buy Volume %", x_data, buy_vol_percent, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::SellVolumePercent: {
+        // Percentage of sell volume relative to total volume
+        static double sell_vol_percent[100];
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          if (total > 0) {
+            sell_vol_percent[i] = (sell_data[i] / total) * 100.0;
+          } else {
+            sell_vol_percent[i] = 0.0;
+          }
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Sell Volume %", x_data, sell_vol_percent, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
       case Data::VolumeAnalysisType::BuySellVolume: {
         // Create stacked bars: buy volume (green) on top, sell volume (red) on bottom
         // For visualization, we'll plot buy volume above zero and sell volume below zero
@@ -99,6 +219,41 @@ void TimeHistogramPanel::render() {
         ImPlot::PlotBars("Negative Delta", x_data, neg_values, 100, 0.8);
         ImPlot::PopStyleColor();
 
+        break;
+      }
+      case Data::VolumeAnalysisType::DeltaPercent: {
+        // Delta as percentage of total volume
+        static double delta_percent[100];
+        for (int i = 0; i < 100; ++i) {
+          double total = buy_data[i] + sell_data[i];
+          if (total > 0) {
+            delta_percent[i] = ((buy_data[i] - sell_data[i]) / total) * 100.0;
+          } else {
+            delta_percent[i] = 0.0;
+          }
+        }
+
+        // Separate positive and negative values for different coloring
+        static double pos_values[100], neg_values[100];
+        for (int i = 0; i < 100; ++i) {
+          if (delta_percent[i] >= 0) {
+            pos_values[i] = delta_percent[i];
+            neg_values[i] = 0.0;
+          } else {
+            pos_values[i] = 0.0;
+            neg_values[i] = delta_percent[i];
+          }
+        }
+
+        // Plot positive delta percent values (green)
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Positive Delta %", x_data, pos_values, 100, 0.8);
+        ImPlot::PopStyleColor();
+
+        // Plot negative delta percent values (red)
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Negative Delta %", x_data, neg_values, 100, 0.8);
+        ImPlot::PopStyleColor();
         break;
       }
       case Data::VolumeAnalysisType::CumulativeDelta: {
@@ -191,6 +346,94 @@ void TimeHistogramPanel::render() {
         // Add legend entry for the cumulative delta line
         ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
         ImPlot::PlotDummy("Cumulative Delta");  // Dummy plot for legend
+        ImPlot::PopStyleColor();
+
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageSize: {
+        // Average trade size - using a constant value for demonstration
+        static double avg_size_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate average trade size with some variation
+          avg_size_data[i] = 50.0 + 20.0 * sin(i * 0.05) + 10.0 * cos(i * 0.1);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.7f, 0.3f, 1.0f, 0.7f));  // Purple fill
+        ImPlot::PlotBars("Avg Size", x_data, avg_size_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageBuySize: {
+        // Average size of buy trades - using a constant value for demonstration
+        static double avg_buy_size_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate average buy trade size with some variation
+          avg_buy_size_data[i] = 45.0 + 15.0 * sin(i * 0.06) + 8.0 * cos(i * 0.12);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.8f, 0.0f, 0.7f));  // Dark green fill
+        ImPlot::PlotBars("Avg Buy Size", x_data, avg_buy_size_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::AverageSellSize: {
+        // Average size of sell trades - using a constant value for demonstration
+        static double avg_sell_size_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate average sell trade size with some variation
+          avg_sell_size_data[i] = 48.0 + 18.0 * cos(i * 0.06) + 9.0 * sin(i * 0.12);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.8f, 0.0f, 0.0f, 0.7f));  // Dark red fill
+        ImPlot::PlotBars("Avg Sell Size", x_data, avg_sell_size_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::MaxOneTradeVolume: {
+        // Maximum volume of a single trade - using a constant value for demonstration
+        static double max_trade_vol_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate max trade volume with some variation
+          max_trade_vol_data[i] = 100.0 + 40.0 * sin(i * 0.04) + 20.0 * cos(i * 0.08);
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.5f, 0.0f, 0.7f));  // Orange fill
+        ImPlot::PlotBars("Max Trade Vol", x_data, max_trade_vol_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::FilteredVolume: {
+        // Volume filtered by specific criteria - using a combination of buy and sell for demo
+        static double filtered_vol_data[100];
+        for (int i = 0; i < 100; ++i) {
+          // Simulate filtered volume as weighted combination
+          filtered_vol_data[i] = 0.6 * buy_data[i] + 0.4 * sell_data[i];
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 0.7f, 0.7f, 0.7f));  // Teal fill
+        ImPlot::PlotBars("Filtered Volume", x_data, filtered_vol_data, 100, 0.8);
+        ImPlot::PopStyleColor();
+        break;
+      }
+      case Data::VolumeAnalysisType::SplitVolume: {
+        // Split volume display: buy volume on left half, sell volume on right half
+        // This requires a different visualization approach
+        // For this demo, we'll show both volumes side by side
+
+        // Create arrays for split representation
+        static double buy_split[100], sell_split[100];
+        for (int i = 0; i < 100; ++i) {
+          buy_split[i] = buy_data[i] / 2.0;  // Half height for split view
+          sell_split[i] = sell_data[i] / 2.0;  // Half height for split view
+        }
+
+        // Plot buy volume (green)
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Buy Volume", x_data, buy_split, 100, 0.4);  // Narrower bars
+        ImPlot::PopStyleColor();
+
+        // Plot sell volume (red) shifted slightly to the right
+        static double x_shifted[100];
+        for (int i = 0; i < 100; ++i) {
+          x_shifted[i] = x_data[i] + 0.2;  // Shift right
+        }
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Sell Volume", x_shifted, sell_split, 100, 0.4);  // Narrower bars
         ImPlot::PopStyleColor();
 
         break;

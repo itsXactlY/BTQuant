@@ -107,6 +107,7 @@ set(DASHBOARD_SOURCES
     src/components/histogram_panel.cpp
     src/components/scatter_plot_panel.cpp
     src/components/time_series_panel.cpp
+    src/components/time_statistics_panel.cpp
     src/components/screener_panel.cpp
     src/components/log_panel.cpp
     src/components/performance_monitor_panel.cpp

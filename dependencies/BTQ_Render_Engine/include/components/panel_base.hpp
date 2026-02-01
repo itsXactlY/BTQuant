@@ -30,7 +30,8 @@ enum class PanelType {
   LOG_PANEL,
   FOOTPRINT_CHART,
   TPO_PROFILE,
-  PERFORMANCE_MONITOR
+  PERFORMANCE_MONITOR,
+  TIME_STATISTICS
 };
 
 struct PanelConfig {

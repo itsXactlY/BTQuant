@@ -112,6 +112,8 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "TPO Profile";
     case PanelType::PERFORMANCE_MONITOR:
       return "Performance Monitor";
+    case PanelType::TIME_STATISTICS:
+      return "Time Statistics";
     default:
       return "Unknown";
   }

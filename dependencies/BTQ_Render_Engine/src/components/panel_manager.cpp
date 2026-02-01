@@ -20,6 +20,7 @@
 #include "../../include/components/status_bar_panel.hpp"
 #include "../../include/components/tape_panel.hpp"
 #include "../../include/components/time_series_panel.hpp"
+#include "../../include/components/time_statistics_panel.hpp"
 #include "../../include/components/tpo_panel.hpp"
 #include "../../include/components/trading_orders_panel.hpp"
 #include "../../include/components/trading_positions_panel.hpp"
@@ -193,6 +194,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
+    case PanelType::TIME_STATISTICS:
+      panel = std::make_unique<TimeStatisticsPanel>(config);
+      break;
     default:
       return 0;
   }
@@ -291,6 +295,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
+      break;
+    case PanelType::TIME_STATISTICS:
+      panel = std::make_unique<TimeStatisticsPanel>(config);
       break;
     default:
       return 0;
@@ -670,6 +677,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "TPO Profile";
     case PanelType::LOG_PANEL:
       return "Log";
+    case PanelType::TIME_STATISTICS:
+      return "Time Statistics";
     default:
       return "Panel";
   }

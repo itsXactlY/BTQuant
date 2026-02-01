@@ -9,7 +9,6 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "alerts_panel.hpp"
-#include "watchlist_panel.hpp"
 
 namespace BTQuant {
 
@@ -23,11 +22,17 @@ struct WatchlistPriceAlert {
     AlertStatus status;
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point triggered_at;
-    
+
+    // Default constructor
+    WatchlistPriceAlert() : id(""), symbol_id(0), symbol_name(""), target_price(0.0),
+                           direction(Direction::ABOVE), status(AlertStatus::ACTIVE),
+                           created_at(std::chrono::system_clock::time_point{}),
+                           triggered_at(std::chrono::system_clock::time_point{}) {}
+
     // Constructor
-    WatchlistPriceAlert(const std::string& alert_id, uint32_t sym_id, const std::string& sym_name, 
+    WatchlistPriceAlert(const std::string& alert_id, uint32_t sym_id, const std::string& sym_name,
                        double price, Direction dir)
-        : id(alert_id), symbol_id(sym_id), symbol_name(sym_name), target_price(price), 
+        : id(alert_id), symbol_id(sym_id), symbol_name(sym_name), target_price(price),
           direction(dir), status(AlertStatus::ACTIVE),
           created_at(std::chrono::system_clock::now()),
           triggered_at(std::chrono::system_clock::time_point{}) {}

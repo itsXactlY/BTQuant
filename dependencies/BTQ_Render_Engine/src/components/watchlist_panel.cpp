@@ -182,10 +182,10 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   std::string panel_name = "watchlist";
   config_file_path_ = panel_name + "_config.ini";
 
-  // Initialize default watchlist groups
-  create_group("Futures");
-  create_group("Crypto");
+  // Initialize default watchlist groups with better organization
   create_group("Stocks");
+  create_group("Crypto");
+  create_group("Futures");
 
   // Ensure default groups are at the beginning of the group names list in the right order
   ensure_default_groups_order();
@@ -855,18 +855,33 @@ void WatchlistPanel::update_watchlist_data() {
 
 void WatchlistPanel::render_group_tabs() {
   // Create tabs for different watchlist groups with enhanced styling
-  ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 4.0f);  // Round the tab corners slightly
-  ImGui::PushStyleVar(ImGuiStyleVar_TabBorderSize, 1.0f); // Add border to tabs
+  ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);  // Round the tab corners more
+  ImGui::PushStyleVar(ImGuiStyleVar_TabBorderSize, 1.5f); // Add thicker border to tabs
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f)); // Add more padding to tabs
 
-  if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_None)) {
+  // Customize tab colors for better visual hierarchy
+  ImGui::PushStyleColor(ImGuiCol_Tab, ImVec4(0.18f, 0.18f, 0.18f, 0.86f));           // Inactive tab background
+  ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));       // Hovered tab background
+  ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));     // Active tab background
+  ImGui::PushStyleColor(ImGuiCol_TabUnfocused, ImVec4(0.15f, 0.15f, 0.15f, 0.97f)); // Inactive tab when window unfocused
+  ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive, ImVec4(0.2f, 0.2f, 0.2f, 1.0f)); // Active tab when window unfocused
+
+  if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_Reorderable)) {
     for (const auto& group_name : group_names_) {
       bool is_selected = (group_name == current_group_name_);
+
+      // Count symbols in this group for display
+      auto it = watchlist_groups_.find(group_name);
+      size_t symbol_count = (it != watchlist_groups_.end()) ? it->second.size() : 0;
+
+      // Format the tab label with symbol count
+      std::string tab_label = group_name + " (" + std::to_string(symbol_count) + ")";
 
       // Set tab item flags for better appearance
       ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
 
       // Create the tab item with enhanced styling
-      if (ImGui::BeginTabItem(group_name.c_str(), nullptr, tab_flags)) {
+      if (ImGui::BeginTabItem(tab_label.c_str(), nullptr, tab_flags)) {
         if (!is_selected) {
           // Switch to this group
           switch_to_group(group_name);
@@ -878,20 +893,38 @@ void WatchlistPanel::render_group_tabs() {
       if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::Text("Switch to %s watchlist group", group_name.c_str());
+        ImGui::Text("Symbols in this group: %zu", symbol_count);
 
-        // Show count of symbols in this group
-        auto it = watchlist_groups_.find(group_name);
-        if (it != watchlist_groups_.end()) {
-          ImGui::Text("Symbols in this group: %zu", it->second.size());
+        // Show additional info if group is not a default group
+        if (group_name != "Futures" && group_name != "Crypto" && group_name != "Stocks") {
+          ImGui::Separator();
+          ImGui::Text("Right-click to manage group");
+
+          // Add context menu for custom groups
+          if (ImGui::BeginPopupContextItem("GroupContextMenu")) {
+            if (ImGui::MenuItem("Rename Group")) {
+              // Future enhancement: implement group renaming with input dialog
+              std::cout << "[WatchlistPanel] Rename functionality would be implemented here for: " << group_name << std::endl;
+            }
+
+            if (group_name != "Futures" && group_name != "Crypto" && group_name != "Stocks") {
+              if (ImGui::MenuItem("Delete Group")) {
+                delete_group(group_name);
+              }
+            }
+
+            ImGui::EndPopup();
+          }
         }
+
         ImGui::EndTooltip();
       }
     }
 
     // Add a '+' button to create new groups with better styling
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));      // Dark gray background
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.4f, 1.0f)); // Slightly lighter when hovered
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));  // Even lighter when active
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.35f, 0.25f, 1.0f));      // Greenish background
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.45f, 0.35f, 1.0f)); // Lighter green when hovered
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.55f, 0.45f, 1.0f));  // Even lighter when active
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
 
     if (ImGui::Button("+##AddGroup")) {
@@ -914,7 +947,9 @@ void WatchlistPanel::render_group_tabs() {
     ImGui::EndTabBar();
   }
 
-  ImGui::PopStyleVar(2); // Pop the style variables
+  // Restore original styles
+  ImGui::PopStyleColor(5); // Pop the 5 color styles
+  ImGui::PopStyleVar(3); // Pop the 3 style variables
 }
 
 void WatchlistPanel::render_filter_input() {
@@ -2794,6 +2829,49 @@ void WatchlistPanel::create_group(const std::string& group_name) {
   std::cout << "[WatchlistPanel] Created new watchlist group: " << group_name << std::endl;
 }
 
+void WatchlistPanel::rename_group(const std::string& old_name, const std::string& new_name) {
+  // Check if old group exists
+  if (watchlist_groups_.find(old_name) == watchlist_groups_.end()) {
+    std::cout << "[WatchlistPanel] Cannot rename non-existent group: " << old_name << std::endl;
+    return;
+  }
+
+  // Check if new name already exists
+  if (watchlist_groups_.find(new_name) != watchlist_groups_.end()) {
+    std::cout << "[WatchlistPanel] Group with name already exists: " << new_name << std::endl;
+    return;
+  }
+
+  // Don't allow renaming default groups
+  if (old_name == "Futures" || old_name == "Crypto" || old_name == "Stocks") {
+    std::cout << "[WatchlistPanel] Cannot rename default group: " << old_name << std::endl;
+    return;
+  }
+
+  // Move the group data to the new name
+  watchlist_groups_[new_name] = watchlist_groups_[old_name];
+  watchlist_groups_.erase(old_name);
+
+  // Move the display order to the new name
+  if (group_display_orders_.find(old_name) != group_display_orders_.end()) {
+    group_display_orders_[new_name] = group_display_orders_[old_name];
+    group_display_orders_.erase(old_name);
+  }
+
+  // Update the group names list
+  auto it = std::find(group_names_.begin(), group_names_.end(), old_name);
+  if (it != group_names_.end()) {
+    *it = new_name;
+  }
+
+  // If we're renaming the current group, update the current group name
+  if (current_group_name_ == old_name) {
+    current_group_name_ = new_name;
+  }
+
+  std::cout << "[WatchlistPanel] Renamed watchlist group: " << old_name << " -> " << new_name << std::endl;
+}
+
 void WatchlistPanel::delete_group(const std::string& group_name) {
   // Don't delete if it's one of the default groups
   if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
@@ -2914,9 +2992,9 @@ void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel)
     alert_manager_->set_alert_triggered_callback([alerts_panel](const WatchlistPriceAlert& alert, double current_price) {
       if (alerts_panel) {
         auto now = std::chrono::system_clock::now();
-        std::string message = "Price " +
+        std::string message = std::string("Price ") +
                              (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
-                             " target: " + std::to_string(alert.target_price);
+                             std::string(" target: ") + std::to_string(alert.target_price);
 
         // Create a new alert log entry
         AlertLog log_entry;
@@ -2954,7 +3032,7 @@ void WatchlistPanel::ensure_default_groups_order() {
   std::vector<std::string> reordered_groups;
 
   // Add the default groups in the desired order first
-  std::vector<std::string> default_groups = {"Futures", "Crypto", "Stocks"};
+  std::vector<std::string> default_groups = {"Stocks", "Crypto", "Futures"};
 
   for (const auto& default_group : default_groups) {
     if (std::find(group_names_.begin(), group_names_.end(), default_group) != group_names_.end()) {

@@ -59,6 +59,7 @@ class WatchlistPanel : public PanelBase {
   void clear_group(const std::string& group_name);
   void create_group(const std::string& group_name);
   void delete_group(const std::string& group_name);
+  void rename_group(const std::string& old_name, const std::string& new_name);
   void switch_to_group(const std::string& group_name);
 
   // Symbol selection callback (e.g., to open chart when clicked)

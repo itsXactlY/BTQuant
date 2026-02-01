@@ -64,16 +64,16 @@ void WatchlistAlertManager::update_alerts() {
             continue; // Skip disabled or triggered alerts
         }
 
-        // Get current price for the symbol
-        auto current_data = bridge_->getLastMarketData(alert.symbol_id);
-        if (current_data.has_value()) {
-            double current_price = current_data.value().price; // Assuming price field exists
-            
+        // Get current price for the symbol from the market data processor
+        auto analytics = processor_->getSymbolAnalytics(alert.symbol_id);
+        if (analytics.symbol_id != 0) {  // Check if valid data was returned
+            double current_price = analytics.last_trade_price;
+
             if (should_trigger_alert(alert, current_price)) {
                 // Update the alert status and timestamp
                 alert.status = AlertStatus::TRIGGERED;
                 alert.triggered_at = std::chrono::system_clock::now();
-                
+
                 // Trigger the alert
                 trigger_alert(alert, current_price);
             }
@@ -106,9 +106,9 @@ void WatchlistAlertManager::trigger_alert(const WatchlistPriceAlert& alert, doub
     // Log the alert in the alerts panel
     if (alerts_panel_) {
         auto now = std::chrono::system_clock::now();
-        std::string message = "Price " +
+        std::string message = std::string("Price ") +
                              (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
-                             " target: " + std::to_string(alert.target_price);
+                             std::string(" target: ") + std::to_string(alert.target_price);
 
         // Create a new alert log entry
         AlertLog log_entry;

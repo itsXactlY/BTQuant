@@ -192,16 +192,8 @@ void DashboardControls::render_dashboard_controls() {
             auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
             for (const auto& symbol_info : all_symbol_infos) {
               // Check if this symbol's exchange is in the selected exchanges
-              bool exchange_selected = false;
-              for (size_t i = 0; i < all_exchanges_.size(); ++i) {
-                if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
-                  exchange_selected = true;
-                  break;
-                }
-              }
-
-              // Only add symbol if its exchange is selected
-              if (exchange_selected) {
+              if (is_exchange_selected(symbol_info.exchange)) {
+                // Only add symbol if its exchange is selected
                 // Check if symbol is already in the list
                 bool found = false;
                 for (const auto& existing_symbol : all_symbols_) {
@@ -239,18 +231,7 @@ void DashboardControls::render_dashboard_controls() {
                   }
 
                   // Check if this symbol's exchange is in the selected exchanges
-                  bool exchange_selected = false;
-                  if (!exchange_name.empty()) {
-                    for (size_t i = 0; i < all_exchanges_.size(); ++i) {
-                      if (all_exchanges_[i] == exchange_name && selected_exchanges_[i] != 0) {
-                        exchange_selected = true;
-                        break;
-                      }
-                    }
-                  } else {
-                    // If exchange name is empty, assume it's selected
-                    exchange_selected = true;
-                  }
+                  bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
 
                   if (exchange_selected) {
                     // Check if symbol is already in the list
@@ -486,6 +467,16 @@ void DashboardControls::initialize_vulkan_resources(VulkanCore* core) {
 
 void DashboardControls::clear_data() {
   // No data to clear for controls panel
+}
+
+bool DashboardControls::is_exchange_selected(const std::string& exchange_name) const {
+  // Check if the given exchange is in the selected exchanges list
+  for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+    if (all_exchanges_[i] == exchange_name && selected_exchanges_[i] != 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void DashboardControls::fetch_symbols_from_exchange_api() {

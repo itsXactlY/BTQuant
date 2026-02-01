@@ -46,6 +46,9 @@ class DashboardControls : public UIComponent {
 
   // Methods for exchange API integration
   void fetch_symbols_from_exchange_api();
+
+  // Helper method to check if an exchange is selected
+  bool is_exchange_selected(const std::string& exchange_name) const;
 };
 
 }  // namespace BTQuant

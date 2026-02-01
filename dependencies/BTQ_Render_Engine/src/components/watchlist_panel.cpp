@@ -10,6 +10,33 @@
 
 namespace BTQuant {
 
+// Helper function to calculate color intensity based on change magnitude
+ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
+  // Determine if change is positive or negative
+  bool is_positive = change_value >= 0;
+
+  // Calculate absolute magnitude for intensity
+  double abs_change = std::abs(change_value);
+
+  // Define thresholds for intensity scaling
+  double max_intensity_threshold = is_percentage ? 10.0 : 100.0; // 10% or $100 as max intensity
+  double min_intensity = 0.2f;  // Minimum color intensity
+  double max_intensity = 0.9f;  // Maximum color intensity
+
+  // Calculate intensity factor (clamped between 0 and 1)
+  double intensity_factor = std::min(1.0, abs_change / max_intensity_threshold);
+  double color_intensity = min_intensity + (max_intensity - min_intensity) * intensity_factor;
+
+  // Return appropriate color based on sign and intensity
+  if (is_positive) {
+    // Green for positive changes
+    return ImVec4(color_intensity, std::min(1.0, 0.3f + intensity_factor * 0.7f), 0.2f, 1.0f);
+  } else {
+    // Red for negative changes
+    return ImVec4(std::min(1.0, 0.3f + intensity_factor * 0.7f), color_intensity * 0.3f, color_intensity * 0.3f, 1.0f);
+  }
+}
+
 WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
@@ -389,13 +416,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(3);
-  ImVec4 change_color =
-      entry.change_pct >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-  ImGui::TextColored(change_color, "%+.2f%%", entry.change_pct);
+  ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
+  ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
 
   ImGui::TableSetColumnIndex(4);
-  ImVec4 change_dollar_color =
-      entry.change_dollar >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+  ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
   ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
 
   ImGui::TableSetColumnIndex(5);

@@ -1072,11 +1072,30 @@ void WatchlistPanel::render_table_header() {
     }
 
     // Render the header text with sort indicator
-    ImGui::Text("%s", header_text.c_str());
+    // Highlight the header if it's the current sort column
+    if (orig_idx == sort_column_) {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 1.0f, 1.0f)); // Light blue highlight for sorted column
+      ImGui::Text("%s", header_text.c_str());
+      ImGui::PopStyleColor();
+    } else {
+      ImGui::Text("%s", header_text.c_str());
+    }
 
     // Check if the current visible column is being hovered for right-click
     if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
       ImGui::OpenPopup("ColumnContextMenu");
+    }
+
+    // Check if the current visible column is being clicked for sorting
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+      // Toggle sort direction if clicking the same column, otherwise sort by new column
+      if (orig_idx == sort_column_) {
+        sort_ascending_ = !sort_ascending_;
+      } else {
+        sort_column_ = orig_idx;
+        sort_ascending_ = true; // Default to ascending when switching columns
+      }
+      sort_watchlist();
     }
 
     // Implement drag-and-drop for column reordering
@@ -2101,6 +2120,11 @@ double WatchlistPanel::calculate_24h_change(const RenderEngine::OHLCVCandle& cur
 }
 
 void WatchlistPanel::sort_watchlist() {
+  // Don't sort if the Action column is selected (column 10) since it doesn't have comparable values
+  if (sort_column_ == 10) {
+    return;
+  }
+
   std::sort(get_current_display_order().begin(), get_current_display_order().end(), [this](uint32_t a_id, uint32_t b_id) {
     const auto& a = get_current_watchlist().at(a_id);
     const auto& b = get_current_watchlist().at(b_id);
@@ -2136,9 +2160,6 @@ void WatchlistPanel::sort_watchlist() {
         break;
       case 9:  // VWAP
         result = a.vwap < b.vwap;
-        break;
-      case 10:  // Action (not actually sorted, fallback to symbol)
-        result = a.symbol < b.symbol;
         break;
       default:
         result = a.symbol < b.symbol;
@@ -2176,9 +2197,6 @@ void WatchlistPanel::sort_watchlist() {
         break;
       case 9:  // VWAP
         values_equal = (a.vwap == b.vwap);
-        break;
-      case 10:  // Action
-        values_equal = true; // Action column doesn't have comparable values
         break;
       default:
         values_equal = (a.symbol == b.symbol);

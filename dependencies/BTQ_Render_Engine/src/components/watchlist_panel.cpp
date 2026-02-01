@@ -867,36 +867,81 @@ void WatchlistPanel::render_group_tabs() {
   ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive, ImVec4(0.2f, 0.2f, 0.2f, 1.0f)); // Active tab when window unfocused
 
   if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_Reorderable)) {
-    for (const auto& group_name : group_names_) {
-      bool is_selected = (group_name == current_group_name_);
+    // First, render the default groups (Futures, Crypto, Stocks) in a specific order
+    std::vector<std::string> default_groups = {"Stocks", "Crypto", "Futures"};
 
-      // Count symbols in this group for display
-      auto it = watchlist_groups_.find(group_name);
-      size_t symbol_count = (it != watchlist_groups_.end()) ? it->second.size() : 0;
+    for (const auto& group_name : default_groups) {
+      // Only render if the group exists in our groups
+      if (watchlist_groups_.find(group_name) != watchlist_groups_.end()) {
+        bool is_selected = (group_name == current_group_name_);
 
-      // Format the tab label with symbol count
-      std::string tab_label = group_name + " (" + std::to_string(symbol_count) + ")";
+        // Count symbols in this group for display
+        auto it = watchlist_groups_.find(group_name);
+        size_t symbol_count = (it != watchlist_groups_.end()) ? it->second.size() : 0;
 
-      // Set tab item flags for better appearance
-      ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
+        // Format the tab label with symbol count
+        std::string tab_label = group_name + " (" + std::to_string(symbol_count) + ")";
 
-      // Create the tab item with enhanced styling
-      if (ImGui::BeginTabItem(tab_label.c_str(), nullptr, tab_flags)) {
-        if (!is_selected) {
-          // Switch to this group
-          switch_to_group(group_name);
+        // Set tab item flags for better appearance
+        ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
+
+        // Create the tab item with enhanced styling
+        if (ImGui::BeginTabItem(tab_label.c_str(), nullptr, tab_flags)) {
+          if (!is_selected) {
+            // Switch to this group
+            switch_to_group(group_name);
+          }
+          ImGui::EndTabItem();
         }
-        ImGui::EndTabItem();
+
+        // Add tooltip to each tab
+        if (ImGui::IsItemHovered()) {
+          ImGui::BeginTooltip();
+          ImGui::Text("Switch to %s watchlist group", group_name.c_str());
+          ImGui::Text("Symbols in this group: %zu", symbol_count);
+
+          // Show additional info for default groups
+          if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
+            ImGui::Separator();
+            ImGui::Text("Default watchlist group");
+          }
+
+          ImGui::EndTooltip();
+        }
       }
+    }
 
-      // Add tooltip to each tab
-      if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::Text("Switch to %s watchlist group", group_name.c_str());
-        ImGui::Text("Symbols in this group: %zu", symbol_count);
+    // Then render any custom groups that are not default groups
+    for (const auto& group_name : group_names_) {
+      // Only render if it's not a default group
+      if (group_name != "Futures" && group_name != "Crypto" && group_name != "Stocks") {
+        bool is_selected = (group_name == current_group_name_);
 
-        // Show additional info if group is not a default group
-        if (group_name != "Futures" && group_name != "Crypto" && group_name != "Stocks") {
+        // Count symbols in this group for display
+        auto it = watchlist_groups_.find(group_name);
+        size_t symbol_count = (it != watchlist_groups_.end()) ? it->second.size() : 0;
+
+        // Format the tab label with symbol count
+        std::string tab_label = group_name + " (" + std::to_string(symbol_count) + ")";
+
+        // Set tab item flags for better appearance
+        ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
+
+        // Create the tab item with enhanced styling
+        if (ImGui::BeginTabItem(tab_label.c_str(), nullptr, tab_flags)) {
+          if (!is_selected) {
+            // Switch to this group
+            switch_to_group(group_name);
+          }
+          ImGui::EndTabItem();
+        }
+
+        // Add tooltip to each tab
+        if (ImGui::IsItemHovered()) {
+          ImGui::BeginTooltip();
+          ImGui::Text("Switch to %s watchlist group", group_name.c_str());
+          ImGui::Text("Symbols in this group: %zu", symbol_count);
+
           ImGui::Separator();
           ImGui::Text("Right-click to manage group");
 
@@ -915,9 +960,9 @@ void WatchlistPanel::render_group_tabs() {
 
             ImGui::EndPopup();
           }
-        }
 
-        ImGui::EndTooltip();
+          ImGui::EndTooltip();
+        }
       }
     }
 

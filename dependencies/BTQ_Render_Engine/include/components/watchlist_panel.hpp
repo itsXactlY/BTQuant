@@ -85,6 +85,9 @@ class WatchlistPanel : public PanelBase {
   // Get current group name
   const std::string& get_current_group_name() const { return current_group_name_; }
 
+  // Get all group names
+  const std::vector<std::string>& get_all_group_names() const { return group_names_; }
+
   // Alert management methods
   void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel);
   void add_price_alert(uint32_t symbol_id, const std::string& symbol_name,

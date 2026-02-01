@@ -137,8 +137,22 @@ void MultiVWAPPanel::render_vwap_list() {
         }
 
         ImGui::TableSetColumnIndex(3);
+        // Show color button with right-click context menu for color picker
         ImGui::ColorButton(("##color" + instance.id).c_str(), instance.color,
-                          ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20));
+                          ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoTooltip, ImVec2(20, 20));
+
+        // Right-click context menu for color picker
+        std::string picker_popup_id = "Color Picker##" + instance.id;
+        if (ImGui::BeginPopupContextItem(picker_popup_id.c_str())) {
+            ImGui::Text("Pick color for %s", instance.name.c_str());
+            ImGui::Separator();
+            if (ImGui::ColorPicker3(("##picker" + instance.id).c_str(), &instance.color.x,
+                                   ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_NoSidePreview |
+                                   ImGuiColorEditFlags_NoSmallPreview)) {
+                // Color was changed
+            }
+            ImGui::EndPopup();
+        }
 
         ImGui::TableSetColumnIndex(4);
         if (ImGui::Button(("Delete##" + instance.id).c_str())) {

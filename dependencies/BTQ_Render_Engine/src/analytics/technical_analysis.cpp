@@ -334,6 +334,63 @@ TechnicalIndicators::IndicatorResult TechnicalIndicators::calculate_vwap(
   return result;
 }
 
+TechnicalIndicators::IndicatorResult TechnicalIndicators::calculate_vwap_standard_deviation(
+    const std::vector<OHLCV>& data, size_t start_index) {
+  IndicatorResult result;
+  result.name = "VWAP_StdDev";
+  result.parameters["start_index"] = static_cast<double>(start_index);
+
+  if (data.empty() || start_index >= data.size()) {
+    return result;
+  }
+
+  // First, calculate the VWAP to use as the reference point
+  double cumulative_price_volume = 0.0;
+  double cumulative_volume = 0.0;
+
+  result.values.reserve(data.size() - start_index);
+  result.timestamps.reserve(data.size() - start_index);
+
+  for (size_t i = start_index; i < data.size(); ++i) {
+    double typical_price = (data[i].high + data[i].low + data[i].close) / 3.0;
+    double price_times_volume = typical_price * data[i].volume;
+
+    cumulative_price_volume += price_times_volume;
+    cumulative_volume += data[i].volume;
+
+    if (cumulative_volume > 0) {
+      double current_vwap = cumulative_price_volume / cumulative_volume;
+
+      // Calculate the weighted variance around the current VWAP
+      double weighted_sum_squared_diff = 0.0;
+      double vol_sum = 0.0;
+
+      // Calculate weighted variance for all data points from start_index to current index
+      for (size_t j = start_index; j <= i; ++j) {
+        double price = (data[j].high + data[j].low + data[j].close) / 3.0;
+        double diff = price - current_vwap;
+        weighted_sum_squared_diff += (diff * diff) * data[j].volume;
+        vol_sum += data[j].volume;
+      }
+
+      if (vol_sum > 0) {
+        double variance = weighted_sum_squared_diff / vol_sum;
+        double std_dev = std::sqrt(variance);
+        result.values.push_back(std_dev);
+        result.timestamps.push_back(data[i].timestamp);
+      } else {
+        result.values.push_back(0.0);
+        result.timestamps.push_back(data[i].timestamp);
+      }
+    } else {
+      result.values.push_back(0.0);
+      result.timestamps.push_back(data[i].timestamp);
+    }
+  }
+
+  return result;
+}
+
 // ============================================================================
 // Volume Profile Analyzer Implementation - Simplified
 // ============================================================================

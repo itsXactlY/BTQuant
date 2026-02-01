@@ -43,6 +43,7 @@ class TechnicalIndicators {
   static std::vector<IndicatorResult> stochastic(const std::vector<OHLCV>& data, int k_period = 14,
                                                  int d_period = 3);
   static IndicatorResult calculate_vwap(const std::vector<OHLCV>& data, size_t start_index = 0);
+  static IndicatorResult calculate_vwap_standard_deviation(const std::vector<OHLCV>& data, size_t start_index = 0);
 };
 
 struct ProcessedTrade {

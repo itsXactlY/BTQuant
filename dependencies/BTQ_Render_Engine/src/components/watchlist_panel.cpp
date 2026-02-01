@@ -888,8 +888,15 @@ void WatchlistPanel::render_group_tabs() {
 
         // Format the tab label with symbol count and visual indicator for default groups
         std::string tab_label = group_name;
-        if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
-            tab_label += " \uf007"; // Unicode icon to indicate default groups
+        if (group_name == "Stocks") {
+            // Stock market icon
+            tab_label = "\uf016 " + group_name; // Briefcase icon for stocks
+        } else if (group_name == "Crypto") {
+            // Cryptocurrency icon
+            tab_label = "\uf379 " + group_name; // Bitcoin icon for crypto
+        } else if (group_name == "Futures") {
+            // Futures contract icon
+            tab_label = "\uf5af " + group_name; // Chart line icon for futures
         }
         tab_label += " (" + std::to_string(symbol_count) + ")";
 
@@ -915,7 +922,13 @@ void WatchlistPanel::render_group_tabs() {
           if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
             ImGui::Separator();
             ImGui::Text("Default watchlist group");
-            ImGui::Text("Predefined category for %s", group_name.c_str());
+            if (group_name == "Stocks") {
+              ImGui::Text("Stock market securities");
+            } else if (group_name == "Crypto") {
+              ImGui::Text("Cryptocurrency assets");
+            } else if (group_name == "Futures") {
+              ImGui::Text("Futures contracts");
+            }
           }
 
           ImGui::EndTooltip();
@@ -955,6 +968,7 @@ void WatchlistPanel::render_group_tabs() {
           ImGui::Text("Symbols in this group: %zu", symbol_count);
 
           ImGui::Separator();
+          ImGui::Text("Custom watchlist group");
           ImGui::Text("Right-click to manage group");
 
           // Add context menu for custom groups

@@ -501,12 +501,15 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   // Drag and drop source
-  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
     // Set payload to carry the symbol_id
     ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
 
     // Display preview of what is being dragged with enhanced visual
     ImGui::Text("Dragging: %s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
+
+    // Add visual indicator showing the dragged item
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.2f, 1.0f), "↕ Reordering %s", entry.symbol.c_str());
 
     ImGui::EndDragDropSource();
   }
@@ -573,13 +576,34 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float line_y = drop_above ? cell_rect_min.y : cell_rect_max.y;
 
-    // Draw a visual indicator for the drop target
+    // Draw a visual indicator for the drop target with enhanced styling
     draw_list->AddLine(
         ImVec2(cell_rect_min.x, line_y),
         ImVec2(cell_rect_max.x, line_y),
         ImGui::GetColorU32(ImVec4(0.4f, 0.8f, 1.0f, 1.0f)), // Bright blue color
-        2.0f // Line thickness
+        3.0f // Increased line thickness for better visibility
     );
+
+    // Add a small triangle indicator to show direction
+    if (drop_above) {
+      // Triangle pointing up for "insert above"
+      ImVec2 triangle_points[3] = {
+          ImVec2(cell_rect_max.x - 20, line_y + 5),
+          ImVec2(cell_rect_max.x - 10, line_y - 5),
+          ImVec2(cell_rect_max.x, line_y + 5)
+      };
+      draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
+                                  ImGui::GetColorU32(ImVec4(0.4f, 0.8f, 1.0f, 1.0f)));
+    } else {
+      // Triangle pointing down for "insert below"
+      ImVec2 triangle_points[3] = {
+          ImVec2(cell_rect_max.x - 20, line_y - 5),
+          ImVec2(cell_rect_max.x - 10, line_y + 5),
+          ImVec2(cell_rect_max.x, line_y - 5)
+      };
+      draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
+                                  ImGui::GetColorU32(ImVec4(0.4f, 0.8f, 1.0f, 1.0f)));
+    }
 
     ImGui::EndDragDropTarget();
   }
@@ -1021,7 +1045,7 @@ void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_fi
     }
 
     write_file.close();
-    std::cout << "[WatchlistPanel] Saved watchlist order to: " << config_file << std::endl;
+    std::cout << "[WatchlistPanel] Saved watchlist order to: " << config_file << ", entries: " << display_order_.size() << std::endl;
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error saving watchlist order: " << e.what() << std::endl;
   }
@@ -1086,6 +1110,8 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
                   // Only add to new order if the symbol exists in the watchlist
                   if (watchlist_.find(symbol_id) != watchlist_.end()) {
                     new_display_order.push_back(symbol_id);
+                  } else {
+                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id << " from config not found in current watchlist, skipping." << std::endl;
                   }
                 } catch (const std::invalid_argument&) {
                   std::cerr << "[WatchlistPanel] Invalid symbol ID in config: " << item << std::endl;
@@ -1102,6 +1128,7 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
             }
 
             display_order_ = new_display_order;
+            std::cout << "[WatchlistPanel] Loaded watchlist order from config, entries: " << new_display_order.size() << std::endl;
             break;
           }
         }
@@ -1111,7 +1138,7 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
     file.close();
 
     if (found_watchlist_order) {
-      std::cout << "[WatchlistPanel] Loaded watchlist order from: " << config_file << std::endl;
+      std::cout << "[WatchlistPanel] Successfully loaded watchlist order from: " << config_file << std::endl;
     } else {
       std::cout << "[WatchlistPanel] No watchlist order found in config, keeping current order: " << config_file << std::endl;
     }

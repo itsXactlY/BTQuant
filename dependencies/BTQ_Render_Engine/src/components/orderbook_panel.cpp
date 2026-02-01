@@ -14,7 +14,7 @@ namespace BTQuant {
 OrderbookPanel::OrderbookPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {}
+    : PanelBase(config), bridge_(bridge), processor_(processor), selected_levels_count_(20) {}
 
 void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
   symbol_id_ = symbol_id;
@@ -117,6 +117,23 @@ void OrderbookPanel::render() {
       ImGui::EndCombo();
     }
     ImGui::PopID();
+
+    // Level count selector
+    ImGui::SameLine();
+    ImGui::Text("Levels:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(100);
+    if (ImGui::BeginCombo("##LevelCount", LEVEL_OPTION_NAMES[get_level_option_index()])) {
+      for (int i = 0; i < 6; ++i) {
+        bool is_selected = (LEVEL_OPTIONS[i] == selected_levels_count_);
+        if (ImGui::Selectable(LEVEL_OPTION_NAMES[i], is_selected)) {
+          selected_levels_count_ = LEVEL_OPTIONS[i];
+        }
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+    }
+    ImGui::PopItemWidth();
   } else {
     const auto& colors = ThemeManager::getInstance().getColors();
     ImGui::TextColored(colors.accent_red, "No active symbols detected in SHM!");
@@ -156,12 +173,44 @@ void OrderbookPanel::render() {
   end_panel_window();
 }
 
+int OrderbookPanel::get_level_option_index() {
+  for (int i = 0; i < 6; ++i) {
+    if (LEVEL_OPTIONS[i] == selected_levels_count_) {
+      return i;
+    }
+  }
+  return 1; // Default to 20 if not found
+}
+
 void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook) {
   // Calculate max volume for relative scaling
   double max_vol = 1.0;
   for (const auto& level : orderbook.bids) max_vol = std::max(max_vol, level.size);
   for (const auto& level : orderbook.asks) max_vol = std::max(max_vol, level.size);
   if (max_vol < 1.0) max_vol = 1.0;
+
+  // Calculate cumulative volumes for liquidity bars
+  std::vector<double> cumulative_bids(orderbook.bids.size());
+  std::vector<double> cumulative_asks(orderbook.asks.size());
+
+  // Calculate cumulative bid volumes (from best bid outward)
+  double bid_sum = 0.0;
+  for (size_t i = 0; i < orderbook.bids.size(); ++i) {
+    bid_sum += orderbook.bids[i].size;
+    cumulative_bids[i] = bid_sum;
+  }
+
+  // Calculate cumulative ask volumes (from best ask outward)
+  double ask_sum = 0.0;
+  for (size_t i = 0; i < orderbook.asks.size(); ++i) {
+    ask_sum += orderbook.asks[i].size;
+    cumulative_asks[i] = ask_sum;
+  }
+
+  // Find max cumulative volume for scaling
+  double max_cumulative_vol = max_vol; // fallback to individual max if no cumulative data
+  if (!cumulative_bids.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_bids.back());
+  if (!cumulative_asks.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
 
   // Use Table instead of Columns for modern layout (C++26 style UI)
   if (ImGui::BeginTable("OrderbookTable", 7,
@@ -179,8 +228,87 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
     const auto& colors = ThemeManager::getInstance().getColors();
 
+    // Determine how many levels to show based on selected_levels_count_
+    int max_levels_to_show = selected_levels_count_ == -1 ?
+                             std::max(orderbook.asks.size(), orderbook.bids.size()) :
+                             selected_levels_count_;
+
+    // Use channel splitting to draw backgrounds before text content
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->ChannelsSplit(2); // Split into 2 channels: 0 for backgrounds, 1 for text (default)
+
+    // Switch to background channel (0) to draw heatmap backgrounds first
+    draw_list->ChannelsSetCurrent(0);
+
+    // First, we need to render the table structure to establish row positions,
+    // then we can draw the backgrounds in the correct positions
+
+    // Render Asks (Sell) - Top down, but only to calculate positions
+    int ask_count = std::min((int)orderbook.asks.size(), max_levels_to_show);
+    for (int i = ask_count - 1; i >= 0; --i) {
+      const auto& level = orderbook.asks[i];
+      ImGui::TableNextRow();
+
+      // Calculate heatmap intensity for this level
+      float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      if (intensity > 0.05f) {
+        // Calculate position for the entire row background
+        ImVec2 row_pos = ImGui::GetCursorScreenPos();
+        float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+        // Get the width of the table row
+        float table_width = ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX();
+
+        // Calculate the background rectangle for the entire row
+        ImVec2 pos_min = row_pos;
+        ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
+
+        // Red heatmap for asks
+        ImU32 bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, intensity * 0.3f));
+
+        // Draw the rectangle in the background channel
+        draw_list->AddRectFilled(pos_min, pos_max, bg_color);
+      }
+    }
+
+    // Spread Row - also need to account for this in positioning
+    ImGui::TableNextRow();
+
+    // Render Bids (Buy) - but only to calculate positions
+    int bid_count = std::min((int)orderbook.bids.size(), max_levels_to_show);
+    for (int i = 0; i < bid_count; ++i) {
+      const auto& level = orderbook.bids[i];
+      ImGui::TableNextRow();
+
+      // Calculate heatmap intensity for this level
+      float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      if (intensity > 0.05f) {
+        // Calculate position for the entire row background
+        ImVec2 row_pos = ImGui::GetCursorScreenPos();
+        float row_height = ImGui::GetTextLineHeightWithSpacing();
+
+        // Get the width of the table row
+        float table_width = ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX();
+
+        // Calculate the background rectangle for the entire row
+        ImVec2 pos_min = row_pos;
+        ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
+
+        // Blue heatmap for bids
+        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, intensity * 0.3f));
+
+        // Draw the rectangle in the background channel
+        draw_list->AddRectFilled(pos_min, pos_max, bg_color);
+      }
+    }
+
+    // Switch back to the default channel (1) for text content
+    draw_list->ChannelsSetCurrent(1);
+
+    // Now render the actual content in the default channel
     // Render Asks (Sell) - Top down
-    int ask_count = std::min((int)orderbook.asks.size(), MAX_LEVELS);
+
+    // Render Asks (Sell) - Top down
     for (int i = ask_count - 1; i >= 0; --i) {
       const auto& level = orderbook.asks[i];
       ImGui::TableNextRow();
@@ -212,6 +340,21 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::Text("Price: %.2f", level.price);
         ImGui::EndDragDropSource();
       }
+
+      // Draw cumulative volume bar extending from price column to the right
+      if (i < static_cast<int>(cumulative_asks.size())) {
+          float width = ImGui::GetContentRegionAvail().x;
+          float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
+          ImVec2 pos = ImGui::GetCursorScreenPos();
+
+          // Position the bar to start from the left edge of the price column and extend right
+          ImGui::GetWindowDrawList()->AddRectFilled(
+              ImVec2(pos.x, pos.y),
+              ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+              ImGui::GetColorU32(
+                  ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f)));
+      }
+
       ImGui::SameLine();
       ImGui::TextColored(colors.accent_red, "%.2f", level.price);
 
@@ -222,19 +365,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         if (bought > 0) ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
       }
 
-      // 5. Ask Size (with Bar and Heatmap)
+      // 5. Ask Size (with Bar)
       ImGui::TableSetColumnIndex(4);
       {
         float width = ImGui::GetContentRegionAvail().x;
         float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
-
-        // Liquidity Heatmap Background for the whole row
-        float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-        if (intensity > 0.05f) {
-          ImU32 bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, intensity * 0.3f));
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
-        }
 
         ImGui::GetWindowDrawList()->AddRectFilled(
             pos, ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
@@ -271,7 +407,6 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TextColored(ImVec4(1, 1, 1, 0.5f), "--- %.1f ---", orderbook.spread);
 
     // Render Bids (Buy)
-    int bid_count = std::min((int)orderbook.bids.size(), MAX_LEVELS);
     for (int i = 0; i < bid_count; ++i) {
       const auto& level = orderbook.bids[i];
       ImGui::TableNextRow();
@@ -288,13 +423,6 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         float width = ImGui::GetContentRegionAvail().x;
         float bar_width = width * (float)(level.size / max_vol);
         ImVec2 pos = ImGui::GetCursorScreenPos();
-
-        // Liquidity Heatmap Background for the whole row
-        float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-        if (intensity > 0.05f) {
-          ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, intensity * 0.3f));
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
-        }
 
         ImGui::GetWindowDrawList()->AddRectFilled(
             ImVec2(pos.x + width - bar_width, pos.y),
@@ -331,6 +459,21 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImGui::Text("Price: %.2f", level.price);
         ImGui::EndDragDropSource();
       }
+
+      // Draw cumulative volume bar extending from price column to the left
+      if (i < static_cast<int>(cumulative_bids.size())) {
+          float width = ImGui::GetContentRegionAvail().x;
+          float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
+          ImVec2 pos = ImGui::GetCursorScreenPos();
+
+          // Position the bar to start from the right edge of the price column and extend left
+          ImGui::GetWindowDrawList()->AddRectFilled(
+              ImVec2(pos.x + width - bar_width, pos.y),
+              ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+              ImGui::GetColorU32(
+                  ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
+      }
+
       ImGui::SameLine();
       ImGui::TextColored(colors.accent_green, "%.2f",
                          level.price);  // Green for Bid Price
@@ -366,6 +509,9 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       ImGui::PopID();
     }
+
+    // Merge the channels back together
+    draw_list->ChannelsMerge();
 
     ImGui::EndTable();
   }

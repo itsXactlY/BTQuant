@@ -33,12 +33,13 @@ void WatchlistPanel::render() {
   // Input field for adding new symbols by name
   ImGui::Text("Add Symbol:");
   ImGui::SameLine();
-  ImGui::SetNextItemWidth(200);
-  ImGui::InputText("##NewSymbolInput", new_symbol_buffer_, sizeof(new_symbol_buffer_));
+  ImGui::SetNextItemWidth(150);
+  bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "Enter symbol...", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
   ImGui::SameLine();
 
   // Button to add symbol by name
-  if (ImGui::Button("Add")) {
+  bool add_clicked = ImGui::Button("Add");
+  if (add_clicked || input_entered) {
     std::string symbol_to_add = new_symbol_buffer_;
     if (!symbol_to_add.empty() && bridge_) {
       // Find the symbol ID from the bridge based on the entered name
@@ -46,7 +47,7 @@ void WatchlistPanel::render() {
       for (uint32_t sym_id : active_symbols) {
         std::string sym_name = bridge_->getSymbolName(sym_id);
         std::string exchange = bridge_->getExchangeName(sym_id);
-        if (!sym_name.empty() && sym_name == symbol_to_add && !watchlist_.contains(sym_id)) {
+        if (!sym_name.empty() && sym_name == symbol_to_add && watchlist_.find(sym_id) == watchlist_.end()) {
           add_symbol(sym_id, sym_name, exchange);
           new_symbol_buffer_[0] = '\0'; // Clear the input buffer
           break;
@@ -85,7 +86,7 @@ void WatchlistPanel::render() {
         ImGui::EndCombo();
       }
       ImGui::SameLine();
-      ImGui::Text("(%zu symbols)", active_symbols.size());
+      ImGui::Text("(%zu in watchlist, %zu available)", watchlist_.size(), active_symbols.size());
     }
   }
 
@@ -319,7 +320,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
-  if (ImGui::Button("Delete")) {
+  if (ImGui::Button("×")) {  // Use × symbol for cleaner look
     remove_symbol(entry.symbol_id);
   }
   ImGui::PopID();

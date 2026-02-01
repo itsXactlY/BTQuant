@@ -782,6 +782,29 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       flash_color.z = flash_color.z * (0.5f + 0.5f * flash_phase); // Blue - reduced
     }
 
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.7f) { // Only during the first part of the animation
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.0f; // Fade out quickly
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize(formatPrice(animated_price).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a subtle background highlight
+      ImVec4 highlight_color = (price_change_pct >= 0.0) ?
+        ImVec4(0.1f, 0.3f, 0.1f, bg_alpha * 0.3f) :
+        ImVec4(0.3f, 0.1f, 0.1f, bg_alpha * 0.3f);
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 5, pos.y - 2),
+        ImVec2(pos.x + textSize.x + 5, pos.y + textSize.y + 2),
+        ImGui::GetColorU32(highlight_color)
+      );
+    }
+
     ImGui::TextColored(flash_color, "%s", formatPrice(animated_price).c_str());
   } else {
     // Calculate price change percentage for color calculation
@@ -829,6 +852,29 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       change_pct_color.y = change_pct_color.y * (0.7f + 0.3f * flash_phase); // Green
       change_pct_color.z = change_pct_color.z * (0.7f + 0.3f * flash_phase); // Blue
     }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.7f) { // Only during the first part of the animation
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.0f; // Fade out quickly
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize((std::string("+") + std::to_string(entry.change_pct) + "%").c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a subtle background highlight
+      ImVec4 highlight_color = (entry.change_pct >= 0.0) ?
+        ImVec4(0.1f, 0.3f, 0.1f, bg_alpha * 0.3f) :
+        ImVec4(0.3f, 0.1f, 0.1f, bg_alpha * 0.3f);
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 5, pos.y - 2),
+        ImVec2(pos.x + textSize.x + 5, pos.y + textSize.y + 2),
+        ImGui::GetColorU32(highlight_color)
+      );
+    }
   }
 
   ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
@@ -865,6 +911,29 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       change_dollar_color.x = std::min(1.0f, change_dollar_color.x * (0.7f + 0.3f * flash_phase)); // Red
       change_dollar_color.y = change_dollar_color.y * (0.7f + 0.3f * flash_phase); // Green
       change_dollar_color.z = change_dollar_color.z * (0.7f + 0.3f * flash_phase); // Blue
+    }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.7f) { // Only during the first part of the animation
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.0f; // Fade out quickly
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize((std::string("+") + std::to_string(entry.change_dollar)).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a subtle background highlight
+      ImVec4 highlight_color = (entry.change_dollar >= 0.0) ?
+        ImVec4(0.1f, 0.3f, 0.1f, bg_alpha * 0.3f) :
+        ImVec4(0.3f, 0.1f, 0.1f, bg_alpha * 0.3f);
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 5, pos.y - 2),
+        ImVec2(pos.x + textSize.x + 5, pos.y + textSize.y + 2),
+        ImGui::GetColorU32(highlight_color)
+      );
     }
   }
 
@@ -995,6 +1064,29 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     } else {
       // No significant change in VWAP - light blue tint
       vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
+    }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.7f) { // Only during the first part of the animation
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.0f; // Fade out quickly
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize(formatVWAP(animated_vwap).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a subtle background highlight
+      ImVec4 highlight_color = (current_vwap > previous_vwap) ?
+        ImVec4(0.1f, 0.3f, 0.1f, bg_alpha * 0.3f) :
+        ImVec4(0.3f, 0.1f, 0.1f, bg_alpha * 0.3f);
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 5, pos.y - 2),
+        ImVec2(pos.x + textSize.x + 5, pos.y + textSize.y + 2),
+        ImGui::GetColorU32(highlight_color)
+      );
     }
 
     ImGui::TextColored(vwap_color, "%s", formatVWAP(animated_vwap).c_str());

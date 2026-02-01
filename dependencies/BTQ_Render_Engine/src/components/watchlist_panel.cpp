@@ -34,6 +34,21 @@ std::string formatPrice(double price) {
   }
 }
 
+// Enhanced interpolation function for smoother transitions
+double interpolateValue(double start, double end, float progress) {
+  // Use cubic easing for smoother animation
+  float t = progress * progress * (3.0f - 2.0f * progress);
+  return start + (end - start) * t;
+}
+
+// Enhanced flash animation function with smoother transitions
+float calculateFlashIntensity(float progress) {
+  // Use a smoother flash curve with more gradual fade-in and fade-out
+  float t = progress * 4.0f; // Speed up the flash cycle
+  if (t > 2.0f) t = 4.0f - t; // Create a smooth bounce effect (triangle wave)
+  return t / 2.0f; // Normalize to 0-1 range
+}
+
 // Helper function to format VWAP with consistent decimal places
 std::string formatVWAP(double vwap) {
   // For VWAP values less than 1, show more decimals
@@ -87,7 +102,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   subscription_id_ = 0;
 
   // Set config file path based on panel name or use default
-  std::string panel_name = config.name.empty() ? "watchlist" : config.name;
+  std::string panel_name = "watchlist";
   config_file_path_ = panel_name + "_config.ini";
 
   // Load the saved watchlist order from config file
@@ -441,6 +456,9 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       double prev_volume = it->second.volume_24h;
       double prev_change_pct = it->second.change_pct;
       double prev_change_dollar = it->second.change_dollar;
+      double prev_high_24h = it->second.high_24h;
+      double prev_low_24h = it->second.low_24h;
+      double prev_open_24h = it->second.open_24h;
 
       // Update the entry with new data
       it->second.price = analytics.last_trade_price;
@@ -505,6 +523,17 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
 
       // Check if change dollars changed significantly
       if (std::abs(it->second.change_dollar - prev_change_dollar) > 0.001) { // At least $0.001 difference
+        significant_change = true;
+      }
+
+      // Check if high/low/open changed significantly
+      if (std::abs(it->second.high_24h - prev_high_24h) > 0.001) {
+        significant_change = true;
+      }
+      if (std::abs(it->second.low_24h - prev_low_24h) > 0.001) {
+        significant_change = true;
+      }
+      if (std::abs(it->second.open_24h - prev_open_24h) > 0.001) {
         significant_change = true;
       }
 
@@ -787,13 +816,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(2);
-  // Apply animation effect to price if recently updated
+  // Apply smooth animation effect to price if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Create a pulsing effect by interpolating between previous and current price
-    double animated_price = entry.previous_price + (entry.price - entry.previous_price) * progress;
+    // Use enhanced interpolation for smoother transition
+    double animated_price = interpolateValue(entry.previous_price, entry.price, progress);
 
     // Calculate price change percentage for color calculation
     double price_change_pct = 0.0;
@@ -804,28 +833,26 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Enhanced flash animation - more prominent flash effect with smoother transition
     ImVec4 flash_color = calculateChangeColor(price_change_pct, true);
 
-    // Calculate flash timing for brief flash effect with more intensity
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation with more pronounced flash
     if (price_change_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      flash_color.x = flash_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      flash_color.y = std::min(1.0f, flash_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      flash_color.z = flash_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      flash_color.x = flash_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      flash_color.y = std::min(1.0f, flash_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      flash_color.x = std::min(1.0f, flash_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      flash_color.y = flash_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      flash_color.z = flash_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      flash_color.x = std::min(1.0f, flash_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      flash_color.y = flash_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -835,8 +862,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (price_change_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -877,33 +904,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Apply subtle animation to change percentage when it updates significantly
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
 
-  // Apply animation effect to change percentage if recently updated
+  // Apply smooth animation effect to change percentage if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for change percentage animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (entry.change_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      change_pct_color.x = change_pct_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      change_pct_color.y = std::min(1.0f, change_pct_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      change_pct_color.x = change_pct_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      change_pct_color.y = std::min(1.0f, change_pct_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      change_pct_color.x = std::min(1.0f, change_pct_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      change_pct_color.y = change_pct_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      change_pct_color.x = std::min(1.0f, change_pct_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      change_pct_color.y = change_pct_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -913,8 +938,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (entry.change_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -944,33 +969,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Apply subtle animation to change dollar when it updates significantly
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
 
-  // Apply animation effect to change dollar if recently updated
+  // Apply smooth animation effect to change dollar if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for change dollar animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (entry.change_dollar >= 0.0) {
       // Positive change - enhance green component during animation
-      change_dollar_color.x = change_dollar_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      change_dollar_color.y = std::min(1.0f, change_dollar_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      change_dollar_color.x = change_dollar_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      change_dollar_color.y = std::min(1.0f, change_dollar_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      change_dollar_color.x = std::min(1.0f, change_dollar_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      change_dollar_color.y = change_dollar_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      change_dollar_color.x = std::min(1.0f, change_dollar_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      change_dollar_color.y = change_dollar_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -980,8 +1003,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (entry.change_dollar >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1020,33 +1043,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     volume_color = calculateChangeColor(volume_change_pct, false);
   }
 
-  // Apply animation effect to volume if recently updated
+  // Apply smooth animation effect to volume if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for volume animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (entry.volume_24h >= entry.previous_volume) {
       // Volume increased - enhance green component during animation
-      volume_color.x = volume_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      volume_color.y = std::min(1.0f, volume_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      volume_color.z = volume_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      volume_color.x = volume_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      volume_color.y = std::min(1.0f, volume_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Volume decreased - enhance red component during animation
-      volume_color.x = std::min(1.0f, volume_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      volume_color.y = volume_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      volume_color.z = volume_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      volume_color.x = std::min(1.0f, volume_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      volume_color.y = volume_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1056,8 +1077,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (entry.volume_24h >= entry.previous_volume) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for increase
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for decrease
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for increase
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for decrease
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1088,38 +1109,37 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(6);
   // Apply color coding to High based on comparison with current price
   ImVec4 high_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  double high_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
-    double high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
+    high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
     high_color = calculateChangeColor(high_diff_pct, true);
   }
 
-  // Apply animation effect to high if recently updated
+  // Apply smooth animation effect to high if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for high animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (high_diff_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      high_color.x = high_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      high_color.y = std::min(1.0f, high_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      high_color.z = high_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      high_color.x = high_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      high_color.y = std::min(1.0f, high_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      high_color.x = std::min(1.0f, high_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      high_color.y = high_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      high_color.z = high_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      high_color.x = std::min(1.0f, high_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      high_color.y = high_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1129,8 +1149,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (high_diff_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1159,38 +1179,37 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(7);
   // Apply color coding to Low based on comparison with current price
   ImVec4 low_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  double low_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
-    double low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
+    low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
     low_color = calculateChangeColor(low_diff_pct, true);
   }
 
-  // Apply animation effect to low if recently updated
+  // Apply smooth animation effect to low if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for low animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (low_diff_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      low_color.x = low_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      low_color.y = std::min(1.0f, low_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      low_color.z = low_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      low_color.x = low_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      low_color.y = std::min(1.0f, low_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      low_color.x = std::min(1.0f, low_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      low_color.y = low_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      low_color.z = low_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      low_color.x = std::min(1.0f, low_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      low_color.y = low_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1200,8 +1219,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (low_diff_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1230,38 +1249,37 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(8);
   // Apply color coding to Open based on comparison with current price
   ImVec4 open_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  double open_diff_pct = 0.0; // Initialize here to avoid scope issues
   if (entry.price != 0.0) {
-    double open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
+    open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
     open_color = calculateChangeColor(open_diff_pct, true);
   }
 
-  // Apply animation effect to open if recently updated
+  // Apply smooth animation effect to open if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Calculate flash timing for open animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (open_diff_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      open_color.x = open_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
-      open_color.y = std::min(1.0f, open_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
-      open_color.z = open_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      open_color.x = open_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
+      open_color.y = std::min(1.0f, open_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
+      open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      open_color.x = std::min(1.0f, open_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
-      open_color.y = open_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
-      open_color.z = open_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+      open_color.x = std::min(1.0f, open_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
+      open_color.y = open_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
+      open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1271,8 +1289,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (open_diff_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1311,18 +1329,16 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     vwap_color = calculateChangeColor(vwap_change_pct, true);
   }
 
-  // Apply animation effect on top of color coding if recently updated
+  // Apply smooth animation effect on top of color coding if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
-    // Create a pulsing effect by interpolating between previous and current VWAP
-    double animated_vwap = entry.previous_vwap + (entry.vwap - entry.previous_vwap) * progress;
+    // Use enhanced interpolation for smoother transition
+    double animated_vwap = interpolateValue(entry.previous_vwap, entry.vwap, progress);
 
-    // Calculate flash timing for VWAP animation
-    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
-    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    // Calculate flash intensity using the enhanced function
+    float flash_intensity = calculateFlashIntensity(progress);
 
     // Enhanced VWAP animation with more visual feedback
     // Calculate if VWAP increased or decreased from previous value
@@ -1330,15 +1346,15 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     double previous_vwap = entry.previous_vwap;
     if (current_vwap > previous_vwap) {
       // VWAP went up - green highlight
-      float green_intensity = 0.4f + 0.6f * flash_phase; // From 40% to 100% intensity
-      float red_intensity = 0.2f * (1.0f - flash_phase); // Fade from red to none
-      float blue_intensity = 0.2f * (1.0f - flash_phase); // Fade from blue to none
+      float green_intensity = 0.4f + 0.6f * flash_intensity; // From 40% to 100% intensity
+      float red_intensity = 0.2f * (1.0f - flash_intensity); // Fade from red to none
+      float blue_intensity = 0.2f * (1.0f - flash_intensity); // Fade from blue to none
       vwap_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
     } else if (current_vwap < previous_vwap) {
       // VWAP went down - red highlight
-      float red_intensity = 0.4f + 0.6f * flash_phase; // From 40% to 100% intensity
-      float green_intensity = 0.2f * (1.0f - flash_phase); // Fade from green to none
-      float blue_intensity = 0.2f * (1.0f - flash_phase); // Fade from blue to none
+      float red_intensity = 0.4f + 0.6f * flash_intensity; // From 40% to 100% intensity
+      float green_intensity = 0.2f * (1.0f - flash_intensity); // Fade from green to none
+      float blue_intensity = 0.2f * (1.0f - flash_intensity); // Fade from blue to none
       vwap_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
     } else {
       // No significant change in VWAP - light blue tint
@@ -1346,9 +1362,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.6f) { // Extend the flash duration for more visibility
+    if (progress > 0.4f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1358,8 +1374,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (current_vwap > previous_vwap) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),

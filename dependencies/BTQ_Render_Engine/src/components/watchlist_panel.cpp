@@ -57,22 +57,23 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
 
   // Use exponential scaling to make intensity increase more dramatically with larger changes
   double normalized_change = std::min(1.0, abs_change / max_intensity_threshold);
-  // Apply exponential curve to make intensity grow faster with larger changes
-  double intensity_factor = normalized_change * normalized_change; // Square the value for exponential effect
+
+  // Apply quartic curve for even more dramatic intensity growth with larger changes
+  double intensity_factor = normalized_change * normalized_change * normalized_change * normalized_change; // Quartic for more dramatic effect
   double saturation_factor = std::sqrt(normalized_change); // Square root for saturation effect
 
   // Return appropriate color based on sign and intensity
   if (is_positive) {
     // Green for positive changes - more intense greens for larger changes
-    float red_comp = 0.2f * (1.0f - saturation_factor);
-    float green_comp = 0.5f + 0.5f * saturation_factor; // Base green with intensity
-    float blue_comp = 0.2f * (1.0f - saturation_factor);
+    float red_comp = 0.05f * (1.0f - saturation_factor);
+    float green_comp = 0.3f + 0.7f * saturation_factor; // Higher base green with more intensity
+    float blue_comp = 0.05f * (1.0f - saturation_factor);
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   } else {
     // Red for negative changes - more intense reds for larger changes
-    float red_comp = 0.5f + 0.5f * saturation_factor; // Base red with intensity
-    float green_comp = 0.3f * (1.0f - saturation_factor);
-    float blue_comp = 0.3f * (1.0f - saturation_factor);
+    float red_comp = 0.3f + 0.7f * saturation_factor; // Higher base red with more intensity
+    float green_comp = 0.1f * (1.0f - saturation_factor);
+    float blue_comp = 0.05f * (1.0f - saturation_factor);
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }
@@ -1088,6 +1089,61 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     double high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
     high_color = calculateChangeColor(high_diff_pct, true);
   }
+
+  // Apply animation effect to high if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Calculate flash timing for high animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhance the color intensity during animation
+    if (high_diff_pct >= 0.0) {
+      // Positive change - enhance green component during animation
+      high_color.x = high_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
+      high_color.y = std::min(1.0f, high_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
+      high_color.z = high_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    } else {
+      // Negative change - enhance red component during animation
+      high_color.x = std::min(1.0f, high_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
+      high_color.y = high_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
+      high_color.z = high_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.6f) { // Extend the flash duration for more visibility
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize(formatPrice(entry.high_24h).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a more prominent background highlight
+      ImVec4 highlight_color = (high_diff_pct >= 0.0) ?
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(highlight_color)
+      );
+
+      // Add a subtle border to make the highlight more defined
+      draw_list->AddRect(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
+      );
+    }
+  }
+
   ImGui::TextColored(high_color, "%s", formatPrice(entry.high_24h).c_str());
 
   // Add tooltip to explain High
@@ -1104,6 +1160,61 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     double low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
     low_color = calculateChangeColor(low_diff_pct, true);
   }
+
+  // Apply animation effect to low if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Calculate flash timing for low animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhance the color intensity during animation
+    if (low_diff_pct >= 0.0) {
+      // Positive change - enhance green component during animation
+      low_color.x = low_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
+      low_color.y = std::min(1.0f, low_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
+      low_color.z = low_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    } else {
+      // Negative change - enhance red component during animation
+      low_color.x = std::min(1.0f, low_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
+      low_color.y = low_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
+      low_color.z = low_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.6f) { // Extend the flash duration for more visibility
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize(formatPrice(entry.low_24h).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a more prominent background highlight
+      ImVec4 highlight_color = (low_diff_pct >= 0.0) ?
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(highlight_color)
+      );
+
+      // Add a subtle border to make the highlight more defined
+      draw_list->AddRect(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
+      );
+    }
+  }
+
   ImGui::TextColored(low_color, "%s", formatPrice(entry.low_24h).c_str());
 
   // Add tooltip to explain Low
@@ -1120,6 +1231,61 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     double open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
     open_color = calculateChangeColor(open_diff_pct, true);
   }
+
+  // Apply animation effect to open if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Calculate flash timing for open animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhance the color intensity during animation
+    if (open_diff_pct >= 0.0) {
+      // Positive change - enhance green component during animation
+      open_color.x = open_color.x * (0.3f + 0.7f * flash_phase); // Red - reduced to allow green to dominate
+      open_color.y = std::min(1.0f, open_color.y * (0.3f + 0.7f * flash_phase)); // Green - enhanced
+      open_color.z = open_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    } else {
+      // Negative change - enhance red component during animation
+      open_color.x = std::min(1.0f, open_color.x * (0.3f + 0.7f * flash_phase)); // Red - enhanced
+      open_color.y = open_color.y * (0.3f + 0.7f * flash_phase); // Green - reduced
+      open_color.z = open_color.z * (0.3f + 0.7f * flash_phase); // Blue - reduced
+    }
+
+    // Add brief flash animation effect by temporarily highlighting the background
+    if (progress > 0.6f) { // Extend the flash duration for more visibility
+      // Calculate alpha for background highlight based on animation progress
+      float bg_alpha = (1.0f - progress) * 2.5f; // Increase intensity
+      if (bg_alpha > 1.0f) bg_alpha = 1.0f;
+
+      // Create a temporary background highlight for the cell
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 textSize = ImGui::CalcTextSize(formatPrice(entry.open_24h).c_str());
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a more prominent background highlight
+      ImVec4 highlight_color = (open_diff_pct >= 0.0) ?
+        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.5f) :  // More green for positive
+        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.5f);   // More red for negative
+
+      draw_list->AddRectFilled(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(highlight_color)
+      );
+
+      // Add a subtle border to make the highlight more defined
+      draw_list->AddRect(
+        ImVec2(pos.x - 8, pos.y - 3),
+        ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
+      );
+    }
+  }
+
   ImGui::TextColored(open_color, "%s", formatPrice(entry.open_24h).c_str());
 
   // Add tooltip to explain Open

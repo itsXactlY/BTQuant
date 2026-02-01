@@ -1486,84 +1486,87 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       }
     }
 
-    // Render SD1 bands as smooth polylines with anti-aliasing
+    // Render SD1 bands as semi-transparent filled regions
     if (sd1_upper.size() > 1 && sd1_lower.size() > 1) {
-      // Prepare points for upper and lower bands
-      std::vector<ImVec2> upper_points, lower_points;
-      upper_points.reserve(sd1_upper.size());
-      lower_points.reserve(sd1_lower.size());
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd1_upper.size() * 2);
 
+      // Add upper band points (forward direction)
       for (size_t i = 0; i < sd1_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_upper[i]);
-        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_lower[i]);
-        upper_points.push_back(upper_point);
-        lower_points.push_back(lower_point);
+        filled_region_points.push_back(upper_point);
       }
 
-      // Draw upper band
-      if (upper_points.size() > 1) {
-        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
-                              IM_COL32(255, 255, 0, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd1_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
       }
 
-      // Draw lower band
-      if (lower_points.size() > 1) {
-        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
-                              IM_COL32(255, 255, 0, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Draw filled region for SD1 band
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(255, 255, 0, 80));  // Semi-transparent yellow
       }
     }
 
-    // Render SD2 bands
+    // Render SD2 bands as semi-transparent filled regions
     if (sd2_upper.size() > 1 && sd2_lower.size() > 1) {
-      // Prepare points for upper and lower bands
-      std::vector<ImVec2> upper_points, lower_points;
-      upper_points.reserve(sd2_upper.size());
-      lower_points.reserve(sd2_lower.size());
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd2_upper.size() * 2);
 
+      // Add upper band points (forward direction)
       for (size_t i = 0; i < sd2_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_upper[i]);
-        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_lower[i]);
-        upper_points.push_back(upper_point);
-        lower_points.push_back(lower_point);
+        filled_region_points.push_back(upper_point);
       }
 
-      // Draw upper band
-      if (upper_points.size() > 1) {
-        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
-                              IM_COL32(0, 255, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd2_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
       }
 
-      // Draw lower band
-      if (lower_points.size() > 1) {
-        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
-                              IM_COL32(0, 255, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Draw filled region for SD2 band
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(0, 255, 255, 60));  // Semi-transparent cyan
       }
     }
 
-    // Render SD3 bands
+    // Render SD3 bands as semi-transparent filled regions
     if (sd3_upper.size() > 1 && sd3_lower.size() > 1) {
-      // Prepare points for upper and lower bands
-      std::vector<ImVec2> upper_points, lower_points;
-      upper_points.reserve(sd3_upper.size());
-      lower_points.reserve(sd3_lower.size());
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd3_upper.size() * 2);
 
+      // Add upper band points (forward direction)
       for (size_t i = 0; i < sd3_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_upper[i]);
-        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_lower[i]);
-        upper_points.push_back(upper_point);
-        lower_points.push_back(lower_point);
+        filled_region_points.push_back(upper_point);
       }
 
-      // Draw upper band
-      if (upper_points.size() > 1) {
-        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
-                              IM_COL32(255, 0, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd3_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
       }
 
-      // Draw lower band
-      if (lower_points.size() > 1) {
-        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
-                              IM_COL32(255, 0, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      // Draw filled region for SD3 band
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      IM_COL32(255, 0, 255, 40));  // More transparent magenta
       }
     }
   }

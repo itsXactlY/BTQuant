@@ -130,6 +130,8 @@ class WatchlistPanel : public PanelBase {
   void verify_subscriptions();
   void refresh_all_subscriptions();
   void ensure_all_symbols_subscribed();
+  void process_pending_updates();
+  void subscribe_to_all_watchlist_symbols();
 };
 
 }  // namespace BTQuant

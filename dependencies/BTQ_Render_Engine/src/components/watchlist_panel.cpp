@@ -73,6 +73,18 @@ float calculatePriceFlashIntensity(float progress) {
   return t;
 }
 
+// Enhanced animation function for smooth value transitions with better visual feedback
+double animateValueTransition(double start, double end, float progress, bool& is_animating) {
+  // Use quintic easing for smooth acceleration and deceleration
+  float t = progress * progress * progress * (progress * (progress * 6.0f - 15.0f) + 10.0f);
+  double result = start + (end - start) * t;
+
+  // Mark as animating if progress is less than 1.0
+  is_animating = (progress < 1.0f);
+
+  return result;
+}
+
 // Helper function to format VWAP with consistent decimal places
 std::string formatVWAP(double vwap) {
   // For VWAP values less than 1, show more decimals
@@ -132,10 +144,8 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   // Load the saved watchlist order from config file
   load_watchlist_order_from_config(config_file_path_);
 
-  // Subscribe to all currently watched symbols
-  for (const auto& [symbol_id, entry] : watchlist_) {
-    subscribe_to_symbol(symbol_id);
-  }
+  // Subscribe to all currently watched symbols using the new efficient method
+  subscribe_to_all_watchlist_symbols();
 
   // Verify all subscriptions are active
   verify_subscriptions();
@@ -156,11 +166,7 @@ void WatchlistPanel::update(float dt) {
 
   // Ensure all symbols in the watchlist are subscribed to real-time updates
   // This handles cases where subscriptions might have been lost or need to be refreshed
-  for (const auto& [symbol_id, entry] : watchlist_) {
-    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
-      subscribe_to_symbol(symbol_id);
-    }
-  }
+  ensure_all_symbols_subscribed();
 
   // Additionally, periodically verify all subscriptions are active
   // This ensures robustness in case of connection issues or other problems
@@ -182,6 +188,10 @@ void WatchlistPanel::update(float dt) {
       }
     }
   }
+
+  // Handle real-time price updates for all symbols in the watchlist
+  // Process any pending market data updates
+  process_pending_updates();
 }
 
 void WatchlistPanel::render() {
@@ -1851,6 +1861,36 @@ void WatchlistPanel::ensure_all_symbols_subscribed() {
     std::cout << "[WatchlistPanel] Subscribed to " << subscribed_count
               << " additional symbols to ensure all watchlist symbols are covered" << std::endl;
   }
+}
+
+void WatchlistPanel::subscribe_to_all_watchlist_symbols() {
+  // Subscribe to all symbols in the watchlist efficiently
+  std::vector<uint32_t> symbols_to_subscribe;
+
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+      symbols_to_subscribe.push_back(symbol_id);
+    }
+  }
+
+  if (!symbols_to_subscribe.empty()) {
+    std::cout << "[WatchlistPanel] Subscribing to " << symbols_to_subscribe.size()
+              << " symbols for real-time updates..." << std::endl;
+
+    for (uint32_t symbol_id : symbols_to_subscribe) {
+      subscribe_to_symbol(symbol_id);
+    }
+
+    std::cout << "[WatchlistPanel] Successfully subscribed to all "
+              << symbols_to_subscribe.size() << " watchlist symbols" << std::endl;
+  }
+}
+
+void WatchlistPanel::process_pending_updates() {
+  // This method handles any pending market data updates
+  // Currently, updates are processed directly in on_market_data_update
+  // This method can be extended to handle batch updates or other processing
+  // For now, it serves as a placeholder for future enhancements
 }
 
 }  // namespace BTQuant

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "watchlist_alerts.hpp"
 
 namespace BTQuant {
 
@@ -82,9 +84,16 @@ class WatchlistPanel : public PanelBase {
   // Get current group name
   const std::string& get_current_group_name() const { return current_group_name_; }
 
+  // Alert management methods
+  void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel);
+  void add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
+                      double target_price, WatchlistPriceAlert::Direction direction);
+  void remove_alerts_for_symbol(uint32_t symbol_id);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  std::shared_ptr<WatchlistAlertManager> alert_manager_;
 
   // Single watchlist for backward compatibility
   std::map<uint32_t, WatchlistEntry> watchlist_;

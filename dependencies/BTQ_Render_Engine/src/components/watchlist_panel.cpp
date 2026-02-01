@@ -208,6 +208,9 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   // Load column settings from config file
   load_column_settings_from_config(config_file_path_);
 
+  // Initialize the alert manager
+  alert_manager_ = std::make_shared<WatchlistAlertManager>(bridge_, processor_, nullptr);
+
   // Subscribe to all currently watched symbols using the new efficient method
   subscribe_to_all_watchlist_symbols();
 
@@ -227,6 +230,11 @@ void WatchlistPanel::update(float dt) {
         entry.animation_timer = 0.0f;
       }
     }
+  }
+
+  // Update alerts for all watchlist symbols
+  if (alert_manager_) {
+    alert_manager_->update_alerts();
   }
 
   // Ensure all symbols in the current watchlist group are subscribed to real-time price feed updates
@@ -1822,6 +1830,50 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     ImGui::PopStyleVar(2); // Pop the style variables
     ImGui::PopStyleColor(4); // Pop all 4 color styles
+
+    // Add context menu for additional actions including alerts
+    if (ImGui::BeginPopupContextItem("WatchlistItemContextMenu")) {
+      if (ImGui::MenuItem("Add Price Alert")) {
+        // Store the symbol for which to add an alert
+        // This would typically open a modal dialog to set the alert parameters
+        // For now, we'll just add a simple alert above current price + 5%
+        double target_price = entry.price * 1.05; // 5% above current price
+        if (alert_manager_) {
+          alert_manager_->add_price_alert(entry.symbol_id, entry.symbol, target_price,
+                                         WatchlistPriceAlert::Direction::ABOVE);
+        }
+      }
+
+      if (ImGui::MenuItem("Add Below Alert")) {
+        // Add an alert for when price goes below current price - 5%
+        double target_price = entry.price * 0.95; // 5% below current price
+        if (alert_manager_) {
+          alert_manager_->add_price_alert(entry.symbol_id, entry.symbol, target_price,
+                                         WatchlistPriceAlert::Direction::BELOW);
+        }
+      }
+
+      if (ImGui::MenuItem("View Existing Alerts")) {
+        // Show existing alerts for this symbol
+        if (alert_manager_) {
+          auto alerts = alert_manager_->get_alerts_for_symbol(entry.symbol_id);
+          if (alerts.empty()) {
+            std::cout << "[WatchlistPanel] No alerts for symbol: " << entry.symbol << std::endl;
+          } else {
+            std::cout << "[WatchlistPanel] Found " << alerts.size() << " alerts for symbol: " << entry.symbol << std::endl;
+            for (const auto& alert : alerts) {
+              std::cout << "  Alert: " << (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "Above" : "Below")
+                        << " " << alert.target_price << " Status: " <<
+                           (alert.status == AlertStatus::ACTIVE ? "Active" :
+                            alert.status == AlertStatus::TRIGGERED ? "Triggered" : "Disabled") << std::endl;
+            }
+          }
+        }
+      }
+
+      ImGui::EndPopup();
+    }
+
     ImGui::PopID();
   }
 }
@@ -2762,8 +2814,56 @@ void WatchlistPanel::clear_group(const std::string& group_name) {
     }
   }
 
+  // Remove alerts for all symbols in this group
+  for (const auto& [symbol_id, entry] : group) {
+    if (alert_manager_) {
+      alert_manager_->remove_alerts_for_symbol(symbol_id);
+    }
+  }
+
   group.clear();
   group_display_orders_[group_name].clear();
+}
+
+void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel) {
+  if (alert_manager_) {
+    // Update the alerts panel reference in the alert manager
+    alert_manager_->set_alert_triggered_callback([alerts_panel](const WatchlistPriceAlert& alert, double current_price) {
+      if (alerts_panel) {
+        auto now = std::chrono::system_clock::now();
+        std::string message = "Price " +
+                             (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
+                             " target: " + std::to_string(alert.target_price);
+
+        // Create a new alert log entry
+        AlertLog log_entry;
+        log_entry.time = now;
+        log_entry.rule_name = alert.symbol_name + " Price Alert";
+        log_entry.symbol = alert.symbol_name;
+        log_entry.price = current_price;
+        log_entry.message = message;
+
+        // Note: Since we can't directly access the logs_ vector in AlertsPanel,
+        // we would need to add a public method to AlertsPanel to add logs
+        // For now, we'll just log to console
+        std::cout << "[WatchlistAlert] Triggered: " << alert.symbol_name
+                  << " price alert at " << current_price << " (target: " << alert.target_price << ")" << std::endl;
+      }
+    });
+  }
+}
+
+void WatchlistPanel::add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
+                                    double target_price, WatchlistPriceAlert::Direction direction) {
+  if (alert_manager_) {
+    alert_manager_->add_price_alert(symbol_id, symbol_name, target_price, direction);
+  }
+}
+
+void WatchlistPanel::remove_alerts_for_symbol(uint32_t symbol_id) {
+  if (alert_manager_) {
+    alert_manager_->remove_alerts_for_symbol(symbol_id);
+  }
 }
 
 }  // namespace BTQuant

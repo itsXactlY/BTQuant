@@ -91,6 +91,7 @@ set(DASHBOARD_SOURCES
     src/components/alerts_panel.cpp
     src/components/status_bar_panel.cpp
     src/components/watchlist_panel.cpp
+    src/components/watchlist_alerts.cpp
     src/components/tape_panel.cpp
     src/components/volume_profile_panel.cpp
     src/components/depth_chart_panel.cpp

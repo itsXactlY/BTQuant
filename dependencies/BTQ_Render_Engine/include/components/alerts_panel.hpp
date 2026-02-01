@@ -39,6 +39,12 @@ class AlertsPanel : public PanelBase {
   void update(float dt) override;
   void render() override;
 
+ public:
+  // Public method to add logs from external sources (e.g., watchlist alerts)
+  void add_alert_log(const AlertLog& log) {
+    logs_.push_back(log);
+  }
+
  private:
   void render_rules_table();
   void render_alert_logs();

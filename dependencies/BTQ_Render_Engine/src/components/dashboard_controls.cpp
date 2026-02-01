@@ -51,16 +51,9 @@ void DashboardControls::render_dashboard_controls() {
       // Multi-select dropdown for exchanges
       ImGui::Text("Select Active Exchanges:");
 
-      // Create a temporary window to show the multi-select list
+      // Create a more compact multi-select dropdown
       static bool show_exchange_selector = false;
       static char exchange_preview[256] = "All Exchanges";
-
-      if (ImGui::Button("Select Exchanges")) {
-        show_exchange_selector = !show_exchange_selector;
-      }
-
-      // Store the button position for the popup
-      ImVec2 button_pos = ImGui::GetItemRectMin(); // Get top-left corner of the button
 
       // Update preview text to show selected exchanges
       std::string preview_text = "";
@@ -82,35 +75,32 @@ void DashboardControls::render_dashboard_controls() {
         exchange_preview[sizeof(exchange_preview) - 1] = '\0';
       }
 
-      ImGui::SameLine();
-      ImGui::Text("%s", exchange_preview);
+      // Button that acts as a dropdown
+      if (ImGui::Button(exchange_preview, ImVec2(-1, 0))) {
+        show_exchange_selector = !show_exchange_selector;
+      }
 
-      // Show exchange selection popup
+      // Show exchange selection popup as a proper dropdown
       if (show_exchange_selector) {
-        // Position the popup near the button
-        ImVec2 window_pos = ImVec2(button_pos.x, button_pos.y + ImGui::GetItemRectSize().y); // Position directly below the button
-        ImGui::SetNextWindowPos(window_pos);
-        ImGui::SetNextWindowSize(ImVec2(250, 300));
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
+        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 300));
 
-        if (ImGui::Begin("Exchange Selector", &show_exchange_selector,
-                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::Begin("##ExchangeSelectorPopup", &show_exchange_selector,
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoSavedSettings)) {
 
           bool any_changes = false;
 
           // Select All / Deselect All buttons
-          if (ImGui::Button("Select All")) {
+          if (ImGui::Button("Select All", ImVec2(ImGui::GetContentRegionAvail().x * 0.45f, 0))) {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1);
             any_changes = true;
           }
           ImGui::SameLine();
-          if (ImGui::Button("Deselect All")) {
+          if (ImGui::Button("Deselect All", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 0);
             any_changes = true;
-          }
-          ImGui::SameLine();
-          if (ImGui::Button("Apply")) {
-            show_exchange_selector = false;
-            needs_refresh_ = true; // Refresh symbols when exchange selection changes
           }
 
           ImGui::Separator();
@@ -123,13 +113,18 @@ void DashboardControls::render_dashboard_controls() {
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
               selected_exchanges_[i] = temp_selected ? 1 : 0;
               any_changes = true;
-            }
 
-            // Add a small indent to show hierarchy if needed in the future
-            // ImGui::Indent(20.0f);
+              // Automatically refresh when selection changes
+              needs_refresh_ = true;
+            }
           }
 
           ImGui::EndChild();
+
+          // Apply button to close the popup
+          if (ImGui::Button("Apply", ImVec2(-1, 0))) {
+            show_exchange_selector = false;
+          }
 
           if (any_changes) {
             // Update preview text immediately when changes occur
@@ -160,6 +155,9 @@ void DashboardControls::render_dashboard_controls() {
           needs_refresh_ = true; // Refresh symbols when exchange selection changes
         }
       }
+
+      // Add a small info text showing how many exchanges are selected
+      ImGui::TextDisabled("(%d/%zu exchanges)", selected_count, all_exchanges_.size());
     }
 
     // Symbol selection section
@@ -207,43 +205,43 @@ void DashboardControls::render_dashboard_controls() {
                 }
               }
             }
-          }
 
-          // Also get active symbols from the bridge if possible through the chart manager
-          auto chart_manager = panel_manager_->get_chart_manager();
-          if (chart_manager) {
-            // Access the bridge through the chart manager
-            auto bridge = chart_manager->get_bridge();
-            if (bridge) {
-              auto active_symbols = bridge->getActiveSymbols();
-              for (auto symbol_id : active_symbols) {
-                std::string symbol_name = bridge->getSymbolName(symbol_id);
+            // Also get active symbols from the bridge if possible through the chart manager
+            auto chart_manager = panel_manager_->get_chart_manager();
+            if (chart_manager) {
+              // Access the bridge through the chart manager
+              auto bridge = chart_manager->get_bridge();
+              if (bridge) {
+                auto active_symbols = bridge->getActiveSymbols();
+                for (auto symbol_id : active_symbols) {
+                  std::string symbol_name = bridge->getSymbolName(symbol_id);
 
-                if (!symbol_name.empty()) {
-                  // Try to get exchange information from the symbol registry
-                  std::string exchange_name = "";
-                  auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-                  if (symbol_info.has_value()) {
-                    exchange_name = symbol_info->exchange;
-                  } else {
-                    // If not in registry, try to get from bridge
-                    exchange_name = bridge->getExchangeName(symbol_id);
-                  }
-
-                  // Check if this symbol's exchange is in the selected exchanges
-                  bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
-
-                  if (exchange_selected) {
-                    // Check if symbol is already in the list
-                    bool found = false;
-                    for (const auto& existing_symbol : all_symbols_) {
-                      if (existing_symbol == symbol_name) {
-                        found = true;
-                        break;
-                      }
+                  if (!symbol_name.empty()) {
+                    // Try to get exchange information from the symbol registry
+                    std::string exchange_name = "";
+                    auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+                    if (symbol_info.has_value()) {
+                      exchange_name = symbol_info->exchange;
+                    } else {
+                      // If not in registry, try to get from bridge
+                      exchange_name = bridge->getExchangeName(symbol_id);
                     }
-                    if (!found) {
-                      all_symbols_.push_back(symbol_name);
+
+                    // Check if this symbol's exchange is in the selected exchanges
+                    bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
+
+                    if (exchange_selected) {
+                      // Check if symbol is already in the list
+                      bool found = false;
+                      for (const auto& existing_symbol : all_symbols_) {
+                        if (existing_symbol == symbol_name) {
+                          found = true;
+                          break;
+                        }
+                      }
+                      if (!found) {
+                        all_symbols_.push_back(symbol_name);
+                      }
                     }
                   }
                 }

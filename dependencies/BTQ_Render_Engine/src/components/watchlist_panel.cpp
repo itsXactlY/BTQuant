@@ -48,6 +48,9 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                              this->on_market_data_update(symbol_id, type);
                                            });
   }
+
+  // Load the saved watchlist order from config file
+  load_watchlist_order_from_config("watchlist_config.ini");
 }
 
 void WatchlistPanel::update(float dt) {
@@ -355,7 +358,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   // Drag and drop target
   if (ImGui::BeginDragDropTarget()) {
-    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("WATCHLIST_ROW")) {
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("WATCHLIST_ROW");
+    if (payload) {
       IM_ASSERT(payload->DataSize == sizeof(uint32_t));
       uint32_t source_symbol_id = *(const uint32_t*)payload->Data;
 
@@ -369,10 +373,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         int target_idx = std::distance(display_order_.begin(), target_it);
 
         // Move the source item to the target position
-        uint32_t moved_item = display_order_[source_idx];
+        uint32_t moved_item = *source_it;
 
         // Remove the moved item from its current position
-        display_order_.erase(display_order_.begin() + source_idx);
+        display_order_.erase(source_it);
 
         // Adjust target index if source was before target (since we removed an element)
         if (source_idx < target_idx) {
@@ -381,6 +385,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
         // Insert the moved item at the new position
         display_order_.insert(display_order_.begin() + target_idx, moved_item);
+
+        // Save the updated order to config file
+        save_watchlist_order_to_config("watchlist_config.ini");
       }
     }
     ImGui::EndDragDropTarget();
@@ -585,29 +592,84 @@ void WatchlistPanel::sort_watchlist() {
   });
 }
 
+void WatchlistPanel::handle_drag_drop_reordering() {
+  // This method handles the drag and drop reordering logic
+  // The actual reordering is handled in render_table_row when drag and drop occurs
+  // This method can be used for additional processing if needed
+}
+
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {
-  std::ofstream file(config_file, std::ios::app); // Append to existing config file
-  if (!file.is_open()) {
+  // First, read the existing config file to preserve other sections
+  std::vector<std::string> existing_lines;
+  std::ifstream read_file(config_file);
+  bool replaced_section = false;
+
+  if (read_file.is_open()) {
+    std::string line;
+    bool in_watchlist_section = false;
+
+    while (std::getline(read_file, line)) {
+      // Check if we're entering the watchlist_order section
+      if (line.find("[watchlist_order]") != std::string::npos) {
+        existing_lines.push_back(line);
+        in_watchlist_section = true;
+
+        // Add our updated display order
+        std::string order_line = "display_order=";
+        for (size_t i = 0; i < display_order_.size(); ++i) {
+          order_line += std::to_string(display_order_[i]);
+          if (i < display_order_.size() - 1) {
+            order_line += ",";
+          }
+        }
+        existing_lines.push_back(order_line);
+        replaced_section = true;
+      }
+      // Skip lines inside the watchlist_order section (we'll replace them)
+      else if (in_watchlist_section && line.find('[') == 0 && line.find(']') != std::string::npos) {
+        // Found next section, so we're out of the watchlist section
+        in_watchlist_section = false;
+        existing_lines.push_back(line);
+      }
+      else if (!in_watchlist_section) {
+        existing_lines.push_back(line);
+      }
+      // If in watchlist section and not a new section header, skip the line
+    }
+    read_file.close();
+  }
+
+  // If the watchlist_order section wasn't found, add it at the end
+  if (!replaced_section) {
+    if (!existing_lines.empty() && !existing_lines.back().empty()) {
+      existing_lines.push_back(""); // Add blank line before new section
+    }
+    existing_lines.push_back("# Watchlist order configuration");
+    existing_lines.push_back("[watchlist_order]");
+
+    std::string order_line = "display_order=";
+    for (size_t i = 0; i < display_order_.size(); ++i) {
+      order_line += std::to_string(display_order_[i]);
+      if (i < display_order_.size() - 1) {
+        order_line += ",";
+      }
+    }
+    existing_lines.push_back(order_line);
+  }
+
+  // Write the updated content back to the file
+  std::ofstream write_file(config_file);
+  if (!write_file.is_open()) {
     std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file << std::endl;
     return;
   }
 
   try {
-    file << std::endl;
-    file << "# Watchlist order configuration" << std::endl;
-    file << "[watchlist_order]" << std::endl;
-
-    // Write the display order as a comma-separated list of symbol IDs
-    file << "display_order=";
-    for (size_t i = 0; i < display_order_.size(); ++i) {
-      file << display_order_[i];
-      if (i < display_order_.size() - 1) {
-        file << ",";
-      }
+    for (const auto& line : existing_lines) {
+      write_file << line << std::endl;
     }
-    file << std::endl;
 
-    file.close();
+    write_file.close();
     std::cout << "[WatchlistPanel] Saved watchlist order to: " << config_file << std::endl;
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error saving watchlist order: " << e.what() << std::endl;

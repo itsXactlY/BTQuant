@@ -300,16 +300,6 @@ void ChartPanel::render() {
 
   const ChartInstance& chart = it->second;
 
-  // Invalidate cache if new data has arrived
-  // NOTE: This check is lightweight and only compares sizes
-  if (chart.closes.size() > last_known_data_size_) {
-    cached_sma_.clear();
-    cached_ema_.clear();
-    cached_rsi_.clear();
-    cached_stoch_k_.clear();
-    cached_atr_.clear();
-    last_known_data_size_ = chart.closes.size();
-  }
 
   // Render chart controls in a collapsible header
   if (ImGui::CollapsingHeader("Chart Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -761,13 +751,13 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_k(const std::vector<
 }
 
 std::vector<double> ChartPanel::calculate_cached_stochastic_d(const std::vector<double>& stoch_k,
-                                                       int d_period) {
+                                                       int slow_period) {
   if (stoch_k.empty()) {
     return std::vector<double>();
   }
 
-  // Create cache key based on data size and d_period
-  IndicatorCacheKey key{IndicatorType::STOCH_D, stoch_k.size(), d_period, 0, 0.0};
+  // Create cache key based on data size and slow_period
+  IndicatorCacheKey key{IndicatorType::STOCH_D, stoch_k.size(), slow_period, 0, 0.0};
 
   // Check if result is already cached in the unified cache
   auto it = cached_indicators_.find(key);
@@ -777,14 +767,14 @@ std::vector<double> ChartPanel::calculate_cached_stochastic_d(const std::vector<
 
   std::vector<double> stoch_d(stoch_k.size(), 50.0); // Default to neutral
 
-  for (size_t i = d_period - 1; i < stoch_k.size(); ++i) {
+  for (size_t i = slow_period - 1; i < stoch_k.size(); ++i) {
     double sum = 0.0;
-    for (int j = 0; j < d_period; ++j) {
+    for (int j = 0; j < slow_period; ++j) {
       if (i >= static_cast<size_t>(j)) {
         sum += stoch_k[i - j];
       }
     }
-    stoch_d[i] = sum / d_period;
+    stoch_d[i] = sum / slow_period;
   }
 
   // Cache the result in the unified cache
@@ -898,7 +888,7 @@ void ChartPanel::calculate_cached_stochastic(const std::vector<float>& highs,
                                           int k_period, int d_period) {
   // This method calculates and caches both stochastic components
   auto stoch_k = calculate_cached_stochastic_k(highs, lows, closes, k_period);
-  calculate_cached_stochastic_d(stoch_k, d_period);
+  calculate_cached_stochastic_d(stoch_k, indicator_config_.stochastic_slow_period);
 }
 
 void ChartPanel::update_indicator_config_from_active() {
@@ -980,6 +970,9 @@ void ChartPanel::update_indicator_config_from_active() {
       }
       if (indicator.parameters.count("d_period") > 0) {
         indicator_config_.stochastic_d_period = static_cast<int>(indicator.parameters.at("d_period"));
+      }
+      if (indicator.parameters.count("slow_period") > 0) {
+        indicator_config_.stochastic_slow_period = static_cast<int>(indicator.parameters.at("slow_period"));
       }
     } else if (indicator.name == "ATR") {
       indicator_config_.show_atr = true;
@@ -1164,6 +1157,7 @@ void ChartPanel::sync_active_indicators_with_config() {
       new_active_indicators.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["k_period"] = static_cast<float>(indicator_config_.stochastic_k_period);
       new_active_indicators.back().parameters["d_period"] = static_cast<float>(indicator_config_.stochastic_d_period);
+      new_active_indicators.back().parameters["slow_period"] = static_cast<float>(indicator_config_.stochastic_slow_period);
     }
   }
 
@@ -1260,7 +1254,7 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<double>& prices,
 void ChartPanel::render_indicator_overlay_panel() {
   // Create a window for the indicator overlay panel
   const char* overlay_title = "Active Indicators";
-  ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
   ImGui::Begin(overlay_title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
   // Add a button to add new indicators
@@ -1297,6 +1291,7 @@ void ChartPanel::render_indicator_overlay_panel() {
       active_indicators_.emplace_back("Stochastic", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
       active_indicators_.back().parameters["k_period"] = 14.0f;
       active_indicators_.back().parameters["d_period"] = 3.0f;
+      active_indicators_.back().parameters["slow_period"] = 3.0f;
     }
     if (ImGui::Selectable("ATR")) {
       active_indicators_.emplace_back("ATR", true, ImVec4(0.0f, 1.0f, 0.5f, 1.0f), next_indicator_id_++);
@@ -1351,7 +1346,8 @@ void ChartPanel::render_indicator_overlay_panel() {
 
   // Render the list of active indicators
   if (!active_indicators_.empty()) {
-    ImGui::BeginChild("IndicatorList", ImVec2(0, 150), true);
+    ImGui::Text("Active Indicators (%zu):", active_indicators_.size());
+    ImGui::BeginChild("IndicatorList", ImVec2(0, 200), true);
 
     for (auto it = active_indicators_.begin(); it != active_indicators_.end();) {
       auto& indicator = *it;
@@ -1367,7 +1363,7 @@ void ChartPanel::render_indicator_overlay_panel() {
       ImGui::SameLine();
 
       // Color picker for the indicator
-      if (ImGui::ColorEdit4("##color", &indicator.color.x, ImGuiColorEditFlags_NoInputs)) {
+      if (ImGui::ColorEdit4("##color", &indicator.color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
         // Color changed, no additional action needed
       }
       ImGui::SameLine();
@@ -1384,7 +1380,7 @@ void ChartPanel::render_indicator_overlay_panel() {
 
         float period = indicator.parameters.count("period") > 0 ?
                       indicator.parameters["period"] : 9.0f;
-        if (ImGui::DragFloat("Period", &period, 0.5f, 1.0f, 200.0f, "%.0f")) {
+        if (ImGui::DragFloat("##period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
           indicator.parameters["period"] = period;
           update_indicator_config_from_active();
         }
@@ -1396,15 +1392,17 @@ void ChartPanel::render_indicator_overlay_panel() {
         float signal_period = indicator.parameters.count("signal_period") > 0 ?
                              indicator.parameters["signal_period"] : 9.0f;
 
-        if (ImGui::DragFloat("Fast", &fast_period, 0.5f, 1.0f, 50.0f, "%.0f")) {
+        if (ImGui::DragFloat("##fast", &fast_period, 0.5f, 1.0f, 50.0f, "Fast: %.0f")) {
           indicator.parameters["fast_period"] = fast_period;
           update_indicator_config_from_active();
         }
-        if (ImGui::DragFloat("Slow", &slow_period, 0.5f, 1.0f, 100.0f, "%.0f")) {
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##slow", &slow_period, 0.5f, 1.0f, 100.0f, "Slow: %.0f")) {
           indicator.parameters["slow_period"] = slow_period;
           update_indicator_config_from_active();
         }
-        if (ImGui::DragFloat("Signal", &signal_period, 0.5f, 1.0f, 50.0f, "%.0f")) {
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##signal", &signal_period, 0.5f, 1.0f, 50.0f, "Signal: %.0f")) {
           indicator.parameters["signal_period"] = signal_period;
           update_indicator_config_from_active();
         }
@@ -1414,11 +1412,12 @@ void ChartPanel::render_indicator_overlay_panel() {
         float std_dev = indicator.parameters.count("std_dev") > 0 ?
                        indicator.parameters["std_dev"] : 2.0f;
 
-        if (ImGui::DragFloat("Period", &period, 0.5f, 1.0f, 100.0f, "%.0f")) {
+        if (ImGui::DragFloat("##bb_period", &period, 0.5f, 1.0f, 100.0f, "Period: %.0f")) {
           indicator.parameters["period"] = period;
           update_indicator_config_from_active();
         }
-        if (ImGui::DragFloat("Std Dev", &std_dev, 0.1f, 0.1f, 5.0f, "%.1f")) {
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##bb_std", &std_dev, 0.1f, 0.1f, 5.0f, "Std Dev: %.1f")) {
           indicator.parameters["std_dev"] = std_dev;
           update_indicator_config_from_active();
         }
@@ -1427,20 +1426,28 @@ void ChartPanel::render_indicator_overlay_panel() {
                         indicator.parameters["k_period"] : 14.0f;
         float d_period = indicator.parameters.count("d_period") > 0 ?
                         indicator.parameters["d_period"] : 3.0f;
+        float slow_period = indicator.parameters.count("slow_period") > 0 ?
+                           indicator.parameters["slow_period"] : 3.0f;
 
-        if (ImGui::DragFloat("K Period", &k_period, 0.5f, 1.0f, 50.0f, "%.0f")) {
+        if (ImGui::DragFloat("##stoch_k", &k_period, 0.5f, 1.0f, 50.0f, "K: %.0f")) {
           indicator.parameters["k_period"] = k_period;
           update_indicator_config_from_active();
         }
-        if (ImGui::DragFloat("D Period", &d_period, 0.5f, 1.0f, 50.0f, "%.0f")) {
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##stoch_d", &d_period, 0.5f, 1.0f, 50.0f, "D: %.0f")) {
           indicator.parameters["d_period"] = d_period;
+          update_indicator_config_from_active();
+        }
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##stoch_slow", &slow_period, 0.5f, 1.0f, 50.0f, "Slow: %.0f")) {
+          indicator.parameters["slow_period"] = slow_period;
           update_indicator_config_from_active();
         }
       }
 
       // Delete button
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50);
-      if (ImGui::Button("Delete")) {
+      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30);
+      if (ImGui::Button("X##delete")) {
         // Set the corresponding configuration flag to false based on the indicator name
         if (indicator.name == "SMA 9") {
           indicator_config_.show_sma_9 = false;
@@ -1500,9 +1507,9 @@ void ChartPanel::render_indicator_overlay_panel() {
   // Render multi-timeframe indicators
   if (!multi_tf_indicators_.empty()) {
     ImGui::Separator();
-    ImGui::Text("Multi-Timeframe Indicators:");
+    ImGui::Text("Multi-Timeframe Indicators (%zu):", multi_tf_indicators_.size());
 
-    ImGui::BeginChild("MultiTFIndicatorList", ImVec2(0, 100), true);
+    ImGui::BeginChild("MultiTFIndicatorList", ImVec2(0, 120), true);
 
     for (auto it = multi_tf_indicators_.begin(); it != multi_tf_indicators_.end();) {
       auto& indicator = *it;
@@ -1517,22 +1524,31 @@ void ChartPanel::render_indicator_overlay_panel() {
       ImGui::SameLine();
 
       // Color picker for the indicator
-      if (ImGui::ColorEdit4("##multitf_color", &indicator.color.x, ImGuiColorEditFlags_NoInputs)) {
+      if (ImGui::ColorEdit4("##multitf_color", &indicator.color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
         // Color changed, no additional action needed
       }
       ImGui::SameLine();
 
       // Indicator name and source timeframe
-      char timeframe_str[32];
+      char timeframe_str[64];
       snprintf(timeframe_str, sizeof(timeframe_str), "%s (%s)",
                indicator.name.c_str(),
                timeframe_to_string(indicator.source_timeframe).c_str());
       ImGui::Text("%s", timeframe_str);
       ImGui::SameLine();
 
+      // Parameter input for multi-timeframe indicators
+      if (indicator.name.find("SMA") != std::string::npos) {
+        float period = static_cast<float>(indicator.period);
+        if (ImGui::DragFloat("##mtf_period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
+          indicator.period = static_cast<int>(period);
+        }
+        ImGui::SameLine();
+      }
+
       // Delete button
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 50);
-      if (ImGui::Button("Delete")) {
+      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30);
+      if (ImGui::Button("X##mtf_delete")) {
         it = multi_tf_indicators_.erase(it);
         ImGui::PopID();
         continue; // Skip incrementing iterator since we removed an element
@@ -1633,9 +1649,9 @@ std::vector<double> ChartPanel::calculate_stochastic_k(const std::vector<float>&
 }
 
 std::vector<double> ChartPanel::calculate_stochastic_d(const std::vector<double>& stoch_k,
-                                                       int d_period) {
+                                                       int slow_period) {
   // Redirect to the cached version
-  return calculate_cached_stochastic_d(stoch_k, d_period);
+  return calculate_cached_stochastic_d(stoch_k, slow_period);
 }
 
 std::vector<double> ChartPanel::calculate_true_range(const std::vector<float>& highs,
@@ -2040,10 +2056,27 @@ void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-  auto macd_line = calculate_macd_line(chart.closes, indicator_config_.macd_fast_period,
-                                       indicator_config_.macd_slow_period);
-  auto macd_signal = calculate_macd_signal(macd_line, indicator_config_.macd_signal_period);
-  auto macd_histogram = calculate_macd_histogram(macd_line, macd_signal);
+  // Get cached MACD values
+  IndicatorCacheKey line_key{IndicatorType::MACD_LINE, chart.closes.size(),
+                            indicator_config_.macd_fast_period, indicator_config_.macd_slow_period, 0.0};
+  IndicatorCacheKey signal_key{IndicatorType::MACD_SIGNAL, chart.closes.size(),
+                               indicator_config_.macd_signal_period, 0, 0.0};
+  IndicatorCacheKey histogram_key{IndicatorType::MACD_HISTOGRAM, chart.closes.size(), 0, 0, 0.0};
+
+  // Get all cached MACD components
+  auto line_it = cached_indicators_.find(line_key);
+  auto signal_it = cached_indicators_.find(signal_key);
+  auto histogram_it = cached_indicators_.find(histogram_key);
+
+  if (line_it == cached_indicators_.end() ||
+      signal_it == cached_indicators_.end() ||
+      histogram_it == cached_indicators_.end()) {
+    return; // No cached data available
+  }
+
+  const auto& macd_line = line_it->second;
+  const auto& macd_signal = signal_it->second;
+  const auto& macd_histogram = histogram_it->second;
 
   // Get plot limits for MACD scaling
   ImPlotRect limits = ImPlot::GetPlotLimits();

@@ -106,6 +106,7 @@ class WatchlistPanel : public PanelBase {
 
   // Drag and drop helpers
   void handle_drag_drop_reordering();
+  void cleanup_drag_resources();
 
   // Helpers
   double calculate_24h_change(const RenderEngine::OHLCVCandle& current,

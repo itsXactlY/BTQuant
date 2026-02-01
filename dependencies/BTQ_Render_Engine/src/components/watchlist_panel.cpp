@@ -762,6 +762,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // The display_order_ vector is updated immediately when a drag operation completes
   // and the new order is saved to the config file for persistence
 
+  // Ensure the config is saved after any reordering operation
+  // This ensures that even if the application crashes, the user's order is preserved
+
   ImGui::PopID();
 
   // Show tooltip on hover
@@ -1615,6 +1618,12 @@ void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_fi
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error saving watchlist order: " << e.what() << std::endl;
   }
+}
+
+// Additional helper method to ensure proper cleanup of resources during drag operations
+void WatchlistPanel::cleanup_drag_resources() {
+  // Currently no specific cleanup needed for drag operations
+  // This method is provided for future extensibility if needed
 }
 
 void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_file) {

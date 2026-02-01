@@ -24,17 +24,14 @@ void ChartPanel::calculate_all_indicators(const ChartInstance& chart) {
 
   // Calculate all enabled indicators based on indicator_config_
 
-  // Calculate SMAs
+  // Calculate SMAs - Required: (9,20,50,200)
   if (indicator_config_.show_sma_9) calculate_cached_sma(chart.closes, 9);
-  if (indicator_config_.show_sma_10) calculate_cached_sma(chart.closes, 10);
   if (indicator_config_.show_sma_20) calculate_cached_sma(chart.closes, 20);
   if (indicator_config_.show_sma_50) calculate_cached_sma(chart.closes, 50);
   if (indicator_config_.show_sma_200) calculate_cached_sma(chart.closes, 200);
 
-  // Calculate EMAs
+  // Calculate EMAs - Required: (9,21,50,200)
   if (indicator_config_.show_ema_9) calculate_cached_ema(chart.closes, 9);
-  if (indicator_config_.show_ema_10) calculate_cached_ema(chart.closes, 10);
-  if (indicator_config_.show_ema_20) calculate_cached_ema(chart.closes, 20);
   if (indicator_config_.show_ema_21) calculate_cached_ema(chart.closes, 21);
   if (indicator_config_.show_ema_50) calculate_cached_ema(chart.closes, 50);
   if (indicator_config_.show_ema_200) calculate_cached_ema(chart.closes, 200);
@@ -122,7 +119,6 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
                        PanelManager* panel_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
-  drawing_tools_manager_ = std::make_unique<DrawingToolsManager>();
   initialize_active_indicators();
 
   // Initialize the historical time & sales panel for showing trades
@@ -142,14 +138,10 @@ void ChartPanel::initialize_active_indicators() {
   // Clear existing indicators
   active_indicators_.clear();
 
-  // Add SMA indicators
+  // Add SMA indicators - Required: (9,20,50,200)
   if (indicator_config_.show_sma_9) {
     active_indicators_.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 9.0f;
-  }
-  if (indicator_config_.show_sma_10) {
-    active_indicators_.emplace_back("SMA 10", true, ImVec4(1.0f, 0.65f, 0.0f, 1.0f), next_indicator_id_++);
-    active_indicators_.back().parameters["period"] = 10.0f;
   }
   if (indicator_config_.show_sma_20) {
     active_indicators_.emplace_back("SMA 20", true, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), next_indicator_id_++);
@@ -164,18 +156,10 @@ void ChartPanel::initialize_active_indicators() {
     active_indicators_.back().parameters["period"] = 200.0f;
   }
 
-  // Add EMA indicators
+  // Add EMA indicators - Required: (9,21,50,200)
   if (indicator_config_.show_ema_9) {
     active_indicators_.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), next_indicator_id_++);
     active_indicators_.back().parameters["period"] = 9.0f;
-  }
-  if (indicator_config_.show_ema_10) {
-    active_indicators_.emplace_back("EMA 10", true, ImVec4(1.0f, 0.0f, 0.5f, 1.0f), next_indicator_id_++);
-    active_indicators_.back().parameters["period"] = 10.0f;
-  }
-  if (indicator_config_.show_ema_20) {
-    active_indicators_.emplace_back("EMA 20", true, ImVec4(0.54f, 0.17f, 0.89f, 1.0f), next_indicator_id_++);
-    active_indicators_.back().parameters["period"] = 20.0f;
   }
   if (indicator_config_.show_ema_21) {
     active_indicators_.emplace_back("EMA 21", true, ImVec4(0.0f, 0.75f, 1.0f, 1.0f), next_indicator_id_++);
@@ -280,6 +264,24 @@ void ChartPanel::update(float dt) {
     cached_rsi_.clear();
     cached_stoch_k_.clear();
     cached_atr_.clear();
+
+    // Convert chart data to OHLCVCandle format for VWAP calculation
+    std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
+    for (size_t i = 0; i < chart.dates.size(); ++i) {
+      BTQuant::RenderEngine::OHLCVCandle bar;
+      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
+      bar.open = chart.opens[i];
+      bar.high = chart.highs[i];
+      bar.low = chart.lows[i];
+      bar.close = chart.closes[i];
+      bar.volume = chart.volumes[i];
+      bar.trade_count = 1; // Placeholder value
+      bars.push_back(bar);
+    }
+
+    // Calculate session VWAPs based on the chart data
+    session_vwap_.calculate(bars);
+
     last_known_data_size_ = chart.closes.size();
 
     // Pre-calculate all enabled indicators with new data
@@ -403,10 +405,6 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-follow", &follow_latest_);
 
-  // Drawing tools UI
-  if (drawing_tools_manager_) {
-      drawing_tools_manager_->render_ui();
-  }
 
   ImGui::PopStyleVar();
 }
@@ -414,13 +412,9 @@ void ChartPanel::render_chart_controls() {
 void ChartPanel::render_indicator_selector() {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
 
-  // Moving Averages
+  // Moving Averages - Required: (9,20,50,200)
   ImGui::SeparatorText("Moving Averages");
   if (ImGui::Checkbox("SMA 9", &indicator_config_.show_sma_9)) {
-    sync_active_indicators_with_config();
-  }
-  ImGui::SameLine();
-  if (ImGui::Checkbox("SMA 10", &indicator_config_.show_sma_10)) {
     sync_active_indicators_with_config();
   }
   ImGui::SameLine();
@@ -437,14 +431,6 @@ void ChartPanel::render_indicator_selector() {
   }
 
   if (ImGui::Checkbox("EMA 9", &indicator_config_.show_ema_9)) {
-    sync_active_indicators_with_config();
-  }
-  ImGui::SameLine();
-  if (ImGui::Checkbox("EMA 10", &indicator_config_.show_ema_10)) {
-    sync_active_indicators_with_config();
-  }
-  ImGui::SameLine();
-  if (ImGui::Checkbox("EMA 20", &indicator_config_.show_ema_20)) {
     sync_active_indicators_with_config();
   }
   ImGui::SameLine();
@@ -913,13 +899,13 @@ void ChartPanel::calculate_cached_stochastic(const std::vector<float>& highs,
 void ChartPanel::update_indicator_config_from_active() {
   // Reset all indicators to false initially
   indicator_config_.show_sma_9 = false;
-  indicator_config_.show_sma_10 = false;
+  indicator_config_.show_sma_10 = false;  // Not required by spec
   indicator_config_.show_sma_20 = false;
   indicator_config_.show_sma_50 = false;
   indicator_config_.show_sma_200 = false;
   indicator_config_.show_ema_9 = false;
-  indicator_config_.show_ema_10 = false;
-  indicator_config_.show_ema_20 = false;
+  indicator_config_.show_ema_10 = false;  // Not required by spec
+  indicator_config_.show_ema_20 = false;  // Not required by spec
   indicator_config_.show_ema_21 = false;
   indicator_config_.show_ema_50 = false;
   indicator_config_.show_ema_200 = false;
@@ -938,8 +924,6 @@ void ChartPanel::update_indicator_config_from_active() {
 
     if (indicator.name == "SMA 9") {
       indicator_config_.show_sma_9 = true;
-    } else if (indicator.name == "SMA 10") {
-      indicator_config_.show_sma_10 = true;
     } else if (indicator.name == "SMA 20") {
       indicator_config_.show_sma_20 = true;
     } else if (indicator.name == "SMA 50") {
@@ -948,10 +932,6 @@ void ChartPanel::update_indicator_config_from_active() {
       indicator_config_.show_sma_200 = true;
     } else if (indicator.name == "EMA 9") {
       indicator_config_.show_ema_9 = true;
-    } else if (indicator.name == "EMA 10") {
-      indicator_config_.show_ema_10 = true;
-    } else if (indicator.name == "EMA 20") {
-      indicator_config_.show_ema_20 = true;
     } else if (indicator.name == "EMA 21") {
       indicator_config_.show_ema_21 = true;
     } else if (indicator.name == "EMA 50") {
@@ -1012,7 +992,7 @@ void ChartPanel::sync_active_indicators_with_config() {
   // Create a temporary list to hold the new active indicators
   std::vector<IndicatorItem> new_active_indicators;
 
-  // Add SMA indicators
+  // Add SMA indicators - Required: (9,20,50,200)
   if (indicator_config_.show_sma_9) {
     // Check if already exists in active_indicators_
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
@@ -1022,16 +1002,6 @@ void ChartPanel::sync_active_indicators_with_config() {
     } else {
       new_active_indicators.emplace_back("SMA 9", true, ImVec4(1.0f, 0.41f, 0.71f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 9.0f;
-    }
-  }
-  if (indicator_config_.show_sma_10) {
-    auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                          [](const IndicatorItem& item) { return item.name == "SMA 10"; });
-    if (it != active_indicators_.end()) {
-      new_active_indicators.push_back(*it);
-    } else {
-      new_active_indicators.emplace_back("SMA 10", true, ImVec4(1.0f, 0.65f, 0.0f, 1.0f), next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] = 10.0f;
     }
   }
   if (indicator_config_.show_sma_20) {
@@ -1065,7 +1035,7 @@ void ChartPanel::sync_active_indicators_with_config() {
     }
   }
 
-  // Add EMA indicators
+  // Add EMA indicators - Required: (9,21,50,200)
   if (indicator_config_.show_ema_9) {
     auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
                           [](const IndicatorItem& item) { return item.name == "EMA 9"; });
@@ -1074,26 +1044,6 @@ void ChartPanel::sync_active_indicators_with_config() {
     } else {
       new_active_indicators.emplace_back("EMA 9", true, ImVec4(1.0f, 0.0f, 1.0f, 1.0f), next_indicator_id_++);
       new_active_indicators.back().parameters["period"] = 9.0f;
-    }
-  }
-  if (indicator_config_.show_ema_10) {
-    auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                          [](const IndicatorItem& item) { return item.name == "EMA 10"; });
-    if (it != active_indicators_.end()) {
-      new_active_indicators.push_back(*it);
-    } else {
-      new_active_indicators.emplace_back("EMA 10", true, ImVec4(1.0f, 0.0f, 0.5f, 1.0f), next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] = 10.0f;
-    }
-  }
-  if (indicator_config_.show_ema_20) {
-    auto it = std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                          [](const IndicatorItem& item) { return item.name == "EMA 20"; });
-    if (it != active_indicators_.end()) {
-      new_active_indicators.push_back(*it);
-    } else {
-      new_active_indicators.emplace_back("EMA 20", true, ImVec4(0.54f, 0.17f, 0.89f, 1.0f), next_indicator_id_++);
-      new_active_indicators.back().parameters["period"] = 20.0f;
     }
   }
   if (indicator_config_.show_ema_21) {
@@ -1273,7 +1223,7 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<double>& prices,
 void ChartPanel::render_indicator_overlay_panel() {
   // Create a window for the indicator overlay panel
   const char* overlay_title = "Active Indicators";
-  ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
   ImGui::Begin(overlay_title, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 
   // Add a button to add new indicators
@@ -1363,162 +1313,170 @@ void ChartPanel::render_indicator_overlay_panel() {
 
   ImGui::Separator();
 
-  // Render the list of active indicators
+  // Render the list of active indicators with improved layout
   if (!active_indicators_.empty()) {
     ImGui::Text("Active Indicators (%zu):", active_indicators_.size());
-    ImGui::BeginChild("IndicatorList", ImVec2(0, 200), true);
 
-    for (auto it = active_indicators_.begin(); it != active_indicators_.end();) {
-      auto& indicator = *it;
+    // Create a table for better organization of indicator properties
+    if (ImGui::BeginTable("IndicatorTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+      ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+      ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+      ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Parameters", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f); // For delete button
 
-      ImGui::PushID(indicator.id); // Use unique ID for each indicator
+      ImGui::TableHeadersRow();
 
-      // Checkbox for visibility
-      bool visible = indicator.isVisible;
-      if (ImGui::Checkbox("##visible", &visible)) {
-        indicator.isVisible = visible;
-        update_indicator_config_from_active();
+      for (auto it = active_indicators_.begin(); it != active_indicators_.end();) {
+        auto& indicator = *it;
+
+        ImGui::PushID(indicator.id); // Use unique ID for each indicator
+
+        ImGui::TableNextRow();
+
+        // Column 1: Visibility checkbox
+        ImGui::TableSetColumnIndex(0);
+        bool visible = indicator.isVisible;
+        if (ImGui::Checkbox("##visible", &visible)) {
+          indicator.isVisible = visible;
+          update_indicator_config_from_active();
+        }
+
+        // Column 2: Color picker
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::ColorEdit4("##color", &indicator.color.x,
+              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip)) {
+          // Color changed, no additional action needed
+        }
+
+        // Column 3: Indicator name
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("%s", indicator.name.c_str());
+
+        // Column 4: Parameter inputs based on indicator type
+        ImGui::TableSetColumnIndex(3);
+        if (indicator.name.find("SMA") != std::string::npos ||
+            indicator.name.find("EMA") != std::string::npos ||
+            indicator.name.find("RSI") != std::string::npos ||
+            indicator.name.find("ATR") != std::string::npos) {
+
+          float period = indicator.parameters.count("period") > 0 ?
+                        indicator.parameters["period"] : 9.0f;
+          if (ImGui::DragFloat("##period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
+            indicator.parameters["period"] = period;
+            update_indicator_config_from_active();
+          }
+        } else if (indicator.name.find("MACD") != std::string::npos) {
+          float fast_period = indicator.parameters.count("fast_period") > 0 ?
+                             indicator.parameters["fast_period"] : 12.0f;
+          float slow_period = indicator.parameters.count("slow_period") > 0 ?
+                             indicator.parameters["slow_period"] : 26.0f;
+          float signal_period = indicator.parameters.count("signal_period") > 0 ?
+                               indicator.parameters["signal_period"] : 9.0f;
+
+          if (ImGui::DragFloat("##fast", &fast_period, 0.5f, 1.0f, 50.0f, "Fast: %.0f")) {
+            indicator.parameters["fast_period"] = fast_period;
+            update_indicator_config_from_active();
+          }
+          ImGui::SameLine();
+          if (ImGui::DragFloat("##slow", &slow_period, 0.5f, 1.0f, 100.0f, "Slow: %.0f")) {
+            indicator.parameters["slow_period"] = slow_period;
+            update_indicator_config_from_active();
+          }
+          ImGui::SameLine();
+          if (ImGui::DragFloat("##signal", &signal_period, 0.5f, 1.0f, 50.0f, "Signal: %.0f")) {
+            indicator.parameters["signal_period"] = signal_period;
+            update_indicator_config_from_active();
+          }
+        } else if (indicator.name.find("Bollinger") != std::string::npos) {
+          float period = indicator.parameters.count("period") > 0 ?
+                        indicator.parameters["period"] : 20.0f;
+          float std_dev = indicator.parameters.count("std_dev") > 0 ?
+                         indicator.parameters["std_dev"] : 2.0f;
+
+          if (ImGui::DragFloat("##bb_period", &period, 0.5f, 1.0f, 100.0f, "Period: %.0f")) {
+            indicator.parameters["period"] = period;
+            update_indicator_config_from_active();
+          }
+          ImGui::SameLine();
+          if (ImGui::DragFloat("##bb_std", &std_dev, 0.1f, 0.1f, 5.0f, "Std Dev: %.1f")) {
+            indicator.parameters["std_dev"] = std_dev;
+            update_indicator_config_from_active();
+          }
+        } else if (indicator.name.find("Stochastic") != std::string::npos) {
+          float k_period = indicator.parameters.count("k_period") > 0 ?
+                          indicator.parameters["k_period"] : 14.0f;
+          float d_period = indicator.parameters.count("d_period") > 0 ?
+                          indicator.parameters["d_period"] : 3.0f;
+          float slow_period = indicator.parameters.count("slow_period") > 0 ?
+                             indicator.parameters["slow_period"] : 3.0f;
+
+          if (ImGui::DragFloat("##stoch_k", &k_period, 0.5f, 1.0f, 50.0f, "K: %.0f")) {
+            indicator.parameters["k_period"] = k_period;
+            update_indicator_config_from_active();
+          }
+          ImGui::SameLine();
+          if (ImGui::DragFloat("##stoch_d", &d_period, 0.5f, 1.0f, 50.0f, "D: %.0f")) {
+            indicator.parameters["d_period"] = d_period;
+            update_indicator_config_from_active();
+          }
+          ImGui::SameLine();
+          if (ImGui::DragFloat("##stoch_slow", &slow_period, 0.5f, 1.0f, 50.0f, "Slow: %.0f")) {
+            indicator.parameters["slow_period"] = slow_period;
+            update_indicator_config_from_active();
+          }
+        }
+
+        // Column 5: Delete button
+        ImGui::TableSetColumnIndex(4);
+        if (ImGui::Button("X##delete")) {
+          // Set the corresponding configuration flag to false based on the indicator name
+          if (indicator.name == "SMA 9") {
+            indicator_config_.show_sma_9 = false;
+          } else if (indicator.name == "SMA 20") {
+            indicator_config_.show_sma_20 = false;
+          } else if (indicator.name == "SMA 50") {
+            indicator_config_.show_sma_50 = false;
+          } else if (indicator.name == "SMA 200") {
+            indicator_config_.show_sma_200 = false;
+          } else if (indicator.name == "EMA 9") {
+            indicator_config_.show_ema_9 = false;
+          } else if (indicator.name == "EMA 21") {
+            indicator_config_.show_ema_21 = false;
+          } else if (indicator.name == "EMA 50") {
+            indicator_config_.show_ema_50 = false;
+          } else if (indicator.name == "EMA 200") {
+            indicator_config_.show_ema_200 = false;
+          } else if (indicator.name == "RSI") {
+            indicator_config_.show_rsi = false;
+          } else if (indicator.name == "MACD") {
+            indicator_config_.show_macd = false;
+          } else if (indicator.name == "Bollinger Bands") {
+            indicator_config_.show_bollinger = false;
+          } else if (indicator.name == "Stochastic") {
+            indicator_config_.show_stochastic = false;
+          } else if (indicator.name == "ATR") {
+            indicator_config_.show_atr = false;
+          } else if (indicator.name == "Fibonacci") {
+            indicator_config_.show_fibonacci = false;
+          } else if (indicator.name == "Volume Profile") {
+            indicator_config_.show_volume_profile = false;
+          } else if (indicator.name == "Crosshair Info") {
+            indicator_config_.show_crosshair_info = false;
+          }
+
+          it = active_indicators_.erase(it);
+          update_indicator_config_from_active();
+          ImGui::PopID();
+          continue; // Skip incrementing iterator since we removed an element
+        }
+
+        ImGui::PopID(); // Pop the ID for this indicator
+        ++it;
       }
-      ImGui::SameLine();
 
-      // Color picker for the indicator
-      if (ImGui::ColorEdit4("##color", &indicator.color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
-        // Color changed, no additional action needed
-      }
-      ImGui::SameLine();
-
-      // Indicator name
-      ImGui::Text("%s", indicator.name.c_str());
-      ImGui::SameLine();
-
-      // Parameter inputs based on indicator type
-      if (indicator.name.find("SMA") != std::string::npos ||
-          indicator.name.find("EMA") != std::string::npos ||
-          indicator.name.find("RSI") != std::string::npos ||
-          indicator.name.find("ATR") != std::string::npos) {
-
-        float period = indicator.parameters.count("period") > 0 ?
-                      indicator.parameters["period"] : 9.0f;
-        if (ImGui::DragFloat("##period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
-          indicator.parameters["period"] = period;
-          update_indicator_config_from_active();
-        }
-      } else if (indicator.name.find("MACD") != std::string::npos) {
-        float fast_period = indicator.parameters.count("fast_period") > 0 ?
-                           indicator.parameters["fast_period"] : 12.0f;
-        float slow_period = indicator.parameters.count("slow_period") > 0 ?
-                           indicator.parameters["slow_period"] : 26.0f;
-        float signal_period = indicator.parameters.count("signal_period") > 0 ?
-                             indicator.parameters["signal_period"] : 9.0f;
-
-        if (ImGui::DragFloat("##fast", &fast_period, 0.5f, 1.0f, 50.0f, "Fast: %.0f")) {
-          indicator.parameters["fast_period"] = fast_period;
-          update_indicator_config_from_active();
-        }
-        ImGui::SameLine();
-        if (ImGui::DragFloat("##slow", &slow_period, 0.5f, 1.0f, 100.0f, "Slow: %.0f")) {
-          indicator.parameters["slow_period"] = slow_period;
-          update_indicator_config_from_active();
-        }
-        ImGui::SameLine();
-        if (ImGui::DragFloat("##signal", &signal_period, 0.5f, 1.0f, 50.0f, "Signal: %.0f")) {
-          indicator.parameters["signal_period"] = signal_period;
-          update_indicator_config_from_active();
-        }
-      } else if (indicator.name.find("Bollinger") != std::string::npos) {
-        float period = indicator.parameters.count("period") > 0 ?
-                      indicator.parameters["period"] : 20.0f;
-        float std_dev = indicator.parameters.count("std_dev") > 0 ?
-                       indicator.parameters["std_dev"] : 2.0f;
-
-        if (ImGui::DragFloat("##bb_period", &period, 0.5f, 1.0f, 100.0f, "Period: %.0f")) {
-          indicator.parameters["period"] = period;
-          update_indicator_config_from_active();
-        }
-        ImGui::SameLine();
-        if (ImGui::DragFloat("##bb_std", &std_dev, 0.1f, 0.1f, 5.0f, "Std Dev: %.1f")) {
-          indicator.parameters["std_dev"] = std_dev;
-          update_indicator_config_from_active();
-        }
-      } else if (indicator.name.find("Stochastic") != std::string::npos) {
-        float k_period = indicator.parameters.count("k_period") > 0 ?
-                        indicator.parameters["k_period"] : 14.0f;
-        float d_period = indicator.parameters.count("d_period") > 0 ?
-                        indicator.parameters["d_period"] : 3.0f;
-        float slow_period = indicator.parameters.count("slow_period") > 0 ?
-                           indicator.parameters["slow_period"] : 3.0f;
-
-        if (ImGui::DragFloat("##stoch_k", &k_period, 0.5f, 1.0f, 50.0f, "K: %.0f")) {
-          indicator.parameters["k_period"] = k_period;
-          update_indicator_config_from_active();
-        }
-        ImGui::SameLine();
-        if (ImGui::DragFloat("##stoch_d", &d_period, 0.5f, 1.0f, 50.0f, "D: %.0f")) {
-          indicator.parameters["d_period"] = d_period;
-          update_indicator_config_from_active();
-        }
-        ImGui::SameLine();
-        if (ImGui::DragFloat("##stoch_slow", &slow_period, 0.5f, 1.0f, 50.0f, "Slow: %.0f")) {
-          indicator.parameters["slow_period"] = slow_period;
-          update_indicator_config_from_active();
-        }
-      }
-
-      // Delete button
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30);
-      if (ImGui::Button("X##delete")) {
-        // Set the corresponding configuration flag to false based on the indicator name
-        if (indicator.name == "SMA 9") {
-          indicator_config_.show_sma_9 = false;
-        } else if (indicator.name == "SMA 10") {
-          indicator_config_.show_sma_10 = false;
-        } else if (indicator.name == "SMA 20") {
-          indicator_config_.show_sma_20 = false;
-        } else if (indicator.name == "SMA 50") {
-          indicator_config_.show_sma_50 = false;
-        } else if (indicator.name == "SMA 200") {
-          indicator_config_.show_sma_200 = false;
-        } else if (indicator.name == "EMA 9") {
-          indicator_config_.show_ema_9 = false;
-        } else if (indicator.name == "EMA 10") {
-          indicator_config_.show_ema_10 = false;
-        } else if (indicator.name == "EMA 20") {
-          indicator_config_.show_ema_20 = false;
-        } else if (indicator.name == "EMA 21") {
-          indicator_config_.show_ema_21 = false;
-        } else if (indicator.name == "EMA 50") {
-          indicator_config_.show_ema_50 = false;
-        } else if (indicator.name == "EMA 200") {
-          indicator_config_.show_ema_200 = false;
-        } else if (indicator.name == "RSI") {
-          indicator_config_.show_rsi = false;
-        } else if (indicator.name == "MACD") {
-          indicator_config_.show_macd = false;
-        } else if (indicator.name == "Bollinger Bands") {
-          indicator_config_.show_bollinger = false;
-        } else if (indicator.name == "Stochastic") {
-          indicator_config_.show_stochastic = false;
-        } else if (indicator.name == "ATR") {
-          indicator_config_.show_atr = false;
-        } else if (indicator.name == "Fibonacci") {
-          indicator_config_.show_fibonacci = false;
-        } else if (indicator.name == "Volume Profile") {
-          indicator_config_.show_volume_profile = false;
-        } else if (indicator.name == "Crosshair Info") {
-          indicator_config_.show_crosshair_info = false;
-        }
-
-        it = active_indicators_.erase(it);
-        update_indicator_config_from_active();
-        ImGui::PopID();
-        continue; // Skip incrementing iterator since we removed an element
-      }
-
-      ImGui::PopID(); // Pop the ID for this indicator
-      ++it;
+      ImGui::EndTable();
     }
-
-    ImGui::EndChild();
   } else {
     ImGui::Text("No active indicators. Click 'Add Indicator' to add one.");
   }
@@ -1528,56 +1486,67 @@ void ChartPanel::render_indicator_overlay_panel() {
     ImGui::Separator();
     ImGui::Text("Multi-Timeframe Indicators (%zu):", multi_tf_indicators_.size());
 
-    ImGui::BeginChild("MultiTFIndicatorList", ImVec2(0, 120), true);
+    if (ImGui::BeginTable("MultiTFIndicatorTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+      ImGui::TableSetupColumn("Visibility", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+      ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+      ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableSetupColumn("Parameters", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+      ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 40.0f); // For delete button
 
-    for (auto it = multi_tf_indicators_.begin(); it != multi_tf_indicators_.end();) {
-      auto& indicator = *it;
+      ImGui::TableHeadersRow();
 
-      ImGui::PushID(next_multitf_indicator_id_ + std::distance(multi_tf_indicators_.begin(), it)); // Use unique ID for each indicator
+      for (auto it = multi_tf_indicators_.begin(); it != multi_tf_indicators_.end();) {
+        auto& indicator = *it;
 
-      // Checkbox for visibility
-      bool visible = indicator.isVisible;
-      if (ImGui::Checkbox("##multitf_visible", &visible)) {
-        indicator.isVisible = visible;
-      }
-      ImGui::SameLine();
+        ImGui::PushID(next_multitf_indicator_id_ + std::distance(multi_tf_indicators_.begin(), it)); // Use unique ID for each indicator
 
-      // Color picker for the indicator
-      if (ImGui::ColorEdit4("##multitf_color", &indicator.color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
-        // Color changed, no additional action needed
-      }
-      ImGui::SameLine();
+        ImGui::TableNextRow();
 
-      // Indicator name and source timeframe
-      char timeframe_str[64];
-      snprintf(timeframe_str, sizeof(timeframe_str), "%s (%s)",
-               indicator.name.c_str(),
-               timeframe_to_string(indicator.source_timeframe).c_str());
-      ImGui::Text("%s", timeframe_str);
-      ImGui::SameLine();
-
-      // Parameter input for multi-timeframe indicators
-      if (indicator.name.find("SMA") != std::string::npos) {
-        float period = static_cast<float>(indicator.period);
-        if (ImGui::DragFloat("##mtf_period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
-          indicator.period = static_cast<int>(period);
+        // Column 1: Visibility checkbox
+        ImGui::TableSetColumnIndex(0);
+        bool visible = indicator.isVisible;
+        if (ImGui::Checkbox("##multitf_visible", &visible)) {
+          indicator.isVisible = visible;
         }
-        ImGui::SameLine();
+
+        // Column 2: Color picker
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::ColorEdit4("##multitf_color", &indicator.color.x,
+              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoTooltip)) {
+          // Color changed, no additional action needed
+        }
+
+        // Column 3: Indicator name and source timeframe
+        ImGui::TableSetColumnIndex(2);
+        char timeframe_str[64];
+        snprintf(timeframe_str, sizeof(timeframe_str), "%s (%s)",
+                 indicator.name.c_str(),
+                 timeframe_to_string(indicator.source_timeframe).c_str());
+        ImGui::Text("%s", timeframe_str);
+
+        // Column 4: Parameter input for multi-timeframe indicators
+        ImGui::TableSetColumnIndex(3);
+        if (indicator.name.find("SMA") != std::string::npos) {
+          float period = static_cast<float>(indicator.period);
+          if (ImGui::DragFloat("##mtf_period", &period, 0.5f, 1.0f, 200.0f, "Period: %.0f")) {
+            indicator.period = static_cast<int>(period);
+          }
+        }
+
+        // Column 5: Delete button
+        ImGui::TableSetColumnIndex(4);
+        if (ImGui::Button("X##mtf_delete")) {
+          it = multi_tf_indicators_.erase(it);
+          ImGui::PopID();
+          continue; // Skip incrementing iterator since we removed an element
+        }
+
+        ImGui::PopID(); // Pop the ID for this indicator
+        ++it;
       }
 
-      // Delete button
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30);
-      if (ImGui::Button("X##mtf_delete")) {
-        it = multi_tf_indicators_.erase(it);
-        ImGui::PopID();
-        continue; // Skip incrementing iterator since we removed an element
-      }
-
-      ImGui::PopID(); // Pop the ID for this indicator
-      ++it;
+      ImGui::EndTable();
     }
-
-    ImGui::EndChild();
   } else {
     ImGui::Text("No multi-timeframe indicators. Click 'Add Multi-TF Indicator' to add one.");
   }
@@ -2630,8 +2599,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       follow_latest_ = false;
     }
 
-    // Update and render multi-timeframe indicators
-    update_multi_timeframe_indicators(chart);
+    // Render multi-timeframe indicators
     render_multi_timeframe_indicators(chart, render_start_idx, render_end_idx);
 
     // Render indicators
@@ -2645,9 +2613,6 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
     // Render drawing tools
-    if (drawing_tools_manager_) {
-        drawing_tools_manager_->render_all();
-    }
 
     // Render crosshair info if mouse is over plot
     // Handle mouse drag interaction for custom profile creation
@@ -2659,9 +2624,6 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     }
 
     // Handle drawing tools mouse events
-    if (drawing_tools_manager_) {
-        drawing_tools_manager_->handle_mouse_events();
-    }
 
     // Render context menu if right-clicked on plot
     render_context_menu(chart);
@@ -3168,24 +3130,7 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
     return;
   }
 
-  // Convert the chart data to OHLCVCandle format for VWAP calculation
-  std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
-  for (size_t i = 0; i < chart.dates.size(); ++i) {
-    BTQuant::RenderEngine::OHLCVCandle bar;
-    bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
-    bar.open = chart.opens[i];
-    bar.high = chart.highs[i];
-    bar.low = chart.lows[i];
-    bar.close = chart.closes[i];
-    bar.volume = chart.volumes[i];
-    bar.trade_count = 1; // Placeholder value
-    bars.push_back(bar);
-  }
-
-  // Calculate session VWAPs based on the chart data
-  session_vwap_.calculate(bars);
-
-  // Get all sessions and render them
+  // Get all sessions and render them (already calculated in update method)
   const auto& sessions = session_vwap_.getSessions();
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 

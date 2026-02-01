@@ -103,28 +103,34 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   // Calculate absolute magnitude for intensity
   double abs_change = std::abs(change_value);
 
-  // Define thresholds for intensity scaling
-  double max_intensity_threshold = is_percentage ? 10.0 : 100.0; // 10% or $100 as max intensity
+  // Define thresholds for intensity scaling - make more adaptive based on typical market movements
+  double max_intensity_threshold = is_percentage ? 5.0 : 50.0; // Lower threshold for more sensitivity (5% or $50 as max intensity)
 
-  // Use exponential scaling to make intensity increase more dramatically with larger changes
-  double normalized_change = std::min(1.0, abs_change / max_intensity_threshold);
+  // For extremely large changes, cap the intensity to prevent overly saturated colors
+  double capped_change = std::min(abs_change, max_intensity_threshold * 2.0);
 
-  // Apply quintic curve for even more dramatic intensity growth with larger changes
-  double intensity_factor = normalized_change * normalized_change * normalized_change * normalized_change * normalized_change; // Quintic for more dramatic effect
-  double saturation_factor = std::sqrt(normalized_change); // Square root for saturation effect
+  // Use logarithmic scaling to make intensity increase more gradually with larger changes
+  // This provides better visual distinction for smaller changes while preventing oversaturation
+  double normalized_change = std::min(1.0, capped_change / max_intensity_threshold);
+
+  // Apply a more balanced curve for intensity scaling - using a combination of linear and exponential
+  double intensity_factor = normalized_change; // Base linear scaling
+  double saturation_factor = normalized_change; // Use same factor for consistency
 
   // Return appropriate color based on sign and intensity
   if (is_positive) {
     // Bright green for positive changes - more intense greens for larger changes
-    float red_comp = 0.1f * (1.0f - saturation_factor);
-    float green_comp = 0.5f + 0.5f * saturation_factor; // Higher base green with more intensity
-    float blue_comp = 0.1f * (1.0f - saturation_factor);
+    // Start with a bright green and make it more intense with larger changes
+    float red_comp = 0.1f * (1.0f - saturation_factor); // Reduce red as intensity increases
+    float green_comp = 0.4f + 0.6f * saturation_factor; // Increase green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor); // Reduce blue as intensity increases
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   } else {
     // Bright red for negative changes - more intense reds for larger changes
-    float red_comp = 0.6f + 0.4f * saturation_factor; // Higher base red with more intensity
-    float green_comp = 0.1f * (1.0f - saturation_factor);
-    float blue_comp = 0.1f * (1.0f - saturation_factor);
+    // Start with a bright red and make it more intense with larger changes
+    float red_comp = 0.4f + 0.6f * saturation_factor; // Increase red as intensity increases
+    float green_comp = 0.1f * (1.0f - saturation_factor); // Reduce green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor); // Reduce blue as intensity increases
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }
@@ -872,6 +878,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(2);
+  // Calculate price change percentage for color calculation
+  double price_change_pct = 0.0;
+  if (entry.previous_price != 0.0) {
+    price_change_pct = ((entry.price - entry.previous_price) / entry.previous_price) * 100.0;
+  }
+
   // Apply smooth animation effect to price if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
@@ -879,12 +891,6 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     // Use enhanced interpolation for smoother transition
     double animated_price = interpolateValue(entry.previous_price, entry.price, progress);
-
-    // Calculate price change percentage for color calculation
-    double price_change_pct = 0.0;
-    if (entry.previous_price != 0.0) {
-      price_change_pct = ((entry.price - entry.previous_price) / entry.previous_price) * 100.0;
-    }
 
     // Enhanced flash animation - more prominent flash effect with smoother transition
     ImVec4 flash_color = calculateChangeColor(price_change_pct, true);
@@ -937,12 +943,6 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     ImGui::TextColored(flash_color, "%s", formatPrice(animated_price).c_str());
   } else {
-    // Calculate price change percentage for color calculation
-    double price_change_pct = 0.0;
-    if (entry.previous_price != 0.0) {
-      price_change_pct = ((entry.price - entry.previous_price) / entry.previous_price) * 100.0;
-    }
-
     // Use the calculated change color based on price change percentage
     ImVec4 price_color = calculateChangeColor(price_change_pct, true);
 

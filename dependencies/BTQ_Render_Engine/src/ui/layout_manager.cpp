@@ -224,50 +224,17 @@ bool LayoutManager::apply_layout_from_preset(const Layout::LayoutPreset& preset)
                 new_layout.panels.push_back(panel);
             }
 
-            // We need to create the layout file first, then load it
-            std::string file_path = "layouts/" + layout_name + ".json";
-
-            nlohmann::json layout_json;
-            layout_json["layout_name"] = layout_name;
-            layout_json["theme"] = theme;
-            layout_json["created_time"] = created_time;
-            layout_json["grid_columns"] = grid_columns;
-            layout_json["grid_rows"] = grid_rows;
-            layout_json["min_width"] = min_width;
-            layout_json["min_height"] = min_height;
-
-            nlohmann::json panels_json = nlohmann::json::array();
-            for (const auto& panel : new_layout.panels) {
-                nlohmann::json panel_json;
-                panel_json["panel_id"] = panel.panel_id;
-                panel_json["panel_name"] = panel.panel_name;
-                panel_json["type"] = static_cast<int>(panel.type);
-                panel_json["x"] = panel.x;
-                panel_json["y"] = panel.y;
-                panel_json["width"] = panel.width;
-                panel_json["height"] = panel.height;
-                panel_json["is_docked"] = panel.is_docked;
-                panel_json["dock_node_id"] = panel.dock_node_id;
-                panel_json["symbol"] = panel.symbol;
-                panel_json["timeframe"] = panel.timeframe;
-                panel_json["is_collapsed"] = panel.is_collapsed;
-                panel_json["is_focused"] = panel.is_focused;
-                panels_json.push_back(panel_json);
+            // Create or update the layout in the dashboard layout manager
+            if (!dashboard_layout_manager_->has_layout(layout_name)) {
+                // Create a new layout entry in the manager
+                dashboard_layout_manager_->create_new_layout();
             }
-            layout_json["panels"] = panels_json;
 
-            // Write the layout to file
-            std::ofstream file(file_path);
-            if (file.is_open()) {
-                file << layout_json.dump(4);
-                file.close();
+            // Load the layout to make it current
+            dashboard_layout_manager_->load_layout(layout_name);
 
-                // Load the newly created layout
-                dashboard_layout_manager_->load_layout(layout_name);
-            } else {
-                std::cerr << "Failed to save layout to file: " << file_path << std::endl;
-                return false;
-            }
+            // Update the current layout with the preset data
+            dashboard_layout_manager_->update_current_layout(new_layout);
 
             // Set grid dimensions
             dashboard_layout_manager_->set_grid_dimensions(grid_columns, grid_rows);

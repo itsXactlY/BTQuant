@@ -99,6 +99,9 @@ class DashboardLayoutManager {
   void maximize_panel(const std::string& panel_id);
   void restore_panel_sizes();
 
+  // Current layout modification
+  void update_current_layout(const DashboardLayout& new_layout);
+
   // Integration with layout presets
   void set_preset_manager(LayoutPresetManager* preset_manager) { preset_manager_ = preset_manager; }
   LayoutPresetManager* get_preset_manager() const { return preset_manager_; }

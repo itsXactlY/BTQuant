@@ -328,6 +328,29 @@ void DashboardLayoutManager::restore_panel_sizes() {
   }
 }
 
+void DashboardLayoutManager::update_current_layout(const DashboardLayout& new_layout) {
+  if (!current_layout_name_.empty()) {
+    auto it = layouts_.find(current_layout_name_);
+    if (it != layouts_.end()) {
+      // Update the layout properties
+      it->second.layout_name = new_layout.layout_name;
+      it->second.theme = new_layout.theme;
+      it->second.created_time = new_layout.created_time;
+      it->second.grid_columns = new_layout.grid_columns;
+      it->second.grid_rows = new_layout.grid_rows;
+      it->second.min_width = new_layout.min_width;
+      it->second.min_height = new_layout.min_height;
+
+      // Clear existing panels and copy new ones
+      it->second.panels.clear();
+      it->second.panels = new_layout.panels;
+
+      // Save the updated layout to file
+      save_layout_to_file(it->second);
+    }
+  }
+}
+
 void DashboardLayoutManager::save_layout_to_file(const DashboardLayout& layout) {
 #ifdef HAS_NLOHMANN_JSON
   std::string file_path = get_layout_file_path(layout.layout_name);

@@ -1125,6 +1125,9 @@ void WatchlistPanel::render_table_header() {
   if (ImGui::TableGetHoveredColumn() == -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     ImGui::OpenPopup("ColumnContextMenu");
   }
+
+  // Reset the column context menu flag after rendering
+  column_context_menu_open_ = false;
 }
 
 void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
@@ -2596,6 +2599,13 @@ void WatchlistPanel::render_column_context_menu() {
         column_info_[i].visible = is_visible;
         any_changes = true;
       }
+
+      // Add tooltip to explain the column
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text("Toggle visibility of the %s column", column_info_[i].name.c_str());
+        ImGui::EndTooltip();
+      }
     }
 
     if (any_changes) {
@@ -2614,6 +2624,13 @@ void WatchlistPanel::render_column_context_menu() {
 
       // Save the updated settings to config
       save_column_settings_to_config(config_file_path_);
+    }
+
+    // Add tooltip to explain the reset option
+    if (ImGui::IsItemHovered()) {
+      ImGui::BeginTooltip();
+      ImGui::Text("Reset all column settings to default values");
+      ImGui::EndTooltip();
     }
 
     ImGui::EndPopup();
@@ -2909,8 +2926,8 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     ImGui::PopStyleColor(2);
   }
 
-  // Check if the current column header is being hovered for right-click
-  if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+  // Check if the current column header is being clicked for right-click context menu
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
     clicked_column_index_ = column_index;
     column_context_menu_open_ = true;
     ImGui::OpenPopup("ColumnContextMenu");

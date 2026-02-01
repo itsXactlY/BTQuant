@@ -449,7 +449,8 @@ void WatchlistPanel::render() {
   if (visible_columns > 0) {
     if (ImGui::BeginTable("WatchlistTable", visible_columns,
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
-                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_SortMulti)) {
       render_table_header();
 
       auto filtered_symbols = get_filtered_symbols();
@@ -1035,13 +1036,13 @@ void WatchlistPanel::render_table_header() {
     // Set appropriate flags based on original column index
     switch (orig_idx) {
       case 0: // Symbol
-        flags = ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch;
+        flags = ImGuiTableColumnFlags_WidthStretch;
         break;
       case 2: // Last Price
       case 3: // Change%
       case 4: // Change$
       case 5: // Volume
-        flags = ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed;
+        flags = ImGuiTableColumnFlags_WidthFixed;
         break;
       case 10: // Action
         flags = ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed;
@@ -1049,6 +1050,16 @@ void WatchlistPanel::render_table_header() {
       default:
         flags = ImGuiTableColumnFlags_WidthFixed;
         break;
+    }
+
+    // Enable sorting for all sortable columns except the Action column
+    if (orig_idx != 10) { // Not the Action column
+        // Set default sort for certain columns
+        if (orig_idx == 0) { // Symbol
+            flags |= ImGuiTableColumnFlags_DefaultSort;
+        } else if (orig_idx == 2 || orig_idx == 3 || orig_idx == 4 || orig_idx == 5) { // Price, Change%, Change$, Volume
+            flags |= ImGuiTableColumnFlags_PreferSortDescending;
+        }
     }
 
     // Set up the column with the appropriate width
@@ -1068,9 +1079,7 @@ void WatchlistPanel::render_table_header() {
     render_draggable_header(orig_idx, column_info_[orig_idx].name.c_str());
   }
 
-  // The right-click on individual column headers is already handled in render_draggable_header
-  // So we don't need additional right-click detection here
-
+  // Handle ImGui's built-in sorting system
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
   if (sorts_specs && sorts_specs->SpecsDirty) {
     if (sorts_specs->SpecsCount > 0) {
@@ -2039,8 +2048,16 @@ void WatchlistPanel::sort_watchlist() {
   }
 
   std::sort(get_current_display_order().begin(), get_current_display_order().end(), [this](uint32_t a_id, uint32_t b_id) {
-    const auto& a = get_current_watchlist().at(a_id);
-    const auto& b = get_current_watchlist().at(b_id);
+    const auto& a_it = get_current_watchlist().find(a_id);
+    const auto& b_it = get_current_watchlist().find(b_id);
+
+    // If either symbol is not found, return false to maintain order
+    if (a_it == get_current_watchlist().end() || b_it == get_current_watchlist().end()) {
+        return a_id < b_id; // Maintain original order based on ID
+    }
+
+    const auto& a = a_it->second;
+    const auto& b = b_it->second;
 
     bool result = false;
     switch (sort_column_) {
@@ -2088,28 +2105,28 @@ void WatchlistPanel::sort_watchlist() {
         values_equal = (a.exchange == b.exchange);
         break;
       case 2:  // Last Price
-        values_equal = (a.price == b.price);
+        values_equal = (std::abs(a.price - b.price) < 1e-9); // Use epsilon for floating point comparison
         break;
       case 3:  // Change %
-        values_equal = (a.change_pct == b.change_pct);
+        values_equal = (std::abs(a.change_pct - b.change_pct) < 1e-9);
         break;
       case 4:  // Change $
-        values_equal = (a.change_dollar == b.change_dollar);
+        values_equal = (std::abs(a.change_dollar - b.change_dollar) < 1e-9);
         break;
       case 5:  // Volume
-        values_equal = (a.volume_24h == b.volume_24h);
+        values_equal = (std::abs(a.volume_24h - b.volume_24h) < 1e-9);
         break;
       case 6:  // High
-        values_equal = (a.high_24h == b.high_24h);
+        values_equal = (std::abs(a.high_24h - b.high_24h) < 1e-9);
         break;
       case 7:  // Low
-        values_equal = (a.low_24h == b.low_24h);
+        values_equal = (std::abs(a.low_24h - b.low_24h) < 1e-9);
         break;
       case 8:  // Open
-        values_equal = (a.open_24h == b.open_24h);
+        values_equal = (std::abs(a.open_24h - b.open_24h) < 1e-9);
         break;
       case 9:  // VWAP
-        values_equal = (a.vwap == b.vwap);
+        values_equal = (std::abs(a.vwap - b.vwap) < 1e-9);
         break;
       default:
         values_equal = (a.symbol == b.symbol);
@@ -2819,21 +2836,41 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     return;
   }
 
+  // Get the current sort specs to determine if this column is currently sorted
+  ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
+  bool is_sorted = false;
+  bool is_ascending = true;
+
+  if (sorts_specs && sorts_specs->SpecsCount > 0) {
+    const auto& spec = sorts_specs->Specs[0];
+
+    // We need to determine the current table column index to compare with the sort spec
+    // Since we set up columns in the same order as our visible columns, we need to map properly
+    // For now, we'll use the sort_column_ variable that tracks the sorted column
+    if (column_index == sort_column_) {
+      is_sorted = true;
+      is_ascending = sort_ascending_;
+    }
+  }
+
   // Render the header text with sort indicator if this is the sort column
   std::string header_text = std::string(label);
-  if (column_index == sort_column_) {
+  if (is_sorted) {
     // Add sort direction indicator
-    header_text += sort_ascending_ ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
+    header_text += is_ascending ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
   }
 
   // Render the header text with sort indicator
   // Highlight the header if it's the current sort column
-  if (column_index == sort_column_) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 1.0f, 1.0f)); // Light blue highlight for sorted column
-    ImGui::Text("%s", header_text.c_str());
-    ImGui::PopStyleColor();
-  } else {
-    ImGui::Text("%s", header_text.c_str());
+  if (is_sorted) {
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.3f, 0.5f, 1.0f)); // Purple highlight for sorted column
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 1.0f, 1.0f)); // Lighter text for sorted column
+  }
+
+  ImGui::TableHeader(header_text.c_str());
+
+  if (is_sorted) {
+    ImGui::PopStyleColor(2);
   }
 
   // Check if the current column header is being hovered for right-click
@@ -2844,7 +2881,7 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
   }
 
   // Check if the current column header is being clicked for sorting
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && column_index != 10) { // Exclude Action column
     // Toggle sort direction if clicking the same column, otherwise sort by new column
     if (column_index == sort_column_) {
       sort_ascending_ = !sort_ascending_;

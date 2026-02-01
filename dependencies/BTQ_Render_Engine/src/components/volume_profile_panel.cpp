@@ -7,6 +7,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/components/interaction_manager.hpp"
 
 namespace BTQuant {
 
@@ -56,6 +57,9 @@ void VolumeProfilePanel::render() {
   render_panel_header();
   render_controls();
   ImGui::Separator();
+
+  // Handle mouse drag interaction for custom profile creation
+  handleMouseDragInteraction();
 
   // C++26 Reactive: Only rebuild when new data arrives or first load
   if (processor_ && symbol_id_ != 0) {
@@ -343,6 +347,7 @@ void VolumeProfilePanel::render_controls() {
     double total_volume_in_value_area = 0.0;
     double total_volume_above_poc = 0.0;
     double total_volume_below_poc = 0.0;
+    double poc_volume_level = 0.0; // Volume at POC level
 
     if (!volume_profile_.empty()) {
       for (const auto& level : volume_profile_) {
@@ -356,19 +361,37 @@ void VolumeProfilePanel::render_controls() {
           total_volume_above_poc += level.total_volume;
         } else if (level.price < poc_price_) {
           total_volume_below_poc += level.total_volume;
+        } else if (level.price == poc_price_) {
+          poc_volume_level = level.total_volume;
         }
       }
     }
 
     ImGui::Text("Total Volume in Value Area: %.2f", total_volume_in_value_area);
+    ImGui::Text("POC Volume Level: %.2f", poc_volume_level);
 
     // Calculate and display percentage of volume above POC
-    double total_volume = total_volume_above_poc + total_volume_below_poc;
-    if (total_volume > 0) {
-      double percentage_above_poc = (total_volume_above_poc / total_volume) * 100.0;
+    double total_volume_above_below_poc = total_volume_above_poc + total_volume_below_poc;
+    if (total_volume_above_below_poc > 0) {
+      double percentage_above_poc = (total_volume_above_poc / total_volume_above_below_poc) * 100.0;
       ImGui::Text("Percentage of Volume Above POC: %.2f%%", percentage_above_poc);
+
+      double percentage_below_poc = (total_volume_below_poc / total_volume_above_below_poc) * 100.0;
+      ImGui::Text("Percentage of Volume Below POC: %.2f%%", percentage_below_poc);
     } else {
       ImGui::Text("Percentage of Volume Above POC: N/A");
+      ImGui::Text("Percentage of Volume Below POC: N/A");
+    }
+
+    // Calculate and display additional statistics
+    double total_market_volume = total_volume_above_poc + total_volume_below_poc + poc_volume_level;
+    ImGui::Text("Total Market Volume: %.2f", total_market_volume);
+
+    if (total_market_volume > 0) {
+      double poc_volume_percentage = (poc_volume_level / total_market_volume) * 100.0;
+      ImGui::Text("POC Volume Percentage: %.2f%%", poc_volume_percentage);
+    } else {
+      ImGui::Text("POC Volume Percentage: N/A");
     }
 
     ImGui::Unindent();
@@ -1034,6 +1057,11 @@ void VolumeProfilePanel::render_volume_bars() {
             end_time_drag_active_ = false;
         }
       }
+    }
+
+    // Render custom profile overlay if in custom profile mode and time range selection is active
+    if (profile_mode_ == ProfileMode::Custom) {
+      renderCustomProfileOverlay(ImPlot::GetPlotDrawList());
     }
 
     ImPlot::EndPlot();
@@ -2747,6 +2775,188 @@ void VolumeProfilePanel::drawMiniHistogramOverlay(ImDrawList* draw_list,
                                                  int num_buckets_per_candle) {
   render_step_profile_histograms_on_candle_bars(draw_list, candles, x_coords, y_coords_high, y_coords_low,
                                               show_poc_line, num_buckets_per_candle);
+}
+
+// Method to handle mouse drag interaction for custom profile creation
+void VolumeProfilePanel::handleMouseDragInteraction() {
+  auto& interaction_mgr = InteractionManager::getInstance();
+
+  // Check if we're in custom profile mode
+  if (profile_mode_ != ProfileMode::Custom) {
+    return;
+  }
+
+  // Get the current mouse position in plot coordinates if we're in a plot context
+  ImVec2 mouse_pos = ImGui::GetMousePos();
+
+  // Check if a time range selection is active
+  if (interaction_mgr.isTimeRangeSelectionActive()) {
+    // Update the time range selection with current mouse position
+    // For volume profile, we might want to use screen coordinates or plot coordinates depending on context
+    interaction_mgr.updateTimeRangeSelection(mouse_pos);
+
+    // Get the current time range
+    auto time_range = interaction_mgr.getTimeRangeSelection();
+
+    // Calculate profile for the selected time range
+    calculateProfileForTimeRange(time_range.first, time_range.second);
+  }
+  // If no drag is active but we were previously dragging, finalize the selection
+  else if (!interaction_mgr.isMouseDragActive() && use_custom_time_range_) {
+    // The drag has ended, we can now use the selected time range
+    auto time_range = interaction_mgr.getTimeRangeSelection();
+    custom_start_time_ = time_range.first;
+    custom_end_time_ = time_range.second;
+  }
+}
+
+// Method to render custom profile overlay when mouse drag is active
+void VolumeProfilePanel::renderCustomProfileOverlay(ImDrawList* draw_list) {
+  auto& interaction_mgr = InteractionManager::getInstance();
+
+  // Only render if we're in custom profile mode and have an active time range selection
+  if (profile_mode_ != ProfileMode::Custom || !interaction_mgr.isTimeRangeSelectionActive()) {
+    return;
+  }
+
+  auto time_range = interaction_mgr.getTimeRangeSelection();
+  double start_time = time_range.first;
+  double end_time = time_range.second;
+
+  // Get plot limits to determine the Y range for vertical lines
+  ImPlotRect plot_limits = ImPlot::GetPlotLimits();
+
+  // Draw start time vertical line (green)
+  double start_line_x[2] = {start_time, start_time};
+  double start_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
+
+  ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 0.8f)); // Green
+  ImPlot::PlotLine("Start Time Selection", start_line_x, start_line_y, 2);
+  ImPlot::PopStyleColor();
+
+  // Draw end time vertical line (red)
+  double end_line_x[2] = {end_time, end_time};
+  double end_line_y[2] = {plot_limits.Y.Min, plot_limits.Y.Max};
+
+  ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.0f, 0.0f, 0.8f)); // Red
+  ImPlot::PlotLine("End Time Selection", end_line_x, end_line_y, 2);
+  ImPlot::PopStyleColor();
+
+  // Draw a shaded area between the two time points
+  if (start_time != end_time) {
+    // Draw a semi-transparent rectangle between the two time points
+    ImVec2 area_start = ImPlot::PlotToPixels(start_time, plot_limits.Y.Min);
+    ImVec2 area_end = ImPlot::PlotToPixels(end_time, plot_limits.Y.Max);
+
+    // Swap if needed to ensure area_start.x < area_end.x
+    if (area_start.x > area_end.x) {
+      ImVec2 temp = area_start;
+      area_start = area_end;
+      area_end = temp;
+    }
+
+    // Draw the shaded area
+    draw_list->AddRectFilled(area_start, area_end, IM_COL32(0, 100, 255, 50)); // Semi-transparent blue overlay
+  }
+}
+
+// Method to calculate profile for a specific time range
+void VolumeProfilePanel::calculateProfileForTimeRange(double start_time, double end_time) {
+  if (!processor_ || symbol_id_ == 0) return;
+
+  // Get all trades for this symbol
+  auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+  auto all_trades = analytics.recent_trades;
+
+  // Filter trades based on the time range
+  std::vector<RenderEngine::TradeData> filtered_trades;
+
+  for (const auto& trade : all_trades) {
+    // Convert timestamp to plot coordinate equivalent if needed
+    // For now, assuming the time values are already in the same coordinate system
+    if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
+      filtered_trades.push_back(trade);
+    }
+  }
+
+  // If no trades in the selected range, clear the profile
+  if (filtered_trades.empty()) {
+    volume_profile_.clear();
+    max_volume_ = 0.0;
+    poc_price_ = 0.0;
+    return;
+  }
+
+  // Calculate the volume profile based on the filtered trades
+  // Find the price range of the filtered trades
+  double min_price = std::numeric_limits<double>::max();
+  double max_price = std::numeric_limits<double>::lowest();
+
+  for (const auto& trade : filtered_trades) {
+    min_price = std::min(min_price, trade.price);
+    max_price = std::max(max_price, trade.price);
+  }
+
+  if (max_price <= min_price) return;
+
+  // Compute bucket size
+  double range = max_price - min_price;
+  price_bucket_size_ = range / NUM_PRICE_LEVELS;
+  if (price_bucket_size_ <= 0) price_bucket_size_ = 1.0;
+
+  // Reset profile
+  volume_profile_.clear();
+  volume_profile_.resize(NUM_PRICE_LEVELS);
+
+  for (size_t i = 0; i < NUM_PRICE_LEVELS; ++i) {
+    volume_profile_[i].price = min_price + (i + 0.5) * price_bucket_size_;
+    volume_profile_[i].buy_volume = 0;
+    volume_profile_[i].sell_volume = 0;
+    volume_profile_[i].total_volume = 0;
+  }
+
+  // Aggregate filtered trades into buckets
+  for (const auto& trade : filtered_trades) {
+    size_t bucket = static_cast<size_t>((trade.price - min_price) / price_bucket_size_);
+    bucket = std::min(bucket, NUM_PRICE_LEVELS - 1);
+
+    if (trade.is_buy) {
+      volume_profile_[bucket].buy_volume += trade.size;
+    } else {
+      volume_profile_[bucket].sell_volume += trade.size;
+    }
+    volume_profile_[bucket].total_volume += trade.size;
+  }
+
+  // Find POC and max volume
+  max_volume_ = 0;
+  poc_price_ = volume_profile_[0].price;
+  double poc_volume = 0;
+
+  for (const auto& level : volume_profile_) {
+    double total = level.buy_volume + level.sell_volume;
+    max_volume_ = std::max(max_volume_, std::max(level.buy_volume, level.sell_volume));
+    if (total > poc_volume) {
+      poc_volume = total;
+      poc_price_ = level.price;
+    }
+  }
+
+  // Ensure poc_price_ is always set to the price level with the highest total volume
+  if (poc_volume > 0) {
+    // Double check to make sure we have the correct POC
+    double current_max_volume = 0;
+    for (const auto& level : volume_profile_) {
+      double total = level.buy_volume + level.sell_volume;
+      if (total > current_max_volume) {
+        current_max_volume = total;
+        poc_price_ = level.price;
+      }
+    }
+  }
+
+  // Calculate Value Area
+  calculate_value_area();
 }
 
 }  // namespace BTQuant

@@ -157,6 +157,9 @@ class ChartPanel : public PanelBase {
 
   // Fibonacci calculation
   std::vector<FibonacciLevel> calculate_fibonacci_levels(double start_price, double end_price);
+
+  // Methods for handling mouse drag interaction for custom profile creation
+  void handleMouseDragInteraction();
 };
 
 }  // namespace BTQuant

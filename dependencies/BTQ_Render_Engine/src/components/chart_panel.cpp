@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "../../include/components/volume_profile_panel.hpp"
+#include "../../include/components/interaction_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
 
@@ -1098,6 +1099,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
     // Render crosshair info if mouse is over plot
+    // Handle mouse drag interaction for custom profile creation
+    handleMouseDragInteraction();
+
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
@@ -1279,6 +1283,48 @@ void ChartPanel::render_enhanced_step_profile_histograms_on_candle_bars(ImDrawLi
       // Draw the label with appropriate color
       draw_list->AddText(label_pos, IM_COL32(255, 255, 255, static_cast<int>(200 * opacity)), label);
     }
+  }
+}
+
+// Method to handle mouse drag interaction for custom profile creation
+void ChartPanel::handleMouseDragInteraction() {
+  auto& interaction_mgr = InteractionManager::getInstance();
+
+  // Check if we're in a state where we should handle mouse drag for profile creation
+  if (!ImPlot::IsPlotHovered()) {
+    return;
+  }
+
+  // Get the current mouse position in plot coordinates
+  ImPlotPoint mouse_plot_pos = ImPlot::GetPlotMousePos();
+  ImVec2 mouse_screen_pos = ImGui::GetMousePos();
+
+  // Convert ImPlotPoint to ImVec2 for interaction manager
+  ImVec2 converted_plot_pos = ImVec2(static_cast<float>(mouse_plot_pos.x), static_cast<float>(mouse_plot_pos.y));
+
+  // Check if left mouse button is pressed (starting drag) and no drag is currently active
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !interaction_mgr.isMouseDragActive()) {
+    // Check if the user is holding a modifier key (e.g., Shift) to indicate custom profile creation
+    if (ImGui::GetIO().KeyShift) {
+      interaction_mgr.startTimeRangeSelection(converted_plot_pos);
+    }
+  }
+  // If drag is active, update the position
+  else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && interaction_mgr.isTimeRangeSelectionActive()) {
+    interaction_mgr.updateTimeRangeSelection(converted_plot_pos);
+  }
+  // If mouse button is released, end the drag interaction
+  else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) && interaction_mgr.isTimeRangeSelectionActive()) {
+    interaction_mgr.endTimeRangeSelection();
+
+    // At this point, we have a completed time range selection
+    // We could trigger profile creation or notify other components
+    auto time_range = interaction_mgr.getTimeRangeSelection();
+
+    // Optionally, we can set the volume profile panel to use this time range
+    // This would require having access to the volume profile panel instance
+    // For now, we'll just log the selection
+    std::cout << "[ChartPanel] Time range selected: " << time_range.first << " to " << time_range.second << std::endl;
   }
 }
 

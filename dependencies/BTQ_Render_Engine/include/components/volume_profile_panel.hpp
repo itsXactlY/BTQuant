@@ -165,6 +165,11 @@ class VolumeProfilePanel : public PanelBase {
                               bool show_poc_line = true,
                               int num_buckets_per_candle = 8);
 
+  // Methods for custom profile with mouse drag interaction
+  void handleMouseDragInteraction();
+  void renderCustomProfileOverlay(ImDrawList* draw_list);
+  void calculateProfileForTimeRange(double start_time, double end_time);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

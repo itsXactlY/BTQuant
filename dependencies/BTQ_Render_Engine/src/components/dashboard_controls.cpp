@@ -43,9 +43,6 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::SameLine();
 
-      // Static buffer for symbol search input
-      static char symbol_search_buffer[256] = "";
-
       // Load symbols if needed
       if (needs_refresh_ || !symbols_loaded_) {
         if (panel_manager_) {
@@ -87,26 +84,21 @@ void DashboardControls::render_dashboard_controls() {
           // Sort symbols alphabetically
           std::sort(all_symbols_.begin(), all_symbols_.end());
 
-          // Update filtered symbols
-          filtered_symbols_ = all_symbols_;
-
           symbols_loaded_ = true;
           needs_refresh_ = false;
-
-          // Update the search buffer to reflect current input
-          strncpy(symbol_search_buffer, symbol_input_buffer_.c_str(), sizeof(symbol_search_buffer) - 1);
-          symbol_search_buffer[sizeof(symbol_search_buffer) - 1] = '\0';
         }
       }
 
-      // Search input for symbol selection
+      // Search-enabled symbol selection dropdown
       ImGui::Text("Select Symbol:");
-      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", symbol_search_buffer, sizeof(symbol_search_buffer))) {
-        symbol_input_buffer_ = std::string(symbol_search_buffer);
+
+      // Search input for filtering the dropdown options
+      static char search_buffer[256] = "";
+      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", search_buffer, sizeof(search_buffer))) {
         // Filter symbols based on search input
         filtered_symbols_.clear();
 
-        std::string search_lower = symbol_input_buffer_;
+        std::string search_lower = search_buffer;
         std::transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
 
         for (const auto& symbol : all_symbols_) {
@@ -119,10 +111,17 @@ void DashboardControls::render_dashboard_controls() {
         }
       }
 
-      // Display filtered symbols in a selectable list
-      if (!filtered_symbols_.empty()) {
-        ImGui::BeginChild("SymbolList", ImVec2(0, 150), true);
+      // Create a unique ID for the combo box
+      static char preview_value[256] = "";
+      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+        strncpy(preview_value, all_symbols_[selected_symbol_idx_].c_str(), sizeof(preview_value) - 1);
+        preview_value[sizeof(preview_value) - 1] = '\0';
+      } else {
+        strcpy(preview_value, "Select a symbol...");
+      }
 
+      if (ImGui::BeginCombo("##symbol_combo", preview_value, ImGuiComboFlags_HeightLarge)) {
+        // Display filtered symbols in the combo box
         for (int i = 0; i < static_cast<int>(filtered_symbols_.size()); ++i) {
           const std::string& symbol = filtered_symbols_[i];
           bool is_selected = (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size()) &&
@@ -147,12 +146,17 @@ void DashboardControls::render_dashboard_controls() {
                 break;
               }
             }
+
+            // Close the combo box after selection
+            ImGui::CloseCurrentPopup();
+          }
+
+          if (is_selected) {
+            ImGui::SetItemDefaultFocus();
           }
         }
 
-        ImGui::EndChild();
-      } else if (!symbol_input_buffer_.empty()) {
-        ImGui::Text("No symbols match your search.");
+        ImGui::EndCombo();
       }
 
       // Display currently selected symbol

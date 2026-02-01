@@ -20,6 +20,7 @@ public:
 private:
     void renderColumnSelectionPopup();
     void setupTableColumns();
+    void sortDataByColumn(int columnIndex);
 
     // Data storage
     std::vector<BTQuant::RenderEngine::OHLCVCandle> m_data;
@@ -46,6 +47,10 @@ private:
     // UI state
     bool m_showColumnSelector = false;
     ImVec2 m_columnSelectorPos = ImVec2(0, 0);
+
+    // Sorting state
+    int m_sortColumnIndex = -1;
+    bool m_isSortAscending = true;
 };
 
 } // namespace BTQuant

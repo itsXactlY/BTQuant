@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include <algorithm>
 
 namespace BTQuant {
 
@@ -21,6 +22,68 @@ TimeStatisticsPanel::TimeStatisticsPanel(const PanelConfig& config) : PanelBase(
     m_columns.push_back({"Trades", true});
     m_columns.push_back({"AvgSize", false});    // Not available in OHLCVCandle
     m_columns.push_back({"MaxTrade", false});   // Not available in OHLCVCandle
+}
+
+void TimeStatisticsPanel::sortDataByColumn(int columnIndex) {
+    if (columnIndex < 0 || columnIndex >= static_cast<int>(m_columns.size())) {
+        return;
+    }
+
+    // Toggle sort direction if clicking the same column
+    if (m_sortColumnIndex == columnIndex) {
+        m_isSortAscending = !m_isSortAscending;
+    } else {
+        m_sortColumnIndex = columnIndex;
+        m_isSortAscending = true;
+    }
+
+    std::sort(m_data.begin(), m_data.end(), [this, columnIndex](const BTQuant::RenderEngine::OHLCVCandle& a, const BTQuant::RenderEngine::OHLCVCandle& b) {
+        bool result = false;
+
+        switch (columnIndex) {
+            case 0: // Time
+                result = a.timestamp < b.timestamp;
+                break;
+            case 1: // Open
+                result = a.open < b.open;
+                break;
+            case 2: // High
+                result = a.high < b.high;
+                break;
+            case 3: // Low
+                result = a.low < b.low;
+                break;
+            case 4: // Close
+                result = a.close < b.close;
+                break;
+            case 5: // Volume
+                result = a.volume < b.volume;
+                break;
+            case 6: // BuyVolume (placeholder)
+                result = false; // Always false since it's a placeholder
+                break;
+            case 7: // SellVolume (placeholder)
+                result = false; // Always false since it's a placeholder
+                break;
+            case 8: // Delta (placeholder)
+                result = false; // Always false since it's a placeholder
+                break;
+            case 9: // Trades
+                result = a.trade_count < b.trade_count;
+                break;
+            case 10: // AvgSize (placeholder)
+                result = false; // Always false since it's a placeholder
+                break;
+            case 11: // MaxTrade (placeholder)
+                result = false; // Always false since it's a placeholder
+                break;
+            default:
+                result = false;
+                break;
+        }
+
+        return m_isSortAscending ? result : !result;
+    });
 }
 
 void TimeStatisticsPanel::render() {
@@ -61,19 +124,55 @@ void TimeStatisticsPanel::render() {
         // Begin table only if there are visible columns
         if (visibleColCount > 0 && ImGui::BeginTable("TimeStatisticsTable", visibleColCount,
                              ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
-                             ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
+                             ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame |
+                             ImGuiTableFlags_Sortable)) {
 
             // Setup only visible columns
             int currentIndex = 0;
-            for (const auto& col : m_columns) {
+            int visibleIndex = 0; // Track the visible column index for mapping back to original
+            for (size_t i = 0; i < m_columns.size(); ++i) {
+                const auto& col = m_columns[i];
                 if (col.second) { // If column is visible
-                    ImGui::TableSetupColumn(col.first.c_str(), ImGuiTableColumnFlags_None, 0.0f);
+                    ImGuiTableColumnFlags flags = ImGuiTableColumnFlags_None;
+
+                    // Check if this is the currently sorted column
+                    if (static_cast<int>(i) == m_sortColumnIndex) {
+                        flags |= ImGuiTableColumnFlags_DefaultSort;
+                    }
+
+                    ImGui::TableSetupColumn(col.first.c_str(), flags, 0.0f);
                     currentIndex++;
                 }
             }
 
             ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
             ImGui::TableHeadersRow();
+
+            // Handle header clicks for sorting
+            ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
+            if (sorts_specs && sorts_specs->SpecsDirty) {
+                if (sorts_specs->SpecsCount > 0) {
+                    const ImGuiTableColumnSortSpecs* sort_spec = &sorts_specs->Specs[0];
+
+                    // Find which original column this corresponds to
+                    int original_col_index = -1;
+                    int visible_col_index = 0;
+                    for (size_t i = 0; i < m_columns.size(); ++i) {
+                        if (m_columns[i].second) { // If column is visible
+                            if (visible_col_index == sort_spec->ColumnIndex) {
+                                original_col_index = static_cast<int>(i);
+                                break;
+                            }
+                            visible_col_index++;
+                        }
+                    }
+
+                    if (original_col_index != -1) {
+                        sortDataByColumn(original_col_index);
+                    }
+                }
+                sorts_specs->SpecsDirty = false;
+            }
 
             // Render data rows
             for (const auto& entry : m_data) {
@@ -169,6 +268,11 @@ void TimeStatisticsPanel::render() {
 
 void TimeStatisticsPanel::updateData(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& data) {
     m_data = data;
+
+    // Re-sort data if we had a previous sort applied
+    if (m_sortColumnIndex != -1) {
+        sortDataByColumn(m_sortColumnIndex);
+    }
 }
 
 void TimeStatisticsPanel::renderColumnSelectionPopup() {

@@ -871,7 +871,7 @@ void WatchlistPanel::render_group_tabs() {
   ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive, ImVec4(0.2f, 0.2f, 0.2f, 1.0f)); // Active tab when window unfocused
 
   if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_Reorderable)) {
-    // First, render the default groups (Futures, Crypto, Stocks) in a specific order
+    // First, render the default groups (Stocks, Crypto, Futures) in a specific order
     std::vector<std::string> default_groups = {"Stocks", "Crypto", "Futures"};
 
     for (const auto& group_name : default_groups) {
@@ -883,8 +883,12 @@ void WatchlistPanel::render_group_tabs() {
         auto it = watchlist_groups_.find(group_name);
         size_t symbol_count = (it != watchlist_groups_.end()) ? it->second.size() : 0;
 
-        // Format the tab label with symbol count
-        std::string tab_label = group_name + " (" + std::to_string(symbol_count) + ")";
+        // Format the tab label with symbol count and visual indicator for default groups
+        std::string tab_label = group_name;
+        if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
+            tab_label += " \uf007"; // Unicode icon to indicate default groups
+        }
+        tab_label += " (" + std::to_string(symbol_count) + ")";
 
         // Set tab item flags for better appearance
         ImGuiTabItemFlags tab_flags = ImGuiTabItemFlags_None;
@@ -908,6 +912,7 @@ void WatchlistPanel::render_group_tabs() {
           if (group_name == "Futures" || group_name == "Crypto" || group_name == "Stocks") {
             ImGui::Separator();
             ImGui::Text("Default watchlist group");
+            ImGui::Text("Predefined category for %s", group_name.c_str());
           }
 
           ImGui::EndTooltip();

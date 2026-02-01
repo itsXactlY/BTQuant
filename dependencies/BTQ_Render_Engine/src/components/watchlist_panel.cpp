@@ -748,6 +748,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(1);
   ImGui::Text("%s", entry.exchange.c_str());
 
+  // Add tooltip to explain Exchange
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Trading exchange: %s", entry.exchange.c_str());
+    ImGui::EndTooltip();
+  }
+
   ImGui::TableSetColumnIndex(2);
   // Apply animation effect to price if recently updated
   if (entry.animation_timer > 0.0f) {
@@ -967,6 +974,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
     ImGui::Text("24-hour trading volume");
+    ImGui::Text("Symbol: %s", entry.symbol.c_str());
+    ImGui::Text("Exchange: %s", entry.exchange.c_str());
     ImGui::EndTooltip();
   }
 
@@ -979,6 +988,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
   ImGui::TextColored(high_color, "%s", formatPrice(entry.high_24h).c_str());
 
+  // Add tooltip to explain High
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("24-hour high price");
+    ImGui::EndTooltip();
+  }
+
   ImGui::TableSetColumnIndex(7);
   // Apply color coding to Low based on comparison with current price
   ImVec4 low_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
@@ -988,6 +1004,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
   ImGui::TextColored(low_color, "%s", formatPrice(entry.low_24h).c_str());
 
+  // Add tooltip to explain Low
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("24-hour low price");
+    ImGui::EndTooltip();
+  }
+
   ImGui::TableSetColumnIndex(8);
   // Apply color coding to Open based on comparison with current price
   ImVec4 open_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
@@ -996,6 +1019,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     open_color = calculateChangeColor(open_diff_pct, true);
   }
   ImGui::TextColored(open_color, "%s", formatPrice(entry.open_24h).c_str());
+
+  // Add tooltip to explain Open
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("24-hour opening price");
+    ImGui::EndTooltip();
+  }
 
   ImGui::TableSetColumnIndex(9);
   // Apply color coding to VWAP based on change from previous value (green for increase, red for decrease)

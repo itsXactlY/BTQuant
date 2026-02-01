@@ -39,7 +39,6 @@ class DashboardControls : public UIComponent {
   std::array<char, 256> symbol_input_buffer_ = {};  // For search input
   std::vector<std::string> filtered_symbols_;  // Filtered symbols for search
   std::vector<std::string> all_symbols_;       // All available symbols
-  std::vector<std::string> exchange_filtered_symbols_; // Symbols filtered by selected exchanges
   int selected_symbol_idx_ = -1;              // Selected symbol index
   bool symbols_loaded_ = false;               // Flag to indicate if symbols are loaded
   bool needs_refresh_ = true;                 // Flag to indicate refresh needed

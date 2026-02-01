@@ -112,11 +112,10 @@ void DashboardControls::render_dashboard_controls() {
       }
 
       // Show exchange selection popup as a proper dropdown
+      bool any_changes = false; // Move this declaration outside the Begin/End block
       if (show_exchange_selector) {
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
         ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 300));
-
-        bool any_changes = false; // Move this declaration outside the Begin/End block
 
         if (ImGui::Begin("##ExchangeSelectorPopup", &show_exchange_selector,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
@@ -136,10 +135,30 @@ void DashboardControls::render_dashboard_controls() {
 
           ImGui::Separator();
 
+          // Search input for filtering exchanges
+          static char exchange_search_buffer[128] = "";
+          ImGui::InputTextWithHint("##exchange_search", "Filter exchanges...", exchange_search_buffer, sizeof(exchange_search_buffer));
+
+          ImGui::Separator();
+
           // Individual exchange checkboxes with scrollable area
           ImGui::BeginChild("ExchangeList", ImVec2(0, 200), true);
 
+          // Convert search term to lowercase for case-insensitive comparison
+          std::string search_term = exchange_search_buffer;
+          std::transform(search_term.begin(), search_term.end(), search_term.begin(), ::tolower);
+
           for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+            // Skip exchanges that don't match the search term (if search is not empty)
+            if (!search_term.empty()) {
+              std::string exchange_lower = all_exchanges_[i];
+              std::transform(exchange_lower.begin(), exchange_lower.end(), exchange_lower.begin(), ::tolower);
+
+              if (exchange_lower.find(search_term) == std::string::npos) {
+                continue; // Skip this exchange if it doesn't match the search
+              }
+            }
+
             bool temp_selected = selected_exchanges_[i] != 0;
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
               selected_exchanges_[i] = temp_selected ? 1 : 0;
@@ -157,6 +176,9 @@ void DashboardControls::render_dashboard_controls() {
             if (any_changes) {
               refresh_symbols_for_selected_exchanges();
             }
+
+            // Clear the search buffer when closing
+            memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
           }
 
           if (any_changes) {
@@ -190,6 +212,9 @@ void DashboardControls::render_dashboard_controls() {
           if (any_changes) {
             refresh_symbols_for_selected_exchanges();
           }
+
+          // Clear the search buffer when closing
+          memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
         }
       }
 

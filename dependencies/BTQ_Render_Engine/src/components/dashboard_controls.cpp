@@ -329,7 +329,7 @@ void DashboardControls::render_dashboard_controls() {
     // Panel management section with all requested panel types
     if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-      // Add Chart Button
+      // First row of panel buttons
       if (ImGui::Button("Add Chart", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::CHART);
@@ -337,7 +337,6 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add Footprint Button
       if (ImGui::Button("Add Footprint", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
@@ -345,7 +344,6 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add Volume Profile Button
       if (ImGui::Button("Add Volume Profile", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
@@ -353,7 +351,7 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add Order Book Button
+      // Second row of panel buttons
       if (ImGui::Button("Add Order Book", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ORDERBOOK);
@@ -361,7 +359,6 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add Time&Sales Button
       if (ImGui::Button("Add Time&Sales", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);
@@ -369,7 +366,6 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add Watchlist Button
       if (ImGui::Button("Add Watchlist", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::WATCHLIST);
@@ -377,7 +373,6 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
-      // Add News Button (using Alerts panel as news feed)
       if (ImGui::Button("Add News", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ALERTS);

@@ -211,6 +211,9 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   // Load column settings from config file
   load_column_settings_from_config(config_file_path_);
 
+  // Validate column settings after loading
+  validate_column_settings();
+
   // Initialize the alert manager
   alert_manager_ = std::make_shared<WatchlistAlertManager>(bridge_, processor_, nullptr);
 
@@ -1073,8 +1076,6 @@ void WatchlistPanel::render_table_header() {
 
     // Check if the current visible column is being hovered for right-click
     if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-      clicked_column_index_ = orig_idx;  // Store the actual column index
-      column_context_menu_open_ = true;
       ImGui::OpenPopup("ColumnContextMenu");
     }
 
@@ -1135,15 +1136,8 @@ void WatchlistPanel::render_table_header() {
     }
   }
 
-  // Also detect right-click on the header row area (not just individual columns)
-  // This allows showing the context menu when clicking in the header area but not on a specific column
-  if (ImGui::TableGetColumnIndex() == -1 && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-    // If we clicked in the header area but not on a specific column, show the context menu
-    // We'll use -1 to indicate that no specific column was clicked
-    clicked_column_index_ = -1;
-    column_context_menu_open_ = true;
-    ImGui::OpenPopup("ColumnContextMenu");
-  }
+  // The right-click on individual column headers is already handled above in the loop
+  // So we don't need additional right-click detection here
 
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
   if (sorts_specs && sorts_specs->SpecsDirty) {
@@ -2606,49 +2600,40 @@ void WatchlistPanel::initialize_column_settings() {
   column_info_.emplace_back("Open", true, 90.0f, 8);
   column_info_.emplace_back("VWAP", true, 90.0f, 9);
   column_info_.emplace_back("Action", true, 70.0f, 10);
+
+  // Validate column settings after initialization
+  validate_column_settings();
 }
 
 void WatchlistPanel::render_column_context_menu() {
-  if (column_context_menu_open_) {
-    if (ImGui::BeginPopup("ColumnContextMenu")) {
-      ImGui::Text("Column Options:");
-      ImGui::Separator();
+  if (ImGui::BeginPopup("ColumnContextMenu")) {
+    ImGui::Text("Column Options:");
+    ImGui::Separator();
 
-      // Show/hide options for each column with current visibility status
-      for (int i = 0; i < static_cast<int>(column_info_.size()); ++i) {
-        bool is_visible = column_info_[i].visible;
-        std::string label = column_info_[i].name + (is_visible ? " (Visible)" : " (Hidden)");
+    // Show/hide options for each column with current visibility status
+    for (int i = 0; i < static_cast<int>(column_info_.size()); ++i) {
+      bool is_visible = column_info_[i].visible;
+      std::string label = column_info_[i].name + (is_visible ? " (Visible)" : " (Hidden)");
 
-        if (ImGui::MenuItem(label.c_str(), nullptr, &is_visible)) {
-          column_info_[i].visible = is_visible;
-
-          // Save the updated settings to config
-          save_column_settings_to_config(config_file_path_);
-        }
-      }
-
-      ImGui::Separator();
-
-      // Option to reset to default column layout
-      if (ImGui::MenuItem("Reset to Default Layout")) {
-        initialize_column_settings(); // Reset to default settings
+      if (ImGui::MenuItem(label.c_str(), nullptr, &is_visible)) {
+        column_info_[i].visible = is_visible;
 
         // Save the updated settings to config
         save_column_settings_to_config(config_file_path_);
       }
-
-      ImGui::EndPopup();
-
-      // Close the popup after processing
-      if (!ImGui::IsPopupOpen("ColumnContextMenu")) {
-        column_context_menu_open_ = false;
-        clicked_column_index_ = -1;
-      }
-    } else {
-      // Popup was closed, reset the state
-      column_context_menu_open_ = false;
-      clicked_column_index_ = -1;
     }
+
+    ImGui::Separator();
+
+    // Option to reset to default column layout
+    if (ImGui::MenuItem("Reset to Default Layout")) {
+      initialize_column_settings(); // Reset to default settings
+
+      // Save the updated settings to config
+      save_column_settings_to_config(config_file_path_);
+    }
+
+    ImGui::EndPopup();
   }
 }
 
@@ -2658,6 +2643,9 @@ void WatchlistPanel::toggle_column_visibility(int column_index) {
 
     // Save the updated settings to config
     save_column_settings_to_config(config_file_path_);
+
+    // Validate column settings after toggling visibility
+    validate_column_settings();
   }
 }
 
@@ -2890,6 +2878,9 @@ void WatchlistPanel::reorder_columns(int source_index, int target_index) {
 
   // Save the updated settings to config
   save_column_settings_to_config(config_file_path_);
+
+  // Validate column settings after reordering
+  validate_column_settings();
 }
 
 void WatchlistPanel::process_pending_updates() {
@@ -3148,21 +3139,35 @@ void WatchlistPanel::ensure_default_groups_order() {
 void WatchlistPanel::validate_column_settings() {
   // Ensure all columns have unique order values
   std::vector<int> orders;
-  for (const auto& col : column_info_) {
-    orders.push_back(col.order);
+  std::vector<size_t> indices;
+
+  for (size_t i = 0; i < column_info_.size(); ++i) {
+    orders.push_back(column_info_[i].order);
+    indices.push_back(i);
   }
 
-  // Sort the orders to check for duplicates
-  std::sort(orders.begin(), orders.end());
-
   // Check for duplicates and fix if needed
-  for (size_t i = 0; i < orders.size() - 1; ++i) {
-    if (orders[i] == orders[i + 1]) {
-      // If there are duplicates, reassign order values sequentially
+  for (size_t i = 0; i < orders.size(); ++i) {
+    for (size_t j = i + 1; j < orders.size(); ++j) {
+      if (orders[i] == orders[j]) {
+        // If there are duplicates, reassign order values sequentially
+        for (size_t k = 0; k < column_info_.size(); ++k) {
+          column_info_[k].order = static_cast<int>(k);
+        }
+        return; // Exit after fixing duplicates
+      }
+    }
+  }
+
+  // Ensure order values are consecutive starting from 0
+  std::sort(orders.begin(), orders.end());
+  for (size_t i = 0; i < orders.size(); ++i) {
+    if (orders[i] != static_cast<int>(i)) {
+      // Reassign order values sequentially if they're not consecutive
       for (size_t j = 0; j < column_info_.size(); ++j) {
         column_info_[j].order = static_cast<int>(j);
       }
-      break; // Exit after fixing duplicates
+      return; // Exit after reassignment
     }
   }
 }

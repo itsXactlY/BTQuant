@@ -32,7 +32,7 @@ struct WatchlistEntry {
   double previous_vwap = 0.0;  // Previous VWAP for animation
   double previous_volume = 0.0;  // Previous volume for change calculation
   float animation_timer = 0.0f;
-  static constexpr float ANIMATION_DURATION = 0.8f; // Animation duration in seconds - increased for more visible flash effect
+  static constexpr float ANIMATION_DURATION = 1.0f; // Animation duration in seconds - increased for more visible flash effect
 };
 
 class WatchlistPanel : public PanelBase {

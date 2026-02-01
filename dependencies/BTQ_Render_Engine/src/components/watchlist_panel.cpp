@@ -981,8 +981,15 @@ void WatchlistPanel::render_table_header() {
     // Render the header cell with drag-and-drop support
     ImGui::TableNextColumn();
 
-    // Render the header text
-    ImGui::Text(column_info_[orig_idx].name.c_str());
+    // Prepare the header text with sort indicator if this is the sort column
+    std::string header_text = column_info_[orig_idx].name;
+    if (orig_idx == sort_column_) {
+      // Add sort direction indicator
+      header_text += sort_ascending_ ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
+    }
+
+    // Render the header text with sort indicator
+    ImGui::Text("%s", header_text.c_str());
 
     // Check if the current visible column is being hovered for right-click
     if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {

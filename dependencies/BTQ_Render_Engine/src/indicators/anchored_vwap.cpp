@@ -7,17 +7,22 @@ namespace btq {
 void AnchoredVWAP::calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars) {
     // Clear any existing data
     clear();
-    
+
     // Find the index of the first bar that has a timestamp >= anchor timestamp
+    // Use binary search (std::lower_bound) to optimize from O(n) to O(log n)
     size_t startIndex = 0;
     bool anchorFound = false;
-    
-    for (size_t i = 0; i < bars.size(); ++i) {
-        if (bars[i].timestamp >= anchorTimestamp_) {
-            startIndex = i;
-            anchorFound = true;
-            break;
-        }
+
+    // Create a lambda to compare timestamps for lower_bound
+    auto timestampComparator = [this](uint64_t ts, const BTQuant::RenderEngine::OHLCVCandle& bar) {
+        return ts < bar.timestamp;
+    };
+
+    auto lower = std::lower_bound(bars.begin(), bars.end(), anchorTimestamp_, timestampComparator);
+
+    if (lower != bars.end()) {
+        startIndex = std::distance(bars.begin(), lower);
+        anchorFound = true;
     }
     
     // If no bars are found from the anchor point forward, return early

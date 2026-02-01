@@ -51,6 +51,14 @@ class WatchlistPanel : public PanelBase {
   void remove_symbol(uint32_t symbol_id);
   void clear_watchlist();
 
+  // Watchlist group management
+  void add_symbol_to_group(const std::string& group_name, uint32_t symbol_id, const std::string& symbol, const std::string& exchange);
+  void remove_symbol_from_group(const std::string& group_name, uint32_t symbol_id);
+  void clear_group(const std::string& group_name);
+  void create_group(const std::string& group_name);
+  void delete_group(const std::string& group_name);
+  void switch_to_group(const std::string& group_name);
+
   // Symbol selection callback (e.g., to open chart when clicked)
   void set_symbol_selected_callback(SymbolSelectedCallback cb) {
     on_symbol_selected_ = std::move(cb);
@@ -67,16 +75,27 @@ class WatchlistPanel : public PanelBase {
   // Method to get the currently selected symbol
   uint32_t get_selected_symbol_id() const { return selected_symbol_id_; }
   std::string get_selected_symbol() const {
-    auto it = watchlist_.find(selected_symbol_id_);
-    return (it != watchlist_.end()) ? it->second.symbol : "";
+    auto it = get_current_watchlist().find(selected_symbol_id_);
+    return (it != get_current_watchlist().end()) ? it->second.symbol : "";
   }
+
+  // Get current group name
+  const std::string& get_current_group_name() const { return current_group_name_; }
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
+  // Single watchlist for backward compatibility
   std::map<uint32_t, WatchlistEntry> watchlist_;
-  std::vector<uint32_t> display_order_;  // For custom ordering
+
+  // Multiple watchlist groups
+  std::map<std::string, std::map<uint32_t, WatchlistEntry>> watchlist_groups_;
+  std::vector<std::string> group_names_;
+  std::string current_group_name_ = "Default";
+
+  // Display orders for each group
+  std::map<std::string, std::vector<uint32_t>> group_display_orders_;
 
   // UI state
   int sort_column_ = 0;  // 0=symbol, 1=exchange, 2=last price, 3=change%, 4=change$, 5=volume, 6=high, 7=low, 8=open, 9=vwap
@@ -104,12 +123,39 @@ class WatchlistPanel : public PanelBase {
   // float update_timer_ = 0.0f;
   // static constexpr float UPDATE_INTERVAL = 0.1f;  // 10 FPS updates
 
+  // Column customization data structures
+  struct ColumnInfo {
+    std::string name;
+    bool visible;
+    float width;
+    int order;  // Position in the table
+
+    ColumnInfo(const std::string& n, bool v, float w, int o)
+      : name(n), visible(v), width(w), order(o) {}
+  };
+
+  // Get reference to current watchlist based on selected group
+  std::map<uint32_t, WatchlistEntry>& get_current_watchlist();
+  const std::map<uint32_t, WatchlistEntry>& get_current_watchlist() const;
+  std::vector<uint32_t>& get_current_display_order();
+  const std::vector<uint32_t>& get_current_display_order() const;
+
   void update_watchlist_data();
   void render_table_header();
   void render_table_row(const WatchlistEntry& entry);
   void render_filter_input();
+  void render_group_tabs();
   void sort_watchlist();
   std::vector<uint32_t> get_filtered_symbols() const;
+
+  // Column customization methods
+  void initialize_column_settings();
+  void render_column_context_menu();
+  void toggle_column_visibility(int column_index);
+  void save_column_settings_to_config(const std::string& config_file) const;
+  void load_column_settings_from_config(const std::string& config_file);
+  void swap_column_positions(int index1, int index2);
+  void render_draggable_header(int column_index, const char* label);
 
   // Drag and drop helpers
   void handle_drag_drop_reordering();
@@ -120,6 +166,7 @@ class WatchlistPanel : public PanelBase {
                               const RenderEngine::OHLCVCandle& old) const;
 
   static const char* get_sort_column_name(int column);
+  const char* get_column_name_by_index(int column_index);
 
   // Real-time update handler
   void on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type);
@@ -132,6 +179,12 @@ class WatchlistPanel : public PanelBase {
   void ensure_all_symbols_subscribed();
   void process_pending_updates();
   void subscribe_to_all_watchlist_symbols();
+
+ private:
+  // Column customization members
+  std::vector<ColumnInfo> column_info_;
+  bool column_context_menu_open_ = false;
+  int clicked_column_index_ = -1;
 };
 
 }  // namespace BTQuant

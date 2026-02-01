@@ -388,6 +388,13 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::Spacing();
 
+      if (ImGui::Button("Add DOM Surface", ImVec2(-1, 30))) {
+        if (panel_manager_) {
+          panel_manager_->add_panel(PanelType::HEATMAP);
+        }
+      }
+      ImGui::Spacing();
+
       if (ImGui::Button("Add Time&Sales", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);

@@ -30,7 +30,7 @@ struct WatchlistEntry {
   // Animation state for price changes
   double previous_price = 0.0;
   float animation_timer = 0.0f;
-  static constexpr float ANIMATION_DURATION = 0.6f; // Animation duration in seconds - slightly longer for better visibility
+  static constexpr float ANIMATION_DURATION = 0.8f; // Animation duration in seconds - increased for more visible flash effect
 };
 
 class WatchlistPanel : public PanelBase {

@@ -312,13 +312,19 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
     // Get the latest analytics data for this symbol
     auto analytics = processor_->getSymbolAnalytics(symbol_id);
     if (analytics.symbol_id != 0) {
-      // Store previous price for animation
-      it->second.previous_price = it->second.price;
+      // Store previous values for animation
+      double prev_price = it->second.price;
+      double prev_vwap = it->second.vwap;
+      double prev_change_pct = it->second.change_pct;
+      double prev_change_dollar = it->second.change_dollar;
 
       // Update the entry with new data
       it->second.price = analytics.last_trade_price;
       it->second.vwap = analytics.vwap;
       it->second.last_update_ts = analytics.last_trade_time;
+
+      // Store the previous price in the entry for animation purposes
+      it->second.previous_price = prev_price;
 
       // Calculate 24h change using the longest available timeframe candles
       auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
@@ -350,8 +356,30 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
         it->second.volume_24h = analytics.volume_1m;  // Fallback
       }
 
-      // Start animation for price change
-      it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+      // Start animation for any significant value change
+      // Only restart animation if there's a meaningful change
+      bool significant_change = false;
+
+      // Check if price changed significantly (more than 0.01% or minimum tick)
+      double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+      if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) { // 0.01% or $0.001 threshold
+        significant_change = true;
+      }
+
+      // Check if VWAP changed significantly
+      double vwap_change_pct = (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
+      if (vwap_change_pct > 0.01 || std::abs(it->second.vwap - prev_vwap) > 0.001) { // 0.01% or $0.001 threshold
+        significant_change = true;
+      }
+
+      // Check if change percentages changed significantly
+      if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) { // At least 0.01% difference
+        significant_change = true;
+      }
+
+      if (significant_change) {
+        it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+      }
     }
   }
 }
@@ -455,12 +483,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   // Drag and drop source
-  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
     // Set payload to carry the symbol_id
     ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
 
-    // Display preview of what is being dragged
-    ImGui::Text("%s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
+    // Display preview of what is being dragged with enhanced visual
+    ImGui::Text("Dragging: %s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
+    ImGui::Text("Release to drop at new position");
 
     ImGui::EndDragDropSource();
   }
@@ -477,11 +506,25 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       auto target_it = std::find(display_order_.begin(), display_order_.end(), entry.symbol_id);
 
       if (source_it != display_order_.end() && target_it != display_order_.end()) {
-        // Calculate new position for the dragged item
+        // Calculate new position for the dragged item based on mouse position
         int source_idx = std::distance(display_order_.begin(), source_it);
         int target_idx = std::distance(display_order_.begin(), target_it);
 
-        // Move the source item to the target position
+        // Determine if dropping above or below the target row
+        // Get the height of the current row to determine drop zone
+        float row_height = ImGui::GetTextLineHeightWithSpacing();
+        float current_y = ImGui::GetCursorScreenPos().y;
+        float mouse_y = ImGui::GetMousePos().y;
+
+        // If mouse is in upper half of the row, insert above; lower half, insert below
+        bool drop_above = (mouse_y - current_y) < (row_height / 2.0f);
+
+        // Adjust target index based on drop position
+        if (!drop_above) {
+          target_idx++;  // Drop below means insert after the target
+        }
+
+        // Move the source item to the calculated position
         uint32_t moved_item = *source_it;
 
         // Remove the moved item from its current position
@@ -489,7 +532,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
         // Adjust target index if source was before target (since we removed an element)
         if (source_idx < target_idx) {
-          target_idx--;
+          // If we removed an item before the target position, adjust the target index
+          if (source_idx < target_idx) {
+            target_idx--;
+          }
         }
 
         // Insert the moved item at the new position
@@ -500,8 +546,26 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       }
     }
 
-    // Visual feedback for drop target
-    ImGui::Separator();
+    // Visual feedback for drop target - draw a horizontal line to indicate drop zone
+    ImVec2 cell_rect_min = ImGui::GetItemRectMin();
+    ImVec2 cell_rect_max = ImGui::GetItemRectMax();
+
+    // Determine where to draw the line based on mouse position within the row
+    float row_height = cell_rect_max.y - cell_rect_min.y;
+    float mouse_y = ImGui::GetMousePos().y;
+    bool drop_above = (mouse_y - cell_rect_min.y) < (row_height / 2.0f);
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float line_y = drop_above ? cell_rect_min.y : cell_rect_max.y;
+
+    // Draw a visual indicator for the drop target
+    draw_list->AddLine(
+        ImVec2(cell_rect_min.x, line_y),
+        ImVec2(cell_rect_max.x, line_y),
+        ImGui::GetColorU32(ImVec4(0.4f, 0.8f, 1.0f, 1.0f)), // Bright blue color
+        2.0f // Line thickness
+    );
+
     ImGui::EndDragDropTarget();
   }
 
@@ -528,20 +592,25 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Create a pulsing effect by interpolating between previous and current price
     double animated_price = entry.previous_price + (entry.price - entry.previous_price) * progress;
 
-    // Enhanced flash animation - alternate between highlight color and normal color
+    // Enhanced flash animation - more prominent flash effect
     ImVec4 flash_color;
-    float flash_intensity = 1.0f;
 
-    // Calculate flash timing for brief flash effect
-    float flash_phase = progress * 2.0f; // Speed up the flash cycle
+    // Calculate flash timing for brief flash effect with more intensity
+    float flash_phase = progress * 3.0f; // Speed up the flash cycle for more intensity
     if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+    if (flash_phase > 1.0f) flash_phase = 0.0f; // Clamp to 0 after bounce
 
+    // More pronounced flash colors with better contrast
     if (entry.price > entry.previous_price) {
-      // Price went up - flash green then fade to normal
-      flash_color = ImVec4(0.2f + 0.8f * flash_phase, 1.0f, 0.2f, 1.0f);
+      // Price went up - bright green flash then fade to normal
+      float green_intensity = 0.5f + 0.5f * flash_phase;
+      float red_intensity = 0.2f * (1.0f - flash_phase);
+      flash_color = ImVec4(red_intensity, green_intensity, 0.2f * (1.0f - flash_phase), 1.0f);
     } else if (entry.price < entry.previous_price) {
-      // Price went down - flash red then fade to normal
-      flash_color = ImVec4(1.0f, 0.2f + 0.8f * (1.0f - flash_phase), 0.2f + 0.8f * (1.0f - flash_phase), 1.0f);
+      // Price went down - bright red flash then fade to normal
+      float red_intensity = 0.5f + 0.5f * flash_phase;
+      float green_intensity = 0.3f * (1.0f - flash_phase);
+      flash_color = ImVec4(red_intensity, green_intensity, green_intensity, 1.0f);
     } else {
       // No change - use normal color
       flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -553,10 +622,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(3);
+  // Apply subtle animation to change percentage when it updates significantly
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
   ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
 
   ImGui::TableSetColumnIndex(4);
+  // Apply subtle animation to change dollar when it updates significantly
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
   ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
 
@@ -574,7 +645,14 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::Text("%s", formatPrice(entry.open_24h).c_str());
 
   ImGui::TableSetColumnIndex(9);
-  ImGui::Text("%s", formatPrice(entry.vwap).c_str());
+  // Apply subtle animation to VWAP when it updates significantly
+  ImVec4 vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  if (entry.animation_timer > 0.0f) {
+    // Slightly highlight VWAP when there's an active animation
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+    vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
+  }
+  ImGui::TextColored(vwap_color, "%s", formatPrice(entry.vwap).c_str());
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
@@ -719,6 +797,9 @@ void WatchlistPanel::handle_drag_drop_reordering() {
   // This method handles the drag and drop reordering logic
   // The actual reordering is handled in render_table_row when drag and drop occurs
   // This method can be used for additional processing if needed
+
+  // Currently, the drag and drop reordering is handled directly in render_table_row
+  // This method is kept for potential future enhancements or cleanup operations
 }
 
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {

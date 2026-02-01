@@ -34,6 +34,98 @@ void DashboardControls::render_dashboard_controls() {
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
 
+    // Exchange selection section
+    if (ImGui::CollapsingHeader("Exchange Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
+      // Load exchanges if needed
+      if (!exchanges_loaded_) {
+        all_exchanges_ = SymbolRegistry::instance().get_exchanges();
+
+        // Initialize selected_exchanges_ vector with all exchanges selected by default
+        selected_exchanges_.resize(all_exchanges_.size());
+        std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1); // 1 means true/selected
+
+        exchanges_loaded_ = true;
+        needs_refresh_ = true; // Refresh symbols after exchange selection changes
+      }
+
+      // Multi-select dropdown for exchanges
+      ImGui::Text("Select Active Exchanges:");
+
+      // Create a temporary window to show the multi-select list
+      static bool show_exchange_selector = false;
+      static char exchange_preview[256] = "All Exchanges";
+
+      if (ImGui::Button("Select Exchanges")) {
+        show_exchange_selector = !show_exchange_selector;
+      }
+
+      // Update preview text to show selected exchanges
+      std::string preview_text = "";
+      int selected_count = 0;
+      for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+        if (selected_exchanges_[i]) {
+          if (selected_count > 0) preview_text += ", ";
+          preview_text += all_exchanges_[i];
+          selected_count++;
+        }
+      }
+
+      if (selected_count == 0) {
+        strcpy(exchange_preview, "No Exchanges Selected");
+      } else if (selected_count == static_cast<int>(all_exchanges_.size())) {
+        strcpy(exchange_preview, "All Exchanges");
+      } else {
+        strncpy(exchange_preview, preview_text.c_str(), sizeof(exchange_preview) - 1);
+        exchange_preview[sizeof(exchange_preview) - 1] = '\0';
+      }
+
+      ImGui::SameLine();
+      ImGui::Text("%s", exchange_preview);
+
+      // Show exchange selection popup
+      if (show_exchange_selector) {
+        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos());
+        ImGui::SetNextWindowSize(ImVec2(200, 300));
+
+        if (ImGui::Begin("Exchange Selector", &show_exchange_selector,
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+
+          bool any_changes = false;
+
+          // Select All / Deselect All buttons
+          if (ImGui::Button("Select All")) {
+            std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1);
+            any_changes = true;
+          }
+          ImGui::SameLine();
+          if (ImGui::Button("Deselect All")) {
+            std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 0);
+            any_changes = true;
+          }
+
+          ImGui::Separator();
+
+          // Individual exchange checkboxes
+          for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+            bool temp_selected = selected_exchanges_[i] != 0;
+            if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
+              selected_exchanges_[i] = temp_selected ? 1 : 0;
+              any_changes = true;
+            }
+          }
+
+          if (any_changes) {
+            needs_refresh_ = true; // Refresh symbols when exchange selection changes
+          }
+
+          ImGui::End();
+        } else {
+          // Window was closed, so set the flag to false
+          show_exchange_selector = false;
+        }
+      }
+    }
+
     // Symbol selection section
     if (ImGui::CollapsingHeader("Symbol Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
       // Refresh symbols button
@@ -49,10 +141,32 @@ void DashboardControls::render_dashboard_controls() {
           // Get all available symbols from the symbol registry
           all_symbols_.clear();
 
-          // Get symbols from the symbol registry
+          // Get symbols from the symbol registry, filtered by selected exchanges
           auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
           for (const auto& symbol_info : all_symbol_infos) {
-            all_symbols_.push_back(symbol_info.symbol);
+            // Check if this symbol's exchange is in the selected exchanges
+            bool exchange_selected = false;
+            for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+              if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
+                exchange_selected = true;
+                break;
+              }
+            }
+
+            // Only add symbol if its exchange is selected
+            if (exchange_selected) {
+              // Check if symbol is already in the list
+              bool found = false;
+              for (const auto& existing_symbol : all_symbols_) {
+                if (existing_symbol == symbol_info.symbol) {
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                all_symbols_.push_back(symbol_info.symbol);
+              }
+            }
           }
 
           // Also get active symbols from the bridge if possible through the chart manager
@@ -64,17 +178,44 @@ void DashboardControls::render_dashboard_controls() {
               auto active_symbols = bridge->getActiveSymbols();
               for (auto symbol_id : active_symbols) {
                 std::string symbol_name = bridge->getSymbolName(symbol_id);
+
                 if (!symbol_name.empty()) {
-                  // Check if symbol is already in the list
-                  bool found = false;
-                  for (const auto& existing_symbol : all_symbols_) {
-                    if (existing_symbol == symbol_name) {
-                      found = true;
-                      break;
-                    }
+                  // Try to get exchange information from the symbol registry
+                  std::string exchange_name = "";
+                  auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+                  if (symbol_info.has_value()) {
+                    exchange_name = symbol_info->exchange;
+                  } else {
+                    // If not in registry, try to get from bridge
+                    exchange_name = bridge->getExchangeName(symbol_id);
                   }
-                  if (!found) {
-                    all_symbols_.push_back(symbol_name);
+
+                  // Check if this symbol's exchange is in the selected exchanges
+                  bool exchange_selected = false;
+                  if (!exchange_name.empty()) {
+                    for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+                      if (all_exchanges_[i] == exchange_name && selected_exchanges_[i] != 0) {
+                        exchange_selected = true;
+                        break;
+                      }
+                    }
+                  } else {
+                    // If exchange name is empty, assume it's selected
+                    exchange_selected = true;
+                  }
+
+                  if (exchange_selected) {
+                    // Check if symbol is already in the list
+                    bool found = false;
+                    for (const auto& existing_symbol : all_symbols_) {
+                      if (existing_symbol == symbol_name) {
+                        found = true;
+                        break;
+                      }
+                    }
+                    if (!found) {
+                      all_symbols_.push_back(symbol_name);
+                    }
                   }
                 }
               }
@@ -83,6 +224,9 @@ void DashboardControls::render_dashboard_controls() {
 
           // Sort symbols alphabetically
           std::sort(all_symbols_.begin(), all_symbols_.end());
+
+          // Update filtered symbols to match the newly loaded symbols
+          filtered_symbols_ = all_symbols_;
 
           symbols_loaded_ = true;
           needs_refresh_ = false;
@@ -109,6 +253,9 @@ void DashboardControls::render_dashboard_controls() {
             filtered_symbols_.push_back(symbol);
           }
         }
+      } else if (needs_refresh_) {
+        // If symbols were refreshed due to exchange selection, update the filtered list too
+        filtered_symbols_ = all_symbols_;
       }
 
       // Create a unique ID for the combo box

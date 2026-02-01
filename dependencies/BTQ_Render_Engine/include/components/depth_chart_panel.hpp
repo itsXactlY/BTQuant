@@ -13,7 +13,8 @@ namespace BTQuant {
 
 enum class DepthChartVisualizationMode {
   CUMULATIVE_AREA,  // Current mode: cumulative depth as area chart
-  SEPARATE_SIDES    // Alternative mode: bid area on left, ask area on right
+  SEPARATE_SIDES,   // Alternative mode: bid area on left, ask area on right (negative values)
+  BID_ASK_SPLIT      // New mode: bid area on left, ask area on right as separate areas
 };
 
 /**
@@ -61,6 +62,7 @@ class DepthChartPanel : public PanelBase {
   void compute_depth_data();
   void render_depth_chart_implot();
   void render_depth_chart_separate_sides();
+  void render_depth_chart_bid_ask_split();
   void render_visualization_mode_selector();
   void render_stats();
   void subscribe_to_updates();

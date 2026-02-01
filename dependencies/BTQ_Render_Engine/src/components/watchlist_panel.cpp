@@ -54,20 +54,26 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
 
   // Define thresholds for intensity scaling
   double max_intensity_threshold = is_percentage ? 10.0 : 100.0; // 10% or $100 as max intensity
-  double min_intensity = 0.2f;  // Minimum color intensity
-  double max_intensity = 0.9f;  // Maximum color intensity
 
-  // Calculate intensity factor (clamped between 0 and 1)
-  double intensity_factor = std::min(1.0, abs_change / max_intensity_threshold);
-  double color_intensity = min_intensity + (max_intensity - min_intensity) * intensity_factor;
+  // Use exponential scaling to make intensity increase more dramatically with larger changes
+  double normalized_change = std::min(1.0, abs_change / max_intensity_threshold);
+  // Apply exponential curve to make intensity grow faster with larger changes
+  double intensity_factor = normalized_change * normalized_change; // Square the value for exponential effect
+  double saturation_factor = std::sqrt(normalized_change); // Square root for saturation effect
 
   // Return appropriate color based on sign and intensity
   if (is_positive) {
-    // Green for positive changes
-    return ImVec4(color_intensity, std::min(1.0, 0.3f + intensity_factor * 0.7f), 0.2f, 1.0f);
+    // Green for positive changes - more intense greens for larger changes
+    float red_comp = 0.2f * (1.0f - saturation_factor);
+    float green_comp = 0.5f + 0.5f * saturation_factor; // Base green with intensity
+    float blue_comp = 0.2f * (1.0f - saturation_factor);
+    return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   } else {
-    // Red for negative changes
-    return ImVec4(std::min(1.0, 0.3f + intensity_factor * 0.7f), color_intensity * 0.3f, color_intensity * 0.3f, 1.0f);
+    // Red for negative changes - more intense reds for larger changes
+    float red_comp = 0.5f + 0.5f * saturation_factor; // Base red with intensity
+    float green_comp = 0.3f * (1.0f - saturation_factor);
+    float blue_comp = 0.3f * (1.0f - saturation_factor);
+    return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }
 
@@ -882,13 +888,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(6);
-  ImGui::Text("%s", formatPrice(entry.high_24h).c_str());
+  // Apply color coding to High based on comparison with current price
+  ImVec4 high_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  if (entry.price != 0.0) {
+    double high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
+    high_color = calculateChangeColor(high_diff_pct, true);
+  }
+  ImGui::TextColored(high_color, "%s", formatPrice(entry.high_24h).c_str());
 
   ImGui::TableSetColumnIndex(7);
-  ImGui::Text("%s", formatPrice(entry.low_24h).c_str());
+  // Apply color coding to Low based on comparison with current price
+  ImVec4 low_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  if (entry.price != 0.0) {
+    double low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
+    low_color = calculateChangeColor(low_diff_pct, true);
+  }
+  ImGui::TextColored(low_color, "%s", formatPrice(entry.low_24h).c_str());
 
   ImGui::TableSetColumnIndex(8);
-  ImGui::Text("%s", formatPrice(entry.open_24h).c_str());
+  // Apply color coding to Open based on comparison with current price
+  ImVec4 open_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+  if (entry.price != 0.0) {
+    double open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
+    open_color = calculateChangeColor(open_diff_pct, true);
+  }
+  ImGui::TextColored(open_color, "%s", formatPrice(entry.open_24h).c_str());
 
   ImGui::TableSetColumnIndex(9);
   // Apply color coding to VWAP based on relationship to current price (green if price > VWAP, red if price < VWAP)

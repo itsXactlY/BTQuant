@@ -30,11 +30,36 @@ void WatchlistPanel::render() {
 
   render_panel_header();
 
+  // Input field for adding new symbols by name
+  ImGui::Text("Add Symbol:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(200);
+  ImGui::InputText("##NewSymbolInput", new_symbol_buffer_, sizeof(new_symbol_buffer_));
+  ImGui::SameLine();
+
+  // Button to add symbol by name
+  if (ImGui::Button("Add")) {
+    std::string symbol_to_add = new_symbol_buffer_;
+    if (!symbol_to_add.empty() && bridge_) {
+      // Find the symbol ID from the bridge based on the entered name
+      auto active_symbols = bridge_->getActiveSymbols();
+      for (uint32_t sym_id : active_symbols) {
+        std::string sym_name = bridge_->getSymbolName(sym_id);
+        std::string exchange = bridge_->getExchangeName(sym_id);
+        if (!sym_name.empty() && sym_name == symbol_to_add && !watchlist_.contains(sym_id)) {
+          add_symbol(sym_id, sym_name, exchange);
+          new_symbol_buffer_[0] = '\0'; // Clear the input buffer
+          break;
+        }
+      }
+    }
+  }
+
   // Symbol Selector Dropdown - add symbols from all available in bridge
   if (bridge_) {
     auto active_symbols = bridge_->getActiveSymbols();
     if (!active_symbols.empty()) {
-      ImGui::Text("Add:");
+      ImGui::Text("Or select:");
       ImGui::SameLine();
       ImGui::SetNextItemWidth(200);
       if (ImGui::BeginCombo("##SymbolSelector", "Select Symbol...")) {
@@ -44,7 +69,7 @@ void WatchlistPanel::render() {
           if (sym_name.empty()) continue;
 
           // Check if already in watchlist
-          bool already_added = watchlist_.contains(sym_id);
+          bool already_added = (watchlist_.find(sym_id) != watchlist_.end());
 
           std::string label = exchange + "/" + sym_name;
           if (already_added) {
@@ -69,7 +94,7 @@ void WatchlistPanel::render() {
   ImGui::Separator();
 
   // Table
-  if (ImGui::BeginTable("WatchlistTable", 7,
+  if (ImGui::BeginTable("WatchlistTable", 11,
                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable |
                             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
     render_table_header();
@@ -92,7 +117,7 @@ void WatchlistPanel::render() {
         for (uint32_t sym_id : bridge_->getActiveSymbols()) {
           std::string sym_name = bridge_->getSymbolName(sym_id);
           std::string exchange = bridge_->getExchangeName(sym_id);
-          if (!sym_name.empty() && !watchlist_.contains(sym_id)) {
+          if (!sym_name.empty() && (watchlist_.find(sym_id) == watchlist_.end())) {
             add_symbol(sym_id, sym_name, exchange);
           }
         }
@@ -153,14 +178,28 @@ void WatchlistPanel::update_watchlist_data() {
       if (!candles.empty()) {
         const auto& oldest_candle = candles.front();
         const auto& newest_candle = candles.back();  // Or just use current price
-        entry.change_24h = calculate_24h_change(newest_candle, oldest_candle);
+
+        // Calculate percentage change
+        entry.change_pct = calculate_24h_change(newest_candle, oldest_candle);
+
+        // Calculate dollar change
+        entry.change_dollar = newest_candle.close - oldest_candle.close;
+
+        // Store open, high, low values from the oldest candle (representing 24h period)
+        entry.open_24h = oldest_candle.open;
+        entry.high_24h = oldest_candle.high;
+        entry.low_24h = oldest_candle.low;
 
         // Estimate 24h volume by summing available candles (best effort)
         double total_vol = 0.0;
         for (const auto& c : candles) total_vol += c.volume;
         entry.volume_24h = total_vol;
       } else {
-        entry.change_24h = 0.0;
+        entry.change_pct = 0.0;
+        entry.change_dollar = 0.0;
+        entry.open_24h = 0.0;
+        entry.high_24h = 0.0;
+        entry.low_24h = 0.0;
         entry.volume_24h = analytics.volume_1m;  // Fallback
       }
     }
@@ -182,13 +221,18 @@ void WatchlistPanel::render_table_header() {
       "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableSetupColumn(
-      "Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+      "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
   ImGui::TableSetupColumn(
-      "Change %", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+      "Change%", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+  ImGui::TableSetupColumn(
+      "Change$", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
   ImGui::TableSetupColumn(
       "Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_DefaultSort);
+  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_DefaultSort);
+  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_DefaultSort);
   ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_DefaultSort);
-  ImGui::TableSetupColumn("Last Update", ImGuiTableColumnFlags_DefaultSort);
+  ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 60.0f);
   ImGui::TableHeadersRow();
 
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
@@ -231,7 +275,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     ImGui::BeginTooltip();
     ImGui::Text("Click to view %s chart", entry.symbol.c_str());
     ImGui::Text("Exchange: %s", entry.exchange.c_str());
-    ImGui::Text("24h High/Low: %.4f / %.4f", entry.high_24h, entry.low_24h);
+    ImGui::Text("24h Open/High/Low: %.4f / %.4f / %.4f", entry.open_24h, entry.high_24h, entry.low_24h);
     ImGui::EndTooltip();
   }
 
@@ -243,10 +287,15 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(3);
   ImVec4 change_color =
-      entry.change_24h >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-  ImGui::TextColored(change_color, "%+.2f%%", entry.change_24h);
+      entry.change_pct >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+  ImGui::TextColored(change_color, "%+.2f%%", entry.change_pct);
 
   ImGui::TableSetColumnIndex(4);
+  ImVec4 change_dollar_color =
+      entry.change_dollar >= 0 ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+  ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
+
+  ImGui::TableSetColumnIndex(5);
   // Format volume with K/M suffix for readability
   if (entry.volume_24h >= 1e6) {
     ImGui::Text("%.2fM", entry.volume_24h / 1e6);
@@ -256,18 +305,24 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     ImGui::Text("%.0f", entry.volume_24h);
   }
 
-  ImGui::TableSetColumnIndex(5);
+  ImGui::TableSetColumnIndex(6);
+  ImGui::Text("%.4f", entry.high_24h);
+
+  ImGui::TableSetColumnIndex(7);
+  ImGui::Text("%.4f", entry.low_24h);
+
+  ImGui::TableSetColumnIndex(8);
+  ImGui::Text("%.4f", entry.open_24h);
+
+  ImGui::TableSetColumnIndex(9);
   ImGui::Text("%.4f", entry.vwap);
 
-  ImGui::TableSetColumnIndex(6);
-  if (entry.last_update_ts > 0) {
-    time_t time = entry.last_update_ts / 1000000;  // Convert microseconds to seconds
-    char time_str[9];
-    strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time));
-    ImGui::Text("%s", time_str);
-  } else {
-    ImGui::Text("-");
+  ImGui::TableSetColumnIndex(10);
+  ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
+  if (ImGui::Button("Delete")) {
+    remove_symbol(entry.symbol_id);
   }
+  ImGui::PopID();
 }
 
 std::vector<uint32_t> WatchlistPanel::get_filtered_symbols() const {
@@ -301,15 +356,23 @@ const char* WatchlistPanel::get_sort_column_name(int column) {
     case 1:
       return "Exchange";
     case 2:
-      return "Price";
+      return "Last Price";
     case 3:
-      return "Change %";
+      return "Change%";
     case 4:
-      return "Volume";
+      return "Change$";
     case 5:
-      return "VWAP";
+      return "Volume";
     case 6:
-      return "Last Update";
+      return "High";
+    case 7:
+      return "Low";
+    case 8:
+      return "Open";
+    case 9:
+      return "VWAP";
+    case 10:
+      return "Action";
     default:
       return "Unknown";
   }
@@ -335,21 +398,31 @@ void WatchlistPanel::sort_watchlist() {
       case 1:  // Exchange
         result = a.exchange < b.exchange;
         break;
-      case 2:  // Price
+      case 2:  // Last Price
         result = a.price < b.price;
         break;
       case 3:  // Change %
-        result = a.change_24h < b.change_24h;
+        result = a.change_pct < b.change_pct;
         break;
-      case 4:  // Volume
+      case 4:  // Change $
+        result = a.change_dollar < b.change_dollar;
+        break;
+      case 5:  // Volume
         result = a.volume_24h < b.volume_24h;
         break;
-      case 5:  // VWAP
+      case 6:  // High
+        result = a.high_24h < b.high_24h;
+        break;
+      case 7:  // Low
+        result = a.low_24h < b.low_24h;
+        break;
+      case 8:  // Open
+        result = a.open_24h < b.open_24h;
+        break;
+      case 9:  // VWAP
         result = a.vwap < b.vwap;
         break;
-      case 6:  // Last Update
-        result = a.last_update_ts < b.last_update_ts;
-        break;
+      case 10:  // Action (not actually sorted, fallback to symbol)
       default:
         result = a.symbol < b.symbol;
     }

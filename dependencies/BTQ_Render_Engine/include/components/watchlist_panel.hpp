@@ -16,11 +16,13 @@ struct WatchlistEntry {
   std::string symbol;
   std::string exchange;
   double price = 0.0;
-  double change_24h = 0.0;
+  double change_pct = 0.0;      // Change %
+  double change_dollar = 0.0;   // Change $
   double volume_24h = 0.0;
   double vwap = 0.0;
   double high_24h = 0.0;
   double low_24h = 0.0;
+  double open_24h = 0.0;        // Opening price
   uint64_t last_update_ts = 0;
   bool is_active = true;
 };
@@ -53,9 +55,10 @@ class WatchlistPanel : public PanelBase {
   std::vector<uint32_t> display_order_;  // For custom ordering
 
   // UI state
-  int sort_column_ = 0;  // 0=symbol, 1=price, 2=change, 3=volume
+  int sort_column_ = 0;  // 0=symbol, 1=exchange, 2=last price, 3=change%, 4=change$, 5=volume, 6=high, 7=low, 8=open, 9=vwap
   bool sort_ascending_ = true;
   char filter_buffer_[256] = {0};
+  char new_symbol_buffer_[128] = {0};  // Buffer for new symbol input
   uint32_t selected_symbol_id_ = 0;
   SymbolSelectedCallback on_symbol_selected_;
 

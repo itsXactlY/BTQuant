@@ -101,6 +101,100 @@ void TimeHistogramPanel::render() {
 
         break;
       }
+      case Data::VolumeAnalysisType::CumulativeDelta: {
+        // Cumulative Delta: line chart overlay showing running sum of delta
+        // Color transitions from red to green as cumulative delta crosses zero
+        static double cum_delta_data[100];
+
+        // Calculate cumulative delta (running sum)
+        double running_sum = 0.0;
+        for (int i = 0; i < 100; ++i) {
+          double current_delta = buy_data[i] - sell_data[i];
+          running_sum += current_delta;
+          cum_delta_data[i] = running_sum;
+        }
+
+        // Plot the cumulative delta as a line chart with color transitions
+        // We'll draw segments individually to allow color changes based on sign
+        for (int i = 0; i < 99; ++i) {  // 99 segments for 100 points
+          // Determine color based on the sign of the two points to handle zero crossings
+          bool start_positive = cum_delta_data[i] >= 0;
+          bool end_positive = cum_delta_data[i+1] >= 0;
+
+          // If both points are on the same side of zero, use consistent color
+          if (start_positive == end_positive) {
+            ImVec4 color = start_positive ?
+                           ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
+                           ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
+
+            ImPlot::PushStyleColor(ImPlotCol_Line, color);
+            ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);  // Length 2: current and next point
+            ImPlot::PopStyleColor();
+          } else {
+            // Line segment crosses zero, so we need to interpolate the crossing point
+            // Find the x-coordinate where the line crosses zero
+            double dx = x_data[i+1] - x_data[i];
+            if (dx != 0.0) {  // Avoid division by zero
+              double slope = (cum_delta_data[i+1] - cum_delta_data[i]) / dx;
+              if (slope != 0.0) {  // Avoid division by zero when slope is zero
+                double zero_cross_x = x_data[i] - (cum_delta_data[i] / slope);
+
+                // Draw first segment with starting color
+                ImVec4 start_color = start_positive ?
+                                     ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
+                                     ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
+
+                // Create temporary arrays for the partial segment
+                double partial_x[2] = {x_data[i], zero_cross_x};
+                double partial_y[2] = {cum_delta_data[i], 0.0};
+
+                ImPlot::PushStyleColor(ImPlotCol_Line, start_color);
+                ImPlot::PlotLine("", partial_x, partial_y, 2);
+                ImPlot::PopStyleColor();
+
+                // Draw second segment with ending color
+                ImVec4 end_color = end_positive ?
+                                   ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
+                                   ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
+
+                double partial_x2[2] = {zero_cross_x, x_data[i+1]};
+                double partial_y2[2] = {0.0, cum_delta_data[i+1]};
+
+                ImPlot::PushStyleColor(ImPlotCol_Line, end_color);
+                ImPlot::PlotLine("", partial_x2, partial_y2, 2);
+                ImPlot::PopStyleColor();
+              } else {
+                // Slope is zero, meaning both values are zero (shouldn't happen in this branch)
+                // Just draw with start color
+                ImVec4 color = start_positive ?
+                               ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
+                               ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
+
+                ImPlot::PushStyleColor(ImPlotCol_Line, color);
+                ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);
+                ImPlot::PopStyleColor();
+              }
+            } else {
+              // x coordinates are the same (shouldn't happen in normal time series)
+              // Just draw with start color
+              ImVec4 color = start_positive ?
+                             ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for positive
+                             ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for negative
+
+              ImPlot::PushStyleColor(ImPlotCol_Line, color);
+              ImPlot::PlotLine("", &x_data[i], &cum_delta_data[i], 2);
+              ImPlot::PopStyleColor();
+            }
+          }
+        }
+
+        // Add legend entry for the cumulative delta line
+        ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+        ImPlot::PlotDummy("Cumulative Delta");  // Dummy plot for legend
+        ImPlot::PopStyleColor();
+
+        break;
+      }
       default: {
         // Fallback to regular histogram for other types
         static double y_data[100];

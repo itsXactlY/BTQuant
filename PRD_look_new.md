@@ -212,12 +212,12 @@
 ### Phase 9b: Enhanced Features [Complexity: M]
 - [x] Add color coding: green for positive change, red for negative, intensity increases with larger changes in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: S]
 - [x] Implement click-to-switch: clicking any symbol in watchlist changes all panels to display that symbol in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
-- [ ] Add watchlist groups: create multiple named watchlists (Futures, Crypto, Stocks), tab interface to switch between groups in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
-- [ ] Implement column customization: right-click header to show/hide columns, drag columns to reorder in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
-- [ ] Add sorting: click column header to sort watchlist by that metric ascending/descending in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: S]
+- [x] Add watchlist groups: create multiple named watchlists (Futures, Crypto, Stocks), tab interface to switch between groups in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
+- [x] Implement column customization: right-click header to show/hide columns, drag columns to reorder in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
+- [x] Add sorting: click column header to sort watchlist by that metric ascending/descending in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: S]
 
 ### Phase 9c: Alerts & Notifications [Complexity: M]
-- [ ] Implement watchlist alerts: trigger notification when symbol price reaches specified level, shows in alerts panel in `dependencies/BTQ_Render_Engine/src/components/watchlist_alerts.cpp` [Complexity: M]
+- [x] Implement watchlist alerts: trigger notification when symbol price reaches specified level, shows in alerts panel in `dependencies/BTQ_Render_Engine/src/components/watchlist_alerts.cpp` [Complexity: M]
 
 ---
 

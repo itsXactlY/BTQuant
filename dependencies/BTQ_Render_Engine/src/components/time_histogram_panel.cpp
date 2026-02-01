@@ -69,6 +69,38 @@ void TimeHistogramPanel::render() {
 
         break;
       }
+      case Data::VolumeAnalysisType::Delta: {
+        // Delta histogram: bars originate from zero line
+        // Positive delta extends up (green), negative delta extends down (red)
+        static double delta_data[100];
+        for (int i = 0; i < 100; ++i) {
+          delta_data[i] = buy_data[i] - sell_data[i];  // Delta = BuyVolume - SellVolume
+        }
+
+        // Separate positive and negative values for different coloring
+        static double pos_values[100], neg_values[100];
+        for (int i = 0; i < 100; ++i) {
+          if (delta_data[i] >= 0) {
+            pos_values[i] = delta_data[i];
+            neg_values[i] = 0.0;
+          } else {
+            pos_values[i] = 0.0;
+            neg_values[i] = delta_data[i];
+          }
+        }
+
+        // Plot positive delta values (green)
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
+        ImPlot::PlotBars("Positive Delta", x_data, pos_values, 100, 0.8);
+        ImPlot::PopStyleColor();
+
+        // Plot negative delta values (red)
+        ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
+        ImPlot::PlotBars("Negative Delta", x_data, neg_values, 100, 0.8);
+        ImPlot::PopStyleColor();
+
+        break;
+      }
       default: {
         // Fallback to regular histogram for other types
         static double y_data[100];

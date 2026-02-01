@@ -108,8 +108,10 @@ set(DASHBOARD_SOURCES
     src/components/scatter_plot_panel.cpp
     src/components/time_series_panel.cpp
     src/components/time_statistics_panel.cpp
+    src/components/time_histogram_panel.cpp
     src/components/screener_panel.cpp
     src/components/log_panel.cpp
+    src/components/multi_vwap_panel.cpp
     src/components/performance_monitor_panel.cpp
     src/trading/trading_interface.cpp
     src/trading/order_manager.cpp

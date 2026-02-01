@@ -632,6 +632,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       auto source_it = std::find(display_order_.begin(), display_order_.end(), source_symbol_id);
       auto target_it = std::find(display_order_.begin(), display_order_.end(), entry.symbol_id);
 
+      // Prevent dropping on the same item (self-drag)
       if (source_it != display_order_.end() && target_it != display_order_.end() && source_symbol_id != entry.symbol_id) {
         // Calculate new position for the dragged item based on mouse position
         int source_idx = std::distance(display_order_.begin(), source_it);

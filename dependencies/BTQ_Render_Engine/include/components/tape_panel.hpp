@@ -42,15 +42,68 @@ class TapePanel : public PanelBase {
   std::string symbol_name_ = "BTC-USDT";
 
   // Configuration
-  static constexpr size_t MAX_VISIBLE_TRADES = 50;
+  // Note: With virtualized scrolling using ImGuiListClipper, we can efficiently handle 100,000+ trades
+  // The MAX_VISIBLE_TRADES value represents the maximum number of trades stored in memory
+  static constexpr size_t MAX_VISIBLE_TRADES = 100000;  // Increased to handle large datasets
   bool auto_scroll_ = true;
+
+  // Filtering options
+  double min_size_filter_ = 0.0;
+  std::string exchange_filter_ = "";  // Empty means no filter
+  uint64_t start_time_filter_ = 0;    // 0 means no filter
+  uint64_t end_time_filter_ = 0;      // 0 means no filter (until now)
+
+  // UI state for filters
+  bool show_filters_ = false;
+  bool show_histogram_ = false;
+  char min_size_input_[32] = "0.0";
+  char exchange_input_[64] = "";
+  char start_time_input_[32] = "";
+  char end_time_input_[32] = "";
 
   // Cached trades for rendering
   std::vector<RenderEngine::TradeData> cached_trades_;
 
+  // Trade clustering detection parameters
+  static constexpr uint64_t CLUSTER_TIME_WINDOW_US = 1000000;  // 1 second in microseconds
+  static constexpr int MIN_CLUSTER_SIZE = 5;                   // Minimum trades to form a cluster
+  static constexpr double PRICE_MATCH_TOLERANCE = 0.0001;      // Tolerance for price matching
+
   void render_trade_table();
   void render_controls();
+  void render_filter_controls();
+  void render_trade_size_histogram();
+  uint64_t parseTimeString(const std::string& time_str);
   void subscribe_to_updates();
+
+  // Trade clustering detection
+  bool isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const;
+
+  // Trade size histogram functions
+  struct LogBucket {
+    double lower_bound;
+    double upper_bound;
+    int count;
+    double total_size;
+  };
+
+  std::vector<LogBucket> computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const;
+
+  // Trade pace indicator data structures
+  struct TradePaceData {
+    uint64_t timestamp;  // Time when the measurement was taken
+    double trades_per_minute;  // Trades per minute at this time
+  };
+
+  // Trade pace history for different time windows
+  std::vector<TradePaceData> trade_pace_1min_history_;
+  std::vector<TradePaceData> trade_pace_5min_history_;
+  std::vector<TradePaceData> trade_pace_15min_history_;
+
+  // Methods for trade pace calculation
+  double calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const;
+  void updateTradePaceHistory();
+  void renderTradePaceChart();
 };
 
 }  // namespace BTQuant

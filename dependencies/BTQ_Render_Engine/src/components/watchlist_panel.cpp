@@ -425,6 +425,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       // Store previous values for animation
       double prev_price = it->second.price;
       double prev_vwap = it->second.vwap;
+      double prev_volume = it->second.volume_24h;
       double prev_change_pct = it->second.change_pct;
       double prev_change_dollar = it->second.change_dollar;
 
@@ -436,6 +437,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       // Store the previous values in the entry for animation purposes
       it->second.previous_price = prev_price;
       it->second.previous_vwap = prev_vwap;
+      it->second.previous_volume = prev_volume;
 
       // Calculate 24h change using the longest available timeframe candles
       auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
@@ -947,8 +949,19 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   ImGui::TableSetColumnIndex(5);
-  // Format volume with K/M/B suffix for readability
-  ImGui::Text("%s", formatFinancialNumber(entry.volume_24h, 2).c_str());
+  // Apply color coding to volume based on comparison with previous volume if available
+  ImVec4 volume_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+
+  // Calculate color based on volume change (green for increase, red for decrease)
+  if (entry.previous_volume != 0.0) {
+    double volume_change = entry.volume_24h - entry.previous_volume;
+    double volume_change_pct = (entry.previous_volume != 0.0) ? ((volume_change / entry.previous_volume) * 100.0) : 0.0;
+
+    // Use the same color calculation as other change indicators
+    volume_color = calculateChangeColor(volume_change_pct, false);
+  }
+
+  ImGui::TextColored(volume_color, "%s", formatFinancialNumber(entry.volume_24h, 2).c_str());
 
   // Add tooltip to explain Volume
   if (ImGui::IsItemHovered()) {
@@ -985,53 +998,16 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TextColored(open_color, "%s", formatPrice(entry.open_24h).c_str());
 
   ImGui::TableSetColumnIndex(9);
-  // Apply color coding to VWAP based on relationship to current price (green if price > VWAP, red if price < VWAP)
-  // Also apply color coding for VWAP changes (green for increase, red for decrease)
+  // Apply color coding to VWAP based on change from previous value (green for increase, red for decrease)
   ImVec4 vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
 
-  // Calculate color based on price vs VWAP relationship (primary indicator)
-  ImVec4 price_vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-  if (entry.price != 0.0 && entry.vwap != 0.0) {
-    double price_vwap_diff = entry.price - entry.vwap;
-    double abs_diff = std::abs(price_vwap_diff);
-
-    // Calculate intensity based on the difference between price and VWAP
-    double max_expected_diff = std::max(entry.price * 0.1, 1.0); // 10% of price or $1 as max for intensity calculation
-    double intensity_factor = std::min(1.0, abs_diff / max_expected_diff);
-    double min_intensity = 0.3f;
-    double max_intensity = 0.9f;
-    double color_intensity = min_intensity + (max_intensity - min_intensity) * intensity_factor;
-
-    if (price_vwap_diff >= 0) {
-      // Price above VWAP - green
-      price_vwap_color = ImVec4(0.2f, color_intensity, 0.3f, 1.0f);
-    } else {
-      // Price below VWAP - red
-      price_vwap_color = ImVec4(color_intensity, 0.3f, 0.3f, 1.0f);
-    }
-  }
-
-  // Calculate color based on VWAP change (secondary indicator)
-  ImVec4 vwap_change_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+  // Calculate color based on VWAP change (green for increase, red for decrease)
   if (entry.previous_vwap != 0.0) {
     double vwap_change = entry.vwap - entry.previous_vwap;
     double vwap_change_pct = (entry.previous_vwap != 0.0) ? ((vwap_change / entry.previous_vwap) * 100.0) : 0.0;
 
     // Use the same color calculation as other change indicators
-    vwap_change_color = calculateChangeColor(vwap_change_pct, true);
-  }
-
-  // Combine both color indicators - prioritize price vs VWAP relationship but blend with VWAP change color
-  vwap_color = price_vwap_color; // Start with price vs VWAP color
-
-  // Blend with VWAP change color to show both indicators
-  // When not animating, blend the two color signals
-  if (entry.animation_timer <= 0.0f) {
-    // Blend the colors: 70% weight to price vs VWAP relationship, 30% to VWAP change
-    vwap_color.x = 0.7f * price_vwap_color.x + 0.3f * vwap_change_color.x;
-    vwap_color.y = 0.7f * price_vwap_color.y + 0.3f * vwap_change_color.y;
-    vwap_color.z = 0.7f * price_vwap_color.z + 0.3f * vwap_change_color.z;
-    vwap_color.w = 1.0f;
+    vwap_color = calculateChangeColor(vwap_change_pct, true);
   }
 
   // Apply animation effect on top of color coding if recently updated

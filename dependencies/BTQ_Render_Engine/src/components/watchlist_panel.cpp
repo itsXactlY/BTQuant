@@ -338,21 +338,22 @@ void WatchlistPanel::render_filter_input() {
 }
 
 void WatchlistPanel::render_table_header() {
+  // Setup table columns with appropriate widths for better readability
   ImGui::TableSetupColumn(
       "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_DefaultSort);
+  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 70.0f);
   ImGui::TableSetupColumn(
-      "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+      "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 90.0f);
   ImGui::TableSetupColumn(
-      "Change%", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+      "Change%", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn(
-      "Change$", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
+      "Change$", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn(
-      "Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending);
-  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_DefaultSort);
-  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_DefaultSort);
-  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_DefaultSort);
-  ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_DefaultSort);
+      "Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+  ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 60.0f);
   ImGui::TableHeadersRow();
 
@@ -482,40 +483,42 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    ImGui::TextColored(flash_color, "%.4f", animated_price);
+    ImGui::TextColored(flash_color, "%.5g", animated_price);
   } else {
-    ImGui::Text("%.4f", entry.price);
+    ImGui::Text("%.5g", entry.price);
   }
 
   ImGui::TableSetColumnIndex(3);
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
-  ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
+  ImGui::TextColored(change_pct_color, "%+.3g%%", entry.change_pct);
 
   ImGui::TableSetColumnIndex(4);
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
-  ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
+  ImGui::TextColored(change_dollar_color, "%+.3g", entry.change_dollar);
 
   ImGui::TableSetColumnIndex(5);
-  // Format volume with K/M suffix for readability
-  if (entry.volume_24h >= 1e6) {
-    ImGui::Text("%.2fM", entry.volume_24h / 1e6);
+  // Format volume with K/M/B suffix for readability
+  if (entry.volume_24h >= 1e9) {
+    ImGui::Text("%.3gB", entry.volume_24h / 1e9);
+  } else if (entry.volume_24h >= 1e6) {
+    ImGui::Text("%.3gM", entry.volume_24h / 1e6);
   } else if (entry.volume_24h >= 1e3) {
-    ImGui::Text("%.2fK", entry.volume_24h / 1e3);
+    ImGui::Text("%.3gK", entry.volume_24h / 1e3);
   } else {
     ImGui::Text("%.0f", entry.volume_24h);
   }
 
   ImGui::TableSetColumnIndex(6);
-  ImGui::Text("%.4f", entry.high_24h);
+  ImGui::Text("%.5g", entry.high_24h);
 
   ImGui::TableSetColumnIndex(7);
-  ImGui::Text("%.4f", entry.low_24h);
+  ImGui::Text("%.5g", entry.low_24h);
 
   ImGui::TableSetColumnIndex(8);
-  ImGui::Text("%.4f", entry.open_24h);
+  ImGui::Text("%.5g", entry.open_24h);
 
   ImGui::TableSetColumnIndex(9);
-  ImGui::Text("%.4f", entry.vwap);
+  ImGui::Text("%.5g", entry.vwap);
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier

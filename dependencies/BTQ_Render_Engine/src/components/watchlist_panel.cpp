@@ -109,11 +109,18 @@ void WatchlistPanel::render() {
 
   render_panel_header();
 
-  // Section for adding new symbols - enhanced UI with better visual grouping
-  ImGui::Text("Add Symbol:");
+  // Enhanced section for adding new symbols with better visual grouping
+  ImGui::Spacing();
+  ImGui::Text("Add Symbol to Watchlist:");
   ImGui::SameLine();
+
+  // Input field for new symbol with improved styling
+  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.15f, 1.0f)); // Darker background for input
+  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
   ImGui::SetNextItemWidth(150);
   bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+  ImGui::PopStyleColor(3);
 
   // Add tooltip to explain the input field
   if (ImGui::IsItemHovered()) {
@@ -333,8 +340,9 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       it->second.vwap = analytics.vwap;
       it->second.last_update_ts = analytics.last_trade_time;
 
-      // Store the previous price in the entry for animation purposes
+      // Store the previous values in the entry for animation purposes
       it->second.previous_price = prev_price;
+      it->second.previous_vwap = prev_vwap;
 
       // Calculate 24h change using the longest available timeframe candles
       auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
@@ -493,13 +501,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   }
 
   // Drag and drop source
-  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
     // Set payload to carry the symbol_id
     ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
 
     // Display preview of what is being dragged with enhanced visual
     ImGui::Text("Dragging: %s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
-    ImGui::Text("Release to drop at new position");
 
     ImGui::EndDragDropSource();
   }
@@ -522,12 +529,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
         // Determine if dropping above or below the target row
         // Get the height of the current row to determine drop zone
-        float row_height = ImGui::GetTextLineHeightWithSpacing();
-        float current_y = ImGui::GetCursorScreenPos().y;
+        ImVec2 cell_rect_min = ImGui::GetItemRectMin();
+        ImVec2 cell_rect_max = ImGui::GetItemRectMax();
+        float row_height = cell_rect_max.y - cell_rect_min.y;
         float mouse_y = ImGui::GetMousePos().y;
 
         // If mouse is in upper half of the row, insert above; lower half, insert below
-        bool drop_above = (mouse_y - current_y) < (row_height / 2.0f);
+        bool drop_above = (mouse_y - cell_rect_min.y) < (row_height / 2.0f);
 
         // Adjust target index based on drop position
         if (!drop_above) {
@@ -542,10 +550,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
         // Adjust target index if source was before target (since we removed an element)
         if (source_idx < target_idx) {
-          // If we removed an item before the target position, adjust the target index
-          if (source_idx < target_idx) {
-            target_idx--;
-          }
+          target_idx--;  // If we removed an item before the target position, adjust the target index
         }
 
         // Insert the moved item at the new position
@@ -602,25 +607,27 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Create a pulsing effect by interpolating between previous and current price
     double animated_price = entry.previous_price + (entry.price - entry.previous_price) * progress;
 
-    // Enhanced flash animation - more prominent flash effect
+    // Enhanced flash animation - more prominent flash effect with smoother transition
     ImVec4 flash_color;
 
     // Calculate flash timing for brief flash effect with more intensity
-    float flash_phase = progress * 3.0f; // Speed up the flash cycle for more intensity
-    if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
-    if (flash_phase > 1.0f) flash_phase = 0.0f; // Clamp to 0 after bounce
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
 
-    // More pronounced flash colors with better contrast
+    // More pronounced flash colors with better contrast and smoother transitions
     if (entry.price > entry.previous_price) {
-      // Price went up - bright green flash then fade to normal
-      float green_intensity = 0.5f + 0.5f * flash_phase;
-      float red_intensity = 0.2f * (1.0f - flash_phase);
-      flash_color = ImVec4(red_intensity, green_intensity, 0.2f * (1.0f - flash_phase), 1.0f);
+      // Price went up - bright green flash then fade to normal with smooth transition
+      float green_intensity = 0.3f + 0.7f * flash_phase; // From 30% to 100% intensity
+      float red_intensity = 0.1f * (1.0f - flash_phase); // Fade from slight red to none
+      float blue_intensity = 0.1f * (1.0f - flash_phase); // Fade from slight blue to none
+      flash_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
     } else if (entry.price < entry.previous_price) {
-      // Price went down - bright red flash then fade to normal
-      float red_intensity = 0.5f + 0.5f * flash_phase;
-      float green_intensity = 0.3f * (1.0f - flash_phase);
-      flash_color = ImVec4(red_intensity, green_intensity, green_intensity, 1.0f);
+      // Price went down - bright red flash then fade to normal with smooth transition
+      float red_intensity = 0.3f + 0.7f * flash_phase; // From 30% to 100% intensity
+      float green_intensity = 0.1f * (1.0f - flash_phase); // Fade from slight green to none
+      float blue_intensity = 0.1f * (1.0f - flash_phase); // Fade from slight blue to none
+      flash_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
     } else {
       // No change - use normal color
       flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -641,6 +648,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(3);
   // Apply subtle animation to change percentage when it updates significantly
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
+
+  // Apply animation effect to change percentage if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Calculate flash timing for change percentage animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhance the color intensity during animation
+    if (entry.change_pct >= 0.0) {
+      // Positive change - enhance green component during animation
+      change_pct_color.x = change_pct_color.x * (0.7f + 0.3f * flash_phase); // Red
+      change_pct_color.y = std::min(1.0f, change_pct_color.y * (0.7f + 0.3f * flash_phase)); // Green
+      change_pct_color.z = change_pct_color.z * (0.7f + 0.3f * flash_phase); // Blue
+    } else {
+      // Negative change - enhance red component during animation
+      change_pct_color.x = std::min(1.0f, change_pct_color.x * (0.7f + 0.3f * flash_phase)); // Red
+      change_pct_color.y = change_pct_color.y * (0.7f + 0.3f * flash_phase); // Green
+      change_pct_color.z = change_pct_color.z * (0.7f + 0.3f * flash_phase); // Blue
+    }
+  }
+
   ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
 
   // Add tooltip to explain Change%
@@ -653,6 +685,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::TableSetColumnIndex(4);
   // Apply subtle animation to change dollar when it updates significantly
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
+
+  // Apply animation effect to change dollar if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Calculate flash timing for change dollar animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhance the color intensity during animation
+    if (entry.change_dollar >= 0.0) {
+      // Positive change - enhance green component during animation
+      change_dollar_color.x = change_dollar_color.x * (0.7f + 0.3f * flash_phase); // Red
+      change_dollar_color.y = std::min(1.0f, change_dollar_color.y * (0.7f + 0.3f * flash_phase)); // Green
+      change_dollar_color.z = change_dollar_color.z * (0.7f + 0.3f * flash_phase); // Blue
+    } else {
+      // Negative change - enhance red component during animation
+      change_dollar_color.x = std::min(1.0f, change_dollar_color.x * (0.7f + 0.3f * flash_phase)); // Red
+      change_dollar_color.y = change_dollar_color.y * (0.7f + 0.3f * flash_phase); // Green
+      change_dollar_color.z = change_dollar_color.z * (0.7f + 0.3f * flash_phase); // Blue
+    }
+  }
+
   ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
 
   // Add tooltip to explain Change$
@@ -686,9 +743,32 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Apply subtle animation to VWAP when it updates significantly
   ImVec4 vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
   if (entry.animation_timer > 0.0f) {
-    // Slightly highlight VWAP when there's an active animation
+    // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
-    vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
+
+    // Calculate flash timing for VWAP animation
+    float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
+    if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
+    else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    // Enhanced VWAP animation with more visual feedback
+    // Calculate if VWAP increased or decreased from previous value
+    double current_vwap = entry.vwap;
+    double previous_vwap = entry.previous_vwap;
+    if (current_vwap > previous_vwap) {
+      // VWAP went up - light blue highlight
+      float blue_intensity = 0.6f + 0.4f * flash_phase; // From 60% to 100% intensity
+      float green_intensity = 0.8f + 0.2f * flash_phase; // From 80% to 100% intensity
+      vwap_color = ImVec4(0.6f, green_intensity, blue_intensity, 1.0f);
+    } else if (current_vwap < previous_vwap) {
+      // VWAP went down - light orange/red highlight
+      float red_intensity = 0.8f + 0.2f * flash_phase; // From 80% to 100% intensity
+      float green_intensity = 0.7f - 0.2f * flash_phase; // From 70% to 50% intensity
+      vwap_color = ImVec4(red_intensity, green_intensity, 0.6f - 0.3f * flash_phase, 1.0f);
+    } else {
+      // No significant change - light blue tint
+      vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
+    }
   }
   ImGui::TextColored(vwap_color, "%s", formatVWAP(entry.vwap).c_str());
 
@@ -713,7 +793,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f)); // Small padding but slightly larger for better click area
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
 
-  if (ImGui::Button("×##DeleteBtn")) {  // Use × symbol for better visual representation
+  if (ImGui::Button("✕##DeleteBtn")) {  // Use ✕ symbol for better visual representation
     // Show confirmation dialog before deleting
     symbol_to_delete_ = entry.symbol_id;
     show_delete_confirmation_ = true;
@@ -840,12 +920,8 @@ void WatchlistPanel::sort_watchlist() {
 }
 
 void WatchlistPanel::handle_drag_drop_reordering() {
-  // This method handles the drag and drop reordering logic
-  // The actual reordering is handled in render_table_row when drag and drop occurs
-  // This method can be used for additional processing if needed
-
-  // Currently, the drag and drop reordering is handled directly in render_table_row
-  // This method is kept for potential future enhancements or cleanup operations
+  // This method is now deprecated as drag and drop reordering is handled directly in render_table_row
+  // when drag and drop occurs. This ensures immediate visual feedback and proper state management.
 }
 
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {

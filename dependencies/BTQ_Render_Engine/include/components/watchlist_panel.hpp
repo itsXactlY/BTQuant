@@ -29,6 +29,7 @@ struct WatchlistEntry {
 
   // Animation state for price changes
   double previous_price = 0.0;
+  double previous_vwap = 0.0;  // Previous VWAP for animation
   float animation_timer = 0.0f;
   static constexpr float ANIMATION_DURATION = 0.8f; // Animation duration in seconds - increased for more visible flash effect
 };

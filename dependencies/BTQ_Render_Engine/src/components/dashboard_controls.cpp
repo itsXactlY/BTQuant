@@ -8,6 +8,7 @@
 #include <cctype>
 
 #include "../../include/components/panel_manager.hpp"
+#include "../../include/components/chart_panel.hpp"
 #include "../../include/ui/ui_base.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
@@ -865,23 +866,26 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
     return;
   }
 
+  // Update all charts managed by the chart manager
+  auto chart_manager = panel_manager_->get_chart_manager();
+  if (chart_manager) {
+    chart_manager->update_all_chart_timeframes(timeframe);
+  }
+
   // Get all panel IDs
   auto panel_ids = panel_manager_->get_all_panel_ids();
 
-  // Iterate through all panels and update chart panels
+  // Iterate through all panels and update chart panels specifically
   for (uint32_t panel_id : panel_ids) {
     auto panel = panel_manager_->get_panel_by_id(panel_id);
     if (!panel) continue;
 
-    // Check if this is a chart panel - we need to cast it appropriately
-    // Since we don't have direct access to ChartPanel type here, we'll use dynamic_cast
-    // But first we need to include the header
-
-    // For now, we'll use the chart manager to update the charts associated with chart panels
-    auto chart_manager = panel_manager_->get_chart_manager();
-    if (chart_manager) {
-      // Update all charts managed by the chart manager
-      chart_manager->update_all_chart_timeframes(timeframe);
+    // Only ChartPanel has a direct set_timeframe method, so we only update those directly
+    if (panel->get_config().type == PanelType::CHART) {
+      ChartPanel* chart_panel = dynamic_cast<ChartPanel*>(panel);
+      if (chart_panel) {
+        chart_panel->set_timeframe(timeframe);
+      }
     }
   }
 }

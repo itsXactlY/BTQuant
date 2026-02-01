@@ -11,6 +11,11 @@
 
 namespace BTQuant {
 
+enum class DepthChartVisualizationMode {
+  CUMULATIVE_AREA,  // Current mode: cumulative depth as area chart
+  SEPARATE_SIDES    // Alternative mode: bid area on left, ask area on right
+};
+
 /**
  * DepthChartPanel - Cumulative bid/ask depth visualization
  *
@@ -40,6 +45,7 @@ class DepthChartPanel : public PanelBase {
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";
+  DepthChartVisualizationMode visualization_mode_ = DepthChartVisualizationMode::CUMULATIVE_AREA;
 
   // Cached orderbook data - pre-computed for rendering
   RenderEngine::OrderbookData cached_orderbook_;
@@ -54,6 +60,8 @@ class DepthChartPanel : public PanelBase {
 
   void compute_depth_data();
   void render_depth_chart_implot();
+  void render_depth_chart_separate_sides();
+  void render_visualization_mode_selector();
   void render_stats();
   void subscribe_to_updates();
 };

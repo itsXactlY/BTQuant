@@ -12,7 +12,7 @@ namespace BTQuant {
 DepthChartPanel::DepthChartPanel(const PanelConfig& config,
                                  std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), bridge_(bridge), processor_(processor), visualization_mode_(DepthChartVisualizationMode::CUMULATIVE_AREA) {
   // Pre-allocate vectors for typical orderbook depth
   bid_prices_.reserve(50);
   bid_cumulative_.reserve(50);
@@ -76,6 +76,10 @@ void DepthChartPanel::render() {
   render_stats();
   ImGui::Separator();
 
+  // Render visualization mode selector
+  render_visualization_mode_selector();
+  ImGui::Separator();
+
   // C++26 Reactive: Refresh data when dirty or on first frame with valid symbol
   if (processor_ && symbol_id_ != 0) {
     // Always check orderbook if we have a valid symbol
@@ -89,7 +93,15 @@ void DepthChartPanel::render() {
     }
   }
 
-  render_depth_chart_implot();
+  // Render based on selected visualization mode
+  switch (visualization_mode_) {
+    case DepthChartVisualizationMode::CUMULATIVE_AREA:
+      render_depth_chart_implot();
+      break;
+    case DepthChartVisualizationMode::SEPARATE_SIDES:
+      render_depth_chart_separate_sides();
+      break;
+  }
 
   end_panel_window();
 }
@@ -310,6 +322,122 @@ void DepthChartPanel::render_depth_chart_implot() {
       char mid_label[32];
       snprintf(mid_label, sizeof(mid_label), "Mid: %.2f", mid_price_);
       ImPlot::Annotation(mid_price_, max_depth_ * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5), true,
+                         "%s", mid_label);
+    }
+
+    ImPlot::EndPlot();
+  }
+}
+
+void DepthChartPanel::render_visualization_mode_selector() {
+  const char* items[] = {"Cumulative Area", "Separate Sides"};
+  int current_item = static_cast<int>(visualization_mode_);
+
+  ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12);
+  if (ImGui::Combo("##DepthChartMode", &current_item, items, IM_ARRAYSIZE(items))) {
+    visualization_mode_ = static_cast<DepthChartVisualizationMode>(current_item);
+    markDirty(); // Trigger recomputation if needed
+  }
+
+  ImGui::SameLine();
+  ImGui::Text("Visualization Mode:");
+}
+
+void DepthChartPanel::render_depth_chart_separate_sides() {
+  if (bid_prices_.empty() && ask_prices_.empty()) {
+    ImGui::Text("Waiting for orderbook data...");
+    ImGui::Text("(Bids: %zu, Asks: %zu)", cached_orderbook_.bids.size(),
+                cached_orderbook_.asks.size());
+    return;
+  }
+
+  ImVec2 region = ImGui::GetContentRegionAvail();
+  if (region.x < 50 || region.y < 50) return;
+
+  // Calculate axis limits
+  double price_min = mid_price_ * 0.995;
+  double price_max = mid_price_ * 1.005;
+
+  if (!bid_prices_.empty()) {
+    price_min = std::min(price_min, bid_prices_.front()); // Use front for min bid price
+  }
+  if (!ask_prices_.empty()) {
+    price_max = std::max(price_max, ask_prices_.back()); // Use back for max ask price
+  }
+
+  // Unique plot ID
+  char plot_id[64];
+  snprintf(plot_id, sizeof(plot_id), "##DepthChartSeparate_%s", config_.title.c_str());
+
+  // Styling: Neon Financial Colors (Green/Red) from ThemeManager
+  const auto& colors = ThemeManager::getInstance().getColors();
+  ImVec4 col_bid_fill = colors.accent_green;
+  col_bid_fill.w = 0.2f;
+  ImVec4 col_bid_line = colors.accent_green;
+  ImVec4 col_ask_fill = colors.accent_red;
+  col_ask_fill.w = 0.2f;
+  ImVec4 col_ask_line = colors.accent_red;
+
+  // Setup Plot Flags for clean look
+  if (ImPlot::BeginPlot(plot_id, region,
+                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText |
+                            ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMenus)) {
+    // Set axis limits - cleaner look without labels
+    ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoLabel,
+                      ImPlotAxisFlags_NoLabel | ImPlotAxisFlags_Opposite);
+    ImPlot::SetupAxisLimits(ImAxis_X1, price_min, price_max, ImPlotCond_Always);
+
+    // Calculate max depth for Y-axis scaling
+    double max_depth_for_axis = max_depth_ * 1.1;
+    ImPlot::SetupAxisLimits(ImAxis_Y1, -max_depth_for_axis, max_depth_for_axis, ImPlotCond_Always);
+
+    // Plot bid depth (Neon Green) - on the negative side of Y-axis
+    if (!bid_prices_.empty()) {
+      // Create inverted data for bids (negative values)
+      std::vector<double> bid_negative_values(bid_cumulative_.size());
+      for (size_t i = 0; i < bid_cumulative_.size(); ++i) {
+        bid_negative_values[i] = -bid_cumulative_[i];
+      }
+
+      ImPlot::PushStyleColor(ImPlotCol_Fill, col_bid_fill);
+      ImPlot::PushStyleColor(ImPlotCol_Line, col_bid_line);
+      ImPlot::PlotShaded("Bids", bid_prices_.data(), bid_negative_values.data(),
+                         static_cast<int>(bid_prices_.size()), 0.0);
+      ImPlot::PlotLine("Bids", bid_prices_.data(), bid_negative_values.data(),
+                       static_cast<int>(bid_prices_.size()));
+      ImPlot::PopStyleColor(2);
+    }
+
+    // Plot ask depth (Neon Red) - on the positive side of Y-axis
+    if (!ask_prices_.empty()) {
+      ImPlot::PushStyleColor(ImPlotCol_Fill, col_ask_fill);
+      ImPlot::PushStyleColor(ImPlotCol_Line, col_ask_line);
+      ImPlot::PlotShaded("Asks", ask_prices_.data(), ask_cumulative_.data(),
+                         static_cast<int>(ask_prices_.size()), 0.0);
+      ImPlot::PlotLine("Asks", ask_prices_.data(), ask_cumulative_.data(),
+                       static_cast<int>(ask_prices_.size()));
+      ImPlot::PopStyleColor(2);
+    }
+
+    // Draw zero-depth horizontal line
+    double zero_line_x[2] = {price_min, price_max};
+    double zero_line_y[2] = {0, 0};
+    ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.8f, 0.8f, 0.8f, 0.3f));
+    ImPlot::PlotLine("Zero", zero_line_x, zero_line_y, 2);
+    ImPlot::PopStyleColor();
+
+    // Draw mid-price vertical line
+    if (mid_price_ > 0) {
+      double mid_line_x[2] = {mid_price_, mid_price_};
+      double mid_line_y[2] = {-max_depth_for_axis, max_depth_for_axis};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 1.0f, 0.5f));
+      ImPlot::PlotLine("Mid", mid_line_x, mid_line_y, 2);
+      ImPlot::PopStyleColor();
+
+      // Annotation for mid price
+      char mid_label[32];
+      snprintf(mid_label, sizeof(mid_label), "Mid: %.2f", mid_price_);
+      ImPlot::Annotation(mid_price_, max_depth_for_axis * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5), true,
                          "%s", mid_label);
     }
 

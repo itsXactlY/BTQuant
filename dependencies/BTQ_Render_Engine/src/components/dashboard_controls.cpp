@@ -43,6 +43,9 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::SameLine();
 
+      // Static buffer for symbol search input
+      static char symbol_search_buffer[256] = "";
+
       // Load symbols if needed
       if (needs_refresh_ || !symbols_loaded_) {
         if (panel_manager_) {
@@ -89,12 +92,17 @@ void DashboardControls::render_dashboard_controls() {
 
           symbols_loaded_ = true;
           needs_refresh_ = false;
+
+          // Update the search buffer to reflect current input
+          strncpy(symbol_search_buffer, symbol_input_buffer_.c_str(), sizeof(symbol_search_buffer) - 1);
+          symbol_search_buffer[sizeof(symbol_search_buffer) - 1] = '\0';
         }
       }
 
       // Search input for symbol selection
       ImGui::Text("Select Symbol:");
-      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", &symbol_input_buffer_)) {
+      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", symbol_search_buffer, sizeof(symbol_search_buffer))) {
+        symbol_input_buffer_ = std::string(symbol_search_buffer);
         // Filter symbols based on search input
         filtered_symbols_.clear();
 

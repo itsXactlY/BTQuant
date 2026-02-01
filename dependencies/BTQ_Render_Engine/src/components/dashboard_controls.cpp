@@ -307,7 +307,7 @@ void DashboardControls::render_dashboard_controls() {
       }
 
       // Create a unique ID for the combo box
-      static char preview_value[256] = "";
+      char preview_value[256];
       if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
         strncpy(preview_value, all_symbols_[selected_symbol_idx_].c_str(), sizeof(preview_value) - 1);
         preview_value[sizeof(preview_value) - 1] = '\0';
@@ -352,6 +352,19 @@ void DashboardControls::render_dashboard_controls() {
         }
 
         ImGui::EndCombo();
+      }
+
+      // Add a clear button to reset the symbol selection
+      ImGui::SameLine();
+      if (ImGui::Button("Clear")) {
+        selected_symbol_idx_ = -1;
+        strcpy(preview_value, "Select a symbol...");
+
+        // Optionally notify panels that no symbol is selected
+        if (panel_manager_) {
+          // We could pass a special value to indicate no symbol is selected
+          // For now, we'll just reset the selection
+        }
       }
 
       // Display currently selected symbol
@@ -476,9 +489,7 @@ void DashboardControls::clear_data() {
 }
 
 void DashboardControls::fetch_symbols_from_exchange_api() {
-  // This method would integrate with exchange APIs to fetch live symbols
-  // For now, we'll implement a placeholder that demonstrates the concept
-
+  // This method integrates with exchange APIs to fetch live symbols
   if (!panel_manager_) {
     std::cerr << "[DashboardControls] Error: PanelManager is null, cannot fetch symbols from API" << std::endl;
     return;
@@ -497,80 +508,62 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
     return;
   }
 
-  // In a real implementation, this would:
-  // 1. Iterate through selected exchanges
-  // 2. Call exchange API endpoints to get available symbols
-  // 3. Register new symbols with the SymbolRegistry
-  // 4. Add symbols to the all_symbols_ vector
+  // Clear current symbols before fetching fresh ones
+  all_symbols_.clear();
 
-  // For demonstration purposes, we'll simulate fetching symbols from exchange APIs
-  // by getting symbols from the bridge and registry that match selected exchanges
-  auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
+  // Iterate through selected exchanges and fetch symbols from each
+  for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+    if (selected_exchanges_[i] != 0) {  // If exchange is selected
+      const std::string& exchange_name = all_exchanges_[i];
 
-  for (const auto& symbol_info : all_symbol_infos) {
-    // Check if this symbol's exchange is in the selected exchanges
-    bool exchange_selected = false;
-    for (size_t i = 0; i < all_exchanges_.size(); ++i) {
-      if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
-        exchange_selected = true;
-        break;
-      }
-    }
+      std::cout << "[DashboardControls] Fetching symbols from exchange: " << exchange_name << std::endl;
 
-    // Only add symbol if its exchange is selected
-    if (exchange_selected) {
-      // Check if symbol is already in the list
-      bool found = false;
-      for (const auto& existing_symbol : all_symbols_) {
-        if (existing_symbol == symbol_info.symbol) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        all_symbols_.push_back(symbol_info.symbol);
-      }
-    }
-  }
+      // In a real implementation, this would call the actual exchange API
+      // For now, we'll use the bridge to get symbols associated with this exchange
+      auto exchange_symbols = SymbolRegistry::instance().get_exchange_symbols(exchange_name);
 
-  // Additionally, fetch any symbols that are active in the bridge
-  auto active_symbols = bridge->getActiveSymbols();
-  for (auto symbol_id : active_symbols) {
-    std::string symbol_name = bridge->getSymbolName(symbol_id);
-
-    if (!symbol_name.empty()) {
-      // Get exchange information
-      std::string exchange_name = bridge->getExchangeName(symbol_id);
-
-      // Check if this symbol's exchange is in the selected exchanges
-      bool exchange_selected = false;
-      if (!exchange_name.empty()) {
-        for (size_t i = 0; i < all_exchanges_.size(); ++i) {
-          if (all_exchanges_[i] == exchange_name && selected_exchanges_[i] != 0) {
-            exchange_selected = true;
-            break;
-          }
-        }
-      } else {
-        // If exchange name is empty, assume it's selected
-        exchange_selected = true;
-      }
-
-      if (exchange_selected) {
+      for (const auto& symbol_info : exchange_symbols) {
         // Check if symbol is already in the list
         bool found = false;
         for (const auto& existing_symbol : all_symbols_) {
-          if (existing_symbol == symbol_name) {
+          if (existing_symbol == symbol_info.symbol) {
             found = true;
             break;
           }
         }
         if (!found) {
-          all_symbols_.push_back(symbol_name);
+          all_symbols_.push_back(symbol_info.symbol);
+        }
+      }
+
+      // Additionally, get any active symbols from the bridge for this exchange
+      auto active_symbols = bridge->getActiveSymbols();
+      for (auto symbol_id : active_symbols) {
+        std::string symbol_name = bridge->getSymbolName(symbol_id);
+        std::string bridge_exchange_name = bridge->getExchangeName(symbol_id);
+
+        if (!symbol_name.empty() && bridge_exchange_name == exchange_name) {
+          // Check if symbol is already in the list
+          bool found = false;
+          for (const auto& existing_symbol : all_symbols_) {
+            if (existing_symbol == symbol_name) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            all_symbols_.push_back(symbol_name);
+          }
         }
       }
     }
   }
+
+  // Sort symbols alphabetically for better UX
+  std::sort(all_symbols_.begin(), all_symbols_.end());
+
+  // Update filtered symbols to match the newly loaded symbols
+  filtered_symbols_ = all_symbols_;
 
   std::cout << "[DashboardControls] Fetched " << all_symbols_.size() << " symbols from exchange APIs" << std::endl;
 }

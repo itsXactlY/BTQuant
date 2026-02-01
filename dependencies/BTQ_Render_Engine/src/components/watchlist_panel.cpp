@@ -676,6 +676,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Fix ID conflict
 
+  // Visually highlight the selected row
+  if (is_selected) {
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImVec4(0.2f, 0.3f, 0.6f, 0.5f))); // Blueish highlight for selected row
+  }
+
   // Use Selectable spanning all columns with drag and drop support
   if (ImGui::Selectable(
           entry.symbol.c_str(), is_selected,

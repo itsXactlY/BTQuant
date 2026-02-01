@@ -64,6 +64,13 @@ class WatchlistPanel : public PanelBase {
   void set_config_file_path(const std::string& path) { config_file_path_ = path; }
   const std::string& get_config_file_path() const { return config_file_path_; }
 
+  // Method to get the currently selected symbol
+  uint32_t get_selected_symbol_id() const { return selected_symbol_id_; }
+  std::string get_selected_symbol() const {
+    auto it = watchlist_.find(selected_symbol_id_);
+    return (it != watchlist_.end()) ? it->second.symbol : "";
+  }
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

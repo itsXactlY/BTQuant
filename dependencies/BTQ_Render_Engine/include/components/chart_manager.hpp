@@ -62,6 +62,9 @@ class ChartManager {
   // Helper to map symbol name to ID
   std::optional<uint32_t> getSymbolId(const std::string& symbol_name) const;
 
+  // Getter for bridge access
+  std::shared_ptr<HotSpineDataBridge> get_bridge() const { return bridge_; }
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

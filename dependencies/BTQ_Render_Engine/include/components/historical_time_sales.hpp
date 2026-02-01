@@ -37,6 +37,9 @@ class HistoricalTimeSalesPanel : public PanelBase {
   // Set trades for a specific time range (for displaying trades from a specific bar)
   void set_trades_for_time_range(uint64_t start_time, uint64_t end_time);
 
+  // Show trades for a specific time range in a popup window
+  void show_trades_popup(uint64_t start_time, uint64_t end_time, const std::string& symbol_name);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

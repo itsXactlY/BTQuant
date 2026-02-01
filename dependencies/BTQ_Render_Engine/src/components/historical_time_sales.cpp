@@ -76,7 +76,7 @@ void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, ui
 
   // Get all trades for the symbol within the specified time range
   auto analytics = processor_->getSymbolAnalytics(symbol_id_);
-  
+
   // Filter trades to only include those within the specified time range
   cached_trades_.clear();
   for (const auto& trade : analytics.recent_trades) {
@@ -84,6 +84,12 @@ void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, ui
       cached_trades_.push_back(trade);
     }
   }
+
+  // Sort trades by timestamp to show them in chronological order
+  std::sort(cached_trades_.begin(), cached_trades_.end(),
+            [](const RenderEngine::TradeData& a, const RenderEngine::TradeData& b) {
+              return a.timestamp < b.timestamp;
+            });
 
   // Keep only most recent trades for display if we have too many
   if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
@@ -1213,6 +1219,123 @@ void HistoricalTimeSalesPanel::exportTradesToCSV() {
     }
 
     file.close();
+}
+
+// Show trades for a specific time range in a popup window
+void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t end_time, const std::string& symbol_name) {
+  // Create a unique popup ID based on the clicked time range
+  char popup_id[128];
+  snprintf(popup_id, sizeof(popup_id), "TradesForBar_%llu_%llu_%s",
+           static_cast<unsigned long long>(start_time),
+           static_cast<unsigned long long>(end_time),
+           symbol_name.c_str());
+
+  // Open the modal popup
+  if (ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    // Get symbol analytics to retrieve trades for the time range
+    if (processor_ && symbol_id_ != 0) {
+      auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+
+      // Filter trades to only include those within the specified time range
+      std::vector<RenderEngine::TradeData> trades_for_bar;
+      for (const auto& trade : analytics.recent_trades) {
+        if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
+          trades_for_bar.push_back(trade);
+        }
+      }
+
+      // Sort trades by timestamp to show them in chronological order
+      std::sort(trades_for_bar.begin(), trades_for_bar.end(),
+                [](const RenderEngine::TradeData& a, const RenderEngine::TradeData& b) {
+                  return a.timestamp < b.timestamp;
+                });
+
+      // Display header information
+      ImGui::Text("Trades for Bar: %s", symbol_name.c_str());
+      ImGui::Text("Time Range: %llu - %llu",
+                 static_cast<unsigned long long>(start_time),
+                 static_cast<unsigned long long>(end_time));
+      ImGui::Text("Number of Trades: %zu", trades_for_bar.size());
+      ImGui::Separator();
+
+      // Display trades in a table format
+      if (!trades_for_bar.empty()) {
+        if (ImGui::BeginTable("TradesTable", 4, ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
+          ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+          ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+          ImGui::TableHeadersRow();
+
+          // Use ImGuiListClipper for efficient rendering of large trade lists
+          ImGuiListClipper clipper;
+          clipper.Begin(static_cast<int>(trades_for_bar.size()));
+
+          while (clipper.Step()) {
+            for (int row_n = clipper.DisplayStart; row_n < clipper.DisplayEnd; row_n++) {
+              const auto& trade = trades_for_bar[row_n];
+
+              ImGui::PushID(row_n);
+              ImGui::TableNextRow();
+
+              // Time column (HH:MM:SS.mmm)
+              ImGui::TableSetColumnIndex(0);
+              if (trade.timestamp > 0) {
+                time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
+                uint64_t millis = (trade.timestamp / 1000) % 1000;
+                char time_str[32];
+                strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
+                ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
+              } else {
+                ImGui::Text("-");
+              }
+
+              // Price column
+              ImGui::TableSetColumnIndex(1);
+              ImVec4 price_color = trade.is_buy ?
+                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
+                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
+              ImGui::TextColored(price_color, "%.4f", trade.price);
+
+              // Size column
+              ImGui::TableSetColumnIndex(2);
+              ImGui::Text("%.4f", trade.size);
+
+              // Side column
+              ImGui::TableSetColumnIndex(3);
+              ImVec4 side_color = trade.is_buy ?
+                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
+                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
+              if (trade.is_buy) {
+                ImGui::TextColored(side_color, "BUY");
+              } else {
+                ImGui::TextColored(side_color, "SELL");
+              }
+
+              ImGui::PopID();
+            }
+          }
+
+          ImGui::EndTable();
+        }
+      } else {
+        ImGui::Text("No trades found for this time range.");
+      }
+
+      // Close button
+      ImGui::Separator();
+      if (ImGui::Button("Close")) {
+        ImGui::CloseCurrentPopup();
+      }
+    } else {
+      ImGui::Text("Unable to retrieve trade data.");
+      if (ImGui::Button("Close")) {
+        ImGui::CloseCurrentPopup();
+      }
+    }
+
+    ImGui::EndPopup();
+  }
 }
 
 }  // namespace BTQuant

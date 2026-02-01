@@ -14,6 +14,8 @@
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "panel_manager.hpp"
+#include "drawing_tools.hpp"
+#include "historical_time_sales.hpp"
 
 namespace BTQuant {
 
@@ -137,9 +139,7 @@ class ChartPanel : public PanelBase {
   std::pair<uint64_t, uint64_t> get_visible_time_range() const;
 
   // Set callback for showing historical trades
-  void set_show_historical_trades_callback(std::function<void(uint64_t, uint64_t)> callback) {
-    on_show_historical_trades_ = std::move(callback);
-  }
+  void set_show_historical_trades_callback(std::function<void(uint64_t, uint64_t)> callback);
 
   // Method to initialize active indicators from current configuration
   void initialize_active_indicators();
@@ -233,8 +233,14 @@ class ChartPanel : public PanelBase {
   // Pointer to panel manager for creating new panels
   PanelManager* panel_manager_ = nullptr;
 
+  // Pointer to historical time & sales panel for showing trades
+  std::shared_ptr<HistoricalTimeSalesPanel> historical_time_sales_panel_ = nullptr;
+
   // Active indicators list for the overlay panel
   std::vector<IndicatorItem> active_indicators_;
+
+  // Drawing tools manager
+  std::unique_ptr<DrawingToolsManager> drawing_tools_manager_;
   int next_indicator_id_ = 1;  // Counter for generating unique IDs
 
   // Multi-timeframe indicators support

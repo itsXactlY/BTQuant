@@ -122,7 +122,20 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
                        PanelManager* panel_manager)
     : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
+  drawing_tools_manager_ = std::make_unique<DrawingToolsManager>();
   initialize_active_indicators();
+
+  // Initialize the historical time & sales panel for showing trades
+  if (panel_manager_) {
+    // Create a temporary config for the historical time sales panel
+    PanelConfig hts_config;
+    hts_config.title = "Historical Time & Sales";
+    hts_config.position = ImVec2(100, 100);
+    hts_config.size = ImVec2(600, 400);
+
+    historical_time_sales_panel_ = std::make_shared<HistoricalTimeSalesPanel>(hts_config, bridge_, processor_);
+    historical_time_sales_panel_->set_symbol(chart_manager_->getSymbolId(symbol_).value_or(0), symbol_);
+  }
 }
 
 void ChartPanel::initialize_active_indicators() {
@@ -318,6 +331,11 @@ void ChartPanel::render() {
 
   // Render the trades popup if needed
   render_trades_popup();
+
+  // Render the historical time & sales popup if needed
+  if (historical_time_sales_panel_ && show_trades_popup_) {
+    historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_, symbol_);
+  }
 }
 
 void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchange) {
@@ -328,6 +346,14 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
   // Recreate chart with new symbol
   // Don't destroy old one, so we can switch back to it with state preserved
   initialize();
+
+  // Update the historical time & sales panel with the new symbol
+  if (historical_time_sales_panel_) {
+    auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+    if (symbol_id_opt) {
+      historical_time_sales_panel_->set_symbol(*symbol_id_opt, symbol_);
+    }
+  }
 }
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
@@ -367,6 +393,11 @@ void ChartPanel::render_chart_controls() {
   // Auto-follow checkbox
   ImGui::SameLine();
   ImGui::Checkbox("Auto-follow", &follow_latest_);
+
+  // Drawing tools UI
+  if (drawing_tools_manager_) {
+      drawing_tools_manager_->render_ui();
+  }
 
   ImGui::PopStyleVar();
 }
@@ -2561,6 +2592,11 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     render_atr_indicator(chart, render_start_idx, render_end_idx);
     render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
+    // Render drawing tools
+    if (drawing_tools_manager_) {
+        drawing_tools_manager_->render_all();
+    }
+
     // Render crosshair info if mouse is over plot
     // Handle mouse drag interaction for custom profile creation
     handleMouseDragInteraction();
@@ -2568,6 +2604,11 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     if (indicator_config_.show_crosshair_info && ImPlot::IsPlotHovered()) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
+    }
+
+    // Handle drawing tools mouse events
+    if (drawing_tools_manager_) {
+        drawing_tools_manager_->handle_mouse_events();
     }
 
     // Render context menu if right-clicked on plot
@@ -2871,8 +2912,13 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
   // Create the context menu
   if (ImGui::BeginPopup("ChartContextMenu")) {
     if (ImGui::MenuItem("Show Trades for Bar")) {
-      // Set the flag to show the trades popup
-      show_trades_popup_ = true;
+      // Call the callback to show historical trades if available
+      if (on_show_historical_trades_) {
+        on_show_historical_trades_(clicked_bar_start_time_, clicked_bar_end_time_);
+      } else {
+        // Fallback to the popup if no callback is set
+        show_trades_popup_ = true;
+      }
     }
 
     if (ImGui::MenuItem("Anchor VWAP Here")) {
@@ -3230,122 +3276,9 @@ void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
 }
 
 void ChartPanel::render_trades_popup() {
-  if (!show_trades_popup_) {
-    return;
-  }
-
-  // Create a unique popup ID based on the clicked time range
-  char popup_id[128];
-  snprintf(popup_id, sizeof(popup_id), "TradesForBar_%llu_%llu",
-           static_cast<unsigned long long>(clicked_bar_start_time_),
-           static_cast<unsigned long long>(clicked_bar_end_time_));
-
-  // Open the modal popup
-  if (ImGui::BeginPopupModal(popup_id, &show_trades_popup_, ImGuiWindowFlags_AlwaysAutoResize)) {
-    // Get symbol analytics to retrieve trades for the time range
-    auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
-    if (symbol_id_opt && processor_) {
-      auto analytics = processor_->getSymbolAnalytics(*symbol_id_opt);
-
-      // Filter trades to only include those within the specified time range
-      std::vector<RenderEngine::TradeData> trades_for_bar;
-      for (const auto& trade : analytics.recent_trades) {
-        if (trade.timestamp >= clicked_bar_start_time_ && trade.timestamp <= clicked_bar_end_time_) {
-          trades_for_bar.push_back(trade);
-        }
-      }
-
-      // Display header information
-      ImGui::Text("Trades for Bar: %s", symbol_.c_str());
-      ImGui::Text("Time Range: %llu - %llu",
-                 static_cast<unsigned long long>(clicked_bar_start_time_),
-                 static_cast<unsigned long long>(clicked_bar_end_time_));
-      ImGui::Text("Number of Trades: %zu", trades_for_bar.size());
-      ImGui::Separator();
-
-      // Display trades in a table format
-      if (!trades_for_bar.empty()) {
-        if (ImGui::BeginTable("TradesTable", 4, ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
-          ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-          ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
-          ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-          ImGui::TableHeadersRow();
-
-          // Use ImGuiListClipper for efficient rendering of large trade lists
-          ImGuiListClipper clipper;
-          clipper.Begin(static_cast<int>(trades_for_bar.size()));
-
-          while (clipper.Step()) {
-            for (int row_n = clipper.DisplayStart; row_n < clipper.DisplayEnd; row_n++) {
-              const auto& trade = trades_for_bar[row_n];
-
-              ImGui::PushID(row_n);
-              ImGui::TableNextRow();
-
-              // Time column (HH:MM:SS.mmm)
-              ImGui::TableSetColumnIndex(0);
-              if (trade.timestamp > 0) {
-                time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
-                uint64_t millis = (trade.timestamp / 1000) % 1000;
-                char time_str[32];
-                strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-                ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
-              } else {
-                ImGui::Text("-");
-              }
-
-              // Price column
-              ImGui::TableSetColumnIndex(1);
-              ImVec4 price_color = trade.is_buy ?
-                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
-                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
-              ImGui::TextColored(price_color, "%.4f", trade.price);
-
-              // Size column
-              ImGui::TableSetColumnIndex(2);
-              ImGui::Text("%.4f", trade.size);
-
-              // Side column
-              ImGui::TableSetColumnIndex(3);
-              ImVec4 side_color = trade.is_buy ?
-                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
-                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
-              if (trade.is_buy) {
-                ImGui::TextColored(side_color, "BUY");
-              } else {
-                ImGui::TextColored(side_color, "SELL");
-              }
-
-              ImGui::PopID();
-            }
-          }
-
-          ImGui::EndTable();
-        }
-      } else {
-        ImGui::Text("No trades found for this time range.");
-      }
-
-      // Close button
-      ImGui::Separator();
-      if (ImGui::Button("Close")) {
-        ImGui::CloseCurrentPopup();
-        show_trades_popup_ = false;
-      }
-    } else {
-      ImGui::Text("Unable to retrieve trade data.");
-      if (ImGui::Button("Close")) {
-        ImGui::CloseCurrentPopup();
-        show_trades_popup_ = false;
-      }
-    }
-
-    ImGui::EndPopup();
-  } else {
-    // If the popup is closed, reset the flag
-    show_trades_popup_ = false;
-  }
+  // This method is kept for backward compatibility but will be replaced by the HistoricalTimeSalesPanel popup
+  // The actual popup is now handled by the HistoricalTimeSalesPanel.show_trades_popup method
+  // which is called from the render method
 }
 
 // Multi-timeframe indicator methods implementation
@@ -3485,6 +3418,18 @@ std::vector<double> ChartPanel::get_indicator_values_from_timeframe(const std::s
 
   // Return empty vector if indicator type is not supported
   return std::vector<double>();
+}
+
+// Set callback for showing historical trades
+void ChartPanel::set_show_historical_trades_callback(std::function<void(uint64_t, uint64_t)> callback) {
+  on_show_historical_trades_ = [this, callback](uint64_t start_time, uint64_t end_time) {
+    if (callback) {
+      callback(start_time, end_time);
+    } else if (historical_time_sales_panel_) {
+      // Show the trades in the historical time & sales panel
+      historical_time_sales_panel_->show_trades_popup(start_time, end_time, symbol_);
+    }
+  };
 }
 
 }  // namespace BTQuant

@@ -11,6 +11,7 @@
 #include "../../include/components/interaction_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/indicators/anchored_vwap.hpp"
 
 namespace BTQuant {
 
@@ -948,6 +949,10 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       ImPlot::EndDragDropTarget();
     }
 
+    // Store previous view limits to detect changes
+    double prev_view_min = last_view_min_;
+    double prev_view_max = last_view_max_;
+
     // Now get actual limits being used for THIS frame's rendering and NEXT
     // frame's scaling This locks setup, so it must happen AFTER SetupAxisLimits
     ImPlotRect limits = ImPlot::GetPlotLimits();
@@ -955,6 +960,13 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     // Store for next frame
     last_view_min_ = limits.X.Min;
     last_view_max_ = limits.X.Max;
+
+    // Check if the view has changed (scroll/zoom) and notify the time stats panel if needed
+    if ((prev_view_min != last_view_min_ || prev_view_max != last_view_max_) && on_scroll_sync_) {
+        uint64_t start_time = static_cast<uint64_t>(last_view_min_ * 1000000);
+        uint64_t end_time = static_cast<uint64_t>(last_view_max_ * 1000000);
+        on_scroll_sync_(start_time, end_time);
+    }
 
     // Recalculate start/end for CULLING (Rendering optimization)
     size_t render_start_idx = 0;
@@ -1106,6 +1118,12 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
       render_crosshair_info(chart, mouse_pos.x, mouse_pos.y);
     }
+
+    // Render context menu if right-clicked on plot
+    render_context_menu(chart);
+
+    // Render anchored VWAP overlays
+    render_anchored_vwap_overlay(chart);
 
     ImPlot::EndPlot();
   }
@@ -1338,6 +1356,162 @@ void ChartPanel::center_on_timestamp(uint64_t timestamp) {
   last_view_min_ = timestamp_seconds - 10.0; // 10 seconds before
   last_view_max_ = timestamp_seconds + 10.0; // 10 seconds after
   follow_latest_ = false; // Disable auto-follow to keep the view centered
+}
+
+std::pair<uint64_t, uint64_t> ChartPanel::get_visible_time_range() const {
+  // Return the currently visible time range in the chart
+  // Convert from seconds (used by ImPlot) back to microseconds (our internal format)
+  uint64_t start_time = static_cast<uint64_t>(last_view_min_ * 1000000);
+  uint64_t end_time = static_cast<uint64_t>(last_view_max_ * 1000000);
+
+  return {start_time, end_time};
+}
+
+// Render context menu when user right-clicks on the chart
+void ChartPanel::render_context_menu(const ChartInstance& chart) {
+  // Check if the plot is hovered and right mouse button was clicked
+  if (ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    // Get the mouse position in plot coordinates
+    ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+
+    // Convert the x-coordinate (time) back to timestamp
+    uint64_t clicked_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
+
+    // Open the context menu
+    ImGui::OpenPopup("ChartContextMenu");
+  }
+
+  // Create the context menu
+  if (ImGui::BeginPopup("ChartContextMenu")) {
+    if (ImGui::MenuItem("Anchor VWAP Here")) {
+      // Get the current mouse position in plot coordinates
+      ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+
+      // Convert the x-coordinate (time) back to timestamp
+      uint64_t anchor_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
+
+      // Create a new anchored VWAP at this timestamp
+      create_anchored_vwap_at_time(anchor_timestamp);
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+// Create an anchored VWAP at the specified timestamp
+void ChartPanel::create_anchored_vwap_at_time(uint64_t timestamp) {
+  // Create a new anchored VWAP with the given timestamp
+  ::btq::AnchoredVWAP new_vwap(timestamp);
+
+  // Get the chart data to calculate the VWAP
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    const ChartInstance& chart = it->second;
+
+    // Convert the chart data to OHLCVCandle format for VWAP calculation
+    std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
+    for (size_t i = 0; i < chart.dates.size(); ++i) {
+      BTQuant::RenderEngine::OHLCVCandle bar;
+      bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
+      bar.open = chart.opens[i];
+      bar.high = chart.highs[i];
+      bar.low = chart.lows[i];
+      bar.close = chart.closes[i];
+      bar.volume = chart.volumes[i];
+      bar.trade_count = 1; // Placeholder value
+      bars.push_back(bar);
+    }
+
+    // Calculate the VWAP from the anchor point
+    new_vwap.calculate(bars);
+  }
+
+  // Add the new VWAP to our list
+  anchored_vwaps_.push_back(new_vwap);
+}
+
+// Render the anchored VWAP overlay on the chart
+void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
+  if (anchored_vwaps_.empty()) {
+    return;
+  }
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  // Iterate through all anchored VWAPs and render them
+  for (const auto& vwap : anchored_vwaps_) {
+    const auto& vwap_values = vwap.getVWAPValues();
+    const auto& sd1_upper = vwap.getSD1UpperBand();
+    const auto& sd1_lower = vwap.getSD1LowerBand();
+    const auto& sd2_upper = vwap.getSD2UpperBand();
+    const auto& sd2_lower = vwap.getSD2LowerBand();
+    const auto& sd3_upper = vwap.getSD3UpperBand();
+    const auto& sd3_lower = vwap.getSD3LowerBand();
+
+    // Find the starting index in the chart data that corresponds to the anchor timestamp
+    uint64_t anchor_timestamp = vwap.getAnchorTimestamp();
+    double anchor_time_seconds = static_cast<double>(anchor_timestamp) / 1000000.0;
+
+    // Find the index in the chart where the anchor timestamp occurs
+    size_t start_idx = 0;
+    bool found_anchor = false;
+    for (size_t i = 0; i < chart.dates.size(); ++i) {
+      if (chart.dates[i] >= anchor_time_seconds) {
+        start_idx = i;
+        found_anchor = true;
+        break;
+      }
+    }
+
+    if (!found_anchor) {
+      continue; // Anchor timestamp not found in current chart data
+    }
+
+    // Render the VWAP line
+    if (vwap_values.size() > 1) {
+      for (size_t i = 1; i < vwap_values.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[start_idx + i - 1], vwap_values[i - 1]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[start_idx + i], vwap_values[i]);
+
+        // Draw the VWAP line in yellow
+        draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 255), 2.0f);
+      }
+    }
+
+    // Render SD1 bands as semi-transparent filled region
+    if (sd1_upper.size() > 1 && sd1_lower.size() > 1) {
+      for (size_t i = 0; i < sd1_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_upper[i]);
+        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_lower[i]);
+
+        // Draw vertical lines between upper and lower bands
+        draw_list->AddLine(upper_point, lower_point, IM_COL32(255, 255, 0, 100), 1.0f);
+      }
+    }
+
+    // Render SD2 bands
+    if (sd2_upper.size() > 1 && sd2_lower.size() > 1) {
+      for (size_t i = 0; i < sd2_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_upper[i]);
+        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_lower[i]);
+
+        // Draw vertical lines between upper and lower bands
+        draw_list->AddLine(upper_point, lower_point, IM_COL32(0, 255, 255, 100), 1.0f);
+      }
+    }
+
+    // Render SD3 bands
+    if (sd3_upper.size() > 1 && sd3_lower.size() > 1) {
+      for (size_t i = 0; i < sd3_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_upper[i]);
+        ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_lower[i]);
+
+        // Draw vertical lines between upper and lower bands
+        draw_list->AddLine(upper_point, lower_point, IM_COL32(255, 0, 255, 100), 1.0f);
+      }
+    }
+  }
 }
 
 }  // namespace BTQuant

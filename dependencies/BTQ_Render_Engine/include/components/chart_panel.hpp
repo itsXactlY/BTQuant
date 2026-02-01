@@ -4,14 +4,18 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <list>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "chart_manager.hpp"
 #include "indicator_renderer.hpp"
 #include "panel_base.hpp"
+#include "../indicators/anchored_vwap.hpp"
 
 namespace BTQuant {
+
+class TimeStatisticsPanel; // Forward declaration
 
 // Indicator configuration for chart panel
 struct IndicatorConfig {
@@ -57,6 +61,8 @@ struct FibonacciLevel {
 
 class ChartPanel : public PanelBase {
  public:
+  using ScrollSyncCallback = std::function<void(uint64_t start_timestamp, uint64_t end_timestamp)>;
+
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
              ChartManager* chart_manager);
@@ -72,6 +78,19 @@ class ChartPanel : public PanelBase {
 
   // Method to center the chart on a specific timestamp
   void center_on_timestamp(uint64_t timestamp);
+
+  // Set callback for scroll synchronization
+  void set_scroll_sync_callback(ScrollSyncCallback callback) {
+      on_scroll_sync_ = std::move(callback);
+  }
+
+  // Set associated time statistics panel for synchronization
+  void set_associated_time_stats_panel(TimeStatisticsPanel* time_stats_panel) {
+      associated_time_stats_panel_ = time_stats_panel;
+  }
+
+  // Get visible time range
+  std::pair<uint64_t, uint64_t> get_visible_time_range() const;
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -114,10 +133,25 @@ class ChartPanel : public PanelBase {
   // Track the last known data size to detect when cache needs invalidation
   size_t last_known_data_size_ = 0;
 
+  // Callback for scroll synchronization
+  ScrollSyncCallback on_scroll_sync_;
+
+  // Associated time statistics panel for synchronization
+  TimeStatisticsPanel* associated_time_stats_panel_ = nullptr;
+
+  // Anchored VWAPs
+  std::list<::btq::AnchoredVWAP> anchored_vwaps_;
+
+  // Accessors for view range (needed for synchronization)
+  friend class PanelManager; // Allow PanelManager to access private members for synchronization
+
   void render_chart_controls();
   void render_indicator_selector();
   void render_instrument_chart(const ChartInstance& chart);
   void render_candlestick(const ChartInstance& chart);
+  void render_context_menu(const ChartInstance& chart);
+  void render_anchored_vwap_overlay(const ChartInstance& chart);
+  void create_anchored_vwap_at_time(uint64_t timestamp);
 
   // Indicator rendering methods
   void render_sma_lines(const ChartInstance& chart, size_t start_idx, size_t end_idx);

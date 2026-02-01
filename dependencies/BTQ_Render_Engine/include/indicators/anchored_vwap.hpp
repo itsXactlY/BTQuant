@@ -3,20 +3,9 @@
 #include <vector>
 #include <cstdint>
 
-// Define OHLCVCandle structure here to avoid dependency issues
-namespace BTQuant {
-namespace RenderEngine {
-    struct OHLCVCandle {
-        uint64_t timestamp;  // Start time of the candle in microseconds
-        double open;
-        double high;
-        double low;
-        double close;
-        double volume;
-        uint64_t trade_count;
-    };
-}
-}
+// Forward declaration to avoid circular dependency
+// The actual OHLCVCandle struct is defined in market_data_processor.hpp
+#include "../market_data_processor.hpp"
 
 namespace btq {
 

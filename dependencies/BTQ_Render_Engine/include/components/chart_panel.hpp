@@ -14,8 +14,8 @@
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "panel_manager.hpp"
-#include "drawing_tools.hpp"
 #include "historical_time_sales.hpp"
+#include "drawing_tools.hpp"  // Include drawing tools header
 
 namespace BTQuant {
 
@@ -23,17 +23,17 @@ class TimeStatisticsPanel; // Forward declaration
 
 // Indicator configuration for chart panel
 struct IndicatorConfig {
-  // SMA configurations
+  // SMA configurations - Required: (9,20,50,200)
   bool show_sma_9 = false;
-  bool show_sma_10 = false;
+  bool show_sma_10 = false;  // Not required by spec
   bool show_sma_20 = false;
   bool show_sma_50 = false;
   bool show_sma_200 = false;
 
-  // EMA configurations
+  // EMA configurations - Required: (9,21,50,200)
   bool show_ema_9 = false;
-  bool show_ema_10 = false;
-  bool show_ema_20 = false;
+  bool show_ema_10 = false;  // Not required by spec
+  bool show_ema_20 = false;  // Not required by spec
   bool show_ema_21 = false;
   bool show_ema_50 = false;
   bool show_ema_200 = false;
@@ -241,6 +241,7 @@ class ChartPanel : public PanelBase {
 
   // Drawing tools manager
   std::unique_ptr<DrawingToolsManager> drawing_tools_manager_;
+
   int next_indicator_id_ = 1;  // Counter for generating unique IDs
 
   // Multi-timeframe indicators support

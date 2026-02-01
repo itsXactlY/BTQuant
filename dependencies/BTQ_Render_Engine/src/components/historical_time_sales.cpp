@@ -1231,7 +1231,7 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
            symbol_name.c_str());
 
   // Open the modal popup
-  if (ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+  if (ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
     // Get symbol analytics to retrieve trades for the time range
     if (processor_ && symbol_id_ != 0) {
       auto analytics = processor_->getSymbolAnalytics(symbol_id_);
@@ -1256,15 +1256,44 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
                  static_cast<unsigned long long>(start_time),
                  static_cast<unsigned long long>(end_time));
       ImGui::Text("Number of Trades: %zu", trades_for_bar.size());
+
+      // Add statistics about the trades
+      if (!trades_for_bar.empty()) {
+        double min_price = trades_for_bar[0].price;
+        double max_price = trades_for_bar[0].price;
+        double total_volume = 0.0;
+        int buy_count = 0, sell_count = 0;
+
+        for (const auto& trade : trades_for_bar) {
+          min_price = std::min(min_price, trade.price);
+          max_price = std::max(max_price, trade.price);
+          total_volume += trade.size;
+
+          if (trade.is_buy) buy_count++;
+          else sell_count++;
+        }
+
+        ImGui::Text("Price Range: %.4f - %.4f", min_price, max_price);
+        ImGui::Text("Total Volume: %.4f", total_volume);
+        ImGui::Text("Buy/Sell: %d/%d", buy_count, sell_count);
+      }
+
       ImGui::Separator();
 
       // Display trades in a table format
       if (!trades_for_bar.empty()) {
-        if (ImGui::BeginTable("TradesTable", 4, ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable)) {
+        // Calculate table height based on number of trades (with a reasonable maximum)
+        float table_height = std::min(400.0f, static_cast<float>(trades_for_bar.size() * 25 + 30));
+
+        if (ImGui::BeginTable("TradesTable", 5,
+                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable,
+                              ImVec2(0, table_height))) {
           ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
           ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
           ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthStretch);
           ImGui::TableSetupColumn("Side", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+          ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
           ImGui::TableHeadersRow();
 
           // Use ImGuiListClipper for efficient rendering of large trade lists
@@ -1312,6 +1341,11 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
                 ImGui::TextColored(side_color, "SELL");
               }
 
+              // Exchange column
+              ImGui::TableSetColumnIndex(4);
+              std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+              ImGui::Text("%s", exchange.c_str());
+
               ImGui::PopID();
             }
           }
@@ -1324,12 +1358,12 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
       // Close button
       ImGui::Separator();
-      if (ImGui::Button("Close")) {
+      if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ImGui::CloseCurrentPopup();
       }
     } else {
       ImGui::Text("Unable to retrieve trade data.");
-      if (ImGui::Button("Close")) {
+      if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         ImGui::CloseCurrentPopup();
       }
     }

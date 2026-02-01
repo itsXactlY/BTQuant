@@ -175,7 +175,7 @@
 
 ### Phase 7c: Audio & Historical Data [Complexity: M]
 - [x] Implement trade audio alerts: play sound when large trade executes, different tones for buy vs sell, configurable volume threshold in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Add historical time & sales: right-click any bar on chart to open popup showing all trades for that specific bar in `dependencies/BTQ_Render_Engine/src/components/historical_time_sales.cpp` [Complexity: M]
+- [x] Add historical time & sales: right-click any bar on chart to open popup showing all trades for that specific bar in `dependencies/BTQ_Render_Engine/src/components/historical_time_sales.cpp` [Complexity: M]
 
 ---
 
@@ -184,14 +184,14 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 8a: Indicator Library [Complexity: L]
-- [ ] Implement complete technical indicators library in chart_panel.cpp: SMA (9,20,50,200), EMA (9,21,50,200), Bollinger Bands (20,2), RSI (14), MACD (12,26,9), Stochastic (14,3,3), ATR (14) in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: L]
-- [ ] Move ALL indicator calculations OUT of render loop into cached_indicators_ map updated only on new data in update() method in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
-- [ ] Add indicator overlay panel listing all active indicators with checkboxes for visibility, color pickers, parameter inputs, delete buttons in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Implement complete technical indicators library in chart_panel.cpp: SMA (9,20,50,200), EMA (9,21,50,200), Bollinger Bands (20,2), RSI (14), MACD (12,26,9), Stochastic (14,3,3), ATR (14) in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: L]
+- [x] Move ALL indicator calculations OUT of render loop into cached_indicators_ map updated only on new data in update() method in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Add indicator overlay panel listing all active indicators with checkboxes for visibility, color pickers, parameter inputs, delete buttons in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
 
 ### Phase 8b: Advanced Chart Features [Complexity: M]
-- [ ] Implement indicator alerts: trigger when price crosses SMA, RSI enters oversold/overbought, Bollinger Band touch with notification system in `dependencies/BTQ_Render_Engine/src/indicators/indicator_alerts.cpp` [Complexity: M]
-- [ ] Add multi-timeframe indicator support: display daily SMA on 1-minute chart as context, auto-update on timeframe change in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
-- [ ] Optimize crosshair price/time lookup using std::lower_bound binary search replacing current O(n) linear scan in render_crosshair_info in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: S]
+- [x] Implement indicator alerts: trigger when price crosses SMA, RSI enters oversold/overbought, Bollinger Band touch with notification system in `dependencies/BTQ_Render_Engine/src/indicators/indicator_alerts.cpp` [Complexity: M]
+- [x] Add multi-timeframe indicator support: display daily SMA on 1-minute chart as context, auto-update on timeframe change in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Optimize crosshair price/time lookup using std::lower_bound binary search replacing current O(n) linear scan in render_crosshair_info in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: S]
 
 ### Phase 8c: Drawing Tools & Replay [Complexity: M]
 - [ ] Implement drawing tools: trend lines, horizontal lines, fibonacci retracements, rectangles, text annotations stored persistently in `dependencies/BTQ_Render_Engine/src/components/drawing_tools.cpp` [Complexity: M]

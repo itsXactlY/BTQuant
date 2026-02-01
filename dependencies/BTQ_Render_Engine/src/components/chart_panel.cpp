@@ -13,8 +13,10 @@
 #include "../../include/components/historical_time_sales.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "implot_internal.h"
 #include "../../include/indicators/anchored_vwap.hpp"
 #include "../../include/indicators/session_vwap.hpp"
+#include "../../include/components/drawing_tools.hpp"
 
 namespace BTQuant {
 
@@ -132,6 +134,9 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
     historical_time_sales_panel_ = std::make_shared<HistoricalTimeSalesPanel>(hts_config, bridge_, processor_);
     historical_time_sales_panel_->set_symbol(chart_manager_->getSymbolId(symbol_).value_or(0), symbol_);
   }
+
+  // Initialize drawing tools manager
+  drawing_tools_manager_ = std::make_unique<DrawingToolsManager>();
 }
 
 void ChartPanel::initialize_active_indicators() {
@@ -321,6 +326,13 @@ void ChartPanel::render() {
   // Render indicator selector
   if (ImGui::CollapsingHeader("Indicators", ImGuiTreeNodeFlags_DefaultOpen)) {
     render_indicator_selector();
+  }
+
+  // Render drawing tools controls
+  if (ImGui::CollapsingHeader("Drawing Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (drawing_tools_manager_) {
+      drawing_tools_manager_->render_ui_controls();
+    }
   }
 
   // Render chart with indicators
@@ -2613,6 +2625,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
     // Render drawing tools
+    if (drawing_tools_manager_) {
+        drawing_tools_manager_->render_all();
+    }
 
     // Render crosshair info if mouse is over plot
     // Handle mouse drag interaction for custom profile creation
@@ -2624,6 +2639,60 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     }
 
     // Handle drawing tools mouse events
+    if (drawing_tools_manager_ && ImPlot::IsPlotHovered()) {
+        // Check for mouse clicks to create drawing tools
+        if (ImPlot::IsPlotSelected()) {
+            ImPlotRect selection = ImPlot::GetPlotSelection();
+            // Handle selection-based drawing tools like rectangles
+            // For now, we'll just clear the selection
+            ImPlot::EndPlot();
+            ImPlot::SetNextAxisLimits(ImAxis_X1, selection.X.Min, selection.X.Max, ImGuiCond_Always);
+            ImPlot::SetNextAxisLimits(ImAxis_Y1, selection.Y.Min, selection.Y.Max, ImGuiCond_Always);
+        }
+
+        // Handle right-click context menu for drawing tools
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImPlot::IsPlotHovered()) {
+            ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            // In a real implementation, we would show a context menu to select drawing tool type
+            // For now, we'll just store the position for potential use
+        }
+
+        // Handle left mouse click for creating drawing tools
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
+            ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            // In a real implementation, we would check if we're in drawing mode
+            // and create the appropriate tool based on the selected tool type
+        }
+
+        // Handle mouse dragging for creating drawing tools
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
+            // Check if we're in drawing mode
+            static bool is_drawing = false;
+            static ImPlotPoint start_point;
+            static std::string current_tool_id;
+
+            if (!is_drawing) {
+                start_point = ImPlot::GetPlotMousePos();
+                is_drawing = true;
+
+                // Generate a unique ID for the new tool
+                static int tool_counter = 0;
+                current_tool_id = "tool_" + std::to_string(++tool_counter);
+            }
+
+            // During drag, we could preview the tool being drawn
+            // For now, we'll just track the drag state
+            ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+
+            // When mouse is released, finalize the tool
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                // In a real implementation, we would create the tool based on the
+                // selected tool type and the start/end points
+                // For now, we'll just reset the drawing state
+                is_drawing = false;
+            }
+        }
+    }
 
     // Render context menu if right-clicked on plot
     render_context_menu(chart);

@@ -11,7 +11,10 @@
 namespace BTQuant {
 
 TimeHistogramPanel::TimeHistogramPanel(const PanelConfig& config)
-    : PanelBase(config), volume_data_type_(Data::VolumeDataType::BuySellVolume) {}
+    : PanelBase(config),
+      volume_data_type_(Data::VolumeDataType::BuySellVolume),
+      locked_min_y_(-50.0),
+      locked_max_y_(150.0) {}
 
 void TimeHistogramPanel::initialize() { PanelBase::initialize(); }
 
@@ -45,7 +48,25 @@ void TimeHistogramPanel::render() {
     volume_data_type_ = static_cast<Data::VolumeDataType>(current_type);
   }
 
-  if (ImPlot::BeginPlot("Time Histogram", "Time", "Volume", ImVec2(-1, -1), ImPlotFlags_None, ImPlotAxisFlags_None, ImPlotAxisFlags_None)) {
+  // Add auto-scaling and scale locking controls
+  ImGui::Checkbox("Auto-Scale Y-Axis", &auto_scale_y_axis_);
+  ImGui::SameLine();
+  ImGui::Checkbox("Lock Scale", &lock_y_axis_scale_);
+
+  // If auto-scaling is disabled and not locked, show manual range controls
+  if (!auto_scale_y_axis_ && !lock_y_axis_scale_) {
+    ImGui::SliderScalar("Min Y", ImGuiDataType_Double, &locked_min_y_, &locked_min_y_, &locked_max_y_, "%.2f");
+    ImGui::SliderScalar("Max Y", ImGuiDataType_Double, &locked_max_y_, &locked_min_y_, &locked_max_y_, "%.2f");
+  }
+
+  // Define axis flags based on auto-scaling and locking settings
+  ImPlotAxisFlags y_axis_flags = ImPlotAxisFlags_None;
+  if (lock_y_axis_scale_) {
+    // When locked, prevent user from changing the scale
+    y_axis_flags |= ImPlotAxisFlags_Lock;
+  }
+
+  if (ImPlot::BeginPlot("Time Histogram", "Time", "Volume", ImVec2(-1, -1), ImPlotFlags_None, ImPlotAxisFlags_None, y_axis_flags)) {
     // Generate sample time-based histogram data for demonstration
     static double x_data[100], buy_data[100], sell_data[100];
     static bool first_run = true;
@@ -72,6 +93,23 @@ void TimeHistogramPanel::render() {
 
     // Configure the plot axes
     ImPlot::SetupAxes("Time", "Volume", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+
+    // Variables to track min/max values for auto-scaling
+    double min_y_value = 0.0;
+    double max_y_value = 100.0;
+    bool has_valid_data = false;
+
+    // Handle Y-axis scaling based on auto-scale and lock settings
+    if (lock_y_axis_scale_) {
+      // If scale is locked, set the fixed Y-axis range
+      ImPlot::SetNextPlotLimitsY(locked_min_y_, locked_max_y_, ImGuiCond_Always);
+    } else if (auto_scale_y_axis_) {
+      // If auto-scaling is enabled, calculate min/max from the data to be plotted
+      // This will be handled by setting appropriate limits after processing all data
+    } else {
+      // If auto-scaling is disabled but not locked, use manual range
+      ImPlot::SetNextPlotLimitsY(locked_min_y_, locked_max_y_, ImGuiCond_FirstUseEver);
+    }
 
     // Helper function to add tooltip to bars
     auto addBarTooltip = [](const char* label_id, const double* xs, const double* ys, int count, double bar_size) {
@@ -114,6 +152,20 @@ void TimeHistogramPanel::render() {
           // Simulate trade counts with some variation
           trades_data[i] = 10.0 + 5.0 * sin(i * 0.1) + 2.0 * cos(i * 0.3);
         }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = trades_data[i];
+              has_valid_data = true;
+            } else {
+              if (trades_data[i] < min_y_value) min_y_value = trades_data[i];
+              if (trades_data[i] > max_y_value) max_y_value = trades_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.5f, 0.5f, 1.0f, 0.7f));  // Blue fill
         ImPlot::PlotBars("Trades", x_data, trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -129,6 +181,20 @@ void TimeHistogramPanel::render() {
           // Simulate buy trade counts with some variation
           buy_trades_data[i] = 5.0 + 3.0 * sin(i * 0.15) + 1.5 * cos(i * 0.25);
         }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = buy_trades_data[i];
+              has_valid_data = true;
+            } else {
+              if (buy_trades_data[i] < min_y_value) min_y_value = buy_trades_data[i];
+              if (buy_trades_data[i] > max_y_value) max_y_value = buy_trades_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Trades", x_data, buy_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -144,6 +210,20 @@ void TimeHistogramPanel::render() {
           // Simulate sell trade counts with some variation
           sell_trades_data[i] = 5.0 + 3.0 * cos(i * 0.15) + 1.5 * sin(i * 0.25);
         }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = sell_trades_data[i];
+              has_valid_data = true;
+            } else {
+              if (sell_trades_data[i] < min_y_value) min_y_value = sell_trades_data[i];
+              if (sell_trades_data[i] > max_y_value) max_y_value = sell_trades_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Trades", x_data, sell_trades_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -158,6 +238,20 @@ void TimeHistogramPanel::render() {
         for (int i = 0; i < 100; ++i) {
           total_vol_data[i] = buy_data[i] + sell_data[i];
         }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = total_vol_data[i];
+              has_valid_data = true;
+            } else {
+              if (total_vol_data[i] < min_y_value) min_y_value = total_vol_data[i];
+              if (total_vol_data[i] > max_y_value) max_y_value = total_vol_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 1.0f, 0.0f, 0.7f));  // Yellow fill
         ImPlot::PlotBars("Total Volume", x_data, total_vol_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -168,6 +262,19 @@ void TimeHistogramPanel::render() {
       }
       case Data::VolumeAnalysisType::BuyVolume: {
         // Volume of buy trades
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = buy_data[i];
+              has_valid_data = true;
+            } else {
+              if (buy_data[i] < min_y_value) min_y_value = buy_data[i];
+              if (buy_data[i] > max_y_value) max_y_value = buy_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -178,6 +285,19 @@ void TimeHistogramPanel::render() {
       }
       case Data::VolumeAnalysisType::SellVolume: {
         // Volume of sell trades
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = sell_data[i];
+              has_valid_data = true;
+            } else {
+              if (sell_data[i] < min_y_value) min_y_value = sell_data[i];
+              if (sell_data[i] > max_y_value) max_y_value = sell_data[i];
+            }
+          }
+        }
+
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.0f, 0.0f, 0.7f));  // Red fill
         ImPlot::PlotBars("Sell Volume", x_data, sell_data, 100, 0.8);
         ImPlot::PopStyleColor();
@@ -235,6 +355,22 @@ void TimeHistogramPanel::render() {
           sell_stack[i] = -sell_data[i];  // Negative values for sell volume
         }
 
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = buy_stack[i];
+              has_valid_data = true;
+            } else {
+              if (buy_stack[i] < min_y_value) min_y_value = buy_stack[i];
+              if (buy_stack[i] > max_y_value) max_y_value = buy_stack[i];
+            }
+
+            if (sell_stack[i] < min_y_value) min_y_value = sell_stack[i];
+            if (sell_stack[i] > max_y_value) max_y_value = sell_stack[i];
+          }
+        }
+
         // Plot buy volume (green) above x-axis
         ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(0.0f, 1.0f, 0.0f, 0.7f));  // Green fill
         ImPlot::PlotBars("Buy Volume", x_data, buy_stack, 100, 0.8);
@@ -266,6 +402,19 @@ void TimeHistogramPanel::render() {
           } else {
             pos_values[i] = 0.0;
             neg_values[i] = delta_data[i];
+          }
+        }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = delta_data[i];
+              has_valid_data = true;
+            } else {
+              if (delta_data[i] < min_y_value) min_y_value = delta_data[i];
+              if (delta_data[i] > max_y_value) max_y_value = delta_data[i];
+            }
           }
         }
 
@@ -332,6 +481,19 @@ void TimeHistogramPanel::render() {
           double current_delta = buy_data[i] - sell_data[i];
           running_sum += current_delta;
           cum_delta_data[i] = running_sum;
+        }
+
+        // Update min/max values for auto-scaling if enabled
+        if (auto_scale_y_axis_) {
+          for (int i = 0; i < 100; ++i) {
+            if (!has_valid_data) {
+              min_y_value = max_y_value = cum_delta_data[i];
+              has_valid_data = true;
+            } else {
+              if (cum_delta_data[i] < min_y_value) min_y_value = cum_delta_data[i];
+              if (cum_delta_data[i] > max_y_value) max_y_value = cum_delta_data[i];
+            }
+          }
         }
 
         // Plot the cumulative delta as a line chart with color transitions
@@ -537,6 +699,22 @@ void TimeHistogramPanel::render() {
     // Add grid for better readability (grid lines are shown by default)
     ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_None);
     ImPlot::SetupAxis(ImAxis_Y1, nullptr, ImPlotAxisFlags_None);
+
+    // Apply auto-scaling if enabled and we have valid data
+    if (auto_scale_y_axis_ && has_valid_data && !lock_y_axis_scale_) {
+      // Add some padding to the calculated range
+      double range = max_y_value - min_y_value;
+      if (range == 0) {
+        range = 1.0; // Prevent division by zero if all values are the same
+      }
+      double padding = range * 0.05; // 5% padding
+
+      ImPlot::SetNextPlotLimitsY(min_y_value - padding, max_y_value + padding, ImGuiCond_Always);
+
+      // Update the locked values to reflect the current auto-scaled range
+      locked_min_y_ = min_y_value - padding;
+      locked_max_y_ = max_y_value + padding;
+    }
 
     ImPlot::EndPlot();
   }

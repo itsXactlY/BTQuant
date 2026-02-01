@@ -19,6 +19,12 @@ class TimeHistogramPanel : public PanelBase {
  private:
   // Volume Data Type for Time Histogram Visualization
   Data::VolumeDataType volume_data_type_ = Data::VolumeDataType::BuySellVolume;
+
+  // Auto-scaling and scale locking options
+  bool auto_scale_y_axis_ = true;
+  bool lock_y_axis_scale_ = false;
+  double locked_min_y_ = 0.0;
+  double locked_max_y_ = 100.0;
 };
 
 }  // namespace BTQuant

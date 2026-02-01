@@ -21,15 +21,36 @@ class TimeStatisticsPanel; // Forward declaration
 
 // Indicator configuration for chart panel
 struct IndicatorConfig {
+  // SMA configurations
+  bool show_sma_9 = false;
   bool show_sma_10 = false;
   bool show_sma_20 = false;
   bool show_sma_50 = false;
+  bool show_sma_200 = false;
+
+  // EMA configurations
+  bool show_ema_9 = false;
   bool show_ema_10 = false;
   bool show_ema_20 = false;
+  bool show_ema_21 = false;
   bool show_ema_50 = false;
+  bool show_ema_200 = false;
+
+  // RSI configuration
   bool show_rsi = false;
+
+  // MACD configuration
   bool show_macd = false;
+
+  // Bollinger Bands configuration
   bool show_bollinger = false;
+
+  // Stochastic configuration
+  bool show_stochastic = false;
+
+  // ATR configuration
+  bool show_atr = false;
+
   bool show_volume_profile = true;
   bool show_fibonacci = false;
   bool show_crosshair_info = true;
@@ -51,6 +72,14 @@ struct IndicatorConfig {
   int macd_fast_period = 12;
   int macd_slow_period = 26;
   int macd_signal_period = 9;
+
+  // Stochastic configuration
+  int stochastic_k_period = 14;
+  int stochastic_d_period = 3;
+  int stochastic_smooth_period = 3;
+
+  // ATR configuration
+  int atr_period = 14;
 };
 
 // Fibonacci Retracement Level
@@ -137,6 +166,8 @@ class ChartPanel : public PanelBase {
   std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_sma_;
   std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_ema_;
   std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_rsi_;
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_stoch_k_;
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_atr_;
 
   // Track the last known data size to detect when cache needs invalidation
   size_t last_known_data_size_ = 0;
@@ -181,6 +212,8 @@ class ChartPanel : public PanelBase {
   void render_bollinger_bands(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_rsi_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_macd_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
+  void render_stochastic_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
+  void render_atr_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_fibonacci_levels(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_crosshair_info(const ChartInstance& chart, double mouse_x, double mouse_y);
   void render_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
@@ -206,6 +239,7 @@ class ChartPanel : public PanelBase {
   std::vector<double> calculate_ema(const std::vector<double>& prices, int period);
   std::vector<double> calculate_bollinger_upper(const std::vector<float>& prices, int period,
                                                 double std_dev);
+  std::vector<double> calculate_bollinger_middle(const std::vector<float>& prices, int period);
   std::vector<double> calculate_bollinger_lower(const std::vector<float>& prices, int period,
                                                 double std_dev);
   std::vector<double> calculate_rsi(const std::vector<float>& prices, int period);
@@ -213,6 +247,18 @@ class ChartPanel : public PanelBase {
   std::vector<double> calculate_macd_signal(const std::vector<double>& macd_line, int signal);
   std::vector<double> calculate_macd_histogram(const std::vector<double>& macd_line,
                                                const std::vector<double>& signal);
+  std::vector<double> calculate_stochastic_k(const std::vector<float>& highs,
+                                             const std::vector<float>& lows,
+                                             const std::vector<float>& closes,
+                                             int k_period);
+  std::vector<double> calculate_stochastic_d(const std::vector<double>& stoch_k, int d_period);
+  std::vector<double> calculate_true_range(const std::vector<float>& highs,
+                                           const std::vector<float>& lows,
+                                           const std::vector<float>& closes);
+  std::vector<double> calculate_atr(const std::vector<float>& highs,
+                                    const std::vector<float>& lows,
+                                    const std::vector<float>& closes,
+                                    int period);
 
   // Fibonacci calculation
   std::vector<FibonacciLevel> calculate_fibonacci_levels(double start_price, double end_price);

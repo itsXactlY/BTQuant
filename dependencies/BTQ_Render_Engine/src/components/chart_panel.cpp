@@ -86,6 +86,8 @@ void ChartPanel::render() {
     cached_sma_.clear();
     cached_ema_.clear();
     cached_rsi_.clear();
+    cached_stoch_k_.clear();
+    cached_atr_.clear();
     last_known_data_size_ = chart.closes.size();
   }
 
@@ -161,23 +163,37 @@ void ChartPanel::render_indicator_selector() {
 
   // Moving Averages
   ImGui::SeparatorText("Moving Averages");
+  ImGui::Checkbox("SMA 9", &indicator_config_.show_sma_9);
+  ImGui::SameLine();
   ImGui::Checkbox("SMA 10", &indicator_config_.show_sma_10);
   ImGui::SameLine();
   ImGui::Checkbox("SMA 20", &indicator_config_.show_sma_20);
   ImGui::SameLine();
   ImGui::Checkbox("SMA 50", &indicator_config_.show_sma_50);
+  ImGui::SameLine();
+  ImGui::Checkbox("SMA 200", &indicator_config_.show_sma_200);
 
+  ImGui::Checkbox("EMA 9", &indicator_config_.show_ema_9);
+  ImGui::SameLine();
   ImGui::Checkbox("EMA 10", &indicator_config_.show_ema_10);
   ImGui::SameLine();
   ImGui::Checkbox("EMA 20", &indicator_config_.show_ema_20);
   ImGui::SameLine();
+  ImGui::Checkbox("EMA 21", &indicator_config_.show_ema_21);
+  ImGui::SameLine();
   ImGui::Checkbox("EMA 50", &indicator_config_.show_ema_50);
+  ImGui::SameLine();
+  ImGui::Checkbox("EMA 200", &indicator_config_.show_ema_200);
 
   // Oscillators
   ImGui::SeparatorText("Oscillators");
   ImGui::Checkbox("RSI", &indicator_config_.show_rsi);
   ImGui::SameLine();
   ImGui::Checkbox("MACD", &indicator_config_.show_macd);
+  ImGui::SameLine();
+  ImGui::Checkbox("Stochastic", &indicator_config_.show_stochastic);
+  ImGui::SameLine();
+  ImGui::Checkbox("ATR", &indicator_config_.show_atr);
 
   // Overlays
   ImGui::SeparatorText("Overlays");
@@ -296,6 +312,32 @@ std::vector<double> ChartPanel::calculate_ema(const std::vector<double>& prices,
   // Cache the result
   cached_ema_[key] = ema;
   return ema;
+}
+
+std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<float>& prices,
+                                                          int period, double std_dev) {
+  auto sma = calculate_sma(prices, period);
+  std::vector<double> upper_band(prices.size(), 0.0);
+
+  for (size_t i = period - 1; i < prices.size(); ++i) {
+    // Calculate standard deviation
+    double sum_sq_diff = 0.0;
+    for (int j = 0; j < period; ++j) {
+      double diff = static_cast<double>(prices[i - j]) - sma[i];
+      sum_sq_diff += diff * diff;
+    }
+    double variance = sum_sq_diff / period;
+    double std_deviation = std::sqrt(variance);
+
+    upper_band[i] = sma[i] + std_dev * std_deviation;
+  }
+
+  return upper_band;
+}
+
+std::vector<double> ChartPanel::calculate_bollinger_middle(const std::vector<float>& prices,
+                                                          int period) {
+  return calculate_sma(prices, period);
 }
 
 std::vector<double> ChartPanel::calculate_bollinger_upper(const std::vector<float>& prices,
@@ -449,6 +491,145 @@ std::vector<FibonacciLevel> ChartPanel::calculate_fibonacci_levels(double start_
   return levels;
 }
 
+std::vector<double> ChartPanel::calculate_stochastic_k(const std::vector<float>& highs,
+                                                       const std::vector<float>& lows,
+                                                       const std::vector<float>& closes,
+                                                       int k_period) {
+  if (highs.empty() || lows.empty() || closes.empty()) {
+    return std::vector<double>();
+  }
+
+  // Create cache key based on data size and k_period
+  IndicatorCacheKey key{highs.size(), k_period};
+
+  // Check if result is already cached
+  auto it = cached_stoch_k_.find(key);
+  if (it != cached_stoch_k_.end()) {
+    return it->second;
+  }
+
+  std::vector<double> stoch_k(highs.size(), 50.0); // Default to neutral
+
+  for (size_t i = k_period - 1; i < highs.size(); ++i) {
+    float highest_high = highs[i];
+    float lowest_low = lows[i];
+
+    // Find highest high and lowest low in the k_period
+    for (int j = 0; j < k_period; ++j) {
+      if (i >= static_cast<size_t>(j)) {
+        highest_high = std::max(highest_high, highs[i - j]);
+        lowest_low = std::min(lowest_low, lows[i - j]);
+      }
+    }
+
+    // Calculate %K
+    if (highest_high != lowest_low) {
+      stoch_k[i] = ((static_cast<double>(closes[i]) - lowest_low) / (highest_high - lowest_low)) * 100.0;
+    } else {
+      stoch_k[i] = 50.0; // Neutral if high equals low
+    }
+  }
+
+  // Cache the result
+  cached_stoch_k_[key] = stoch_k;
+  return stoch_k;
+}
+
+std::vector<double> ChartPanel::calculate_stochastic_d(const std::vector<double>& stoch_k,
+                                                       int d_period) {
+  if (stoch_k.empty()) {
+    return std::vector<double>();
+  }
+
+  std::vector<double> stoch_d(stoch_k.size(), 50.0); // Default to neutral
+
+  for (size_t i = d_period - 1; i < stoch_k.size(); ++i) {
+    double sum = 0.0;
+    for (int j = 0; j < d_period; ++j) {
+      if (i >= static_cast<size_t>(j)) {
+        sum += stoch_k[i - j];
+      }
+    }
+    stoch_d[i] = sum / d_period;
+  }
+
+  return stoch_d;
+}
+
+std::vector<double> ChartPanel::calculate_true_range(const std::vector<float>& highs,
+                                                     const std::vector<float>& lows,
+                                                     const std::vector<float>& closes) {
+  if (highs.empty() || lows.empty() || closes.empty()) {
+    return std::vector<double>();
+  }
+
+  std::vector<double> tr(highs.size(), 0.0);
+
+  for (size_t i = 0; i < highs.size(); ++i) {
+    if (i == 0) {
+      // For the first period, use high - low
+      tr[i] = static_cast<double>(highs[i]) - static_cast<double>(lows[i]);
+    } else {
+      // True Range is the maximum of:
+      // 1. Current High - Current Low
+      // 2. Absolute value of Current High - Previous Close
+      // 3. Absolute value of Current Low - Previous Close
+      double hl = static_cast<double>(highs[i]) - static_cast<double>(lows[i]);
+      double hc = std::abs(static_cast<double>(highs[i]) - static_cast<double>(closes[i - 1]));
+      double lc = std::abs(static_cast<double>(lows[i]) - static_cast<double>(closes[i - 1]));
+
+      tr[i] = std::max({hl, hc, lc});
+    }
+  }
+
+  return tr;
+}
+
+std::vector<double> ChartPanel::calculate_atr(const std::vector<float>& highs,
+                                              const std::vector<float>& lows,
+                                              const std::vector<float>& closes,
+                                              int period) {
+  if (highs.empty() || lows.empty() || closes.empty()) {
+    return std::vector<double>();
+  }
+
+  // Create cache key based on data size and period
+  IndicatorCacheKey key{highs.size(), period};
+
+  // Check if result is already cached
+  auto it = cached_atr_.find(key);
+  if (it != cached_atr_.end()) {
+    return it->second;
+  }
+
+  auto tr = calculate_true_range(highs, lows, closes);
+  if (tr.empty()) {
+    return std::vector<double>();
+  }
+
+  std::vector<double> atr(highs.size(), 0.0);
+
+  // Calculate initial ATR using Simple Moving Average for the first value
+  double sum = 0.0;
+  for (int i = 0; i < period && i < static_cast<int>(tr.size()); ++i) {
+    sum += tr[i];
+  }
+
+  if (static_cast<int>(tr.size()) >= period) {
+    atr[period - 1] = sum / period;
+
+    // Calculate remaining ATR values using Wilder's smoothing method
+    for (size_t i = period; i < tr.size(); ++i) {
+      // ATR = [(previous ATR) * (period - 1) + current TR] / period
+      atr[i] = ((atr[i - 1] * (period - 1)) + tr[i]) / period;
+    }
+  }
+
+  // Cache the result
+  cached_atr_[key] = atr;
+  return atr;
+}
+
 // ============================================================================
 // INDICATOR RENDERING METHODS
 // ============================================================================
@@ -458,6 +639,18 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
+  // SMA 9
+  if (indicator_config_.show_sma_9) {
+    auto sma_9 = calculate_sma(chart.closes, 9);
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i >= 8) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 8], sma_9[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_9[i]);
+        draw_list->AddLine(p1, p2, IM_COL32(255, 105, 180, 200), 2.0f); // Hot pink
+      }
+    }
+  }
+
   // SMA 10
   if (indicator_config_.show_sma_10) {
     auto sma_10 = calculate_sma(chart.closes, 10);
@@ -465,7 +658,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 9) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 9], sma_10[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_10[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(255, 165, 0, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(255, 165, 0, 200), 2.0f); // Orange
       }
     }
   }
@@ -477,7 +670,7 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 19) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 19], sma_20[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_20[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 200), 2.0f); // Yellow
       }
     }
   }
@@ -489,7 +682,19 @@ void ChartPanel::render_sma_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 49) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 49], sma_50[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_50[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(0, 255, 255, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(0, 255, 255, 200), 2.0f); // Cyan
+      }
+    }
+  }
+
+  // SMA 200
+  if (indicator_config_.show_sma_200) {
+    auto sma_200 = calculate_sma(chart.closes, 200);
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i >= 199) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 199], sma_200[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], sma_200[i]);
+        draw_list->AddLine(p1, p2, IM_COL32(128, 0, 128, 200), 2.0f); // Purple
       }
     }
   }
@@ -500,6 +705,18 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
 
   ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
+  // EMA 9
+  if (indicator_config_.show_ema_9) {
+    auto ema_9 = calculate_ema(chart.closes, 9);
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i >= 8) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 8], ema_9[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_9[i]);
+        draw_list->AddLine(p1, p2, IM_COL32(255, 0, 255, 200), 2.0f); // Magenta
+      }
+    }
+  }
+
   // EMA 10
   if (indicator_config_.show_ema_10) {
     auto ema_10 = calculate_ema(chart.closes, 10);
@@ -507,7 +724,7 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 9) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 9], ema_10[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_10[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(255, 0, 255, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(255, 0, 128, 200), 2.0f); // Medium violet red
       }
     }
   }
@@ -519,7 +736,19 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 19) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 19], ema_20[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_20[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(255, 0, 128, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(138, 43, 226, 200), 2.0f); // Blue violet
+      }
+    }
+  }
+
+  // EMA 21
+  if (indicator_config_.show_ema_21) {
+    auto ema_21 = calculate_ema(chart.closes, 21);
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i >= 20) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 20], ema_21[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_21[i]);
+        draw_list->AddLine(p1, p2, IM_COL32(0, 191, 255, 200), 2.0f); // Deep sky blue
       }
     }
   }
@@ -531,7 +760,19 @@ void ChartPanel::render_ema_lines(const ChartInstance& chart, size_t start_idx, 
       if (i >= 49) {
         ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 49], ema_50[i]);
         ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_50[i]);
-        draw_list->AddLine(p1, p2, IM_COL32(128, 0, 255, 200), 2.0f);
+        draw_list->AddLine(p1, p2, IM_COL32(65, 105, 225, 200), 2.0f); // Royal blue
+      }
+    }
+  }
+
+  // EMA 200
+  if (indicator_config_.show_ema_200) {
+    auto ema_200 = calculate_ema(chart.closes, 200);
+    for (size_t i = start_idx; i < end_idx; ++i) {
+      if (i >= 199) {
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i - 199], ema_200[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], ema_200[i]);
+        draw_list->AddLine(p1, p2, IM_COL32(75, 0, 130, 200), 2.0f); // Indigo
       }
     }
   }
@@ -545,18 +786,55 @@ void ChartPanel::render_bollinger_bands(const ChartInstance& chart, size_t start
 
   auto upper_band = calculate_bollinger_upper(chart.closes, indicator_config_.bollinger_period,
                                               indicator_config_.bollinger_std_dev);
+  auto middle_band = calculate_bollinger_middle(chart.closes, indicator_config_.bollinger_period);
   auto lower_band = calculate_bollinger_lower(chart.closes, indicator_config_.bollinger_period,
                                               indicator_config_.bollinger_std_dev);
 
+  // Prepare points for filled area between upper and lower bands
+  std::vector<ImVec2> upper_points;
+  std::vector<ImVec2> lower_points;
+
   for (size_t i = start_idx; i < end_idx; ++i) {
     if (i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
-      ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[i], upper_band[i]);
-      ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[i], lower_band[i]);
+      ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[i], upper_band[i]);
+      ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[i], lower_band[i]);
+      ImVec2 middle_point = ImPlot::PlotToPixels(chart.dates[i], middle_band[i]);
 
-      // Draw upper band
-      draw_list->AddLine(p1, p1, IM_COL32(0, 255, 255, 100), 1.0f);
-      // Draw lower band
-      draw_list->AddLine(p2, p2, IM_COL32(0, 255, 255, 100), 1.0f);
+      // Add points for filled area
+      upper_points.push_back(upper_point);
+      lower_points.insert(lower_points.begin(), lower_point); // Insert at beginning to maintain order
+
+      // Draw middle band (SMA)
+      if (i > start_idx && i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
+        ImVec2 prev_middle = ImPlot::PlotToPixels(chart.dates[i-1], middle_band[i-1]);
+        draw_list->AddLine(prev_middle, middle_point, IM_COL32(255, 255, 0, 150), 1.0f); // Yellow
+      }
+    }
+  }
+
+  // Draw filled area between upper and lower bands
+  if (!upper_points.empty() && !lower_points.empty()) {
+    std::vector<ImVec2> filled_area_points;
+    filled_area_points.insert(filled_area_points.end(), upper_points.begin(), upper_points.end());
+    filled_area_points.insert(filled_area_points.end(), lower_points.begin(), lower_points.end());
+
+    if (filled_area_points.size() >= 3) {
+      draw_list->AddConvexPolyFilled(filled_area_points.data(),
+                                   static_cast<int>(filled_area_points.size()),
+                                   IM_COL32(0, 255, 255, 50)); // Semi-transparent cyan
+    }
+  }
+
+  // Draw upper and lower band lines
+  for (size_t i = start_idx + 1; i < end_idx; ++i) {
+    if (i >= static_cast<size_t>(indicator_config_.bollinger_period - 1)) {
+      ImVec2 prev_upper = ImPlot::PlotToPixels(chart.dates[i-1], upper_band[i-1]);
+      ImVec2 curr_upper = ImPlot::PlotToPixels(chart.dates[i], upper_band[i]);
+      ImVec2 prev_lower = ImPlot::PlotToPixels(chart.dates[i-1], lower_band[i-1]);
+      ImVec2 curr_lower = ImPlot::PlotToPixels(chart.dates[i], lower_band[i]);
+
+      draw_list->AddLine(prev_upper, curr_upper, IM_COL32(0, 255, 255, 150), 1.0f); // Cyan
+      draw_list->AddLine(prev_lower, curr_lower, IM_COL32(0, 255, 255, 150), 1.0f); // Cyan
     }
   }
 }
@@ -608,6 +886,54 @@ void ChartPanel::render_rsi_indicator(const ChartInstance& chart, size_t start_i
   draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f);
 }
 
+void ChartPanel::render_stochastic_indicator(const ChartInstance& chart, size_t start_idx,
+                                           size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_stochastic) return;
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  auto stoch_k = calculate_stochastic_k(chart.highs, chart.lows, chart.closes,
+                                       indicator_config_.stochastic_k_period);
+  auto stoch_d = calculate_stochastic_d(stoch_k, indicator_config_.stochastic_d_period);
+
+  // Get plot limits for Stochastic scaling
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+
+  for (size_t i = start_idx; i < end_idx; ++i) {
+    if (i >= static_cast<size_t>(indicator_config_.stochastic_k_period +
+                                indicator_config_.stochastic_d_period - 1)) {
+
+      double k_value = stoch_k[i];
+      double d_value = stoch_d[i];
+
+      // Map Stochastic values to Y-axis (0-100)
+      double k_y = limits.Y.Min + (k_value / 100.0) * (limits.Y.Max - limits.Y_Min);
+      double d_y = limits.Y.Min + (d_value / 100.0) * (limits.Y.Max - limits.Y_Min);
+
+      ImVec2 k_point = ImPlot::PlotToPixels(chart.dates[i], k_y);
+      ImVec2 d_point = ImPlot::PlotToPixels(chart.dates[i], d_y);
+
+      // Draw %K line (typically faster line)
+      draw_list->AddLine(k_point, k_point, IM_COL32(255, 255, 0, 200), 1.5f); // Yellow
+
+      // Draw %D line (typically slower line)
+      draw_list->AddLine(d_point, d_point, IM_COL32(255, 0, 0, 200), 1.5f); // Red
+    }
+  }
+
+  // Draw overbought/oversold lines (typically at 80 and 20)
+  double overbought_y = limits.Y.Min + (80.0 / 100.0) * (limits.Y.Max - limits.Y_Min);
+  double oversold_y = limits.Y.Min + (20.0 / 100.0) * (limits.Y.Max - limits.Y_Min);
+
+  ImVec2 ob_p1 = ImPlot::PlotToPixels(limits.X.Min, overbought_y);
+  ImVec2 ob_p2 = ImPlot::PlotToPixels(limits.X.Max, overbought_y);
+  draw_list->AddLine(ob_p1, ob_p2, IM_COL32(255, 0, 0, 100), 1.0f); // Red
+
+  ImVec2 os_p1 = ImPlot::PlotToPixels(limits.X.Min, oversold_y);
+  ImVec2 os_p2 = ImPlot::PlotToPixels(limits.X.Max, oversold_y);
+  draw_list->AddLine(os_p1, os_p2, IM_COL32(0, 255, 0, 100), 1.0f); // Green
+}
+
 void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_idx,
                                        size_t end_idx) {
   if (chart.closes.empty() || !indicator_config_.show_macd) return;
@@ -653,6 +979,48 @@ void ChartPanel::render_macd_indicator(const ChartInstance& chart, size_t start_
       ImU32 hist_color = hist_value >= 0 ? IM_COL32(0, 255, 0, 150) : IM_COL32(255, 0, 0, 150);
       draw_list->AddRectFilled(ImVec2(hist_p.x - 2, hist_p.y),
                                ImVec2(hist_p.x + 2, hist_p.y + hist_y - signal_y), hist_color);
+    }
+  }
+}
+
+void ChartPanel::render_atr_indicator(const ChartInstance& chart, size_t start_idx,
+                                     size_t end_idx) {
+  if (chart.closes.empty() || !indicator_config_.show_atr) return;
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  auto atr = calculate_atr(chart.highs, chart.lows, chart.closes,
+                           indicator_config_.atr_period);
+
+  // Get plot limits for scaling
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+
+  // Calculate min/max ATR values for normalization
+  double min_atr = std::numeric_limits<double>::max();
+  double max_atr = std::numeric_limits<double>::lowest();
+  
+  for (size_t i = indicator_config_.atr_period; i < atr.size(); ++i) {
+    if (atr[i] < min_atr) min_atr = atr[i];
+    if (atr[i] > max_atr) max_atr = atr[i];
+  }
+
+  // If all ATR values are the same, use a default range
+  if (min_atr == max_atr) {
+    min_atr = min_atr * 0.9;
+    max_atr = max_atr * 1.1;
+  }
+
+  for (size_t i = start_idx; i < end_idx; ++i) {
+    if (i >= static_cast<size_t>(indicator_config_.atr_period)) {
+      double atr_value = atr[i];
+
+      // Normalize ATR value to fit within the plot area
+      double normalized_atr = limits.Y.Min + ((atr_value - min_atr) / (max_atr - min_atr)) * (limits.Y.Max - limits.Y_Min);
+
+      ImVec2 p = ImPlot::PlotToPixels(chart.dates[i], normalized_atr);
+
+      // Draw ATR line
+      draw_list->AddLine(p, p, IM_COL32(0, 255, 127, 200), 2.0f); // Spring green
     }
   }
 }
@@ -1112,6 +1480,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     render_bollinger_bands(chart, render_start_idx, render_end_idx);
     render_rsi_indicator(chart, render_start_idx, render_end_idx);
     render_macd_indicator(chart, render_start_idx, render_end_idx);
+    render_stochastic_indicator(chart, render_start_idx, render_end_idx);
+    render_atr_indicator(chart, render_start_idx, render_end_idx);
     render_fibonacci_levels(chart, render_start_idx, render_end_idx);
 
     // Render crosshair info if mouse is over plot

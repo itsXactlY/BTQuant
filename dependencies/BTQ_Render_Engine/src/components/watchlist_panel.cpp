@@ -10,6 +10,29 @@
 
 namespace BTQuant {
 
+// Helper function to format numbers for financial display
+std::string formatFinancialNumber(double value, int precision = 2) {
+  if (value >= 1e9) {
+    return std::to_string(value / 1e9).substr(0, std::to_string(value / 1e9).find('.') + precision + 1) + "B";
+  } else if (value >= 1e6) {
+    return std::to_string(value / 1e6).substr(0, std::to_string(value / 1e6).find('.') + precision + 1) + "M";
+  } else if (value >= 1e3) {
+    return std::to_string(value / 1e3).substr(0, std::to_string(value / 1e3).find('.') + precision + 1) + "K";
+  } else {
+    return std::to_string(value).substr(0, std::to_string(value).find('.') + precision + 1);
+  }
+}
+
+// Helper function to format price values with consistent decimal places
+std::string formatPrice(double price) {
+  // For prices less than 1, show more decimals
+  if (price < 1.0) {
+    return std::to_string(price).substr(0, std::to_string(price).find('.') + 6);
+  } else {
+    return std::to_string(price).substr(0, std::to_string(price).find('.') + 5);
+  }
+}
+
 // Helper function to calculate color intensity based on change magnitude
 ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
   // Determine if change is positive or negative
@@ -340,21 +363,21 @@ void WatchlistPanel::render_filter_input() {
 void WatchlistPanel::render_table_header() {
   // Setup table columns with appropriate widths for better readability
   ImGui::TableSetupColumn(
-      "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+      "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 100.0f);
+  ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn(
-      "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 90.0f);
+      "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 100.0f);
   ImGui::TableSetupColumn(
-      "Change%", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
+      "Change%", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 90.0f);
   ImGui::TableSetupColumn(
-      "Change$", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
+      "Change$", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 90.0f);
   ImGui::TableSetupColumn(
-      "Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-  ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 60.0f);
+      "Volume", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 100.0f);
+  ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Low", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Open", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("VWAP", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+  ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed, 70.0f);
   ImGui::TableHeadersRow();
 
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
@@ -483,42 +506,34 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    ImGui::TextColored(flash_color, "%.5g", animated_price);
+    ImGui::TextColored(flash_color, "%s", formatPrice(animated_price).c_str());
   } else {
-    ImGui::Text("%.5g", entry.price);
+    ImGui::Text("%s", formatPrice(entry.price).c_str());
   }
 
   ImGui::TableSetColumnIndex(3);
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
-  ImGui::TextColored(change_pct_color, "%+.3g%%", entry.change_pct);
+  ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
 
   ImGui::TableSetColumnIndex(4);
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
-  ImGui::TextColored(change_dollar_color, "%+.3g", entry.change_dollar);
+  ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
 
   ImGui::TableSetColumnIndex(5);
   // Format volume with K/M/B suffix for readability
-  if (entry.volume_24h >= 1e9) {
-    ImGui::Text("%.3gB", entry.volume_24h / 1e9);
-  } else if (entry.volume_24h >= 1e6) {
-    ImGui::Text("%.3gM", entry.volume_24h / 1e6);
-  } else if (entry.volume_24h >= 1e3) {
-    ImGui::Text("%.3gK", entry.volume_24h / 1e3);
-  } else {
-    ImGui::Text("%.0f", entry.volume_24h);
-  }
+  ImGui::Text("%s", formatFinancialNumber(entry.volume_24h, 2).c_str());
 
   ImGui::TableSetColumnIndex(6);
-  ImGui::Text("%.5g", entry.high_24h);
+  ImGui::Text("%s", formatPrice(entry.high_24h).c_str());
 
   ImGui::TableSetColumnIndex(7);
-  ImGui::Text("%.5g", entry.low_24h);
+  ImGui::Text("%s", formatPrice(entry.low_24h).c_str());
 
   ImGui::TableSetColumnIndex(8);
-  ImGui::Text("%.5g", entry.open_24h);
+  ImGui::Text("%s", formatPrice(entry.open_24h).c_str());
 
   ImGui::TableSetColumnIndex(9);
-  ImGui::Text("%.5g", entry.vwap);
+  ImGui::Text("%s", formatPrice(entry.vwap).c_str());
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier

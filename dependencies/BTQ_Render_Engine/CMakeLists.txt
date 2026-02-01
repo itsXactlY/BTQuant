@@ -130,6 +130,7 @@ set(DASHBOARD_SOURCES
     src/components/chart_replay.cpp
     src/components/chart_replay_panel.cpp
     src/components/drawing_tools.cpp
+    src/components/dashboard_controls.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/data/market_data_processor.cpp

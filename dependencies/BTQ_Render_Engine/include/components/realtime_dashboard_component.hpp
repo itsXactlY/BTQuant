@@ -10,6 +10,7 @@
 #include "../trading/position_manager.hpp"
 #include "../trading/risk_assessment.hpp"
 #include "../vulkan_dashboard_advanced.hpp"
+#include "dashboard_controls.hpp"
 #include "hierarchical_selector.hpp"
 #include "panel_manager.hpp"
 
@@ -31,7 +32,6 @@ class RealtimeDashboardComponent : public UIComponent {
 
   // Dashboard Layout
   void setup_modern_layout();
-  void render_dashboard_controls();
 
  private:
   // Data sources
@@ -56,6 +56,9 @@ class RealtimeDashboardComponent : public UIComponent {
 
   // UI state
   bool show_dashboard_controls_ = true;
+
+  // Dashboard Controls component
+  std::unique_ptr<DashboardControls> dashboard_controls_;
 };
 
 }  // namespace BTQuant

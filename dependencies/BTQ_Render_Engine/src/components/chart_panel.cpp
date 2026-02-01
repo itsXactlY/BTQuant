@@ -2832,15 +2832,27 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
     uint64_t clicked_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
 
     // Find the closest candle to the clicked timestamp to determine the time range for the bar
+    // Use binary search (std::lower_bound) to optimize from O(n) to O(log n)
     size_t closest_idx = 0;
-    double min_distance = std::numeric_limits<double>::max();
 
-    for (size_t i = 0; i < chart.dates.size(); ++i) {
-      double distance = std::abs(chart.dates[i] - mouse_pos.x);
-      if (distance < min_distance) {
-        min_distance = distance;
-        closest_idx = i;
-      }
+    // Use lower_bound to find the insertion point for mouse_pos.x in the sorted dates vector
+    auto lower = std::lower_bound(chart.dates.begin(), chart.dates.end(), mouse_pos.x);
+
+    if (lower == chart.dates.end()) {
+        // Mouse x is beyond the last date, use the last element
+        closest_idx = chart.dates.size() - 1;
+    } else if (lower == chart.dates.begin()) {
+        // Mouse x is before the first date, use the first element
+        closest_idx = 0;
+    } else {
+        // Compare the distance to the element at lower and the one before it
+        size_t idx_after = std::distance(chart.dates.begin(), lower);
+        size_t idx_before = idx_after - 1;
+
+        double dist_to_after = std::abs(chart.dates[idx_after] - mouse_pos.x);
+        double dist_to_before = std::abs(chart.dates[idx_before] - mouse_pos.x);
+
+        closest_idx = (dist_to_before < dist_to_after) ? idx_before : idx_after;
     }
 
     // Calculate the time range for the clicked bar based on the timeframe

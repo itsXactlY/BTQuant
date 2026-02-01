@@ -4,6 +4,9 @@
 #include <functional>
 #include <string>
 #include <memory>
+#include <fstream>
+#include <iostream>
+#include <ctime>
 #include "../market_data_processor.hpp"
 
 namespace btq {
@@ -60,13 +63,20 @@ public:
 
     // Configure alert sensitivity thresholds
     void setSMACrossThreshold(double threshold);      // Threshold for price crossing SMA
+    void setEMACrossThreshold(double threshold);      // Threshold for price crossing EMA
     void setRSIThresholds(int overbought, int oversold); // RSI overbought/oversold levels
     void setBollingerBandThreshold(double threshold); // Threshold for touching Bollinger Bands
     void setMACDThreshold(double threshold);          // Threshold for MACD signals
 
+    // Logging and notification system
+    void enableLogging(bool enable);                 // Enable/disable alert logging
+    void setLogFilePath(const std::string& path);    // Set custom log file path
+    void logAlert(const IndicatorAlertEvent& event); // Log an alert to file
+
     // Check for alerts based on current market data and indicators
     void checkAlerts(const BTQuant::RenderEngine::OHLCVCandle& current_bar,
                      const std::vector<double>& sma_values,
+                     const std::vector<double>& ema_values,
                      const std::vector<double>& rsi_values,
                      const std::vector<double>& bb_upper_values,
                      const std::vector<double>& bb_lower_values,
@@ -80,6 +90,7 @@ public:
     // Check for alerts based on individual values (for real-time updates)
     void checkAlerts(double current_price,
                      double current_sma,
+                     double current_ema,
                      double current_rsi,
                      double current_bb_upper,
                      double current_bb_lower,
@@ -94,6 +105,7 @@ public:
 private:
     IndicatorAlertCallback alert_callback_;
     double sma_cross_threshold_;
+    double ema_cross_threshold_;
     int rsi_overbought_level_;
     int rsi_oversold_level_;
     double bollinger_band_threshold_;
@@ -102,6 +114,7 @@ private:
     // Store previous values for comparison
     double previous_price_;
     double previous_sma_;
+    double previous_ema_;
     double previous_rsi_;
     double previous_bb_upper_;
     double previous_bb_lower_;
@@ -113,6 +126,7 @@ private:
 
     // Previous state flags
     bool previous_price_above_sma_;
+    bool previous_price_above_ema_;
     bool previous_rsi_overbought_;
     bool previous_rsi_oversold_;
     bool previous_price_above_bb_upper_;
@@ -124,8 +138,14 @@ private:
     // Initialize previous values flag
     bool initialized_;
 
+    // Logging members
+    bool logging_enabled_;
+    std::string log_file_path_;
+    std::ofstream log_file_;
+
     // Helper methods
     bool isPriceCrossingSMA(double current_price, double current_sma, double previous_price, double previous_sma) const;
+    bool isPriceCrossingEMA(double current_price, double current_ema, double previous_price, double previous_ema) const;
     bool isRSIOversold(double current_rsi) const;
     bool isRSIOverbought(double current_rsi) const;
     bool isPriceTouchingBollingerBands(double current_price, double bb_upper, double bb_lower) const;

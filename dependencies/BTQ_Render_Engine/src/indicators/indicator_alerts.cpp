@@ -1,17 +1,20 @@
 #include "indicators/indicator_alerts.hpp"
 #include <cmath>
 #include <iostream>
+#include <ctime>
 
 namespace btq {
 
 IndicatorAlerts::IndicatorAlerts()
     : sma_cross_threshold_(0.0001),  // Small threshold for forex-like precision
+      ema_cross_threshold_(0.0001),  // Small threshold for forex-like precision
       rsi_overbought_level_(70),
       rsi_oversold_level_(30),
       bollinger_band_threshold_(0.0001),
       macd_threshold_(0.00001),
       previous_price_(0.0),
       previous_sma_(0.0),
+      previous_ema_(0.0),
       previous_rsi_(0.0),
       previous_bb_upper_(0.0),
       previous_bb_lower_(0.0),
@@ -21,6 +24,7 @@ IndicatorAlerts::IndicatorAlerts()
       previous_stoch_k_(0.0),
       previous_stoch_d_(0.0),
       previous_price_above_sma_(false),
+      previous_price_above_ema_(false),
       previous_rsi_overbought_(false),
       previous_rsi_oversold_(false),
       previous_price_above_bb_upper_(false),
@@ -28,6 +32,8 @@ IndicatorAlerts::IndicatorAlerts()
       previous_macd_above_signal_(false),
       previous_stoch_k_above_oversold_(false),
       previous_stoch_k_below_overbought_(false),
+      logging_enabled_(false),
+      log_file_path_("indicator_alerts.log"),
       initialized_(false) {
 }
 
@@ -37,6 +43,10 @@ void IndicatorAlerts::setAlertCallback(IndicatorAlertCallback callback) {
 
 void IndicatorAlerts::setSMACrossThreshold(double threshold) {
     sma_cross_threshold_ = std::abs(threshold);
+}
+
+void IndicatorAlerts::setEMACrossThreshold(double threshold) {
+    ema_cross_threshold_ = std::abs(threshold);
 }
 
 void IndicatorAlerts::setRSIThresholds(int overbought, int oversold) {
@@ -59,6 +69,7 @@ void IndicatorAlerts::setMACDThreshold(double threshold) {
 
 void IndicatorAlerts::checkAlerts(const BTQuant::RenderEngine::OHLCVCandle& current_bar,
                                   const std::vector<double>& sma_values,
+                                  const std::vector<double>& ema_values,
                                   const std::vector<double>& rsi_values,
                                   const std::vector<double>& bb_upper_values,
                                   const std::vector<double>& bb_lower_values,
@@ -75,6 +86,7 @@ void IndicatorAlerts::checkAlerts(const BTQuant::RenderEngine::OHLCVCandle& curr
 
     // Get the most recent indicator values
     double current_sma = sma_values.back();
+    double current_ema = ema_values.empty() ? 0.0 : ema_values.back();
     double current_rsi = rsi_values.empty() ? 0.0 : rsi_values.back();
     double current_bb_upper = bb_upper_values.empty() ? 0.0 : bb_upper_values.back();
     double current_bb_lower = bb_lower_values.empty() ? 0.0 : bb_lower_values.back();
@@ -88,13 +100,14 @@ void IndicatorAlerts::checkAlerts(const BTQuant::RenderEngine::OHLCVCandle& curr
     double current_price = current_bar.close;
     uint64_t timestamp = current_bar.timestamp;
 
-    checkAlerts(current_price, current_sma, current_rsi, current_bb_upper, current_bb_lower,
+    checkAlerts(current_price, current_sma, current_ema, current_rsi, current_bb_upper, current_bb_lower,
                 current_bb_middle, current_macd, current_macd_signal,
                 current_stoch_k, current_stoch_d, timestamp, symbol);
 }
 
 void IndicatorAlerts::checkAlerts(double current_price,
                                   double current_sma,
+                                  double current_ema,
                                   double current_rsi,
                                   double current_bb_upper,
                                   double current_bb_lower,
@@ -114,6 +127,7 @@ void IndicatorAlerts::checkAlerts(double current_price,
     if (!initialized_) {
         previous_price_ = current_price;
         previous_sma_ = current_sma;
+        previous_ema_ = current_ema;
         previous_rsi_ = current_rsi;
         previous_bb_upper_ = current_bb_upper;
         previous_bb_lower_ = current_bb_lower;
@@ -122,8 +136,9 @@ void IndicatorAlerts::checkAlerts(double current_price,
         previous_macd_signal_ = current_macd_signal;
         previous_stoch_k_ = current_stoch_k;
         previous_stoch_d_ = current_stoch_d;
-        
+
         previous_price_above_sma_ = current_price > current_sma;
+        previous_price_above_ema_ = current_price > current_ema;
         previous_rsi_overbought_ = current_rsi > rsi_overbought_level_;
         previous_rsi_oversold_ = current_rsi < rsi_oversold_level_;
         previous_price_above_bb_upper_ = current_price > current_bb_upper;
@@ -131,7 +146,7 @@ void IndicatorAlerts::checkAlerts(double current_price,
         previous_macd_above_signal_ = current_macd > current_macd_signal;
         previous_stoch_k_above_oversold_ = current_stoch_k > rsi_oversold_level_;
         previous_stoch_k_below_overbought_ = current_stoch_k < rsi_overbought_level_;
-        
+
         initialized_ = true;
         return;
     }
@@ -141,6 +156,13 @@ void IndicatorAlerts::checkAlerts(double current_price,
         bool is_bullish = current_price > current_sma;
         generateAlert(IndicatorAlertType::PRICE_CROSSES_SMA, timestamp, current_price,
                       current_sma, 0.0, 0.0, 0.0, symbol, is_bullish);
+    }
+
+    // Check for price crossing EMA
+    if (isPriceCrossingEMA(current_price, current_ema, previous_price_, previous_ema_)) {
+        bool is_bullish = current_price > current_ema;
+        generateAlert(IndicatorAlertType::PRICE_CROSSES_EMA, timestamp, current_price,
+                      current_ema, 0.0, 0.0, 0.0, symbol, is_bullish);
     }
 
     // Check for RSI oversold
@@ -158,18 +180,18 @@ void IndicatorAlerts::checkAlerts(double current_price,
     // Check for Bollinger Band touches
     if (isPriceTouchingBollingerBands(current_price, current_bb_upper, current_bb_lower)) {
         bool is_bullish = current_price >= current_bb_upper;
-        generateAlert(is_bullish ? IndicatorAlertType::BOLLINGER_BAND_TOUCH_UPPER : 
+        generateAlert(is_bullish ? IndicatorAlertType::BOLLINGER_BAND_TOUCH_UPPER :
                                  IndicatorAlertType::BOLLINGER_BAND_TOUCH_LOWER,
-                      timestamp, current_price, current_bb_middle, 0.0, 
+                      timestamp, current_price, current_bb_middle, 0.0,
                       current_bb_upper, current_bb_lower, symbol, is_bullish);
     }
 
     // Check for Bollinger Band breakouts
     if (isPriceBreakingBollingerBands(current_price, current_bb_upper, current_bb_lower)) {
         bool is_bullish = current_price > current_bb_upper;
-        generateAlert(is_bullish ? IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_UPPER : 
+        generateAlert(is_bullish ? IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_UPPER :
                                  IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_LOWER,
-                      timestamp, current_price, current_bb_middle, 0.0, 
+                      timestamp, current_price, current_bb_middle, 0.0,
                       current_bb_upper, current_bb_lower, symbol, is_bullish);
     }
 
@@ -195,6 +217,7 @@ void IndicatorAlerts::checkAlerts(double current_price,
     // Update previous values for next comparison
     previous_price_ = current_price;
     previous_sma_ = current_sma;
+    previous_ema_ = current_ema;
     previous_rsi_ = current_rsi;
     previous_bb_upper_ = current_bb_upper;
     previous_bb_lower_ = current_bb_lower;
@@ -203,8 +226,9 @@ void IndicatorAlerts::checkAlerts(double current_price,
     previous_macd_signal_ = current_macd_signal;
     previous_stoch_k_ = current_stoch_k;
     previous_stoch_d_ = current_stoch_d;
-    
+
     previous_price_above_sma_ = current_price > current_sma;
+    previous_price_above_ema_ = current_price > current_ema;
     previous_rsi_overbought_ = current_rsi > rsi_overbought_level_;
     previous_rsi_oversold_ = current_rsi < rsi_oversold_level_;
     previous_price_above_bb_upper_ = current_price > current_bb_upper;
@@ -223,6 +247,21 @@ bool IndicatorAlerts::isPriceCrossingSMA(double current_price, double current_sm
     // Add threshold to avoid noise
     double price_sma_diff = std::abs(current_price - current_sma);
     if (price_sma_diff < sma_cross_threshold_) {
+        return false; // Too close to call, avoid noise
+    }
+
+    return current_above != previous_above;
+}
+
+bool IndicatorAlerts::isPriceCrossingEMA(double current_price, double current_ema,
+                                         double previous_price, double previous_ema) const {
+    // Check if price crossed EMA from above to below or below to above
+    bool current_above = current_price > current_ema;
+    bool previous_above = previous_price > previous_ema;
+
+    // Add threshold to avoid noise
+    double price_ema_diff = std::abs(current_price - current_ema);
+    if (price_ema_diff < ema_cross_threshold_) {
         return false; // Too close to call, avoid noise
     }
 
@@ -310,11 +349,103 @@ bool IndicatorAlerts::isStochasticOverbought(double current_stoch_k, double curr
 void IndicatorAlerts::generateAlert(IndicatorAlertType type, uint64_t timestamp, double price,
                                     double indicator_value, double secondary_value,
                                     double upper_band, double lower_band, const std::string& symbol, bool bullish) {
-    IndicatorAlertEvent event(type, timestamp, price, indicator_value, secondary_value, 
+    IndicatorAlertEvent event(type, timestamp, price, indicator_value, secondary_value,
                              upper_band, lower_band, symbol, bullish);
 
     // Call the registered callback
-    alert_callback_(event);
+    if (alert_callback_) {
+        alert_callback_(event);
+    }
+
+    // Log the alert if logging is enabled
+    if (logging_enabled_) {
+        logAlert(event);
+    }
+}
+
+void IndicatorAlerts::enableLogging(bool enable) {
+    logging_enabled_ = enable;
+    if (enable && !log_file_.is_open()) {
+        log_file_.open(log_file_path_, std::ios::app);
+    } else if (!enable && log_file_.is_open()) {
+        log_file_.close();
+    }
+}
+
+void IndicatorAlerts::setLogFilePath(const std::string& path) {
+    log_file_path_ = path;
+    if (logging_enabled_ && log_file_.is_open()) {
+        log_file_.close();
+        log_file_.open(log_file_path_, std::ios::app);
+    }
+}
+
+void IndicatorAlerts::logAlert(const IndicatorAlertEvent& event) {
+    if (!logging_enabled_) {
+        return;
+    }
+
+    if (!log_file_.is_open()) {
+        log_file_.open(log_file_path_, std::ios::app);
+        if (!log_file_.is_open()) {
+            std::cerr << "Failed to open log file: " << log_file_path_ << std::endl;
+            return;
+        }
+    }
+
+    // Convert timestamp to readable format
+    time_t timestamp_seconds = static_cast<time_t>(event.timestamp / 1000000); // Convert microseconds to seconds
+    char buffer[100];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", localtime(&timestamp_seconds));
+
+    std::string alert_type_str;
+    switch (event.alert_type) {
+        case IndicatorAlertType::PRICE_CROSSES_SMA:
+            alert_type_str = "PRICE_CROSSES_SMA";
+            break;
+        case IndicatorAlertType::PRICE_CROSSES_EMA:
+            alert_type_str = "PRICE_CROSSES_EMA";
+            break;
+        case IndicatorAlertType::RSI_OVERSOLD:
+            alert_type_str = "RSI_OVERSOLD";
+            break;
+        case IndicatorAlertType::RSI_OVERBOUGHT:
+            alert_type_str = "RSI_OVERBOUGHT";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_UPPER:
+            alert_type_str = "BOLLINGER_BAND_TOUCH_UPPER";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_LOWER:
+            alert_type_str = "BOLLINGER_BAND_TOUCH_LOWER";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_UPPER:
+            alert_type_str = "BOLLINGER_BAND_BREAKOUT_UPPER";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_LOWER:
+            alert_type_str = "BOLLINGER_BAND_BREAKOUT_LOWER";
+            break;
+        case IndicatorAlertType::MACD_CROSS_SIGNAL:
+            alert_type_str = "MACD_CROSS_SIGNAL";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERSOLD:
+            alert_type_str = "STOCHASTIC_OVERSOLD";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERBOUGHT:
+            alert_type_str = "STOCHASTIC_OVERBOUGHT";
+            break;
+        default:
+            alert_type_str = "UNKNOWN";
+            break;
+    }
+
+    log_file_ << "[" << buffer << "." << (event.timestamp % 1000000)/1000 << "] "
+              << "Symbol: " << event.symbol << ", "
+              << "Alert: " << alert_type_str << ", "
+              << "Price: " << event.price << ", "
+              << "Value: " << event.indicator_value << ", "
+              << "Direction: " << (event.is_bullish ? "Bullish" : "Bearish") << std::endl;
+
+    log_file_.flush(); // Ensure the log is written immediately
 }
 
 } // namespace btq

@@ -337,6 +337,28 @@ void DashboardControls::render_dashboard_controls() {
       ImGui::Text("No symbol selected");
     }
 
+    // Add a refresh button to update symbols from exchange API
+    ImGui::Spacing();
+    if (ImGui::Button("Refresh Symbols from Exchange API")) {
+      fetch_symbols_from_api_ = true;
+      needs_refresh_ = true;
+
+      // Trigger the API fetch
+      if (panel_manager_) {
+        fetch_symbols_from_exchange_api();
+        fetch_symbols_from_api_ = false;
+        symbols_loaded_ = true;
+        needs_refresh_ = false;
+
+        // Update filtered symbols to match the newly loaded symbols
+        filtered_symbols_ = all_symbols_;
+      }
+    }
+
+    // Show status of symbol count
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%zu symbols)", all_symbols_.size());
+
     // Symbol selection section (keeping the original section for advanced controls)
     if (ImGui::CollapsingHeader("Symbol Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
       // Refresh symbols button
@@ -858,6 +880,9 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
   filtered_symbols_ = all_symbols_;
 
   std::cout << "[DashboardControls] Fetched " << all_symbols_.size() << " symbols from exchange APIs" << std::endl;
+
+  // Update the symbol input buffer to clear any previous search
+  std::fill(symbol_input_buffer_.begin(), symbol_input_buffer_.end(), 0);
 }
 
 void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame timeframe) {

@@ -3,10 +3,10 @@
 #include "../ui/ui_base.hpp"
 #include "../vulkan_base_types.hpp"
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
-#include <string>
 
 namespace BTQuant {
 
@@ -35,7 +35,7 @@ class DashboardControls : public UIComponent {
   bool exchanges_loaded_ = false;                  // Flag to indicate if exchanges are loaded
 
   // Symbol selection state
-  std::string symbol_input_buffer_ = "";  // For search input
+  std::array<char, 256> symbol_input_buffer_ = {};  // For search input
   std::vector<std::string> filtered_symbols_;  // Filtered symbols for search
   std::vector<std::string> all_symbols_;       // All available symbols
   std::vector<std::string> exchange_filtered_symbols_; // Symbols filtered by selected exchanges

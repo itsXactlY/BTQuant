@@ -266,12 +266,11 @@ void DashboardControls::render_dashboard_controls() {
       ImGui::Text("Select Symbol:");
 
       // Search input for filtering the dropdown options
-      static char search_buffer[256] = "";
-      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", search_buffer, sizeof(search_buffer))) {
+      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", symbol_input_buffer_.data(), symbol_input_buffer_.size())) {
         // Filter symbols based on search input
         filtered_symbols_.clear();
 
-        std::string search_lower = search_buffer;
+        std::string search_lower = symbol_input_buffer_.data();
         std::transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
 
         for (const auto& symbol : all_symbols_) {

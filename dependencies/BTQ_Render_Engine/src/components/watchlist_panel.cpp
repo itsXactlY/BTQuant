@@ -90,7 +90,7 @@ void WatchlistPanel::render() {
   ImGui::SameLine();
 
   // Button to add symbol by name
-  bool add_clicked = ImGui::Button("Add Symbol");
+  bool add_clicked = ImGui::Button("Add");
   // Add tooltip to explain the button
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
@@ -101,25 +101,36 @@ void WatchlistPanel::render() {
   // Show error message if symbol not found
   std::string symbol_to_add = new_symbol_buffer_;
   if ((add_clicked || input_entered) && !symbol_to_add.empty() && bridge_) {
-    bool symbol_found = false;
-    auto active_symbols = bridge_->getActiveSymbols();
-    for (uint32_t sym_id : active_symbols) {
-      std::string sym_name = bridge_->getSymbolName(sym_id);
-      std::string exchange = bridge_->getExchangeName(sym_id);
-      if (!sym_name.empty() && sym_name == symbol_to_add && watchlist_.find(sym_id) == watchlist_.end()) {
-        add_symbol(sym_id, sym_name, exchange);
-        new_symbol_buffer_[0] = '\0'; // Clear the input buffer
-        symbol_found = true;
-        break;
-      }
-    }
+    // Trim whitespace from input
+    symbol_to_add.erase(0, symbol_to_add.find_first_not_of(" \t"));
+    symbol_to_add.erase(symbol_to_add.find_last_not_of(" \t") + 1);
 
-    // Show error message if symbol was not found
-    if (!symbol_found && !symbol_to_add.empty()) {
+    if (symbol_to_add.empty()) {
       ImGui::SameLine();
       ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f)); // Red text for error
-      ImGui::Text("Symbol '%s' not found!", symbol_to_add.c_str());
+      ImGui::Text("Please enter a valid symbol name!");
       ImGui::PopStyleColor();
+    } else {
+      bool symbol_found = false;
+      auto active_symbols = bridge_->getActiveSymbols();
+      for (uint32_t sym_id : active_symbols) {
+        std::string sym_name = bridge_->getSymbolName(sym_id);
+        std::string exchange = bridge_->getExchangeName(sym_id);
+        if (!sym_name.empty() && sym_name == symbol_to_add && watchlist_.find(sym_id) == watchlist_.end()) {
+          add_symbol(sym_id, sym_name, exchange);
+          new_symbol_buffer_[0] = '\0'; // Clear the input buffer
+          symbol_found = true;
+          break;
+        }
+      }
+
+      // Show error message if symbol was not found
+      if (!symbol_found) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f)); // Red text for error
+        ImGui::Text("Symbol '%s' not found!", symbol_to_add.c_str());
+        ImGui::PopStyleColor();
+      }
     }
   }
 
@@ -508,6 +519,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
+
   // Style the delete button to be more visually distinct
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));      // Red background
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.1f, 0.1f, 1.0f)); // Darker red when hovered
@@ -515,10 +527,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
 
   // Make the delete button smaller and more compact
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f)); // Smaller padding
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 3.0f)); // Small padding but slightly larger for better click area
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
 
-  if (ImGui::Button("×")) {  // Use × symbol for cleaner look
+  if (ImGui::Button("X##DeleteBtn")) {  // Use X instead of × for better font support
     remove_symbol(entry.symbol_id);
   }
 

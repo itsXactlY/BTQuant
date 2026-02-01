@@ -372,21 +372,6 @@ void DashboardControls::render_dashboard_controls() {
         }
       }
       ImGui::Spacing();
-
-      // Additional useful panels
-      if (ImGui::Button("Add Metrics", ImVec2(-1, 30))) {
-        if (panel_manager_) {
-          panel_manager_->add_panel(PanelType::METRICS);
-        }
-      }
-      ImGui::Spacing();
-
-      if (ImGui::Button("Add Screener", ImVec2(-1, 30))) {
-        if (panel_manager_) {
-          panel_manager_->add_panel(PanelType::SCREENER);
-        }
-      }
-      ImGui::Spacing();
     }
 
     // Layout controls

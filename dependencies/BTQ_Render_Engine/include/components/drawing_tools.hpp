@@ -163,37 +163,52 @@ class DrawingToolsManager {
 public:
     DrawingToolsManager();
     ~DrawingToolsManager();
-    
+
     // Add a new drawing tool
     void add_tool(std::unique_ptr<DrawingTool> tool);
-    
+
     // Remove a drawing tool by ID
     void remove_tool(const std::string& id);
-    
+
     // Clear all drawing tools
     void clear_all_tools();
-    
+
     // Render all visible drawing tools
     void render_all();
-    
+
     // Toggle visibility of a tool
     void toggle_visibility(const std::string& id);
-    
+
     // Update tool properties
     void update_tool_color(const std::string& id, ImVec4 new_color);
     void update_tool_thickness(const std::string& id, float new_thickness);
-    
+
     // UI controls for managing drawing tools
     void render_ui_controls();
-    
+
     // Save/load drawing tools to/from persistent storage
     void save_to_file(const std::string& filename);
     void load_from_file(const std::string& filename);
-    
+
+    // Mouse event handling for drawing tools
+    void handle_mouse_events();
+    void start_new_tool(int tool_type, ImVec2 start_pos);
+    void update_current_tool(ImVec2 current_pos);
+    void finalize_current_tool();
+
+    // Check if a tool is currently being created
+    bool is_creating_tool() const { return creating_tool_ != nullptr; }
+
 private:
     std::vector<std::unique_ptr<DrawingTool>> tools_;
     std::string selected_tool_id_;
     bool show_ui_controls_ = true;
+
+    // Tool creation state
+    std::unique_ptr<DrawingTool> creating_tool_ = nullptr;
+    int current_tool_type_ = -1;
+    ImVec2 tool_start_pos_;
+    bool tool_dragging_ = false;
 };
 
 } // namespace BTQuant

@@ -39,6 +39,11 @@ void DrawingToolsManager::render_all() {
             tool->render();
         }
     }
+
+    // Also render the tool currently being created
+    if (creating_tool_) {
+        creating_tool_->render();
+    }
 }
 
 void DrawingToolsManager::toggle_visibility(const std::string& id) {
@@ -70,31 +75,41 @@ void DrawingToolsManager::update_tool_thickness(const std::string& id, float new
 
 void DrawingToolsManager::render_ui_controls() {
     if (!show_ui_controls_) return;
-    
+
     ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Drawing Tools", &show_ui_controls_)) {
         // Tool selection and creation
         static int selected_tool_type = 0;
         const char* tool_types[] = { "Trend Line", "Horizontal Line", "Fibonacci", "Rectangle", "Text Annotation" };
-        
-        ImGui::Combo("Tool Type", &selected_tool_type, tool_types, IM_ARRAYSIZE(tool_types));
-        
+
+        if (ImGui::Combo("Tool Type", &selected_tool_type, tool_types, IM_ARRAYSIZE(tool_types))) {
+            // Update the current tool type when selection changes
+            current_tool_type_ = selected_tool_type;
+        }
+
         // Tool properties
         static ImVec4 current_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         static float current_thickness = 1.0f;
-        
+        static std::string current_text = "Note";
+        static float current_font_size = 14.0f;
+
         ImGui::ColorEdit4("Color", (float*)&current_color);
         ImGui::SliderFloat("Thickness", &current_thickness, 0.5f, 5.0f, "%.1f");
-        
+
+        if (selected_tool_type == 4) { // Text Annotation
+            ImGui::InputText("Text", &current_text);
+            ImGui::SliderFloat("Font Size", &current_font_size, 8.0f, 24.0f, "%.0f");
+        }
+
         // Add button to create new tool
         if (ImGui::Button("Add New Tool")) {
             // In a real implementation, we would capture mouse clicks on the chart
             // to determine where to place the tool. For now, we'll just add a sample tool.
-            
+
             // Generate a unique ID for the new tool
             static int tool_counter = 0;
             std::string new_id = "tool_" + std::to_string(++tool_counter);
-            
+
             switch (selected_tool_type) {
                 case 0: { // Trend Line
                     // In real implementation, we would capture two points from user interaction
@@ -141,7 +156,8 @@ void DrawingToolsManager::render_ui_controls() {
                 case 4: { // Text Annotation
                     // In real implementation, we would capture position and text from user interaction
                     // For now, using sample position and text
-                    auto tool = std::make_unique<TextAnnotation>(new_id, ImVec2(5.0f, 130.0f), "Sample Note");
+                    auto tool = std::make_unique<TextAnnotation>(new_id, ImVec2(5.0f, 130.0f), current_text);
+                    static_cast<TextAnnotation*>(tool.get())->font_size = current_font_size;
                     tool->color = current_color;
                     tool->thickness = current_thickness;
                     add_tool(std::move(tool));
@@ -149,47 +165,80 @@ void DrawingToolsManager::render_ui_controls() {
                 }
             }
         }
-        
+
+        // Show status if a tool is being created
+        if (creating_tool_) {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Creating tool... Click and drag on chart");
+        }
+
         // List existing tools with controls
         if (!tools_.empty()) {
             ImGui::Separator();
             ImGui::Text("Existing Tools:");
-            
+
             for (size_t i = 0; i < tools_.size(); ++i) {
                 auto& tool = tools_[i];
-                
+
                 ImGui::PushID(static_cast<int>(i));
-                
+
                 // Show tool type and ID
                 std::string tool_label = tool->id + "##" + std::to_string(i);
                 ImGui::Text("%s", tool_label.c_str());
-                
+
                 // Visibility toggle
                 bool is_visible = tool->visible;
                 if (ImGui::Checkbox(("Visible##" + std::to_string(i)).c_str(), &is_visible)) {
                     tool->visible = is_visible;
                 }
-                
+
+                // Lock toggle
+                bool is_locked = tool->locked;
+                if (ImGui::Checkbox(("Locked##" + std::to_string(i)).c_str(), &is_locked)) {
+                    tool->locked = is_locked;
+                }
+
                 // Color picker
                 ImVec4 tool_color = tool->color;
                 if (ImGui::ColorEdit4(("Color##" + std::to_string(i)).c_str(), (float*)&tool_color)) {
                     tool->color = tool_color;
                 }
-                
+
                 // Thickness slider
                 float tool_thickness = tool->thickness;
                 if (ImGui::SliderFloat(("Thickness##" + std::to_string(i)).c_str(), &tool_thickness, 0.5f, 5.0f, "%.1f")) {
                     tool->thickness = tool_thickness;
                 }
-                
+
+                // Additional controls for text annotations
+                if (auto* text_tool = dynamic_cast<TextAnnotation*>(tool.get())) {
+                    std::string current_text_val = text_tool->text;
+                    if (ImGui::InputText(("Text##" + std::to_string(i)).c_str(), &current_text_val)) {
+                        text_tool->text = current_text_val;
+                    }
+
+                    float font_size = text_tool->font_size;
+                    if (ImGui::SliderFloat(("Font Size##" + std::to_string(i)).c_str(), &font_size, 8.0f, 24.0f, "%.0f")) {
+                        text_tool->font_size = font_size;
+                    }
+                }
+
                 // Delete button
                 if (ImGui::Button(("Delete##" + std::to_string(i)).c_str())) {
                     tools_.erase(tools_.begin() + i);
                     --i; // Adjust index after removal
                 }
-                
+
                 ImGui::PopID();
             }
+        }
+
+        // Add save/load buttons
+        if (ImGui::Button("Save Tools")) {
+            save_to_file("drawing_tools.json");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load Tools")) {
+            load_from_file("drawing_tools.json");
         }
     }
     ImGui::End();
@@ -329,6 +378,101 @@ void DrawingToolsManager::load_from_file(const std::string& filename) {
 
             tools_.push_back(std::move(tool));
         }
+    }
+}
+
+void DrawingToolsManager::handle_mouse_events() {
+    // Handle mouse events for creating and manipulating drawing tools
+    if (ImPlot::IsPlotHovered()) {
+        // Check for left mouse button press to start creating a new tool
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+
+            // If we're not currently creating a tool, start creating one
+            if (!creating_tool_ && current_tool_type_ >= 0) {
+                start_new_tool(current_tool_type_, mouse_pos);
+            }
+        }
+
+        // If we're currently creating a tool, update it as the mouse moves
+        if (creating_tool_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+            update_current_tool(mouse_pos);
+        }
+
+        // Check for mouse release to finalize the tool
+        if (creating_tool_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+            update_current_tool(mouse_pos);  // Update one final time
+            finalize_current_tool();
+        }
+    }
+}
+
+void DrawingToolsManager::start_new_tool(int tool_type, ImVec2 start_pos) {
+    // Generate a unique ID for the new tool
+    static int tool_counter = 0;
+    std::string new_id = "tool_" + std::to_string(++tool_counter);
+
+    // Store the start position
+    tool_start_pos_ = start_pos;
+
+    switch (tool_type) {
+        case 0: { // Trend Line
+            creating_tool_ = std::make_unique<TrendLine>(new_id, start_pos, start_pos);
+            break;
+        }
+        case 1: { // Horizontal Line
+            creating_tool_ = std::make_unique<HorizontalLine>(new_id, start_pos.y);
+            break;
+        }
+        case 2: { // Fibonacci
+            creating_tool_ = std::make_unique<FibonacciRetracement>(new_id, start_pos, start_pos);
+            break;
+        }
+        case 3: { // Rectangle
+            creating_tool_ = std::make_unique<Rectangle>(new_id, start_pos, start_pos);
+            break;
+        }
+        case 4: { // Text Annotation
+            creating_tool_ = std::make_unique<TextAnnotation>(new_id, start_pos, "Note");
+            break;
+        }
+    }
+
+    if (creating_tool_) {
+        // Apply default properties
+        creating_tool_->color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow for visibility during creation
+        creating_tool_->thickness = 2.0f;
+    }
+}
+
+void DrawingToolsManager::update_current_tool(ImVec2 current_pos) {
+    if (!creating_tool_) return;
+
+    // Update the tool based on its type
+    if (auto* trend_line = dynamic_cast<TrendLine*>(creating_tool_.get())) {
+        trend_line->point2 = current_pos;
+    } else if (auto* fib = dynamic_cast<FibonacciRetracement*>(creating_tool_.get())) {
+        fib->point2 = current_pos;
+    } else if (auto* rect = dynamic_cast<Rectangle*>(creating_tool_.get())) {
+        rect->point2 = current_pos;
+    } else if (auto* text = dynamic_cast<TextAnnotation*>(creating_tool_.get())) {
+        text->position = current_pos;
+    }
+    // Horizontal line doesn't need updating since it only depends on Y value
+}
+
+void DrawingToolsManager::finalize_current_tool() {
+    if (creating_tool_) {
+        // Reset the color to white for the final tool
+        creating_tool_->color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+        // Add the completed tool to the tools list
+        add_tool(std::move(creating_tool_));
+
+        // Reset tool creation state
+        current_tool_type_ = -1;
     }
 }
 

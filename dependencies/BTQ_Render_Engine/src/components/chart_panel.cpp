@@ -2640,6 +2640,8 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
     // Handle drawing tools mouse events
     if (drawing_tools_manager_ && ImPlot::IsPlotHovered()) {
+        drawing_tools_manager_->handle_mouse_events();
+
         // Check for mouse clicks to create drawing tools
         if (ImPlot::IsPlotSelected()) {
             ImPlotRect selection = ImPlot::GetPlotSelection();

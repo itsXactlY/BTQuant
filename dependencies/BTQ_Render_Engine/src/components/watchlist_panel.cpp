@@ -981,21 +981,18 @@ void WatchlistPanel::render_table_header() {
     // Render the header cell with drag-and-drop support
     ImGui::TableNextColumn();
 
-    // Check if the current visible column is being hovered
-    if (ImGui::TableGetColumnFlags(idx) & ImGuiTableColumnFlags_IsHovered) {
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-        clicked_column_index_ = orig_idx;  // Store the actual column index
-        column_context_menu_open_ = true;
-        ImGui::OpenPopup("ColumnContextMenu");
-        break; // Exit loop after handling the click
-      }
-    }
-
     // Render the header text
     ImGui::Text(column_info_[orig_idx].name.c_str());
 
+    // Check if the current visible column is being hovered for right-click
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+      clicked_column_index_ = orig_idx;  // Store the actual column index
+      column_context_menu_open_ = true;
+      ImGui::OpenPopup("ColumnContextMenu");
+    }
+
     // Implement drag-and-drop for column reordering
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
       // Set payload to carry the column index
       ImGui::SetDragDropPayload("COLUMN_REORDER", &orig_idx, sizeof(int));
       ImGui::Text("Moving %s", column_info_[orig_idx].name.c_str());
@@ -1007,9 +1004,9 @@ void WatchlistPanel::render_table_header() {
       if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("COLUMN_REORDER")) {
         int source_column = *(const int*)payload->Data;
 
-        // Swap the positions of the columns
+        // Reorder the columns by updating their order values
         if (source_column != orig_idx) {
-          swap_column_positions(source_column, orig_idx);
+          reorder_columns(source_column, orig_idx);
         }
       }
       ImGui::EndDragDropTarget();
@@ -2485,12 +2482,12 @@ void WatchlistPanel::render_column_context_menu() {
       ImGui::Text("Column Options:");
       ImGui::Separator();
 
-      // Show/hide options for each column
+      // Show/hide options for each column with current visibility status
       for (int i = 0; i < static_cast<int>(column_info_.size()); ++i) {
-        if (i == clicked_column_index_) continue; // Skip the clicked column for special handling
-
         bool is_visible = column_info_[i].visible;
-        if (ImGui::Checkbox(column_info_[i].name.c_str(), &is_visible)) {
+        std::string label = column_info_[i].name + (is_visible ? " (Visible)" : " (Hidden)");
+
+        if (ImGui::MenuItem(label.c_str(), nullptr, &is_visible)) {
           column_info_[i].visible = is_visible;
 
           // Save the updated settings to config
@@ -2500,27 +2497,25 @@ void WatchlistPanel::render_column_context_menu() {
 
       ImGui::Separator();
 
-      // Option to hide the clicked column
-      bool clicked_col_visible = column_info_[clicked_column_index_].visible;
-      std::string hide_text = "Hide '" + column_info_[clicked_column_index_].name + "'";
-      if (ImGui::MenuItem(hide_text.c_str())) {
-        column_info_[clicked_column_index_].visible = false;
-
-        // Save the updated settings to config
-        save_column_settings_to_config(config_file_path_);
-      }
-
-      // Option to show all columns
-      if (ImGui::MenuItem("Show All Columns")) {
-        for (auto& col : column_info_) {
-          col.visible = true;
-        }
+      // Option to reset to default column layout
+      if (ImGui::MenuItem("Reset to Default Layout")) {
+        initialize_column_settings(); // Reset to default settings
 
         // Save the updated settings to config
         save_column_settings_to_config(config_file_path_);
       }
 
       ImGui::EndPopup();
+
+      // Close the popup after processing
+      if (!ImGui::IsPopupOpen("ColumnContextMenu")) {
+        column_context_menu_open_ = false;
+        clicked_column_index_ = -1;
+      }
+    } else {
+      // Popup was closed, reset the state
+      column_context_menu_open_ = false;
+      clicked_column_index_ = -1;
     }
   }
 }
@@ -2713,14 +2708,56 @@ void WatchlistPanel::swap_column_positions(int index1, int index2) {
   if (index1 >= 0 && index1 < static_cast<int>(column_info_.size()) &&
       index2 >= 0 && index2 < static_cast<int>(column_info_.size()) &&
       index1 != index2) {
+
+    // Get the current order values
+    int order1 = column_info_[index1].order;
+    int order2 = column_info_[index2].order;
+
     // Swap the order values
-    int temp_order = column_info_[index1].order;
-    column_info_[index1].order = column_info_[index2].order;
-    column_info_[index2].order = temp_order;
+    column_info_[index1].order = order2;
+    column_info_[index2].order = order1;
 
     // Save the updated settings to config
     save_column_settings_to_config(config_file_path_);
   }
+}
+
+void WatchlistPanel::reorder_columns(int source_index, int target_index) {
+  if (source_index < 0 || source_index >= static_cast<int>(column_info_.size()) ||
+      target_index < 0 || target_index >= static_cast<int>(column_info_.size()) ||
+      source_index == target_index) {
+    return;
+  }
+
+  // Get the source column's current order value
+  int source_order = column_info_[source_index].order;
+
+  // Get the target column's current order value
+  int target_order = column_info_[target_index].order;
+
+  // If the source is being moved after the target, we need to shift other columns appropriately
+  if (source_order < target_order) {
+    // Moving right/down - shift columns between source and target left
+    for (auto& col : column_info_) {
+      if (col.order > source_order && col.order <= target_order) {
+        col.order--;
+      }
+    }
+    // Set the source column to the target position
+    column_info_[source_index].order = target_order;
+  } else {
+    // Moving left/up - shift columns between target and source right
+    for (auto& col : column_info_) {
+      if (col.order >= target_order && col.order < source_order) {
+        col.order++;
+      }
+    }
+    // Set the source column to the target position
+    column_info_[source_index].order = target_order;
+  }
+
+  // Save the updated settings to config
+  save_column_settings_to_config(config_file_path_);
 }
 
 void WatchlistPanel::process_pending_updates() {

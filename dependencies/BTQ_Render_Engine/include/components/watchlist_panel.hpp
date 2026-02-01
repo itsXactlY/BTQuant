@@ -165,6 +165,7 @@ class WatchlistPanel : public PanelBase {
   void save_column_settings_to_config(const std::string& config_file) const;
   void load_column_settings_from_config(const std::string& config_file);
   void swap_column_positions(int index1, int index2);
+  void reorder_columns(int source_index, int target_index);
   void render_draggable_header(int column_index, const char* label);
 
   // Drag and drop helpers

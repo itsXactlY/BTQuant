@@ -86,7 +86,8 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   subscription_id_ = 0;
 
   // Set config file path based on panel name or use default
-  config_file_path_ = "watchlist_config.ini";
+  std::string panel_name = config.name.empty() ? "watchlist" : config.name;
+  config_file_path_ = panel_name + "_config.ini";
 
   // Load the saved watchlist order from config file
   load_watchlist_order_from_config(config_file_path_);
@@ -600,6 +601,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     }
   }
 
+  // DRAG-AND-DROP REORDERING IMPLEMENTATION
+  // Each row acts as both a drag source and drop target to enable reordering
+
   // Drag and drop source - make the entire row draggable with enhanced visual feedback
   if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID | ImGuiDragDropFlags_SourceNoDisableHover)) {
     // Set payload to carry the symbol_id
@@ -616,10 +620,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     // Add a visual border around the preview
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 size = ImGui::GetContentRegionAvail();
+    ImVec2 size = ImVec2(300, ImGui::GetTextLineHeightWithSpacing() * 5); // Fixed size for cleaner preview
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + ImGui::GetTextLineHeightWithSpacing() * 5),
-                      ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 0.0f, 0, 2.0f);
+    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                      ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
 
     ImGui::EndDragDropSource();
   }
@@ -674,8 +678,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
         // Log the reordering action
         std::cout << "[WatchlistPanel] Reordered symbol " << entry.symbol
-                  << " to position " << target_idx << " (dropped "
-                  << (drop_above ? "above" : "below") << " " << entry.symbol << ")" << std::endl;
+                  << " (ID: " << source_symbol_id << ") to position " << target_idx
+                  << " (dropped " << (drop_above ? "above" : "below") << " " << entry.symbol << ")" << std::endl;
+
+        // Trigger a refresh of subscriptions to maintain proper ordering
+        refresh_all_subscriptions();
       }
     }
 
@@ -733,6 +740,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     ImGui::EndDragDropTarget();
   }
+
+  // END DRAG-AND-DROP REORDERING IMPLEMENTATION
+  // The display_order_ vector is updated immediately when a drag operation completes
+  // and the new order is saved to the config file for persistence
 
   ImGui::PopID();
 
@@ -1251,6 +1262,11 @@ void WatchlistPanel::handle_drag_drop_reordering() {
   // This method is now deprecated as drag and drop reordering is handled directly in render_table_row
   // when drag and drop occurs. This ensures immediate visual feedback and proper state management.
   // The drag-and-drop functionality is now fully implemented and working with config saving.
+
+  // NOTE: The actual drag-and-drop reordering happens in render_table_row() method
+  // where each row acts as both a drag source and drop target.
+  // When a drag operation completes, the display_order_ vector is updated immediately
+  // and the new order is saved to the config file.
 }
 
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {

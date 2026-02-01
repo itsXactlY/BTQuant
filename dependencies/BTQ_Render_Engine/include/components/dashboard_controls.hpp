@@ -51,6 +51,9 @@ class DashboardControls : public UIComponent {
   // Helper method to check if an exchange is selected
   bool is_exchange_selected(const std::string& exchange_name) const;
 
+  // Helper method to refresh symbols based on selected exchanges
+  void refresh_symbols_for_selected_exchanges();
+
   // Timeframe selection state
   RenderEngine::TimeFrame current_timeframe_ = RenderEngine::TimeFrame::TF_1MIN;
 

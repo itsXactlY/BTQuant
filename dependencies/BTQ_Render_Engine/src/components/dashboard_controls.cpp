@@ -73,7 +73,9 @@ void DashboardControls::render_dashboard_controls() {
         std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1); // 1 means true/selected
 
         exchanges_loaded_ = true;
-        needs_refresh_ = true; // Refresh symbols after exchange selection changes
+
+        // Refresh symbols after exchange selection changes
+        refresh_symbols_for_selected_exchanges();
       }
 
       // Multi-select dropdown for exchanges
@@ -113,12 +115,12 @@ void DashboardControls::render_dashboard_controls() {
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
         ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 300));
 
+        bool any_changes = false; // Move this declaration outside the Begin/End block
+
         if (ImGui::Begin("##ExchangeSelectorPopup", &show_exchange_selector,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
                          ImGuiWindowFlags_NoSavedSettings)) {
-
-          bool any_changes = false;
 
           // Select All / Deselect All buttons
           if (ImGui::Button("Select All", ImVec2(ImGui::GetContentRegionAvail().x * 0.45f, 0))) {
@@ -141,9 +143,6 @@ void DashboardControls::render_dashboard_controls() {
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
               selected_exchanges_[i] = temp_selected ? 1 : 0;
               any_changes = true;
-
-              // Automatically refresh when selection changes
-              needs_refresh_ = true;
             }
           }
 
@@ -152,6 +151,11 @@ void DashboardControls::render_dashboard_controls() {
           // Apply button to close the popup
           if (ImGui::Button("Apply", ImVec2(-1, 0))) {
             show_exchange_selector = false;
+
+            // Refresh symbols when exchange selection changes
+            if (any_changes) {
+              refresh_symbols_for_selected_exchanges();
+            }
           }
 
           if (any_changes) {
@@ -180,7 +184,11 @@ void DashboardControls::render_dashboard_controls() {
         } else {
           // Window was closed (by clicking outside), so set the flag to false and refresh
           show_exchange_selector = false;
-          needs_refresh_ = true; // Refresh symbols when exchange selection changes
+
+          // Refresh symbols when exchange selection changes
+          if (any_changes) {
+            refresh_symbols_for_selected_exchanges();
+          }
         }
       }
 
@@ -346,82 +354,14 @@ void DashboardControls::render_dashboard_controls() {
       // Load symbols if needed
       if (needs_refresh_ || !symbols_loaded_ || fetch_symbols_from_api_) {
         if (panel_manager_) {
-          // Get all available symbols from the symbol registry
-          all_symbols_.clear();
-
           if (fetch_symbols_from_api_) {
             // Fetch symbols directly from exchange APIs
             fetch_symbols_from_exchange_api();
             fetch_symbols_from_api_ = false;
           } else {
-            // Get symbols from the symbol registry, filtered by selected exchanges
-            auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
-            for (const auto& symbol_info : all_symbol_infos) {
-              // Check if this symbol's exchange is in the selected exchanges
-              if (is_exchange_selected(symbol_info.exchange)) {
-                // Only add symbol if its exchange is selected
-                // Check if symbol is already in the list
-                bool found = false;
-                for (const auto& existing_symbol : all_symbols_) {
-                  if (existing_symbol == symbol_info.symbol) {
-                    found = true;
-                    break;
-                  }
-                }
-                if (!found) {
-                  all_symbols_.push_back(symbol_info.symbol);
-                }
-              }
-            }
-
-            // Also get active symbols from the bridge if possible through the chart manager
-            auto chart_manager = panel_manager_->get_chart_manager();
-            if (chart_manager) {
-              // Access the bridge through the chart manager
-              auto bridge = chart_manager->get_bridge();
-              if (bridge) {
-                auto active_symbols = bridge->getActiveSymbols();
-                for (auto symbol_id : active_symbols) {
-                  std::string symbol_name = bridge->getSymbolName(symbol_id);
-
-                  if (!symbol_name.empty()) {
-                    // Try to get exchange information from the symbol registry
-                    std::string exchange_name = "";
-                    auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-                    if (symbol_info.has_value()) {
-                      exchange_name = symbol_info->exchange;
-                    } else {
-                      // If not in registry, try to get from bridge
-                      exchange_name = bridge->getExchangeName(symbol_id);
-                    }
-
-                    // Check if this symbol's exchange is in the selected exchanges
-                    bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
-
-                    if (exchange_selected) {
-                      // Check if symbol is already in the list
-                      bool found = false;
-                      for (const auto& existing_symbol : all_symbols_) {
-                        if (existing_symbol == symbol_name) {
-                          found = true;
-                          break;
-                        }
-                      }
-                      if (!found) {
-                        all_symbols_.push_back(symbol_name);
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            // Refresh symbols based on selected exchanges
+            refresh_symbols_for_selected_exchanges();
           }
-
-          // Sort symbols alphabetically
-          std::sort(all_symbols_.begin(), all_symbols_.end());
-
-          // Update filtered symbols to match the newly loaded symbols
-          filtered_symbols_ = all_symbols_;
 
           symbols_loaded_ = true;
           needs_refresh_ = false;
@@ -569,55 +509,60 @@ void DashboardControls::render_dashboard_controls() {
     // Panel management section with all requested panel types
     if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
 
-      // First row of panel buttons
+      // Create a grid layout for panel buttons (2 columns)
+      ImGui::Columns(2, "panel_buttons", true);
+
       if (ImGui::Button("Add Chart", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::CHART);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
       if (ImGui::Button("Add Footprint", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
       if (ImGui::Button("Add Volume Profile", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
-      // Second row of panel buttons
       if (ImGui::Button("Add Order Book", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ORDERBOOK);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
       if (ImGui::Button("Add Time&Sales", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
       if (ImGui::Button("Add Watchlist", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::WATCHLIST);
         }
       }
-      ImGui::Spacing();
+      ImGui::NextColumn();
 
       if (ImGui::Button("Add News", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::ALERTS);
         }
       }
+      ImGui::NextColumn();
+
+      ImGui::Columns(1); // Reset to single column
+
       ImGui::Spacing();
     }
 
@@ -738,6 +683,85 @@ bool DashboardControls::is_exchange_selected(const std::string& exchange_name) c
     }
   }
   return false;
+}
+
+void DashboardControls::refresh_symbols_for_selected_exchanges() {
+  if (!panel_manager_) {
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot refresh symbols" << std::endl;
+    return;
+  }
+
+  // Clear current symbols
+  all_symbols_.clear();
+
+  // Get all symbols from the symbol registry, filtered by selected exchanges
+  auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
+  for (const auto& symbol_info : all_symbol_infos) {
+    // Check if this symbol's exchange is in the selected exchanges
+    if (is_exchange_selected(symbol_info.exchange)) {
+      // Only add symbol if its exchange is selected and it's not already in the list
+      bool found = false;
+      for (const auto& existing_symbol : all_symbols_) {
+        if (existing_symbol == symbol_info.symbol) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        all_symbols_.push_back(symbol_info.symbol);
+      }
+    }
+  }
+
+  // Also get active symbols from the bridge if possible through the chart manager
+  auto chart_manager = panel_manager_->get_chart_manager();
+  if (chart_manager) {
+    // Access the bridge through the chart manager
+    auto bridge = chart_manager->get_bridge();
+    if (bridge) {
+      auto active_symbols = bridge->getActiveSymbols();
+      for (auto symbol_id : active_symbols) {
+        std::string symbol_name = bridge->getSymbolName(symbol_id);
+
+        if (!symbol_name.empty()) {
+          // Try to get exchange information from the symbol registry
+          std::string exchange_name = "";
+          auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+          if (symbol_info.has_value()) {
+            exchange_name = symbol_info->exchange;
+          } else {
+            // If not in registry, try to get from bridge
+            exchange_name = bridge->getExchangeName(symbol_id);
+          }
+
+          // Check if this symbol's exchange is in the selected exchanges
+          bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
+
+          if (exchange_selected) {
+            // Check if symbol is already in the list
+            bool found = false;
+            for (const auto& existing_symbol : all_symbols_) {
+              if (existing_symbol == symbol_name) {
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              all_symbols_.push_back(symbol_name);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Sort symbols alphabetically
+  std::sort(all_symbols_.begin(), all_symbols_.end());
+
+  // Update filtered symbols to match the newly loaded symbols
+  filtered_symbols_ = all_symbols_;
+
+  std::cout << "[DashboardControls] Refreshed symbols for selected exchanges. Total symbols: " << all_symbols_.size() << std::endl;
 }
 
 void DashboardControls::fetch_symbols_from_exchange_api() {

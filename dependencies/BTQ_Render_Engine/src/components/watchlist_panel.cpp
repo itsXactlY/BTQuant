@@ -33,6 +33,16 @@ std::string formatPrice(double price) {
   }
 }
 
+// Helper function to format VWAP with consistent decimal places
+std::string formatVWAP(double vwap) {
+  // For VWAP values less than 1, show more decimals
+  if (vwap < 1.0) {
+    return std::to_string(vwap).substr(0, std::to_string(vwap).find('.') + 6);
+  } else {
+    return std::to_string(vwap).substr(0, std::to_string(vwap).find('.') + 5);
+  }
+}
+
 // Helper function to calculate color intensity based on change magnitude
 ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
   // Determine if change is positive or negative
@@ -432,7 +442,7 @@ void WatchlistPanel::render_filter_input() {
 void WatchlistPanel::render_table_header() {
   // Setup table columns with appropriate widths for better readability
   ImGui::TableSetupColumn(
-      "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthFixed, 100.0f);
+      "Symbol", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch, 0.0f);  // Stretch to fill available space
   ImGui::TableSetupColumn("Exchange", ImGuiTableColumnFlags_WidthFixed, 80.0f);
   ImGui::TableSetupColumn(
       "Last Price", ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 100.0f);
@@ -621,19 +631,47 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     ImGui::Text("%s", formatPrice(entry.price).c_str());
   }
 
+  // Add tooltip to explain Last Price
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Last traded price");
+    ImGui::EndTooltip();
+  }
+
   ImGui::TableSetColumnIndex(3);
   // Apply subtle animation to change percentage when it updates significantly
   ImVec4 change_pct_color = calculateChangeColor(entry.change_pct, true);
   ImGui::TextColored(change_pct_color, "%+.2f%%", entry.change_pct);
+
+  // Add tooltip to explain Change%
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Percentage change from 24-hour opening price");
+    ImGui::EndTooltip();
+  }
 
   ImGui::TableSetColumnIndex(4);
   // Apply subtle animation to change dollar when it updates significantly
   ImVec4 change_dollar_color = calculateChangeColor(entry.change_dollar, false);
   ImGui::TextColored(change_dollar_color, "%+.2f", entry.change_dollar);
 
+  // Add tooltip to explain Change$
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Dollar change from 24-hour opening price");
+    ImGui::EndTooltip();
+  }
+
   ImGui::TableSetColumnIndex(5);
   // Format volume with K/M/B suffix for readability
   ImGui::Text("%s", formatFinancialNumber(entry.volume_24h, 2).c_str());
+
+  // Add tooltip to explain Volume
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("24-hour trading volume");
+    ImGui::EndTooltip();
+  }
 
   ImGui::TableSetColumnIndex(6);
   ImGui::Text("%s", formatPrice(entry.high_24h).c_str());
@@ -652,7 +690,15 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
     vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
   }
-  ImGui::TextColored(vwap_color, "%s", formatPrice(entry.vwap).c_str());
+  ImGui::TextColored(vwap_color, "%s", formatVWAP(entry.vwap).c_str());
+
+  // Add tooltip to explain VWAP
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Volume Weighted Average Price (VWAP)");
+    ImGui::Text("Represents the average price weighted by volume traded");
+    ImGui::EndTooltip();
+  }
 
   ImGui::TableSetColumnIndex(10);
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier

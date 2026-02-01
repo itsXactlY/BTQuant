@@ -316,6 +316,33 @@ void DashboardControls::render_dashboard_controls() {
                   // Set the active symbol for all panels
                   if (panel_manager_) {
                     panel_manager_->set_active_symbol(symbol_id, symbol);
+
+                    // Log the symbol change for debugging
+                    std::cout << "[DashboardControls] Setting active symbol to: " << symbol
+                              << " (ID: " << symbol_id << ")" << std::endl;
+                  }
+                } else {
+                  // If symbol not found in registry, try to register it
+                  std::string exchange_name = "Unknown"; // Default exchange
+
+                  // Try to determine exchange from selected exchanges
+                  if (!selected_exchanges_.empty() && !all_exchanges_.empty()) {
+                    for (size_t idx = 0; idx < selected_exchanges_.size(); ++idx) {
+                      if (selected_exchanges_[idx] != 0) {
+                        exchange_name = all_exchanges_[idx];
+                        break;
+                      }
+                    }
+                  }
+
+                  uint32_t new_symbol_id = SymbolRegistry::instance().register_symbol(exchange_name, symbol);
+
+                  if (panel_manager_) {
+                    panel_manager_->set_active_symbol(new_symbol_id, symbol);
+
+                    // Log the symbol registration and change for debugging
+                    std::cout << "[DashboardControls] Registered and set active symbol: " << symbol
+                              << " (ID: " << new_symbol_id << ") on exchange: " << exchange_name << std::endl;
                   }
                 }
                 break;
@@ -338,12 +365,30 @@ void DashboardControls::render_dashboard_controls() {
       ImGui::SameLine();
       if (ImGui::Button("Clear")) {
         selected_symbol_idx_ = -1;
-        strcpy(preview_value, "Select a symbol...");
 
         // Optionally notify panels that no symbol is selected
         if (panel_manager_) {
-          // We could pass a special value to indicate no symbol is selected
-          // For now, we'll just reset the selection
+          // Pass a special value to indicate no symbol is selected
+          // Using 0 as a special symbol ID for "no symbol"
+          panel_manager_->set_active_symbol(0, "");
+          std::cout << "[DashboardControls] Cleared active symbol selection" << std::endl;
+        }
+      }
+
+      // Add an Apply to All button to ensure all panels get the current symbol
+      ImGui::SameLine();
+      if (ImGui::Button("Apply to All")) {
+        if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+          const std::string& symbol = all_symbols_[selected_symbol_idx_];
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            uint32_t symbol_id = symbol_info_opt->id;
+            if (panel_manager_) {
+              panel_manager_->set_active_symbol(symbol_id, symbol);
+              std::cout << "[DashboardControls] Applied symbol " << symbol
+                        << " (ID: " << symbol_id << ") to all panels" << std::endl;
+            }
+          }
         }
       }
 
@@ -532,6 +577,9 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
         }
         if (!found) {
           all_symbols_.push_back(symbol_info.symbol);
+
+          // Register the symbol in the registry if it doesn't exist
+          SymbolRegistry::instance().register_symbol(symbol_info.exchange, symbol_info.symbol);
         }
       }
 
@@ -552,6 +600,9 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
           }
           if (!found) {
             all_symbols_.push_back(symbol_name);
+
+            // Register the symbol in the registry if it doesn't exist
+            SymbolRegistry::instance().register_symbol(bridge_exchange_name, symbol_name);
           }
         }
       }

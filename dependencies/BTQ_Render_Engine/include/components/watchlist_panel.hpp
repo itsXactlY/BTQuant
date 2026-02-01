@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../hotspine_data_bridge.hpp"
@@ -29,7 +30,7 @@ struct WatchlistEntry {
   // Animation state for price changes
   double previous_price = 0.0;
   float animation_timer = 0.0f;
-  static constexpr float ANIMATION_DURATION = 0.5f; // Animation duration in seconds
+  static constexpr float ANIMATION_DURATION = 0.6f; // Animation duration in seconds - slightly longer for better visibility
 };
 
 class WatchlistPanel : public PanelBase {
@@ -75,6 +76,9 @@ class WatchlistPanel : public PanelBase {
   // Real-time subscription ID
   uint64_t subscription_id_ = 0;
 
+  // Map to store subscription IDs for individual symbols
+  std::unordered_map<uint32_t, uint64_t> symbol_subscriptions_;
+
   // Performance - timer removed since we now use real-time updates
   // float update_timer_ = 0.0f;
   // static constexpr float UPDATE_INTERVAL = 0.1f;  // 10 FPS updates
@@ -97,6 +101,10 @@ class WatchlistPanel : public PanelBase {
 
   // Real-time update handler
   void on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type);
+
+  // Helper methods for managing subscriptions
+  void subscribe_to_symbol(uint32_t symbol_id);
+  void unsubscribe_from_symbol(uint32_t symbol_id);
 };
 
 }  // namespace BTQuant

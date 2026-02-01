@@ -41,16 +41,17 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
-  // Subscribe to real-time market data updates for all symbols
-  if (processor_) {
-    subscription_id_ = processor_->subscribe(0, RenderEngine::NotificationType::TRADE,
-                                           [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
-                                             this->on_market_data_update(symbol_id, type);
-                                           });
-  }
+  // Initialize the subscription to real-time market data updates
+  // We'll subscribe to individual symbols when they're added to the watchlist
+  subscription_id_ = 0;
 
   // Load the saved watchlist order from config file
   load_watchlist_order_from_config("watchlist_config.ini");
+
+  // Subscribe to all currently watched symbols
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    subscribe_to_symbol(symbol_id);
+  }
 }
 
 void WatchlistPanel::update(float dt) {
@@ -212,7 +213,16 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   entry.is_active = true;
 
   watchlist_[symbol_id] = entry;
+
+  // Add to display order - if there's an existing order, append to the end
+  // otherwise, just add to the vector
   display_order_.push_back(symbol_id);
+
+  // Subscribe to real-time updates for this symbol
+  subscribe_to_symbol(symbol_id);
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config("watchlist_config.ini");
 }
 
 void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
@@ -275,18 +285,32 @@ void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
   watchlist_.erase(symbol_id);
   display_order_.erase(std::remove(display_order_.begin(), display_order_.end(), symbol_id),
                        display_order_.end());
+
+  // Unsubscribe from real-time updates for this symbol
+  unsubscribe_from_symbol(symbol_id);
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config("watchlist_config.ini");
 }
 
 WatchlistPanel::~WatchlistPanel() {
-  // Unsubscribe from market data updates when the panel is destroyed
-  if (processor_ && subscription_id_ != 0) {
-    processor_->unsubscribe(subscription_id_);
+  // Unsubscribe from all market data updates when the panel is destroyed
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    unsubscribe_from_symbol(symbol_id);
   }
 }
 
 void WatchlistPanel::clear_watchlist() {
+  // Unsubscribe from all current symbols before clearing
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    unsubscribe_from_symbol(symbol_id);
+  }
+
   watchlist_.clear();
   display_order_.clear();
+
+  // Save the updated order to config file
+  save_watchlist_order_to_config("watchlist_config.ini");
 }
 
 void WatchlistPanel::update_watchlist_data() {
@@ -399,6 +423,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         save_watchlist_order_to_config("watchlist_config.ini");
       }
     }
+
+    // Visual feedback for drop target
+    ImGui::Separator();
     ImGui::EndDragDropTarget();
   }
 
@@ -425,16 +452,22 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Create a pulsing effect by interpolating between previous and current price
     double animated_price = entry.previous_price + (entry.price - entry.previous_price) * progress;
 
-    // Flash animation - alternate between green/red and white based on price direction
+    // Enhanced flash animation - alternate between highlight color and normal color
     ImVec4 flash_color;
-    if ((entry.price > entry.previous_price && progress < 0.5f) ||
-        (entry.price < entry.previous_price && progress < 0.5f)) {
-      // Highlight color (green for up, red for down)
-      flash_color = entry.price > entry.previous_price ?
-                    ImVec4(0.2f, 0.9f, 0.2f, 1.0f) :  // Bright green for up
-                    ImVec4(0.9f, 0.2f, 0.2f, 1.0f);   // Bright red for down
+    float flash_intensity = 1.0f;
+
+    // Calculate flash timing for brief flash effect
+    float flash_phase = progress * 2.0f; // Speed up the flash cycle
+    if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
+
+    if (entry.price > entry.previous_price) {
+      // Price went up - flash green then fade to normal
+      flash_color = ImVec4(0.2f + 0.8f * flash_phase, 1.0f, 0.2f, 1.0f);
+    } else if (entry.price < entry.previous_price) {
+      // Price went down - flash red then fade to normal
+      flash_color = ImVec4(1.0f, 0.2f + 0.8f * (1.0f - flash_phase), 0.2f + 0.8f * (1.0f - flash_phase), 1.0f);
     } else {
-      // Normal white color
+      // No change - use normal color
       flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
@@ -604,6 +637,9 @@ void WatchlistPanel::sort_watchlist() {
     }
     return sort_ascending_ ? result : !result;
   });
+
+  // Save the updated order to config file after sorting
+  save_watchlist_order_to_config("watchlist_config.ini");
 }
 
 void WatchlistPanel::handle_drag_drop_reordering() {
@@ -780,6 +816,29 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
     }
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error loading watchlist order: " << e.what() << std::endl;
+  }
+}
+
+void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
+  if (processor_) {
+    // Create a subscription for this specific symbol
+    uint64_t sub_id = processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
+                                          [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
+                                            this->on_market_data_update(symbol_id, type);
+                                          });
+
+    // Store the subscription ID for this symbol
+    symbol_subscriptions_[symbol_id] = sub_id;
+  }
+}
+
+void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
+  if (processor_) {
+    auto it = symbol_subscriptions_.find(symbol_id);
+    if (it != symbol_subscriptions_.end()) {
+      processor_->unsubscribe(it->second);
+      symbol_subscriptions_.erase(it);
+    }
   }
 }
 

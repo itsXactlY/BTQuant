@@ -173,6 +173,9 @@ class WatchlistPanel : public PanelBase {
   void handle_drag_drop_reordering();
   void cleanup_drag_resources();
 
+  // Column customization helpers
+  void validate_column_settings();
+
   // Helpers
   double calculate_24h_change(const RenderEngine::OHLCVCandle& current,
                               const RenderEngine::OHLCVCandle& old) const;

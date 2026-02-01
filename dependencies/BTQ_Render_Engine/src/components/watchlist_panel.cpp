@@ -1037,13 +1037,24 @@ void WatchlistPanel::render_table_header() {
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
       // Set payload to carry the column index
       ImGui::SetDragDropPayload("COLUMN_REORDER", &orig_idx, sizeof(int));
-      ImGui::Text("Moving %s", column_info_[orig_idx].name.c_str());
+
+      // Enhanced visual preview of what is being dragged
+      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moving: %s", column_info_[orig_idx].name.c_str());
+
+      // Add a visual border around the preview
+      ImVec2 pos = ImGui::GetCursorScreenPos();
+      ImVec2 size = ImVec2(200, ImGui::GetTextLineHeightWithSpacing() * 2); // Fixed size for cleaner preview
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+      draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
+
       ImGui::EndDragDropSource();
     }
 
     // Make this header a drop target
     if (ImGui::BeginDragDropTarget()) {
-      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("COLUMN_REORDER")) {
+      const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("COLUMN_REORDER");
+      if (payload && payload->DataSize == sizeof(int)) {
         int source_column = *(const int*)payload->Data;
 
         // Reorder the columns by updating their order values
@@ -1051,8 +1062,42 @@ void WatchlistPanel::render_table_header() {
           reorder_columns(source_column, orig_idx);
         }
       }
+
+      // Enhanced visual feedback for drop target - draw a more prominent indicator
+      ImVec2 cell_rect_min = ImGui::GetItemRectMin();
+      ImVec2 cell_rect_max = ImGui::GetItemRectMax();
+
+      ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+      // Draw a more prominent visual indicator for the drop target
+      draw_list->AddLine(
+          ImVec2(cell_rect_min.x, cell_rect_max.y),
+          ImVec2(cell_rect_max.x, cell_rect_max.y),
+          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
+          3.0f // Increased line thickness for better visibility
+      );
+
+      // Add a more distinctive triangle indicator to show insertion direction
+      ImVec2 triangle_points[3] = {
+          ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 10),
+          ImVec2(cell_rect_max.x - 10, cell_rect_max.y),
+          ImVec2(cell_rect_max.x, cell_rect_max.y - 10)
+      };
+      draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
+                                  ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
+
       ImGui::EndDragDropTarget();
     }
+  }
+
+  // Also detect right-click on the header row area (not just individual columns)
+  // This allows showing the context menu when clicking in the header area but not on a specific column
+  if (ImGui::TableGetColumnIndex() == -1 && ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    // If we clicked in the header area but not on a specific column, show the context menu
+    // We'll use -1 to indicate that no specific column was clicked
+    clicked_column_index_ = -1;
+    column_context_menu_open_ = true;
+    ImGui::OpenPopup("ColumnContextMenu");
   }
 
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
@@ -2519,7 +2564,7 @@ void WatchlistPanel::initialize_column_settings() {
 }
 
 void WatchlistPanel::render_column_context_menu() {
-  if (column_context_menu_open_ && clicked_column_index_ >= 0) {
+  if (column_context_menu_open_) {
     if (ImGui::BeginPopup("ColumnContextMenu")) {
       ImGui::Text("Column Options:");
       ImGui::Separator();
@@ -3049,6 +3094,29 @@ void WatchlistPanel::ensure_default_groups_order() {
 
   // Update the group_names_ vector with the reordered groups
   group_names_ = reordered_groups;
+}
+
+// Helper method to validate column settings and ensure consistency
+void WatchlistPanel::validate_column_settings() {
+  // Ensure all columns have unique order values
+  std::vector<int> orders;
+  for (const auto& col : column_info_) {
+    orders.push_back(col.order);
+  }
+
+  // Sort the orders to check for duplicates
+  std::sort(orders.begin(), orders.end());
+
+  // Check for duplicates and fix if needed
+  for (size_t i = 0; i < orders.size() - 1; ++i) {
+    if (orders[i] == orders[i + 1]) {
+      // If there are duplicates, reassign order values sequentially
+      for (size_t j = 0; j < column_info_.size(); ++j) {
+        column_info_[j].order = static_cast<int>(j);
+      }
+      break; // Exit after fixing duplicates
+    }
+  }
 }
 
 }  // namespace BTQuant

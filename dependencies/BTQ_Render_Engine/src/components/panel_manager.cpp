@@ -947,7 +947,7 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
         break;
       }
       case PanelType::WATCHLIST: {
-        // Add symbol to watchlist if not already present
+        // Update the symbol for all watchlist panels
         if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
           watchlist->add_symbol(symbol_id, symbol_name, bridge_->getExchangeName(symbol_id));
         }

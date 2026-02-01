@@ -297,6 +297,43 @@ std::vector<TechnicalIndicators::IndicatorResult> TechnicalIndicators::stochasti
   return results;
 }
 
+TechnicalIndicators::IndicatorResult TechnicalIndicators::calculate_vwap(
+    const std::vector<OHLCV>& data, size_t start_index) {
+  IndicatorResult result;
+  result.name = "VWAP";
+  result.parameters["start_index"] = static_cast<double>(start_index);
+
+  if (data.empty() || start_index >= data.size()) {
+    return result;
+  }
+
+  double cumulative_price_volume = 0.0;
+  double cumulative_volume = 0.0;
+
+  result.values.reserve(data.size() - start_index);
+  result.timestamps.reserve(data.size() - start_index);
+
+  for (size_t i = start_index; i < data.size(); ++i) {
+    double typical_price = (data[i].high + data[i].low + data[i].close) / 3.0;
+    double price_times_volume = typical_price * data[i].volume;
+
+    cumulative_price_volume += price_times_volume;
+    cumulative_volume += data[i].volume;
+
+    if (cumulative_volume > 0) {
+      double vwap = cumulative_price_volume / cumulative_volume;
+      result.values.push_back(vwap);
+      result.timestamps.push_back(data[i].timestamp);
+    } else {
+      // If volume is zero, use the typical price as VWAP
+      result.values.push_back(typical_price);
+      result.timestamps.push_back(data[i].timestamp);
+    }
+  }
+
+  return result;
+}
+
 // ============================================================================
 // Volume Profile Analyzer Implementation - Simplified
 // ============================================================================

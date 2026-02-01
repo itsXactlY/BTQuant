@@ -14,6 +14,34 @@
 
 namespace BTQuant {
 
+// Helper function to convert timeframe to string representation
+static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
+  switch (tf) {
+    case RenderEngine::TimeFrame::TF_1MIN:  return "1m";
+    case RenderEngine::TimeFrame::TF_5MIN:  return "5m";
+    case RenderEngine::TimeFrame::TF_15MIN: return "15m";
+    case RenderEngine::TimeFrame::TF_30MIN: return "30m";
+    case RenderEngine::TimeFrame::TF_1HOUR: return "1h";
+    case RenderEngine::TimeFrame::TF_4HOUR: return "4h";
+    case RenderEngine::TimeFrame::TF_1DAY:  return "1d";
+    case RenderEngine::TimeFrame::TF_1WEEK: return "1w";
+    case RenderEngine::TimeFrame::TF_1MS:   return "1ms";
+    case RenderEngine::TimeFrame::TF_10MS:  return "10ms";
+    case RenderEngine::TimeFrame::TF_100MS: return "100ms";
+    case RenderEngine::TimeFrame::TF_500MS: return "500ms";
+    case RenderEngine::TimeFrame::TF_1SEC:  return "1s";
+    case RenderEngine::TimeFrame::TF_3SEC:  return "3s";
+    case RenderEngine::TimeFrame::TF_5SEC:  return "5s";
+    case RenderEngine::TimeFrame::TF_15SEC: return "15s";
+    case RenderEngine::TimeFrame::TF_30SEC: return "30s";
+    case RenderEngine::TimeFrame::TF_2MIN:  return "2m";
+    case RenderEngine::TimeFrame::TF_2HOUR: return "2h";
+    case RenderEngine::TimeFrame::TF_6HOUR: return "6h";
+    case RenderEngine::TimeFrame::TF_12HOUR: return "12h";
+    default: return "1m";
+  }
+}
+
 DashboardControls::DashboardControls(PanelManager* panel_manager)
     : UIComponent({0, 0}, {0, 0}), panel_manager_(panel_manager) {
   if (!panel_manager_) {
@@ -453,6 +481,57 @@ void DashboardControls::render_dashboard_controls() {
       ImGui::Spacing();
     }
 
+    // Timeframe selection section
+    if (ImGui::CollapsingHeader("Timeframe Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImGui::Text("Select Chart Timeframe:");
+
+      // Define the target timeframes for the buttons
+      const std::vector<std::pair<RenderEngine::TimeFrame, const char*>> timeframes = {
+        {RenderEngine::TimeFrame::TF_1MIN, "1m"},
+        {RenderEngine::TimeFrame::TF_5MIN, "5m"},
+        {RenderEngine::TimeFrame::TF_15MIN, "15m"},
+        {RenderEngine::TimeFrame::TF_30MIN, "30m"},
+        {RenderEngine::TimeFrame::TF_1HOUR, "1h"},
+        {RenderEngine::TimeFrame::TF_4HOUR, "4h"},
+        {RenderEngine::TimeFrame::TF_1DAY, "1d"},
+        {RenderEngine::TimeFrame::TF_1WEEK, "1w"}
+      };
+
+      // Create a row of buttons for each timeframe
+      for (size_t i = 0; i < timeframes.size(); ++i) {
+        const auto& [timeframe, label] = timeframes[i];
+
+        // Highlight the currently selected timeframe button
+        if (current_timeframe_ == timeframe) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        }
+
+        if (ImGui::Button(label, ImVec2(60, 30))) {
+          // Update the current timeframe
+          current_timeframe_ = timeframe;
+
+          // Update all chart panels with the new timeframe
+          update_all_chart_timeframes(timeframe);
+        }
+
+        if (current_timeframe_ == timeframe) {
+          ImGui::PopStyleColor(2); // Pop the two pushed colors
+        }
+
+        // Add spacing between buttons, except for the last one in each row
+        if ((i + 1) % 4 != 0 && i < timeframes.size() - 1) {  // 4 buttons per row
+          ImGui::SameLine();
+        } else if ((i + 1) % 4 == 0 || i == timeframes.size() - 1) {
+          ImGui::Spacing(); // Add vertical spacing after each row
+        }
+      }
+
+      // Show currently selected timeframe
+      ImGui::Spacing();
+      ImGui::Text("Current Timeframe: %s", timeframe_to_string(current_timeframe_).c_str());
+    }
+
     // Layout controls
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Layout Management")) {
@@ -614,6 +693,33 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
   filtered_symbols_ = all_symbols_;
 
   std::cout << "[DashboardControls] Fetched " << all_symbols_.size() << " symbols from exchange APIs" << std::endl;
+}
+
+void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame timeframe) {
+  if (!panel_manager_) {
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot update chart timeframes" << std::endl;
+    return;
+  }
+
+  // Get all panel IDs
+  auto panel_ids = panel_manager_->get_all_panel_ids();
+
+  // Iterate through all panels and update chart panels
+  for (uint32_t panel_id : panel_ids) {
+    auto panel = panel_manager_->get_panel_by_id(panel_id);
+    if (!panel) continue;
+
+    // Check if this is a chart panel - we need to cast it appropriately
+    // Since we don't have direct access to ChartPanel type here, we'll use dynamic_cast
+    // But first we need to include the header
+
+    // For now, we'll use the chart manager to update the charts associated with chart panels
+    auto chart_manager = panel_manager_->get_chart_manager();
+    if (chart_manager) {
+      // Update all charts managed by the chart manager
+      chart_manager->update_all_chart_timeframes(timeframe);
+    }
+  }
 }
 
 }  // namespace BTQuant

@@ -2,6 +2,7 @@
 
 #include "../ui/ui_base.hpp"
 #include "../vulkan_base_types.hpp"
+#include "../market_data_processor.hpp"  // For TimeFrame enum
 
 #include <array>
 #include <memory>
@@ -49,6 +50,12 @@ class DashboardControls : public UIComponent {
 
   // Helper method to check if an exchange is selected
   bool is_exchange_selected(const std::string& exchange_name) const;
+
+  // Timeframe selection state
+  RenderEngine::TimeFrame current_timeframe_ = RenderEngine::TimeFrame::TF_1MIN;
+
+  // Method to update all chart panels with the new timeframe
+  void update_all_chart_timeframes(RenderEngine::TimeFrame timeframe);
 };
 
 }  // namespace BTQuant

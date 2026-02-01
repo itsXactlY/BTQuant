@@ -226,4 +226,26 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
   }
 }
 
+void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe) {
+  // Update the timeframe for all charts
+  for (auto& [chart_id, chart] : charts_) {
+    // Store the old timeframe to compare
+    RenderEngine::TimeFrame old_timeframe = chart.timeframe;
+
+    // Update the timeframe
+    chart.timeframe = new_timeframe;
+
+    // Clear the old chart data to force a reload with the new timeframe
+    chart.dates.clear();
+    chart.opens.clear();
+    chart.highs.clear();
+    chart.lows.clear();
+    chart.closes.clear();
+    chart.volumes.clear();
+
+    // Repopulate the chart data with the new timeframe
+    populate_chart_data(chart_id);
+  }
+}
+
 }  // namespace BTQuant

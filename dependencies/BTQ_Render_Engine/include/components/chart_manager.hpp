@@ -65,6 +65,9 @@ class ChartManager {
   // Getter for bridge access
   std::shared_ptr<HotSpineDataBridge> get_bridge() const { return bridge_; }
 
+  // Method to update all chart timeframes
+  void update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

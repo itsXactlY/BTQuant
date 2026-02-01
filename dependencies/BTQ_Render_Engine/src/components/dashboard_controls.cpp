@@ -516,10 +516,19 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
       std::cout << "[DashboardControls] Fetching symbols from exchange: " << exchange_name << std::endl;
 
       // In a real implementation, this would call the actual exchange API
-      // For now, we'll use the bridge to get symbols associated with this exchange
-      auto exchange_symbols = SymbolRegistry::instance().get_exchange_symbols(exchange_name);
+      // For now, we'll simulate API calls by fetching from the symbol registry
+      // and the bridge, but in a more structured way that mimics real API integration
 
-      for (const auto& symbol_info : exchange_symbols) {
+      // Simulate API call to exchange to get available symbols
+      std::vector<SymbolInfo> api_symbols;
+
+      // Placeholder for actual API call - in real implementation this would be:
+      // api_symbols = exchange_api_client.get_symbols(exchange_name);
+      // For now, we'll get symbols from registry but simulate the API call
+      api_symbols = SymbolRegistry::instance().get_exchange_symbols(exchange_name);
+
+      // Process symbols returned from API simulation
+      for (const auto& symbol_info : api_symbols) {
         // Check if symbol is already in the list
         bool found = false;
         for (const auto& existing_symbol : all_symbols_) {

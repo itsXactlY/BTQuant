@@ -96,7 +96,7 @@ std::string formatVWAP(double vwap) {
 }
 
 // Helper function to calculate color intensity based on change magnitude
-ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
+ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   // Determine if change is positive or negative
   bool is_positive = change_value >= 0;
 
@@ -109,22 +109,22 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage = true) {
   // Use exponential scaling to make intensity increase more dramatically with larger changes
   double normalized_change = std::min(1.0, abs_change / max_intensity_threshold);
 
-  // Apply quartic curve for even more dramatic intensity growth with larger changes
-  double intensity_factor = normalized_change * normalized_change * normalized_change * normalized_change; // Quartic for more dramatic effect
+  // Apply quintic curve for even more dramatic intensity growth with larger changes
+  double intensity_factor = normalized_change * normalized_change * normalized_change * normalized_change * normalized_change; // Quintic for more dramatic effect
   double saturation_factor = std::sqrt(normalized_change); // Square root for saturation effect
 
   // Return appropriate color based on sign and intensity
   if (is_positive) {
-    // Green for positive changes - more intense greens for larger changes
-    float red_comp = 0.05f * (1.0f - saturation_factor);
-    float green_comp = 0.3f + 0.7f * saturation_factor; // Higher base green with more intensity
-    float blue_comp = 0.05f * (1.0f - saturation_factor);
+    // Bright green for positive changes - more intense greens for larger changes
+    float red_comp = 0.1f * (1.0f - saturation_factor);
+    float green_comp = 0.5f + 0.5f * saturation_factor; // Higher base green with more intensity
+    float blue_comp = 0.1f * (1.0f - saturation_factor);
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   } else {
-    // Red for negative changes - more intense reds for larger changes
-    float red_comp = 0.3f + 0.7f * saturation_factor; // Higher base red with more intensity
+    // Bright red for negative changes - more intense reds for larger changes
+    float red_comp = 0.6f + 0.4f * saturation_factor; // Higher base red with more intensity
     float green_comp = 0.1f * (1.0f - saturation_factor);
-    float blue_comp = 0.05f * (1.0f - saturation_factor);
+    float blue_comp = 0.1f * (1.0f - saturation_factor);
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }

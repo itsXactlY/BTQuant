@@ -194,8 +194,8 @@
 - [x] Optimize crosshair price/time lookup using std::lower_bound binary search replacing current O(n) linear scan in render_crosshair_info in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: S]
 
 ### Phase 8c: Drawing Tools & Replay [Complexity: M]
-- [ ] Implement drawing tools: trend lines, horizontal lines, fibonacci retracements, rectangles, text annotations stored persistently in `dependencies/BTQ_Render_Engine/src/components/drawing_tools.cpp` [Complexity: M]
-- [ ] Add chart replay mode: load historical data and replay bar-by-bar at configurable speed for backtesting practice in `dependencies/BTQ_Render_Engine/src/components/chart_replay.cpp` [Complexity: M]
+- [x] Implement drawing tools: trend lines, horizontal lines, fibonacci retracements, rectangles, text annotations stored persistently in `dependencies/BTQ_Render_Engine/src/components/drawing_tools.cpp` [Complexity: M]
+- [x] Add chart replay mode: load historical data and replay bar-by-bar at configurable speed for backtesting practice in `dependencies/BTQ_Render_Engine/src/components/chart_replay.cpp` [Complexity: M]
 
 ---
 

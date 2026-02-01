@@ -89,8 +89,8 @@ bool HierarchicalSelector::render(HierarchicalSelectorState& state) {
 
   ImGui::SameLine();
 
-  // Timeframe dropdown (1ms-15sec only)
-  const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s"};
+  // Timeframe dropdown (Extended to include higher timeframes for multi-timeframe analysis)
+  const char* timeframes[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s", "30s", "1m", "2m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"};
 
   if (ImGui::BeginCombo("TF", timeframes[state.selected_timeframe_idx])) {
     for (int i = 0; i < get_timeframe_count(); ++i) {
@@ -172,6 +172,32 @@ const char* HierarchicalSelector::get_timeframe_name(RenderEngine::TimeFrame tf)
       return "5s";
     case RenderEngine::TimeFrame::TF_15SEC:
       return "15s";
+    case RenderEngine::TimeFrame::TF_30SEC:
+      return "30s";
+    case RenderEngine::TimeFrame::TF_1MIN:
+      return "1m";
+    case RenderEngine::TimeFrame::TF_2MIN:
+      return "2m";
+    case RenderEngine::TimeFrame::TF_5MIN:
+      return "5m";
+    case RenderEngine::TimeFrame::TF_15MIN:
+      return "15m";
+    case RenderEngine::TimeFrame::TF_30MIN:
+      return "30m";
+    case RenderEngine::TimeFrame::TF_1HOUR:
+      return "1h";
+    case RenderEngine::TimeFrame::TF_2HOUR:
+      return "2h";
+    case RenderEngine::TimeFrame::TF_4HOUR:
+      return "4h";
+    case RenderEngine::TimeFrame::TF_6HOUR:
+      return "6h";
+    case RenderEngine::TimeFrame::TF_12HOUR:
+      return "12h";
+    case RenderEngine::TimeFrame::TF_1DAY:
+      return "1d";
+    case RenderEngine::TimeFrame::TF_1WEEK:
+      return "1w";
     default:
       return "1s";
   }
@@ -179,27 +205,31 @@ const char* HierarchicalSelector::get_timeframe_name(RenderEngine::TimeFrame tf)
 
 RenderEngine::TimeFrame HierarchicalSelector::get_timeframe_from_index(int index) {
   switch (index) {
-    case 0:
-      return RenderEngine::TimeFrame::TF_1MS;
-    case 1:
-      return RenderEngine::TimeFrame::TF_10MS;
-    case 2:
-      return RenderEngine::TimeFrame::TF_100MS;
-    case 3:
-      return RenderEngine::TimeFrame::TF_500MS;
-    case 4:
-      return RenderEngine::TimeFrame::TF_1SEC;
-    case 5:
-      return RenderEngine::TimeFrame::TF_3SEC;
-    case 6:
-      return RenderEngine::TimeFrame::TF_5SEC;
-    case 7:
-      return RenderEngine::TimeFrame::TF_15SEC;
-    default:
-      return RenderEngine::TimeFrame::TF_1SEC;
+    case 0: return RenderEngine::TimeFrame::TF_1MS;
+    case 1: return RenderEngine::TimeFrame::TF_10MS;
+    case 2: return RenderEngine::TimeFrame::TF_100MS;
+    case 3: return RenderEngine::TimeFrame::TF_500MS;
+    case 4: return RenderEngine::TimeFrame::TF_1SEC;
+    case 5: return RenderEngine::TimeFrame::TF_3SEC;
+    case 6: return RenderEngine::TimeFrame::TF_5SEC;
+    case 7: return RenderEngine::TimeFrame::TF_15SEC;
+    case 8: return RenderEngine::TimeFrame::TF_30SEC;
+    case 9: return RenderEngine::TimeFrame::TF_1MIN;
+    case 10: return RenderEngine::TimeFrame::TF_2MIN;
+    case 11: return RenderEngine::TimeFrame::TF_5MIN;
+    case 12: return RenderEngine::TimeFrame::TF_15MIN;
+    case 13: return RenderEngine::TimeFrame::TF_30MIN;
+    case 14: return RenderEngine::TimeFrame::TF_1HOUR;
+    case 15: return RenderEngine::TimeFrame::TF_2HOUR;
+    case 16: return RenderEngine::TimeFrame::TF_4HOUR;
+    case 17: return RenderEngine::TimeFrame::TF_6HOUR;
+    case 18: return RenderEngine::TimeFrame::TF_12HOUR;
+    case 19: return RenderEngine::TimeFrame::TF_1DAY;
+    case 20: return RenderEngine::TimeFrame::TF_1WEEK;
+    default: return RenderEngine::TimeFrame::TF_1SEC;
   }
 }
 
-int HierarchicalSelector::get_timeframe_count() { return 8; }
+int HierarchicalSelector::get_timeframe_count() { return 21; }
 
 }  // namespace BTQuant

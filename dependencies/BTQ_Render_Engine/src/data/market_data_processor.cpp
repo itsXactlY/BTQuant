@@ -285,6 +285,32 @@ uint64_t MarketDataProcessor::getTimeFrameDuration(TimeFrame timeframe) {
       return 5000000;
     case TimeFrame::TF_15SEC:
       return 15000000;
+    case TimeFrame::TF_30SEC:
+      return 30000000;
+    case TimeFrame::TF_1MIN:
+      return 60000000;
+    case TimeFrame::TF_2MIN:
+      return 120000000;
+    case TimeFrame::TF_5MIN:
+      return 300000000;
+    case TimeFrame::TF_15MIN:
+      return 900000000;
+    case TimeFrame::TF_30MIN:
+      return 1800000000;
+    case TimeFrame::TF_1HOUR:
+      return 3600000000;
+    case TimeFrame::TF_2HOUR:
+      return 7200000000;
+    case TimeFrame::TF_4HOUR:
+      return 14400000000;
+    case TimeFrame::TF_6HOUR:
+      return 21600000000;
+    case TimeFrame::TF_12HOUR:
+      return 43200000000;
+    case TimeFrame::TF_1DAY:
+      return 86400000000;
+    case TimeFrame::TF_1WEEK:
+      return 604800000000;
     default:
       return 1000000;
   }
@@ -571,7 +597,11 @@ void MarketDataProcessor::updateSpreadAnalysis(SymbolAnalytics& symbol_data) {
 void MarketDataProcessor::updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade) {
   for (auto timeframe :
        {TimeFrame::TF_1MS, TimeFrame::TF_10MS, TimeFrame::TF_100MS, TimeFrame::TF_500MS,
-        TimeFrame::TF_1SEC, TimeFrame::TF_3SEC, TimeFrame::TF_5SEC, TimeFrame::TF_15SEC}) {
+        TimeFrame::TF_1SEC, TimeFrame::TF_3SEC, TimeFrame::TF_5SEC, TimeFrame::TF_15SEC,
+        TimeFrame::TF_30SEC, TimeFrame::TF_1MIN, TimeFrame::TF_2MIN, TimeFrame::TF_5MIN,
+        TimeFrame::TF_15MIN, TimeFrame::TF_30MIN, TimeFrame::TF_1HOUR, TimeFrame::TF_2HOUR,
+        TimeFrame::TF_4HOUR, TimeFrame::TF_6HOUR, TimeFrame::TF_12HOUR, TimeFrame::TF_1DAY,
+        TimeFrame::TF_1WEEK}) {
     updateCandleForTimeframe(symbol_data, trade, timeframe);
   }
 }

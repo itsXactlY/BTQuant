@@ -96,7 +96,7 @@ struct OHLCVCandle {
 };
 
 // Time frame definitions for OHLCV aggregation
-// Sub-second focus: 1ms-15sec only (>5min removed per user requirement)
+// Extended to include higher timeframes for multi-timeframe analysis
 enum class TimeFrame {
   TF_1MS,    // 1 millisecond
   TF_10MS,   // 10 milliseconds
@@ -105,7 +105,20 @@ enum class TimeFrame {
   TF_1SEC,   // 1 second
   TF_3SEC,   // 3 seconds
   TF_5SEC,   // 5 seconds
-  TF_15SEC   // 15 seconds
+  TF_15SEC,  // 15 seconds
+  TF_30SEC,  // 30 seconds
+  TF_1MIN,   // 1 minute
+  TF_2MIN,   // 2 minutes
+  TF_5MIN,   // 5 minutes
+  TF_15MIN,  // 15 minutes
+  TF_30MIN,  // 30 minutes
+  TF_1HOUR,  // 1 hour
+  TF_2HOUR,  // 2 hours
+  TF_4HOUR,  // 4 hours
+  TF_6HOUR,  // 6 hours
+  TF_12HOUR, // 12 hours
+  TF_1DAY,   // 1 day
+  TF_1WEEK   // 1 week
 };
 
 // Indicator cache entry

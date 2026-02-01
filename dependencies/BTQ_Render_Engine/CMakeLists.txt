@@ -138,6 +138,7 @@ set(DASHBOARD_SOURCES
     src/indicators/session_vwap.cpp
     src/indicators/rolling_vwap.cpp
     src/indicators/vwap_alerts.cpp
+    src/indicators/indicator_alerts.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp

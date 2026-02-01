@@ -154,7 +154,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
 }
 
 void WatchlistPanel::update(float dt) {
-  // Update animation timers for all watchlist entries
+  // Update animation timers for all watchlist entries to ensure smooth transitions
   for (auto& [symbol_id, entry] : watchlist_) {
     if (entry.animation_timer > 0.0f) {
       entry.animation_timer -= dt;
@@ -164,7 +164,7 @@ void WatchlistPanel::update(float dt) {
     }
   }
 
-  // Ensure all symbols in the watchlist are subscribed to real-time updates
+  // Ensure all symbols in the watchlist are subscribed to real-time price feed updates
   // This handles cases where subscriptions might have been lost or need to be refreshed
   ensure_all_symbols_subscribed();
 
@@ -484,7 +484,7 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
 }
 
 void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
-  // Only process trade updates
+  // Only process trade updates for real-time price feed
   if (type != RenderEngine::NotificationType::TRADE) {
     return;
   }
@@ -505,7 +505,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       double prev_low_24h = it->second.low_24h;
       double prev_open_24h = it->second.open_24h;
 
-      // Update the entry with new data
+      // Update the entry with new data from real-time price feed
       it->second.price = analytics.last_trade_price;
       it->second.vwap = analytics.vwap;
       it->second.last_update_ts = analytics.last_trade_time;
@@ -583,7 +583,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       }
 
       if (significant_change) {
-        // Reset animation timer to start fresh animation
+        // Reset animation timer to start fresh animation with brief flash effect
         it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
 
         // Log the animation trigger for debugging
@@ -1788,7 +1788,7 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
       return;
     }
 
-    // Create a subscription for this specific symbol
+    // Create a subscription for this specific symbol to receive real-time price updates
     uint64_t sub_id = processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
                                           [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
                                             this->on_market_data_update(symbol_id, type);

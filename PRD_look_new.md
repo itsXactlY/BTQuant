@@ -205,7 +205,7 @@
 
 ### Phase 9a: Basic Watchlist [Complexity: M]
 - [ ] Create Watchlist panel with multi-column table showing: Symbol, Exchange, Last Price, Change%, Change$, Volume, High, Low, Open, VWAP in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
-- [ ] Implement add/remove symbols: input field at top for entering new symbols, delete button per row for removing in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: S]
+- [x] Implement add/remove symbols: input field at top for entering new symbols, delete button per row for removing in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: S]
 - [ ] Add drag-and-drop reordering: click and drag rows to reorder watchlist, save order to config file in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
 - [ ] Implement real-time price updates: subscribe to price feed for all watchlist symbols, update cell values smoothly with brief flash animation on change in `dependencies/BTQ_Render_Engine/src/components/watchlist_panel.cpp` [Complexity: M]
 

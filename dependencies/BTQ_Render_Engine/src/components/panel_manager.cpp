@@ -30,6 +30,7 @@
 #include "../../include/components/trading_positions_panel.hpp"
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/watchlist_panel.hpp"
+#include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 
 using json = nlohmann::json;
@@ -260,6 +261,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
+    case PanelType::CHART_REPLAY:
+      panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
+      break;
     default:
       return 0;
   }
@@ -383,6 +387,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
+      break;
+    case PanelType::CHART_REPLAY:
+      panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
       break;
     default:
       return 0;
@@ -780,6 +787,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Time Statistics";
     case PanelType::TIME_HISTOGRAM:
       return "Time Histogram";
+    case PanelType::CHART_REPLAY:
+      return "Chart Replay";
     default:
       return "Panel";
   }

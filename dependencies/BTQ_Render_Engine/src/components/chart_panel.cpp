@@ -248,6 +248,13 @@ void ChartPanel::initialize() {
 
   // Initialize active indicators based on current configuration
   sync_active_indicators_with_config();
+
+  // Initialize multi-timeframe indicators
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    update_multi_timeframe_indicators(it->second);
+  }
 }
 
 void ChartPanel::update(float dt) {
@@ -279,6 +286,9 @@ void ChartPanel::update(float dt) {
     calculate_all_indicators(chart);
   }
 
+  // Update multi-timeframe indicators when new data arrives
+  // This ensures that multi-timeframe indicators remain synchronized with the chart data
+  update_multi_timeframe_indicators(chart);
 }
 
 void ChartPanel::render() {
@@ -347,12 +357,21 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
 }
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
+  RenderEngine::TimeFrame old_timeframe = timeframe_;
   timeframe_ = timeframe;
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
 
   // Recreate chart with new timeframe
   // Don't destroy old one, so we can switch back to it with state preserved
   initialize();
+
+  // Update multi-timeframe indicators when timeframe changes
+  // This ensures that the multi-timeframe indicators are recalculated to align with the new chart timeframe
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    update_multi_timeframe_indicators(it->second);
+  }
 }
 
 void ChartPanel::render_chart_controls() {
@@ -3358,8 +3377,17 @@ void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
         for (const auto& candle : source_candles) {
           indicator.timestamps.push_back(static_cast<double>(candle.timestamp) / 1000000.0); // Convert microseconds to seconds
         }
+      } else if (indicator.name.find("EMA") != std::string::npos) {
+        // Calculate EMA for the source timeframe
+        indicator.values = calculate_cached_ema(source_closes, indicator.period);
+
+        // Store the timestamps for alignment with the current chart
+        indicator.timestamps.clear();
+        for (const auto& candle : source_candles) {
+          indicator.timestamps.push_back(static_cast<double>(candle.timestamp) / 1000000.0); // Convert microseconds to seconds
+        }
       }
-      // Add other indicator types as needed (EMA, RSI, etc.)
+      // Add other indicator types as needed (RSI, etc.)
     }
   }
 }
@@ -3397,27 +3425,64 @@ void ChartPanel::render_multi_timeframe_indicators(const ChartInstance& chart, s
     }
 
     // Draw the multi-timeframe indicator lines
-    for (size_t i = mt_start_idx + 1; i < mt_end_idx && i < indicator.values.size(); ++i) {
+    for (size_t i = mt_start_idx; i < mt_end_idx - 1 && i < indicator.values.size() - 1; ++i) {
       // Find the closest date in the current chart for the multi-timeframe timestamp
-      auto closest_date_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
-      auto closest_date_prev_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i - 1]);
+      auto current_timestamp_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
+      auto next_timestamp_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i + 1]);
 
-      if (closest_date_it != chart.dates.end() && closest_date_prev_it != chart.dates.end()) {
-        size_t closest_idx = std::distance(chart.dates.begin(), closest_date_it);
-        size_t closest_prev_idx = std::distance(chart.dates.begin(), closest_date_prev_it);
+      // If we can't find exact matches, we'll interpolate or find the closest points
+      size_t current_chart_idx = 0;
+      size_t next_chart_idx = 0;
 
-        // Ensure indices are within bounds
-        if (closest_idx < chart.dates.size() && closest_prev_idx < chart.dates.size() &&
-            i < indicator.values.size() && (i - 1) < indicator.values.size()) {
+      if (current_timestamp_it != chart.dates.end()) {
+        current_chart_idx = std::distance(chart.dates.begin(), current_timestamp_it);
+        // Ensure we don't go out of bounds
+        if (current_chart_idx >= chart.dates.size()) current_chart_idx = chart.dates.size() - 1;
+      } else {
+        // If timestamp is beyond the chart data, use the last available index
+        current_chart_idx = chart.dates.size() - 1;
+      }
 
-          ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[closest_prev_idx], indicator.values[i - 1]);
-          ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[closest_idx], indicator.values[i]);
+      if (next_timestamp_it != chart.dates.end()) {
+        next_chart_idx = std::distance(chart.dates.begin(), next_timestamp_it);
+        // Ensure we don't go out of bounds
+        if (next_chart_idx >= chart.dates.size()) next_chart_idx = chart.dates.size() - 1;
+      } else {
+        // If timestamp is beyond the chart data, use the last available index
+        next_chart_idx = chart.dates.size() - 1;
+      }
 
-          // Convert color to ImU32
+      // Ensure we have valid indices and values
+      if (i < indicator.values.size() && (i + 1) < indicator.values.size() &&
+          current_chart_idx < chart.dates.size() && next_chart_idx < chart.dates.size()) {
+
+        // Draw line segments connecting the multi-timeframe indicator values to the appropriate chart positions
+        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[current_chart_idx], indicator.values[i]);
+        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[next_chart_idx], indicator.values[i + 1]);
+
+        // Convert color to ImU32
+        ImU32 color = ImGui::ColorConvertFloat4ToU32(indicator.color);
+
+        // Draw the line segment with a slightly different style to distinguish from regular indicators
+        draw_list->AddLine(p1, p2, color, 2.5f); // Slightly thicker line for visibility
+      }
+    }
+
+    // Additionally, for better visualization of multi-timeframe indicators, draw points at the exact
+    // multi-timeframe data points that align with the chart
+    for (size_t i = mt_start_idx; i < mt_end_idx && i < indicator.values.size(); ++i) {
+      // Find the closest date in the current chart for the multi-timeframe timestamp
+      auto chart_it = std::lower_bound(chart.dates.begin(), chart.dates.end(), indicator.timestamps[i]);
+
+      if (chart_it != chart.dates.end()) {
+        size_t chart_idx = std::distance(chart.dates.begin(), chart_it);
+
+        if (chart_idx < chart.dates.size()) {
+          ImVec2 point = ImPlot::PlotToPixels(chart.dates[chart_idx], indicator.values[i]);
+
+          // Draw a small circle to mark the exact multi-timeframe data point
           ImU32 color = ImGui::ColorConvertFloat4ToU32(indicator.color);
-
-          // Draw the line segment
-          draw_list->AddLine(p1, p2, color, 2.0f);
+          draw_list->AddCircleFilled(point, 3.0f, color);
         }
       }
     }

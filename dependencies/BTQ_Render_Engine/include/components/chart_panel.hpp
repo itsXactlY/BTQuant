@@ -78,7 +78,7 @@ struct IndicatorConfig {
   // Stochastic configuration
   int stochastic_k_period = 14;
   int stochastic_d_period = 3;
-  int stochastic_smooth_period = 3;
+  int stochastic_slow_period = 3;
 
   // ATR configuration
   int atr_period = 14;
@@ -318,7 +318,7 @@ class ChartPanel : public PanelBase {
                                              const std::vector<float>& lows,
                                              const std::vector<float>& closes,
                                              int k_period);
-  std::vector<double> calculate_stochastic_d(const std::vector<double>& stoch_k, int d_period);
+  std::vector<double> calculate_stochastic_d(const std::vector<double>& stoch_k, int slow_period);
   std::vector<double> calculate_true_range(const std::vector<float>& highs,
                                            const std::vector<float>& lows,
                                            const std::vector<float>& closes);

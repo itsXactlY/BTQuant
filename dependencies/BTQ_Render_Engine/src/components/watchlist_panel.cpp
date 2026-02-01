@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
 #include "imgui.h"
 
@@ -10,13 +13,25 @@ namespace BTQuant {
 WatchlistPanel::WatchlistPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {}
+    : PanelBase(config), bridge_(bridge), processor_(processor) {
+  // Subscribe to real-time market data updates for all symbols
+  if (processor_) {
+    subscription_id_ = processor_->subscribe(0, RenderEngine::NotificationType::TRADE,
+                                           [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
+                                             this->on_market_data_update(symbol_id, type);
+                                           });
+  }
+}
 
 void WatchlistPanel::update(float dt) {
-  update_timer_ += dt;
-  if (update_timer_ >= UPDATE_INTERVAL) {
-    update_watchlist_data();
-    update_timer_ = 0.0f;
+  // Update animation timers for all watchlist entries
+  for (auto& [symbol_id, entry] : watchlist_) {
+    if (entry.animation_timer > 0.0f) {
+      entry.animation_timer -= dt;
+      if (entry.animation_timer < 0.0f) {
+        entry.animation_timer = 0.0f;
+      }
+    }
   }
 }
 
@@ -149,10 +164,73 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   display_order_.push_back(symbol_id);
 }
 
+void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
+  // Only process trade updates
+  if (type != RenderEngine::NotificationType::TRADE) {
+    return;
+  }
+
+  // Check if this symbol is in our watchlist
+  auto it = watchlist_.find(symbol_id);
+  if (it != watchlist_.end()) {
+    // Get the latest analytics data for this symbol
+    auto analytics = processor_->getSymbolAnalytics(symbol_id);
+    if (analytics.symbol_id != 0) {
+      // Store previous price for animation
+      it->second.previous_price = it->second.price;
+
+      // Update the entry with new data
+      it->second.price = analytics.last_trade_price;
+      it->second.vwap = analytics.vwap;
+      it->second.last_update_ts = analytics.last_trade_time;
+
+      // Calculate 24h change using the longest available timeframe candles
+      auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
+      if (!candles.empty()) {
+        const auto& oldest_candle = candles.front();
+        const auto& newest_candle = candles.back();
+
+        // Calculate percentage change
+        it->second.change_pct = calculate_24h_change(newest_candle, oldest_candle);
+
+        // Calculate dollar change
+        it->second.change_dollar = newest_candle.close - oldest_candle.close;
+
+        // Store open, high, low values from the oldest candle (representing 24h period)
+        it->second.open_24h = oldest_candle.open;
+        it->second.high_24h = oldest_candle.high;
+        it->second.low_24h = oldest_candle.low;
+
+        // Estimate 24h volume by summing available candles (best effort)
+        double total_vol = 0.0;
+        for (const auto& c : candles) total_vol += c.volume;
+        it->second.volume_24h = total_vol;
+      } else {
+        it->second.change_pct = 0.0;
+        it->second.change_dollar = 0.0;
+        it->second.open_24h = 0.0;
+        it->second.high_24h = 0.0;
+        it->second.low_24h = 0.0;
+        it->second.volume_24h = analytics.volume_1m;  // Fallback
+      }
+
+      // Start animation for price change
+      it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
+    }
+  }
+}
+
 void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
   watchlist_.erase(symbol_id);
   display_order_.erase(std::remove(display_order_.begin(), display_order_.end(), symbol_id),
                        display_order_.end());
+}
+
+WatchlistPanel::~WatchlistPanel() {
+  // Unsubscribe from market data updates when the panel is destroyed
+  if (processor_ && subscription_id_ != 0) {
+    processor_->unsubscribe(subscription_id_);
+  }
 }
 
 void WatchlistPanel::clear_watchlist() {
@@ -161,53 +239,9 @@ void WatchlistPanel::clear_watchlist() {
 }
 
 void WatchlistPanel::update_watchlist_data() {
-  if (!processor_) return;
-
-  for (auto& [symbol_id, entry] : watchlist_) {
-    auto analytics = processor_->getSymbolAnalytics(symbol_id);
-    if (analytics.symbol_id != 0) {
-      entry.price = analytics.last_trade_price;
-      entry.vwap = analytics.vwap;
-      entry.last_update_ts = analytics.last_trade_time;
-
-      // Calculate 24h change using longest available timeframe candles
-      // Note: Ideally we want TF_1DAY or TF_1HOUR, but we use the longest
-      // available from the processor as a proxy/placeholder until the processor
-      // supports longer history. We'll use the oldest candle from the longest
-      // timeframe to estimate change.
-      auto candles = processor_->getCandles(symbol_id, RenderEngine::TimeFrame::TF_15SEC);
-      if (!candles.empty()) {
-        const auto& oldest_candle = candles.front();
-        const auto& newest_candle = candles.back();  // Or just use current price
-
-        // Calculate percentage change
-        entry.change_pct = calculate_24h_change(newest_candle, oldest_candle);
-
-        // Calculate dollar change
-        entry.change_dollar = newest_candle.close - oldest_candle.close;
-
-        // Store open, high, low values from the oldest candle (representing 24h period)
-        entry.open_24h = oldest_candle.open;
-        entry.high_24h = oldest_candle.high;
-        entry.low_24h = oldest_candle.low;
-
-        // Estimate 24h volume by summing available candles (best effort)
-        double total_vol = 0.0;
-        for (const auto& c : candles) total_vol += c.volume;
-        entry.volume_24h = total_vol;
-      } else {
-        entry.change_pct = 0.0;
-        entry.change_dollar = 0.0;
-        entry.open_24h = 0.0;
-        entry.high_24h = 0.0;
-        entry.low_24h = 0.0;
-        entry.volume_24h = analytics.volume_1m;  // Fallback
-      }
-    }
-  }
-
-  // Apply sort after updating data
-  sort_watchlist();
+  // This method is now deprecated since we use real-time updates
+  // The data is updated in on_market_data_update() when new market data arrives
+  // This method remains for backward compatibility but does nothing
 }
 
 void WatchlistPanel::render_filter_input() {
@@ -257,7 +291,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
   ImGui::PushID(static_cast<int>(entry.symbol_id));  // Fix ID conflict
 
-  // Use Selectable spanning all columns
+  // Use Selectable spanning all columns with drag and drop support
   if (ImGui::Selectable(
           entry.symbol.c_str(), is_selected,
           ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
@@ -267,6 +301,50 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     if (on_symbol_selected_) {
       on_symbol_selected_(entry.symbol_id, entry.symbol);
     }
+  }
+
+  // Drag and drop source
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+    // Set payload to carry the symbol_id
+    ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
+
+    // Display preview of what is being dragged
+    ImGui::Text("%s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
+
+    ImGui::EndDragDropSource();
+  }
+
+  // Drag and drop target
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("WATCHLIST_ROW")) {
+      IM_ASSERT(payload->DataSize == sizeof(uint32_t));
+      uint32_t source_symbol_id = *(const uint32_t*)payload->Data;
+
+      // Find positions of source and target in display_order_
+      auto source_it = std::find(display_order_.begin(), display_order_.end(), source_symbol_id);
+      auto target_it = std::find(display_order_.begin(), display_order_.end(), entry.symbol_id);
+
+      if (source_it != display_order_.end() && target_it != display_order_.end()) {
+        // Calculate new position for the dragged item
+        int source_idx = std::distance(display_order_.begin(), source_it);
+        int target_idx = std::distance(display_order_.begin(), target_it);
+
+        // Move the source item to the target position
+        uint32_t moved_item = display_order_[source_idx];
+
+        // Remove the moved item from its current position
+        display_order_.erase(display_order_.begin() + source_idx);
+
+        // Adjust target index if source was before target (since we removed an element)
+        if (source_idx < target_idx) {
+          target_idx--;
+        }
+
+        // Insert the moved item at the new position
+        display_order_.insert(display_order_.begin() + target_idx, moved_item);
+      }
+    }
+    ImGui::EndDragDropTarget();
   }
 
   ImGui::PopID();
@@ -284,7 +362,31 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::Text("%s", entry.exchange.c_str());
 
   ImGui::TableSetColumnIndex(2);
-  ImGui::Text("%.4f", entry.price);
+  // Apply animation effect to price if recently updated
+  if (entry.animation_timer > 0.0f) {
+    // Calculate animation progress (0.0 to 1.0)
+    float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
+
+    // Create a pulsing effect by interpolating between previous and current price
+    double animated_price = entry.previous_price + (entry.price - entry.previous_price) * progress;
+
+    // Flash animation - alternate between green/red and white based on price direction
+    ImVec4 flash_color;
+    if ((entry.price > entry.previous_price && progress < 0.5f) ||
+        (entry.price < entry.previous_price && progress < 0.5f)) {
+      // Highlight color (green for up, red for down)
+      flash_color = entry.price > entry.previous_price ?
+                    ImVec4(0.2f, 0.9f, 0.2f, 1.0f) :  // Bright green for up
+                    ImVec4(0.9f, 0.2f, 0.2f, 1.0f);   // Bright red for down
+    } else {
+      // Normal white color
+      flash_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    ImGui::TextColored(flash_color, "%.4f", animated_price);
+  } else {
+    ImGui::Text("%.4f", entry.price);
+  }
 
   ImGui::TableSetColumnIndex(3);
   ImVec4 change_color =
@@ -429,6 +531,128 @@ void WatchlistPanel::sort_watchlist() {
     }
     return sort_ascending_ ? result : !result;
   });
+}
+
+void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {
+  std::ofstream file(config_file, std::ios::app); // Append to existing config file
+  if (!file.is_open()) {
+    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file << std::endl;
+    return;
+  }
+
+  try {
+    file << std::endl;
+    file << "# Watchlist order configuration" << std::endl;
+    file << "[watchlist_order]" << std::endl;
+
+    // Write the display order as a comma-separated list of symbol IDs
+    file << "display_order=";
+    for (size_t i = 0; i < display_order_.size(); ++i) {
+      file << display_order_[i];
+      if (i < display_order_.size() - 1) {
+        file << ",";
+      }
+    }
+    file << std::endl;
+
+    file.close();
+    std::cout << "[WatchlistPanel] Saved watchlist order to: " << config_file << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "[WatchlistPanel] Error saving watchlist order: " << e.what() << std::endl;
+  }
+}
+
+void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_file) {
+  std::ifstream file(config_file);
+  if (!file.is_open()) {
+    std::cout << "[WatchlistPanel] Config file not found, using current order: " << config_file << std::endl;
+    return;
+  }
+
+  try {
+    std::string line;
+    std::string current_section;
+    bool found_watchlist_order = false;
+
+    while (std::getline(file, line)) {
+      // Remove comments and trim whitespace
+      size_t comment_pos = line.find('#');
+      if (comment_pos != std::string::npos) {
+        line = line.substr(0, comment_pos);
+      }
+
+      // Trim whitespace
+      size_t start = line.find_first_not_of(" \t\r\n");
+      if (start == std::string::npos) continue; // Skip empty lines
+      size_t end = line.find_last_not_of(" \t\r\n");
+      line = line.substr(start, end - start + 1);
+
+      // Check for section headers
+      if (line.front() == '[' && line.back() == ']') {
+        current_section = line.substr(1, line.length() - 2);
+        if (current_section == "watchlist_order") {
+          found_watchlist_order = true;
+        }
+        continue;
+      }
+
+      // Parse key-value pairs only in the watchlist_order section
+      if (current_section == "watchlist_order") {
+        size_t equals_pos = line.find('=');
+        if (equals_pos != std::string::npos) {
+          std::string key = line.substr(0, equals_pos);
+          std::string value = line.substr(equals_pos + 1);
+
+          if (key == "display_order") {
+            // Parse comma-separated list of symbol IDs
+            std::vector<uint32_t> new_display_order;
+            std::stringstream ss(value);
+            std::string item;
+
+            while (std::getline(ss, item, ',')) {
+              // Trim whitespace from item
+              size_t item_start = item.find_first_not_of(" \t\r\n");
+              if (item_start != std::string::npos) {
+                size_t item_end = item.find_last_not_of(" \t\r\n");
+                item = item.substr(item_start, item_end - item_start + 1);
+
+                try {
+                  uint32_t symbol_id = std::stoi(item);
+                  // Only add to new order if the symbol exists in the watchlist
+                  if (watchlist_.find(symbol_id) != watchlist_.end()) {
+                    new_display_order.push_back(symbol_id);
+                  }
+                } catch (const std::invalid_argument&) {
+                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config: " << item << std::endl;
+                }
+              }
+            }
+
+            // Add any remaining symbols that weren't in the config to the end
+            for (const auto& pair : watchlist_) {
+              uint32_t symbol_id = pair.first;
+              if (std::find(new_display_order.begin(), new_display_order.end(), symbol_id) == new_display_order.end()) {
+                new_display_order.push_back(symbol_id);
+              }
+            }
+
+            display_order_ = new_display_order;
+            break;
+          }
+        }
+      }
+    }
+
+    file.close();
+
+    if (found_watchlist_order) {
+      std::cout << "[WatchlistPanel] Loaded watchlist order from: " << config_file << std::endl;
+    } else {
+      std::cout << "[WatchlistPanel] No watchlist order found in config, keeping current order: " << config_file << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[WatchlistPanel] Error loading watchlist order: " << e.what() << std::endl;
+  }
 }
 
 }  // namespace BTQuant

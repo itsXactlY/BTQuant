@@ -25,6 +25,11 @@ struct WatchlistEntry {
   double open_24h = 0.0;        // Opening price
   uint64_t last_update_ts = 0;
   bool is_active = true;
+
+  // Animation state for price changes
+  double previous_price = 0.0;
+  float animation_timer = 0.0f;
+  static constexpr float ANIMATION_DURATION = 0.5f; // Animation duration in seconds
 };
 
 class WatchlistPanel : public PanelBase {
@@ -33,6 +38,7 @@ class WatchlistPanel : public PanelBase {
 
   WatchlistPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  ~WatchlistPanel();
 
   void update(float dt) override;
   void render() override;
@@ -46,6 +52,10 @@ class WatchlistPanel : public PanelBase {
   void set_symbol_selected_callback(SymbolSelectedCallback cb) {
     on_symbol_selected_ = std::move(cb);
   }
+
+  // Configuration methods for saving/loading watchlist order
+  void save_watchlist_order_to_config(const std::string& config_file) const;
+  void load_watchlist_order_from_config(const std::string& config_file);
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -62,9 +72,12 @@ class WatchlistPanel : public PanelBase {
   uint32_t selected_symbol_id_ = 0;
   SymbolSelectedCallback on_symbol_selected_;
 
-  // Performance
-  float update_timer_ = 0.0f;
-  static constexpr float UPDATE_INTERVAL = 0.1f;  // 10 FPS updates
+  // Real-time subscription ID
+  uint64_t subscription_id_ = 0;
+
+  // Performance - timer removed since we now use real-time updates
+  // float update_timer_ = 0.0f;
+  // static constexpr float UPDATE_INTERVAL = 0.1f;  // 10 FPS updates
 
   void update_watchlist_data();
   void render_table_header();
@@ -73,11 +86,17 @@ class WatchlistPanel : public PanelBase {
   void sort_watchlist();
   std::vector<uint32_t> get_filtered_symbols() const;
 
+  // Drag and drop helpers
+  void handle_drag_drop_reordering();
+
   // Helpers
   double calculate_24h_change(const RenderEngine::OHLCVCandle& current,
                               const RenderEngine::OHLCVCandle& old) const;
 
   static const char* get_sort_column_name(int column);
+
+  // Real-time update handler
+  void on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type);
 };
 
 }  // namespace BTQuant

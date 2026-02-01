@@ -118,6 +118,8 @@ class WatchlistPanel : public PanelBase {
   // Helper methods for managing subscriptions
   void subscribe_to_symbol(uint32_t symbol_id);
   void unsubscribe_from_symbol(uint32_t symbol_id);
+  void verify_subscriptions();
+  void refresh_all_subscriptions();
 };
 
 }  // namespace BTQuant

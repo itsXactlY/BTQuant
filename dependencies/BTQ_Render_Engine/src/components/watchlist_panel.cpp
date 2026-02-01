@@ -89,6 +89,9 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   for (const auto& [symbol_id, entry] : watchlist_) {
     subscribe_to_symbol(symbol_id);
   }
+
+  // Verify all subscriptions are active
+  verify_subscriptions();
 }
 
 void WatchlistPanel::update(float dt) {
@@ -109,6 +112,10 @@ void WatchlistPanel::update(float dt) {
       subscribe_to_symbol(symbol_id);
     }
   }
+
+  // Additionally, periodically verify all subscriptions are active
+  // This ensures robustness in case of connection issues or other problems
+  verify_subscriptions();
 }
 
 void WatchlistPanel::render() {
@@ -475,6 +482,11 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
         significant_change = true;
       }
 
+      // Check if change dollars changed significantly
+      if (std::abs(it->second.change_dollar - prev_change_dollar) > 0.001) { // At least $0.001 difference
+        significant_change = true;
+      }
+
       if (significant_change) {
         it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
       }
@@ -750,17 +762,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
     else if (flash_phase > 1.0f) flash_phase = 2.0f - flash_phase; // Create a bounce effect
 
-    // Enhance the color intensity during animation
+    // Enhance the color intensity during animation with more pronounced flash
     if (price_change_pct >= 0.0) {
       // Positive change - enhance green component during animation
-      flash_color.x = flash_color.x * (0.7f + 0.3f * flash_phase); // Red
-      flash_color.y = std::min(1.0f, flash_color.y * (0.7f + 0.3f * flash_phase)); // Green
-      flash_color.z = flash_color.z * (0.7f + 0.3f * flash_phase); // Blue
+      flash_color.x = flash_color.x * (0.5f + 0.5f * flash_phase); // Red - reduced to allow green to dominate
+      flash_color.y = std::min(1.0f, flash_color.y * (0.5f + 0.5f * flash_phase)); // Green - enhanced
+      flash_color.z = flash_color.z * (0.5f + 0.5f * flash_phase); // Blue - reduced
     } else {
       // Negative change - enhance red component during animation
-      flash_color.x = std::min(1.0f, flash_color.x * (0.7f + 0.3f * flash_phase)); // Red
-      flash_color.y = flash_color.y * (0.7f + 0.3f * flash_phase); // Green
-      flash_color.z = flash_color.z * (0.7f + 0.3f * flash_phase); // Blue
+      flash_color.x = std::min(1.0f, flash_color.x * (0.5f + 0.5f * flash_phase)); // Red - enhanced
+      flash_color.y = flash_color.y * (0.5f + 0.5f * flash_phase); // Green - reduced
+      flash_color.z = flash_color.z * (0.5f + 0.5f * flash_phase); // Blue - reduced
     }
 
     ImGui::TextColored(flash_color, "%s", formatPrice(animated_price).c_str());
@@ -933,6 +945,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
 
+    // Create a pulsing effect by interpolating between previous and current VWAP
+    double animated_vwap = entry.previous_vwap + (entry.vwap - entry.previous_vwap) * progress;
+
     // Calculate flash timing for VWAP animation
     float flash_phase = progress * 4.0f; // Speed up the flash cycle for more intensity
     if (flash_phase > 2.0f) flash_phase = 0.0f; // Reset after full cycle
@@ -956,8 +971,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // No significant change in VWAP - light blue tint
       vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
     }
+
+    ImGui::TextColored(vwap_color, "%s", formatVWAP(animated_vwap).c_str());
+  } else {
+    ImGui::TextColored(vwap_color, "%s", formatVWAP(entry.vwap).c_str());
   }
-  ImGui::TextColored(vwap_color, "%s", formatVWAP(entry.vwap).c_str());
 
   // Add tooltip to explain VWAP
   if (ImGui::IsItemHovered()) {
@@ -1311,6 +1329,37 @@ void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
       symbol_subscriptions_.erase(it);
     }
   }
+}
+
+void WatchlistPanel::verify_subscriptions() {
+  // Periodically verify that all symbols in the watchlist have active subscriptions
+  // This helps ensure robustness in case of connection issues or other problems
+
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    // Check if the symbol has a subscription
+    auto sub_it = symbol_subscriptions_.find(symbol_id);
+    if (sub_it == symbol_subscriptions_.end()) {
+      // Subscription is missing, create a new one
+      subscribe_to_symbol(symbol_id);
+    }
+    // Note: We don't verify if the subscription is still valid on the processor side
+    // as that would require additional API calls. The current approach ensures
+    // that each symbol has a subscription registered in our local map.
+  }
+}
+
+void WatchlistPanel::refresh_all_subscriptions() {
+  // Unsubscribe from all current symbols
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    unsubscribe_from_symbol(symbol_id);
+  }
+
+  // Then resubscribe to all symbols
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    subscribe_to_symbol(symbol_id);
+  }
+
+  std::cout << "[WatchlistPanel] Refreshed all subscriptions for " << watchlist_.size() << " symbols" << std::endl;
 }
 
 }  // namespace BTQuant

@@ -9,6 +9,8 @@
 
 #include "../../include/components/panel_manager.hpp"
 #include "../../include/components/chart_panel.hpp"
+#include "../../include/components/footprint_panel.hpp"
+#include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/ui/ui_base.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
@@ -765,17 +767,74 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
   // Get all panel IDs
   auto panel_ids = panel_manager_->get_all_panel_ids();
 
-  // Iterate through all panels and update chart panels specifically
+  // Iterate through all panels and update chart-based panels
   for (uint32_t panel_id : panel_ids) {
     auto panel = panel_manager_->get_panel_by_id(panel_id);
     if (!panel) continue;
 
-    // Only ChartPanel has a direct set_timeframe method, so we only update those directly
-    if (panel->get_config().type == PanelType::CHART) {
-      ChartPanel* chart_panel = dynamic_cast<ChartPanel*>(panel);
-      if (chart_panel) {
-        chart_panel->set_timeframe(timeframe);
+    // Update all chart-based panels with the new timeframe
+    // Check for all chart-related panel types
+    if (panel->get_config().type == PanelType::CHART ||
+        panel->get_config().type == PanelType::FOOTPRINT_CHART ||
+        panel->get_config().type == PanelType::DEPTH_CHART ||
+        panel->get_config().type == PanelType::CHART_REPLAY) {
+
+      // Handle different chart panel types
+      if (panel->get_config().type == PanelType::CHART) {
+        // Regular chart panel - use set_timeframe method
+        ChartPanel* chart_panel = dynamic_cast<ChartPanel*>(panel);
+        if (chart_panel) {
+          chart_panel->set_timeframe(timeframe);
+        }
       }
+      else if (panel->get_config().type == PanelType::CHART_REPLAY) {
+        // Chart replay panel - update replay config
+        auto* chart_replay_panel = dynamic_cast<class ChartReplayPanel*>(panel);
+        if (chart_replay_panel) {
+          chart_replay_panel->set_timeframe(timeframe);
+        }
+      }
+      else if (panel->get_config().type == PanelType::FOOTPRINT_CHART) {
+        // Footprint chart panel - update time aggregation type
+        auto* footprint_panel = dynamic_cast<class FootprintPanel*>(panel);
+        if (footprint_panel) {
+          // Map the timeframe to the corresponding TimeAggregationType
+          Data::TimeAggregationType time_agg_type;
+          switch (timeframe) {
+            case RenderEngine::TimeFrame::TF_1MIN:
+              time_agg_type = Data::TimeAggregationType::T_1MIN;
+              break;
+            case RenderEngine::TimeFrame::TF_5MIN:
+              time_agg_type = Data::TimeAggregationType::T_5MIN;
+              break;
+            case RenderEngine::TimeFrame::TF_15MIN:
+              time_agg_type = Data::TimeAggregationType::T_15MIN;
+              break;
+            case RenderEngine::TimeFrame::TF_30MIN:
+              time_agg_type = Data::TimeAggregationType::T_30MIN;
+              break;
+            case RenderEngine::TimeFrame::TF_1HOUR:
+              time_agg_type = Data::TimeAggregationType::T_1HOUR;
+              break;
+            case RenderEngine::TimeFrame::TF_4HOUR:
+              time_agg_type = Data::TimeAggregationType::T_4HOUR;
+              break;
+            case RenderEngine::TimeFrame::TF_1DAY:
+              time_agg_type = Data::TimeAggregationType::T_1DAY;
+              break;
+            case RenderEngine::TimeFrame::TF_1WEEK:
+              time_agg_type = Data::TimeAggregationType::T_1WEEK;
+              break;
+            default:
+              time_agg_type = Data::TimeAggregationType::T_1MIN;
+              break;
+          }
+
+          footprint_panel->setTimeAggregationType(time_agg_type);
+        }
+      }
+      // Depth chart typically doesn't need a timeframe as it shows current order book data
+      // So we don't need to handle PanelType::DEPTH_CHART here
     }
   }
 }

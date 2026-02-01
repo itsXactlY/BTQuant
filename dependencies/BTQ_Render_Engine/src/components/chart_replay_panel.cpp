@@ -41,4 +41,17 @@ void ChartReplayPanel::initialize() {
     // Initialization is handled in constructor
 }
 
+void ChartReplayPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
+    if (chart_replay_) {
+        // Get the current config
+        auto config = chart_replay_->get_replay_config();
+
+        // Update the timeframe in the config
+        config.timeframe = timeframe;
+
+        // Set the updated config back
+        chart_replay_->set_replay_config(config);
+    }
+}
+
 } // namespace BTQuant

@@ -84,6 +84,7 @@ class WatchlistPanel : public PanelBase {
   // Delete confirmation state
   uint32_t symbol_to_delete_ = 0;
   bool show_delete_confirmation_ = false;
+  bool show_clear_all_confirmation_ = false;
 
   // Real-time subscription ID
   uint64_t subscription_id_ = 0;

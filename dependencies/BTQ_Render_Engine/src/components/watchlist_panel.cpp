@@ -147,6 +147,32 @@ void WatchlistPanel::render() {
 
   ImGui::PopStyleColor(4); // Pop all 4 color styles
 
+  // Show current count of symbols in watchlist
+  ImGui::SameLine();
+  ImGui::TextDisabled("(%zu symbols)", watchlist_.size());
+
+  // Add a clear all button
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));      // Red background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.1f, 0.1f, 1.0f)); // Darker red when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));   // Even brighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+
+  if (ImGui::Button("Clear All")) {
+    if (!watchlist_.empty()) {
+      show_clear_all_confirmation_ = true;
+    }
+  }
+
+  // Add tooltip to explain the clear all button
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Remove all symbols from watchlist");
+    ImGui::EndTooltip();
+  }
+
+  ImGui::PopStyleColor(4); // Pop all 4 color styles
+
   // Alternative symbol selector dropdown
   if (bridge_) {
     auto active_symbols = bridge_->getActiveSymbols();
@@ -193,12 +219,19 @@ void WatchlistPanel::render() {
       ImGui::Text("Please enter a valid symbol name!");
       ImGui::PopStyleColor();
     } else {
+      // Convert to uppercase for standardization
+      std::transform(symbol_to_add.begin(), symbol_to_add.end(), symbol_to_add.begin(), ::toupper);
+
       bool symbol_found = false;
       auto active_symbols = bridge_->getActiveSymbols();
       for (uint32_t sym_id : active_symbols) {
         std::string sym_name = bridge_->getSymbolName(sym_id);
         std::string exchange = bridge_->getExchangeName(sym_id);
-        if (!sym_name.empty() && sym_name == symbol_to_add && watchlist_.find(sym_id) == watchlist_.end()) {
+
+        // Compare the symbol name and check if it's already in the watchlist
+        if (!sym_name.empty() &&
+            sym_name == symbol_to_add &&
+            watchlist_.find(sym_id) == watchlist_.end()) {
           add_symbol(sym_id, sym_name, exchange);
           new_symbol_buffer_[0] = '\0'; // Clear the input buffer
           symbol_found = true;
@@ -206,11 +239,17 @@ void WatchlistPanel::render() {
         }
       }
 
-      // Show error message if symbol was not found
-      if (!symbol_found) {
+      // Show success message if symbol was added
+      if (symbol_found) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 0.3f, 1.0f)); // Green text for success
+        ImGui::Text("Added '%s' to watchlist!", symbol_to_add.c_str());
+        ImGui::PopStyleColor();
+      } else {
+        // Show error message if symbol was not found
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f)); // Red text for error
-        ImGui::Text("Symbol '%s' not found!", symbol_to_add.c_str());
+        ImGui::Text("Symbol '%s' not found or already in watchlist!", symbol_to_add.c_str());
         ImGui::PopStyleColor();
       }
     }
@@ -283,6 +322,35 @@ void WatchlistPanel::render() {
 
     if (ImGui::Button("Cancel", ImVec2(80, 0))) {
       show_delete_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+
+  // Clear all confirmation dialog
+  if (show_clear_all_confirmation_) {
+    ImGui::OpenPopup("Confirm Clear All?");
+  }
+
+  if (ImGui::BeginPopupModal("Confirm Clear All?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Are you sure you want to remove ALL symbols from the watchlist?");
+
+    // Show how many symbols will be removed
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Number of symbols to remove: %zu", watchlist_.size());
+
+    ImGui::Separator();
+
+    if (ImGui::Button("Yes, Clear All", ImVec2(100, 0))) {
+      clear_watchlist();
+      show_clear_all_confirmation_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+      show_clear_all_confirmation_ = false;
       ImGui::CloseCurrentPopup();
     }
 

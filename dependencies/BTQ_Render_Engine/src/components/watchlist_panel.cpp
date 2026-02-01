@@ -1064,98 +1064,11 @@ void WatchlistPanel::render_table_header() {
     // Render the header cell with drag-and-drop support
     ImGui::TableNextColumn();
 
-    // Prepare the header text with sort indicator if this is the sort column
-    std::string header_text = column_info_[orig_idx].name;
-    if (orig_idx == sort_column_) {
-      // Add sort direction indicator
-      header_text += sort_ascending_ ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
-    }
-
-    // Render the header text with sort indicator
-    // Highlight the header if it's the current sort column
-    if (orig_idx == sort_column_) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 1.0f, 1.0f)); // Light blue highlight for sorted column
-      ImGui::Text("%s", header_text.c_str());
-      ImGui::PopStyleColor();
-    } else {
-      ImGui::Text("%s", header_text.c_str());
-    }
-
-    // Check if the current visible column is being hovered for right-click
-    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-      ImGui::OpenPopup("ColumnContextMenu");
-    }
-
-    // Check if the current visible column is being clicked for sorting
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-      // Toggle sort direction if clicking the same column, otherwise sort by new column
-      if (orig_idx == sort_column_) {
-        sort_ascending_ = !sort_ascending_;
-      } else {
-        sort_column_ = orig_idx;
-        sort_ascending_ = true; // Default to ascending when switching columns
-      }
-      sort_watchlist();
-    }
-
-    // Implement drag-and-drop for column reordering
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-      // Set payload to carry the column index
-      ImGui::SetDragDropPayload("COLUMN_REORDER", &orig_idx, sizeof(int));
-
-      // Enhanced visual preview of what is being dragged
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moving: %s", column_info_[orig_idx].name.c_str());
-
-      // Add a visual border around the preview
-      ImVec2 pos = ImGui::GetCursorScreenPos();
-      ImVec2 size = ImVec2(200, ImGui::GetTextLineHeightWithSpacing() * 2); // Fixed size for cleaner preview
-      ImDrawList* draw_list = ImGui::GetWindowDrawList();
-      draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
-
-      ImGui::EndDragDropSource();
-    }
-
-    // Make this header a drop target
-    if (ImGui::BeginDragDropTarget()) {
-      const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("COLUMN_REORDER");
-      if (payload && payload->DataSize == sizeof(int)) {
-        int source_column = *(const int*)payload->Data;
-
-        // Reorder the columns by updating their order values
-        if (source_column != orig_idx) {
-          reorder_columns(source_column, orig_idx);
-        }
-      }
-
-      // Enhanced visual feedback for drop target - draw a more prominent indicator
-      ImVec2 cell_rect_min = ImGui::GetItemRectMin();
-      ImVec2 cell_rect_max = ImGui::GetItemRectMax();
-
-      ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-      // Draw a more prominent visual indicator for the drop target
-      draw_list->AddLine(
-          ImVec2(cell_rect_min.x, cell_rect_max.y),
-          ImVec2(cell_rect_max.x, cell_rect_max.y),
-          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
-          3.0f // Increased line thickness for better visibility
-      );
-
-      // Add a more distinctive triangle indicator to show insertion direction
-      ImVec2 triangle_points[3] = {
-          ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 10),
-          ImVec2(cell_rect_max.x - 10, cell_rect_max.y),
-          ImVec2(cell_rect_max.x, cell_rect_max.y - 10)
-      };
-      draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
-                                  ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
-
-      ImGui::EndDragDropTarget();
-    }
+    // Use the new draggable header function
+    render_draggable_header(orig_idx, column_info_[orig_idx].name.c_str());
   }
 
-  // The right-click on individual column headers is already handled above in the loop
+  // The right-click on individual column headers is already handled in render_draggable_header
   // So we don't need additional right-click detection here
 
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
@@ -2901,6 +2814,104 @@ void WatchlistPanel::reorder_columns(int source_index, int target_index) {
   validate_column_settings();
 }
 
+void WatchlistPanel::render_draggable_header(int column_index, const char* label) {
+  if (column_index < 0 || column_index >= static_cast<int>(column_info_.size())) {
+    return;
+  }
+
+  // Render the header text with sort indicator if this is the sort column
+  std::string header_text = std::string(label);
+  if (column_index == sort_column_) {
+    // Add sort direction indicator
+    header_text += sort_ascending_ ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
+  }
+
+  // Render the header text with sort indicator
+  // Highlight the header if it's the current sort column
+  if (column_index == sort_column_) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 1.0f, 1.0f)); // Light blue highlight for sorted column
+    ImGui::Text("%s", header_text.c_str());
+    ImGui::PopStyleColor();
+  } else {
+    ImGui::Text("%s", header_text.c_str());
+  }
+
+  // Check if the current column header is being hovered for right-click
+  if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    clicked_column_index_ = column_index;
+    column_context_menu_open_ = true;
+    ImGui::OpenPopup("ColumnContextMenu");
+  }
+
+  // Check if the current column header is being clicked for sorting
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+    // Toggle sort direction if clicking the same column, otherwise sort by new column
+    if (column_index == sort_column_) {
+      sort_ascending_ = !sort_ascending_;
+    } else {
+      sort_column_ = column_index;
+      sort_ascending_ = true; // Default to ascending when switching columns
+    }
+    sort_watchlist();
+  }
+
+  // Implement drag-and-drop for column reordering
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    // Set payload to carry the column index
+    ImGui::SetDragDropPayload("COLUMN_REORDER", &column_index, sizeof(int));
+
+    // Enhanced visual preview of what is being dragged
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moving: %s", column_info_[column_index].name.c_str());
+
+    // Add a visual border around the preview
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 size = ImVec2(200, ImGui::GetTextLineHeightWithSpacing() * 2); // Fixed size for cleaner preview
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
+                      ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
+
+    ImGui::EndDragDropSource();
+  }
+
+  // Make this header a drop target
+  if (ImGui::BeginDragDropTarget()) {
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("COLUMN_REORDER");
+    if (payload && payload->DataSize == sizeof(int)) {
+      int source_column = *(const int*)payload->Data;
+
+      // Reorder the columns by updating their order values
+      if (source_column != column_index) {
+        reorder_columns(source_column, column_index);
+      }
+    }
+
+    // Enhanced visual feedback for drop target - draw a more prominent indicator
+    ImVec2 cell_rect_min = ImGui::GetItemRectMin();
+    ImVec2 cell_rect_max = ImGui::GetItemRectMax();
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    // Draw a more prominent visual indicator for the drop target
+    draw_list->AddLine(
+        ImVec2(cell_rect_min.x, cell_rect_max.y),
+        ImVec2(cell_rect_max.x, cell_rect_max.y),
+        ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
+        3.0f // Increased line thickness for better visibility
+    );
+
+    // Add a more distinctive triangle indicator to show insertion direction
+    ImVec2 triangle_points[3] = {
+        ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 10),
+        ImVec2(cell_rect_max.x - 10, cell_rect_max.y),
+        ImVec2(cell_rect_max.x, cell_rect_max.y - 10)
+    };
+    draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
+                                ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
+
+    ImGui::EndDragDropTarget();
+  }
+}
+
 void WatchlistPanel::process_pending_updates() {
   // This method handles any pending market data updates
   // Currently, updates are processed directly in on_market_data_update
@@ -3186,6 +3197,36 @@ void WatchlistPanel::validate_column_settings() {
         column_info_[j].order = static_cast<int>(j);
       }
       return; // Exit after reassignment
+    }
+  }
+
+  // Additional validation: ensure that visible columns have proper order values
+  int visible_count = 0;
+  for (size_t i = 0; i < column_info_.size(); ++i) {
+    if (column_info_[i].visible) {
+      visible_count++;
+    }
+  }
+
+  // If we have visible columns but the highest order value is greater than the number of visible columns - 1,
+  // we might have gaps in the ordering. Let's reassign to ensure continuity for visible columns.
+  if (visible_count > 0) {
+    std::vector<std::pair<int, int>> visible_orders; // (original_index, order)
+    for (size_t i = 0; i < column_info_.size(); ++i) {
+      if (column_info_[i].visible) {
+        visible_orders.emplace_back(i, column_info_[i].order);
+      }
+    }
+
+    // Sort by order value
+    std::sort(visible_orders.begin(), visible_orders.end(),
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                return a.second < b.second;
+              });
+
+    // Reassign order values to be consecutive starting from 0 for visible columns
+    for (size_t i = 0; i < visible_orders.size(); ++i) {
+      column_info_[visible_orders[i].first].order = static_cast<int>(i);
     }
   }
 }

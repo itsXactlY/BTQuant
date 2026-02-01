@@ -59,6 +59,10 @@ class WatchlistPanel : public PanelBase {
   void save_watchlist_order_to_config(const std::string& config_file) const;
   void load_watchlist_order_from_config(const std::string& config_file);
 
+  // Method to set the config file path
+  void set_config_file_path(const std::string& path) { config_file_path_ = path; }
+  const std::string& get_config_file_path() const { return config_file_path_; }
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -73,6 +77,9 @@ class WatchlistPanel : public PanelBase {
   char new_symbol_buffer_[128] = {0};  // Buffer for new symbol input
   uint32_t selected_symbol_id_ = 0;
   SymbolSelectedCallback on_symbol_selected_;
+
+  // Configuration
+  std::string config_file_path_ = "watchlist_config.ini";  // Path to the config file
 
   // Delete confirmation state
   uint32_t symbol_to_delete_ = 0;

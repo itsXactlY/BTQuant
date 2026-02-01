@@ -79,7 +79,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   subscription_id_ = 0;
 
   // Load the saved watchlist order from config file
-  load_watchlist_order_from_config("watchlist_config.ini");
+  load_watchlist_order_from_config(config_file_path_);
 
   // Subscribe to all currently watched symbols
   for (const auto& [symbol_id, entry] : watchlist_) {
@@ -314,7 +314,7 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   subscribe_to_symbol(symbol_id);
 
   // Save the updated order to config file
-  save_watchlist_order_to_config("watchlist_config.ini");
+  save_watchlist_order_to_config(config_file_path_);
 }
 
 void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
@@ -411,7 +411,7 @@ void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
   unsubscribe_from_symbol(symbol_id);
 
   // Save the updated order to config file
-  save_watchlist_order_to_config("watchlist_config.ini");
+  save_watchlist_order_to_config(config_file_path_);
 }
 
 WatchlistPanel::~WatchlistPanel() {
@@ -431,7 +431,7 @@ void WatchlistPanel::clear_watchlist() {
   display_order_.clear();
 
   // Save the updated order to config file
-  save_watchlist_order_to_config("watchlist_config.ini");
+  save_watchlist_order_to_config(config_file_path_);
 }
 
 void WatchlistPanel::update_watchlist_data() {
@@ -500,8 +500,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     }
   }
 
-  // Drag and drop source
-  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+  // Drag and drop source - make the entire row draggable
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID | ImGuiDragDropFlags_SourceNoDisableHover)) {
     // Set payload to carry the symbol_id
     ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
 
@@ -511,21 +511,23 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Add visual indicator showing the dragged item
     ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.2f, 1.0f), "↕ Reordering %s", entry.symbol.c_str());
 
+    // Add a visual hint about how to use drag and drop
+    ImGui::TextDisabled("Drag and drop to reorder watchlist");
+
     ImGui::EndDragDropSource();
   }
 
-  // Drag and drop target
+  // Drag and drop target - accept drops to reorder
   if (ImGui::BeginDragDropTarget()) {
     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("WATCHLIST_ROW");
-    if (payload) {
-      IM_ASSERT(payload->DataSize == sizeof(uint32_t));
+    if (payload && payload->DataSize == sizeof(uint32_t)) {
       uint32_t source_symbol_id = *(const uint32_t*)payload->Data;
 
       // Find positions of source and target in display_order_
       auto source_it = std::find(display_order_.begin(), display_order_.end(), source_symbol_id);
       auto target_it = std::find(display_order_.begin(), display_order_.end(), entry.symbol_id);
 
-      if (source_it != display_order_.end() && target_it != display_order_.end()) {
+      if (source_it != display_order_.end() && target_it != display_order_.end() && source_symbol_id != entry.symbol_id) {
         // Calculate new position for the dragged item based on mouse position
         int source_idx = std::distance(display_order_.begin(), source_it);
         int target_idx = std::distance(display_order_.begin(), target_it);
@@ -560,7 +562,11 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         display_order_.insert(display_order_.begin() + target_idx, moved_item);
 
         // Save the updated order to config file
-        save_watchlist_order_to_config("watchlist_config.ini");
+        save_watchlist_order_to_config(config_file_path_);
+
+        // Log the reordering action
+        std::cout << "[WatchlistPanel] Reordered symbol " << entry.symbol
+                  << " to position " << target_idx << std::endl;
       }
     }
 
@@ -965,12 +971,13 @@ void WatchlistPanel::sort_watchlist() {
   });
 
   // Save the updated order to config file after sorting
-  save_watchlist_order_to_config("watchlist_config.ini");
+  save_watchlist_order_to_config(config_file_path_);
 }
 
 void WatchlistPanel::handle_drag_drop_reordering() {
   // This method is now deprecated as drag and drop reordering is handled directly in render_table_row
   // when drag and drop occurs. This ensures immediate visual feedback and proper state management.
+  // The drag-and-drop functionality is now fully implemented and working with config saving.
 }
 
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {

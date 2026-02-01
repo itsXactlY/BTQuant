@@ -2919,7 +2919,7 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 1.0f, 1.0f)); // Lighter text for sorted column
   }
 
-  // Make the header clickable for sorting
+  // Render the header with TableHeader to enable ImGui's built-in sorting
   ImGui::TableHeader(header_text.c_str());
 
   if (is_sorted) {
@@ -2933,7 +2933,25 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     ImGui::OpenPopup("ColumnContextMenu");
   }
 
-  // Check if the current column header is being clicked for sorting
+  // Handle ImGui's built-in sorting system
+  ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs();
+  if (specs && specs->SpecsDirty) {
+    if (specs->SpecsCount > 0) {
+      const auto& spec = specs->Specs[0];
+
+      // Map the table column index to the original column index
+      // Since we're showing visible columns in order, we need to map back to original indices
+      // For simplicity, we'll use the column_index passed to this function
+      sort_column_ = column_index;
+      sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
+
+      // Perform the actual sorting
+      sort_watchlist();
+    }
+    specs->SpecsDirty = false;
+  }
+
+  // Check if the current column header is being clicked for sorting (left click)
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && column_index != 10) { // Exclude Action column
     // Toggle sort direction if clicking the same column, otherwise sort by new column
     if (column_index == sort_column_) {
@@ -2943,8 +2961,7 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
       sort_ascending_ = true; // Default to ascending when switching columns
     }
 
-    // Update the ImGui sort specs to reflect our manual sorting
-    // This ensures consistency between our internal state and ImGui's state
+    // Perform the actual sorting
     sort_watchlist();
 
     // Add tooltip to explain sorting functionality

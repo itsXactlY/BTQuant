@@ -34,6 +34,14 @@ IndicatorAlerts::IndicatorAlerts()
       previous_stoch_k_below_overbought_(false),
       logging_enabled_(false),
       log_file_path_("indicator_alerts.log"),
+      email_notifications_enabled_(false),
+      smtp_server_("smtp.gmail.com"),
+      smtp_port_(587),
+      email_username_(""),
+      email_password_(""),
+      email_recipient_(""),
+      webhook_notifications_enabled_(false),
+      webhook_url_(""),
       initialized_(false) {
 }
 
@@ -244,13 +252,24 @@ bool IndicatorAlerts::isPriceCrossingSMA(double current_price, double current_sm
     bool current_above = current_price > current_sma;
     bool previous_above = previous_price > previous_sma;
 
-    // Add threshold to avoid noise
+    // Check if there was an actual crossing (different sides of the SMA)
+    bool crossed = current_above != previous_above;
+
+    // Additional validation: ensure the crossing is meaningful by checking
+    // that the current price is sufficiently away from the SMA
     double price_sma_diff = std::abs(current_price - current_sma);
     if (price_sma_diff < sma_cross_threshold_) {
         return false; // Too close to call, avoid noise
     }
 
-    return current_above != previous_above;
+    // Also validate that the previous price was on the opposite side of the SMA
+    // and sufficiently away from it to confirm a genuine cross
+    double prev_price_sma_diff = std::abs(previous_price - previous_sma);
+    if (prev_price_sma_diff < sma_cross_threshold_) {
+        return false; // Previous position was too close to SMA to confirm a cross
+    }
+
+    return crossed;
 }
 
 bool IndicatorAlerts::isPriceCrossingEMA(double current_price, double current_ema,
@@ -259,20 +278,32 @@ bool IndicatorAlerts::isPriceCrossingEMA(double current_price, double current_em
     bool current_above = current_price > current_ema;
     bool previous_above = previous_price > previous_ema;
 
-    // Add threshold to avoid noise
+    // Check if there was an actual crossing (different sides of the EMA)
+    bool crossed = current_above != previous_above;
+
+    // Additional validation: ensure the crossing is meaningful by checking
+    // that the current price is sufficiently away from the EMA
     double price_ema_diff = std::abs(current_price - current_ema);
     if (price_ema_diff < ema_cross_threshold_) {
         return false; // Too close to call, avoid noise
     }
 
-    return current_above != previous_above;
+    // Also validate that the previous price was on the opposite side of the EMA
+    // and sufficiently away from it to confirm a genuine cross
+    double prev_price_ema_diff = std::abs(previous_price - previous_ema);
+    if (prev_price_ema_diff < ema_cross_threshold_) {
+        return false; // Previous position was too close to EMA to confirm a cross
+    }
+
+    return crossed;
 }
 
 bool IndicatorAlerts::isRSIOversold(double current_rsi) const {
     // Check if RSI entered oversold territory (typically < 30)
     bool currently_oversold = current_rsi < rsi_oversold_level_;
     bool previously_not_oversold = previous_rsi_ >= rsi_oversold_level_;
-    
+
+    // Only trigger if we just entered the oversold zone
     return currently_oversold && previously_not_oversold;
 }
 
@@ -280,21 +311,27 @@ bool IndicatorAlerts::isRSIOverbought(double current_rsi) const {
     // Check if RSI entered overbought territory (typically > 70)
     bool currently_overbought = current_rsi > rsi_overbought_level_;
     bool previously_not_overbought = previous_rsi_ <= rsi_overbought_level_;
-    
+
+    // Only trigger if we just entered the overbought zone
     return currently_overbought && previously_not_overbought;
 }
 
 bool IndicatorAlerts::isPriceTouchingBollingerBands(double current_price, double bb_upper, double bb_lower) const {
-    // Check if price touched or crossed Bollinger Bands
+    // Check if price touched Bollinger Bands with proper threshold
+    // A touch occurs when price comes within threshold distance of either band
     double upper_diff = std::abs(current_price - bb_upper);
     double lower_diff = std::abs(current_price - bb_lower);
 
-    bool touched_upper = upper_diff <= bollinger_band_threshold_ && 
-                         current_price >= bb_lower && current_price <= bb_upper + bollinger_band_threshold_;
-    bool touched_lower = lower_diff <= bollinger_band_threshold_ && 
-                         current_price >= bb_lower - bollinger_band_threshold_ && current_price <= bb_upper;
+    bool touched_upper = upper_diff <= bollinger_band_threshold_ && current_price <= bb_upper;
+    bool touched_lower = lower_diff <= bollinger_band_threshold_ && current_price >= bb_lower;
 
-    return touched_upper || touched_lower;
+    // Also check for actual crossing of bands (price moved from inside to outside)
+    bool crossed_upper = current_price > bb_upper && previous_price_ <= bb_upper &&
+                         std::abs(current_price - bb_upper) <= bollinger_band_threshold_;
+    bool crossed_lower = current_price < bb_lower && previous_price_ >= bb_lower &&
+                         std::abs(current_price - bb_lower) <= bollinger_band_threshold_;
+
+    return touched_upper || touched_lower || crossed_upper || crossed_lower;
 }
 
 bool IndicatorAlerts::isPriceBreakingBollingerBands(double current_price, double bb_upper, double bb_lower) const {
@@ -360,6 +397,16 @@ void IndicatorAlerts::generateAlert(IndicatorAlertType type, uint64_t timestamp,
     // Log the alert if logging is enabled
     if (logging_enabled_) {
         logAlert(event);
+    }
+
+    // Send email notification if enabled
+    if (email_notifications_enabled_) {
+        sendEmailNotification(event);
+    }
+
+    // Send webhook notification if enabled
+    if (webhook_notifications_enabled_) {
+        sendWebhookNotification(event);
     }
 }
 
@@ -446,6 +493,140 @@ void IndicatorAlerts::logAlert(const IndicatorAlertEvent& event) {
               << "Direction: " << (event.is_bullish ? "Bullish" : "Bearish") << std::endl;
 
     log_file_.flush(); // Ensure the log is written immediately
+}
+
+void IndicatorAlerts::enableEmailNotifications(bool enable) {
+    email_notifications_enabled_ = enable;
+}
+
+void IndicatorAlerts::setEmailConfig(const std::string& smtp_server, int port,
+                                   const std::string& username, const std::string& password,
+                                   const std::string& recipient) {
+    smtp_server_ = smtp_server;
+    smtp_port_ = port;
+    email_username_ = username;
+    email_password_ = password;
+    email_recipient_ = recipient;
+}
+
+void IndicatorAlerts::sendEmailNotification(const IndicatorAlertEvent& event) {
+    if (!email_notifications_enabled_) {
+        return;
+    }
+
+    // In a real implementation, this would connect to an SMTP server and send an email
+    // For now, we'll just log the attempt
+    std::cout << "EMAIL NOTIFICATION WOULD BE SENT: ";
+
+    std::string alert_type_str;
+    switch (event.alert_type) {
+        case IndicatorAlertType::PRICE_CROSSES_SMA:
+            alert_type_str = "Price crosses SMA";
+            break;
+        case IndicatorAlertType::PRICE_CROSSES_EMA:
+            alert_type_str = "Price crosses EMA";
+            break;
+        case IndicatorAlertType::RSI_OVERSOLD:
+            alert_type_str = "RSI oversold";
+            break;
+        case IndicatorAlertType::RSI_OVERBOUGHT:
+            alert_type_str = "RSI overbought";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_UPPER:
+            alert_type_str = "Price touches upper Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_LOWER:
+            alert_type_str = "Price touches lower Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_UPPER:
+            alert_type_str = "Price breaks out above upper Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_LOWER:
+            alert_type_str = "Price breaks out below lower Bollinger Band";
+            break;
+        case IndicatorAlertType::MACD_CROSS_SIGNAL:
+            alert_type_str = "MACD crosses signal line";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERSOLD:
+            alert_type_str = "Stochastic oversold";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERBOUGHT:
+            alert_type_str = "Stochastic overbought";
+            break;
+        default:
+            alert_type_str = "Unknown alert";
+            break;
+    }
+
+    std::cout << "To: " << email_recipient_
+              << " | Subject: Indicator Alert - " << alert_type_str
+              << " | Symbol: " << event.symbol
+              << " | Price: " << event.price
+              << " | Value: " << event.indicator_value << std::endl;
+}
+
+void IndicatorAlerts::enableWebhookNotifications(bool enable) {
+    webhook_notifications_enabled_ = enable;
+}
+
+void IndicatorAlerts::setWebhookUrl(const std::string& url) {
+    webhook_url_ = url;
+}
+
+void IndicatorAlerts::sendWebhookNotification(const IndicatorAlertEvent& event) {
+    if (!webhook_notifications_enabled_ || webhook_url_.empty()) {
+        return;
+    }
+
+    // In a real implementation, this would make an HTTP POST request to the webhook URL
+    // For now, we'll just log the attempt
+    std::cout << "WEBHOOK NOTIFICATION WOULD BE SENT TO: " << webhook_url_ << std::endl;
+
+    std::string alert_type_str;
+    switch (event.alert_type) {
+        case IndicatorAlertType::PRICE_CROSSES_SMA:
+            alert_type_str = "Price crosses SMA";
+            break;
+        case IndicatorAlertType::PRICE_CROSSES_EMA:
+            alert_type_str = "Price crosses EMA";
+            break;
+        case IndicatorAlertType::RSI_OVERSOLD:
+            alert_type_str = "RSI oversold";
+            break;
+        case IndicatorAlertType::RSI_OVERBOUGHT:
+            alert_type_str = "RSI overbought";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_UPPER:
+            alert_type_str = "Price touches upper Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_TOUCH_LOWER:
+            alert_type_str = "Price touches lower Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_UPPER:
+            alert_type_str = "Price breaks out above upper Bollinger Band";
+            break;
+        case IndicatorAlertType::BOLLINGER_BAND_BREAKOUT_LOWER:
+            alert_type_str = "Price breaks out below lower Bollinger Band";
+            break;
+        case IndicatorAlertType::MACD_CROSS_SIGNAL:
+            alert_type_str = "MACD crosses signal line";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERSOLD:
+            alert_type_str = "Stochastic oversold";
+            break;
+        case IndicatorAlertType::STOCHASTIC_OVERBOUGHT:
+            alert_type_str = "Stochastic overbought";
+            break;
+        default:
+            alert_type_str = "Unknown alert";
+            break;
+    }
+
+    std::cout << "Alert Type: " << alert_type_str
+              << " | Symbol: " << event.symbol
+              << " | Price: " << event.price
+              << " | Value: " << event.indicator_value
+              << " | Bullish: " << (event.is_bullish ? "Yes" : "No") << std::endl;
 }
 
 } // namespace btq

@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <ctime>
+#include <sstream>
+#include <iomanip>
 #include "../market_data_processor.hpp"
 
 namespace btq {
@@ -72,6 +74,17 @@ public:
     void enableLogging(bool enable);                 // Enable/disable alert logging
     void setLogFilePath(const std::string& path);    // Set custom log file path
     void logAlert(const IndicatorAlertEvent& event); // Log an alert to file
+
+    // Enhanced notification system
+    void enableEmailNotifications(bool enable);      // Enable/disable email notifications
+    void setEmailConfig(const std::string& smtp_server, int port,
+                       const std::string& username, const std::string& password,
+                       const std::string& recipient); // Configure email settings
+    void sendEmailNotification(const IndicatorAlertEvent& event); // Send email notification
+
+    void enableWebhookNotifications(bool enable);    // Enable/disable webhook notifications
+    void setWebhookUrl(const std::string& url);     // Set webhook URL
+    void sendWebhookNotification(const IndicatorAlertEvent& event); // Send webhook notification
 
     // Check for alerts based on current market data and indicators
     void checkAlerts(const BTQuant::RenderEngine::OHLCVCandle& current_bar,
@@ -142,6 +155,18 @@ private:
     bool logging_enabled_;
     std::string log_file_path_;
     std::ofstream log_file_;
+
+    // Email notification members
+    bool email_notifications_enabled_;
+    std::string smtp_server_;
+    int smtp_port_;
+    std::string email_username_;
+    std::string email_password_;
+    std::string email_recipient_;
+
+    // Webhook notification members
+    bool webhook_notifications_enabled_;
+    std::string webhook_url_;
 
     // Helper methods
     bool isPriceCrossingSMA(double current_price, double current_sma, double previous_price, double previous_sma) const;

@@ -87,6 +87,7 @@ set(DASHBOARD_SOURCES
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
+    src/components/orderbook_history.cpp
     src/components/alerts_panel.cpp
     src/components/status_bar_panel.cpp
     src/components/watchlist_panel.cpp
@@ -113,6 +114,7 @@ set(DASHBOARD_SOURCES
     src/components/log_panel.cpp
     src/components/multi_vwap_panel.cpp
     src/components/performance_monitor_panel.cpp
+    src/components/time_and_sales.cpp
     src/trading/trading_interface.cpp
     src/trading/order_manager.cpp
     src/trading/position_manager.cpp
@@ -133,6 +135,9 @@ set(DASHBOARD_SOURCES
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp
     src/analytics/volume_calculator.cpp
+    src/indicators/session_vwap.cpp
+    src/indicators/rolling_vwap.cpp
+    src/indicators/vwap_alerts.cpp
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp

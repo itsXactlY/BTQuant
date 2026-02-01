@@ -96,18 +96,18 @@
 ### Phase 4a: Time Statistics [Complexity: M]
 - [x] Create TimeStatistics panel with ImGui table showing columns: Time, Open, High, Low, Close, Volume, BuyVolume, SellVolume, Delta, Trades, AvgSize, MaxTrade, dynamically show/hide columns based on user selection in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
 - [x] Implement sortable columns in TimeStatistics table: click column header to sort ascending/descending by that metric in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
-- [ ] Add row highlighting in TimeStatistics: highlight row on hover, double-click row to center chart on that time bar in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
-- [ ] Implement synchronized scrolling: scrolling TimeStatistics table scrolls chart panel to corresponding time range and vice versa in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
-- [ ] Add color coding in TimeStatistics: green text for positive delta, red for negative, yellow for extreme values (>3 standard deviations) in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
+- [x] Add row highlighting in TimeStatistics: highlight row on hover, double-click row to center chart on that time bar in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
+- [x] Implement synchronized scrolling: scrolling TimeStatistics table scrolls chart panel to corresponding time range and vice versa in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
+- [x] Add color coding in TimeStatistics: green text for positive delta, red for negative, yellow for extreme values (>3 standard deviations) in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
 
 ### Phase 4b: Time Histogram [Complexity: M]
-- [ ] Create TimeHistogram panel rendering vertical bars below chart for each time bar in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
-- [ ] Implement BuySellVolume histogram mode: stacked bars with buy volume (green) on top, sell volume (red) on bottom in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
-- [ ] Implement Delta histogram mode: bars originating from zero line, positive delta extends up (green), negative delta extends down (red) in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
-- [ ] Implement CumulativeDelta histogram: line chart overlay showing running sum of delta, color transitions from red to green as cumulative delta crosses zero in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
-- [ ] Add histogram data type selector supporting all 16 VolumeAnalysisType values with instant update on selection in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: S]
-- [ ] Implement histogram bar tooltip showing exact values when hovering over any bar in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: S]
-- [ ] Add histogram auto-scaling: automatically adjust Y-axis range to fit visible data, option to lock scale to prevent jumping in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
+- [x] Create TimeHistogram panel rendering vertical bars below chart for each time bar in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
+- [x] Implement BuySellVolume histogram mode: stacked bars with buy volume (green) on top, sell volume (red) on bottom in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
+- [x] Implement Delta histogram mode: bars originating from zero line, positive delta extends up (green), negative delta extends down (red) in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
+- [x] Implement CumulativeDelta histogram: line chart overlay showing running sum of delta, color transitions from red to green as cumulative delta crosses zero in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
+- [x] Add histogram data type selector supporting all 16 VolumeAnalysisType values with instant update on selection in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: S]
+- [x] Implement histogram bar tooltip showing exact values when hovering over any bar in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: S]
+- [x] Add histogram auto-scaling: automatically adjust Y-axis range to fit visible data, option to lock scale to prevent jumping in `dependencies/BTQ_Render_Engine/src/components/time_histogram_panel.cpp` [Complexity: M]
 
 ---
 
@@ -116,22 +116,22 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 5a: VWAP Calculation [Complexity: M]
-- [ ] Implement calculateVWAP function in technical_analysis.cpp: VWAP = sum(price * volume) / sum(volume) starting from specified index in `dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp` [Complexity: M]
-- [ ] Add calculateVWAPStandardDeviation method computing standard deviation of prices weighted by volume around VWAP in `dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp` [Complexity: M]
-- [ ] Create AnchoredVWAP class storing anchor timestamp, VWAP values array, and standard deviation bands (SD1, SD2, SD3) in `dependencies/BTQ_Render_Engine/include/indicators/anchored_vwap.hpp` [Complexity: M]
-- [ ] Implement AnchoredVWAP::calculate method that processes all bars from anchor point forward, calculating running VWAP and updating bands in `dependencies/BTQ_Render_Engine/src/indicators/anchored_vwap.cpp` [Complexity: M]
+- [x] Implement calculateVWAP function in technical_analysis.cpp: VWAP = sum(price * volume) / sum(volume) starting from specified index in `dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp` [Complexity: M]
+- [x] Add calculateVWAPStandardDeviation method computing standard deviation of prices weighted by volume around VWAP in `dependencies/BTQ_Render_Engine/src/analytics/technical_analysis.cpp` [Complexity: M]
+- [x] Create AnchoredVWAP class storing anchor timestamp, VWAP values array, and standard deviation bands (SD1, SD2, SD3) in `dependencies/BTQ_Render_Engine/include/indicators/anchored_vwap.hpp` [Complexity: M]
+- [x] Implement AnchoredVWAP::calculate method that processes all bars from anchor point forward, calculating running VWAP and updating bands in `dependencies/BTQ_Render_Engine/src/indicators/anchored_vwap.cpp` [Complexity: M]
 
 ### Phase 5b: VWAP Visualization [Complexity: M]
-- [ ] Add click-to-anchor interaction in chart panel: user right-clicks bar and selects "Anchor VWAP Here" from context menu to create new anchored VWAP in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
-- [ ] Render VWAP line as polyline overlay on chart using distinct color (yellow or cyan), with smooth anti-aliased rendering in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
-- [ ] Render VWAP bands (SD1, SD2, SD3) as semi-transparent filled regions above and below VWAP line in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
-- [ ] Create MultiVWAP panel managing multiple simultaneous VWAP instances (daily, weekly, monthly, custom anchored) in `dependencies/BTQ_Render_Engine/src/components/multi_vwap_panel.cpp` [Complexity: M]
-- [ ] Implement VWAP list in MultiVWAP panel showing all active VWAPs with checkboxes to show/hide, color picker for line color, delete button in `dependencies/BTQ_Render_Engine/src/components/multi_vwap_panel.cpp` [Complexity: S]
+- [x] Add click-to-anchor interaction in chart panel: user right-clicks bar and selects "Anchor VWAP Here" from context menu to create new anchored VWAP in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Render VWAP line as polyline overlay on chart using distinct color (yellow or cyan), with smooth anti-aliased rendering in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Render VWAP bands (SD1, SD2, SD3) as semi-transparent filled regions above and below VWAP line in `dependencies/BTQ_Render_Engine/src/components/chart_panel.cpp` [Complexity: M]
+- [x] Create MultiVWAP panel managing multiple simultaneous VWAP instances (daily, weekly, monthly, custom anchored) in `dependencies/BTQ_Render_Engine/src/components/multi_vwap_panel.cpp` [Complexity: M]
+- [x] Implement VWAP list in MultiVWAP panel showing all active VWAPs with checkboxes to show/hide, color picker for line color, delete button in `dependencies/BTQ_Render_Engine/src/components/multi_vwap_panel.cpp` [Complexity: S]
 
 ### Phase 5c: VWAP Management [Complexity: M]
-- [ ] Add session VWAP auto-reset: automatically create new VWAP at session start (market open time), mark previous session VWAP as historical in `dependencies/BTQ_Render_Engine/src/indicators/session_vwap.cpp` [Complexity: M]
-- [ ] Implement rolling VWAP: calculate VWAP for last N bars (sliding window), update continuously as new bars appear in `dependencies/BTQ_Render_Engine/src/indicators/rolling_vwap.cpp` [Complexity: M]
-- [ ] Add VWAP alerts: trigger notification when price crosses VWAP, touches SD2 band, or other configurable conditions in `dependencies/BTQ_Render_Engine/src/indicators/vwap_alerts.cpp` [Complexity: M]
+- [x] Add session VWAP auto-reset: automatically create new VWAP at session start (market open time), mark previous session VWAP as historical in `dependencies/BTQ_Render_Engine/src/indicators/session_vwap.cpp` [Complexity: M]
+- [x] Implement rolling VWAP: calculate VWAP for last N bars (sliding window), update continuously as new bars appear in `dependencies/BTQ_Render_Engine/src/indicators/rolling_vwap.cpp` [Complexity: M]
+- [x] Add VWAP alerts: trigger notification when price crosses VWAP, touches SD2 band, or other configurable conditions in `dependencies/BTQ_Render_Engine/src/indicators/vwap_alerts.cpp` [Complexity: M]
 
 ---
 
@@ -140,20 +140,20 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 6a: Basic Features [Complexity: M]
-- [ ] Enhance orderbook_panel.cpp to show full market depth with configurable number of levels (10, 20, 50, 100, 500, unlimited) in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
-- [ ] Implement order book heatmap background rendering using batched geometry: pre-calculate all bar rectangles, draw in single pass before text layer in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
-- [ ] Add liquidity bars showing cumulative volume at each level: horizontal bars extending from price column proportional to volume in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
-- [ ] Implement large order highlighting: detect orders exceeding N% of average order size, display with yellow background and bold text in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: S]
+- [x] Enhance orderbook_panel.cpp to show full market depth with configurable number of levels (10, 20, 50, 100, 500, unlimited) in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Implement order book heatmap background rendering using batched geometry: pre-calculate all bar rectangles, draw in single pass before text layer in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Add liquidity bars showing cumulative volume at each level: horizontal bars extending from price column proportional to volume in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Implement large order highlighting: detect orders exceeding N% of average order size, display with yellow background and bold text in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: S]
 
 ### Phase 6b: Advanced Features [Complexity: M]
-- [ ] Add order book imbalance indicator: calculate bid/ask ratio, display colored arrow (green for bid heavy, red for ask heavy) in header in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: S]
-- [ ] Implement order book aggregation modes: group by tick size, 0.1%, 0.5%, 1%, custom value to reduce noise in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
-- [ ] Implement order flow detection: track order additions, cancellations, executions with colored markers showing activity intensity per level in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
-- [ ] Add order book delta column showing net change in volume at each level over last N seconds in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Add order book imbalance indicator: calculate bid/ask ratio, display colored arrow (green for bid heavy, red for ask heavy) in header in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: S]
+- [x] Implement order book aggregation modes: group by tick size, 0.1%, 0.5%, 1%, custom value to reduce noise in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Implement order flow detection: track order additions, cancellations, executions with colored markers showing activity intensity per level in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
+- [x] Add order book delta column showing net change in volume at each level over last N seconds in `dependencies/BTQ_Render_Engine/src/components/orderbook_panel.cpp` [Complexity: M]
 
 ### Phase 6c: History & Visualization [Complexity: M]
-- [ ] Add historical order book snapshots: capture order book state every N seconds, allow playback and comparison with current state in `dependencies/BTQ_Render_Engine/src/components/orderbook_history.cpp` [Complexity: M]
-- [ ] Implement depth chart visualization mode: alternative view showing depth as area chart (bid area on left, ask area on right) in `dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp` [Complexity: M]
+- [x] Add historical order book snapshots: capture order book state every N seconds, allow playback and comparison with current state in `dependencies/BTQ_Render_Engine/src/components/orderbook_history.cpp` [Complexity: M]
+- [x] Implement depth chart visualization mode: alternative view showing depth as area chart (bid area on left, ask area on right) in `dependencies/BTQ_Render_Engine/src/components/depth_chart_panel.cpp` [Complexity: M]
 
 ---
 
@@ -162,19 +162,19 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 7a: Core Functionality [Complexity: M]
-- [ ] Enhance time_and_sales.cpp with virtualized scrolling using ImGuiListClipper for handling 100000+ trades efficiently in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Add trade filtering options: filter by minimum size, filter by exchange, filter by time range with UI controls in panel header in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Implement trade coloring schemes: buy trades in green, sell trades in red, large trades (>avg*5) in yellow, block trades (>avg*10) in orange with bold font in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: S]
-- [ ] Add trade clustering detection: identify rapid sequences of trades at same price as potential algorithm activity, highlight with background color in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Enhance time_and_sales.cpp with virtualized scrolling using ImGuiListClipper for handling 100000+ trades efficiently in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Add trade filtering options: filter by minimum size, filter by exchange, filter by time range with UI controls in panel header in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Implement trade coloring schemes: buy trades in green, sell trades in red, large trades (>avg*5) in yellow, block trades (>avg*10) in orange with bold font in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: S]
+- [x] Add trade clustering detection: identify rapid sequences of trades at same price as potential algorithm activity, highlight with background color in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
 
 ### Phase 7b: Analytics & Search [Complexity: M]
-- [ ] Implement trade size histogram showing distribution of trade sizes with logarithmic buckets in sidebar in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Add trade pace indicator: calculate trades per minute for last 1min, 5min, 15min, display as line chart in header in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Add trade search functionality: search by price range, size range, time range with results highlighted in list in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
-- [ ] Implement trade export to CSV with columns: timestamp, exchange, symbol, price, size, side, custom fields in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Implement trade size histogram showing distribution of trade sizes with logarithmic buckets in sidebar in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Add trade pace indicator: calculate trades per minute for last 1min, 5min, 15min, display as line chart in header in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Add trade search functionality: search by price range, size range, time range with results highlighted in list in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Implement trade export to CSV with columns: timestamp, exchange, symbol, price, size, side, custom fields in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
 
 ### Phase 7c: Audio & Historical Data [Complexity: M]
-- [ ] Implement trade audio alerts: play sound when large trade executes, different tones for buy vs sell, configurable volume threshold in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
+- [x] Implement trade audio alerts: play sound when large trade executes, different tones for buy vs sell, configurable volume threshold in `dependencies/BTQ_Render_Engine/src/components/time_and_sales.cpp` [Complexity: M]
 - [ ] Add historical time & sales: right-click any bar on chart to open popup showing all trades for that specific bar in `dependencies/BTQ_Render_Engine/src/components/historical_time_sales.cpp` [Complexity: M]
 
 ---

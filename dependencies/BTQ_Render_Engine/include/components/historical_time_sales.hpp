@@ -1,8 +1,10 @@
 #pragma once
 
 #include <imgui.h>
+#include <implot.h>
 
 #include <memory>
+#include <fstream>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -11,28 +13,29 @@
 namespace BTQuant {
 
 /**
- * TapePanel - Time & Sales display
+ * HistoricalTimeSalesPanel - Enhanced Time & Sales display for historical data
  *
- * C++26 Reactive Architecture:
- * - Subscribes to TRADE notifications from MarketDataProcessor
- * - markDirty() in callback, consumeDirty() in render()
- * - No polling timer - event-driven updates
- *
- * Shows a scrolling list of recent trades with:
- * - Timestamp (HH:MM:SS.mmm)
- * - Price
- * - Size
- * - Side (colored: green=buy, red=sell)
+ * Features:
+ * - Displays trades for a specific time range (e.g., specific bar on chart)
+ * - Shows all trades that occurred during a particular time period
+ * - Virtualized scrolling for handling 100,000+ trades efficiently
+ * - Trade clustering detection
+ * - Trade size histogram
+ * - CSV export functionality
  */
-class TapePanel : public PanelBase {
+class HistoricalTimeSalesPanel : public PanelBase {
  public:
-  TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-            std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  HistoricalTimeSalesPanel(const PanelConfig& config,
+                   std::shared_ptr<HotSpineDataBridge> bridge,
+                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
-  ~TapePanel() override;
+  ~HistoricalTimeSalesPanel() override;
 
   void render() override;
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
+  
+  // Set trades for a specific time range (for displaying trades from a specific bar)
+  void set_trades_for_time_range(uint64_t start_time, uint64_t end_time);
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -42,16 +45,8 @@ class TapePanel : public PanelBase {
   std::string symbol_name_ = "BTC-USDT";
 
   // Configuration
-  // Note: With virtualized scrolling using ImGuiListClipper, we can efficiently handle 100,000+ trades
-  // The MAX_VISIBLE_TRADES value represents the maximum number of trades stored in memory
   static constexpr size_t MAX_VISIBLE_TRADES = 100000;  // Increased to handle large datasets
   bool auto_scroll_ = true;
-
-  // Audio alert configuration
-  float volume_multiplier_threshold_ = 5.0f;  // Multiplier for average trade size to trigger alert
-  int buy_tone_frequency_ = 800;              // Frequency in Hz for buy alerts
-  int sell_tone_frequency_ = 400;             // Frequency in Hz for sell alerts
-  int tone_duration_ms_ = 200;                // Duration of the alert tone in milliseconds
 
   // Filtering options (these hide trades that don't match)
   double min_size_filter_ = 0.0;
@@ -93,23 +88,28 @@ class TapePanel : public PanelBase {
   int min_cluster_size_ = DEFAULT_MIN_CLUSTER_SIZE;
   double price_match_tolerance_ = DEFAULT_PRICE_MATCH_TOLERANCE;
 
+  // Trade pace indicator data structures
+  struct TradePaceData {
+    uint64_t timestamp;  // Time when the measurement was taken
+    double trades_per_minute;  // Trades per minute at this time
+  };
+
+  // Trade pace history for different time windows
+  std::vector<TradePaceData> trade_pace_1min_history_;
+  std::vector<TradePaceData> trade_pace_5min_history_;
+  std::vector<TradePaceData> trade_pace_15min_history_;
+
+  // Subscription ID for market data updates
+  uint64_t subscription_id_ = 0;
+
+  // Private methods
   void render_trade_table();
   void render_controls();
-  void render_filter_controls();
+  void render_panel_header();
   void render_search_controls();  // New search controls
   void render_trade_size_histogram();
   uint64_t parseTimeString(const std::string& time_str);
   void subscribe_to_updates();
-
-  // Audio alert methods
-  void checkForLargeTradesAndAlert();
-  void playTradeAlertSound(bool is_buy);
-
-#ifdef __linux__
-  void generateAndPlayTone(int frequency, int duration_ms, const std::string& type);
-  void writeInt16(std::ofstream& file, int16_t value);
-  void writeInt32(std::ofstream& file, int32_t value);
-#endif
 
   // CSV Export functionality
   void exportTradesToCSV();
@@ -126,17 +126,6 @@ class TapePanel : public PanelBase {
   };
 
   std::vector<LogBucket> computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const;
-
-  // Trade pace indicator data structures
-  struct TradePaceData {
-    uint64_t timestamp;  // Time when the measurement was taken
-    double trades_per_minute;  // Trades per minute at this time
-  };
-
-  // Trade pace history for different time windows
-  std::vector<TradePaceData> trade_pace_1min_history_;
-  std::vector<TradePaceData> trade_pace_5min_history_;
-  std::vector<TradePaceData> trade_pace_15min_history_;
 
   // Methods for trade pace calculation
   double calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const;

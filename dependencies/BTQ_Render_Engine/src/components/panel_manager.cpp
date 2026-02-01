@@ -2,6 +2,9 @@
 
 #include <fstream>
 #include <iostream>
+
+#include "../../include/components/time_and_sales.hpp"
+#include "../../include/components/historical_time_sales.hpp"
 #include <nlohmann/json.hpp>
 
 #include "../../include/components/alerts_panel.hpp"
@@ -21,6 +24,7 @@
 #include "../../include/components/tape_panel.hpp"
 #include "../../include/components/time_series_panel.hpp"
 #include "../../include/components/time_statistics_panel.hpp"
+#include "../../include/components/time_histogram_panel.hpp"
 #include "../../include/components/tpo_panel.hpp"
 #include "../../include/components/trading_orders_panel.hpp"
 #include "../../include/components/trading_positions_panel.hpp"
@@ -126,6 +130,64 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
   switch (type) {
     case PanelType::CHART:
       panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get());
+
+      // Set up scroll synchronization from Chart to TimeStats (reverse direction)
+      if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+        chart_panel->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
+          // Find the active time statistics panel and adjust its view to match the time range
+          for (auto& [id, panel] : panels_) {
+            if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
+              // Scroll the time statistics panel to show the corresponding time range
+              time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
+              break; // Assuming we want to adjust the first time stats panel we find
+            }
+          }
+        });
+      }
+      break;
+    case PanelType::TIME_STATISTICS: {
+      auto time_stats = std::make_unique<TimeStatisticsPanel>(config);
+
+      // Set up the row double-click callback
+      time_stats->set_row_double_clicked_callback([this](uint64_t timestamp) {
+        // Find the active chart panel and center it on the clicked timestamp
+        for (auto& [id, panel] : panels_) {
+          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+            // Center the chart on the clicked timestamp
+            chart_panel->center_on_timestamp(timestamp);
+            break; // Assuming we want to center the first chart panel we find
+          }
+        }
+      });
+
+      // Set up scroll synchronization from TimeStats to Chart
+      time_stats->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
+        // Find the active chart panel and adjust its view to match the time range
+        for (auto& [id, panel] : panels_) {
+          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+            // Convert timestamps to the format used by the chart (seconds)
+            double start_time_seconds = static_cast<double>(start_timestamp) / 1000000.0;
+            double end_time_seconds = static_cast<double>(end_timestamp) / 1000000.0;
+
+            // Update the chart's view range
+            chart_panel->last_view_min_ = start_time_seconds;
+            chart_panel->last_view_max_ = end_time_seconds;
+            chart_panel->follow_latest_ = false; // Disable auto-follow to maintain the synchronized view
+
+            break; // Assuming we want to adjust the first chart panel we find
+          }
+        }
+      });
+
+      panel = std::move(time_stats);
+      break;
+    }
+    case PanelType::TIME_AND_SALES: {
+      panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      break;
+    }
+    case PanelType::TIME_HISTOGRAM:
+      panel = std::make_unique<TimeHistogramPanel>(config);
       break;
     case PanelType::METRICS:
       panel =
@@ -194,21 +256,6 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
-    case PanelType::TIME_STATISTICS: {
-      auto time_stats = std::make_unique<TimeStatisticsPanel>(config);
-      time_stats->set_row_double_clicked_callback([this](uint64_t timestamp) {
-        // Find the active chart panel and center it on the clicked timestamp
-        for (auto& [id, panel] : panels_) {
-          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
-            // Center the chart on the clicked timestamp
-            chart_panel->center_on_timestamp(timestamp);
-            break; // Assuming we want to center the first chart panel we find
-          }
-        }
-      });
-      panel = std::move(time_stats);
-      break;
-    }
     default:
       return 0;
   }
@@ -240,6 +287,27 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   switch (type) {
     case PanelType::CHART:
       panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get());
+
+      // Set up scroll synchronization from Chart to TimeStats (reverse direction)
+      if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+        chart_panel->set_scroll_sync_callback([this](uint64_t start_timestamp, uint64_t end_timestamp) {
+          // Find the active time statistics panel and adjust its view to match the time range
+          for (auto& [id, panel] : panels_) {
+            if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel.get())) {
+              // Scroll the time statistics panel to show the corresponding time range
+              time_stats_panel->scroll_to_time_range(start_timestamp, end_timestamp);
+              break; // Assuming we want to adjust the first time stats panel we find
+            }
+          }
+        });
+      }
+      break;
+    case PanelType::TIME_AND_SALES: {
+      panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      break;
+    }
+    case PanelType::TIME_HISTOGRAM:
+      panel = std::make_unique<TimeHistogramPanel>(config);
       break;
     case PanelType::METRICS:
       panel =
@@ -308,21 +376,6 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
-    case PanelType::TIME_STATISTICS: {
-      auto time_stats = std::make_unique<TimeStatisticsPanel>(config);
-      time_stats->set_row_double_clicked_callback([this](uint64_t timestamp) {
-        // Find the active chart panel and center it on the clicked timestamp
-        for (auto& [id, panel] : panels_) {
-          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
-            // Center the chart on the clicked timestamp
-            chart_panel->center_on_timestamp(timestamp);
-            break; // Assuming we want to center the first chart panel we find
-          }
-        }
-      });
-      panel = std::move(time_stats);
-      break;
-    }
     default:
       return 0;
   }
@@ -703,6 +756,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Log";
     case PanelType::TIME_STATISTICS:
       return "Time Statistics";
+    case PanelType::TIME_HISTOGRAM:
+      return "Time Histogram";
     default:
       return "Panel";
   }

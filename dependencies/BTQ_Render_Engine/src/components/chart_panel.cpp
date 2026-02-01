@@ -6,12 +6,15 @@
 #include <iostream>
 #include <numeric>
 #include <optional>
+#include <limits>
 
 #include "../../include/components/volume_profile_panel.hpp"
 #include "../../include/components/interaction_manager.hpp"
+#include "../../include/components/historical_time_sales.hpp"
 #include "imgui.h"
 #include "implot.h"
 #include "../../include/indicators/anchored_vwap.hpp"
+#include "../../include/indicators/session_vwap.hpp"
 
 namespace BTQuant {
 
@@ -1125,6 +1128,9 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     // Render anchored VWAP overlays
     render_anchored_vwap_overlay(chart);
 
+    // Render session VWAP overlays
+    render_session_vwap_overlay(chart);
+
     ImPlot::EndPlot();
   }
 
@@ -1377,12 +1383,40 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
     // Convert the x-coordinate (time) back to timestamp
     uint64_t clicked_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
 
+    // Find the closest candle to the clicked timestamp to determine the time range for the bar
+    size_t closest_idx = 0;
+    double min_distance = std::numeric_limits<double>::max();
+
+    for (size_t i = 0; i < chart.dates.size(); ++i) {
+      double distance = std::abs(chart.dates[i] - mouse_pos.x);
+      if (distance < min_distance) {
+        min_distance = distance;
+        closest_idx = i;
+      }
+    }
+
+    // Calculate the time range for the clicked bar based on the timeframe
+    uint64_t bar_duration = RenderEngine::MarketDataProcessor::getTimeFrameDuration(timeframe_);
+    uint64_t bar_start_time = static_cast<uint64_t>(chart.dates[closest_idx] * 1000000); // Convert to microseconds
+    uint64_t bar_end_time = bar_start_time + bar_duration;
+
+    // Store the time range for the clicked bar
+    clicked_bar_start_time_ = bar_start_time;
+    clicked_bar_end_time_ = bar_end_time;
+
     // Open the context menu
     ImGui::OpenPopup("ChartContextMenu");
   }
 
   // Create the context menu
   if (ImGui::BeginPopup("ChartContextMenu")) {
+    if (ImGui::MenuItem("Show Trades for Bar")) {
+      // Create or show the HistoricalTimeSalesPanel with trades for the clicked bar
+      if (on_show_historical_trades_) {
+        on_show_historical_trades_(clicked_bar_start_time_, clicked_bar_end_time_);
+      }
+    }
+
     if (ImGui::MenuItem("Anchor VWAP Here")) {
       // Get the current mouse position in plot coordinates
       ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
@@ -1567,6 +1601,170 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
         draw_list->AddConvexPolyFilled(filled_region_points.data(),
                                       static_cast<int>(filled_region_points.size()),
                                       IM_COL32(255, 0, 255, 40));  // More transparent magenta
+      }
+    }
+  }
+}
+
+// Render the session VWAP overlay on the chart
+void ChartPanel::render_session_vwap_overlay(const ChartInstance& chart) {
+  if (chart.dates.empty()) {
+    return;
+  }
+
+  // Convert the chart data to OHLCVCandle format for VWAP calculation
+  std::vector<BTQuant::RenderEngine::OHLCVCandle> bars;
+  for (size_t i = 0; i < chart.dates.size(); ++i) {
+    BTQuant::RenderEngine::OHLCVCandle bar;
+    bar.timestamp = static_cast<uint64_t>(chart.dates[i] * 1000000); // Convert to microseconds
+    bar.open = chart.opens[i];
+    bar.high = chart.highs[i];
+    bar.low = chart.lows[i];
+    bar.close = chart.closes[i];
+    bar.volume = chart.volumes[i];
+    bar.trade_count = 1; // Placeholder value
+    bars.push_back(bar);
+  }
+
+  // Calculate session VWAPs based on the chart data
+  session_vwap_.calculate(bars);
+
+  // Get all sessions and render them
+  const auto& sessions = session_vwap_.getSessions();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+  for (const auto& session : sessions) {
+    const auto& vwap_values = session.vwapValues;
+    const auto& sd1_upper = session.sd1UpperBand;
+    const auto& sd1_lower = session.sd1LowerBand;
+    const auto& sd2_upper = session.sd2UpperBand;
+    const auto& sd2_lower = session.sd2LowerBand;
+    const auto& sd3_upper = session.sd3UpperBand;
+    const auto& sd3_lower = session.sd3LowerBand;
+
+    // Find the starting index in the chart data that corresponds to the session start time
+    double session_start_seconds = static_cast<double>(session.startTime) / 1000000.0;
+
+    // Find the index in the chart where the session starts
+    size_t start_idx = 0;
+    bool found_start = false;
+    for (size_t i = 0; i < chart.dates.size(); ++i) {
+      if (chart.dates[i] >= session_start_seconds) {
+        start_idx = i;
+        found_start = true;
+        break;
+      }
+    }
+
+    if (!found_start) {
+      continue; // Session start time not found in current chart data
+    }
+
+    // Render the VWAP line as a smooth polyline with anti-aliasing
+    if (vwap_values.size() > 1) {
+      // Prepare points for polyline
+      std::vector<ImVec2> points;
+      points.reserve(vwap_values.size());
+
+      for (size_t i = 0; i < vwap_values.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 point = ImPlot::PlotToPixels(chart.dates[start_idx + i], vwap_values[i]);
+        points.push_back(point);
+      }
+
+      if (points.size() > 1) {
+        // Use different colors for active vs historical sessions
+        ImU32 color = session.isActive ? IM_COL32(0, 255, 255, 255) : IM_COL32(128, 128, 128, 200); // Cyan for active, gray for historical
+
+        // Draw the VWAP line as a smooth polyline in different colors based on session status
+        draw_list->AddPolyline(points.data(), static_cast<int>(points.size()),
+                              color, ImDrawListFlags_AntiAliasedLines, 2.0f);
+      }
+    }
+
+    // Render SD1 bands as semi-transparent filled regions
+    if (sd1_upper.size() > 1 && sd1_lower.size() > 1) {
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd1_upper.size() * 2);
+
+      // Add upper band points (forward direction)
+      for (size_t i = 0; i < sd1_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_upper[i]);
+        filled_region_points.push_back(upper_point);
+      }
+
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd1_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
+      }
+
+      // Draw filled region for SD1 band with different transparency for active vs historical
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        ImU32 sd1_color = session.isActive ? IM_COL32(0, 255, 255, 80) : IM_COL32(128, 128, 128, 60); // More opaque for active
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd1_color);
+      }
+    }
+
+    // Render SD2 bands as semi-transparent filled regions
+    if (sd2_upper.size() > 1 && sd2_lower.size() > 1) {
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd2_upper.size() * 2);
+
+      // Add upper band points (forward direction)
+      for (size_t i = 0; i < sd2_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_upper[i]);
+        filled_region_points.push_back(upper_point);
+      }
+
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd2_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
+      }
+
+      // Draw filled region for SD2 band with different transparency for active vs historical
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        ImU32 sd2_color = session.isActive ? IM_COL32(0, 200, 200, 60) : IM_COL32(100, 100, 100, 40); // More opaque for active
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd2_color);
+      }
+    }
+
+    // Render SD3 bands as semi-transparent filled regions
+    if (sd3_upper.size() > 1 && sd3_lower.size() > 1) {
+      // Prepare points for upper and lower bands to form a filled polygon
+      std::vector<ImVec2> filled_region_points;
+      filled_region_points.reserve(sd3_upper.size() * 2);
+
+      // Add upper band points (forward direction)
+      for (size_t i = 0; i < sd3_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_upper[i]);
+        filled_region_points.push_back(upper_point);
+      }
+
+      // Add lower band points (reverse direction to close the shape)
+      for (int i = static_cast<int>(sd3_lower.size()) - 1; i >= 0; --i) {
+        if ((start_idx + i) < chart.dates.size()) {
+          ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_lower[i]);
+          filled_region_points.push_back(lower_point);
+        }
+      }
+
+      // Draw filled region for SD3 band with different transparency for active vs historical
+      if (filled_region_points.size() >= 4) {  // Need at least 4 points to form a shape
+        ImU32 sd3_color = session.isActive ? IM_COL32(0, 150, 150, 40) : IM_COL32(80, 80, 80, 20); // More opaque for active
+        draw_list->AddConvexPolyFilled(filled_region_points.data(),
+                                      static_cast<int>(filled_region_points.size()),
+                                      sd3_color);
       }
     }
   }

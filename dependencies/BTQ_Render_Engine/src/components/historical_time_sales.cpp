@@ -1,9 +1,8 @@
-#include "../../include/components/tape_panel.hpp"
+#include "../../include/components/historical_time_sales.hpp"
 
-#include <algorithm>
 #include <cmath>
-#include <ctime>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 
 #ifdef _WIN32
@@ -18,13 +17,14 @@
 
 namespace BTQuant {
 
-TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+HistoricalTimeSalesPanel::HistoricalTimeSalesPanel(const PanelConfig& config,
+                                   std::shared_ptr<HotSpineDataBridge> bridge,
+                                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
   // Initialize trade pace history vectors
-  trade_pace_1min_history_.reserve(100);  // Keep last 100 measurements
+  trade_pace_1min_history_.reserve(100);
   trade_pace_5min_history_.reserve(100);
   trade_pace_15min_history_.reserve(100);
 
@@ -33,24 +33,18 @@ TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBrid
   min_cluster_size_ = DEFAULT_MIN_CLUSTER_SIZE;
   price_match_tolerance_ = DEFAULT_PRICE_MATCH_TOLERANCE;
 
-  // Initialize audio alert settings
-  volume_multiplier_threshold_ = 5.0f;  // 5x average trade size to trigger alert
-  buy_tone_frequency_ = 800;            // 800Hz for buy alerts
-  sell_tone_frequency_ = 400;           // 400Hz for sell alerts
-  tone_duration_ms_ = 200;               // 200ms duration
-
-  // C++26: Subscribe to push notifications instead of polling
+  // Subscribe to updates
   subscribe_to_updates();
 }
 
-TapePanel::~TapePanel() {
-  // C++26: Clean unsubscription on destruction
+HistoricalTimeSalesPanel::~HistoricalTimeSalesPanel() {
+  // Clean up subscription
   if (processor_ && subscription_id_ != 0) {
     processor_->unsubscribe(subscription_id_);
   }
 }
 
-void TapePanel::subscribe_to_updates() {
+void HistoricalTimeSalesPanel::subscribe_to_updates() {
   if (!processor_ || symbol_id_ == 0) return;
 
   // Unsubscribe from previous symbol if any
@@ -67,7 +61,40 @@ void TapePanel::subscribe_to_updates() {
       });
 }
 
-void TapePanel::render() {
+void HistoricalTimeSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
+  symbol_id_ = symbol_id;
+  symbol_name_ = symbol_name;
+  cached_trades_.clear();
+
+  // Re-subscribe to new symbol
+  subscribe_to_updates();
+  markDirty();  // Force immediate refresh
+}
+
+void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, uint64_t end_time) {
+  if (!processor_ || symbol_id_ == 0) return;
+
+  // Get all trades for the symbol within the specified time range
+  auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+  
+  // Filter trades to only include those within the specified time range
+  cached_trades_.clear();
+  for (const auto& trade : analytics.recent_trades) {
+    if (trade.timestamp >= start_time && trade.timestamp <= end_time) {
+      cached_trades_.push_back(trade);
+    }
+  }
+
+  // Keep only most recent trades for display if we have too many
+  if (cached_trades_.size() > MAX_VISIBLE_TRADES) {
+    cached_trades_.erase(cached_trades_.begin(),
+                         cached_trades_.begin() + (cached_trades_.size() - MAX_VISIBLE_TRADES));
+  }
+
+  markDirty(); // Force refresh of the display
+}
+
+void HistoricalTimeSalesPanel::render() {
   begin_panel_window();
 
   if (!is_visible()) {
@@ -84,9 +111,9 @@ void TapePanel::render() {
 
   ImGui::Separator();
 
-  // C++26 Reactive: Refresh data when new trades arrive or first load
-  if (processor_ && symbol_id_ != 0) {
-    if (consumeDirty() || cached_trades_.empty()) {
+  // Refresh data when new trades arrive or first load
+  if (processor_ && symbol_id_ != 0 && cached_trades_.empty()) {
+    if (consumeDirty()) {
       auto analytics = processor_->getSymbolAnalytics(symbol_id_);
       cached_trades_ = analytics.recent_trades;
 
@@ -95,9 +122,6 @@ void TapePanel::render() {
         cached_trades_.erase(cached_trades_.begin(),
                              cached_trades_.begin() + (cached_trades_.size() - MAX_VISIBLE_TRADES));
       }
-
-      // Check for large trades and trigger audio alerts
-      checkForLargeTradesAndAlert();
     }
   }
 
@@ -106,216 +130,7 @@ void TapePanel::render() {
   end_panel_window();
 }
 
-void TapePanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
-  symbol_id_ = symbol_id;
-  symbol_name_ = symbol_name;
-  cached_trades_.clear();
-
-  // Re-subscribe to new symbol
-  subscribe_to_updates();
-  markDirty();  // Force immediate refresh
-}
-
-
-// Helper function to parse time string in HH:MM:SS format to microseconds since epoch
-uint64_t TapePanel::parseTimeString(const std::string& time_str) {
-  // This is a simplified parser - in a real implementation, you'd want to handle
-  // date components and timezone properly
-  // For now, we'll assume the time is today and convert to microseconds since epoch
-
-  // Parse HH:MM:SS[.mmm] format
-  int hours = 0, minutes = 0, seconds = 0;
-  double fraction = 0.0;
-
-  size_t pos = 0;
-  try {
-    // Parse hours
-    size_t colon_pos = time_str.find(':');
-    if (colon_pos != std::string::npos) {
-      hours = std::stoi(time_str.substr(pos, colon_pos));
-      pos = colon_pos + 1;
-
-      // Parse minutes
-      colon_pos = time_str.find(':', pos);
-      if (colon_pos != std::string::npos) {
-        minutes = std::stoi(time_str.substr(pos, colon_pos - pos));
-        pos = colon_pos + 1;
-
-        // Parse seconds and optional milliseconds
-        std::string sec_part = time_str.substr(pos);
-        size_t dot_pos = sec_part.find('.');
-        if (dot_pos != std::string::npos) {
-          seconds = std::stoi(sec_part.substr(0, dot_pos));
-          fraction = std::stod(sec_part);
-          fraction -= seconds; // Remove integer part
-        } else {
-          seconds = std::stoi(sec_part);
-        }
-      }
-    }
-  } catch (...) {
-    return 0; // Return 0 if parsing fails
-  }
-
-  // Convert to seconds since midnight
-  uint64_t total_seconds = hours * 3600 + minutes * 60 + seconds;
-
-  // Get today's date and combine with time
-  time_t now = time(nullptr);
-  tm local_tm = *localtime(&now);
-  local_tm.tm_hour = hours;
-  local_tm.tm_min = minutes;
-  local_tm.tm_sec = seconds;
-
-  uint64_t timestamp = mktime(&local_tm) * 1000000; // Convert to microseconds
-  timestamp += static_cast<uint64_t>(fraction * 1000000); // Add fractional microseconds
-
-  return timestamp;
-}
-
-void TapePanel::render_search_controls() {
-  ImGui::Separator();
-  ImGui::Text("Search Options:");
-
-  // Price Range Filter
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Min Price:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##min_price", min_price_input_, sizeof(min_price_input_));
-
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Max Price:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##max_price", max_price_input_, sizeof(max_price_input_));
-
-  // Size Range Filter
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Min Size:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##min_size_search", min_size_input_, sizeof(min_size_input_));
-
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Max Size:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##max_size", max_size_input_, sizeof(max_size_input_));
-
-  // Time Range Filter
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Start Time:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##start_time_search", start_time_input_, sizeof(start_time_input_));
-
-  // End Time Filter
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("End Time:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::InputText("##end_time_search", end_time_input_, sizeof(end_time_input_));
-
-  // Apply button
-  ImGui::SameLine();
-  if (ImGui::Button("Apply Search")) {
-    // Parse minimum price
-    try {
-      search_min_price_ = std::stod(std::string(min_price_input_));
-    } catch (...) {
-      search_min_price_ = 0.0;
-    }
-
-    // Parse maximum price
-    try {
-      search_max_price_ = std::stod(std::string(max_price_input_));
-    } catch (...) {
-      search_max_price_ = 0.0;
-    }
-
-    // Parse minimum size
-    try {
-      search_min_size_ = std::stod(std::string(min_size_input_));
-    } catch (...) {
-      search_min_size_ = 0.0;
-    }
-
-    // Parse maximum size
-    try {
-      search_max_size_ = std::stod(std::string(max_size_input_));
-    } catch (...) {
-      search_max_size_ = 0.0;
-    }
-
-    // Set exchange filter
-    search_exchange_ = std::string(exchange_input_);
-
-    // Parse start time - supports both raw timestamp and HH:MM:SS format
-    if (strlen(start_time_input_) > 0) {
-      std::string time_str = std::string(start_time_input_);
-      if (time_str.find(':') != std::string::npos) {
-        // Parse HH:MM:SS format
-        search_start_time_ = parseTimeString(time_str);
-      } else {
-        // Parse as raw timestamp
-        try {
-          search_start_time_ = std::stoull(time_str);
-        } catch (...) {
-          search_start_time_ = 0;
-        }
-      }
-    } else {
-      search_start_time_ = 0;
-    }
-
-    // Parse end time - supports both raw timestamp and HH:SS format
-    if (strlen(end_time_input_) > 0) {
-      std::string time_str = std::string(end_time_input_);
-      if (time_str.find(':') != std::string::npos) {
-        // Parse HH:MM:SS format
-        search_end_time_ = parseTimeString(time_str);
-      } else {
-        // Parse as raw timestamp
-        try {
-          search_end_time_ = std::stoull(time_str);
-        } catch (...) {
-          search_end_time_ = 0;
-        }
-      }
-    } else {
-      search_end_time_ = 0;
-    }
-
-    markDirty(); // Refresh the display with new search criteria
-  }
-
-  // Reset button
-  ImGui::SameLine();
-  if (ImGui::Button("Reset Search")) {
-    search_min_price_ = 0.0;
-    search_max_price_ = 0.0;
-    search_min_size_ = 0.0;
-    search_max_size_ = 0.0;
-    search_exchange_ = "";
-    search_start_time_ = 0;
-    search_end_time_ = 0;
-    strcpy(min_price_input_, "");
-    strcpy(max_price_input_, "");
-    strcpy(min_size_input_, "0.0");
-    strcpy(max_size_input_, "");
-    strcpy(exchange_input_, "");
-    strcpy(start_time_input_, "");
-    strcpy(end_time_input_, "");
-    markDirty(); // Refresh the display
-  }
-}
-
-void TapePanel::render_controls() {
+void HistoricalTimeSalesPanel::render_panel_header() {
   ImGui::Text("Symbol: %s", symbol_name_.c_str());
   ImGui::SameLine();
   ImGui::Checkbox("Auto-scroll", &auto_scroll_);
@@ -331,7 +146,9 @@ void TapePanel::render_controls() {
 
     ImGui::Text("| TPM: 1m:%.1f 5m:%.1f 15m:%.1f", tpm_1min, tpm_5min, tpm_15min);
   }
+}
 
+void HistoricalTimeSalesPanel::render_controls() {
   ImGui::SameLine();
   ImGui::Checkbox("Search", &show_search_);  // Add search checkbox
   ImGui::SameLine();
@@ -342,37 +159,6 @@ void TapePanel::render_controls() {
   if (ImGui::Button("Export to CSV")) {
     exportTradesToCSV();
   }
-
-  // Add audio alert controls
-  ImGui::Separator();
-  ImGui::Text("Audio Alert Settings:");
-
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Threshold Multiplier:");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::DragFloat("##threshold_mult", &volume_multiplier_threshold_, 0.1f, 1.0f, 100.0f, "%.1fx");
-
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Buy Tone (Hz):");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::DragInt("##buy_tone", &buy_tone_frequency_, 1.0f, 200, 2000, "%d Hz");
-
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Sell Tone (Hz):");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::DragInt("##sell_tone", &sell_tone_frequency_, 1.0f, 200, 2000, "%d Hz");
-
-  ImGui::SameLine();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("Duration (ms):");
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(100);
-  ImGui::DragInt("##duration", &tone_duration_ms_, 1.0f, 50, 1000, "%d ms");
 
   // Add trade filtering controls directly in the header
   ImGui::Separator();
@@ -556,50 +342,6 @@ void TapePanel::render_controls() {
     markDirty(); // Refresh the display
   }
 
-  // Add collapsible section for trade clustering configuration
-  if (ImGui::CollapsingHeader("Trade Clustering Detection")) {
-    ImGui::Indent();
-
-    // Cluster time window (in milliseconds for easier user input)
-    int cluster_time_ms = static_cast<int>(cluster_time_window_us_ / 1000);
-    if (ImGui::SliderInt("Time Window (ms)", &cluster_time_ms, 10, 5000, "%d ms")) {
-        cluster_time_window_us_ = static_cast<uint64_t>(cluster_time_ms) * 1000;
-        markDirty(); // Refresh clustering detection
-    }
-
-    // Minimum cluster size
-    if (ImGui::SliderInt("Min Cluster Size", &min_cluster_size_, 2, 20, "%d trades")) {
-        markDirty(); // Refresh clustering detection
-    }
-
-    // Price match tolerance
-    float price_tol_float = static_cast<float>(price_match_tolerance_);
-    if (ImGui::SliderFloat("Price Tolerance", &price_tol_float, 0.00001f, 0.1f, "%.5f")) {
-        price_match_tolerance_ = static_cast<double>(price_tol_float);
-        markDirty(); // Refresh clustering detection
-    }
-
-    // Show current clustering status
-    int total_trades = static_cast<int>(cached_trades_.size());
-    int clustered_trades = 0;
-    for (int i = 0; i < total_trades; ++i) {
-        if (isTradeClustered(i, cached_trades_)) {
-            clustered_trades++;
-        }
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Current clustering stats:");
-    ImGui::Text("- Total trades: %d", total_trades);
-    ImGui::Text("- Clustered trades: %d", clustered_trades);
-    if (total_trades > 0) {
-        float percentage = (static_cast<float>(clustered_trades) / total_trades) * 100.0f;
-        ImGui::Text("- Cluster percentage: %.2f%%", percentage);
-    }
-
-    ImGui::Unindent();
-  }
-
   if (show_search_) {  // Add search controls
     render_search_controls();
     ImGui::Separator();
@@ -611,7 +353,149 @@ void TapePanel::render_controls() {
   }
 }
 
-void TapePanel::render_trade_size_histogram() {
+void HistoricalTimeSalesPanel::render_search_controls() {
+  ImGui::Separator();
+  ImGui::Text("Search Options:");
+
+  // Price Range Filter
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Min Price:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##min_price", min_price_input_, sizeof(min_price_input_));
+
+  ImGui::SameLine();
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Max Price:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##max_price", max_price_input_, sizeof(max_price_input_));
+
+  // Size Range Filter
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Min Size:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##min_size_search", min_size_input_, sizeof(min_size_input_));
+
+  ImGui::SameLine();
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Max Size:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##max_size", max_size_input_, sizeof(max_size_input_));
+
+  // Time Range Filter
+  ImGui::SameLine();
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("Start Time:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##start_time_search", start_time_input_, sizeof(start_time_input_));
+
+  // End Time Filter
+  ImGui::SameLine();
+  ImGui::AlignTextToFramePadding();
+  ImGui::Text("End Time:");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputText("##end_time_search", end_time_input_, sizeof(end_time_input_));
+
+  // Apply button
+  ImGui::SameLine();
+  if (ImGui::Button("Apply Search")) {
+    // Parse minimum price
+    try {
+      search_min_price_ = std::stod(std::string(min_price_input_));
+    } catch (...) {
+      search_min_price_ = 0.0;
+    }
+
+    // Parse maximum price
+    try {
+      search_max_price_ = std::stod(std::string(max_price_input_));
+    } catch (...) {
+      search_max_price_ = 0.0;
+    }
+
+    // Parse minimum size
+    try {
+      search_min_size_ = std::stod(std::string(min_size_input_));
+    } catch (...) {
+      search_min_size_ = 0.0;
+    }
+
+    // Parse maximum size
+    try {
+      search_max_size_ = std::stod(std::string(max_size_input_));
+    } catch (...) {
+      search_max_size_ = 0.0;
+    }
+
+    // Set exchange filter
+    search_exchange_ = std::string(exchange_input_);
+
+    // Parse start time - supports both raw timestamp and HH:MM:SS format
+    if (strlen(start_time_input_) > 0) {
+      std::string time_str = std::string(start_time_input_);
+      if (time_str.find(':') != std::string::npos) {
+        // Parse HH:MM:SS format
+        search_start_time_ = parseTimeString(time_str);
+      } else {
+        // Parse as raw timestamp
+        try {
+          search_start_time_ = std::stoull(time_str);
+        } catch (...) {
+          search_start_time_ = 0;
+        }
+      }
+    } else {
+      search_start_time_ = 0;
+    }
+
+    // Parse end time - supports both raw timestamp and HH:MM:SS format
+    if (strlen(end_time_input_) > 0) {
+      std::string time_str = std::string(end_time_input_);
+      if (time_str.find(':') != std::string::npos) {
+        // Parse HH:MM:SS format
+        search_end_time_ = parseTimeString(time_str);
+      } else {
+        // Parse as raw timestamp
+        try {
+          search_end_time_ = std::stoull(time_str);
+        } catch (...) {
+          search_end_time_ = 0;
+        }
+      }
+    } else {
+      search_end_time_ = 0;
+    }
+
+    markDirty(); // Refresh the display with new search criteria
+  }
+
+  // Reset button
+  ImGui::SameLine();
+  if (ImGui::Button("Reset Search")) {
+    search_min_price_ = 0.0;
+    search_max_price_ = 0.0;
+    search_min_size_ = 0.0;
+    search_max_size_ = 0.0;
+    search_exchange_ = "";
+    search_start_time_ = 0;
+    search_end_time_ = 0;
+    strcpy(min_price_input_, "");
+    strcpy(max_price_input_, "");
+    strcpy(min_size_input_, "0.0");
+    strcpy(max_size_input_, "");
+    strcpy(exchange_input_, "");
+    strcpy(start_time_input_, "");
+    strcpy(end_time_input_, "");
+    markDirty(); // Refresh the display
+  }
+}
+
+void HistoricalTimeSalesPanel::render_trade_size_histogram() {
   ImGui::Separator();
   ImGui::Text("Trade Size Distribution (Logarithmic Bins)");
 
@@ -629,8 +513,8 @@ void TapePanel::render_trade_size_histogram() {
 
   // Prepare data for plotting
   std::vector<double> hist_counts(histogram.size());
-  std::vector<const char*> labels;  // Changed to const char*
-  std::vector<std::string> label_strings; // Store the actual strings
+  std::vector<const char*> labels;
+  std::vector<std::string> label_strings;
 
   for (size_t i = 0; i < histogram.size(); ++i) {
     hist_counts[i] = static_cast<double>(histogram[i].count);
@@ -643,8 +527,8 @@ void TapePanel::render_trade_size_histogram() {
     } else {
       snprintf(label, sizeof(label), "%.3f-%.3f", histogram[i].lower_bound, histogram[i].upper_bound);
     }
-    label_strings.push_back(std::string(label));  // Store the string
-    labels.push_back(label_strings.back().c_str());  // Add c_str pointer to labels vector
+    label_strings.push_back(std::string(label));
+    labels.push_back(label_strings.back().c_str());
   }
 
   // Create a small plot area
@@ -662,10 +546,6 @@ void TapePanel::render_trade_size_histogram() {
 
       // Plot the histogram bars
       ImPlot::PlotBars("Counts", x_positions.data(), hist_counts.data(), static_cast<int>(histogram.size()), 0.8);
-
-      // Set custom x-axis labels - need to convert vector<const char*> to const char* const*
-      // This is tricky, so let's use a different approach
-      // Just remove the custom axis scale setup since we don't need it for a simple histogram
 
       ImPlot::EndPlot();
     }
@@ -729,10 +609,65 @@ void TapePanel::render_trade_size_histogram() {
   }
 }
 
-void TapePanel::render_trade_table() {
+uint64_t HistoricalTimeSalesPanel::parseTimeString(const std::string& time_str) {
+  // This is a simplified parser - in a real implementation, you'd want to handle
+  // date components and timezone properly
+  // For now, we'll assume the time is today and convert to microseconds since epoch
+  
+  // Parse HH:MM:SS[.mmm] format
+  int hours = 0, minutes = 0, seconds = 0;
+  double fraction = 0.0;
+
+  size_t pos = 0;
+  try {
+    // Parse hours
+    size_t colon_pos = time_str.find(':');
+    if (colon_pos != std::string::npos) {
+      hours = std::stoi(time_str.substr(pos, colon_pos));
+      pos = colon_pos + 1;
+
+      // Parse minutes
+      colon_pos = time_str.find(':', pos);
+      if (colon_pos != std::string::npos) {
+        minutes = std::stoi(time_str.substr(pos, colon_pos - pos));
+        pos = colon_pos + 1;
+
+        // Parse seconds and optional milliseconds
+        std::string sec_part = time_str.substr(pos);
+        size_t dot_pos = sec_part.find('.');
+        if (dot_pos != std::string::npos) {
+          seconds = std::stoi(sec_part.substr(0, dot_pos));
+          fraction = std::stod(sec_part);
+          fraction -= seconds; // Remove integer part
+        } else {
+          seconds = std::stoi(sec_part);
+        }
+      }
+    }
+  } catch (...) {
+    return 0; // Return 0 if parsing fails
+  }
+
+  // Convert to seconds since midnight
+  uint64_t total_seconds = hours * 3600 + minutes * 60 + seconds;
+
+  // Get today's date and combine with time
+  time_t now = time(nullptr);
+  tm local_tm = *localtime(&now);
+  local_tm.tm_hour = hours;
+  local_tm.tm_min = minutes;
+  local_tm.tm_sec = seconds;
+
+  uint64_t timestamp = mktime(&local_tm) * 1000000; // Convert to microseconds
+  timestamp += static_cast<uint64_t>(fraction * 1000000); // Add fractional microseconds
+
+  return timestamp;
+}
+
+void HistoricalTimeSalesPanel::render_trade_table() {
   // Unique table ID per panel instance to avoid ID conflicts
   char table_id[64];
-  snprintf(table_id, sizeof(table_id), "TapeTable##%s", config_.title.c_str());
+  snprintf(table_id, sizeof(table_id), "HistoricalTimeSalesTable##%s", config_.title.c_str());
 
   // Calculate average trade size for thresholds
   double total_size = 0.0;
@@ -970,16 +905,15 @@ void TapePanel::render_trade_table() {
 
     // Auto-scroll to bottom (newest trades)
     if (auto_scroll_ && filtered_trade_count > 0) {
-        ImGui::SetScrollHereY(0.0f);
+      ImGui::SetScrollHereY(0.0f);
     }
 
     ImGui::EndTable();
+  }
 }
 
-}  // namespace BTQuant
-
 // Compute logarithmic trade size histogram
-std::vector<BTQuant::TapePanel::LogBucket> BTQuant::TapePanel::computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const {
+std::vector<HistoricalTimeSalesPanel::LogBucket> HistoricalTimeSalesPanel::computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const {
   // Define logarithmic bucket boundaries (base 10)
   // Starting from 0.001 up to 10000 with logarithmic spacing
   std::vector<double> bucket_bounds = {0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0};
@@ -1022,7 +956,7 @@ std::vector<BTQuant::TapePanel::LogBucket> BTQuant::TapePanel::computeLogarithmi
 }
 
 // Check if a trade at the given index is part of a cluster of rapid trades at the same price
-bool BTQuant::TapePanel::isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const {
+bool HistoricalTimeSalesPanel::isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const {
     if (index < 0 || index >= static_cast<int>(trades.size())) {
         return false;
     }
@@ -1071,7 +1005,7 @@ bool BTQuant::TapePanel::isTradeClustered(int index, const std::vector<RenderEng
 }
 
 // Calculate trades per minute for a given time window
-double BTQuant::TapePanel::calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const {
+double HistoricalTimeSalesPanel::calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const {
     if (trades.empty()) {
         return 0.0;
     }
@@ -1100,7 +1034,7 @@ double BTQuant::TapePanel::calculateTradesPerMinute(const std::vector<RenderEngi
 }
 
 // Update trade pace history for all time windows
-void BTQuant::TapePanel::updateTradePaceHistory() {
+void HistoricalTimeSalesPanel::updateTradePaceHistory() {
     if (cached_trades_.empty()) {
         return;
     }
@@ -1134,7 +1068,7 @@ void BTQuant::TapePanel::updateTradePaceHistory() {
 }
 
 // Render the trade pace chart in the header
-void BTQuant::TapePanel::renderTradePaceChart() {
+void HistoricalTimeSalesPanel::renderTradePaceChart() {
     if (trade_pace_1min_history_.empty()) {
         return;
     }
@@ -1193,7 +1127,7 @@ void BTQuant::TapePanel::renderTradePaceChart() {
 }
 
 // CSV Export functionality
-void BTQuant::TapePanel::exportTradesToCSV() {
+void HistoricalTimeSalesPanel::exportTradesToCSV() {
     if (cached_trades_.empty()) {
         // Nothing to export
         return;
@@ -1202,7 +1136,7 @@ void BTQuant::TapePanel::exportTradesToCSV() {
     // Generate filename with timestamp
     time_t now = time(nullptr);
     char buffer[100];
-    strftime(buffer, sizeof(buffer), "trades_export_%Y%m%d_%H%M%S.csv", localtime(&now));
+    strftime(buffer, sizeof(buffer), "historical_trades_export_%Y%m%d_%H%M%S.csv", localtime(&now));
 
     std::ofstream file(buffer);
     if (!file.is_open()) {
@@ -1280,124 +1214,5 @@ void BTQuant::TapePanel::exportTradesToCSV() {
 
     file.close();
 }
-
-// Check for large trades and trigger audio alerts
-void TapePanel::checkForLargeTradesAndAlert() {
-  if (cached_trades_.empty()) return;
-
-  // Calculate average trade size for threshold comparison
-  double total_size = 0.0;
-  int valid_trade_count = 0;
-  for (const auto& trade : cached_trades_) {
-    if (trade.size > 0) {
-      total_size += trade.size;
-      valid_trade_count++;
-    }
-  }
-
-  double avg_trade_size = (valid_trade_count > 0) ? total_size / valid_trade_count : 0.0;
-  double volume_threshold = avg_trade_size * volume_multiplier_threshold_;
-
-  // Check the most recent trade
-  const auto& latest_trade = cached_trades_.back();
-
-  // Trigger audio alert if trade size exceeds threshold
-  if (latest_trade.size >= volume_threshold && volume_threshold > 0.0) {
-    playTradeAlertSound(latest_trade.is_buy);
-  }
-}
-
-void TapePanel::playTradeAlertSound(bool is_buy) {
-  // Different tones for buy vs sell
-  int frequency = is_buy ? buy_tone_frequency_ : sell_tone_frequency_;
-  int duration = tone_duration_ms_;  // Duration in milliseconds
-
-#ifdef _WIN32
-  // On Windows, use Beep API
-  Beep(frequency, duration);
-#elif __linux__
-  // On Linux, generate a simple WAV file and play it using a system command
-  generateAndPlayTone(frequency, duration, is_buy ? "buy" : "sell");
-#elif __APPLE__
-  // On macOS, use the say command as a fallback or beep utility
-  std::string command = "afplay /System/Library/Sounds/Ping.aiff &";
-  system(command.c_str());
-#else
-  // For other systems, use a generic system beep if available
-  std::cout << "Trade alert triggered: " << (is_buy ? "BUY" : "SELL") << " - "
-            << frequency << "Hz for " << duration << "ms" << std::endl;
-#endif
-}
-
-#ifdef __linux__
-void TapePanel::generateAndPlayTone(int frequency, int duration_ms, const std::string& type) {
-  // Create a temporary WAV file with the specified tone
-  std::string filename = "/tmp/trade_alert_" + type + ".wav";
-
-  // Generate a simple sine wave tone
-  int sample_rate = 44100;
-  int num_samples = (duration_ms * sample_rate) / 1000;
-  int bits_per_sample = 16;
-  int num_channels = 1;
-  int byte_rate = sample_rate * num_channels * bits_per_sample / 8;
-  int block_align = num_channels * bits_per_sample / 8;
-  int data_size = num_samples * block_align;
-  int total_size = 36 + data_size;
-
-  std::ofstream file(filename, std::ios::binary);
-  if (!file.is_open()) return;
-
-  // Write WAV header
-  file << "RIFF";
-  writeInt32(file, total_size);
-  file << "WAVEfmt ";
-  writeInt32(file, 16);  // Subchunk1Size (16 for PCM)
-  writeInt16(file, 1);   // AudioFormat (1 for PCM)
-  writeInt16(file, num_channels);  // NumChannels
-  writeInt32(file, sample_rate);   // SampleRate
-  writeInt32(file, byte_rate);     // ByteRate
-  writeInt16(file, block_align);   // BlockAlign
-  writeInt16(file, bits_per_sample); // BitsPerSample
-
-  file << "data";
-  writeInt32(file, data_size);     // Subchunk2Size
-
-  // Generate and write audio samples
-  double period = 1.0 / frequency;
-  double amplitude = 32760;  // Near maximum for 16-bit signed integers
-
-  for (int i = 0; i < num_samples; ++i) {
-    double time = static_cast<double>(i) / sample_rate;
-    double value = amplitude * sin(2.0 * M_PI * frequency * time);
-
-    // Write 16-bit sample
-    short sample = static_cast<short>(value);
-    file.put(sample & 0xFF);
-    file.put((sample >> 8) & 0xFF);
-  }
-
-  file.close();
-
-  // Play the generated WAV file using aplay or paplay (PulseAudio)
-  std::string play_cmd = "aplay \"" + filename + "\" 2>/dev/null || paplay \"" + filename + "\" 2>/dev/null &";
-  system(play_cmd.c_str());
-
-  // Clean up the temporary file after a delay
-  std::string cleanup_cmd = "(sleep 1; rm \"" + filename + "\") &";
-  system(cleanup_cmd.c_str());
-}
-
-void TapePanel::writeInt16(std::ofstream& file, int16_t value) {
-  file.put(value & 0xFF);
-  file.put((value >> 8) & 0xFF);
-}
-
-void TapePanel::writeInt32(std::ofstream& file, int32_t value) {
-  file.put(value & 0xFF);
-  file.put((value >> 8) & 0xFF);
-  file.put((value >> 16) & 0xFF);
-  file.put((value >> 24) & 0xFF);
-}
-#endif
 
 }  // namespace BTQuant

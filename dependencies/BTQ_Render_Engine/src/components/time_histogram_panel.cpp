@@ -102,13 +102,13 @@ void TimeHistogramPanel::render() {
     // Handle Y-axis scaling based on auto-scale and lock settings
     if (lock_y_axis_scale_) {
       // If scale is locked, set the fixed Y-axis range
-      ImPlot::SetNextPlotLimitsY(locked_min_y_, locked_max_y_, ImGuiCond_Always);
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_Always);
     } else if (auto_scale_y_axis_) {
       // If auto-scaling is enabled, calculate min/max from the data to be plotted
       // This will be handled by setting appropriate limits after processing all data
     } else {
       // If auto-scaling is disabled but not locked, use manual range
-      ImPlot::SetNextPlotLimitsY(locked_min_y_, locked_max_y_, ImGuiCond_FirstUseEver);
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, locked_min_y_, locked_max_y_, ImGuiCond_FirstUseEver);
     }
 
     // Helper function to add tooltip to bars
@@ -709,7 +709,7 @@ void TimeHistogramPanel::render() {
       }
       double padding = range * 0.05; // 5% padding
 
-      ImPlot::SetNextPlotLimitsY(min_y_value - padding, max_y_value + padding, ImGuiCond_Always);
+      ImPlot::SetNextAxisLimits(ImAxis_Y1, min_y_value - padding, max_y_value + padding, ImGuiCond_Always);
 
       // Update the locked values to reflect the current auto-scaled range
       locked_min_y_ = min_y_value - padding;

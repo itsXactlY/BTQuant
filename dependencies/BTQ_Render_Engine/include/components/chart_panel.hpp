@@ -12,6 +12,7 @@
 #include "indicator_renderer.hpp"
 #include "panel_base.hpp"
 #include "../indicators/anchored_vwap.hpp"
+#include "../indicators/session_vwap.hpp"
 
 namespace BTQuant {
 
@@ -92,6 +93,11 @@ class ChartPanel : public PanelBase {
   // Get visible time range
   std::pair<uint64_t, uint64_t> get_visible_time_range() const;
 
+  // Set callback for showing historical trades
+  void set_show_historical_trades_callback(std::function<void(uint64_t, uint64_t)> callback) {
+    on_show_historical_trades_ = std::move(callback);
+  }
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -142,6 +148,16 @@ class ChartPanel : public PanelBase {
   // Anchored VWAPs
   std::list<::btq::AnchoredVWAP> anchored_vwaps_;
 
+  // Session VWAP
+  ::btq::SessionVWAP session_vwap_;
+
+  // Variables for storing clicked bar time range
+  uint64_t clicked_bar_start_time_ = 0;
+  uint64_t clicked_bar_end_time_ = 0;
+
+  // Callback for showing historical trades
+  std::function<void(uint64_t, uint64_t)> on_show_historical_trades_;
+
   // Accessors for view range (needed for synchronization)
   friend class PanelManager; // Allow PanelManager to access private members for synchronization
 
@@ -151,6 +167,7 @@ class ChartPanel : public PanelBase {
   void render_candlestick(const ChartInstance& chart);
   void render_context_menu(const ChartInstance& chart);
   void render_anchored_vwap_overlay(const ChartInstance& chart);
+  void render_session_vwap_overlay(const ChartInstance& chart);
   void create_anchored_vwap_at_time(uint64_t timestamp);
 
   // Indicator rendering methods

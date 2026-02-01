@@ -114,6 +114,8 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Performance Monitor";
     case PanelType::TIME_STATISTICS:
       return "Time Statistics";
+    case PanelType::TIME_AND_SALES:
+      return "Time & Sales";
     default:
       return "Unknown";
   }

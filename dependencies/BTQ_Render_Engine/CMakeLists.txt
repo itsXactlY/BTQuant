@@ -133,6 +133,7 @@ set(DASHBOARD_SOURCES
     src/components/dashboard_controls.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
+    src/ui/layout_manager.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/monitoring/performance_monitor.cpp

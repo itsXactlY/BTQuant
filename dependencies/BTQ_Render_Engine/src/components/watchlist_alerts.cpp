@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <random>
 
 #include "imgui.h"
@@ -12,7 +13,34 @@ WatchlistAlertManager::WatchlistAlertManager(
     std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     std::shared_ptr<AlertsPanel> alerts_panel)
-    : bridge_(bridge), processor_(processor), alerts_panel_(alerts_panel) {}
+    : bridge_(bridge), processor_(processor), alerts_panel_(alerts_panel) {
+
+    // Set up default callback to handle alerts even when alerts_panel_ is nullptr initially
+    on_alert_triggered_ = [this](const WatchlistPriceAlert& alert, double current_price) {
+        // Log the alert in the alerts panel if available
+        if (alerts_panel_) {
+            auto now = std::chrono::system_clock::now();
+            std::string message = std::string("Price ") +
+                                 (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
+                                 std::string(" target: ") + std::to_string(alert.target_price);
+
+            // Create a new alert log entry
+            AlertLog log_entry;
+            log_entry.time = now;
+            log_entry.rule_name = alert.symbol_name + " Price Alert";
+            log_entry.symbol = alert.symbol_name;
+            log_entry.price = current_price;
+            log_entry.message = message;
+
+            // Add the log entry to the alerts panel
+            alerts_panel_->add_alert_log(log_entry);
+        }
+
+        // Also output to console for debugging
+        std::cout << "[WatchlistAlert] Triggered: " << alert.symbol_name
+                  << " price alert at " << current_price << " (target: " << alert.target_price << ")" << std::endl;
+    };
+}
 
 std::string WatchlistAlertManager::add_price_alert(
     uint32_t symbol_id, const std::string& symbol_name, 
@@ -103,26 +131,7 @@ bool WatchlistAlertManager::should_trigger_alert(const WatchlistPriceAlert& aler
 }
 
 void WatchlistAlertManager::trigger_alert(const WatchlistPriceAlert& alert, double current_price) {
-    // Log the alert in the alerts panel
-    if (alerts_panel_) {
-        auto now = std::chrono::system_clock::now();
-        std::string message = std::string("Price ") +
-                             (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
-                             std::string(" target: ") + std::to_string(alert.target_price);
-
-        // Create a new alert log entry
-        AlertLog log_entry;
-        log_entry.time = now;
-        log_entry.rule_name = alert.symbol_name + " Price Alert";
-        log_entry.symbol = alert.symbol_name;
-        log_entry.price = current_price;
-        log_entry.message = message;
-
-        // Add the log entry to the alerts panel
-        alerts_panel_->add_alert_log(log_entry);
-    }
-
-    // Call the callback if set
+    // Call the callback which handles logging to the alerts panel
     if (on_alert_triggered_) {
         on_alert_triggered_(alert, current_price);
     }

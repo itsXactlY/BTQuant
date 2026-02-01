@@ -359,176 +359,6 @@ void DashboardControls::render_dashboard_controls() {
     ImGui::SameLine();
     ImGui::TextDisabled("(%zu symbols)", all_symbols_.size());
 
-    // Symbol selection section (keeping the original section for advanced controls)
-    if (ImGui::CollapsingHeader("Symbol Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
-      // Refresh symbols button
-      if (ImGui::Button("Refresh Symbols")) {
-        needs_refresh_ = true;
-      }
-
-      ImGui::SameLine();
-
-      // Add API fetch button to get symbols directly from exchange APIs
-      if (ImGui::Button("Fetch from Exchange API")) {
-        fetch_symbols_from_api_ = true;
-        needs_refresh_ = true;
-      }
-
-      // Load symbols if needed
-      if (needs_refresh_ || !symbols_loaded_ || fetch_symbols_from_api_) {
-        if (panel_manager_) {
-          if (fetch_symbols_from_api_) {
-            // Fetch symbols directly from exchange APIs
-            fetch_symbols_from_exchange_api();
-            fetch_symbols_from_api_ = false;
-          } else {
-            // Refresh symbols based on selected exchanges
-            refresh_symbols_for_selected_exchanges();
-          }
-
-          symbols_loaded_ = true;
-          needs_refresh_ = false;
-        }
-      }
-
-      // Search-enabled symbol selection dropdown (secondary search)
-      ImGui::Text("Select Symbol:");
-
-      // Search input for filtering the dropdown options
-      if (ImGui::InputTextWithHint("##symbol_search", "Search symbols...", symbol_input_buffer_.data(), symbol_input_buffer_.size())) {
-        // Filter symbols based on search input
-        filtered_symbols_.clear();
-
-        std::string search_lower = symbol_input_buffer_.data();
-        std::transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
-
-        for (const auto& symbol : all_symbols_) {
-          std::string symbol_lower = symbol;
-          std::transform(symbol_lower.begin(), symbol_lower.end(), symbol_lower.begin(), ::tolower);
-
-          if (symbol_lower.find(search_lower) != std::string::npos) {
-            filtered_symbols_.push_back(symbol);
-          }
-        }
-      } else if (needs_refresh_) {
-        // If symbols were refreshed due to exchange selection, update the filtered list too
-        filtered_symbols_ = all_symbols_;
-      }
-
-      // Create a unique ID for the combo box
-      char preview_value[256];
-      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
-        strncpy(preview_value, all_symbols_[selected_symbol_idx_].c_str(), sizeof(preview_value) - 1);
-        preview_value[sizeof(preview_value) - 1] = '\0';
-      } else {
-        strcpy(preview_value, "Select a symbol...");
-      }
-
-      if (ImGui::BeginCombo("##symbol_combo", preview_value, ImGuiComboFlags_HeightLarge)) {
-        // Display filtered symbols in the combo box
-        for (int i = 0; i < static_cast<int>(filtered_symbols_.size()); ++i) {
-          const std::string& symbol = filtered_symbols_[i];
-          bool is_selected = (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size()) &&
-                              all_symbols_[selected_symbol_idx_] == symbol);
-
-          if (ImGui::Selectable(symbol.c_str(), is_selected)) {
-            // Find the index in the all_symbols_ vector
-            for (int j = 0; j < static_cast<int>(all_symbols_.size()); ++j) {
-              if (all_symbols_[j] == symbol) {
-                selected_symbol_idx_ = j;
-
-                // Get the symbol ID from the registry
-                auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-                if (symbol_info_opt) {
-                  uint32_t symbol_id = symbol_info_opt->id;
-
-                  // Set the active symbol for all panels
-                  if (panel_manager_) {
-                    panel_manager_->set_active_symbol(symbol_id, symbol);
-
-                    // Log the symbol change for debugging
-                    std::cout << "[DashboardControls] Setting active symbol to: " << symbol
-                              << " (ID: " << symbol_id << ")" << std::endl;
-                  }
-                } else {
-                  // If symbol not found in registry, try to register it
-                  std::string exchange_name = "Unknown"; // Default exchange
-
-                  // Try to determine exchange from selected exchanges
-                  if (!selected_exchanges_.empty() && !all_exchanges_.empty()) {
-                    for (size_t idx = 0; idx < selected_exchanges_.size(); ++idx) {
-                      if (selected_exchanges_[idx] != 0) {
-                        exchange_name = all_exchanges_[idx];
-                        break;
-                      }
-                    }
-                  }
-
-                  uint32_t new_symbol_id = SymbolRegistry::instance().register_symbol(exchange_name, symbol);
-
-                  if (panel_manager_) {
-                    panel_manager_->set_active_symbol(new_symbol_id, symbol);
-
-                    // Log the symbol registration and change for debugging
-                    std::cout << "[DashboardControls] Registered and set active symbol: " << symbol
-                              << " (ID: " << new_symbol_id << ") on exchange: " << exchange_name << std::endl;
-                  }
-                }
-                break;
-              }
-            }
-
-            // Close the combo box after selection
-            ImGui::CloseCurrentPopup();
-          }
-
-          if (is_selected) {
-            ImGui::SetItemDefaultFocus();
-          }
-        }
-
-        ImGui::EndCombo();
-      }
-
-      // Add a clear button to reset the symbol selection
-      ImGui::SameLine();
-      if (ImGui::Button("Clear")) {
-        selected_symbol_idx_ = -1;
-
-        // Optionally notify panels that no symbol is selected
-        if (panel_manager_) {
-          // Pass a special value to indicate no symbol is selected
-          // Using 0 as a special symbol ID for "no symbol"
-          panel_manager_->set_active_symbol(0, "");
-          std::cout << "[DashboardControls] Cleared active symbol selection" << std::endl;
-        }
-      }
-
-      // Add an Apply to All button to ensure all panels get the current symbol
-      ImGui::SameLine();
-      if (ImGui::Button("Apply to All")) {
-        if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
-          const std::string& symbol = all_symbols_[selected_symbol_idx_];
-          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-          if (symbol_info_opt) {
-            uint32_t symbol_id = symbol_info_opt->id;
-            if (panel_manager_) {
-              panel_manager_->set_active_symbol(symbol_id, symbol);
-              std::cout << "[DashboardControls] Applied symbol " << symbol
-                        << " (ID: " << symbol_id << ") to all panels" << std::endl;
-            }
-          }
-        }
-      }
-
-      // Display currently selected symbol
-      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
-        ImGui::Text("Selected: %s", all_symbols_[selected_symbol_idx_].c_str());
-      } else {
-        ImGui::Text("No symbol selected");
-      }
-    }
-
     // Panel management section with all requested panel types
     if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
 
@@ -785,6 +615,11 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
   filtered_symbols_ = all_symbols_;
 
   std::cout << "[DashboardControls] Refreshed symbols for selected exchanges. Total symbols: " << all_symbols_.size() << std::endl;
+
+  // Update the selected symbol index if the previously selected symbol is no longer available
+  if (selected_symbol_idx_ >= static_cast<int>(all_symbols_.size())) {
+    selected_symbol_idx_ = -1; // Reset to no selection
+  }
 }
 
 void DashboardControls::fetch_symbols_from_exchange_api() {
@@ -883,6 +718,11 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
 
   // Update the symbol input buffer to clear any previous search
   std::fill(symbol_input_buffer_.begin(), symbol_input_buffer_.end(), 0);
+
+  // Update the selected symbol index if the previously selected symbol is no longer available
+  if (selected_symbol_idx_ >= static_cast<int>(all_symbols_.size())) {
+    selected_symbol_idx_ = -1; // Reset to no selection
+  }
 }
 
 void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame timeframe) {

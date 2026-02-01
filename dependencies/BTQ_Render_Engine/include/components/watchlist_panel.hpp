@@ -122,6 +122,7 @@ class WatchlistPanel : public PanelBase {
   void unsubscribe_from_symbol(uint32_t symbol_id);
   void verify_subscriptions();
   void refresh_all_subscriptions();
+  void ensure_all_symbols_subscribed();
 };
 
 }  // namespace BTQuant

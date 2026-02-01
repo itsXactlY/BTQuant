@@ -55,6 +55,24 @@ float calculateFlashIntensity(float progress) {
   return t / 2.0f; // Normalize to 0-1 range
 }
 
+// Enhanced flash animation function specifically for price changes
+float calculatePriceFlashIntensity(float progress) {
+  // Use a more pronounced flash effect for price changes
+  // This creates a more noticeable visual feedback when prices update
+
+  // Use a cubic easing function for a more dramatic effect
+  float t = progress;
+  if (t < 0.5f) {
+    // Accelerate quickly at the beginning
+    t = 4.0f * t * t * t;
+  } else {
+    // Decelerate smoothly at the end
+    t = (t - 1.0f) * (2.0f * t - 2.0f) * (2.0f * t - 2.0f) + 1.0f;
+  }
+
+  return t;
+}
+
 // Helper function to format VWAP with consistent decimal places
 std::string formatVWAP(double vwap) {
   // For VWAP values less than 1, show more decimals
@@ -155,6 +173,14 @@ void WatchlistPanel::update(float dt) {
     subscription_check_timer = 0.0f;
     std::cout << "[WatchlistPanel] Active symbols: " << watchlist_.size()
               << ", Active subscriptions: " << symbol_subscriptions_.size() << std::endl;
+
+    // Log any discrepancies between watchlist and subscriptions
+    for (const auto& [symbol_id, entry] : watchlist_) {
+      if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+        std::cout << "[WatchlistPanel] Missing subscription for symbol ID: " << symbol_id
+                  << " (" << entry.symbol << ")" << std::endl;
+      }
+    }
   }
 }
 
@@ -442,6 +468,9 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
 
   // Save the updated order to config file
   save_watchlist_order_to_config(config_file_path_);
+
+  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id
+            << ") to watchlist and subscribed to real-time updates" << std::endl;
 }
 
 void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
@@ -544,6 +573,7 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       }
 
       if (significant_change) {
+        // Reset animation timer to start fresh animation
         it->second.animation_timer = WatchlistEntry::ANIMATION_DURATION;
 
         // Log the animation trigger for debugging
@@ -554,7 +584,8 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
 
       // Log every market data update for monitoring
       std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                << " (ID: " << symbol_id << "). New price: " << it->second.price << std::endl;
+                << " (ID: " << symbol_id << "). New price: " << it->second.price
+                << ", Timestamp: " << it->second.last_update_ts << std::endl;
     }
   }
 }
@@ -843,8 +874,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Enhanced flash animation - more prominent flash effect with smoother transition
     ImVec4 flash_color = calculateChangeColor(price_change_pct, true);
 
-    // Calculate flash intensity using the enhanced function
-    float flash_intensity = calculateFlashIntensity(progress);
+    // Calculate flash intensity using the enhanced function for prices
+    float flash_intensity = calculatePriceFlashIntensity(progress);
 
     // Enhance the color intensity during animation with more pronounced flash
     if (price_change_pct >= 0.0) {
@@ -860,9 +891,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.4f) { // Adjust flash timing for better visibility
+    if (progress > 0.3f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 4.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -872,8 +903,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (price_change_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f) :  // More green for positive
+        ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -885,7 +916,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       draw_list->AddRect(
         ImVec2(pos.x - 8, pos.y - 3),
         ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
+        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.9f))
       );
     }
 
@@ -1341,8 +1372,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Use enhanced interpolation for smoother transition
     double animated_vwap = interpolateValue(entry.previous_vwap, entry.vwap, progress);
 
-    // Calculate flash intensity using the enhanced function
-    float flash_intensity = calculateFlashIntensity(progress);
+    // Calculate flash intensity using the enhanced function for prices
+    float flash_intensity = calculatePriceFlashIntensity(progress);
 
     // Enhance the color intensity during animation
     if (vwap_change_pct >= 0.0) {
@@ -1358,9 +1389,9 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     }
 
     // Add brief flash animation effect by temporarily highlighting the background
-    if (progress > 0.4f) { // Adjust flash timing for better visibility
+    if (progress > 0.3f) { // Adjust flash timing for better visibility
       // Calculate alpha for background highlight based on animation progress
-      float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+      float bg_alpha = (1.0f - progress) * 4.0f; // Increase intensity
       if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
       // Create a temporary background highlight for the cell
@@ -1370,8 +1401,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent background highlight
       ImVec4 highlight_color = (vwap_change_pct >= 0.0) ?
-        ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-        ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f) :  // More green for positive
+        ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);   // More red for negative
 
       draw_list->AddRectFilled(
         ImVec2(pos.x - 8, pos.y - 3),
@@ -1383,7 +1414,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       draw_list->AddRect(
         ImVec2(pos.x - 8, pos.y - 3),
         ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
+        ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.9f))
       );
     }
 
@@ -1736,6 +1767,12 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
 
 void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
   if (processor_) {
+    // Check if already subscribed to avoid duplicate subscriptions
+    if (symbol_subscriptions_.find(symbol_id) != symbol_subscriptions_.end()) {
+      std::cout << "[WatchlistPanel] Already subscribed to symbol ID: " << symbol_id << std::endl;
+      return;
+    }
+
     // Create a subscription for this specific symbol
     uint64_t sub_id = processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
                                           [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
@@ -1758,6 +1795,8 @@ void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
       std::cout << "[WatchlistPanel] Unsubscribed from symbol ID: " << symbol_id
                 << " with subscription ID: " << it->second << std::endl;
       symbol_subscriptions_.erase(it);
+    } else {
+      std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id << std::endl;
     }
   }
 }
@@ -1791,6 +1830,22 @@ void WatchlistPanel::refresh_all_subscriptions() {
   }
 
   std::cout << "[WatchlistPanel] Refreshed all subscriptions for " << watchlist_.size() << " symbols" << std::endl;
+}
+
+void WatchlistPanel::ensure_all_symbols_subscribed() {
+  // Ensure all symbols in the watchlist have active subscriptions
+  size_t subscribed_count = 0;
+  for (const auto& [symbol_id, entry] : watchlist_) {
+    if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
+      subscribe_to_symbol(symbol_id);
+      subscribed_count++;
+    }
+  }
+
+  if (subscribed_count > 0) {
+    std::cout << "[WatchlistPanel] Subscribed to " << subscribed_count
+              << " additional symbols to ensure all watchlist symbols are covered" << std::endl;
+  }
 }
 
 }  // namespace BTQuant

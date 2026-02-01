@@ -198,11 +198,19 @@ class WatchlistPanel : public PanelBase {
   void process_pending_updates();
   void subscribe_to_all_watchlist_symbols();
 
+  // Alerts management UI
+  void render_alerts_management();
+
  private:
   // Column customization members
   std::vector<ColumnInfo> column_info_;
   bool column_context_menu_open_ = false;
   int clicked_column_index_ = -1;
+
+  // Alerts management UI state
+  char new_alert_symbol_buffer_[128] = {0};
+  char new_alert_price_buffer_[64] = {0};
+  int new_alert_direction_ = 0; // 0 for ABOVE, 1 for BELOW
 };
 
 }  // namespace BTQuant

@@ -432,9 +432,12 @@ void WatchlistPanel::render() {
     }
   }
 
-
   // Filter input
   render_filter_input();
+
+  // Add alerts management section
+  render_alerts_management();
+
   ImGui::Separator();
 
   // Count visible columns for table setup
@@ -3297,6 +3300,161 @@ void WatchlistPanel::validate_column_settings() {
     for (size_t i = 0; i < visible_orders.size(); ++i) {
       column_info_[visible_orders[i].first].order = static_cast<int>(i);
     }
+  }
+}
+
+void WatchlistPanel::render_alerts_management() {
+  if (!alert_manager_) {
+    return;
+  }
+
+  ImGui::Spacing();
+  ImGui::Text("Watchlist Alerts:");
+  ImGui::Separator();
+
+  // Input fields for creating a new alert
+  ImGui::Text("Create New Alert:");
+  ImGui::SameLine();
+
+  // Symbol input
+  ImGui::SetNextItemWidth(120);
+  ImGui::InputTextWithHint("##AlertSymbol", "Symbol", new_alert_symbol_buffer_, sizeof(new_alert_symbol_buffer_));
+
+  ImGui::SameLine();
+
+  // Target price input
+  ImGui::SetNextItemWidth(100);
+  ImGui::InputTextWithHint("##AlertPrice", "Target Price", new_alert_price_buffer_, sizeof(new_alert_price_buffer_));
+
+  ImGui::SameLine();
+
+  // Direction selection
+  const char* directions[] = { "Above", "Below" };
+  ImGui::SetNextItemWidth(80);
+  ImGui::Combo("##AlertDirection", &new_alert_direction_, directions, 2);
+
+  ImGui::SameLine();
+
+  // Add alert button
+  if (ImGui::Button("Add Alert")) {
+    std::string symbol = new_alert_symbol_buffer_;
+    std::string price_str = new_alert_price_buffer_;
+
+    // Validate inputs
+    if (!symbol.empty() && !price_str.empty()) {
+      try {
+        double target_price = std::stod(price_str);
+
+        // Find the symbol ID from the current watchlist
+        uint32_t symbol_id = 0;
+        std::string found_symbol_name = "";
+
+        for (const auto& [id, entry] : get_current_watchlist()) {
+          if (entry.symbol == symbol) {
+            symbol_id = id;
+            found_symbol_name = entry.symbol;
+            break;
+          }
+        }
+
+        if (symbol_id != 0) {
+          // Add the alert
+          WatchlistPriceAlert::Direction direction =
+            (new_alert_direction_ == 0) ?
+            WatchlistPriceAlert::Direction::ABOVE :
+            WatchlistPriceAlert::Direction::BELOW;
+
+          alert_manager_->add_price_alert(symbol_id, found_symbol_name, target_price, direction);
+
+          // Clear input buffers
+          memset(new_alert_symbol_buffer_, 0, sizeof(new_alert_symbol_buffer_));
+          memset(new_alert_price_buffer_, 0, sizeof(new_alert_price_buffer_));
+
+          std::cout << "[WatchlistPanel] Added alert for " << found_symbol_name
+                    << " " << directions[new_alert_direction_] << " " << target_price << std::endl;
+        } else {
+          std::cout << "[WatchlistPanel] Symbol '" << symbol << "' not found in current watchlist" << std::endl;
+        }
+      } catch (const std::exception& e) {
+        std::cout << "[WatchlistPanel] Invalid price format: " << price_str << std::endl;
+      }
+    }
+  }
+
+  // Display existing alerts
+  ImGui::Spacing();
+  const auto& all_alerts = alert_manager_->get_all_alerts();
+
+  if (!all_alerts.empty()) {
+    ImGui::Text("Active Alerts (%zu):", all_alerts.size());
+    ImGui::BeginChild("AlertsList", ImVec2(0, 150), true);
+
+    if (ImGui::BeginTable("AlertsTable", 5,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+      ImGui::TableSetupColumn("Symbol");
+      ImGui::TableSetupColumn("Direction");
+      ImGui::TableSetupColumn("Target Price");
+      ImGui::TableSetupColumn("Status");
+      ImGui::TableSetupColumn("Actions");
+      ImGui::TableHeadersRow();
+
+      for (const auto& [alert_id, alert] : all_alerts) {
+        // Only show alerts for symbols in the current watchlist
+        if (get_current_watchlist().find(alert.symbol_id) != get_current_watchlist().end()) {
+          ImGui::TableNextRow();
+
+          ImGui::TableSetColumnIndex(0);
+          ImGui::Text("%s", alert.symbol_name.c_str());
+
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("%s",
+                     (alert.direction == WatchlistPriceAlert::Direction::ABOVE) ? "Above" : "Below");
+
+          ImGui::TableSetColumnIndex(2);
+          ImGui::Text("%.5f", alert.target_price);
+
+          ImGui::TableSetColumnIndex(3);
+          const char* status_str = "Unknown";
+          ImVec4 status_col = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+
+          switch (alert.status) {
+            case AlertStatus::ACTIVE:
+              status_str = "Active";
+              status_col = ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
+              break;
+            case AlertStatus::TRIGGERED:
+              status_str = "Triggered";
+              status_col = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+              break;
+            case AlertStatus::DISABLED:
+              status_str = "Disabled";
+              status_col = ImVec4(0.4f, 0.4f, 0.4f, 1.0f);
+              break;
+            default:
+              status_str = "Unknown";
+              break;
+          }
+          ImGui::TextColored(status_col, "%s", status_str);
+
+          ImGui::TableSetColumnIndex(4);
+          if (ImGui::Button(("Del##" + alert.id).c_str())) {
+            alert_manager_->remove_alert(alert.id);
+          }
+          ImGui::SameLine();
+          if (alert.status == AlertStatus::ACTIVE) {
+            if (ImGui::Button(("Disable##" + alert.id).c_str())) {
+              alert_manager_->enable_alert(alert.id, false);
+            }
+          } else {
+            if (ImGui::Button(("Enable##" + alert.id).c_str())) {
+              alert_manager_->enable_alert(alert.id, true);
+            }
+          }
+        }
+      }
+      ImGui::EndTable();
+    }
+    ImGui::EndChild();
   }
 }
 

@@ -1102,6 +1102,12 @@ void WatchlistPanel::render_table_header() {
     }
     sorts_specs->SpecsDirty = false;
   }
+
+  // Check if the header row area is right-clicked to show column context menu
+  // This handles the case where user clicks in the header area but not on a specific column
+  if (ImGui::TableGetHoveredColumn() == -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    ImGui::OpenPopup("ColumnContextMenu");
+  }
 }
 
 void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
@@ -2564,16 +2570,23 @@ void WatchlistPanel::render_column_context_menu() {
     ImGui::Separator();
 
     // Show/hide options for each column with current visibility status
+    bool any_changes = false;
     for (int i = 0; i < static_cast<int>(column_info_.size()); ++i) {
       bool is_visible = column_info_[i].visible;
       std::string label = column_info_[i].name + (is_visible ? " (Visible)" : " (Hidden)");
 
       if (ImGui::MenuItem(label.c_str(), nullptr, &is_visible)) {
         column_info_[i].visible = is_visible;
+        any_changes = true;
+      }
+    }
 
+    if (any_changes) {
         // Save the updated settings to config
         save_column_settings_to_config(config_file_path_);
-      }
+
+        // Validate column settings after changes
+        validate_column_settings();
     }
 
     ImGui::Separator();
@@ -2872,6 +2885,7 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 1.0f, 1.0f)); // Lighter text for sorted column
   }
 
+  // Make the header clickable for sorting
   ImGui::TableHeader(header_text.c_str());
 
   if (is_sorted) {
@@ -2894,7 +2908,20 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
       sort_column_ = column_index;
       sort_ascending_ = true; // Default to ascending when switching columns
     }
+
+    // Update the ImGui sort specs to reflect our manual sorting
+    // This ensures consistency between our internal state and ImGui's state
     sort_watchlist();
+
+    // Add tooltip to explain sorting functionality
+    if (ImGui::IsItemHovered()) {
+      ImGui::BeginTooltip();
+      ImGui::Text("Click to sort by %s", label);
+      if (column_index == sort_column_) {
+        ImGui::Text("Current sort: %s", sort_ascending_ ? "Ascending" : "Descending");
+      }
+      ImGui::EndTooltip();
+    }
   }
 
   // Implement drag-and-drop for column reordering
@@ -2935,17 +2962,17 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
 
     // Draw a more prominent visual indicator for the drop target
     draw_list->AddLine(
-        ImVec2(cell_rect_min.x, cell_rect_max.y),
-        ImVec2(cell_rect_max.x, cell_rect_max.y),
+        ImVec2(cell_rect_min.x, cell_rect_max.y - 1),
+        ImVec2(cell_rect_max.x, cell_rect_max.y - 1),
         ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
-        3.0f // Increased line thickness for better visibility
+        4.0f // Increased line thickness for better visibility
     );
 
     // Add a more distinctive triangle indicator to show insertion direction
     ImVec2 triangle_points[3] = {
-        ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 10),
-        ImVec2(cell_rect_max.x - 10, cell_rect_max.y),
-        ImVec2(cell_rect_max.x, cell_rect_max.y - 10)
+        ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 12),
+        ImVec2(cell_rect_max.x - 10, cell_rect_max.y - 2),
+        ImVec2(cell_rect_max.x, cell_rect_max.y - 12)
     };
     draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
                                 ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));

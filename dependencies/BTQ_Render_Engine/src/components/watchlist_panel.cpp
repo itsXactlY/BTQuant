@@ -740,8 +740,32 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   ImGui::Text("%s", formatPrice(entry.open_24h).c_str());
 
   ImGui::TableSetColumnIndex(9);
-  // Apply subtle animation to VWAP when it updates significantly
+  // Apply color coding to VWAP based on relationship to current price (green if price > VWAP, red if price < VWAP)
+  // Also apply subtle animation to VWAP when it updates significantly
   ImVec4 vwap_color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // Default white
+
+  // Calculate color based on price vs VWAP relationship
+  if (entry.price != 0.0 && entry.vwap != 0.0) {
+    double price_vwap_diff = entry.price - entry.vwap;
+    double abs_diff = std::abs(price_vwap_diff);
+
+    // Calculate intensity based on the difference between price and VWAP
+    double max_expected_diff = std::max(entry.price * 0.1, 1.0); // 10% of price or $1 as max for intensity calculation
+    double intensity_factor = std::min(1.0, abs_diff / max_expected_diff);
+    double min_intensity = 0.3f;
+    double max_intensity = 0.9f;
+    double color_intensity = min_intensity + (max_intensity - min_intensity) * intensity_factor;
+
+    if (price_vwap_diff >= 0) {
+      // Price above VWAP - green
+      vwap_color = ImVec4(0.2f, color_intensity, 0.3f, 1.0f);
+    } else {
+      // Price below VWAP - red
+      vwap_color = ImVec4(color_intensity, 0.3f, 0.3f, 1.0f);
+    }
+  }
+
+  // Apply animation effect on top of color coding if recently updated
   if (entry.animation_timer > 0.0f) {
     // Calculate animation progress (0.0 to 1.0)
     float progress = 1.0f - (entry.animation_timer / WatchlistEntry::ANIMATION_DURATION);
@@ -761,12 +785,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       float green_intensity = 0.8f + 0.2f * flash_phase; // From 80% to 100% intensity
       vwap_color = ImVec4(0.6f, green_intensity, blue_intensity, 1.0f);
     } else if (current_vwap < previous_vwap) {
-      // VWAP went down - light orange/red highlight
-      float red_intensity = 0.8f + 0.2f * flash_phase; // From 80% to 100% intensity
-      float green_intensity = 0.7f - 0.2f * flash_phase; // From 70% to 50% intensity
-      vwap_color = ImVec4(red_intensity, green_intensity, 0.6f - 0.3f * flash_phase, 1.0f);
+      // VWAP went down - enhance the red component during animation
+      float red_intensity = std::min(1.0f, vwap_color.x * (0.7f + 0.3f * flash_phase)); // Red
+      float green_intensity = vwap_color.y * (0.7f + 0.3f * flash_phase); // Green
+      float blue_intensity = vwap_color.z * (0.7f + 0.3f * flash_phase); // Blue
+      vwap_color = ImVec4(red_intensity, green_intensity, blue_intensity, 1.0f);
     } else {
-      // No significant change - light blue tint
+      // No significant change in VWAP - light blue tint
       vwap_color = ImVec4(0.8f + 0.2f * progress, 0.8f + 0.2f * progress, 1.0f, 1.0f); // Light blue tint
     }
   }

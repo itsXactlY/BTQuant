@@ -85,6 +85,10 @@ public:
                       const std::string& symbol,
                       RenderEngine::TimeFrame timeframe);
 
+    // Load from market data processor
+    bool load_from_market_data_processor(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
+                                        uint64_t start_time, uint64_t end_time);
+
     // Get performance metrics
     BacktestMetrics get_performance_metrics() const;
 

@@ -191,7 +191,7 @@ bool ChartReplay::load_historical_data(const std::string& symbol, const std::str
                                       RenderEngine::TimeFrame timeframe,
                                       uint64_t start_time, uint64_t end_time) {
     // In a real implementation, this would load historical data from a database or file
-    // For now, we'll simulate loading by generating synthetic data
+    // For now, we'll simulate loading by generating synthetic data with more realistic patterns
 
     historical_candles_.clear();
 
@@ -222,30 +222,76 @@ bool ChartReplay::load_historical_data(const std::string& symbol, const std::str
         default:                                  interval_ms = 60000; break; // Default to 1 minute
     }
 
-    // Generate synthetic data for demonstration
+    // Generate synthetic data for demonstration with more realistic patterns
     uint64_t current_time = start_time;
-    float current_price = 40000.0f; // Starting price
+    double current_price = 40000.0; // Starting price
+
+    // Add some trend and volatility clustering for more realistic behavior
+    double trend_factor = 0.0; // Current trend direction (-1 to 1)
+    double volatility_factor = 0.02; // Base volatility level
 
     while (current_time <= end_time && historical_candles_.size() < 10000) { // Limit to 10k bars
         RenderEngine::OHLCVCandle candle;
         candle.timestamp = current_time;
 
-        // Generate random price movements
-        float volatility = 0.002f; // 0.2% volatility per bar
-        float rand_change = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 2.0f * volatility;
-        float new_price = current_price * (1.0f + rand_change);
+        // Simulate mean reversion and momentum effects
+        double momentum = (static_cast<double>(rand()) / RAND_MAX - 0.5) * 0.02; // Small random momentum
+        trend_factor = trend_factor * 0.95 + momentum * 0.05; // Smooth trend changes
 
-        // Set OHLC values
-        float high_multiplier = 1.0f + (static_cast<float>(rand()) / RAND_MAX) * 0.005f;
-        float low_multiplier = 1.0f - (static_cast<float>(rand()) / RAND_MAX) * 0.005f;
-        float open_close_diff = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.002f;
+        // Adjust volatility based on market conditions (volatility clustering)
+        double volatility_change = (static_cast<double>(rand()) / RAND_MAX - 0.5) * 0.1;
+        volatility_factor = std::max(0.005, std::min(0.05, volatility_factor + volatility_change));
 
-        candle.open = current_price;
-        candle.high = std::max(current_price, new_price) * high_multiplier;
-        candle.low = std::min(current_price, new_price) * low_multiplier;
-        candle.close = new_price;
-        candle.volume = 100.0f + (static_cast<float>(rand()) / RAND_MAX) * 900.0f; // Random volume
-        candle.trade_count = static_cast<uint64_t>(candle.volume); // Simplified trade count
+        // Generate price movement with trend and volatility
+        double rand_change = (static_cast<double>(rand()) / RAND_MAX - 0.5) * 2.0 * volatility_factor;
+        rand_change += trend_factor * 0.001; // Add trend component
+        double new_price = current_price * (1.0 + rand_change);
+
+        // Set OHLC values with realistic relationships
+        double high_val, low_val;
+
+        // Determine if this is a bullish or bearish candle
+        bool is_bullish = new_price > current_price;
+
+        // Calculate wick sizes based on market conditions
+        double upper_wick_ratio = is_bullish ?
+            0.1 + (static_cast<double>(rand()) / RAND_MAX) * 0.3 :  // 10-40% of range for upper wick in bullish
+            0.3 + (static_cast<double>(rand()) / RAND_MAX) * 0.4;   // 30-70% of range for upper wick in bearish
+
+        double lower_wick_ratio = is_bullish ?
+            0.3 + (static_cast<double>(rand()) / RAND_MAX) * 0.4 :  // 30-70% of range for lower wick in bullish
+            0.1 + (static_cast<double>(rand()) / RAND_MAX) * 0.3;   // 10-40% of range for lower wick in bearish
+
+        double body_size = std::abs(new_price - current_price);
+        double range = body_size + (upper_wick_ratio * body_size) + (lower_wick_ratio * body_size);
+
+        if (is_bullish) {
+            candle.open = current_price;
+            candle.close = new_price;
+            high_val = std::max(candle.open, candle.close) + (upper_wick_ratio * body_size);
+            low_val = std::min(candle.open, candle.close) - (lower_wick_ratio * body_size);
+        } else {
+            candle.open = current_price;
+            candle.close = new_price;
+            high_val = std::max(candle.open, candle.close) + (upper_wick_ratio * body_size);
+            low_val = std::min(candle.open, candle.close) - (lower_wick_ratio * body_size);
+        }
+
+        candle.high = high_val;
+        candle.low = low_val;
+
+        // Ensure OHLC values are consistent
+        candle.high = std::max({candle.open, candle.close, candle.high});
+        candle.low = std::min({candle.open, candle.close, candle.low});
+
+        // Generate volume with some correlation to price movement and volatility
+        double volume_base = 1000.0;
+        double volume_multiplier = 0.5 + (static_cast<double>(rand()) / RAND_MAX) * 1.5; // 0.5x to 2x
+        double volatility_multiplier = 0.8 + volatility_factor * 10.0; // Higher volume with higher volatility
+        double movement_multiplier = 1.0 + std::abs(rand_change) * 50.0; // Higher volume with larger moves
+
+        candle.volume = volume_base * volume_multiplier * volatility_multiplier * movement_multiplier;
+        candle.trade_count = static_cast<uint64_t>(candle.volume * (0.1 + (static_cast<double>(rand()) / RAND_MAX) * 0.5)); // 10-60% of volume as trade count
 
         historical_candles_.push_back(candle);
 
@@ -484,6 +530,14 @@ void ChartReplay::render_replay_controls() {
     // Manual control option
     ImGui::Checkbox("Manual control", &config_.enable_manual_control);
 
+    // Backtesting practice mode - separate from manual control
+    static bool backtesting_practice_mode = false;
+    if (ImGui::Checkbox("Backtesting practice mode", &backtesting_practice_mode)) {
+        // Toggle both manual control and step-by-step when backtesting mode is enabled
+        config_.enable_manual_control = backtesting_practice_mode;
+        config_.enable_step_by_step = backtesting_practice_mode;
+    }
+
     // Control buttons
     if (ImGui::Button(is_playing_ ? "Pause" : "Play")) {
         if (is_playing_) {
@@ -610,6 +664,83 @@ void ChartReplay::render_replay_controls() {
         } else {
             std::cerr << "Failed to load historical data from CSV!" << std::endl;
         }
+    }
+
+    // Load from market data processor (if available)
+    if (processor_) {
+        ImGui::SeparatorText("Load from Market Data");
+
+        static char symbol_buffer2[64] = "BTC-USDT";
+        static uint32_t symbol_id_input = 1;
+        static uint64_t start_time_input2 = 0;
+        static uint64_t end_time_input2 = 0;
+
+        ImGui::InputText("Symbol", symbol_buffer2, sizeof(symbol_buffer2));
+        ImGui::InputScalar("Symbol ID", ImGuiDataType_U32, &symbol_id_input);
+
+        ImGui::InputScalar("Start Time", ImGuiDataType_U64, &start_time_input2);
+        ImGui::InputScalar("End Time", ImGuiDataType_U64, &end_time_input2);
+
+        // Timeframe selection for market data
+        const char* timeframes2[] = {"1ms", "10ms", "100ms", "500ms", "1s", "3s", "5s", "15s", "30s", "1m", "2m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"};
+        int selected_timeframe2 = static_cast<int>(config_.timeframe);
+        if (ImGui::Combo("Timeframe", &selected_timeframe2, timeframes2, IM_ARRAYSIZE(timeframes2))) {
+            config_.timeframe = static_cast<RenderEngine::TimeFrame>(selected_timeframe2);
+        }
+
+        if (ImGui::Button("Load from Market Data")) {
+            stop_replay();
+            reset_replay();
+
+            // Attempt to load from market data processor
+            if (load_from_market_data_processor(symbol_id_input, config_.timeframe, start_time_input2, end_time_input2)) {
+                std::cout << "Historical data loaded from market data processor successfully!" << std::endl;
+
+                // Update config with loaded parameters
+                config_.symbol_name = std::string(symbol_buffer2);
+            } else {
+                std::cerr << "Failed to load historical data from market data processor!" << std::endl;
+            }
+        }
+    }
+}
+
+bool ChartReplay::load_from_market_data_processor(uint32_t symbol_id, RenderEngine::TimeFrame timeframe,
+                                                 uint64_t start_time, uint64_t end_time) {
+    if (!processor_) {
+        std::cerr << "Market data processor not available!" << std::endl;
+        return false;
+    }
+
+    historical_candles_.clear();
+
+    try {
+        // Get historical candles from the market data processor
+        auto candles = processor_->getCandles(symbol_id, timeframe);
+
+        // Filter candles by time range if specified
+        for (const auto& candle : candles) {
+            if ((start_time == 0 || candle.timestamp >= start_time) &&
+                (end_time == 0 || candle.timestamp <= end_time)) {
+                historical_candles_.push_back(candle);
+            }
+        }
+
+        std::cout << "Loaded " << historical_candles_.size() << " historical candles from market data processor." << std::endl;
+
+        // Reset to beginning
+        current_bar_index_ = 0;
+        if (!historical_candles_.empty()) {
+            current_time_ = historical_candles_[0].timestamp;
+        }
+
+        // Update metrics
+        update_performance_metrics();
+
+        return !historical_candles_.empty();
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading data from market data processor: " << e.what() << std::endl;
+        return false;
     }
 }
 

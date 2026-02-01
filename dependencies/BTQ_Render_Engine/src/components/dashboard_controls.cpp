@@ -59,6 +59,9 @@ void DashboardControls::render_dashboard_controls() {
         show_exchange_selector = !show_exchange_selector;
       }
 
+      // Store the button position for the popup
+      ImVec2 button_pos = ImGui::GetItemRectMin(); // Get top-left corner of the button
+
       // Update preview text to show selected exchanges
       std::string preview_text = "";
       int selected_count = 0;
@@ -84,8 +87,10 @@ void DashboardControls::render_dashboard_controls() {
 
       // Show exchange selection popup
       if (show_exchange_selector) {
-        ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos());
-        ImGui::SetNextWindowSize(ImVec2(200, 300));
+        // Position the popup near the button
+        ImVec2 window_pos = ImVec2(button_pos.x, button_pos.y + ImGui::GetItemRectSize().y); // Position directly below the button
+        ImGui::SetNextWindowPos(window_pos);
+        ImGui::SetNextWindowSize(ImVec2(250, 300));
 
         if (ImGui::Begin("Exchange Selector", &show_exchange_selector,
                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -102,26 +107,57 @@ void DashboardControls::render_dashboard_controls() {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 0);
             any_changes = true;
           }
+          ImGui::SameLine();
+          if (ImGui::Button("Apply")) {
+            show_exchange_selector = false;
+            needs_refresh_ = true; // Refresh symbols when exchange selection changes
+          }
 
           ImGui::Separator();
 
-          // Individual exchange checkboxes
+          // Individual exchange checkboxes with scrollable area
+          ImGui::BeginChild("ExchangeList", ImVec2(0, 200), true);
+
           for (size_t i = 0; i < all_exchanges_.size(); ++i) {
             bool temp_selected = selected_exchanges_[i] != 0;
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
               selected_exchanges_[i] = temp_selected ? 1 : 0;
               any_changes = true;
             }
+
+            // Add a small indent to show hierarchy if needed in the future
+            // ImGui::Indent(20.0f);
           }
 
+          ImGui::EndChild();
+
           if (any_changes) {
-            needs_refresh_ = true; // Refresh symbols when exchange selection changes
+            // Update preview text immediately when changes occur
+            std::string updated_preview_text = "";
+            int updated_selected_count = 0;
+            for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+              if (selected_exchanges_[i]) {
+                if (updated_selected_count > 0) updated_preview_text += ", ";
+                updated_preview_text += all_exchanges_[i];
+                updated_selected_count++;
+              }
+            }
+
+            if (updated_selected_count == 0) {
+              strcpy(exchange_preview, "No Exchanges Selected");
+            } else if (updated_selected_count == static_cast<int>(all_exchanges_.size())) {
+              strcpy(exchange_preview, "All Exchanges");
+            } else {
+              strncpy(exchange_preview, updated_preview_text.c_str(), sizeof(exchange_preview) - 1);
+              exchange_preview[sizeof(exchange_preview) - 1] = '\0';
+            }
           }
 
           ImGui::End();
         } else {
-          // Window was closed, so set the flag to false
+          // Window was closed (by clicking outside), so set the flag to false and refresh
           show_exchange_selector = false;
+          needs_refresh_ = true; // Refresh symbols when exchange selection changes
         }
       }
     }

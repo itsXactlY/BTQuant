@@ -23,7 +23,7 @@ public:
     ~LayoutManager();
 
     // Save current panel arrangement as named preset
-    bool save_current_layout_as_preset(const std::string& preset_name, 
+    bool save_current_layout_as_preset(const std::string& preset_name,
                                       const std::string& description = "",
                                       const std::string& category = "Custom");
 
@@ -45,6 +45,7 @@ public:
 
 private:
     std::unique_ptr<Layout::LayoutPresetManager> preset_manager_;
+    std::unique_ptr<Layout::DashboardLayoutManager> dashboard_layout_manager_;
     std::string presets_directory_;
 
     void initialize_presets_directory();

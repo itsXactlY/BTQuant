@@ -3,6 +3,21 @@
 #include <vector>
 #include <cstdint>
 
+// Define OHLCVCandle structure here to avoid dependency issues
+namespace BTQuant {
+namespace RenderEngine {
+    struct OHLCVCandle {
+        uint64_t timestamp;  // Start time of the candle in microseconds
+        double open;
+        double high;
+        double low;
+        double close;
+        double volume;
+        uint64_t trade_count;
+    };
+}
+}
+
 namespace btq {
 
 /**
@@ -44,6 +59,9 @@ public:
     
     // Get the count of stored values
     size_t size() const;
+
+    // Calculate VWAP from anchor point forward using OHLCV bars
+    void calculate(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& bars);
 
 private:
     uint64_t anchorTimestamp_;

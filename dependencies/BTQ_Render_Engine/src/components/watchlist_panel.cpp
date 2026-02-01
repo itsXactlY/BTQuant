@@ -318,7 +318,7 @@ void WatchlistPanel::render() {
   // Add tooltip to explain the button
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
-    ImGui::Text("Add the symbol entered above to the watchlist");
+    ImGui::Text("Add the symbol entered above to the %s watchlist", current_group_name_.c_str());
     ImGui::EndTooltip();
   }
 
@@ -344,7 +344,7 @@ void WatchlistPanel::render() {
   // Add tooltip to explain the clear all button
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
-    ImGui::Text("Remove all symbols from watchlist");
+    ImGui::Text("Remove all symbols from the %s watchlist", current_group_name_.c_str());
     ImGui::EndTooltip();
   }
 

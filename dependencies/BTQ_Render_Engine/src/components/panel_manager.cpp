@@ -129,7 +129,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get());
+      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
@@ -184,6 +184,10 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     }
     case PanelType::TIME_AND_SALES: {
       panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      break;
+    }
+    case PanelType::HISTORICAL_TIME_SALES: {
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -286,7 +290,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get());
+      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
@@ -304,6 +308,10 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::TIME_AND_SALES: {
       panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      break;
+    }
+    case PanelType::HISTORICAL_TIME_SALES: {
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -393,6 +401,20 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   }
 
   return panel_id;
+}
+
+uint32_t PanelManager::find_panel_by_type(PanelType type) const {
+  for (const auto& [id, panel] : panels_) {
+    if (panel->get_config().type == type) {
+      return id;
+    }
+  }
+  return 0; // Return 0 if no panel of the specified type is found
+}
+
+PanelBase* PanelManager::get_panel_by_id(uint32_t panel_id) const {
+  auto it = panels_.find(panel_id);
+  return it != panels_.end() ? it->second.get() : nullptr;
 }
 
 void PanelManager::remove_panel(uint32_t panel_id) {

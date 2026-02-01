@@ -13,6 +13,7 @@
 #include "panel_base.hpp"
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
+#include "panel_manager.hpp"
 
 namespace BTQuant {
 
@@ -66,7 +67,8 @@ class ChartPanel : public PanelBase {
 
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-             ChartManager* chart_manager);
+             ChartManager* chart_manager,
+             PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
   void render() override;
@@ -157,6 +159,9 @@ class ChartPanel : public PanelBase {
 
   // Callback for showing historical trades
   std::function<void(uint64_t, uint64_t)> on_show_historical_trades_;
+
+  // Pointer to panel manager for creating new panels
+  PanelManager* panel_manager_ = nullptr;
 
   // Accessors for view range (needed for synchronization)
   friend class PanelManager; // Allow PanelManager to access private members for synchronization

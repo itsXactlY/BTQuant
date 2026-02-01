@@ -43,8 +43,9 @@ static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
 
 ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                       ChartManager* chart_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager) {
+                       ChartManager* chart_manager,
+                       PanelManager* panel_manager)
+    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
 }
 
@@ -1412,8 +1413,26 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
   if (ImGui::BeginPopup("ChartContextMenu")) {
     if (ImGui::MenuItem("Show Trades for Bar")) {
       // Create or show the HistoricalTimeSalesPanel with trades for the clicked bar
-      if (on_show_historical_trades_) {
-        on_show_historical_trades_(clicked_bar_start_time_, clicked_bar_end_time_);
+      if (panel_manager_) {
+        // Check if we already have a HistoricalTimeSales panel, if not create one
+        uint32_t historical_panel_id = panel_manager_->find_panel_by_type(PanelType::HISTORICAL_TIME_SALES);
+
+        // If no existing panel found, create a new one
+        if (historical_panel_id == 0) {
+          historical_panel_id = panel_manager_->add_panel(PanelType::HISTORICAL_TIME_SALES, "Historical Time & Sales", 0, 0, 1, 1);
+        }
+
+        // Get the panel and set the trades for the time range
+        if (auto* panel = panel_manager_->get_panel_by_id(historical_panel_id)) {
+          if (auto* historical_panel = dynamic_cast<HistoricalTimeSalesPanel*>(panel)) {
+            // Get the symbol ID for the current chart
+            auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+            if (symbol_id_opt) {
+              historical_panel->set_symbol(*symbol_id_opt, symbol_);
+              historical_panel->set_trades_for_time_range(clicked_bar_start_time_, clicked_bar_end_time_);
+            }
+          }
+        }
       }
     }
 

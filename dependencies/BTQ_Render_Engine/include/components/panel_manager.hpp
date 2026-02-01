@@ -80,6 +80,12 @@ class PanelManager {
   PanelConfig get_panel_config(uint32_t panel_id) const;
   void update_panel_config(uint32_t panel_id, const PanelConfig& config);
 
+  // Find panel by type
+  uint32_t find_panel_by_type(PanelType type) const;
+
+  // Get panel by ID
+  PanelBase* get_panel_by_id(uint32_t panel_id) const;
+
   // Serialization
   std::string serialize_layout() const;
   void deserialize_layout(const std::string& layout_json);

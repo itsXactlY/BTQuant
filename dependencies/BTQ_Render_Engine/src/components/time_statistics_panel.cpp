@@ -175,20 +175,52 @@ void TimeStatisticsPanel::render() {
             }
 
             // Render data rows
-            for (const auto& entry : m_data) {
+            for (size_t rowIndex = 0; rowIndex < m_data.size(); ++rowIndex) {
+                const auto& entry = m_data[rowIndex];
+
                 ImGui::TableNextRow();
+
+                // Create a unique ID for this row to properly handle selection
+                ImGui::PushID(static_cast<int>(rowIndex));
 
                 int tableColIndex = 0; // Index for visible columns in the table
 
-                // Time column
+                // Time column - we'll use a selectable to enable hover highlighting and double-click detection
                 if (m_columns[0].second) {
                     ImGui::TableSetColumnIndex(tableColIndex++);
+
                     // Convert timestamp from microseconds to time
                     time_t time_sec = entry.timestamp / 1000000; // Convert microseconds to seconds
                     std::tm* tm_info = std::localtime(&time_sec);
                     char buffer[20]; // Buffer for HH:MM:SS format
                     std::strftime(buffer, sizeof(buffer), "%H:%M:%S", tm_info);
-                    ImGui::Text("%s", buffer);
+
+                    // Use Selectable to enable hover effects and double-click detection
+                    bool is_selected = false; // We don't actually maintain selection state
+                    if (ImGui::Selectable(buffer, is_selected,
+                                          ImGuiSelectableFlags_SpanAllColumns |
+                                          ImGuiSelectableFlags_AllowDoubleClick)) {
+                        // Check if this was a double-click
+                        if (ImGui::IsMouseDoubleClicked(0) && on_row_double_clicked_) {
+                            // Call the callback with the timestamp
+                            on_row_double_clicked_(entry.timestamp);
+                        }
+                    }
+                } else {
+                    // If time column is hidden, we still need to set the column index for other columns
+                    ImGui::TableSetColumnIndex(tableColIndex++);
+
+                    // Still need to handle row selection for other columns
+                    // Use an invisible selectable to capture row clicks
+                    if (ImGui::Selectable("##invisible", false,
+                                          ImGuiSelectableFlags_SpanAllColumns |
+                                          ImGuiSelectableFlags_AllowDoubleClick)) {
+                        // Check if this was a double-click
+                        if (ImGui::IsMouseDoubleClicked(0) && on_row_double_clicked_) {
+                            // Call the callback with the timestamp
+                            on_row_double_clicked_(entry.timestamp);
+                        }
+                    }
                 }
 
                 // Open column
@@ -256,6 +288,9 @@ void TimeStatisticsPanel::render() {
                     ImGui::TableSetColumnIndex(tableColIndex++);
                     ImGui::Text("--"); // Placeholder since not available
                 }
+
+                // Pop the ID we pushed earlier
+                ImGui::PopID();
             }
 
             ImGui::EndTable();

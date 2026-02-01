@@ -70,6 +70,9 @@ class ChartPanel : public PanelBase {
   void set_timeframe(RenderEngine::TimeFrame timeframe);
   uint32_t get_chart_id() const { return chart_id_; }
 
+  // Method to center the chart on a specific timestamp
+  void center_on_timestamp(uint64_t timestamp);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

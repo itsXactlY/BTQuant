@@ -4,9 +4,9 @@
 #include <memory>
 #include <vector>
 
+#include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
+#include "../data/unified_data_pipeline.hpp"  // For DataType enum
 #include "MarketMicrostructureRenderer.h"
-#include "data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
-#include "data/unified_data_pipeline.hpp"  // For DataType enum
 #include "panel_base.hpp"
 
 namespace BTQuant {

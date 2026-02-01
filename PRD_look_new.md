@@ -69,23 +69,23 @@
 
 ### Phase 3a: Profile Types [Complexity: M]
 - [x] Add ProfileMode enum to volume_profile_panel.hpp: Step, Right, Left, Custom with ProfileSettings struct containing: vaPercent (default 70.0), tickStep, showPOC, showValueArea, colorScheme in `dependencies/BTQ_Render_Engine/include/components/volume_profile_panel.hpp` [Complexity: S]
-- [ ] Implement Step Profile rendering: draw mini histogram overlay on each candlestick bar showing volume distribution for that bar's price range in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Calculate and render POC (Point of Control) line for each bar in Step Profile mode: horizontal yellow line at price with highest volume in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
-- [ ] Implement Right Profile: aggregate all visible trades into single histogram anchored to right edge of chart, use horizontal bars extending left in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Implement Left Profile: same as Right but anchored to left edge, bars extending right in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Implement Step Profile rendering: draw mini histogram overlay on each candlestick bar showing volume distribution for that bar's price range in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Calculate and render POC (Point of Control) line for each bar in Step Profile mode: horizontal yellow line at price with highest volume in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
+- [x] Implement Right Profile: aggregate all visible trades into single histogram anchored to right edge of chart, use horizontal bars extending left in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Implement Left Profile: same as Right but anchored to left edge, bars extending right in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
 
 ### Phase 3b: Value Area & Advanced Features [Complexity: M]
-- [ ] Calculate Value Area (VA) for Right/Left profiles: find price range containing 70% of total volume centered around POC, shade this zone with semi-transparent overlay in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Render Value Area High (VAH) and Value Area Low (VAL) horizontal lines with labels in Right/Left profile modes in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
-- [ ] Implement split bar rendering in profiles: buy volume on left (green), sell volume on right (red), separated by vertical line at center in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Add profile statistics panel showing: POC price, VAH price, VAL price, total volume in value area, percentage of volume above POC in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Calculate Value Area (VA) for Right/Left profiles: find price range containing 70% of total volume centered around POC, shade this zone with semi-transparent overlay in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Render Value Area High (VAH) and Value Area Low (VAL) horizontal lines with labels in Right/Left profile modes in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
+- [x] Implement split bar rendering in profiles: buy volume on left (green), sell volume on right (red), separated by vertical line at center in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Add profile statistics panel showing: POC price, VAH price, VAL price, total volume in value area, percentage of volume above POC in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
 
 ### Phase 3c: Custom & Comparison Features [Complexity: M]
-- [ ] Implement Custom Profile with mouse drag interaction: user drags from time A to time B, system calculates and renders profile for that specific range in `dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp` [Complexity: M]
-- [ ] Add profile anchor markers for Custom Profile: vertical lines at start/end times with drag handles for adjusting range in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
-- [ ] Implement profile comparison overlay: show today's profile in full opacity, yesterday's profile in 30% opacity, highlight zones where profiles diverge significantly in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Add session profile mode: automatic reset at session boundaries (00:00 UTC, market open/close times), show separate profiles per session in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
-- [ ] Implement composite profile: aggregate multiple days into single profile showing typical price distribution patterns in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Implement Custom Profile with mouse drag interaction: user drags from time A to time B, system calculates and renders profile for that specific range in `dependencies/BTQ_Render_Engine/src/components/interaction_manager.cpp` [Complexity: M]
+- [x] Add profile anchor markers for Custom Profile: vertical lines at start/end times with drag handles for adjusting range in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: S]
+- [x] Implement profile comparison overlay: show today's profile in full opacity, yesterday's profile in 30% opacity, highlight zones where profiles diverge significantly in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Add session profile mode: automatic reset at session boundaries (00:00 UTC, market open/close times), show separate profiles per session in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
+- [x] Implement composite profile: aggregate multiple days into single profile showing typical price distribution patterns in `dependencies/BTQ_Render_Engine/src/components/volume_profile_panel.cpp` [Complexity: M]
 
 ---
 
@@ -94,8 +94,8 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 4a: Time Statistics [Complexity: M]
-- [ ] Create TimeStatistics panel with ImGui table showing columns: Time, Open, High, Low, Close, Volume, BuyVolume, SellVolume, Delta, Trades, AvgSize, MaxTrade, dynamically show/hide columns based on user selection in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
-- [ ] Implement sortable columns in TimeStatistics table: click column header to sort ascending/descending by that metric in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
+- [x] Create TimeStatistics panel with ImGui table showing columns: Time, Open, High, Low, Close, Volume, BuyVolume, SellVolume, Delta, Trades, AvgSize, MaxTrade, dynamically show/hide columns based on user selection in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
+- [x] Implement sortable columns in TimeStatistics table: click column header to sort ascending/descending by that metric in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
 - [ ] Add row highlighting in TimeStatistics: highlight row on hover, double-click row to center chart on that time bar in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]
 - [ ] Implement synchronized scrolling: scrolling TimeStatistics table scrolls chart panel to corresponding time range and vice versa in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: M]
 - [ ] Add color coding in TimeStatistics: green text for positive delta, red for negative, yellow for extreme values (>3 standard deviations) in `dependencies/BTQ_Render_Engine/src/components/time_statistics_panel.cpp` [Complexity: S]

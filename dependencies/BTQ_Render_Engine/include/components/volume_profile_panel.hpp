@@ -13,7 +13,7 @@
 namespace BTQuant {
 
 // Enum for profile mode
-enum class ProfileMode { Step, Right, Left, Custom };
+enum class ProfileMode { Step, Right, Left, Custom, Session, Composite };
 
 // Struct for profile settings
 struct ProfileSettings {
@@ -170,6 +170,11 @@ class VolumeProfilePanel : public PanelBase {
   void renderCustomProfileOverlay(ImDrawList* draw_list);
   void calculateProfileForTimeRange(double start_time, double end_time);
 
+  // Helper methods for time range calculations
+  double getMinTimeAvailable();
+  double getMaxTimeAvailable();
+  double getTimeRangeAvailable();
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -185,11 +190,60 @@ class VolumeProfilePanel : public PanelBase {
     double total_volume;
   };
 
+  // Session profile data
+  struct SessionInfo {
+    double start_time;
+    double end_time;
+    std::string session_name;
+
+    SessionInfo(double start, double end, const std::string& name)
+        : start_time(start), end_time(end), session_name(name) {}
+  };
+
+  struct SessionProfile {
+    std::vector<VolumeLevel> volume_profile;
+    double poc_price = 0.0;
+    double max_volume = 0.0;
+    double vah_price = 0.0;
+    double val_price = 0.0;
+    double start_time = 0.0;
+    double end_time = 0.0;
+    std::string session_name;
+
+    SessionProfile(const std::string& name = "") : session_name(name) {}
+  };
+
   std::vector<VolumeLevel> volume_profile_;
+  std::vector<VolumeLevel> yesterday_volume_profile_;  // Yesterday's profile for comparison overlay
+  std::vector<SessionProfile> session_profiles_;       // Multiple session profiles
+
+  // Data structures for composite profile (aggregated multiple days)
+  struct DailyVolumeProfile {
+    std::vector<VolumeLevel> daily_profile;
+    double poc_price = 0.0;
+    double max_volume = 0.0;
+    double vah_price = 0.0;
+    double val_price = 0.0;
+    time_t date = 0;  // Date of this profile (for identification)
+
+    DailyVolumeProfile(time_t d) : date(d) {}
+  };
+
+  std::vector<DailyVolumeProfile> daily_profiles_;     // Individual daily profiles for composite aggregation
+  std::vector<VolumeLevel> composite_volume_profile_;  // Aggregated composite profile
+  double composite_poc_price_ = 0.0;   // Composite Point of Control (highest volume price)
+  double composite_max_volume_ = 0.0;  // Composite max volume for scaling
+  double composite_vah_price_ = 0.0;   // Composite Value Area High
+  double composite_val_price_ = 0.0;   // Composite Value Area Low
+
   double poc_price_ = 0.0;   // Point of Control (highest volume price)
   double max_volume_ = 0.0;  // For scaling bars
   double vah_price_ = 0.0;   // Value Area High
   double val_price_ = 0.0;   // Value Area Low
+  double yesterday_poc_price_ = 0.0;   // Yesterday's Point of Control
+  double yesterday_max_volume_ = 0.0;  // Yesterday's max volume for scaling
+  double yesterday_vah_price_ = 0.0;   // Yesterday's Value Area High
+  double yesterday_val_price_ = 0.0;   // Yesterday's Value Area Low
 
   // Configuration
   static constexpr size_t NUM_PRICE_LEVELS = 20;
@@ -206,6 +260,17 @@ class VolumeProfilePanel : public PanelBase {
   bool start_time_drag_active_ = false; // Whether start time drag handle is active
   bool end_time_drag_active_ = false;   // Whether end time drag handle is active
 
+  // Session profile settings
+  bool use_session_boundaries_ = true;  // Whether to use session boundaries for profile reset
+  std::vector<SessionInfo> predefined_sessions_; // Predefined trading sessions
+  int current_session_index_ = -1;      // Index of currently displayed session
+  bool auto_detect_session_boundaries_ = true; // Whether to auto-detect session boundaries
+
+  // Composite profile settings
+  bool use_composite_profile_ = false;  // Whether to use composite profile mode
+  int composite_days_count_ = 5;        // Number of days to include in composite profile
+  bool auto_update_composite_ = true;   // Whether to automatically update composite profile
+
   void build_volume_profile();
   void render_volume_bars();
   void render_controls();
@@ -213,7 +278,32 @@ class VolumeProfilePanel : public PanelBase {
                            double height);
   void render_split_profile(const double* xs, const double* buy_vols, const double* sell_vols,
                            int count, double height);
+  void render_yesterday_step_profile(const double* xs, const double* ys, const double* neg_ys,
+                                   int count, double height, float opacity);
+  void render_yesterday_split_profile(const double* xs, const double* buy_vols, const double* sell_vols,
+                                   int count, double height, float opacity);
+  void highlight_profile_divergence(ImDrawList* draw_list);  // Highlight zones where profiles diverge significantly
   void calculate_value_area();
+  void calculate_value_area_for_session(SessionProfile& session); // Calculate value area for a specific session profile
+  void store_current_as_yesterday_profile();  // Store current profile as yesterday's profile
+  void calculate_yesterday_value_area();      // Calculate value area for yesterday's profile
+
+  // Composite profile methods
+  void build_composite_profile();             // Build composite profile from multiple days
+  void add_daily_profile(const std::vector<VolumeLevel>& daily_profile, time_t date); // Add daily profile to composite
+  void calculate_composite_value_area();      // Calculate value area for composite profile
+  time_t get_date_from_timestamp(double timestamp); // Extract date from timestamp
+  void clear_daily_profiles();                // Clear all daily profiles
+  void update_composite_profile();            // Update composite profile based on current settings
+
+  // Session profile methods
+  void initialize_predefined_sessions();      // Initialize predefined trading sessions
+  int get_session_index_for_timestamp(double timestamp); // Get session index for a given timestamp
+  bool is_new_session_boundary(double current_timestamp, double previous_timestamp); // Check if new session boundary
+  void create_new_session_profile(double start_time, double end_time, const std::string& session_name); // Create new session profile
+  void switch_to_session(int session_index);  // Switch to a specific session profile
+  void reset_session_profiles();              // Reset all session profiles
+  void detect_and_handle_session_boundaries(); // Detect and handle session boundaries
 
   // Subscribe to processor notifications
   void subscribe_to_updates();

@@ -194,9 +194,21 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
-    case PanelType::TIME_STATISTICS:
-      panel = std::make_unique<TimeStatisticsPanel>(config);
+    case PanelType::TIME_STATISTICS: {
+      auto time_stats = std::make_unique<TimeStatisticsPanel>(config);
+      time_stats->set_row_double_clicked_callback([this](uint64_t timestamp) {
+        // Find the active chart panel and center it on the clicked timestamp
+        for (auto& [id, panel] : panels_) {
+          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+            // Center the chart on the clicked timestamp
+            chart_panel->center_on_timestamp(timestamp);
+            break; // Assuming we want to center the first chart panel we find
+          }
+        }
+      });
+      panel = std::move(time_stats);
       break;
+    }
     default:
       return 0;
   }
@@ -296,9 +308,21 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
     case PanelType::LOG_PANEL:
       panel = std::make_unique<LogPanel>(config);
       break;
-    case PanelType::TIME_STATISTICS:
-      panel = std::make_unique<TimeStatisticsPanel>(config);
+    case PanelType::TIME_STATISTICS: {
+      auto time_stats = std::make_unique<TimeStatisticsPanel>(config);
+      time_stats->set_row_double_clicked_callback([this](uint64_t timestamp) {
+        // Find the active chart panel and center it on the clicked timestamp
+        for (auto& [id, panel] : panels_) {
+          if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
+            // Center the chart on the clicked timestamp
+            chart_panel->center_on_timestamp(timestamp);
+            break; // Assuming we want to center the first chart panel we find
+          }
+        }
+      });
+      panel = std::move(time_stats);
       break;
+    }
     default:
       return 0;
   }

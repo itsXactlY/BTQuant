@@ -8,9 +8,9 @@
 
 #include "../../include/analytics/cluster_engine.hpp"
 #include "../../include/market_data_processor.hpp"
+#include "../data/VolumeDataTypes.h"
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
-#include "data/VolumeDataTypes.h"
 #include "hotspine_data_bridge.hpp"
 #include "trading/HotspineData.h"
 

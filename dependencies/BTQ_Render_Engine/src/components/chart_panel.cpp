@@ -1328,4 +1328,16 @@ void ChartPanel::handleMouseDragInteraction() {
   }
 }
 
+void ChartPanel::center_on_timestamp(uint64_t timestamp) {
+  // Convert the timestamp to the format used by the chart (seconds since epoch)
+  double timestamp_seconds = static_cast<double>(timestamp) / 1000000.0; // Convert microseconds to seconds
+
+  // Store the target timestamp to be used in the next render cycle
+  // We can't directly set the plot limits from outside BeginPlot/EndPlot
+  // So we'll store it and apply it during the next render
+  last_view_min_ = timestamp_seconds - 10.0; // 10 seconds before
+  last_view_max_ = timestamp_seconds + 10.0; // 10 seconds after
+  follow_latest_ = false; // Disable auto-follow to keep the view centered
+}
+
 }  // namespace BTQuant

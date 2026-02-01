@@ -8,9 +8,9 @@
 #include <mutex>
 #include <vector>
 
-#include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
+#include "../../../../dependencies/ccapi/example/src/market_data_collector/market_data_types.h"
+#include "../data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
 #include "../hotspine_layout_v3.hpp"
-#include "data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
 
 namespace Analytics {
 

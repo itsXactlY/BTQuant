@@ -6,16 +6,24 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <functional>
 
 namespace BTQuant {
 
 class TimeStatisticsPanel : public PanelBase {
 public:
+    using RowDoubleClickedCallback = std::function<void(uint64_t timestamp)>;
+
     TimeStatisticsPanel(const PanelConfig& config);
     ~TimeStatisticsPanel() override = default;
 
     void render() override;
     void updateData(const std::vector<BTQuant::RenderEngine::OHLCVCandle>& data);
+
+    // Set callback for when a row is double-clicked
+    void set_row_double_clicked_callback(RowDoubleClickedCallback callback) {
+        on_row_double_clicked_ = std::move(callback);
+    }
 
 private:
     void renderColumnSelectionPopup();
@@ -51,6 +59,9 @@ private:
     // Sorting state
     int m_sortColumnIndex = -1;
     bool m_isSortAscending = true;
+
+    // Callback for double-clicked row
+    RowDoubleClickedCallback on_row_double_clicked_;
 };
 
 } // namespace BTQuant

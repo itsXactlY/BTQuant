@@ -42,6 +42,10 @@ class DashboardControls : public UIComponent {
   int selected_symbol_idx_ = -1;              // Selected symbol index
   bool symbols_loaded_ = false;               // Flag to indicate if symbols are loaded
   bool needs_refresh_ = true;                 // Flag to indicate refresh needed
+  bool fetch_symbols_from_api_ = false;       // Flag to indicate fetching from exchange API
+
+  // Methods for exchange API integration
+  void fetch_symbols_from_exchange_api();
 };
 
 }  // namespace BTQuant

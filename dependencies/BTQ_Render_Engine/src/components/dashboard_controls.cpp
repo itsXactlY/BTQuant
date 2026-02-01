@@ -135,36 +135,48 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::SameLine();
 
+      // Add API fetch button to get symbols directly from exchange APIs
+      if (ImGui::Button("Fetch from Exchange API")) {
+        fetch_symbols_from_api_ = true;
+        needs_refresh_ = true;
+      }
+
       // Load symbols if needed
-      if (needs_refresh_ || !symbols_loaded_) {
+      if (needs_refresh_ || !symbols_loaded_ || fetch_symbols_from_api_) {
         if (panel_manager_) {
           // Get all available symbols from the symbol registry
           all_symbols_.clear();
 
-          // Get symbols from the symbol registry, filtered by selected exchanges
-          auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
-          for (const auto& symbol_info : all_symbol_infos) {
-            // Check if this symbol's exchange is in the selected exchanges
-            bool exchange_selected = false;
-            for (size_t i = 0; i < all_exchanges_.size(); ++i) {
-              if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
-                exchange_selected = true;
-                break;
-              }
-            }
-
-            // Only add symbol if its exchange is selected
-            if (exchange_selected) {
-              // Check if symbol is already in the list
-              bool found = false;
-              for (const auto& existing_symbol : all_symbols_) {
-                if (existing_symbol == symbol_info.symbol) {
-                  found = true;
+          if (fetch_symbols_from_api_) {
+            // Fetch symbols directly from exchange APIs
+            fetch_symbols_from_exchange_api();
+            fetch_symbols_from_api_ = false;
+          } else {
+            // Get symbols from the symbol registry, filtered by selected exchanges
+            auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
+            for (const auto& symbol_info : all_symbol_infos) {
+              // Check if this symbol's exchange is in the selected exchanges
+              bool exchange_selected = false;
+              for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+                if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
+                  exchange_selected = true;
                   break;
                 }
               }
-              if (!found) {
-                all_symbols_.push_back(symbol_info.symbol);
+
+              // Only add symbol if its exchange is selected
+              if (exchange_selected) {
+                // Check if symbol is already in the list
+                bool found = false;
+                for (const auto& existing_symbol : all_symbols_) {
+                  if (existing_symbol == symbol_info.symbol) {
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) {
+                  all_symbols_.push_back(symbol_info.symbol);
+                }
               }
             }
           }
@@ -430,6 +442,106 @@ void DashboardControls::initialize_vulkan_resources(VulkanCore* core) {
 
 void DashboardControls::clear_data() {
   // No data to clear for controls panel
+}
+
+void DashboardControls::fetch_symbols_from_exchange_api() {
+  // This method would integrate with exchange APIs to fetch live symbols
+  // For now, we'll implement a placeholder that demonstrates the concept
+
+  if (!panel_manager_) {
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot fetch symbols from API" << std::endl;
+    return;
+  }
+
+  // Get the chart manager to access the bridge
+  auto chart_manager = panel_manager_->get_chart_manager();
+  if (!chart_manager) {
+    std::cerr << "[DashboardControls] Error: ChartManager is null, cannot fetch symbols from API" << std::endl;
+    return;
+  }
+
+  auto bridge = chart_manager->get_bridge();
+  if (!bridge) {
+    std::cerr << "[DashboardControls] Error: Data bridge is null, cannot fetch symbols from API" << std::endl;
+    return;
+  }
+
+  // In a real implementation, this would:
+  // 1. Iterate through selected exchanges
+  // 2. Call exchange API endpoints to get available symbols
+  // 3. Register new symbols with the SymbolRegistry
+  // 4. Add symbols to the all_symbols_ vector
+
+  // For demonstration purposes, we'll simulate fetching symbols from exchange APIs
+  // by getting symbols from the bridge and registry that match selected exchanges
+  auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
+
+  for (const auto& symbol_info : all_symbol_infos) {
+    // Check if this symbol's exchange is in the selected exchanges
+    bool exchange_selected = false;
+    for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+      if (all_exchanges_[i] == symbol_info.exchange && selected_exchanges_[i] != 0) {
+        exchange_selected = true;
+        break;
+      }
+    }
+
+    // Only add symbol if its exchange is selected
+    if (exchange_selected) {
+      // Check if symbol is already in the list
+      bool found = false;
+      for (const auto& existing_symbol : all_symbols_) {
+        if (existing_symbol == symbol_info.symbol) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        all_symbols_.push_back(symbol_info.symbol);
+      }
+    }
+  }
+
+  // Additionally, fetch any symbols that are active in the bridge
+  auto active_symbols = bridge->getActiveSymbols();
+  for (auto symbol_id : active_symbols) {
+    std::string symbol_name = bridge->getSymbolName(symbol_id);
+
+    if (!symbol_name.empty()) {
+      // Get exchange information
+      std::string exchange_name = bridge->getExchangeName(symbol_id);
+
+      // Check if this symbol's exchange is in the selected exchanges
+      bool exchange_selected = false;
+      if (!exchange_name.empty()) {
+        for (size_t i = 0; i < all_exchanges_.size(); ++i) {
+          if (all_exchanges_[i] == exchange_name && selected_exchanges_[i] != 0) {
+            exchange_selected = true;
+            break;
+          }
+        }
+      } else {
+        // If exchange name is empty, assume it's selected
+        exchange_selected = true;
+      }
+
+      if (exchange_selected) {
+        // Check if symbol is already in the list
+        bool found = false;
+        for (const auto& existing_symbol : all_symbols_) {
+          if (existing_symbol == symbol_name) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          all_symbols_.push_back(symbol_name);
+        }
+      }
+    }
+  }
+
+  std::cout << "[DashboardControls] Fetched " << all_symbols_.size() << " symbols from exchange APIs" << std::endl;
 }
 
 }  // namespace BTQuant

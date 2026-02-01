@@ -1468,47 +1468,102 @@ void ChartPanel::render_anchored_vwap_overlay(const ChartInstance& chart) {
       continue; // Anchor timestamp not found in current chart data
     }
 
-    // Render the VWAP line
+    // Render the VWAP line as a smooth polyline with anti-aliasing
     if (vwap_values.size() > 1) {
-      for (size_t i = 1; i < vwap_values.size() && (start_idx + i) < chart.dates.size(); ++i) {
-        ImVec2 p1 = ImPlot::PlotToPixels(chart.dates[start_idx + i - 1], vwap_values[i - 1]);
-        ImVec2 p2 = ImPlot::PlotToPixels(chart.dates[start_idx + i], vwap_values[i]);
+      // Prepare points for polyline
+      std::vector<ImVec2> points;
+      points.reserve(vwap_values.size());
 
-        // Draw the VWAP line in yellow
-        draw_list->AddLine(p1, p2, IM_COL32(255, 255, 0, 255), 2.0f);
+      for (size_t i = 0; i < vwap_values.size() && (start_idx + i) < chart.dates.size(); ++i) {
+        ImVec2 point = ImPlot::PlotToPixels(chart.dates[start_idx + i], vwap_values[i]);
+        points.push_back(point);
+      }
+
+      if (points.size() > 1) {
+        // Draw the VWAP line as a smooth polyline in yellow with anti-aliasing
+        draw_list->AddPolyline(points.data(), static_cast<int>(points.size()),
+                              IM_COL32(255, 255, 0, 255), ImDrawListFlags_AntiAliasedLines, 2.0f);
       }
     }
 
-    // Render SD1 bands as semi-transparent filled region
+    // Render SD1 bands as smooth polylines with anti-aliasing
     if (sd1_upper.size() > 1 && sd1_lower.size() > 1) {
+      // Prepare points for upper and lower bands
+      std::vector<ImVec2> upper_points, lower_points;
+      upper_points.reserve(sd1_upper.size());
+      lower_points.reserve(sd1_lower.size());
+
       for (size_t i = 0; i < sd1_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_upper[i]);
         ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd1_lower[i]);
+        upper_points.push_back(upper_point);
+        lower_points.push_back(lower_point);
+      }
 
-        // Draw vertical lines between upper and lower bands
-        draw_list->AddLine(upper_point, lower_point, IM_COL32(255, 255, 0, 100), 1.0f);
+      // Draw upper band
+      if (upper_points.size() > 1) {
+        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
+                              IM_COL32(255, 255, 0, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      }
+
+      // Draw lower band
+      if (lower_points.size() > 1) {
+        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
+                              IM_COL32(255, 255, 0, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
       }
     }
 
     // Render SD2 bands
     if (sd2_upper.size() > 1 && sd2_lower.size() > 1) {
+      // Prepare points for upper and lower bands
+      std::vector<ImVec2> upper_points, lower_points;
+      upper_points.reserve(sd2_upper.size());
+      lower_points.reserve(sd2_lower.size());
+
       for (size_t i = 0; i < sd2_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_upper[i]);
         ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd2_lower[i]);
+        upper_points.push_back(upper_point);
+        lower_points.push_back(lower_point);
+      }
 
-        // Draw vertical lines between upper and lower bands
-        draw_list->AddLine(upper_point, lower_point, IM_COL32(0, 255, 255, 100), 1.0f);
+      // Draw upper band
+      if (upper_points.size() > 1) {
+        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
+                              IM_COL32(0, 255, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      }
+
+      // Draw lower band
+      if (lower_points.size() > 1) {
+        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
+                              IM_COL32(0, 255, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
       }
     }
 
     // Render SD3 bands
     if (sd3_upper.size() > 1 && sd3_lower.size() > 1) {
+      // Prepare points for upper and lower bands
+      std::vector<ImVec2> upper_points, lower_points;
+      upper_points.reserve(sd3_upper.size());
+      lower_points.reserve(sd3_lower.size());
+
       for (size_t i = 0; i < sd3_upper.size() && (start_idx + i) < chart.dates.size(); ++i) {
         ImVec2 upper_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_upper[i]);
         ImVec2 lower_point = ImPlot::PlotToPixels(chart.dates[start_idx + i], sd3_lower[i]);
+        upper_points.push_back(upper_point);
+        lower_points.push_back(lower_point);
+      }
 
-        // Draw vertical lines between upper and lower bands
-        draw_list->AddLine(upper_point, lower_point, IM_COL32(255, 0, 255, 100), 1.0f);
+      // Draw upper band
+      if (upper_points.size() > 1) {
+        draw_list->AddPolyline(upper_points.data(), static_cast<int>(upper_points.size()),
+                              IM_COL32(255, 0, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
+      }
+
+      // Draw lower band
+      if (lower_points.size() > 1) {
+        draw_list->AddPolyline(lower_points.data(), static_cast<int>(lower_points.size()),
+                              IM_COL32(255, 0, 255, 150), ImDrawListFlags_AntiAliasedLines, 1.0f);
       }
     }
   }

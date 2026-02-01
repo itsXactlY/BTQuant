@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
+#include <cmath>
 
 #include "imgui.h"
 
@@ -36,16 +37,21 @@ std::string formatPrice(double price) {
 
 // Enhanced interpolation function for smoother transitions
 double interpolateValue(double start, double end, float progress) {
-  // Use cubic easing for smoother animation
-  float t = progress * progress * (3.0f - 2.0f * progress);
+  // Use quintic easing for even smoother animation with better acceleration/deceleration
+  float t = progress * progress * progress * (progress * (progress * 6.0f - 15.0f) + 10.0f);
   return start + (end - start) * t;
 }
 
 // Enhanced flash animation function with smoother transitions
 float calculateFlashIntensity(float progress) {
   // Use a smoother flash curve with more gradual fade-in and fade-out
+  // Using sine-based easing for even smoother transitions
   float t = progress * 4.0f; // Speed up the flash cycle
   if (t > 2.0f) t = 4.0f - t; // Create a smooth bounce effect (triangle wave)
+
+  // Apply sine-based easing for even smoother transitions
+  t = (1.0f - cosf(t * M_PI)) * 0.5f; // Smooth easing function
+
   return t / 2.0f; // Normalize to 0-1 range
 }
 
@@ -545,6 +551,10 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
                   << " (ID: " << symbol_id << "). Price: " << prev_price << " -> " << it->second.price
                   << ", Change: " << price_change_pct << "%" << std::endl;
       }
+
+      // Log every market data update for monitoring
+      std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
+                << " (ID: " << symbol_id << "). New price: " << it->second.price << std::endl;
     }
   }
 }
@@ -638,10 +648,10 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Use Selectable spanning all columns with drag and drop support
   if (ImGui::Selectable(
           entry.symbol.c_str(), is_selected,
-          ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
+          ImGuiSelectableFlags_SpanAllColumns)) {  // Removed AllowDoubleClick to ensure single click triggers
     selected_symbol_id_ = entry.symbol_id;
 
-    // Trigger symbol selection callback (e.g., to open chart)
+    // Trigger symbol selection callback to switch all panels to this symbol
     if (on_symbol_selected_) {
       on_symbol_selected_(entry.symbol_id, entry.symbol);
     }
@@ -799,7 +809,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Show tooltip on hover
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
-    ImGui::Text("Click to view %s chart", entry.symbol.c_str());
+    ImGui::Text("Click to switch all panels to %s", entry.symbol.c_str());
     ImGui::Text("Exchange: %s", entry.exchange.c_str());
     ImGui::Text("24h Open/High/Low: %.4f / %.4f / %.4f", entry.open_24h, entry.high_24h, entry.low_24h);
     ImGui::EndTooltip();
@@ -1734,6 +1744,9 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
 
     // Store the subscription ID for this symbol
     symbol_subscriptions_[symbol_id] = sub_id;
+
+    std::cout << "[WatchlistPanel] Subscribed to symbol ID: " << symbol_id
+              << " with subscription ID: " << sub_id << std::endl;
   }
 }
 
@@ -1742,6 +1755,8 @@ void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
     auto it = symbol_subscriptions_.find(symbol_id);
     if (it != symbol_subscriptions_.end()) {
       processor_->unsubscribe(it->second);
+      std::cout << "[WatchlistPanel] Unsubscribed from symbol ID: " << symbol_id
+                << " with subscription ID: " << it->second << std::endl;
       symbol_subscriptions_.erase(it);
     }
   }

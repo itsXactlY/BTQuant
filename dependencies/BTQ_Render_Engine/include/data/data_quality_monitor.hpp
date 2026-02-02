@@ -165,6 +165,12 @@ private:
 
   // Advanced missing data detection
   void check_missing_data_for_symbol(const std::string& symbol, uint64_t current_timestamp);
+
+  // Helper method to calculate median interval
+  uint64_t get_median_interval(const std::vector<uint64_t>& intervals) const;
+
+  // Helper method to send critical alerts
+  void send_critical_alert(const DataQualityIssue& issue);
 };
 
 // Global data quality monitor instance

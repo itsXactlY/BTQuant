@@ -197,6 +197,44 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                         metrics_.missing_data_issues++;
                         add_issue(issue);
                     }
+
+                    // Enhanced missing data detection: Check for patterns in recent intervals
+                    if (stats.recent_intervals.size() >= 10) {
+                        uint64_t median_interval = get_median_interval(stats.recent_intervals);
+
+                        // If current gap is much larger than median, it indicates potential missing data
+                        if (median_interval > 0 && time_diff > median_interval * 10) {
+                            std::ostringstream oss;
+                            oss << "Significant data gap detected for " << symbol
+                                << ". Current gap: " << time_diff << "ms, median recent interval: "
+                                << median_interval << "ms";
+
+                            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                                 oss.str(), 0.9);
+                            metrics_.missing_data_issues++;
+                            add_issue(issue);
+                        }
+
+                        // Check for consecutive large gaps (indicating sustained data loss)
+                        size_t large_gaps_count = 0;
+                        for (const auto& interval : stats.recent_intervals) {
+                            if (interval > median_interval * 3) {
+                                large_gaps_count++;
+                            }
+                        }
+
+                        if (large_gaps_count > stats.recent_intervals.size() / 3) { // More than 1/3 are large gaps
+                            std::ostringstream oss;
+                            oss << "Sustained data quality issue for " << symbol
+                                << ". " << large_gaps_count << "/" << stats.recent_intervals.size()
+                                << " recent intervals are significantly larger than median";
+
+                            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                                 oss.str(), 0.85);
+                            metrics_.missing_data_issues++;
+                            add_issue(issue);
+                        }
+                    }
                 }
             }
 
@@ -260,6 +298,26 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                 // If price and volume are nearly identical and exchange matches, consider duplicate
                 return true;
             }
+
+            // Additional duplicate check: Same price, volume, and timestamp but different exchange_id might indicate
+            // a cross-exchange duplicate or data duplication issue
+            if (recent_trade.timestamp == trade.timestamp &&
+                std::abs(recent_trade.price - trade.price) < 0.000001 &&
+                std::abs(recent_trade.volume - trade.volume) < 0.0001f) {
+
+                // This could be a cross-feed duplicate or data integrity issue
+                return true;
+            }
+        }
+
+        // Check for sequence-based duplicates - if we see the same price/volume pattern in quick succession
+        if (time_diff <= duplicate_check_window_ms_ / 2) {  // Tighter window for pattern matching
+            if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
+                std::abs(recent_trade.volume - trade.volume) < 0.0001f) {
+
+                // Same price and volume in a very tight time window - potential duplicate
+                return true;
+            }
         }
     }
 
@@ -301,10 +359,43 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
         if (trade.timestamp < (it->second - out_of_order_tolerance_ms_)) {
             return true;
         }
+
+        // Check for sequence anomalies - if we see timestamps that jump around unexpectedly
+        if (stats_it != symbol_stats_.end()) {
+            const auto& stats = stats_it->second;
+            if (!stats.recent_intervals.empty() && stats.recent_intervals.size() > 5) {
+                // Look for patterns where timestamps are jumping around unexpectedly
+                uint64_t median_interval = get_median_interval(stats.recent_intervals);
+
+                // If the current gap is much larger than the median but the trade is still "in order",
+                // it might indicate a data feed issue
+                uint64_t current_gap = trade.timestamp - it->second;
+                if (median_interval > 0 && current_gap > median_interval * 5) {
+                    // Large gap compared to recent median interval - potential issue
+                    return true;
+                }
+            }
+        }
     }
 
     // If we don't have a previous timestamp for this symbol, we can't determine if it's out of order
     return false;
+}
+
+uint64_t DataQualityMonitor::get_median_interval(const std::vector<uint64_t>& intervals) const {
+    if (intervals.empty()) {
+        return 0;
+    }
+
+    std::vector<uint64_t> sorted_intervals = intervals;
+    std::sort(sorted_intervals.begin(), sorted_intervals.end());
+
+    size_t size = sorted_intervals.size();
+    if (size % 2 == 0) {
+        return (sorted_intervals[size/2 - 1] + sorted_intervals[size/2]) / 2;
+    } else {
+        return sorted_intervals[size/2];
+    }
 }
 
 void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::string& symbol) {
@@ -399,6 +490,51 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
             }
         }
     }
+
+    // Enhanced latency monitoring: Check for increasing trends in latency
+    if (current_time > trade.timestamp) {
+        int64_t current_delay = current_time - trade.timestamp;
+
+        // Track recent delays separately to avoid interfering with interval tracking
+        auto& delay_history = symbol_stats_[symbol].recent_intervals; // Using the same field but for delays in this context
+        delay_history.push_back(current_delay);
+
+        // Keep only the last 20 delays for trend analysis
+        if (delay_history.size() > 20) {
+            delay_history.erase(delay_history.begin());
+        }
+
+        // Check if there's an increasing trend in latency
+        if (delay_history.size() >= 10) {
+            // Compare first half vs second half of recent delays
+            size_t mid = delay_history.size() / 2;
+            if (mid > 0) { // Ensure we have at least 2 elements to split
+                uint64_t first_half_avg = 0, second_half_avg = 0;
+
+                for (size_t i = 0; i < mid; ++i) {
+                    first_half_avg += delay_history[i];
+                }
+                first_half_avg /= mid;
+
+                for (size_t i = mid; i < delay_history.size(); ++i) {
+                    second_half_avg += delay_history[i];
+                }
+                second_half_avg /= (delay_history.size() - mid);
+
+                // If second half average is significantly higher than first half, we have a trend
+                if (first_half_avg > 0 && (static_cast<double>(second_half_avg) / first_half_avg) > 1.5) {
+                    std::ostringstream oss;
+                    oss << "Latency increasing trend detected: recent avg " << second_half_avg
+                        << "ms vs previous avg " << first_half_avg << "ms";
+
+                    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                         oss.str(), 0.6);
+                    metrics_.latency_issues++;
+                    add_issue(issue);
+                }
+            }
+        }
+    }
 }
 
 bool DataQualityMonitor::validate_trade_values(const TradeData& trade) {
@@ -418,8 +554,6 @@ bool DataQualityMonitor::validate_trade_values(const TradeData& trade) {
 }
 
 void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std::string& symbol, uint64_t timestamp) {
-    std::lock_guard<std::mutex> lock(mutex_);
-
     // Check for missing or invalid fields
     std::vector<std::string> missing_fields;
 
@@ -555,10 +689,33 @@ void DataQualityMonitor::add_issue(const DataQualityIssue& issue) {
 
         log_msg << ", Symbol: " << issue.symbol
                 << ", Description: " << issue.description
-                << ", Severity: " << issue.severity;
+                << ", Severity: " << issue.severity
+                << ", Timestamp: " << issue.timestamp;
 
         std::cout << log_msg.str() << std::endl;
     }
+
+    // Additional alerting for critical issues
+    if (issue.severity >= 0.9) {
+        // Send critical alert notification
+        send_critical_alert(issue);
+    }
+}
+
+void DataQualityMonitor::send_critical_alert(const DataQualityIssue& issue) {
+    // This method sends critical alerts to external systems or logs
+    std::ostringstream critical_msg;
+    critical_msg << "[CRITICAL DATA QUALITY ALERT] ";
+    critical_msg << "Symbol: " << issue.symbol
+                 << ", Issue: " << issue.description
+                 << ", Severity: " << issue.severity
+                 << ", Time: " << issue.timestamp;
+
+    // Log to stderr for critical issues
+    std::cerr << critical_msg.str() << std::endl;
+
+    // In a production system, this could send alerts to monitoring systems
+    // For now, we'll just log to console
 }
 
 // Method to generate a summary of current data quality status

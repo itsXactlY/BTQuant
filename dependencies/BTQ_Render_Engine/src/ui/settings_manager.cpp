@@ -22,6 +22,9 @@ namespace UI {
 
 SettingsManager::SettingsManager() {
     initialize_default_settings();
+
+    // Load settings from file on startup
+    load_settings(settings_file_path_);
 }
 
 SettingsManager::~SettingsManager() = default;
@@ -382,6 +385,9 @@ bool SettingsManager::save_settings(const std::string& file_path) const {
             settings_json[key] = setting_json;
         }
 
+        // Add version information
+        settings_json["version"] = current_version_;
+
         std::ofstream file(file_path);
         if (file.is_open()) {
             file << settings_json.dump(4);
@@ -411,9 +417,27 @@ bool SettingsManager::load_settings(const std::string& file_path) {
         file >> settings_json;
         file.close();
 
+        // Check if version information exists and perform migration if needed
+        std::string saved_version = "";
+        if (settings_json.contains("version")) {
+            saved_version = settings_json["version"].get<std::string>();
+
+            // Perform migration if the saved version is different from current version
+            if (saved_version != current_version_) {
+                std::cout << "Detected settings version " << saved_version
+                          << ", performing migration to " << current_version_ << std::endl;
+                migrate_settings(saved_version);
+            }
+        }
+
         for (auto& pair : settings_json.items()) {
             std::string key = pair.key();
             auto setting_json = pair.value();
+
+            // Skip the version entry as it's not a setting
+            if (key == "version") {
+                continue;
+            }
 
             auto it = settings_.find(key);
             if (it != settings_.end()) {
@@ -521,11 +545,11 @@ void SettingsManager::render_settings_ui() {
     
     // Action buttons
     if (ImGui::Button("Save Settings")) {
-        save_settings("settings.json");
+        save_settings(settings_file_path_);
     }
     ImGui::SameLine();
     if (ImGui::Button("Load Settings")) {
-        load_settings("settings.json");
+        load_settings(settings_file_path_);
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset to Defaults")) {
@@ -627,6 +651,161 @@ void SettingsManager::trigger_on_change_callback(const std::string& key) {
     if (it != settings_.end() && it->second.on_change_callback) {
         it->second.on_change_callback();
     }
+
+    // Auto-save settings if enabled
+    if (auto_save_enabled_) {
+        auto_save_settings();
+    }
+}
+
+void SettingsManager::auto_save_settings() {
+    // Ensure the config directory exists
+    std::filesystem::path config_dir = std::filesystem::path(settings_file_path_).parent_path();
+    if (!config_dir.empty()) {
+        std::filesystem::create_directories(config_dir);
+    }
+
+    // Save settings to file
+    save_settings(settings_file_path_);
+}
+
+bool SettingsManager::migrate_settings(const std::string& old_version) {
+    // Parse version numbers
+    std::istringstream old_stream(old_version);
+    std::istringstream current_stream(current_version_);
+    std::string old_part, current_part;
+    std::vector<int> old_ver, current_ver;
+
+    // Split version by dots
+    while (std::getline(old_stream, old_part, '.')) {
+        try {
+            old_ver.push_back(std::stoi(old_part));
+        } catch (...) {
+            old_ver.push_back(0);
+        }
+    }
+
+    while (std::getline(current_stream, current_part, '.')) {
+        try {
+            current_ver.push_back(std::stoi(current_part));
+        } catch (...) {
+            current_ver.push_back(0);
+        }
+    }
+
+    // Perform migrations based on version differences
+    if (old_ver.size() >= 3 && current_ver.size() >= 3) {
+        // Migration from version 0.x.x to 1.x.x
+        if (old_ver[0] < 1 && current_ver[0] >= 1) {
+            // Example migration: adjust any deprecated settings
+            // For now, we'll just log the migration
+            std::cout << "Migrating settings from version " << old_version << " to " << current_version_ << std::endl;
+
+            // Add any specific migration logic here if needed
+            // For example, if a setting key changed between versions:
+            // if (settings_.count("old.setting.key") > 0 && settings_.count("new.setting.key") == 0) {
+            //     settings_["new.setting.key"] = settings_["old.setting.key"];
+            //     settings_.erase("old.setting.key");
+            // }
+        }
+
+        // Add more version-specific migrations as needed
+        // if (old_ver[0] == 1 && old_ver[1] < 1 && current_ver[0] == 1 && current_ver[1] >= 1) {
+        //     // Migration from 1.0.x to 1.1.x
+        // }
+    }
+
+    return true;
+}
+
+std::string SettingsManager::get_saved_version() const {
+#ifdef HAS_NLOHMANN_JSON
+    try {
+        std::ifstream file(settings_file_path_);
+        if (!file.is_open()) {
+            return ""; // File doesn't exist yet
+        }
+
+        nlohmann::json settings_json;
+        file >> settings_json;
+        file.close();
+
+        if (settings_json.contains("version")) {
+            return settings_json["version"].get<std::string>();
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error reading version from settings: " << e.what() << std::endl;
+    }
+#endif
+    return "";
+}
+
+void SettingsManager::set_saved_version(const std::string& version) {
+#ifdef HAS_NLOHMANN_JSON
+    try {
+        nlohmann::json settings_json;
+
+        for (const auto& pair : settings_) {
+            const auto& key = pair.first;
+            const auto& setting = pair.second;
+
+            nlohmann::json setting_json;
+            setting_json["key"] = setting.key;
+            setting_json["display_name"] = setting.display_name;
+            setting_json["description"] = setting.description;
+            setting_json["type"] = static_cast<int>(setting.type);
+            setting_json["category"] = static_cast<int>(setting.category);
+
+            // Store the value based on type
+            switch (setting.type) {
+                case SettingType::BOOLEAN:
+                    setting_json["value"] = setting.bool_value;
+                    break;
+                case SettingType::INTEGER:
+                    setting_json["value"] = setting.int_value;
+                    setting_json["min_int"] = setting.min_int;
+                    setting_json["max_int"] = setting.max_int;
+                    break;
+                case SettingType::FLOAT:
+                    setting_json["value"] = setting.float_value;
+                    setting_json["min_float"] = setting.min_float;
+                    setting_json["max_float"] = setting.max_float;
+                    break;
+                case SettingType::STRING:
+                    setting_json["value"] = setting.string_value;
+                    break;
+                case SettingType::COLOR:
+                    setting_json["value"] = {
+                        setting.color_value.x,
+                        setting.color_value.y,
+                        setting.color_value.z,
+                        setting.color_value.w
+                    };
+                    break;
+                case SettingType::ENUM:
+                    setting_json["value"] = setting.enum_selected_index;
+                    setting_json["options"] = setting.enum_options;
+                    break;
+            }
+
+            settings_json[key] = setting_json;
+        }
+
+        // Add version information
+        settings_json["version"] = version;
+
+        std::ofstream file(settings_file_path_);
+        if (file.is_open()) {
+            file << settings_json.dump(4);
+            file.close();
+            std::cout << "Settings saved with version " << version << " to: " << settings_file_path_ << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error saving settings with version: " << e.what() << std::endl;
+    }
+#else
+    std::cerr << "JSON support not available for saving settings with version" << std::endl;
+#endif
 }
 
 }  // namespace UI

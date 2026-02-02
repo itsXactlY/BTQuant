@@ -151,6 +151,9 @@ private:
 
     std::unordered_map<std::string, SettingInfo> settings_;
     std::string settings_directory_;
+    std::string settings_file_path_ = "config/settings.json";  // Default settings file path
+    std::string current_version_ = "1.0.0";                   // Current settings version
+    bool auto_save_enabled_ = true;                           // Flag to enable/disable auto-save
     std::unique_ptr<class AppearanceSettings> appearance_settings_;
     std::unique_ptr<class DataSettings> data_settings_;
     std::unique_ptr<class PerformanceSettings> performance_settings_;
@@ -165,6 +168,10 @@ private:
     void render_category_settings(SettingCategory category);
     void render_setting_control(SettingInfo& setting);
     void trigger_on_change_callback(const std::string& key);
+    void auto_save_settings();                                 // Auto-save settings when they change
+    bool migrate_settings(const std::string& old_version);     // Migrate settings from older versions
+    std::string get_saved_version() const;                     // Get the version from saved settings
+    void set_saved_version(const std::string& version);        // Set the version in saved settings
 };
 
 }  // namespace UI

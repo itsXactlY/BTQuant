@@ -153,6 +153,8 @@ private:
     std::string settings_directory_;
     std::unique_ptr<class AppearanceSettings> appearance_settings_;
     std::unique_ptr<class DataSettings> data_settings_;
+    std::unique_ptr<class PerformanceSettings> performance_settings_;
+    std::unique_ptr<class AlertSettings> alert_settings_;
 
     void initialize_default_settings();
     void initialize_appearance_settings();

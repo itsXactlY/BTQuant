@@ -1,6 +1,8 @@
 #include "../include/ui/settings_manager.hpp"
 #include "../include/ui/appearance_settings.hpp"
 #include "../include/ui/data_settings.hpp"
+#include "../include/ui/performance_settings.hpp"
+#include "../include/ui/alert_settings.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -106,117 +108,13 @@ void SettingsManager::initialize_data_settings() {
 }
 
 void SettingsManager::initialize_performance_settings() {
-    // Thread count
-    SettingInfo thread_count_setting;
-    thread_count_setting.key = "performance.thread_count";
-    thread_count_setting.display_name = "Thread Count";
-    thread_count_setting.description = "Number of threads for data processing";
-    thread_count_setting.type = SettingType::INTEGER;
-    thread_count_setting.category = SettingCategory::PERFORMANCE;
-    thread_count_setting.int_value = 4;
-    thread_count_setting.min_int = 1;
-    thread_count_setting.max_int = 16;
-    register_setting(thread_count_setting);
-
-    // Memory limit
-    SettingInfo memory_limit_setting;
-    memory_limit_setting.key = "performance.memory_limit";
-    memory_limit_setting.display_name = "Memory Limit (MB)";
-    memory_limit_setting.description = "Maximum memory usage for the application";
-    memory_limit_setting.type = SettingType::INTEGER;
-    memory_limit_setting.category = SettingCategory::PERFORMANCE;
-    memory_limit_setting.int_value = 2048;
-    memory_limit_setting.min_int = 512;
-    memory_limit_setting.max_int = 8192;
-    register_setting(memory_limit_setting);
-
-    // GPU acceleration
-    SettingInfo gpu_acceleration_setting;
-    gpu_acceleration_setting.key = "performance.gpu_acceleration";
-    gpu_acceleration_setting.display_name = "GPU Acceleration";
-    gpu_acceleration_setting.description = "Enable hardware acceleration for rendering";
-    gpu_acceleration_setting.type = SettingType::BOOLEAN;
-    gpu_acceleration_setting.category = SettingCategory::PERFORMANCE;
-    gpu_acceleration_setting.bool_value = true;
-    register_setting(gpu_acceleration_setting);
-
-    // Frame rate limit
-    SettingInfo frame_rate_setting;
-    frame_rate_setting.key = "performance.frame_rate_limit";
-    frame_rate_setting.display_name = "Frame Rate Limit";
-    frame_rate_setting.description = "Maximum frames per second (0 = unlimited)";
-    frame_rate_setting.type = SettingType::INTEGER;
-    frame_rate_setting.category = SettingCategory::PERFORMANCE;
-    frame_rate_setting.int_value = 60;
-    frame_rate_setting.min_int = 0;
-    frame_rate_setting.max_int = 240;
-    register_setting(frame_rate_setting);
-
-    // Background updates
-    SettingInfo background_updates_setting;
-    background_updates_setting.key = "performance.background_updates";
-    background_updates_setting.display_name = "Background Updates";
-    background_updates_setting.description = "Allow updates when window is not focused";
-    background_updates_setting.type = SettingType::BOOLEAN;
-    background_updates_setting.category = SettingCategory::PERFORMANCE;
-    background_updates_setting.bool_value = true;
-    register_setting(background_updates_setting);
+    // Create PerformanceSettings instance to handle all performance-related settings
+    performance_settings_ = std::make_unique<PerformanceSettings>(*this);
 }
 
 void SettingsManager::initialize_alert_settings() {
-    // Alert sound
-    SettingInfo alert_sound_setting;
-    alert_sound_setting.key = "alerts.sound_enabled";
-    alert_sound_setting.display_name = "Sound Enabled";
-    alert_sound_setting.description = "Play sound when alerts trigger";
-    alert_sound_setting.type = SettingType::BOOLEAN;
-    alert_sound_setting.category = SettingCategory::ALERTS;
-    alert_sound_setting.bool_value = true;
-    register_setting(alert_sound_setting);
-
-    // Visual flash
-    SettingInfo visual_flash_setting;
-    visual_flash_setting.key = "alerts.visual_flash";
-    visual_flash_setting.display_name = "Visual Flash";
-    visual_flash_setting.description = "Flash screen when alerts trigger";
-    visual_flash_setting.type = SettingType::BOOLEAN;
-    visual_flash_setting.category = SettingCategory::ALERTS;
-    visual_flash_setting.bool_value = true;
-    register_setting(visual_flash_setting);
-
-    // Notification timeout
-    SettingInfo notification_timeout_setting;
-    notification_timeout_setting.key = "alerts.notification_timeout";
-    notification_timeout_setting.display_name = "Notification Timeout";
-    notification_timeout_setting.description = "Time in seconds before notifications disappear";
-    notification_timeout_setting.type = SettingType::INTEGER;
-    notification_timeout_setting.category = SettingCategory::ALERTS;
-    notification_timeout_setting.int_value = 5;
-    notification_timeout_setting.min_int = 1;
-    notification_timeout_setting.max_int = 30;
-    register_setting(notification_timeout_setting);
-
-    // Email notifications
-    SettingInfo email_notifications_setting;
-    email_notifications_setting.key = "alerts.email_notifications";
-    email_notifications_setting.display_name = "Email Notifications";
-    email_notifications_setting.description = "Send email notifications for alerts";
-    email_notifications_setting.type = SettingType::BOOLEAN;
-    email_notifications_setting.category = SettingCategory::ALERTS;
-    email_notifications_setting.bool_value = false;
-    register_setting(email_notifications_setting);
-
-    // Alert volume
-    SettingInfo alert_volume_setting;
-    alert_volume_setting.key = "alerts.volume";
-    alert_volume_setting.display_name = "Alert Volume";
-    alert_volume_setting.description = "Volume level for alert sounds";
-    alert_volume_setting.type = SettingType::INTEGER;
-    alert_volume_setting.category = SettingCategory::ALERTS;
-    alert_volume_setting.int_value = 75;
-    alert_volume_setting.min_int = 0;
-    alert_volume_setting.max_int = 100;
-    register_setting(alert_volume_setting);
+    // Create AlertSettings instance to handle all alert-related settings
+    alert_settings_ = std::make_unique<AlertSettings>(*this);
 }
 
 void SettingsManager::initialize_keyboard_shortcut_settings() {

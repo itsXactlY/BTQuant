@@ -162,6 +162,10 @@ int main(int argc, char** argv) {
         dashboard->set_show_performance_overlay(show_perf);
       }
 
+      if (ImGui::MenuItem("Debug Overlay (F12)")) {
+        g_debug_overlay.toggle_visibility();
+      }
+
       auto* workspace = dashboard->get_workspace_component();
       if (ImGui::MenuItem("Auto Arrange Panels")) {
         if (workspace && workspace->getPanelManager())

@@ -158,6 +158,7 @@ set(DASHBOARD_SOURCES
     src/performance/panel_profiler.cpp
     src/performance/frame_time_graph.cpp
     src/performance/memory_tracker.cpp
+    src/performance/debug_overlay.cpp
     # Threading module
     src/threading/task_scheduler.cpp
     # Analytics and advanced features
@@ -257,6 +258,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/data/test_quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
     src/performance/frame_time_graph.cpp
+    src/performance/debug_overlay.cpp
     src/threading/task_scheduler.cpp
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp

@@ -209,6 +209,13 @@ void VulkanDashboard::init_components() {
       }
     }
   }, "Quick Save/Load Layout 4", false, false, false); // F8/F8+Shift
+
+  // F12 - Toggle Debug Overlay
+  im.registerHotKey(ImGuiKey_F12, [this]() {
+    g_debug_overlay.toggle_visibility();
+    std::cout << "[Debug Overlay] Toggled visibility: "
+              << (g_debug_overlay.is_visible() ? "ON" : "OFF") << std::endl;
+  }, "Toggle Debug Overlay", false, false, false); // F12
 }
 
 void VulkanDashboard::render_frame() {
@@ -259,6 +266,9 @@ void VulkanDashboard::render_frame() {
 
   // Performance Overlay
   render_performance_overlay();
+
+  // Debug Overlay
+  g_debug_overlay.render();
 
   // Visual indicator for active layout
   render_layout_indicator();
@@ -549,6 +559,23 @@ void VulkanDashboard::render_performance_overlay() {
   }
 
   ImGui::End();
+
+  // Update debug overlay with active component counts
+  if (m_workspace && m_workspace->getPanelManager()) {
+    size_t active_panels = m_workspace->getPanelManager()->get_panel_count();
+    g_debug_overlay.set_active_panels_count(active_panels);
+  }
+
+  // Update renderer stats if available
+  if (m_micro_renderer) {
+    auto stats = m_micro_renderer->getStats();
+    g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates,
+                                      stats.tradeUpdates, stats.footprintCellsRendered);
+  }
+
+  // TODO: Update active indicators and alerts counts when available
+  g_debug_overlay.set_active_indicators_count(0); // Placeholder - update when indicator system is integrated
+  g_debug_overlay.set_active_alerts_count(0);     // Placeholder - update when alert system is integrated
 }
 
 void VulkanDashboard::render_layout_indicator() {

@@ -78,6 +78,10 @@ class FootprintPanel : public PanelBase {
   void setShowDeltaIndicator(bool show) { show_delta_indicator_ = show; }
   void setDeltaThreshold(float threshold) { delta_threshold_ = threshold; }
 
+  bool getShowVolumeLabels() const { return show_volume_labels_; }
+  bool getShowDeltaIndicator() const { return show_delta_indicator_; }
+  float getDeltaThreshold() const { return delta_threshold_; }
+
   // Number formatting options
   void setNumberFormat(NumberFormat format) { number_format_ = format; }
   NumberFormat getNumberFormat() const { return number_format_; }

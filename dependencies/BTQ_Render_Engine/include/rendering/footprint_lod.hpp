@@ -1,0 +1,152 @@
+#pragma once
+
+#include <vector>
+
+#include "imgui.h"
+#include "implot.h"
+#include "../components/footprint_panel.hpp"  // For FootprintCell struct
+
+namespace BTQuant {
+namespace Rendering {
+
+// Level of Detail enumeration for footprint rendering
+enum class LODLevel {
+    LOW_DETAIL,      // Minimal detail, heatmap only, no text
+    MEDIUM_DETAIL,   // Basic detail with borders, no text
+    HIGH_DETAIL,     // Full detail with text and labels
+    MAX_DETAIL       // Ultra detail with all annotations
+};
+
+// Structure to represent LOD transition state for smooth transitions
+struct LODTransitionState {
+    LODLevel from_lod;
+    LODLevel to_lod;
+    float transition_progress;  // Value between 0.0 and 1.0 representing transition progress
+};
+
+// Structure to hold rendering settings for different LOD levels
+struct LODRenderSettings {
+    bool render_heatmap = true;
+    bool render_borders = true;
+    bool render_text = false;
+    bool render_labels = false;
+    bool render_detailed_annotations = false;
+    float alpha_multiplier = 1.0f;
+    float border_thickness = 1.0f;
+};
+
+// Structure to hold LOD statistics
+struct LODStatistics {
+    int total_cells = 0;
+    int low_detail_cells = 0;
+    int medium_detail_cells = 0;
+    int high_detail_cells = 0;
+    int max_detail_cells = 0;
+    
+    float getLowDetailPercentage() const {
+        return total_cells > 0 ? (static_cast<float>(low_detail_cells) / total_cells) * 100.0f : 0.0f;
+    }
+    
+    float getMediumDetailPercentage() const {
+        return total_cells > 0 ? (static_cast<float>(medium_detail_cells) / total_cells) * 100.0f : 0.0f;
+    }
+    
+    float getHighDetailPercentage() const {
+        return total_cells > 0 ? (static_cast<float>(high_detail_cells) / total_cells) * 100.0f : 0.0f;
+    }
+    
+    float getMaxDetailPercentage() const {
+        return total_cells > 0 ? (static_cast<float>(max_detail_cells) / total_cells) * 100.0f : 0.0f;
+    }
+};
+
+class FootprintLOD {
+public:
+    FootprintLOD();
+    
+    // Calculate the appropriate LOD level based on cell dimensions and zoom factor
+    LODLevel calculateLODLevel(float cell_width_px, float cell_height_px, float zoom_factor) const;
+    
+    // Get rendering settings for a specific LOD level
+    LODRenderSettings getRenderSettings(LODLevel lod_level) const;
+    
+    // Determine if text should be rendered based on cell size and zoom
+    bool shouldRenderText(float cell_height_px, float zoom_factor) const;
+    
+    // Determine if labels should be rendered based on cell size and zoom
+    bool shouldRenderLabels(float cell_height_px, float zoom_factor) const;
+    
+    // Determine if detailed annotations should be rendered
+    bool shouldRenderDetailedAnnotations(float cell_width_px, float cell_height_px, 
+                                       float zoom_factor) const;
+    
+    // Adjust cell padding based on zoom level for optimal visual representation
+    float adjustCellPadding(float base_padding, float zoom_factor) const;
+    
+    // Calculate alpha multiplier based on zoom and LOD level
+    float calculateAlphaMultiplier(float zoom_factor, LODLevel lod_level) const;
+
+    // Calculate LOD statistics for a set of cells
+    LODStatistics calculateLODStatistics(const std::vector<FootprintCell>& cells,
+                                       float zoom_factor) const;
+
+    // Calculate adaptive cell size based on zoom and LOD level
+    float calculateAdaptiveCellSize(float base_size, float zoom_factor, LODLevel lod_level) const;
+
+    // Calculate LOD transition state for smooth transitions between LOD levels
+    LODTransitionState calculateLODTransition(float prev_zoom, float curr_zoom,
+                                           float cell_width_px, float cell_height_px) const;
+    
+    // Apply LOD-based rendering to a single cell
+    void applyLODToCell(const FootprintCell& cell,
+                       ImDrawList* draw_list,
+                       float zoom_factor,
+                       double max_volume,
+                       const std::vector<FootprintCell>& diagonal_imbalances,
+                       const std::vector<FootprintCell>& stacked_imbalances,
+                       const FootprintPanel* panel) const;
+    
+    // Getter/setter methods for LOD parameters
+    void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
+    void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }
+    void setMaxDetailZoom(float zoom) { max_detail_zoom_ = zoom; }
+    
+    void setMinCellSizePx(float size) { min_cell_size_px_ = size; }
+    void setMediumCellSizePx(float size) { medium_cell_size_px_ = size; }
+    void setMaxCellSizePx(float size) { max_cell_size_px_ = size; }
+    
+    void setTextRenderThreshold(float threshold) { text_render_threshold_ = threshold; }
+    void setLabelRenderThreshold(float threshold) { label_render_threshold_ = threshold; }
+    void setDetailRenderThreshold(float threshold) { detail_render_threshold_ = threshold; }
+    
+    float getMinDetailZoom() const { return min_detail_zoom_; }
+    float getMediumDetailZoom() const { return medium_detail_zoom_; }
+    float getMaxDetailZoom() const { return max_detail_zoom_; }
+    
+    float getMinCellSizePx() const { return min_cell_size_px_; }
+    float getMediumCellSizePx() const { return medium_cell_size_px_; }
+    float getMaxCellSizePx() const { return max_cell_size_px_; }
+    
+    float getTextRenderThreshold() const { return text_render_threshold_; }
+    float getLabelRenderThreshold() const { return label_render_threshold_; }
+    float getDetailRenderThreshold() const { return detail_render_threshold_; }
+
+private:
+    // Zoom thresholds for different LOD levels
+    float min_detail_zoom_;      // Zoom factor below which low detail is used
+    float medium_detail_zoom_;   // Zoom factor below which medium detail is used
+    float max_detail_zoom_;      // Zoom factor above which max detail is used
+    
+    // Minimum cell size thresholds for different LOD levels (in pixels)
+    float min_cell_size_px_;
+    float medium_cell_size_px_;
+    float max_cell_size_px_;
+    
+    // Thresholds for specific rendering elements
+    float text_render_threshold_;     // Minimum cell height to render text
+    float label_render_threshold_;    // Minimum cell height to render labels
+    float detail_render_threshold_;   // Minimum cell size to render detailed annotations
+};
+
+} // namespace Rendering
+} // namespace BTQuant

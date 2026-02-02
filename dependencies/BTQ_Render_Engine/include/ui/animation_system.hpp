@@ -64,7 +64,10 @@ enum class EasingFunction {
   EaseInOutCirc,
   Spring,
   Elastic,
-  Bounce
+  Bounce,
+  EaseInBack,
+  EaseOutBack,
+  EaseInOutBack
 };
 
 class AnimationSystem {
@@ -119,6 +122,9 @@ class AnimationSystem {
   int animate_callback(std::function<void(float)> on_update, float duration,
                        std::function<void()> on_complete = nullptr,
                        EasingFunction easing = EasingFunction::EaseOutQuad);
+
+  // Chain animations - run one animation after another
+  int chain_animations(int first_anim_id, int second_anim_id);
 
   // Update all active animations
   void update(float delta_time);
@@ -179,6 +185,15 @@ class AnimationPresets {
   static int data_refresh_pulse(void* element, float duration = 0.5f);
   static int notification_slide_in(void* notification, float duration = 0.3f);
   static int symbol_switch_transition(void* chart_element, float duration = 0.4f);
+
+  // Panel-specific animations
+  static int panel_open_close(void* panel, bool is_opening, float duration = 0.3f);
+
+  // Smooth value change animation
+  static int smooth_value_change(float* target_value, float from, float to, float duration = 0.3f);
+
+  // Animated highlight effect
+  static int animated_highlight(float* target_alpha, float highlight_intensity, float duration = 0.3f);
 };
 
 }  // namespace UI

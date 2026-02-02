@@ -87,6 +87,7 @@ set(DASHBOARD_SOURCES
     src/rendering/panel_culler.cpp
     src/rendering/chart_culler.cpp
     src/rendering/footprint_lod.cpp
+    src/rendering/imgui_optimizer.cpp
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
@@ -172,6 +173,7 @@ add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED
 
 target_include_directories(dashboard_advanced PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
@@ -179,7 +181,7 @@ target_include_directories(dashboard_advanced PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
+    ${concurrentqueue_SOURCE_DIR}/src
 )
 
 find_package(TBB REQUIRED)
@@ -1230,6 +1232,7 @@ add_executable(test_task_scheduler
 
 target_include_directories(test_task_scheduler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
@@ -1237,7 +1240,7 @@ target_include_directories(test_task_scheduler PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
+    ${concurrentqueue_SOURCE_DIR}/src
 )
 
 target_link_libraries(test_task_scheduler PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main Vulkan::Vulkan glfw dl pthread TBB::tbb)
@@ -1254,6 +1257,7 @@ add_executable(test_chart_culler
 )
 target_include_directories(test_chart_culler PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
@@ -1261,7 +1265,7 @@ target_include_directories(test_chart_culler PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
+    ${concurrentqueue_SOURCE_DIR}/src
 )
 target_link_libraries(test_chart_culler PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main Vulkan::Vulkan glfw dl pthread TBB::tbb)
 
@@ -1275,6 +1279,7 @@ add_executable(test_panel_culling
 )
 target_include_directories(test_panel_culling PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
@@ -1282,5 +1287,5 @@ target_include_directories(test_panel_culling PRIVATE
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
+    ${concurrentqueue_SOURCE_DIR}/src
 )

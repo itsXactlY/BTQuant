@@ -64,11 +64,13 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     // Thresholds can be adjusted based on performance needs
     const float panel_area = panel_size.x * panel_size.y;
     const float visible_area = intersect_width * intersect_height;
+    const float visible_percentage = panel_area > 0.0f ? (visible_area / panel_area) : 0.0f;
 
-    // If less than 1% of the panel is visible and the visible area is very small, skip rendering
+    // Skip rendering if the visible area is too small OR the visible percentage is too low
+    // Both area and percentage thresholds must be met for the panel to render
     // This prevents rendering of tiny slivers of panels that barely intersect with the viewport
-    if (visible_area < visibility_threshold_small_area_ &&
-        (visible_area / panel_area) < visibility_threshold_percentage_) {
+    if (visible_area < visibility_threshold_small_area_ ||
+        visible_percentage < visibility_threshold_percentage_) {
         return false;
     }
 

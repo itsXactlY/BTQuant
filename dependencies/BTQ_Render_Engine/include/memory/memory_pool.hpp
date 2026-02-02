@@ -16,6 +16,14 @@
 #include "../include/analytics/technical_analysis.hpp"
 #include "../include/data/data_types.hpp"
 #include "../include/trading/position_manager.hpp"
+#include "../include/trading/HotspineData.h"
+
+// Forward declaration for TradePaceData instead of including tape_panel.hpp
+namespace BTQuant {
+    namespace TapePanel {
+        struct TradePaceData;
+    }
+}
 
 namespace BTQuant {
 
@@ -296,6 +304,24 @@ public:
 private:
     TradeRecordPool() = default;
     ObjectPool<PositionManager::TradeRecord> pool_;
+};
+
+// HotspineTradeTickPool for frequently allocated trade ticks
+class HotspineTradeTickPool {
+public:
+    static HotspineTradeTickPool& getInstance();
+
+    RenderEngine::HotspineTradeTick* allocate();
+    void deallocate(RenderEngine::HotspineTradeTick* tick);
+    void preallocate(size_t count = 2048); // Higher count since these are frequently allocated
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    HotspineTradeTickPool() = default;
+    ObjectPool<RenderEngine::HotspineTradeTick> pool_;
 };
 
 // RAII wrapper for automatic deallocation

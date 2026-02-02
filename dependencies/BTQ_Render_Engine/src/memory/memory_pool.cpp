@@ -257,4 +257,22 @@ void TradeRecordPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// HotspineTradeTickPool implementation
+HotspineTradeTickPool& HotspineTradeTickPool::getInstance() {
+    static HotspineTradeTickPool instance;
+    return instance;
+}
+
+RenderEngine::HotspineTradeTick* HotspineTradeTickPool::allocate() {
+    return pool_.allocate();
+}
+
+void HotspineTradeTickPool::deallocate(RenderEngine::HotspineTradeTick* tick) {
+    pool_.deallocate(tick);
+}
+
+void HotspineTradeTickPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

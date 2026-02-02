@@ -882,13 +882,20 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
     if (!panel) continue;
 
     // Update all chart-based panels with the new timeframe
-    // Check for all chart-related panel types
+    // Check for all chart-related panel types that might be affected by timeframe changes
     if (panel->get_config().type == PanelType::CHART ||
         panel->get_config().type == PanelType::FOOTPRINT_CHART ||
+        panel->get_config().type == PanelType::VOLUME_PROFILE ||
         panel->get_config().type == PanelType::DEPTH_CHART ||
+        panel->get_config().type == PanelType::TIME_SERIES ||
+        panel->get_config().type == PanelType::TIME_STATISTICS ||
+        panel->get_config().type == PanelType::TIME_HISTOGRAM ||
+        panel->get_config().type == PanelType::TIME_AND_SALES ||
+        panel->get_config().type == PanelType::HISTORICAL_TIME_SALES ||
+        panel->get_config().type == PanelType::TPO_PROFILE ||
         panel->get_config().type == PanelType::CHART_REPLAY) {
 
-      // Handle different chart panel types
+      // Handle different chart panel types that have specific timeframe methods
       if (panel->get_config().type == PanelType::CHART) {
         // Regular chart panel - use set_timeframe method
         ChartPanel* chart_panel = dynamic_cast<ChartPanel*>(panel);
@@ -941,8 +948,10 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
           footprint_panel->setTimeAggregationType(time_agg_type);
         }
       }
-      // Depth chart typically doesn't need a timeframe as it shows current order book data
-      // So we don't need to handle PanelType::DEPTH_CHART here
+      // For other chart-like panels that don't have direct timeframe setters,
+      // they will automatically receive updated data when the underlying chart manager
+      // updates the data sources with the new timeframe
+      // The panels will refresh their data on the next render cycle due to the reactive architecture
     }
   }
 }

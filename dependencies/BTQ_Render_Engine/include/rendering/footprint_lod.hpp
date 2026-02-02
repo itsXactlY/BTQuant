@@ -120,6 +120,21 @@ public:
     LODTransitionState calculateLODTransition(float prev_zoom, float curr_zoom,
                                            float cell_width_px, float cell_height_px) const;
 
+    // Calculate zoom-based LOD with consideration for view range
+    LODLevel calculateZoomBasedLOD(float cell_width_px, float cell_height_px,
+                               float zoom_factor, float view_range_x, float view_range_y) const;
+
+    // Calculate adaptive LOD based on view area to optimize performance
+    LODLevel calculateAdaptiveLODBasedOnViewArea(float cell_width_px, float cell_height_px,
+                                               float zoom_factor, float view_width, float view_height) const;
+
+    // Determine if a cell should be completely skipped from rendering
+    bool shouldCompletelySkipRendering(float cell_width_px, float cell_height_px,
+                                    float zoom_factor) const;
+
+    // Get simplified rendering settings for better performance when zoomed out
+    LODRenderSettings getSimplifiedRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
     // Apply performance-based LOD adjustment based on rendering metrics
     void updatePerformanceBasedLOD(const PerformanceMetrics& metrics);
 
@@ -153,6 +168,29 @@ public:
                                    const std::vector<FootprintCell>& stacked_imbalances,
                                    const FootprintPanel* panel,
                                    ImVec2 view_center) const;
+
+    // Apply simplified LOD rendering to a single cell (optimized for zoomed-out views)
+    void applySimplifiedLODToCell(const FootprintCell& cell,
+                                 ImDrawList* draw_list,
+                                 float zoom_factor,
+                                 double max_volume,
+                                 const FootprintPanel* panel) const;
+
+    // Calculate enhanced detail LOD for when zoomed in significantly
+    LODLevel calculateEnhancedDetailLOD(float cell_width_px, float cell_height_px,
+                                     float zoom_factor) const;
+
+    // Get enhanced rendering settings for increased detail when zoomed in
+    LODRenderSettings getEnhancedRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply enhanced LOD rendering to a single cell (optimized for zoomed-in views)
+    void applyEnhancedLODToCell(const FootprintCell& cell,
+                               ImDrawList* draw_list,
+                               float zoom_factor,
+                               double max_volume,
+                               const std::vector<FootprintCell>& diagonal_imbalances,
+                               const std::vector<FootprintCell>& stacked_imbalances,
+                               const FootprintPanel* panel) const;
 
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }

@@ -159,6 +159,9 @@ public:
   // Send notifications to UI components
   void send_ui_notification(const DataQualityIssue& issue);
 
+  // Get a user-friendly summary of data quality issues
+  std::string get_user_friendly_summary() const;
+
 private:
   // Structure to track statistics per symbol for advanced data quality checks
   struct SymbolStats {

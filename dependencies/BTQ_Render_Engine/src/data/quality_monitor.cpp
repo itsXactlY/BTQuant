@@ -1493,6 +1493,99 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
     if (severity >= 0.9) {
         trigger_visual_alert(symbol, problem_description);
     }
+
+    // Enhanced user alerting: Send detailed alert information to help users understand the impact
+    std::ostringstream detailed_alert;
+    detailed_alert << "[DATA QUALITY ALERT] ";
+    detailed_alert << "Symbol: " << symbol << ", ";
+
+    switch (issue_type) {
+        case DataQualityIssueType::MISSING_DATA:
+            detailed_alert << "Issue: Missing Data, ";
+            break;
+        case DataQualityIssueType::DUPLICATE_TRADE:
+            detailed_alert << "Issue: Duplicate Trade, ";
+            break;
+        case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+            detailed_alert << "Issue: Out-of-Order Timestamp, ";
+            break;
+        case DataQualityIssueType::LATENCY_ISSUE:
+            detailed_alert << "Issue: Latency Issue, ";
+            break;
+        case DataQualityIssueType::INVALID_PRICE:
+            detailed_alert << "Issue: Invalid Price, ";
+            break;
+        case DataQualityIssueType::INVALID_VOLUME:
+            detailed_alert << "Issue: Invalid Volume, ";
+            break;
+        case DataQualityIssueType::MISSING_FIELD:
+            detailed_alert << "Issue: Missing Field, ";
+            break;
+    }
+
+    detailed_alert << "Description: " << problem_description << ", ";
+    detailed_alert << "Severity: " << severity;
+
+    // Output detailed alert information
+    if (console_alerts_enabled_) {
+        std::cout << detailed_alert.str() << std::endl;
+    }
+
+    // Enhanced alerting: For high severity issues, provide recommendations
+    if (severity >= 0.8) {
+        std::ostringstream recommendation;
+        recommendation << "[RECOMMENDATION] For severity " << severity << " issue with " << symbol << ": ";
+
+        switch (issue_type) {
+            case DataQualityIssueType::MISSING_DATA:
+                recommendation << "Check data feed connectivity and consider switching to backup feed.";
+                break;
+            case DataQualityIssueType::DUPLICATE_TRADE:
+                recommendation << "Review data processing pipeline for duplicate filtering mechanisms.";
+                break;
+            case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+                recommendation << "Verify timestamp synchronization and ordering algorithms.";
+                break;
+            case DataQualityIssueType::LATENCY_ISSUE:
+                recommendation << "Investigate system performance and network connectivity.";
+                break;
+            case DataQualityIssueType::INVALID_PRICE:
+                recommendation << "Validate price normalization and range checking.";
+                break;
+            case DataQualityIssueType::INVALID_VOLUME:
+                recommendation << "Check volume validation filters and data source integrity.";
+                break;
+            case DataQualityIssueType::MISSING_FIELD:
+                recommendation << "Ensure all required fields are populated in data source.";
+                break;
+        }
+
+        if (console_alerts_enabled_) {
+            std::cout << recommendation.str() << std::endl;
+        }
+    }
+
+    // Enhanced alerting: Track alert frequency to prevent spam
+    auto now = std::chrono::high_resolution_clock::now();
+    recent_alert_times_.push_back(now);
+
+    // Clean up old alert times (older than 1 minute)
+    auto one_minute_ago = now - std::chrono::minutes(1);
+    recent_alert_times_.erase(
+        std::remove_if(recent_alert_times_.begin(), recent_alert_times_.end(),
+            [one_minute_ago](const auto& time) {
+                return time < one_minute_ago;
+            }),
+        recent_alert_times_.end()
+    );
+
+    // If too many alerts in a short period, send a summary instead of individual alerts
+    if (recent_alert_times_.size() > 20) { // More than 20 alerts in the last minute
+        if (console_alerts_enabled_) {
+            std::cout << "[ALERT SUMMARY] High volume of data quality alerts detected ("
+                      << recent_alert_times_.size() << "). Consider investigating underlying data source." << std::endl;
+        }
+    }
 }
 
 void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const std::string& problem_description) {
@@ -1514,6 +1607,77 @@ void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const s
 
     // In a real implementation, this would trigger visual indicators in the UI
     // such as flashing red borders, popups, or other visual cues
+}
+
+// Method to get a user-friendly summary of data quality issues
+std::string DataQualityMonitor::get_user_friendly_summary() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream summary;
+    summary << "\n=== DATA QUALITY STATUS ===" << std::endl;
+
+    // Overall health indicator
+    double quality_score = 100.0;
+    if (metrics_.total_trades_processed > 0) {
+        double error_rate = static_cast<double>(metrics_.missing_data_issues +
+                                               metrics_.duplicate_trade_issues +
+                                               metrics_.out_of_order_timestamp_issues +
+                                               metrics_.latency_issues +
+                                               metrics_.invalid_price_issues +
+                                               metrics_.invalid_volume_issues) /
+                           static_cast<double>(metrics_.total_trades_processed);
+        quality_score = (1.0 - std::min(error_rate, 1.0)) * 100.0;
+    }
+
+    if (quality_score >= 95.0) {
+        summary << "Status: EXCELLENT (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+    } else if (quality_score >= 90.0) {
+        summary << "Status: GOOD (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+    } else if (quality_score >= 80.0) {
+        summary << "Status: FAIR (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+    } else if (quality_score >= 70.0) {
+        summary << "Status: POOR (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+    } else {
+        summary << "Status: CRITICAL (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+    }
+
+    summary << "\nIssues Detected:" << std::endl;
+    summary << "- Missing data: " << metrics_.missing_data_issues << std::endl;
+    summary << "- Duplicate trades: " << metrics_.duplicate_trade_issues << std::endl;
+    summary << "- Out-of-order timestamps: " << metrics_.out_of_order_timestamp_issues << std::endl;
+    summary << "- Latency issues: " << metrics_.latency_issues << std::endl;
+    summary << "- Invalid prices: " << metrics_.invalid_price_issues << std::endl;
+    summary << "- Invalid volumes: " << metrics_.invalid_volume_issues << std::endl;
+    summary << "- Missing fields: " << metrics_.missing_field_issues << std::endl;
+
+    summary << "\nPerformance Metrics:" << std::endl;
+    summary << "- Total trades processed: " << metrics_.total_trades_processed << std::endl;
+    summary << "- Average latency: " << std::fixed << std::setprecision(2)
+            << metrics_.average_latency_ms << " ms" << std::endl;
+
+    // Highlight the most problematic symbols
+    if (!recent_issues_.empty()) {
+        std::unordered_map<std::string, size_t> symbol_issue_counts;
+        for (const auto& issue : recent_issues_) {
+            symbol_issue_counts[issue.symbol]++;
+        }
+
+        // Sort symbols by issue count
+        std::vector<std::pair<std::string, size_t>> sorted_symbols(symbol_issue_counts.begin(), symbol_issue_counts.end());
+        std::sort(sorted_symbols.begin(), sorted_symbols.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        if (!sorted_symbols.empty()) {
+            summary << "\nMost Affected Symbols:" << std::endl;
+            for (size_t i = 0; i < std::min(sorted_symbols.size(), static_cast<size_t>(5)); ++i) {
+                summary << "- " << sorted_symbols[i].first << ": " << sorted_symbols[i].second << " issues" << std::endl;
+            }
+        }
+    }
+
+    summary << "===========================" << std::endl;
+
+    return summary.str();
 }
 
 void DataQualityMonitor::alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time) {
@@ -1779,6 +1943,9 @@ void DataQualityMonitor::monitor_data_stream_health(const std::string& symbol) {
                                      oss.str(), 0.75);
                 metrics_.missing_data_issues++;
                 add_issue(issue);
+
+                // Alert user to this data stream degradation
+                alert_user_to_data_problems(symbol, oss.str(), 0.75);
             } else if (ratio < 0.1) { // Recent intervals are much shorter - potential duplicate flood
                 std::ostringstream oss;
                 oss << "Abnormal data stream acceleration detected for " << symbol
@@ -1792,6 +1959,9 @@ void DataQualityMonitor::monitor_data_stream_health(const std::string& symbol) {
                                      oss.str(), 0.7);
                 metrics_.duplicate_trade_issues++;
                 add_issue(issue);
+
+                // Alert user to this abnormal data stream
+                alert_user_to_data_problems(symbol, oss.str(), 0.7);
             }
         }
     }
@@ -1816,6 +1986,83 @@ void DataQualityMonitor::monitor_data_stream_health(const std::string& symbol) {
                                  oss.str(), 0.8);
             metrics_.missing_data_issues++;
             add_issue(issue);
+
+            // Alert user to this extended data gap
+            alert_user_to_data_problems(symbol, oss.str(), 0.8);
+        }
+    }
+
+    // Enhanced data stream health monitoring: Check for consistency in trade patterns
+    if (stats.recent_intervals.size() >= 20) {
+        // Calculate coefficient of variation to detect inconsistent patterns
+        double sum = 0;
+        for (const auto& interval : stats.recent_intervals) {
+            sum += interval;
+        }
+        double mean = sum / stats.recent_intervals.size();
+
+        if (mean > 0) {
+            double variance_sum = 0;
+            for (const auto& interval : stats.recent_intervals) {
+                variance_sum += (interval - mean) * (interval - mean);
+            }
+            double std_dev = sqrt(variance_sum / stats.recent_intervals.size());
+            double coeff_variation = mean > 0 ? std_dev / mean : 0;
+
+            // High coefficient of variation indicates inconsistent data arrival patterns
+            if (coeff_variation > 1.0) { // Highly variable pattern
+                std::ostringstream oss;
+                oss << "Highly inconsistent data arrival pattern for " << symbol
+                    << ". Coefficient of variation: " << std::fixed << std::setprecision(2)
+                    << coeff_variation << " (threshold: 1.0)";
+
+                DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol,
+                                     std::chrono::duration_cast<std::chrono::milliseconds>(
+                                         std::chrono::high_resolution_clock::now().time_since_epoch()).count(),
+                                     oss.str(), 0.6);
+                metrics_.missing_data_issues++;
+                add_issue(issue);
+
+                // Alert user to inconsistent data patterns
+                alert_user_to_data_problems(symbol, oss.str(), 0.6);
+            }
+        }
+    }
+
+    // Check for potential data feed failures by monitoring trade volume patterns
+    // If we see a sudden drop in trade frequency, it might indicate a data feed issue
+    if (stats.recent_intervals.size() >= 15) {
+        // Compare first half vs second half of recent intervals to detect drops in frequency
+        size_t mid = stats.recent_intervals.size() / 2;
+        uint64_t first_half_avg = 0, second_half_avg = 0;
+
+        for (size_t i = 0; i < mid; ++i) {
+            first_half_avg += stats.recent_intervals[i];
+        }
+        first_half_avg = (mid > 0) ? first_half_avg / mid : 0;
+
+        for (size_t i = mid; i < stats.recent_intervals.size(); ++i) {
+            second_half_avg += stats.recent_intervals[i];
+        }
+        size_t second_half_count = stats.recent_intervals.size() - mid;
+        second_half_avg = (second_half_count > 0) ? second_half_avg / second_half_count : 0;
+
+        // If second half has significantly higher intervals (lower frequency), flag it
+        if (first_half_avg > 0 && second_half_avg > first_half_avg * 3) {
+            std::ostringstream oss;
+            oss << "Potential data feed degradation for " << symbol
+                << ". Recent interval avg: " << second_half_avg
+                << "ms vs previous avg: " << first_half_avg << "ms";
+
+            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol,
+                                 std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::high_resolution_clock::now().time_since_epoch()).count(),
+                                 oss.str(), 0.7);
+            metrics_.missing_data_issues++;
+            add_issue(issue);
+
+            // Alert user to potential data feed degradation
+            alert_user_to_data_problems(symbol, oss.str(), 0.7);
         }
     }
 }

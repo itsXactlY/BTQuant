@@ -498,11 +498,13 @@ void DashboardControls::render_dashboard_controls() {
       // Create a grid layout for panel buttons (2 columns)
       ImGui::Columns(2, "panel_buttons", true);
 
+      // First column buttons
       if (ImGui::Button("Add Chart", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::CHART);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a price chart panel for technical analysis");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Footprint", ImVec2(-1, 30))) {
@@ -510,6 +512,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a footprint chart showing trade volume at price levels");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Volume Profile", ImVec2(-1, 30))) {
@@ -517,6 +520,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a volume profile chart showing volume distribution by price");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Order Book", ImVec2(-1, 30))) {
@@ -524,13 +528,16 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::ORDERBOOK);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add an order book panel showing buy/sell orders at different price levels");
       ImGui::NextColumn();
 
+      // Second column buttons
       if (ImGui::Button("Add Time&Sales", ImVec2(-1, 30))) {
         if (panel_manager_) {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a time and sales panel showing recent trades");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Watchlist", ImVec2(-1, 30))) {
@@ -538,6 +545,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::WATCHLIST);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a watchlist panel to monitor multiple symbols");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add News", ImVec2(-1, 30))) {
@@ -545,11 +553,19 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::ALERTS);
         }
       }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a news and alerts panel for market updates");
       ImGui::NextColumn();
 
       ImGui::Columns(1); // Reset to single column
 
       ImGui::Spacing();
+
+      // Add a separator and status information
+      ImGui::Separator();
+      if (panel_manager_) {
+        auto panel_count = panel_manager_->get_panel_count();
+        ImGui::Text("Active Panels: %zu", panel_count);
+      }
     }
 
     // Timeframe selection section

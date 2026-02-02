@@ -227,7 +227,7 @@
 
 ### Phase 10a: Panel Creation [Complexity: S]
 - [ ] Create Dashboard Controls panel with buttons to add new panels: Add Chart, Add Footprint, Add Volume Profile, Add Order Book, Add Time&Sales, Add Watchlist, Add News in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
-- [ ] Implement symbol selection dropdown in dashboard controls: search-enabled dropdown populated from exchange API, applies to all panels when changed in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
+- [x] Implement symbol selection dropdown in dashboard controls: search-enabled dropdown populated from exchange API, applies to all panels when changed in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
 - [ ] Add exchange selector: multi-select dropdown for choosing active exchanges, filters available symbols in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
 - [ ] Implement timeframe selector: buttons for 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w affecting all chart-based panels simultaneously in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
 

@@ -31,7 +31,8 @@ enum class TimeSyncStrategy {
   MEDIAN_TIMESTAMP,      // Use median timestamp among exchanges
   ADAPTIVE_SYNC,         // Adaptive synchronization based on market conditions
   SMART_SYNC,            // Smart synchronization considering reliability and freshness
-  PREDICTIVE_SYNC        // Predictive synchronization using historical patterns
+  PREDICTIVE_SYNC,       // Predictive synchronization using historical patterns
+  WINDOWED_SYNC          // Windowed synchronization considering only recent data
 };
 
 // Exchange-specific features and configurations
@@ -83,6 +84,37 @@ struct MultiExchangeData {
   double lowest_ask = 0.0;                // Lowest ask across all exchanges
   double price_volatility = 0.0;          // Price variation across exchanges
   double price_std_deviation = 0.0;       // Standard deviation of prices across exchanges
+
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Detailed data for a single exchange
+struct ExchangeDetailedData {
+  RenderEngine::MarketDataUpdate update;
+  ExchangeFeatures features;
+  ExchangeSpecificStats stats;
+};
+
+// Market metrics across all exchanges
+struct MarketMetrics {
+  double average_price = 0.0;
+  double spread = 0.0;                    // Difference between highest and lowest prices
+  double volatility = 0.0;                // Normalized price variation
+  double total_volume = 0.0;              // Total volume across all exchanges
+  double correlation_coefficient = 0.0;   // Correlation between exchanges
+};
+
+// Comprehensive view of all exchanges for a symbol
+struct ComprehensiveExchangeView {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeDetailedData> exchange_details;  // Detailed data per exchange
+  MarketMetrics market_metrics;                                           // Overall market metrics
+
+  // Arbitrage detection
+  bool arbitrage_detected = false;
+  double arbitrage_profit = 0.0;
+  std::string bid_exchange = "";
+  std::string ask_exchange = "";
 
   std::chrono::high_resolution_clock::time_point timestamp;
 };
@@ -267,6 +299,8 @@ class ExchangeAggregator {
   std::vector<MultiExchangeData> getAllSymbolsMultiExchangeView() const;
   std::optional<AggregatedMarketData> getAdvancedAggregatedData(
       const std::string& symbol, const std::vector<std::string>& exchanges = {}) const;
+  std::optional<ComprehensiveExchangeView> getComprehensiveExchangeView(
+      const std::string& symbol) const;
 };
 
 }  // namespace Data

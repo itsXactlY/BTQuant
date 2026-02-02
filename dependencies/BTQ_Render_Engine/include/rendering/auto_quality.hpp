@@ -26,6 +26,19 @@ struct QualitySettings {
     float shadow_quality = 1.0f;                 ///< Shadow quality multiplier (0.0 to 1.0)
     float reflection_quality = 1.0f;             ///< Reflection quality multiplier (0.0 to 1.0)
     float post_process_quality = 1.0f;           ///< Post-process quality multiplier (0.0 to 1.0)
+    int msaa_samples = 4;                        ///< MSAA sample count (1, 2, 4, 8, 16)
+    bool enable_motion_blur = true;              ///< Enable motion blur effects
+    bool enable_bloom = true;                    ///< Enable bloom effects
+    bool enable_depth_of_field = true;           ///< Enable depth of field
+    int max_lights = 8;                          ///< Maximum number of lights
+    int max_particles = 10000;                   ///< Maximum number of particles
+    bool enable_dynamic_lod = true;              ///< Enable dynamic level of detail
+    float lod_bias = 1.0f;                       ///< Level of detail bias (higher = more detail)
+    bool enable_occlusion_culling = true;        ///< Enable occlusion culling
+    bool enable_frustum_culling = true;          ///< Enable frustum culling
+    float shadow_map_resolution = 2048.0f;       ///< Shadow map resolution
+    int max_shadow_cascades = 4;                 ///< Maximum shadow cascades
+    bool enable_ssao = true;                     ///< Enable screen space ambient occlusion
 };
 
 /**
@@ -103,8 +116,13 @@ private:
     void initializeQualityLevels();
     void updatePerformanceScore();
     double calculateFrameTimeVariance() const;
+    double calculateStabilityScore(double variance) const;
+    double calculateResponsivenessScore() const;
     void checkAndAdjustQuality();
     bool hasBeenStableAtCurrentLevel() const;
+    int determineQualityReduction();
+    int determineQualityIncrease();
+    void logPerformanceStats() const;
 };
 
 } // namespace RenderEngine

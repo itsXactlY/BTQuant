@@ -29,7 +29,7 @@ protected:
 };
 
 TEST_F(AutoQualityControllerTest, ConstructorInitializesCorrectly) {
-    EXPECT_EQ(controller_->getCurrentQualityIndex(), 4); // Should start at highest quality (index 0)
+    EXPECT_EQ(controller_->getCurrentQualityIndex(), 0); // Should start at highest quality (index 0)
     EXPECT_NEAR(controller_->getPerformanceScore(), 100.0, 0.1);
 }
 
@@ -40,7 +40,7 @@ TEST_F(AutoQualityControllerTest, RecordFrameTimeUpdatesPerformance) {
     }
     
     EXPECT_NEAR(controller_->getPerformanceScore(), 100.0, 5.0);
-    EXPECT_EQ(controller_->getCurrentQualityIndex(), 4); // Should remain at highest quality
+    EXPECT_EQ(controller_->getCurrentQualityIndex(), 0); // Should remain at highest quality
 }
 
 TEST_F(AutoQualityControllerTest, PoorPerformanceTriggersQualityReduction) {
@@ -96,7 +96,7 @@ TEST_F(AutoQualityControllerTest, ResetRestoresInitialState) {
     
     // Reset and verify it goes back to initial state
     controller_->reset();
-    EXPECT_EQ(controller_->getCurrentQualityIndex(), 4); // Back to highest quality
+    EXPECT_EQ(controller_->getCurrentQualityIndex(), 0); // Back to highest quality
     EXPECT_NEAR(controller_->getPerformanceScore(), 100.0, 0.1);
 }
 

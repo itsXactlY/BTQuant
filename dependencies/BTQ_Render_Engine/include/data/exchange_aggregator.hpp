@@ -30,7 +30,8 @@ enum class TimeSyncStrategy {
   OFFSET_COMPENSATION,   // Apply calculated offsets to align times
   MEDIAN_TIMESTAMP,      // Use median timestamp among exchanges
   ADAPTIVE_SYNC,         // Adaptive synchronization based on market conditions
-  SMART_SYNC             // Smart synchronization considering reliability and freshness
+  SMART_SYNC,            // Smart synchronization considering reliability and freshness
+  PREDICTIVE_SYNC        // Predictive synchronization using historical patterns
 };
 
 // Exchange-specific features and configurations
@@ -59,17 +60,29 @@ struct ExchangeRanking {
   int64_t data_staleness_ms = 0;
 };
 
+// Exchange-specific statistics for detailed analysis
+struct ExchangeSpecificStats {
+  double price = 0.0;
+  double volume = 0.0;
+  double price_deviation_from_avg = 0.0;  // Difference from overall average price
+  double percent_price_deviation = 0.0;   // Percentage deviation from average
+  double latency_ms = 0.0;                // Latency compared to other exchanges
+  bool is_outlier = false;                // Whether this exchange's data is an outlier
+};
+
 // Multi-exchange data view for comprehensive analysis
 struct MultiExchangeData {
   std::string symbol;
   std::unordered_map<std::string, RenderEngine::MarketDataUpdate> exchange_data;
   std::unordered_map<std::string, ExchangeFeatures> exchange_features;
+  std::unordered_map<std::string, ExchangeSpecificStats> exchange_stats;  // Detailed stats per exchange
 
   // Calculated metrics across exchanges
   double spread = 0.0;                    // Difference between highest bid and lowest ask
   double highest_bid = 0.0;               // Highest bid across all exchanges
   double lowest_ask = 0.0;                // Lowest ask across all exchanges
   double price_volatility = 0.0;          // Price variation across exchanges
+  double price_std_deviation = 0.0;       // Standard deviation of prices across exchanges
 
   std::chrono::high_resolution_clock::time_point timestamp;
 };
@@ -92,6 +105,11 @@ struct AggregatedMarketData {
   double aggregated_ask = 0.0;           // Best ask price among exchanges
   double consensus_price = 0.0;          // Consensus price using weighted median
   uint64_t synchronized_timestamp = 0;
+
+  // Advanced aggregation metrics
+  double vwap = 0.0;                     // Volume Weighted Average Price
+  double median_price = 0.0;             // Median price across exchanges
+  double trimmed_mean_price = 0.0;       // Trimmed mean to reduce outlier impact
 
   // Time synchronization info
   std::map<std::string, uint64_t> exchange_timestamps;
@@ -229,6 +247,9 @@ class ExchangeAggregator {
   std::optional<MultiExchangeData> getMultiExchangeView(const std::string& symbol) const;
   void applyExchangeSpecificAdjustments(RenderEngine::MarketDataUpdate& data,
                                      const std::string& exchange) const;
+  void validateExchangeSpecificConstraints(const std::string& exchange,
+                                        const std::string& symbol,
+                                        const RenderEngine::MarketDataUpdate& data) const;
   std::vector<ExchangeRanking> rankExchangesByReliability() const;
   double calculateConsensusPrice(const std::string& symbol) const;
   void handleExchangeSpecificFeatures(const std::string& exchange,
@@ -240,6 +261,12 @@ class ExchangeAggregator {
       const std::string& symbol, const std::vector<std::string>& exchanges) const;
   double calculateConsensusPriceForExchanges(
       const std::string& symbol, const std::vector<std::string>& exchanges) const;
+
+  // Enhanced multi-exchange aggregation methods
+  std::optional<AggregatedMarketData> getUnifiedView(const std::string& symbol) const;
+  std::vector<MultiExchangeData> getAllSymbolsMultiExchangeView() const;
+  std::optional<AggregatedMarketData> getAdvancedAggregatedData(
+      const std::string& symbol, const std::vector<std::string>& exchanges = {}) const;
 };
 
 }  // namespace Data

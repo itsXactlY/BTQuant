@@ -147,6 +147,9 @@ void ExchangeAggregator::processDataUpdate(const std::string& exchange, const st
         return;
     }
 
+    // Validate exchange-specific constraints
+    validateExchangeSpecificConstraints(exchange, symbol, update);
+
     // Handle exchange-specific features and adjustments
     RenderEngine::MarketDataUpdate adjusted_update = update;
     applyExchangeSpecificAdjustments(adjusted_update, exchange);
@@ -590,6 +593,44 @@ void ExchangeAggregator::synchronizeTimestamps(AggregatedMarketData& data) const
 
             if (total_weight > 0.0) {
                 data.synchronized_timestamp = static_cast<uint64_t>(weighted_sum / total_weight);
+            } else {
+                data.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::PREDICTIVE_SYNC: {
+            // Predictive synchronization using historical patterns and trends
+            if (timestamps.size() == 1) {
+                data.synchronized_timestamp = timestamps[0];
+                break;
+            }
+
+            // For predictive sync, we consider historical timing patterns
+            // This would typically use historical data to predict the most accurate timestamp
+            // For now, we'll implement a basic version that predicts based on exchange latency patterns
+
+            uint64_t predicted_sum = 0;
+            size_t valid_count = 0;
+
+            for (const auto& [ts, exchange] : timestamp_exchange_pairs) {
+                if (!isExchangeValid(exchange)) {
+                    continue;
+                }
+
+                auto exchange_it = exchange_features_.find(exchange);
+                double latency_offset = (exchange_it != exchange_features_.end()) ?
+                                      exchange_it->second.latency_offset_us : 0.0;
+
+                // Predict the "true" timestamp by compensating for known latency
+                uint64_t predicted_ts = ts + static_cast<uint64_t>(latency_offset);
+
+                predicted_sum += predicted_ts;
+                valid_count++;
+            }
+
+            if (valid_count > 0) {
+                data.synchronized_timestamp = predicted_sum / valid_count;
             } else {
                 data.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
             }
@@ -1155,6 +1196,33 @@ std::optional<MultiExchangeData> ExchangeAggregator::getMultiExchangeView(const 
     if (!prices.empty()) {
         std::sort(prices.begin(), prices.end());
         multi_exchange_data.price_volatility = prices.back() - prices.front(); // Max difference
+
+        // Calculate additional volatility metrics
+        if (prices.size() > 1) {
+            double mean_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+            double variance = 0.0;
+            for (double price : prices) {
+                variance += (price - mean_price) * (price - mean_price);
+            }
+            variance /= prices.size();
+            multi_exchange_data.price_std_deviation = std::sqrt(variance);
+        }
+    }
+
+    // Calculate exchange-specific statistics
+    for (const auto& [exchange, data] : multi_exchange_data.exchange_data) {
+        ExchangeSpecificStats stats;
+        stats.price = data.price;
+        stats.volume = data.size;
+
+        // Calculate price relative to overall average
+        if (!prices.empty()) {
+            double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+            stats.price_deviation_from_avg = data.price - avg_price;
+            stats.percent_price_deviation = (avg_price > 0) ? (stats.price_deviation_from_avg / avg_price) * 100.0 : 0.0;
+        }
+
+        multi_exchange_data.exchange_stats[exchange] = stats;
     }
 
     multi_exchange_data.timestamp = std::chrono::high_resolution_clock::now();
@@ -1187,6 +1255,74 @@ void ExchangeAggregator::applyExchangeSpecificAdjustments(RenderEngine::MarketDa
         // For now, just log that this exchange has fees
         BTQ_LOG_DEBUG(std::format("Processing data from {} with {} fee rate",
                                  exchange, features.trading_fee_rate));
+    }
+
+    // Apply exchange-specific precision adjustments
+    if (features.max_order_size > 0) {
+        // Limit the size to the exchange's maximum order size
+        if (data.size > features.max_order_size) {
+            BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to max order size limit",
+                                       data.size, features.max_order_size, exchange));
+            data.size = features.max_order_size;
+        }
+    }
+
+    // Apply exchange-specific minimum order size
+    if (features.min_order_size > 0 && data.size < features.min_order_size) {
+        BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to min order size requirement",
+                                   data.size, features.min_order_size, exchange));
+        data.size = features.min_order_size;
+    }
+
+    // Apply timezone adjustments if needed
+    if (features.timezone != "UTC") {
+        // In a real implementation, we would convert timestamps based on timezone
+        // For now, just note the timezone difference
+        BTQ_LOG_DEBUG(std::format("Exchange {} operates in timezone {}, data timestamp adjustment may be needed",
+                                 exchange, features.timezone));
+    }
+}
+
+void ExchangeAggregator::validateExchangeSpecificConstraints(const std::string& exchange,
+                                                          const std::string& symbol,
+                                                          const RenderEngine::MarketDataUpdate& data) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto features_it = exchange_features_.find(exchange);
+    if (features_it == exchange_features_.end()) {
+        return; // No features found for this exchange
+    }
+
+    const auto& features = features_it->second;
+
+    // Validate against exchange-specific constraints
+    if (data.size > features.max_order_size) {
+        BTQ_LOG_WARNING(std::format("Order size {} exceeds max allowed {} for exchange {} on symbol {}",
+                                   data.size, features.max_order_size, exchange, symbol));
+    }
+
+    if (data.size < features.min_order_size) {
+        BTQ_LOG_WARNING(std::format("Order size {} below min allowed {} for exchange {} on symbol {}",
+                                   data.size, features.min_order_size, exchange, symbol));
+    }
+
+    // Check if symbol is supported by this exchange
+    if (!features.supported_symbols.empty()) {
+        bool symbol_supported = std::find(features.supported_symbols.begin(),
+                                         features.supported_symbols.end(),
+                                         symbol) != features.supported_symbols.end();
+        if (!symbol_supported) {
+            BTQ_LOG_WARNING(std::format("Symbol {} is not in supported symbols list for exchange {}",
+                                       symbol, exchange));
+        }
+    }
+
+    // Check if data type is supported by this exchange
+    if (!features.supported_data_types.empty()) {
+        // Assuming we have a way to determine data type from the update
+        // For now, we'll just log this check
+        BTQ_LOG_DEBUG(std::format("Checking if exchange {} supports data type for symbol {}",
+                                 exchange, symbol));
     }
 }
 
@@ -1492,6 +1628,98 @@ double ExchangeAggregator::calculateConsensusPriceForExchanges(
 
     // Fallback to first price if something went wrong
     return price_weight_pairs[0].first;
+}
+
+std::optional<AggregatedMarketData> ExchangeAggregator::getUnifiedView(const std::string& symbol) const {
+    // This method provides a comprehensive unified view of multi-exchange data
+    // It combines all the aggregation features into a single, comprehensive view
+    return getAggregatedData(symbol);
+}
+
+std::vector<MultiExchangeData> ExchangeAggregator::getAllSymbolsMultiExchangeView() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    std::vector<MultiExchangeData> all_views;
+
+    for (const auto& [symbol, _] : exchange_data_) {
+        auto view = getMultiExchangeView(symbol);
+        if (view.has_value()) {
+            all_views.push_back(view.value());
+        }
+    }
+
+    return all_views;
+}
+
+std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedAggregatedData(
+    const std::string& symbol,
+    const std::vector<std::string>& exchanges) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    AggregatedMarketData aggregated_data;
+    aggregated_data.symbol = symbol;
+    aggregated_data.sync_strategy = sync_strategy_;
+
+    // Filter data based on requested exchanges or use all if empty
+    std::unordered_map<std::string, RenderEngine::MarketDataUpdate> filtered_exchange_data;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        // If exchanges vector is empty, use all exchanges; otherwise, only use specified ones
+        bool include_exchange = exchanges.empty() ||
+                               std::find(exchanges.begin(), exchanges.end(), exchange) != exchanges.end();
+
+        if (include_exchange && isExchangeDataValid(exchange, data)) {
+            filtered_exchange_data[exchange] = data;
+            aggregated_data.exchange_data[exchange] = data;
+        }
+    }
+
+    if (filtered_exchange_data.empty()) {
+        return std::nullopt;
+    }
+
+    // Collect timestamps from all valid exchanges
+    for (const auto& [exchange, data] : filtered_exchange_data) {
+        aggregated_data.exchange_timestamps[exchange] = data.timestamp;
+    }
+
+    // Synchronize timestamps based on strategy
+    synchronizeTimestamps(aggregated_data);
+
+    // Calculate multiple aggregation methods for comprehensive view
+    aggregated_data.aggregated_price = calculateWeightedAveragePriceWithValidation(symbol);
+    aggregated_data.weighted_price = calculateVolumeWeightedPrice(filtered_exchange_data);
+    aggregated_data.consensus_price = calculateConsensusPrice(symbol);
+
+    // Calculate additional aggregation methods
+    aggregated_data.aggregated_high = calculateHighPrice(filtered_exchange_data);
+    aggregated_data.aggregated_low = calculateLowPrice(filtered_exchange_data);
+    aggregated_data.aggregated_bid = calculateBestBid(filtered_exchange_data);
+    aggregated_data.aggregated_ask = calculateBestAsk(filtered_exchange_data);
+
+    // Calculate total volume across all valid exchanges
+    double total_volume = 0.0;
+    for (const auto& [exchange, data] : filtered_exchange_data) {
+        total_volume += data.size;
+    }
+    aggregated_data.aggregated_volume = total_volume;
+
+    // Calculate advanced metrics
+    aggregated_data.vwap = calculateVWAP(filtered_exchange_data);
+    aggregated_data.median_price = calculateMedianPrice(filtered_exchange_data);
+    aggregated_data.trimmed_mean_price = calculateTrimmedMean(filtered_exchange_data, 0.1);
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, filtered_exchange_data, aggregated_data);
+    detectArbitrageOpportunities(filtered_exchange_data, aggregated_data);
+
+    aggregated_data.last_updated = std::chrono::high_resolution_clock::now();
+
+    return aggregated_data;
 }
 
 }  // namespace Data

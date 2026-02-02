@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "performance_monitor.hpp"
+#include "ui/layout_manager.hpp"
 
 namespace BTQuant {
 
@@ -132,67 +133,79 @@ void VulkanDashboard::init_components() {
       "Toggle Fullscreen", false, true);  // Alt+Enter
 
   // Quick-save hotkeys: F5-F8 to save layouts, Shift+F5-F8 to load layouts
-  // We need to register the same keys with different modifiers to handle both cases
-  im.registerHotKey(ImGuiKey_F5, [workspace]() {
+  // Using LayoutManager singleton for proper preset management
+  im.registerHotKey(ImGuiKey_F5, []() {
+    auto& layoutManager = UI::LayoutManager::getInstance();
     if (ImGui::GetIO().KeyShift) {
       // Shift+F5 - Load layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->load_layout("quick_save_1.json");
+      if (layoutManager.quick_load_layout(1)) {
         std::cout << "[Layout] Loaded Quick Save 1 (Shift+F5)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to load Quick Save 1 (Shift+F5)" << std::endl;
       }
     } else {
       // F5 - Save layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->save_layout("quick_save_1.json");
+      if (layoutManager.quick_save_layout(1)) {
         std::cout << "[Layout] Saved to Quick Save 1 (F5)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to save to Quick Save 1 (F5)" << std::endl;
       }
     }
   }, "Quick Save/Load Layout 1", false, false, false); // F5/F5+Shift
 
-  im.registerHotKey(ImGuiKey_F6, [workspace]() {
+  im.registerHotKey(ImGuiKey_F6, []() {
+    auto& layoutManager = UI::LayoutManager::getInstance();
     if (ImGui::GetIO().KeyShift) {
       // Shift+F6 - Load layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->load_layout("quick_save_2.json");
+      if (layoutManager.quick_load_layout(2)) {
         std::cout << "[Layout] Loaded Quick Save 2 (Shift+F6)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to load Quick Save 2 (Shift+F6)" << std::endl;
       }
     } else {
       // F6 - Save layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->save_layout("quick_save_2.json");
+      if (layoutManager.quick_save_layout(2)) {
         std::cout << "[Layout] Saved to Quick Save 2 (F6)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to save to Quick Save 2 (F6)" << std::endl;
       }
     }
   }, "Quick Save/Load Layout 2", false, false, false); // F6/F6+Shift
 
-  im.registerHotKey(ImGuiKey_F7, [workspace]() {
+  im.registerHotKey(ImGuiKey_F7, []() {
+    auto& layoutManager = UI::LayoutManager::getInstance();
     if (ImGui::GetIO().KeyShift) {
       // Shift+F7 - Load layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->load_layout("quick_save_3.json");
+      if (layoutManager.quick_load_layout(3)) {
         std::cout << "[Layout] Loaded Quick Save 3 (Shift+F7)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to load Quick Save 3 (Shift+F7)" << std::endl;
       }
     } else {
       // F7 - Save layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->save_layout("quick_save_3.json");
+      if (layoutManager.quick_save_layout(3)) {
         std::cout << "[Layout] Saved to Quick Save 3 (F7)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to save to Quick Save 3 (F7)" << std::endl;
       }
     }
   }, "Quick Save/Load Layout 3", false, false, false); // F7/F7+Shift
 
-  im.registerHotKey(ImGuiKey_F8, [workspace]() {
+  im.registerHotKey(ImGuiKey_F8, []() {
+    auto& layoutManager = UI::LayoutManager::getInstance();
     if (ImGui::GetIO().KeyShift) {
       // Shift+F8 - Load layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->load_layout("quick_save_4.json");
+      if (layoutManager.quick_load_layout(4)) {
         std::cout << "[Layout] Loaded Quick Save 4 (Shift+F8)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to load Quick Save 4 (Shift+F8)" << std::endl;
       }
     } else {
       // F8 - Save layout
-      if (workspace->getPanelManager()) {
-        workspace->getPanelManager()->save_layout("quick_save_4.json");
+      if (layoutManager.quick_save_layout(4)) {
         std::cout << "[Layout] Saved to Quick Save 4 (F8)" << std::endl;
+      } else {
+        std::cout << "[Layout] Failed to save to Quick Save 4 (F8)" << std::endl;
       }
     }
   }, "Quick Save/Load Layout 4", false, false, false); // F8/F8+Shift
@@ -539,19 +552,20 @@ void VulkanDashboard::render_performance_overlay() {
 }
 
 void VulkanDashboard::render_layout_indicator() {
-  // Get the active layout name from the workspace
-  std::string active_layout = "Default Layout";
+  // Get the active layout name from the LayoutManager
+  auto& layoutManager = UI::LayoutManager::getInstance();
+  std::string active_layout = layoutManager.get_active_layout_name();
 
-  if (m_workspace) {
-    auto* panel_manager = m_workspace->getPanelManager();
-    if (panel_manager) {
-      active_layout = panel_manager->get_current_layout_name();
-    }
+  // Get the active quick save slot
+  int active_slot = layoutManager.get_active_quick_slot();
+  std::string slot_info = "";
+  if (active_slot > 0) {
+      slot_info = " (QS" + std::to_string(active_slot) + ")";
   }
 
   // Position the layout indicator in the top-right corner
-  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 200, 30), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(190, 40), ImGuiCond_Always);
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 250, 30), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(240, 40), ImGuiCond_Always);
 
   // Create a transparent overlay window for the layout indicator
   ImGui::Begin("##LayoutIndicator", nullptr,
@@ -569,9 +583,15 @@ void VulkanDashboard::render_layout_indicator() {
 
   // Draw the layout indicator with a semi-transparent background
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f)); // Dark semi-transparent background
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));     // Light text
 
-  ImGui::Text("Layout: %s", active_layout.c_str());
+  // Change text color based on whether a quick save slot is active
+  if (active_slot > 0) {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.9f, 0.5f, 1.0f)); // Greenish color for active quick save
+  } else {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f)); // Light text
+  }
+
+  ImGui::Text("Layout: %s%s", active_layout.c_str(), slot_info.c_str());
 
   ImGui::PopStyleColor(2);
   ImGui::End();

@@ -333,5 +333,78 @@ bool LayoutManager::load_dashboard_layout(const std::string& layout_name) {
     return true;
 }
 
+// Quick-save functionality for F5-F8 hotkeys
+bool LayoutManager::quick_save_layout(int slot_num) {
+    if (slot_num < 1 || slot_num > 4) {
+        std::cerr << "Error: Invalid quick save slot number: " << slot_num << std::endl;
+        return false;
+    }
+
+    std::string preset_name = get_quick_save_name(slot_num);
+    std::string description = "Quick save layout slot " + std::to_string(slot_num);
+
+    std::cout << "[Layout] Saving to Quick Save " << slot_num << " (" << preset_name << ")" << std::endl;
+
+    // Save the current layout as a preset
+    bool success = save_current_layout_as_preset(preset_name, description, "Quick Save");
+
+    return success;
+}
+
+bool LayoutManager::quick_load_layout(int slot_num) {
+    if (slot_num < 1 || slot_num > 4) {
+        std::cerr << "Error: Invalid quick save slot number: " << slot_num << std::endl;
+        return false;
+    }
+
+    std::string preset_name = get_quick_save_name(slot_num);
+
+    std::cout << "[Layout] Loading Quick Save " << slot_num << " (" << preset_name << ")" << std::endl;
+
+    // Load the preset
+    bool success = load_preset_layout(preset_name);
+
+    if (success) {
+        // Set the active quick slot to the loaded slot
+        set_active_quick_slot(slot_num);
+    } else {
+        // If loading failed, set active slot to 0 (no active quick slot)
+        set_active_quick_slot(0);
+    }
+
+    return success;
+}
+
+std::string LayoutManager::get_quick_save_name(int slot_num) const {
+    switch (slot_num) {
+        case 1: return "Quick Save 1";
+        case 2: return "Quick Save 2";
+        case 3: return "Quick Save 3";
+        case 4: return "Quick Save 4";
+        default: return "Quick Save " + std::to_string(slot_num);
+    }
+}
+
+std::string LayoutManager::get_quick_save_filename(int slot_num) const {
+    return "quick_save_" + std::to_string(slot_num) + ".json";
+}
+
+std::string LayoutManager::get_active_layout_name() const {
+    if (!dashboard_layout_manager_) {
+        return "Unknown Layout";
+    }
+    return dashboard_layout_manager_->get_current_layout_name();
+}
+
+void LayoutManager::set_active_quick_slot(int slot_num) {
+    if (slot_num >= 0 && slot_num <= 4) {
+        active_quick_slot_ = slot_num;
+    }
+}
+
+int LayoutManager::get_active_quick_slot() const {
+    return active_quick_slot_;
+}
+
 }  // namespace UI
 }  // namespace BTQuant

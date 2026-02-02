@@ -5,6 +5,9 @@
  */
 
 #include "performance_monitor.hpp"
+#include "../include/performance/frame_time_graph.hpp"
+#include "../src/imgui/implot.h"
+#include "../src/imgui/imgui.h"
 
 #include <algorithm>
 #include <chrono>
@@ -13,216 +16,245 @@
 #include <iostream>
 #include <numeric>
 
-namespace BTQ::Render {
+namespace BTQuant {
 
 PerformanceMonitor::PerformanceMonitor()
-    : fps_history_(HISTORY_SIZE, 0.0),
-      frame_time_history_(HISTORY_SIZE, 0.0),
-      render_time_history_(HISTORY_SIZE, 0.0),
-      update_time_history_(HISTORY_SIZE, 0.0),
-      data_processing_time_history_(HISTORY_SIZE, 0.0),
-      memory_usage_history_(HISTORY_SIZE, 0.0),
-      gpu_usage_history_(HISTORY_SIZE, 0.0),
-      current_fps_(0.0),
-      current_frame_time_(0.0),
-      current_render_time_(0.0),
-      current_update_time_(0.0),
-      current_data_processing_time_(0.0),
-      current_memory_usage_(0.0),
-      current_gpu_usage_(0.0),
-      frame_count_(0),
-      history_index_(0),
-      last_update_time_(std::chrono::high_resolution_clock::now()) {}
+    : frame_start_(std::chrono::high_resolution_clock::now()),
+      current_frame_time_ms_(0.0),
+      frame_time_history_(),
+      used_memory_bytes_(0),
+      total_memory_bytes_(0),
+      data_processed_count_(0),
+      indicators_calculated_count_(0),
+      data_processing_time_ms_(0.0),
+      min_fps_(std::numeric_limits<double>::max()),
+      max_fps_(0.0),
+      enabled_(true) {
+    frame_time_history_.reserve(MAX_HISTORY_SIZE);
+}
 
 PerformanceMonitor::~PerformanceMonitor() = default;
 
-void PerformanceMonitor::update_fps(double fps) {
-  current_fps_ = fps;
-  fps_history_[history_index_] = fps;
+void PerformanceMonitor::start_frame() {
+    if (!enabled_) return;
+
+    frame_start_ = std::chrono::high_resolution_clock::now();
+
+    // Also start the global frame time graph
+    g_frame_time_graph.start_frame();
 }
 
-void PerformanceMonitor::update_frame_time(double frame_time_ms) {
-  current_frame_time_ = frame_time_ms;
-  frame_time_history_[history_index_] = frame_time_ms;
+void PerformanceMonitor::end_frame() {
+    if (!enabled_) return;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        end_time - frame_start_);
+
+    double frame_time_ms = static_cast<double>(duration.count()) / 1000.0;
+
+    // Update current frame time
+    current_frame_time_ms_ = frame_time_ms;
+
+    // Add to history
+    {
+        std::lock_guard<std::mutex> lock(history_mutex_);
+        frame_time_history_.push_back(frame_time_ms);
+
+        // Maintain buffer size
+        if (frame_time_history_.size() > MAX_HISTORY_SIZE) {
+            frame_time_history_.erase(frame_time_history_.begin());
+        }
+    }
+
+    // Update FPS
+    double current_fps = frame_time_ms > 0 ? 1000.0 / frame_time_ms : 0.0;
+
+    // Update min/max FPS
+    if (current_fps > max_fps_) {
+        max_fps_ = current_fps;
+    }
+    if (current_fps < min_fps_ || min_fps_ == std::numeric_limits<double>::max()) {
+        min_fps_ = current_fps;
+    }
+
+    // Also end the frame for the global frame time graph
+    g_frame_time_graph.end_frame();
 }
 
-void PerformanceMonitor::update_render_time(double render_time_ms) {
-  current_render_time_ = render_time_ms;
-  render_time_history_[history_index_] = render_time_ms;
+double PerformanceMonitor::get_frame_time_ms() const {
+    return current_frame_time_ms_;
 }
 
-void PerformanceMonitor::update_update_time(double update_time_ms) {
-  current_update_time_ = update_time_ms;
-  update_time_history_[history_index_] = update_time_ms;
+double PerformanceMonitor::get_avg_frame_time_ms(size_t window_size) const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    size_t count = std::min(window_size, frame_time_history_.size());
+    if (count == 0) return 0.0;
+
+    double sum = 0.0;
+    for (size_t i = frame_time_history_.size() - count; i < frame_time_history_.size(); ++i) {
+        sum += frame_time_history_[i];
+    }
+
+    return sum / count;
 }
 
-void PerformanceMonitor::update_data_processing_time(double data_processing_time_ms) {
-  current_data_processing_time_ = data_processing_time_ms;
-  data_processing_time_history_[history_index_] = data_processing_time_ms;
+double PerformanceMonitor::get_fps() const {
+    return current_frame_time_ms_ > 0 ? 1000.0 / current_frame_time_ms_ : 0.0;
 }
 
-void PerformanceMonitor::update_memory_usage(double memory_usage_mb) {
-  current_memory_usage_ = memory_usage_mb;
-  memory_usage_history_[history_index_] = memory_usage_mb;
+double PerformanceMonitor::get_avg_fps(size_t window_size) const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    size_t count = std::min(window_size, frame_time_history_.size());
+    if (count == 0) return 0.0;
+
+    double total_time = 0.0;
+    for (size_t i = frame_time_history_.size() - count; i < frame_time_history_.size(); ++i) {
+        total_time += frame_time_history_[i];
+    }
+
+    if (total_time > 0.0) {
+        return (count * 1000.0) / total_time;
+    }
+    return 0.0;
 }
 
-void PerformanceMonitor::update_gpu_usage(double gpu_usage_percent) {
-  current_gpu_usage_ = gpu_usage_percent;
-  gpu_usage_history_[history_index_] = gpu_usage_percent;
+double PerformanceMonitor::get_max_fps() const {
+    return max_fps_;
 }
 
-void PerformanceMonitor::tick() {
-  frame_count_++;
-  history_index_ = (history_index_ + 1) % HISTORY_SIZE;
-
-  // Update metrics every second
-  auto now = std::chrono::high_resolution_clock::now();
-  auto elapsed = std::chrono::duration<double>(now - last_update_time_).count();
-
-  if (elapsed >= 1.0) {
-    update_aggregated_metrics();
-    last_update_time_ = now;
-  }
+double PerformanceMonitor::get_min_fps() const {
+    return min_fps_ != std::numeric_limits<double>::max() ? min_fps_ : 0.0;
 }
 
-PerformanceMetrics PerformanceMonitor::get_metrics() const {
-  PerformanceMetrics metrics;
-  metrics.fps = current_fps_;
-  metrics.frame_time_ms = current_frame_time_;
-  metrics.render_time_ms = current_render_time_;
-  metrics.update_time_ms = current_update_time_;
-  metrics.data_processing_time_ms = current_data_processing_time_;
-  metrics.memory_usage_mb = current_memory_usage_;
-  metrics.gpu_usage_percent = current_gpu_usage_;
-  metrics.frame_count = frame_count_;
-
-  return metrics;
+void PerformanceMonitor::set_memory_usage(size_t used_bytes, size_t total_bytes) {
+    used_memory_bytes_ = used_bytes;
+    total_memory_bytes_ = total_bytes;
 }
 
-AggregatedMetrics PerformanceMonitor::get_aggregated_metrics() const { return aggregated_metrics_; }
+double PerformanceMonitor::get_memory_usage_percent() const {
+    if (total_memory_bytes_ == 0) return 0.0;
+    return static_cast<double>(used_memory_bytes_) / static_cast<double>(total_memory_bytes_) * 100.0;
+}
+
+size_t PerformanceMonitor::get_used_memory_bytes() const {
+    return used_memory_bytes_;
+}
+
+size_t PerformanceMonitor::get_total_memory_bytes() const {
+    return total_memory_bytes_;
+}
+
+void PerformanceMonitor::increment_data_processed(size_t count) {
+    data_processed_count_ += count;
+}
+
+void PerformanceMonitor::increment_indicators_calculated(size_t count) {
+    indicators_calculated_count_ += count;
+}
+
+void PerformanceMonitor::set_data_processing_time(double ms) {
+    data_processing_time_ms_ = ms;
+}
+
+size_t PerformanceMonitor::get_data_processed_count() const {
+    return data_processed_count_;
+}
+
+size_t PerformanceMonitor::get_indicators_calculated_count() const {
+    return indicators_calculated_count_;
+}
+
+double PerformanceMonitor::get_data_processing_time_ms() const {
+    return data_processing_time_ms_;
+}
 
 void PerformanceMonitor::reset() {
-  std::fill(fps_history_.begin(), fps_history_.end(), 0.0);
-  std::fill(frame_time_history_.begin(), frame_time_history_.end(), 0.0);
-  std::fill(render_time_history_.begin(), render_time_history_.end(), 0.0);
-  std::fill(update_time_history_.begin(), update_time_history_.end(), 0.0);
-  std::fill(data_processing_time_history_.begin(), data_processing_time_history_.end(), 0.0);
-  std::fill(memory_usage_history_.begin(), memory_usage_history_.end(), 0.0);
-  std::fill(gpu_usage_history_.begin(), gpu_usage_history_.end(), 0.0);
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    frame_time_history_.clear();
 
-  current_fps_ = 0.0;
-  current_frame_time_ = 0.0;
-  current_render_time_ = 0.0;
-  current_update_time_ = 0.0;
-  current_data_processing_time_ = 0.0;
-  current_memory_usage_ = 0.0;
-  current_gpu_usage_ = 0.0;
+    // Reset statistics
+    current_frame_time_ms_ = 0.0;
+    used_memory_bytes_ = 0;
+    total_memory_bytes_ = 0;
+    data_processed_count_ = 0;
+    indicators_calculated_count_ = 0;
+    data_processing_time_ms_ = 0.0;
+    min_fps_ = std::numeric_limits<double>::max();
+    max_fps_ = 0.0;
 
-  frame_count_ = 0;
-  history_index_ = 0;
-
-  aggregated_metrics_ = AggregatedMetrics{};
+    // Also reset the global frame time graph
+    g_frame_time_graph.reset();
 }
 
-void PerformanceMonitor::print_report() const {
-  std::cout << "\n========================================" << std::endl;
-  std::cout << "  Performance Report" << std::endl;
-  std::cout << "========================================" << std::endl;
+std::vector<PerformanceMetric> PerformanceMonitor::get_metrics() const {
+    std::vector<PerformanceMetric> metrics;
 
-  std::cout << "\nCurrent Metrics:" << std::endl;
-  std::cout << "  FPS: " << std::fixed << std::setprecision(1) << current_fps_ << std::endl;
-  std::cout << "  Frame Time: " << std::fixed << std::setprecision(2) << current_frame_time_
-            << " ms" << std::endl;
-  std::cout << "  Render Time: " << std::fixed << std::setprecision(2) << current_render_time_
-            << " ms" << std::endl;
-  std::cout << "  Update Time: " << std::fixed << std::setprecision(2) << current_update_time_
-            << " ms" << std::endl;
-  std::cout << "  Data Processing: " << std::fixed << std::setprecision(2)
-            << current_data_processing_time_ << " ms" << std::endl;
-  std::cout << "  Memory Usage: " << std::fixed << std::setprecision(1) << current_memory_usage_
-            << " MB" << std::endl;
-  std::cout << "  GPU Usage: " << std::fixed << std::setprecision(1) << current_gpu_usage_ << "%"
-            << std::endl;
+    // Add frame time metrics
+    PerformanceMetric frame_time_metric;
+    frame_time_metric.name = "Current Frame Time";
+    frame_time_metric.value = get_frame_time_ms();
+    frame_time_metric.unit = "ms";
+    frame_time_metric.avg_value = get_avg_frame_time_ms();
+    frame_time_metric.min_value = get_min_frame_time();
+    frame_time_metric.max_value = get_max_frame_time();
+    frame_time_metric.timestamp = std::chrono::high_resolution_clock::now();
+    metrics.push_back(frame_time_metric);
 
-  std::cout << "\nAggregated Metrics (Last " << HISTORY_SIZE << " frames):" << std::endl;
-  std::cout << "  Average FPS: " << std::fixed << std::setprecision(1)
-            << aggregated_metrics_.avg_fps << std::endl;
-  std::cout << "  Min FPS: " << std::fixed << std::setprecision(1) << aggregated_metrics_.min_fps
-            << std::endl;
-  std::cout << "  Max FPS: " << std::fixed << std::setprecision(1) << aggregated_metrics_.max_fps
-            << std::endl;
-  std::cout << "  Average Frame Time: " << std::fixed << std::setprecision(2)
-            << aggregated_metrics_.avg_frame_time << " ms" << std::endl;
-  std::cout << "  Min Frame Time: " << std::fixed << std::setprecision(2)
-            << aggregated_metrics_.min_frame_time << " ms" << std::endl;
-  std::cout << "  Max Frame Time: " << std::fixed << std::setprecision(2)
-            << aggregated_metrics_.max_frame_time << " ms" << std::endl;
-  std::cout << "  Frame Time StdDev: " << std::fixed << std::setprecision(2)
-            << aggregated_metrics_.stddev_frame_time << " ms" << std::endl;
+    // Add FPS metrics
+    PerformanceMetric fps_metric;
+    fps_metric.name = "Current FPS";
+    fps_metric.value = get_fps();
+    fps_metric.unit = "fps";
+    fps_metric.avg_value = get_avg_fps();
+    fps_metric.min_value = get_min_fps();
+    fps_metric.max_value = get_max_fps();
+    fps_metric.timestamp = std::chrono::high_resolution_clock::now();
+    metrics.push_back(fps_metric);
 
-  std::cout << "\nTotal Frames: " << frame_count_ << std::endl;
-  std::cout << "========================================\n" << std::endl;
+    // Add memory usage metrics
+    PerformanceMetric memory_metric;
+    memory_metric.name = "Memory Usage";
+    memory_metric.value = get_memory_usage_percent();
+    memory_metric.unit = "%";
+    memory_metric.avg_value = 0.0; // No average for this metric
+    memory_metric.min_value = 0.0;
+    memory_metric.max_value = 100.0;
+    memory_metric.timestamp = std::chrono::high_resolution_clock::now();
+    metrics.push_back(memory_metric);
+
+    return metrics;
 }
 
-void PerformanceMonitor::update_aggregated_metrics() {
-  // Calculate FPS statistics
-  double fps_sum = std::accumulate(fps_history_.begin(), fps_history_.end(), 0.0);
-  double fps_avg = fps_sum / HISTORY_SIZE;
-  double fps_min = *std::min_element(fps_history_.begin(), fps_history_.end());
-  double fps_max = *std::max_element(fps_history_.begin(), fps_history_.end());
-
-  // Calculate frame time statistics
-  double frame_time_sum =
-      std::accumulate(frame_time_history_.begin(), frame_time_history_.end(), 0.0);
-  double frame_time_avg = frame_time_sum / HISTORY_SIZE;
-  double frame_time_min = *std::min_element(frame_time_history_.begin(), frame_time_history_.end());
-  double frame_time_max = *std::max_element(frame_time_history_.begin(), frame_time_history_.end());
-
-  // Calculate standard deviation
-  double variance = 0.0;
-  for (double ft : frame_time_history_) {
-    variance += (ft - frame_time_avg) * (ft - frame_time_avg);
-  }
-  variance /= HISTORY_SIZE;
-  double stddev = std::sqrt(variance);
-
-  // Calculate render time statistics
-  double render_time_sum =
-      std::accumulate(render_time_history_.begin(), render_time_history_.end(), 0.0);
-  double render_time_avg = render_time_sum / HISTORY_SIZE;
-
-  // Calculate update time statistics
-  double update_time_sum =
-      std::accumulate(update_time_history_.begin(), update_time_history_.end(), 0.0);
-  double update_time_avg = update_time_sum / HISTORY_SIZE;
-
-  // Calculate data processing time statistics
-  double data_processing_time_sum = std::accumulate(data_processing_time_history_.begin(),
-                                                    data_processing_time_history_.end(), 0.0);
-  double data_processing_time_avg = data_processing_time_sum / HISTORY_SIZE;
-
-  // Calculate memory usage statistics
-  double memory_usage_sum =
-      std::accumulate(memory_usage_history_.begin(), memory_usage_history_.end(), 0.0);
-  double memory_usage_avg = memory_usage_sum / HISTORY_SIZE;
-
-  // Calculate GPU usage statistics
-  double gpu_usage_sum = std::accumulate(gpu_usage_history_.begin(), gpu_usage_history_.end(), 0.0);
-  double gpu_usage_avg = gpu_usage_sum / HISTORY_SIZE;
-
-  // Update aggregated metrics
-  aggregated_metrics_.avg_fps = fps_avg;
-  aggregated_metrics_.min_fps = fps_min;
-  aggregated_metrics_.max_fps = fps_max;
-  aggregated_metrics_.avg_frame_time = frame_time_avg;
-  aggregated_metrics_.min_frame_time = frame_time_min;
-  aggregated_metrics_.max_frame_time = frame_time_max;
-  aggregated_metrics_.stddev_frame_time = stddev;
-  aggregated_metrics_.avg_render_time = render_time_avg;
-  aggregated_metrics_.avg_update_time = update_time_avg;
-  aggregated_metrics_.avg_data_processing_time = data_processing_time_avg;
-  aggregated_metrics_.avg_memory_usage = memory_usage_avg;
-  aggregated_metrics_.avg_gpu_usage = gpu_usage_avg;
+void PerformanceMonitor::set_enabled(bool enabled) {
+    enabled_ = enabled;
+    if (!enabled) {
+        reset();
+    }
 }
 
-}  // namespace BTQ::Render
+bool PerformanceMonitor::is_enabled() const {
+    return enabled_;
+}
+
+double PerformanceMonitor::get_min_frame_time() const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    if (frame_time_history_.empty()) return 0.0;
+
+    auto min_it = std::min_element(frame_time_history_.begin(), frame_time_history_.end());
+    return *min_it;
+}
+
+double PerformanceMonitor::get_max_frame_time() const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    if (frame_time_history_.empty()) return 0.0;
+
+    auto max_it = std::max_element(frame_time_history_.begin(), frame_time_history_.end());
+    return *max_it;
+}
+
+void PerformanceMonitor::render_frame_time_graph(const char* title, float width, float height) {
+    g_frame_time_graph.render(title, width, height);
+}
+
+}  // namespace BTQuant

@@ -6,6 +6,11 @@
 #include <string>
 #include <vector>
 
+// Forward declaration to avoid circular includes
+namespace BTQuant {
+    class FrameTimeGraph;
+}
+
 namespace BTQuant {
 
 struct PerformanceMetric {
@@ -75,6 +80,9 @@ class PerformanceMonitor {
   double get_min_frame_time() const;
   double get_max_frame_time() const;
 
+  // Frame time graph integration
+  void render_frame_time_graph(const char* title = "Frame Time Graph", float width = 0.0f, float height = 200.0f);
+
  private:
   // Frame timing
   std::chrono::high_resolution_clock::time_point frame_start_;
@@ -106,5 +114,8 @@ class PerformanceMonitor {
 
 // Global performance monitor instance
 extern PerformanceMonitor g_performance_monitor;
+
+// Extern declarations for frame time graph integration
+extern FrameTimeGraph g_frame_time_graph;
 
 }  // namespace BTQuant

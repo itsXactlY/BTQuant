@@ -76,6 +76,9 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         detected_issues.push_back(issue);
         metrics_.duplicate_trade_issues++;
         add_issue(issue);
+
+        // Alert the user about the duplicate trade
+        alert_on_duplicate_trade(trade, symbol);
     } else {
         // Add to recent trades and hashes if not a duplicate
         recent_trades_[symbol].push_back(trade);
@@ -93,12 +96,18 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     }
 
     // Check for out-of-order timestamps
+    auto last_timestamp_it = last_timestamps_.find(symbol);
     if (is_out_of_order_timestamp(trade, symbol)) {
         DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
                              "Out-of-order timestamp detected", 0.5);
         detected_issues.push_back(issue);
         metrics_.out_of_order_timestamp_issues++;
         add_issue(issue);
+
+        // Alert the user about the out-of-order timestamp
+        if (last_timestamp_it != last_timestamps_.end()) {
+            alert_on_out_of_order_timestamp(trade, symbol, last_timestamp_it->second);
+        }
     } else {
         // Update last timestamp if in order
         last_timestamps_[symbol] = trade.timestamp;
@@ -182,6 +191,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                              oss.str(), 0.85);
                         metrics_.missing_data_issues++;
                         add_issue(issue);
+
+                        // Alert the user about the potential missing data
+                        alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                     }
 
                     // Additional check: if gap exceeds the configurable threshold
@@ -194,6 +206,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                              oss.str(), 0.9);
                         metrics_.missing_data_issues++;
                         add_issue(issue);
+
+                        // Alert the user about the extended data gap
+                        alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                     }
 
                     // Additional check: if gap is much larger than recent intervals
@@ -207,6 +222,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                              oss.str(), 0.75);
                         metrics_.missing_data_issues++;
                         add_issue(issue);
+
+                        // Alert the user about the unusually large gap
+                        alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                     }
 
                     // Enhanced missing data detection: Check for patterns in recent intervals
@@ -224,6 +242,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                                  oss.str(), 0.9);
                             metrics_.missing_data_issues++;
                             add_issue(issue);
+
+                            // Alert the user about the significant data gap
+                            alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                         }
 
                         // Check for consecutive large gaps (indicating sustained data loss)
@@ -244,6 +265,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                                  oss.str(), 0.85);
                             metrics_.missing_data_issues++;
                             add_issue(issue);
+
+                            // Alert the user about the sustained data quality issue
+                            alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                         }
 
                         // Enhanced missing data detection: Check for periodic patterns
@@ -273,6 +297,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                                      oss.str(), 0.95);
                                 metrics_.missing_data_issues++;
                                 add_issue(issue);
+
+                                // Alert the user about the statistical outlier gap
+                                alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                             }
                         }
                     }
@@ -294,6 +321,9 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                                                  oss.str(), 0.98);
                             metrics_.missing_data_issues++;
                             add_issue(issue);
+
+                            // Alert the user about the data stream cessation
+                            alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                         }
                     }
                 }
@@ -658,6 +688,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                  oss.str(), 0.4);
             metrics_.latency_issues++;
             add_issue(issue);
+
+            // Alert the user about the latency issue
+            alert_on_latency_issue(trade, symbol, latency);
         }
 
         // Update average latency
@@ -681,6 +714,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                  oss.str(), 0.6);
             metrics_.latency_issues++;
             add_issue(issue);
+
+            // Alert the user about the data feed delay
+            alert_on_latency_issue(trade, symbol, delay_ms);
         }
 
         // Additional check: compare against symbol-specific expected patterns
@@ -702,6 +738,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                          oss.str(), 0.7);
                     metrics_.latency_issues++;
                     add_issue(issue);
+
+                    // Alert the user about the data feed delay
+                    alert_on_latency_issue(trade, symbol, delay_ms);
                 }
             }
         }
@@ -732,6 +771,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                      oss.str(), 0.5);
                 metrics_.latency_issues++;
                 add_issue(issue);
+
+                // Alert the user about the latency spike
+                alert_on_latency_issue(trade, symbol, current_delay);
             }
         }
     }
@@ -776,6 +818,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                          oss.str(), 0.6);
                     metrics_.latency_issues++;
                     add_issue(issue);
+
+                    // Alert the user about the latency trend
+                    alert_on_latency_issue(trade, symbol, second_half_avg);
                 }
             }
         }
@@ -801,6 +846,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                      oss.str(), 0.7);
                 metrics_.latency_issues++;
                 add_issue(issue);
+
+                // Alert the user about consistent high latency
+                alert_on_latency_issue(trade, symbol, delay_history.back());
             }
         }
 
@@ -829,6 +877,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                      oss.str(), 0.8);
                 metrics_.latency_issues++;
                 add_issue(issue);
+
+                // Alert the user about the extreme latency outlier
+                alert_on_latency_issue(trade, symbol, current_delay);
             }
         }
 
@@ -852,6 +903,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                      oss.str(), 0.9);
                 metrics_.latency_issues++;
                 add_issue(issue);
+
+                // Alert the user about exponential latency growth
+                alert_on_latency_issue(trade, symbol, latency_delay_history.back());
             }
         }
 
@@ -888,6 +942,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                          oss.str(), 0.75);
                     metrics_.latency_issues++;
                     add_issue(issue);
+
+                    // Alert the user about symbol-specific high latency
+                    alert_on_latency_issue(trade, symbol, avg_symbol_latency);
                 }
             }
         }
@@ -920,6 +977,9 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                                      oss.str(), 0.85);
                 metrics_.latency_issues++;
                 add_issue(issue);
+
+                // Alert the user about latency degradation
+                alert_on_latency_issue(trade, symbol, recent_avg);
             }
         }
     }
@@ -1428,6 +1488,112 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
 
     // Enhanced user alerting: Send notifications to UI components if available
     send_ui_notification(issue);
+
+    // Additional user alerting: Visual/audio alerts for high severity issues
+    if (severity >= 0.9) {
+        trigger_visual_alert(symbol, problem_description);
+    }
+}
+
+void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const std::string& problem_description) {
+    // This method triggers visual alerts for high severity issues
+    // In a real implementation, this would interface with the UI system
+
+    std::ostringstream visual_alert_msg;
+    visual_alert_msg << "{\"type\":\"VISUAL_ALERT\","
+                     << "\"alert_type\":\"DATA_QUALITY\","
+                     << "\"symbol\":\"" << symbol << "\","
+                     << "\"message\":\"" << problem_description << "\","
+                     << "\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::high_resolution_clock::now().time_since_epoch()).count() << "}";
+
+    // Output in a format that can be consumed by UI components
+    if (console_alerts_enabled_) {
+        std::cout << "[VISUAL_ALERT_TRIGGER] " << visual_alert_msg.str() << std::endl;
+    }
+
+    // In a real implementation, this would trigger visual indicators in the UI
+    // such as flashing red borders, popups, or other visual cues
+}
+
+void DataQualityMonitor::alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    uint64_t gap_ms = actual_time - expected_time;
+    std::ostringstream description;
+    description << "Missing data detected for " << symbol
+                << ". Expected data at " << expected_time
+                << " but received at " << actual_time
+                << " (gap of " << gap_ms << "ms)";
+
+    double severity = std::min(0.95, 0.5 + (gap_ms / 10000.0)); // Scale severity based on gap size
+
+    DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, actual_time,
+                          description.str(), std::min(severity, 1.0));
+    add_issue(issue);
+
+    // Alert the user about the missing data
+    alert_user_to_data_problems(symbol, description.str(), std::min(severity, 1.0));
+}
+
+void DataQualityMonitor::alert_on_duplicate_trade(const TradeData& trade, const std::string& symbol) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream description;
+    description << "Duplicate trade detected for " << symbol
+                << " at timestamp " << trade.timestamp
+                << ", price: " << trade.price
+                << ", volume: " << trade.volume;
+
+    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+                          description.str(), 0.7);
+    add_issue(issue);
+
+    // Alert the user about the duplicate trade
+    alert_user_to_data_problems(symbol, description.str(), 0.7);
+}
+
+void DataQualityMonitor::alert_on_out_of_order_timestamp(const TradeData& trade, const std::string& symbol, uint64_t last_timestamp) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream description;
+    description << "Out-of-order timestamp detected for " << symbol
+                << ". Received timestamp " << trade.timestamp
+                << " after processing " << last_timestamp;
+
+    double severity = 0.6; // Base severity for out-of-order timestamps
+    if (trade.timestamp < (last_timestamp - 60000)) { // More than 1 minute difference
+        severity = 0.8; // Higher severity for large gaps
+    }
+
+    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+                          description.str(), severity);
+    add_issue(issue);
+
+    // Alert the user about the out-of-order timestamp
+    alert_user_to_data_problems(symbol, description.str(), severity);
+}
+
+void DataQualityMonitor::alert_on_latency_issue(const TradeData& trade, const std::string& symbol, int64_t latency_ms) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream description;
+    description << "High latency detected for " << symbol
+                << ". Processing delay: " << latency_ms << "ms";
+
+    double severity = 0.5; // Base severity
+    if (latency_ms > 5000) { // More than 5 seconds
+        severity = 0.8; // High severity for significant delays
+    } else if (latency_ms > 1000) { // More than 1 second
+        severity = 0.6; // Medium-high severity
+    }
+
+    DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                          description.str(), severity);
+    add_issue(issue);
+
+    // Alert the user about the latency issue
+    alert_user_to_data_problems(symbol, description.str(), severity);
 }
 
 void DataQualityMonitor::send_ui_notification(const DataQualityIssue& issue) {

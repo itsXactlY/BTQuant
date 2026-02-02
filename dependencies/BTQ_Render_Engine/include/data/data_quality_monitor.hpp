@@ -138,6 +138,15 @@ public:
   // Method to alert users to data problems
   void alert_user_to_data_problems(const std::string& symbol, const std::string& problem_description, double severity = 0.5);
 
+  // Enhanced alerting methods for specific data quality issues
+  void alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time);
+  void alert_on_duplicate_trade(const TradeData& trade, const std::string& symbol);
+  void alert_on_out_of_order_timestamp(const TradeData& trade, const std::string& symbol, uint64_t last_timestamp);
+  void alert_on_latency_issue(const TradeData& trade, const std::string& symbol, int64_t latency_ms);
+
+  // Method to trigger visual alerts for high severity issues
+  void trigger_visual_alert(const std::string& symbol, const std::string& problem_description);
+
   // Method to get alert counts by type
   std::unordered_map<DataQualityIssueType, size_t> get_alert_counts_by_type() const;
 

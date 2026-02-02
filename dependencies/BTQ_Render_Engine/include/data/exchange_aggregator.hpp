@@ -578,6 +578,26 @@ struct AdvancedAggregationResult {
       const std::string& symbol,
       const std::unordered_map<std::string, double>& custom_weights) const;
 
+  // Exchange-specific quality and feature management
+  bool performExchangeSpecificQualityChecks(const std::string& exchange,
+                                         const std::string& symbol,
+                                         const RenderEngine::MarketDataUpdate& update) const;
+  void updateExchangeFeaturesDynamically(const std::string& exchange);
+
+  // Advanced aggregation algorithms
+  std::optional<AggregatedMarketData> getKalmanFilteredAggregatedData(
+      const std::string& symbol) const;
+  std::optional<AggregatedMarketData> getMLWeightedAggregatedData(
+      const std::string& symbol) const;
+  std::optional<AggregatedMarketData> getOutlierResistantAggregatedData(
+      const std::string& symbol) const;
+
+  // New methods for comprehensive multi-exchange aggregation
+  std::optional<ComprehensiveMultiExchangeView> getUnifiedMultiExchangeView(
+      const std::string& symbol) const;
+  std::optional<MultiExchangeTimeSyncResult> performComprehensiveTimeSync(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
+
 private:
   // Enhanced risk metrics calculation
   void calculateEnhancedRiskMetrics(

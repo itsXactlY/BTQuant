@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "imgui.h"
+#include "../../include/performance/panel_profiler.hpp"
 
 namespace BTQuant {
 
@@ -106,6 +107,95 @@ void PerformanceMonitorPanel::render() {
     ImGui::Text("ms");
 
     ImGui::EndTable();
+  }
+
+  // Panel render times section
+  if (ImGui::CollapsingHeader("Panel Render Times")) {
+    auto panel_stats = g_panel_profiler.get_all_panel_stats();
+
+    if (!panel_stats.empty()) {
+      if (ImGui::BeginTable("PanelRenderTimes", 5,
+                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
+        ImGui::TableSetupColumn("Panel ID", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Avg Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Last Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Slow Renders (%)", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+
+        ImGui::TableHeadersRow();
+
+        for (const auto& [panel_id, stats] : panel_stats) {
+          if (stats.render_count > 0) { // Only show panels that have been rendered
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%u", panel_id);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%s", stats.panel_title.c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            double avg_ms = g_panel_profiler.get_average_render_time_ms(panel_id);
+            ImGui::Text("%.3f", avg_ms);
+
+            ImGui::TableSetColumnIndex(3);
+            double last_ms = g_panel_profiler.get_last_render_time_ms(panel_id);
+            ImGui::Text("%.3f", last_ms);
+
+            ImGui::TableSetColumnIndex(4);
+            double slow_pct = g_panel_profiler.get_slow_render_percentage(panel_id);
+            ImGui::Text("%.1f%% (%lu/%lu)", slow_pct, stats.slow_render_count, stats.render_count);
+          }
+        }
+
+        ImGui::EndTable();
+      }
+    } else {
+      ImGui::Text("No panel render data collected yet.");
+    }
+  }
+
+  // Bottleneck analysis section
+  if (ImGui::CollapsingHeader("Bottleneck Analysis")) {
+    auto slowest_panels = g_panel_profiler.get_slowest_panels(5);
+
+    if (!slowest_panels.empty()) {
+      ImGui::Text("Top 5 Slowest Panels (by average render time):");
+
+      if (ImGui::BeginTable("SlowestPanels", 4,
+                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+        ImGui::TableSetupColumn("Panel Title", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Avg Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Slow Renders (%)", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+
+        ImGui::TableHeadersRow();
+
+        for (size_t i = 0; i < slowest_panels.size(); ++i) {
+          const auto& [panel_id, stats] = slowest_panels[i];
+
+          ImGui::TableNextRow();
+
+          ImGui::TableSetColumnIndex(0);
+          ImGui::Text("%zu", i + 1);
+
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("%s", stats.panel_title.c_str());
+
+          ImGui::TableSetColumnIndex(2);
+          double avg_ms = g_panel_profiler.get_average_render_time_ms(panel_id);
+          ImGui::Text("%.3f", avg_ms);
+
+          ImGui::TableSetColumnIndex(3);
+          double slow_pct = g_panel_profiler.get_slow_render_percentage(panel_id);
+          ImGui::Text("%.1f%%", slow_pct);
+        }
+
+        ImGui::EndTable();
+      }
+    } else {
+      ImGui::Text("No bottleneck data available yet.");
+    }
   }
 
   // Detailed metrics section

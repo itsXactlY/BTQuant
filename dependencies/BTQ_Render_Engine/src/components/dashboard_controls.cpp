@@ -135,8 +135,17 @@ void DashboardControls::render_dashboard_controls() {
             any_changes = true;
           }
           ImGui::SameLine();
-          if (ImGui::Button("Deselect All", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+          if (ImGui::Button("Deselect All", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 0);
+            any_changes = true;
+          }
+
+          // Invert Selection button
+          ImGui::SameLine();
+          if (ImGui::Button("Invert", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
+            for (auto& selection : selected_exchanges_) {
+              selection = !selection;
+            }
             any_changes = true;
           }
           ImGui::PopStyleVar(); // Restore item spacing
@@ -204,11 +213,29 @@ void DashboardControls::render_dashboard_controls() {
             memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
           }
           ImGui::SameLine();
-          if (ImGui::Button("Cancel", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+          if (ImGui::Button("Cancel", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             // Revert changes by reloading the exchanges - restore original selections
             if (show_exchange_selector) {
               // Reload original state by resetting to saved values (we don't have a backup, so just close)
               show_exchange_selector = false;
+            }
+
+            // Clear the search buffer when closing
+            memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
+          }
+
+          // Reset to Default button
+          ImGui::SameLine();
+          if (ImGui::Button("Reset", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
+            // Reset to select all exchanges by default
+            std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1);
+            any_changes = true;
+
+            show_exchange_selector = false;
+
+            // Refresh symbols when exchange selection changes
+            if (any_changes) {
+              refresh_symbols_for_selected_exchanges();
             }
 
             // Clear the search buffer when closing

@@ -11,11 +11,13 @@
 #include "chart_manager.hpp"
 #include "indicator_renderer.hpp"
 #include "panel_base.hpp"
+#include "panel_settings_interface.hpp"
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "panel_manager.hpp"
 #include "historical_time_sales.hpp"
 #include "drawing_tools.hpp"  // Include drawing tools header
+#include "chart_panel_settings.hpp"
 
 namespace BTQuant {
 
@@ -144,6 +146,11 @@ class ChartPanel : public PanelBase {
   // Method to initialize active indicators from current configuration
   void initialize_active_indicators();
 
+  // Override methods from PanelBase for settings functionality
+  PanelSettingsInterface* get_settings_interface() override { return settings_.get(); }
+  void open_settings() override;
+  void render_context_menu() override;
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -243,6 +250,9 @@ class ChartPanel : public PanelBase {
   std::unique_ptr<DrawingToolsManager> drawing_tools_manager_;
 
   int next_indicator_id_ = 1;  // Counter for generating unique IDs
+
+  // Panel settings
+  std::unique_ptr<class ChartPanelSettings> settings_;
 
   // Multi-timeframe indicators support
   struct MultiTimeframeIndicator {

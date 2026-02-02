@@ -6,6 +6,7 @@
 
 #include "imgui.h"
 #include "theme_manager.hpp"
+#include "panel_settings_interface.hpp"
 
 namespace BTQuant {
 
@@ -50,6 +51,9 @@ struct PanelConfig {
   int grid_y = 0;
   int grid_width = 1;
   int grid_height = 1;
+
+  // Per-panel settings data
+  std::string settings_key = "";  // Key for identifying panel-specific settings
 };
 
 /**
@@ -81,6 +85,13 @@ class PanelBase {
 
   bool is_visible() const { return config_.visible; }
   const std::string& get_title() const { return config_.title; }
+
+  // Per-panel settings functionality
+  virtual PanelSettingsInterface* get_settings_interface() { return nullptr; }
+  virtual void open_settings() {}
+
+  // Context menu functionality
+  virtual void render_context_menu() {}  // Virtual method for context menu
 
  protected:
   PanelConfig config_;

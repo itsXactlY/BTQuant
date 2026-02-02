@@ -245,15 +245,15 @@
 
 ### Phase 11a: Settings Framework [Complexity: M]
 - [x] Create unified settings system with categories: Appearance, Data, Performance, Alerts, Keyboard Shortcuts in `dependencies/BTQ_Render_Engine/src/ui/settings_manager.cpp` [Complexity: M]
-- [ ] Implement appearance settings: color themes (Dark, Light, Custom), font selection, font sizes, panel opacity, border styles in `dependencies/BTQ_Render_Engine/src/ui/appearance_settings.cpp` [Complexity: M]
-- [ ] Add data settings: default timeframe, default symbol, auto-load last used workspace, data retention period, WebSocket reconnection settings in `dependencies/BTQ_Render_Engine/src/ui/data_settings.cpp` [Complexity: M]
-- [ ] Implement performance settings: FPS limiter, V-Sync toggle, LOD thresholds, caching strategy, memory limits in `dependencies/BTQ_Render_Engine/src/ui/performance_settings.cpp` [Complexity: M]
+- [x] Implement appearance settings: color themes (Dark, Light, Custom), font selection, font sizes, panel opacity, border styles in `dependencies/BTQ_Render_Engine/src/ui/appearance_settings.cpp` [Complexity: M]
+- [x] Add data settings: default timeframe, default symbol, auto-load last used workspace, data retention period, WebSocket reconnection settings in `dependencies/BTQ_Render_Engine/src/ui/data_settings.cpp` [Complexity: M]
+- [x] Implement performance settings: FPS limiter, V-Sync toggle, LOD thresholds, caching strategy, memory limits in `dependencies/BTQ_Render_Engine/src/ui/performance_settings.cpp` [Complexity: M]
 
 ### Phase 11b: Advanced Settings [Complexity: M]
-- [ ] Add alert settings: notification method (popup, sound, system tray), alert history size, alert conditions templates in `dependencies/BTQ_Render_Engine/src/ui/alert_settings.cpp` [Complexity: M]
-- [ ] Create keyboard shortcuts editor: list all actions, assign/modify shortcuts, import/export shortcut profiles, reset to defaults in `dependencies/BTQ_Render_Engine/src/ui/keyboard_shortcuts.cpp` [Complexity: M]
-- [ ] Implement per-panel settings: each panel type has dedicated settings modal accessible via right-click context menu or panel header button in respective panel files [Complexity: M]
-- [ ] Add settings persistence: auto-save settings on change to JSON config file, load on startup, settings migration for version updates in `dependencies/BTQ_Render_Engine/src/ui/settings_manager.cpp` [Complexity: M]
+- [x] Add alert settings: notification method (popup, sound, system tray), alert history size, alert conditions templates in `dependencies/BTQ_Render_Engine/src/ui/alert_settings.cpp` [Complexity: M]
+- [x] Create keyboard shortcuts editor: list all actions, assign/modify shortcuts, import/export shortcut profiles, reset to defaults in `dependencies/BTQ_Render_Engine/src/ui/keyboard_shortcuts.cpp` [Complexity: M]
+- [x] Implement per-panel settings: each panel type has dedicated settings modal accessible via right-click context menu or panel header button in respective panel files [Complexity: M]
+- [x] Add settings persistence: auto-save settings on change to JSON config file, load on startup, settings migration for version updates in `dependencies/BTQ_Render_Engine/src/ui/settings_manager.cpp` [Complexity: M]
 
 ---
 
@@ -262,10 +262,10 @@
 **Prerequisites:** Core data infrastructure complete  
 
 ### Phase 12a: Caching & Optimization [Complexity: M]
-- [ ] Implement data caching system: cache calculated profiles, indicators, aggregations per bar, invalidate on new data in `dependencies/BTQ_Render_Engine/src/data/cache_manager.cpp` [Complexity: M]
-- [ ] Add incremental data updates: only recalculate affected portions when new trade arrives, maintain running totals for all aggregations in `dependencies/BTQ_Render_Engine/src/data/incremental_updater.cpp` [Complexity: L]
-- [ ] Implement data compression for historical data: use delta compression, quantization for price/volume, store differences rather than absolute values in `dependencies/BTQ_Render_Engine/src/data/compression.cpp` [Complexity: M]
-- [ ] Add data persistence: save aggregated data to disk periodically, load on startup, support for multiple data sources in `dependencies/BTQ_Render_Engine/src/data/persistence.cpp` [Complexity: M]
+- [x] Implement data caching system: cache calculated profiles, indicators, aggregations per bar, invalidate on new data in `dependencies/BTQ_Render_Engine/src/data/cache_manager.cpp` [Complexity: M]
+- [x] Add incremental data updates: only recalculate affected portions when new trade arrives, maintain running totals for all aggregations in `dependencies/BTQ_Render_Engine/src/data/incremental_updater.cpp` [Complexity: L]
+- [x] Implement data compression for historical data: use delta compression, quantization for price/volume, store differences rather than absolute values in `dependencies/BTQ_Render_Engine/src/data/compression.cpp` [Complexity: M]
+- [x] Add data persistence: save aggregated data to disk periodically, load on startup, support for multiple data sources in `dependencies/BTQ_Render_Engine/src/data/persistence.cpp` [Complexity: M]
 
 ### Phase 12b: Multi-Exchange & Quality [Complexity: M]
 - [ ] Add multi-exchange aggregation: combine data from multiple exchanges into single view, handle time synchronization, account for exchange-specific features in `dependencies/BTQ_Render_Engine/src/data/exchange_aggregator.cpp` [Complexity: M]

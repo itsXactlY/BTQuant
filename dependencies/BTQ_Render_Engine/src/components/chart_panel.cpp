@@ -17,6 +17,7 @@
 #include "../../include/indicators/anchored_vwap.hpp"
 #include "../../include/indicators/session_vwap.hpp"
 #include "../../include/components/drawing_tools.hpp"
+#include "../../include/components/chart_panel_settings.hpp"
 
 namespace BTQuant {
 
@@ -137,6 +138,9 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
 
   // Initialize drawing tools manager
   drawing_tools_manager_ = std::make_unique<DrawingToolsManager>();
+
+  // Initialize panel settings
+  settings_ = std::make_unique<ChartPanelSettings>(static_cast<void*>(this));
 }
 
 void ChartPanel::initialize_active_indicators() {
@@ -349,6 +353,11 @@ void ChartPanel::render() {
   // Render the historical time & sales popup if needed
   if (historical_time_sales_panel_ && show_trades_popup_) {
     historical_time_sales_panel_->show_trades_popup(clicked_bar_start_time_, clicked_bar_end_time_, symbol_);
+  }
+
+  // Render settings modal if available
+  if (settings_) {
+    settings_->render();
   }
 }
 
@@ -3545,5 +3554,23 @@ void ChartPanel::set_show_historical_trades_callback(std::function<void(uint64_t
     }
   };
 }
+
+  // Panel settings methods
+  void ChartPanel::open_settings() {
+    if (settings_) {
+      settings_->open();
+    }
+  }
+
+  void ChartPanel::render_context_menu() {
+    // Create a context menu that appears when right-clicking on the panel
+    if (ImGui::BeginPopup("PanelContextMenu")) {
+      if (ImGui::MenuItem("Panel Settings")) {
+        open_settings();
+      }
+
+      ImGui::EndPopup();
+    }
+  }
 
 }  // namespace BTQuant

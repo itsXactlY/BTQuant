@@ -1,4 +1,5 @@
 #include "market_data_processor.hpp"
+#include "cache_manager.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -6,6 +7,7 @@
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
+
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -20,6 +22,9 @@ MarketDataProcessor::MarketDataProcessor()
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     shards_.emplace_back(std::make_unique<Shard>());
   }
+
+  // Initialize cache manager
+  cache_manager_ = std::make_shared<CacheManager>();
 
   // Start worker threads
   for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
@@ -215,6 +220,16 @@ std::vector<OrderbookData> MarketDataProcessor::getHistoricalOrderbooks(uint32_t
 
 std::vector<VolumeProfileLevel> MarketDataProcessor::getVolumeProfile(uint32_t symbol_id,
                                                                       TimeFrame timeframe) const {
+  // Try to get from cache first
+  if (cache_manager_) {
+    // For now, we'll use a fixed timestamp (0) for session profiles, but in a real implementation
+    // this would use the appropriate bar timestamp
+    auto cached_result = cache_manager_->getCachedProfileData(symbol_id, timeframe, 0);
+    if (cached_result.has_value()) {
+      return cached_result.value();
+    }
+  }
+
   auto& shard = getShard(symbol_id);
   std::shared_lock lock(shard.mutex);
 
@@ -225,8 +240,15 @@ std::vector<VolumeProfileLevel> MarketDataProcessor::getVolumeProfile(uint32_t s
     for (const auto& [price, level] : it->second.session_volume_profile) {
       result.push_back(level);
     }
+
+    // Cache the result if cache manager is available
+    if (cache_manager_) {
+      cache_manager_->cacheProfileData(symbol_id, timeframe, 0, result);
+    }
+
     return result;
   }
+
   return {};
 }
 
@@ -757,9 +779,8 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
     }
     symbol_data.recent_trades.push_back(trade);
 
-    // Update analytics
-    updateTradingMetrics(symbol_data, trade);
-    updateCandles(symbol_data, trade);
+    // Use incremental updater to update analytics efficiently
+    processTradeIncrementally(symbol_data, trade);
 
   } else if (update.type == MarketDataType::ORDERBOOK) {
     OrderbookData orderbook;
@@ -801,15 +822,18 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
     symbol_data.recent_orderbooks.push_back(orderbook);
   }
 
-  // Update indicators - only update periodically to reduce CPU load
-  static uint64_t update_counter = 0;
-  if (++update_counter % 10 == 0) {  // Update every 10 updates
-    updateVWAP(symbol_data);
-    updateMomentum(symbol_data);
-    updateVolatility(symbol_data);
+  // Invalidate cache for this symbol and all timeframes when new data arrives
+  if (cache_manager_) {
+    cache_manager_->invalidateCacheForSymbol(update.symbol_id);
   }
-  if (update_counter % 5 == 0) {  // Update spread analysis every 5 updates
-    updateSpreadAnalysis(symbol_data);
+
+  // For trades, analytics are updated incrementally in processTradeIncrementally
+  // For orderbooks, update spread analysis periodically
+  if (update.type == MarketDataType::ORDERBOOK) {
+    static uint64_t update_counter = 0;
+    if (++update_counter % 5 == 0) {  // Update spread analysis every 5 updates
+      updateSpreadAnalysis(symbol_data);
+    }
   }
 
   // Release lock before notifying subscribers (avoid holding while calling

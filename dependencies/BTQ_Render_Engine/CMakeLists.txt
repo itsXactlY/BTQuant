@@ -139,8 +139,13 @@ set(DASHBOARD_SOURCES
     src/ui/appearance_settings.cpp
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
+    src/ui/keyboard_shortcuts.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
+    src/data/cache_manager.cpp
+    src/data/persistence.cpp
+    src/data/incremental_updater.cpp
+    src/data/exchange_aggregator.cpp
     src/monitoring/performance_monitor.cpp
     # Analytics and advanced features
     src/analytics/technical_analysis.cpp
@@ -933,6 +938,80 @@ if(GTest_FOUND)
     add_test(NAME test_profile_settings COMMAND test_profile_settings)
 endif()
 
+# Unit test for Exchange Aggregator functionality
+if(GTest_FOUND)
+    add_executable(test_exchange_aggregator
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_exchange_aggregator.cpp
+        src/data/exchange_aggregator.cpp
+        src/data/market_data_processor.cpp
+        src/data/hotspine_data_bridge.cpp
+        src/data/symbol_registry.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/analytics/technical_analysis.cpp
+        src/analytics/trading_analytics.cpp
+        src/components/theme_manager.cpp
+        src/components/interaction_manager.cpp
+        src/monitoring/performance_monitor.cpp
+        src/system/system_optimizer.cpp
+        src/data/symbol_manager.cpp
+        src/config/dashboard_config.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/system/VulkanCore.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/vulkan_dashboard_advanced.cpp
+        ${LIB_SOURCES}
+    )
+    target_include_directories(test_exchange_aggregator PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_exchange_aggregator PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_exchange_aggregator COMMAND test_exchange_aggregator)
+endif()
+
 # Unit test for Step Profile Rendering functionality
 if(GTest_FOUND)
     add_executable(test_step_profile_rendering
@@ -1006,5 +1085,77 @@ if(GTest_FOUND)
     )
     target_link_libraries(test_step_profile_rendering PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
     add_test(NAME test_step_profile_rendering COMMAND test_step_profile_rendering)
+endif()
+
+# Unit test for Incremental Updater functionality
+if(GTest_FOUND)
+    add_executable(test_incremental_updater
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_incremental_updater.cpp
+        src/data/market_data_processor.cpp
+        src/data/incremental_updater.cpp
+        src/data/hotspine_data_bridge.cpp
+        src/data/symbol_registry.cpp
+        src/trading/order_manager.cpp
+        src/trading/position_manager.cpp
+        src/trading/risk_assessment.cpp
+        src/trading/advanced_trading_features.cpp
+        src/analytics/technical_analysis.cpp
+        src/analytics/trading_analytics.cpp
+        src/monitoring/performance_monitor.cpp
+        src/system/system_optimizer.cpp
+        src/data/symbol_manager.cpp
+        src/config/dashboard_config.cpp
+        src/components/panel_manager.cpp
+        src/components/panel_base.cpp
+        src/components/chart_manager.cpp
+        src/components/chart_panel.cpp
+        src/components/metrics_panel.cpp
+        src/components/orderbook_panel.cpp
+        src/components/watchlist_panel.cpp
+        src/components/tape_panel.cpp
+        src/components/volume_profile_panel.cpp
+        src/components/depth_chart_panel.cpp
+        src/components/footprint_panel.cpp
+        src/components/tpo_panel.cpp
+        src/components/dom_surface_panel.cpp
+        src/components/trading_orders_panel.cpp
+        src/components/trading_positions_panel.cpp
+        src/components/risk_metrics_panel.cpp
+        src/components/histogram_panel.cpp
+        src/components/scatter_plot_panel.cpp
+        src/components/time_series_panel.cpp
+        src/components/screener_panel.cpp
+        src/components/log_panel.cpp
+        src/components/alerts_panel.cpp
+        src/components/status_bar_panel.cpp
+        src/components/quant_workspace_component.cpp
+        src/components/realtime_dashboard_component.cpp
+        src/components/correlation_heatmap_component.cpp
+        src/components/symbol_selector.cpp
+        src/components/hierarchical_selector.cpp
+        src/components/indicator_renderer.cpp
+        src/components/MarketMicrostructureRenderer.cpp
+        src/components/VulkanSynchronization.cpp
+        src/system/VulkanCore.cpp
+        src/system/GPUMemoryManager.cpp
+        src/optimization/performance_optimizer.cpp
+        src/layout/dashboard_layout_manager.cpp
+        src/data/ui_data_manager.cpp
+        src/vulkan_dashboard_advanced.cpp
+        ${LIB_SOURCES}
+    )
+    target_include_directories(test_incremental_updater PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${Vulkan_INCLUDE_DIRS}
+        ${glm_SOURCE_DIR}
+        ${json_SOURCE_DIR}/include
+        ${concurrentqueue_SOURCE_DIR}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+        ${IMPLOT_DIR}
+    )
+    target_link_libraries(test_incremental_updater PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+    add_test(NAME test_incremental_updater COMMAND test_incremental_updater)
 endif()
 

@@ -46,6 +46,11 @@ void PanelBase::render() {
   ImGui::Text("Implementation coming soon...");
 
   end_panel_window();
+
+  // Render settings modal if available
+  if (auto* settings = get_settings_interface()) {
+    settings->render();
+  }
 }
 
 void PanelBase::render_panel_header() {
@@ -56,6 +61,15 @@ void PanelBase::render_panel_header() {
   ImGui::SameLine();
   ImGui::Text("%s", config_.title.c_str());
 
+  // Settings button (left of close button)
+  if (get_settings_interface() != nullptr) {
+    float button_size = ImGui::GetTextLineHeight();
+    ImGui::SameLine(ImGui::GetWindowWidth() - button_size * 2 - 15.0f);  // Position before close button
+    if (ImGui::Button("⚙", ImVec2(button_size, button_size))) {
+      open_settings();
+    }
+  }
+
   // Close button (right aligned)
   if (config_.visible) {
     float close_size = ImGui::GetTextLineHeight();
@@ -64,6 +78,14 @@ void PanelBase::render_panel_header() {
       config_.visible = false;
     }
   }
+
+  // Right-click context menu
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+    ImGui::OpenPopup("PanelContextMenu");
+  }
+
+  // Render context menu if available
+  render_context_menu();
 
   ImGui::Separator();
 }

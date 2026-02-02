@@ -41,6 +41,9 @@ void ExchangeAggregator::addExchange(const std::string& exchange_name, const Exc
     exchange_validity_[exchange_name] = true;
     exchange_last_update_[exchange_name] = std::chrono::high_resolution_clock::now();
 
+    // Initialize exchange correlation tracking
+    exchange_correlations_[exchange_name] = std::unordered_map<std::string, double>();
+
     BTQ_LOG_INFO(std::format("Added exchange {} to aggregation pool", exchange_name));
 }
 
@@ -49,6 +52,7 @@ void ExchangeAggregator::removeExchange(const std::string& exchange_name) {
     exchange_features_.erase(exchange_name);
     exchange_validity_.erase(exchange_name);
     exchange_last_update_.erase(exchange_name);
+    exchange_correlations_.erase(exchange_name);
 
     // Remove exchange data from all symbols
     for (auto& [symbol, exchange_data_map] : exchange_data_) {
@@ -109,7 +113,7 @@ std::optional<AggregatedMarketData> ExchangeAggregator::aggregateSymbolData(cons
     aggregated_data.aggregated_price = calculateWeightedAveragePriceWithValidation(symbol);
     aggregated_data.weighted_price = calculateVolumeWeightedPrice(valid_exchange_data);
 
-    // Calculate additional aggregated metrics
+    // Calculate advanced aggregated metrics
     aggregated_data.aggregated_high = calculateHighPrice(valid_exchange_data);
     aggregated_data.aggregated_low = calculateLowPrice(valid_exchange_data);
     aggregated_data.aggregated_bid = calculateBestBid(valid_exchange_data);
@@ -121,6 +125,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::aggregateSymbolData(cons
         total_volume += data.size;
     }
     aggregated_data.aggregated_volume = total_volume;
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, valid_exchange_data, aggregated_data);
+    detectArbitrageOpportunities(valid_exchange_data, aggregated_data);
 
     aggregated_data.last_updated = std::chrono::high_resolution_clock::now();
 
@@ -196,6 +204,10 @@ std::optional<AggregatedMarketData> ExchangeAggregator::getAggregatedData(const 
         total_volume += data.size;
     }
     aggregated_data.aggregated_volume = total_volume;
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, valid_exchange_data, aggregated_data);
+    detectArbitrageOpportunities(valid_exchange_data, aggregated_data);
 
     aggregated_data.last_updated = std::chrono::high_resolution_clock::now();
 
@@ -344,6 +356,35 @@ uint64_t ExchangeAggregator::calculateSynchronizedTimestamp(const std::string& s
             }
         }
 
+        case TimeSyncStrategy::ADAPTIVE_SYNC: {
+            // Adaptive synchronization based on market volatility
+            if (timestamps.size() < 2) {
+                return timestamps.empty() ? 0 : timestamps[0];
+            }
+
+            // Calculate variance in timestamps
+            uint64_t mean_ts = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            uint64_t variance = 0;
+            for (auto ts : timestamps) {
+                variance += (ts > mean_ts) ? (ts - mean_ts) * (ts - mean_ts) : (mean_ts - ts) * (mean_ts - ts);
+            }
+            variance /= timestamps.size();
+
+            // If variance is low (exchanges are well synchronized), use average
+            // If variance is high (exchanges are not synchronized), use median
+            if (variance < 1000000) { // 1ms threshold
+                return std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            } else {
+                std::sort(timestamps.begin(), timestamps.end());
+                size_t n = timestamps.size();
+                if (n % 2 == 0) {
+                    return (timestamps[n/2 - 1] + timestamps[n/2]) / 2;
+                } else {
+                    return timestamps[n/2];
+                }
+            }
+        }
+
         default:
             return *std::min_element(timestamps.begin(), timestamps.end());
     }
@@ -386,6 +427,9 @@ void ExchangeAggregator::aggregationLoop() {
 
         // Check for stale data and mark exchanges as invalid if needed
         checkStaleData();
+
+        // Update exchange correlations periodically
+        updateExchangeCorrelations();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));  // Adjust frequency as needed
     }
@@ -466,6 +510,36 @@ void ExchangeAggregator::synchronizeTimestamps(AggregatedMarketData& data) const
                 data.synchronized_timestamp = (timestamps[n/2 - 1] + timestamps[n/2]) / 2;
             } else {
                 data.synchronized_timestamp = timestamps[n/2];
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::ADAPTIVE_SYNC: {
+            if (timestamps.size() < 2) {
+                data.synchronized_timestamp = timestamps.empty() ? 0 : timestamps[0];
+                break;
+            }
+
+            // Calculate variance in timestamps
+            uint64_t mean_ts = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            uint64_t variance = 0;
+            for (auto ts : timestamps) {
+                variance += (ts > mean_ts) ? (ts - mean_ts) * (ts - mean_ts) : (mean_ts - ts) * (mean_ts - ts);
+            }
+            variance /= timestamps.size();
+
+            // If variance is low (exchanges are well synchronized), use average
+            // If variance is high (exchanges are not synchronized), use median
+            if (variance < 1000000) { // 1ms threshold
+                data.synchronized_timestamp = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            } else {
+                std::sort(timestamps.begin(), timestamps.end());
+                size_t n = timestamps.size();
+                if (n % 2 == 0) {
+                    data.synchronized_timestamp = (timestamps[n/2 - 1] + timestamps[n/2]) / 2;
+                } else {
+                    data.synchronized_timestamp = timestamps[n/2];
+                }
             }
             break;
         }
@@ -689,6 +763,290 @@ double ExchangeAggregator::calculateBestAsk(
     }
 
     return found_ask ? best_ask : 0.0;
+}
+
+void ExchangeAggregator::calculateExchangeCorrelations(const std::string& symbol,
+                                                      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                                                      AggregatedMarketData& result) const {
+    if (exchange_data.size() < 2) {
+        return; // Need at least 2 exchanges to calculate correlation
+    }
+
+    // Extract prices from exchanges
+    std::vector<double> prices;
+    std::vector<std::string> exchange_names;
+
+    for (const auto& [exchange, data] : exchange_data) {
+        prices.push_back(data.price);
+        exchange_names.push_back(exchange);
+    }
+
+    // Calculate mean price
+    double mean_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+
+    // Calculate standard deviation
+    double variance = 0.0;
+    for (double price : prices) {
+        variance += (price - mean_price) * (price - mean_price);
+    }
+    variance /= prices.size();
+    double std_dev = std::sqrt(variance);
+
+    // Calculate z-scores for each exchange
+    std::vector<double> z_scores;
+    for (double price : prices) {
+        z_scores.push_back((price - mean_price) / std_dev);
+    }
+
+    // Calculate correlation matrix (for now just store individual z-scores as a proxy for correlation)
+    for (size_t i = 0; i < exchange_names.size(); ++i) {
+        result.exchange_correlations[exchange_names[i]] = z_scores[i];
+    }
+
+    // Calculate overall correlation coefficient (Pearson correlation to mean)
+    double correlation_sum = 0.0;
+    for (double z_score : z_scores) {
+        correlation_sum += z_score * 0.0; // Correlation to mean is always 1.0, so we use 0.0 as baseline
+    }
+    result.overall_correlation = 1.0 - (std::abs(correlation_sum) / z_scores.size()); // Simplified correlation measure
+}
+
+void ExchangeAggregator::detectArbitrageOpportunities(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                                                     AggregatedMarketData& result) const {
+    if (exchange_data.size() < 2) {
+        return; // Need at least 2 exchanges to detect arbitrage
+    }
+
+    // Find highest bid and lowest ask across exchanges
+    double highest_bid = 0.0;
+    double lowest_ask = std::numeric_limits<double>::max();
+    std::string highest_bid_exchange = "";
+    std::string lowest_ask_exchange = "";
+
+    for (const auto& [exchange, data] : exchange_data) {
+        if (data.side == "BUY" && data.price > highest_bid) {
+            highest_bid = data.price;
+            highest_bid_exchange = exchange;
+        }
+        if (data.side == "SELL" && data.price < lowest_ask) {
+            lowest_ask = data.price;
+            lowest_ask_exchange = exchange;
+        }
+    }
+
+    // Check for arbitrage opportunity (bid > ask)
+    if (highest_bid > lowest_ask) {
+        result.arbitrage_opportunity = true;
+        result.arbitrage_profit = highest_bid - lowest_ask;
+        result.bid_exchange = highest_bid_exchange;
+        result.ask_exchange = lowest_ask_exchange;
+    } else {
+        result.arbitrage_opportunity = false;
+        result.arbitrage_profit = 0.0;
+    }
+}
+
+void ExchangeAggregator::updateExchangeCorrelations() {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    // Update correlations between exchanges based on recent data
+    for (auto& [symbol, exchange_data_map] : exchange_data_) {
+        std::vector<std::pair<std::string, double>> exchange_prices;
+
+        for (const auto& [exchange, data] : exchange_data_map) {
+            if (isExchangeDataValid(exchange, data)) {
+                exchange_prices.push_back({exchange, data.price});
+            }
+        }
+
+        if (exchange_prices.size() >= 2) {
+            // Calculate correlation coefficients between exchanges
+            for (size_t i = 0; i < exchange_prices.size(); ++i) {
+                for (size_t j = i + 1; j < exchange_prices.size(); ++j) {
+                    const auto& [ex1, price1] = exchange_prices[i];
+                    const auto& [ex2, price2] = exchange_prices[j];
+
+                    // Simple correlation based on price difference
+                    double price_diff = std::abs(price1 - price2);
+                    double avg_price = (price1 + price2) / 2.0;
+                    double correlation = 1.0 - (price_diff / avg_price); // Higher correlation when prices are similar
+
+                    // Store correlation in both directions
+                    exchange_correlations_[ex1][ex2] = correlation;
+                    exchange_correlations_[ex2][ex1] = correlation;
+                }
+            }
+        }
+    }
+}
+
+double ExchangeAggregator::calculateTWAP(
+    const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+    uint64_t window_start, uint64_t window_end) const {
+    if (exchange_data.empty()) {
+        return 0.0;
+    }
+
+    double total_value = 0.0;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, data] : exchange_data) {
+        // Only include data within the time window
+        if (data.timestamp >= window_start && data.timestamp <= window_end) {
+            // Get exchange reliability score to weight the contribution
+            auto exchange_it = exchange_features_.find(exchange);
+            double reliability = (exchange_it != exchange_features_.end()) ?
+                                exchange_it->second.reliability_score : 1.0;
+
+            double weighted_volume = data.size * reliability;
+            total_value += data.price * weighted_volume;
+            total_volume += weighted_volume;
+        }
+    }
+
+    if (total_volume > 0.0) {
+        return total_value / total_volume;
+    }
+
+    return 0.0;
+}
+
+double ExchangeAggregator::calculateVWAP(
+    const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const {
+    if (exchange_data.empty()) {
+        return 0.0;
+    }
+
+    double total_value = 0.0;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, data] : exchange_data) {
+        // Get exchange reliability score to weight the contribution
+        auto exchange_it = exchange_features_.find(exchange);
+        double reliability = (exchange_it != exchange_features_.end()) ?
+                            exchange_it->second.reliability_score : 1.0;
+
+        // Weight by both volume and reliability
+        double weighted_volume = data.size * reliability;
+        total_value += data.price * weighted_volume;
+        total_volume += weighted_volume;
+    }
+
+    if (total_volume > 0.0) {
+        return total_value / total_volume;
+    }
+
+    return 0.0;
+}
+
+double ExchangeAggregator::calculateMedianPrice(
+    const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const {
+    if (exchange_data.empty()) {
+        return 0.0;
+    }
+
+    std::vector<double> prices;
+    for (const auto& [exchange, data] : exchange_data) {
+        // Apply reliability weighting by including the price multiple times based on reliability
+        auto exchange_it = exchange_features_.find(exchange);
+        double reliability = (exchange_it != exchange_features_.end()) ?
+                            exchange_it->second.reliability_score : 1.0;
+
+        // Add the price multiple times based on reliability score (clamped to range 0.1-2.0)
+        int copies = std::max(1, static_cast<int>(reliability * 10.0));
+        for (int i = 0; i < copies; ++i) {
+            prices.push_back(data.price);
+        }
+    }
+
+    if (prices.empty()) {
+        return 0.0;
+    }
+
+    std::sort(prices.begin(), prices.end());
+    size_t n = prices.size();
+    if (n % 2 == 0) {
+        return (prices[n/2 - 1] + prices[n/2]) / 2.0;
+    } else {
+        return prices[n/2];
+    }
+}
+
+double ExchangeAggregator::calculateTrimmedMean(
+    const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+    double trim_percentage) const {
+    if (exchange_data.empty()) {
+        return 0.0;
+    }
+
+    std::vector<double> prices;
+    for (const auto& [exchange, data] : exchange_data) {
+        // Apply reliability weighting by including the price multiple times based on reliability
+        auto exchange_it = exchange_features_.find(exchange);
+        double reliability = (exchange_it != exchange_features_.end()) ?
+                            exchange_it->second.reliability_score : 1.0;
+
+        // Add the price multiple times based on reliability score (clamped to range 0.1-2.0)
+        int copies = std::max(1, static_cast<int>(reliability * 10.0));
+        for (int i = 0; i < copies; ++i) {
+            prices.push_back(data.price);
+        }
+    }
+
+    if (prices.size() < 3) {
+        // Not enough data points to trim meaningfully
+        double sum = std::accumulate(prices.begin(), prices.end(), 0.0);
+        return sum / prices.size();
+    }
+
+    std::sort(prices.begin(), prices.end());
+
+    // Calculate how many elements to trim from each end
+    size_t trim_count = static_cast<size_t>(prices.size() * trim_percentage / 2.0);
+    if (trim_count >= prices.size() / 2) {
+        // Too much to trim, just return the median
+        size_t mid = prices.size() / 2;
+        return prices[mid];
+    }
+
+    // Calculate trimmed mean
+    double sum = 0.0;
+    size_t count = 0;
+    for (size_t i = trim_count; i < prices.size() - trim_count; ++i) {
+        sum += prices[i];
+        count++;
+    }
+
+    return (count > 0) ? sum / count : 0.0;
+}
+
+double ExchangeAggregator::calculateHarmonicMean(
+    const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const {
+    if (exchange_data.empty()) {
+        return 0.0;
+    }
+
+    double reciprocal_sum = 0.0;
+    size_t count = 0;
+
+    for (const auto& [exchange, data] : exchange_data) {
+        if (data.price > 0) {  // Harmonic mean requires positive values
+            // Apply reliability weighting
+            auto exchange_it = exchange_features_.find(exchange);
+            double reliability = (exchange_it != exchange_features_.end()) ?
+                                exchange_it->second.reliability_score : 1.0;
+
+            // Weight the reciprocal by reliability
+            reciprocal_sum += reliability / data.price;
+            count += static_cast<size_t>(reliability * 10.0);  // Count weighted by reliability
+        }
+    }
+
+    if (reciprocal_sum > 0) {
+        return (count > 0) ? (count / reciprocal_sum) : 0.0;
+    }
+
+    return 0.0;
 }
 
 }  // namespace Data

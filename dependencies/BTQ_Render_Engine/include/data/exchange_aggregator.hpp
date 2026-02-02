@@ -28,7 +28,8 @@ enum class TimeSyncStrategy {
   AVERAGE_TIMESTAMP,     // Average timestamps from all exchanges
   REFERENCE_EXCHANGE,    // Use one exchange as time reference
   OFFSET_COMPENSATION,   // Apply calculated offsets to align times
-  MEDIAN_TIMESTAMP       // Use median timestamp among exchanges
+  MEDIAN_TIMESTAMP,      // Use median timestamp among exchanges
+  ADAPTIVE_SYNC          // Adaptive synchronization based on market conditions
 };
 
 // Exchange-specific features and configurations
@@ -40,6 +41,12 @@ struct ExchangeFeatures {
   std::vector<std::string> supported_data_types;
   double reliability_score = 1.0;        // 0.0 to 1.0, where 1.0 is most reliable
   std::string api_endpoint;
+  double trading_fee_rate = 0.001;       // Trading fee rate (0.1% default)
+  double withdrawal_fee = 0.0;           // Withdrawal fee in base currency
+  int max_order_size = 1000000;          // Maximum order size allowed
+  int min_order_size = 1;                // Minimum order size allowed
+  std::string timezone = "UTC";          // Exchange timezone
+  bool is_active = true;                 // Whether the exchange is currently active
 };
 
 // Aggregated market data combining multiple exchanges
@@ -63,6 +70,16 @@ struct AggregatedMarketData {
   // Time synchronization info
   std::map<std::string, uint64_t> exchange_timestamps;
   uint64_t reference_timestamp = 0;
+
+  // Exchange correlation data
+  std::unordered_map<std::string, double> exchange_correlations;  // Correlation of each exchange to the aggregated price
+  double overall_correlation = 0.0;                              // Overall correlation among exchanges
+
+  // Arbitrage detection
+  bool arbitrage_opportunity = false;
+  double arbitrage_profit = 0.0;
+  std::string bid_exchange = "";
+  std::string ask_exchange = "";
 
   std::chrono::high_resolution_clock::time_point last_updated;
 };
@@ -138,6 +155,7 @@ class ExchangeAggregator {
   // Additional data structures for enhanced functionality
   std::unordered_map<std::string, bool> exchange_validity_;              // Track validity of each exchange
   std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> exchange_last_update_;  // Track last update time
+  std::unordered_map<std::string, std::unordered_map<std::string, double>> exchange_correlations_;  // Track correlations between exchanges
 
   TimeSyncStrategy sync_strategy_ = TimeSyncStrategy::EARLIEST_TIMESTAMP;
   AggregationStats stats_;
@@ -163,6 +181,23 @@ class ExchangeAggregator {
   double calculateLowPrice(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
   double calculateBestBid(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
   double calculateBestAsk(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+
+  // Advanced multi-exchange methods
+  void calculateExchangeCorrelations(const std::string& symbol,
+                                   const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                                   AggregatedMarketData& result) const;
+  void detectArbitrageOpportunities(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                                   AggregatedMarketData& result) const;
+  void updateExchangeCorrelations();
+
+  // Advanced aggregation algorithms
+  double calculateTWAP(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                      uint64_t window_start, uint64_t window_end) const;
+  double calculateVWAP(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateMedianPrice(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateTrimmedMean(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+                             double trim_percentage = 0.1) const;
+  double calculateHarmonicMean(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
 };
 
 }  // namespace Data

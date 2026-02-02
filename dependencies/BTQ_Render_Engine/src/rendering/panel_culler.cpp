@@ -1,6 +1,7 @@
 #include "../../include/rendering/panel_culler.hpp"
 
 #include "imgui.h"
+#include <algorithm> // for std::max and std::min
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -26,6 +27,11 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     ImVec2 panel_pos = config.position;
     ImVec2 panel_size = config.size;
 
+    // Additional check: if panel size is zero or negative, don't render
+    if (panel_size.x <= 0.0f || panel_size.y <= 0.0f) {
+        return false;
+    }
+
     // Check if panel is completely off-screen based on viewport bounds
     if (panel_pos.x > viewport_max_.x ||                         // Panel is too far right
         panel_pos.y > viewport_max_.y ||                         // Panel is too far down
@@ -34,8 +40,28 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
-    // Additional check: if panel size is zero or negative, don't render
-    if (panel_size.x <= 0.0f || panel_size.y <= 0.0f) {
+    // Calculate intersection between panel and viewport to determine visible area
+    float intersect_left = std::max(panel_pos.x, viewport_min_.x);
+    float intersect_top = std::max(panel_pos.y, viewport_min_.y);
+    float intersect_right = std::min(panel_pos.x + panel_size.x, viewport_max_.x);
+    float intersect_bottom = std::min(panel_pos.y + panel_size.y, viewport_max_.y);
+
+    // Calculate intersection area
+    float intersect_width = intersect_right - intersect_left;
+    float intersect_height = intersect_bottom - intersect_top;
+
+    // If intersection area is not positive, the panel is not visible
+    if (intersect_width <= 0.0f || intersect_height <= 0.0f) {
+        return false;
+    }
+
+    // Optional: Skip rendering if only a very small portion of the panel is visible
+    // This threshold can be adjusted based on performance needs
+    float panel_area = panel_size.x * panel_size.y;
+    float visible_area = intersect_width * intersect_height;
+
+    // If less than 1% of the panel is visible and the visible area is very small, skip rendering
+    if (visible_area < 100.0f && (visible_area / panel_area) < 0.01f) {
         return false;
     }
 

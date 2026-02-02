@@ -155,17 +155,59 @@ int main() {
         config.visible = true;
         config.position = ImVec2(100, 100);
         config.size = ImVec2(0, 0);  // Zero size
-        
+
         MockPanel panel(config);
-        
+
         culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
-        
+
         bool should_render = culler.should_render_panel(panel);
         assert(should_render == false);
         std::cout << "✓ Test 8 PASSED: Zero-size panel should not render\n";
     }
-    
+
+    // Test 9: Configurable visibility thresholds
+    {
+        BTQuant::PanelConfig config;
+        config.visible = true;
+        config.position = ImVec2(100, 100);
+        config.size = ImVec2(50, 50);  // Area = 2500px^2
+
+        MockPanel panel(config);
+
+        culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
+
+        // Set custom thresholds
+        culler.set_visibility_thresholds(1000.0f, 0.1f);  // At least 1000px^2 OR 10% visibility
+
+        bool should_render = culler.should_render_panel(panel);
+        assert(should_render == true);  // Panel has 2500px^2 which is > 1000px^2 threshold
+        std::cout << "✓ Test 9 PASSED: Configurable visibility thresholds work\n";
+    }
+
+    // Test 10: Small visible area with strict thresholds should not render
+    {
+        BTQuant::PanelConfig config;
+        config.visible = true;
+        config.position = ImVec2(-45, 100);  // Mostly off-screen to the left
+        config.size = ImVec2(50, 50);       // Area = 2500px^2
+
+        MockPanel panel(config);
+
+        culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
+
+        // Set very strict thresholds to test small visible area logic
+        culler.set_visibility_thresholds(100.0f, 0.20f);  // Need at least 100px^2 AND 20% visibility
+
+        bool should_render = culler.should_render_panel(panel);
+        // Panel intersects viewport: width = 5px (from x=0 to x=5), height = 50px
+        // Visible area = 5 * 50 = 250px^2, which is > 100px^2
+        // Percentage = 250/2500 = 0.1 = 10%, which is < 20%
+        // So it should NOT render (fails percentage check)
+        assert(should_render == false);
+        std::cout << "✓ Test 10 PASSED: Small visible area with strict thresholds correctly culled\n";
+    }
+
     std::cout << "\nAll tests passed! Panel culling functionality is working correctly.\n";
-    
+
     return 0;
 }

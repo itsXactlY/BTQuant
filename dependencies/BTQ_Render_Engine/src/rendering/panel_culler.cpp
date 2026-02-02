@@ -10,11 +10,15 @@ PanelCuller::PanelCuller() = default;
 
 PanelCuller::~PanelCuller() = default;
 
+void PanelCuller::set_visibility_thresholds(float small_area_threshold, float percentage_threshold) {
+    visibility_threshold_small_area_ = small_area_threshold;
+    visibility_threshold_percentage_ = percentage_threshold;
+}
+
 bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     const auto& config = panel.get_config();
 
-    // Early exit: Don't render if panel is not visible (hidden) or minimized
-    // Note: A panel can be visible but minimized, or invisible for other reasons
+    // Early exit: Don't render if panel is not visible or minimized
     if (!config.visible || config.minimized) {
         return false;
     }
@@ -23,7 +27,7 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     const ImVec2 panel_pos = config.position;
     const ImVec2 panel_size = config.size;
 
-    // Early exit: Additional check: if panel size is zero or negative, don't render
+    // Early exit: Don't render if panel size is zero or negative
     if (panel_size.x <= 0.0f || panel_size.y <= 0.0f) {
         return false;
     }
@@ -57,12 +61,14 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     }
 
     // Optional: Skip rendering if only a very small portion of the panel is visible
-    // This threshold can be adjusted based on performance needs
+    // Thresholds can be adjusted based on performance needs
     const float panel_area = panel_size.x * panel_size.y;
     const float visible_area = intersect_width * intersect_height;
 
     // If less than 1% of the panel is visible and the visible area is very small, skip rendering
-    if (visible_area < 100.0f && (visible_area / panel_area) < 0.01f) {
+    // This prevents rendering of tiny slivers of panels that barely intersect with the viewport
+    if (visible_area < visibility_threshold_small_area_ &&
+        (visible_area / panel_area) < visibility_threshold_percentage_) {
         return false;
     }
 

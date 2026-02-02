@@ -8,6 +8,7 @@
 #include "implot.h"
 #include "market_data_processor.hpp"
 #include "performance_monitor.hpp"
+#include "rendering/frame_pacer.hpp"
 #include "vulkan_dashboard_advanced.hpp"
 
 /**
@@ -50,25 +51,25 @@ int main(int argc, char** argv) {
   ImPlot::CreateContext();
   std::println("[Main] ImPlot context created");
 
-  // 3. Execution Loop with FPS limiting
-  auto frame_start = std::chrono::steady_clock::now();
-  const auto target_frame_time = std::chrono::microseconds(6944);  // 144 FPS = 6.944ms/frame
+  // 3. Initialize Frame Pacer
+  RenderEngine::FramePacer::Config pacer_config;
+  pacer_config.target_fps = 144;  // Target 144 FPS for high-refresh displays
+  pacer_config.enable_adaptive_sync = true;
+  pacer_config.enable_frame_smoothing = true;
+  pacer_config.enable_burst_reduction = true;
+  RenderEngine::FramePacer frame_pacer(pacer_config);
 
   while (!dashboard->should_close()) {
-    auto frame_begin = std::chrono::steady_clock::now();
+    frame_pacer.begin_frame();
 
-    g_performance_monitor.start_frame();
+    BTQuant::g_performance_monitor.start_frame();
     dashboard->handle_events();
     bridge->sync();
     dashboard->render_frame();
-    g_performance_monitor.end_frame();
+    BTQuant::g_performance_monitor.end_frame();
 
-    // FPS cap
-    auto frame_end = std::chrono::steady_clock::now();
-    auto elapsed = frame_end - frame_begin;
-    if (elapsed < target_frame_time) {
-      std::this_thread::sleep_for(target_frame_time - elapsed);
-    }
+    frame_pacer.end_frame();
+    frame_pacer.wait_for_next_frame();
   }
 
   // 4. Graceful Shutdown

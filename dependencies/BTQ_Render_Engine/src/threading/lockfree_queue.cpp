@@ -1,4 +1,5 @@
 #include "threading/lockfree_queue.hpp"
+#include "task_scheduler.hpp"  // For btq::Trade and btq::Candle
 #include <string>
 #include <vector>
 #include <chrono>

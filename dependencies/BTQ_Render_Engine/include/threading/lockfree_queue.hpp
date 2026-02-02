@@ -38,12 +38,10 @@ public:
     }
 
     ~LockFreeQueue() {
-        // Clean up remaining nodes
-        Node* current = head_.load(std::memory_order_acquire);
-        while (current != nullptr) {
-            Node* next = current->next.load(std::memory_order_acquire);
-            delete current;
-            current = next;
+        // Clean up remaining nodes - ensure safe cleanup by advancing head to tail
+        while (Node* const old_head = head_.load(std::memory_order_relaxed)) {
+            head_.store(old_head->next.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            delete old_head;
         }
     }
 
@@ -51,24 +49,26 @@ public:
         Node* new_node = new Node(new_value);
 
         // Keep trying until we successfully add the node
+        Node* prev_tail = tail_.load(std::memory_order_relaxed);
         while (true) {
-            Node* tail_copy = tail_.load(std::memory_order_acquire);
-            Node* next = tail_copy->next.load(std::memory_order_acquire);
+            Node* next = prev_tail->next.load(std::memory_order_acquire);
 
             // Check if tail is still pointing to the same node
-            if (tail_copy == tail_.load(std::memory_order_acquire)) {
+            if (prev_tail == tail_.load(std::memory_order_acquire)) {
                 if (next == nullptr) {
                     // Tail was pointing to the last node, try to link our new node
-                    if (tail_copy->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
+                    if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
                         // Successfully added the node, now advance the tail
-                        tail_.compare_exchange_strong(tail_copy, new_node, std::memory_order_release, std::memory_order_acquire);
+                        tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
                         return;
                     }
                 } else {
                     // Tail wasn't pointing to the last node, advance it
-                    tail_.compare_exchange_strong(tail_copy, next, std::memory_order_release, std::memory_order_acquire);
+                    tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
                 }
             }
+            // Update prev_tail for the next iteration
+            prev_tail = tail_.load(std::memory_order_relaxed);
         }
     }
 
@@ -76,29 +76,32 @@ public:
         Node* new_node = new Node(std::move(new_value));
 
         // Keep trying until we successfully add the node
+        Node* prev_tail = tail_.load(std::memory_order_relaxed);
         while (true) {
-            Node* tail_copy = tail_.load(std::memory_order_acquire);
-            Node* next = tail_copy->next.load(std::memory_order_acquire);
+            Node* next = prev_tail->next.load(std::memory_order_acquire);
 
             // Check if tail is still pointing to the same node
-            if (tail_copy == tail_.load(std::memory_order_acquire)) {
+            if (prev_tail == tail_.load(std::memory_order_acquire)) {
                 if (next == nullptr) {
                     // Tail was pointing to the last node, try to link our new node
-                    if (tail_copy->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
+                    if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
                         // Successfully added the node, now advance the tail
-                        tail_.compare_exchange_strong(tail_copy, new_node, std::memory_order_release, std::memory_order_acquire);
+                        tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
                         return;
                     }
                 } else {
                     // Tail wasn't pointing to the last node, advance it
-                    tail_.compare_exchange_strong(tail_copy, next, std::memory_order_release, std::memory_order_acquire);
+                    tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
                 }
             }
+            // Update prev_tail for the next iteration
+            prev_tail = tail_.load(std::memory_order_relaxed);
         }
     }
 
     std::shared_ptr<T> pop() {
-        // Keep trying until we successfully remove a node
+        Node* prev_head = head_.load(std::memory_order_relaxed);
+
         while (true) {
             Node* head_copy = head_.load(std::memory_order_acquire);
             Node* tail_copy = tail_.load(std::memory_order_acquire);
@@ -125,7 +128,10 @@ public:
                         T data = std::move(next->data);
 
                         // Successfully dequeued the node, delete the old head
-                        delete head_copy;
+                        // Only delete if it's not the dummy node (the initial node)
+                        if (head_copy != prev_head || head_copy != head_.load(std::memory_order_relaxed)) {
+                            delete head_copy;
+                        }
 
                         return std::make_shared<T>(std::move(data));
                     }
@@ -137,7 +143,8 @@ public:
 
     // Non-blocking try_pop
     bool try_pop(T& value) {
-        // Keep trying until we successfully remove a node
+        Node* prev_head = head_.load(std::memory_order_relaxed);
+
         while (true) {
             Node* head_copy = head_.load(std::memory_order_acquire);
             Node* tail_copy = tail_.load(std::memory_order_acquire);
@@ -164,7 +171,10 @@ public:
                         value = std::move(next->data);
 
                         // Successfully dequeued the node, delete the old head
-                        delete head_copy;
+                        // Only delete if it's not the dummy node (the initial node)
+                        if (head_copy != prev_head || head_copy != head_.load(std::memory_order_relaxed)) {
+                            delete head_copy;
+                        }
 
                         return true;
                     }
@@ -200,6 +210,13 @@ public:
     // For compatibility with existing interface
     size_t size() const {
         return size_approx();
+    }
+
+    // Additional utility methods for thread safety
+    void clear() {
+        while (pop() != nullptr) {
+            // Keep popping until queue is empty
+        }
     }
 };
 

@@ -233,7 +233,7 @@
 
 ### Phase 10b: Layout Management [Complexity: M]
 - [ ] Add layout presets system: save current panel arrangement as named preset, load preset to restore layout, delete preset in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
-- [ ] Implement layout quick-save: hotkeys F5-F8 to save layouts, Shift+F5-F8 to load, visual indicator showing active layout in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: S]
+- [x] Implement layout quick-save: hotkeys F5-F8 to save layouts, Shift+F5-F8 to load, visual indicator showing active layout in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: S]
 - [ ] Add panel templates: predefined layouts matching common trading styles (Scalper, Day Trader, Swing Trader, Analysis) one-click load in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
 - [ ] Implement workspace export/import: save entire workspace (layouts, settings, symbols) to file, share with others, load from file in `dependencies/BTQ_Render_Engine/src/ui/workspace_manager.cpp` [Complexity: M]
 

@@ -160,6 +160,76 @@ struct AggregatedMarketData {
   std::chrono::high_resolution_clock::time_point last_updated;
 };
 
+// Structures for enhanced multi-exchange aggregation
+struct TimestampSynchronizationResult {
+  std::string symbol;
+  TimeSyncStrategy strategy_used;
+  uint64_t synchronized_timestamp = 0;
+  std::unordered_map<std::string, uint64_t> original_timestamps;  // Original timestamps from each exchange
+  std::unordered_map<std::string, uint64_t> synchronization_accuracy;  // Accuracy of sync for each exchange (in microseconds)
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+struct ExchangeCorrelationMatrix {
+  std::string symbol;
+  std::unordered_map<std::string, std::unordered_map<std::string, double>> correlations;  // Correlation between exchanges
+  double overall_market_correlation = 0.0;  // Overall correlation across all exchanges
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+struct ExchangeSpecificRisk {
+  std::string exchange_name;
+  double latency_risk = 0.0;              // Risk due to latency (in milliseconds)
+  double fee_cost = 0.0;                  // Trading fee cost
+  double reliability_score = 0.0;         // Reliability score (0.0-1.0)
+  double price_deviation_risk = 0.0;      // Risk due to price deviation from market average
+};
+
+struct ExchangeRiskMetrics {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeSpecificRisk> exchange_specific_risks;  // Risk metrics per exchange
+  double price_volatility = 0.0;          // Overall price volatility across exchanges
+  double coefficient_of_variation = 0.0;  // Coefficient of variation (volatility relative to mean)
+  double price_spread = 0.0;              // Price spread between highest and lowest exchanges
+  double normalized_price_spread = 0.0;   // Normalized price spread relative to average price
+  double volume_concentration_risk = 0.0; // Risk due to volume concentration on single exchange
+  double price_variance = 0.0;            // Price variance across exchanges
+  double max_price_deviation = 0.0;       // Maximum deviation from average price
+  double volume_distribution_entropy = 0.0; // Entropy measure of volume distribution across exchanges
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Result of multi-exchange time synchronization
+struct MultiExchangeTimeSyncResult {
+  std::string symbol;
+  TimeSyncStrategy strategy_used;
+  uint64_t synchronized_timestamp = 0;
+  std::unordered_map<std::string, uint64_t> original_timestamps;    // Original timestamps from each exchange
+  std::unordered_map<std::string, uint64_t> compensated_timestamps; // Timestamps after latency compensation
+  std::unordered_map<std::string, uint64_t> synchronization_accuracy;  // Accuracy of sync for each exchange (in microseconds)
+  uint64_t average_original_timestamp = 0;  // Average of original timestamps
+  double timestamp_variance = 0.0;          // Variance of timestamps across exchanges
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Comprehensive view of all exchanges for a symbol with all analytics
+struct ComprehensiveMultiExchangeView {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeConsolidatedData> exchange_data;  // Detailed data per exchange
+  ConsolidatedMarketMetrics market_metrics;                                 // Overall market metrics
+  ConsolidatedRiskMetrics risk_metrics;                                     // Risk metrics
+  ExchangeDataQualityMetrics data_quality;                                  // Data quality metrics
+  std::vector<ExchangeRanking> exchange_rankings;                           // Rankings of exchanges by reliability
+
+  // Arbitrage detection
+  bool arbitrage_opportunity_exists = false;
+  double arbitrage_profit_potential = 0.0;
+  std::string best_arbitrage_buy_exchange = "";
+  std::string best_arbitrage_sell_exchange = "";
+
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
 // Exchange Aggregator for combining data from multiple exchanges
 class ExchangeAggregator {
  public:
@@ -218,6 +288,192 @@ class ExchangeAggregator {
   };
 
   AggregationStats getStats() const;
+
+  // Exchange-specific quality metrics
+struct ExchangeSpecificQuality {
+  std::string exchange_name;
+  double freshness_score = 0.0;        // Score based on data age (0-1)
+  double completeness_score = 0.0;     // Score based on data completeness (0-1)
+  double accuracy_score = 0.0;         // Score based on agreement with other exchanges (0-1)
+  double overall_quality_score = 0.0;  // Combined quality score (0-1)
+};
+
+// Data quality metrics for multi-exchange aggregation
+struct ExchangeDataQualityMetrics {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeSpecificQuality> exchange_quality_metrics;
+  double cross_exchange_consistency = 0.0;  // How consistent prices are across exchanges (0-1)
+  double data_reliability_score = 0.0;      // Overall reliability of the aggregated data (0-1)
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Exchange latency report for monitoring
+struct ExchangeLatencyReport {
+  std::string exchange_name;
+  int64_t current_latency_ms = 0;           // Current latency in milliseconds
+  double configured_latency_offset_us = 0.0; // Configured offset in microseconds
+  double reliability_score = 0.0;           // Current reliability score
+  bool is_valid = false;                    // Whether the exchange is currently valid
+};
+
+// Market metrics for consolidated view
+struct ConsolidatedMarketMetrics {
+  double average_price = 0.0;
+  double spread = 0.0;                    // Difference between highest and lowest prices
+  double volatility = 0.0;                // Normalized price variation
+  double total_volume = 0.0;              // Total volume across all exchanges
+  double lowest_price = 0.0;              // Lowest price across exchanges
+  double highest_price = 0.0;             // Highest price across exchanges
+  double price_range = 0.0;               // Range between lowest and highest prices
+  double bid_ask_spread = 0.0;            // Spread between best bid and ask
+  std::string best_bid_exchange = "";     // Exchange with best bid
+  std::string best_ask_exchange = "";     // Exchange with best ask
+  double cross_exchange_correlation = 0.0; // Correlation between exchanges
+};
+
+// Risk metrics for consolidated view
+struct ConsolidatedRiskMetrics {
+  double price_volatility = 0.0;          // Standard deviation of prices
+  double coefficient_of_variation = 0.0;  // Volatility relative to mean
+};
+
+// Consolidated data for a single exchange
+struct ExchangeConsolidatedData {
+  RenderEngine::MarketDataUpdate update;
+  ExchangeFeatures features;
+  ExchangeSpecificStats stats;
+};
+
+// Multi-exchange consolidated view
+struct MultiExchangeConsolidatedView {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeConsolidatedData> exchange_data;  // Data per exchange
+  ConsolidatedMarketMetrics market_metrics;                                 // Overall market metrics
+  ConsolidatedRiskMetrics risk_metrics;                                     // Risk metrics
+  bool arbitrage_opportunity_exists = false;                               // Whether arbitrage is possible
+  double arbitrage_profit_potential = 0.0;                                 // Potential profit from arbitrage
+  std::string best_arbitrage_buy_exchange = "";                           // Best exchange to buy from for arbitrage
+  std::string best_arbitrage_sell_exchange = "";                          // Best exchange to sell to for arbitrage
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Cross-exchange analytics for a symbol
+struct SymbolCrossExchangeAnalytics {
+  std::string symbol;
+  std::unordered_map<std::string, double> exchange_prices;                // Price from each exchange
+  std::unordered_map<std::string, double> exchange_volumes;               // Volume from each exchange
+
+  // Statistical measures
+  double mean_price = 0.0;                                               // Average price across exchanges
+  double median_price = 0.0;                                             // Median price across exchanges
+  double std_deviation = 0.0;                                            // Standard deviation of prices
+  double variance = 0.0;                                                 // Variance of prices
+  double coefficient_of_variation = 0.0;                                 // CV = std_dev / mean
+  double min_price = 0.0;                                                // Minimum price across exchanges
+  double max_price = 0.0;                                                // Maximum price across exchanges
+  double price_range = 0.0;                                              // Range = max - min
+  double skewness = 0.0;                                                 // Measure of asymmetry
+  double kurtosis = 0.0;                                                 // Measure of tail heaviness
+
+  // Volume metrics
+  double total_volume = 0.0;                                             // Total volume across exchanges
+  double volume_weighted_average_price = 0.0;                            // VWAP across exchanges
+  double volume_concentration_index = 0.0;                               // Herfindahl-Hirschman Index for volume
+
+  // Arbitrage metrics
+  double max_arbitrage_potential = 0.0;                                  // Max potential profit from arbitrage
+  double relative_arbitrage_potential = 0.0;                             // Relative arbitrage potential (%)
+
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Dispersion metrics for advanced aggregation
+struct DispersionMetrics {
+  double mean = 0.0;
+  double standard_deviation = 0.0;
+  double variance = 0.0;
+  double min = 0.0;
+  double max = 0.0;
+  double range = 0.0;
+  double coefficient_of_variation = 0.0;
+};
+
+// Outlier detection metrics
+struct OutlierDetectionMetrics {
+  double q1 = 0.0;              // First quartile
+  double q3 = 0.0;              // Third quartile
+  double iqr = 0.0;             // Interquartile range
+  double lower_fence = 0.0;     // Lower bound for outliers (Q1 - 1.5*IQR)
+  double upper_fence = 0.0;     // Upper bound for outliers (Q3 + 1.5*IQR)
+  int outlier_count = 0;        // Number of detected outliers
+};
+
+// Result of advanced aggregation
+struct AdvancedAggregationResult {
+  std::string symbol;
+  std::vector<std::string> included_exchanges;
+
+  // Different aggregation methods
+  double simple_average = 0.0;
+  double weighted_average = 0.0;
+  double volume_weighted = 0.0;
+  double median_price = 0.0;
+  double geometric_mean = 0.0;
+  double robust_mean = 0.0;
+  double harmonic_mean = 0.0;
+  double consensus_price = 0.0;
+
+  // Percentile-based aggregations
+  double percentile_25th = 0.0;
+  double percentile_75th = 0.0;
+  double percentile_90th = 0.0;
+  double percentile_95th = 0.0;
+
+  // Dispersion and statistical metrics
+  DispersionMetrics dispersion_metrics;
+  OutlierDetectionMetrics outlier_detection;
+
+  // Confidence intervals
+  double confidence_interval_lower = 0.0;
+  double confidence_interval_upper = 0.0;
+
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Enhanced multi-exchange aggregation methods
+  std::optional<TimestampSynchronizationResult> synchronizeTimestampsAcrossExchanges(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
+  std::vector<ExchangeCorrelationMatrix> calculateExchangeCorrelationsMatrix() const;
+  std::optional<ExchangeRiskMetrics> calculateRiskMetrics(const std::string& symbol) const;
+
+  // Enhanced multi-exchange time synchronization and comprehensive views
+  std::optional<MultiExchangeTimeSyncResult> performMultiExchangeTimeSync(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
+  std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeView(
+      const std::string& symbol) const;
+
+  // Exchange-specific feature handling methods
+  void updateExchangeSpecificFeatures(const std::string& exchange, const ExchangeFeatures& new_features);
+  std::optional<ExchangeFeatures> getEnhancedExchangeFeatures(const std::string& exchange) const;
+  std::vector<ExchangeLatencyReport> generateLatencyReport() const;
+  std::optional<ExchangeDataQualityMetrics> calculateDataQualityMetrics(const std::string& symbol) const;
+
+  // Comprehensive multi-exchange view methods
+  std::optional<MultiExchangeConsolidatedView> getMultiExchangeConsolidatedView(const std::string& symbol) const;
+  std::vector<MultiExchangeConsolidatedView> getAllSymbolsConsolidatedView() const;
+  std::optional<SymbolCrossExchangeAnalytics> getCrossExchangeAnalytics(const std::string& symbol) const;
+
+  // Advanced aggregation algorithms
+  double calculateGeometricMeanPrice(
+      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateRobustMeanPrice(
+      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateWeightedPercentilePrice(
+      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+      double percentile) const;
+  double calculateSimpleAveragePrice(
+      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  std::optional<AdvancedAggregationResult> performAdvancedAggregation(const std::string& symbol) const;
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

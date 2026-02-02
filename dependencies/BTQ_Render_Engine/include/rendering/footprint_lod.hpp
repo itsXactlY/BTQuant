@@ -42,47 +42,59 @@ struct LODStatistics {
     int medium_detail_cells = 0;
     int high_detail_cells = 0;
     int max_detail_cells = 0;
-    
+
     float getLowDetailPercentage() const {
         return total_cells > 0 ? (static_cast<float>(low_detail_cells) / total_cells) * 100.0f : 0.0f;
     }
-    
+
     float getMediumDetailPercentage() const {
         return total_cells > 0 ? (static_cast<float>(medium_detail_cells) / total_cells) * 100.0f : 0.0f;
     }
-    
+
     float getHighDetailPercentage() const {
         return total_cells > 0 ? (static_cast<float>(high_detail_cells) / total_cells) * 100.0f : 0.0f;
     }
-    
+
     float getMaxDetailPercentage() const {
         return total_cells > 0 ? (static_cast<float>(max_detail_cells) / total_cells) * 100.0f : 0.0f;
     }
 };
 
+// Structure to hold performance metrics for adaptive LOD
+struct PerformanceMetrics {
+    float frame_time_ms = 0.0f;      // Time taken to render current frame
+    int rendered_cells = 0;          // Number of cells rendered in current frame
+    float fps = 0.0f;                // Frames per second
+    bool performance_degraded = false; // Flag indicating performance issues
+};
+
 class FootprintLOD {
 public:
     FootprintLOD();
-    
+
     // Calculate the appropriate LOD level based on cell dimensions and zoom factor
     LODLevel calculateLODLevel(float cell_width_px, float cell_height_px, float zoom_factor) const;
-    
+
+    // Calculate LOD level with distance-based adjustment (closer cells get more detail)
+    LODLevel calculateDistanceBasedLODLevel(float cell_width_px, float cell_height_px,
+                                         float zoom_factor, ImVec2 cell_center, ImVec2 view_center) const;
+
     // Get rendering settings for a specific LOD level
     LODRenderSettings getRenderSettings(LODLevel lod_level) const;
-    
+
     // Determine if text should be rendered based on cell size and zoom
     bool shouldRenderText(float cell_height_px, float zoom_factor) const;
-    
+
     // Determine if labels should be rendered based on cell size and zoom
     bool shouldRenderLabels(float cell_height_px, float zoom_factor) const;
-    
+
     // Determine if detailed annotations should be rendered
-    bool shouldRenderDetailedAnnotations(float cell_width_px, float cell_height_px, 
+    bool shouldRenderDetailedAnnotations(float cell_width_px, float cell_height_px,
                                        float zoom_factor) const;
-    
+
     // Adjust cell padding based on zoom level for optimal visual representation
     float adjustCellPadding(float base_padding, float zoom_factor) const;
-    
+
     // Calculate alpha multiplier based on zoom and LOD level
     float calculateAlphaMultiplier(float zoom_factor, LODLevel lod_level) const;
 
@@ -96,7 +108,14 @@ public:
     // Calculate LOD transition state for smooth transitions between LOD levels
     LODTransitionState calculateLODTransition(float prev_zoom, float curr_zoom,
                                            float cell_width_px, float cell_height_px) const;
-    
+
+    // Apply performance-based LOD adjustment based on rendering metrics
+    void updatePerformanceBasedLOD(const PerformanceMetrics& metrics);
+
+    // Cluster nearby cells at low zoom levels to reduce visual clutter
+    std::vector<FootprintCell> clusterCells(const std::vector<FootprintCell>& cells,
+                                          float zoom_factor) const;
+
     // Apply LOD-based rendering to a single cell
     void applyLODToCell(const FootprintCell& cell,
                        ImDrawList* draw_list,
@@ -105,47 +124,70 @@ public:
                        const std::vector<FootprintCell>& diagonal_imbalances,
                        const std::vector<FootprintCell>& stacked_imbalances,
                        const FootprintPanel* panel) const;
-    
+
+    // Apply distance-based LOD rendering to a single cell
+    void applyDistanceBasedLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel,
+                                   ImVec2 view_center) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }
     void setMaxDetailZoom(float zoom) { max_detail_zoom_ = zoom; }
-    
+
     void setMinCellSizePx(float size) { min_cell_size_px_ = size; }
     void setMediumCellSizePx(float size) { medium_cell_size_px_ = size; }
     void setMaxCellSizePx(float size) { max_cell_size_px_ = size; }
-    
+
     void setTextRenderThreshold(float threshold) { text_render_threshold_ = threshold; }
     void setLabelRenderThreshold(float threshold) { label_render_threshold_ = threshold; }
     void setDetailRenderThreshold(float threshold) { detail_render_threshold_ = threshold; }
-    
+
+    void setDistanceLODThreshold(float threshold) { distance_lod_threshold_ = threshold; }
+    void setPerformanceTargetFPS(float fps) { target_fps_ = fps; }
+
     float getMinDetailZoom() const { return min_detail_zoom_; }
     float getMediumDetailZoom() const { return medium_detail_zoom_; }
     float getMaxDetailZoom() const { return max_detail_zoom_; }
-    
+
     float getMinCellSizePx() const { return min_cell_size_px_; }
     float getMediumCellSizePx() const { return medium_cell_size_px_; }
     float getMaxCellSizePx() const { return max_cell_size_px_; }
-    
+
     float getTextRenderThreshold() const { return text_render_threshold_; }
     float getLabelRenderThreshold() const { return label_render_threshold_; }
     float getDetailRenderThreshold() const { return detail_render_threshold_; }
+
+    float getDistanceLODThreshold() const { return distance_lod_threshold_; }
+    float getPerformanceTargetFPS() const { return target_fps_; }
 
 private:
     // Zoom thresholds for different LOD levels
     float min_detail_zoom_;      // Zoom factor below which low detail is used
     float medium_detail_zoom_;   // Zoom factor below which medium detail is used
     float max_detail_zoom_;      // Zoom factor above which max detail is used
-    
+
     // Minimum cell size thresholds for different LOD levels (in pixels)
     float min_cell_size_px_;
     float medium_cell_size_px_;
     float max_cell_size_px_;
-    
+
     // Thresholds for specific rendering elements
     float text_render_threshold_;     // Minimum cell height to render text
     float label_render_threshold_;    // Minimum cell height to render labels
     float detail_render_threshold_;   // Minimum cell size to render detailed annotations
+
+    // Distance-based LOD parameters
+    float distance_lod_threshold_;    // Distance from view center where LOD changes
+
+    // Performance-based LOD parameters
+    float target_fps_;                // Target FPS for performance-based LOD
+    bool performance_lod_enabled_;    // Whether performance-based LOD is enabled
 };
 
 } // namespace Rendering

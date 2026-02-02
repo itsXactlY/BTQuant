@@ -9,8 +9,8 @@ namespace BTQuant {
 // Structure to hold batched geometry data for order book rendering
 struct OrderbookBatchVertex {
     ImVec2 pos;
-    ImU32 col;
     ImVec2 uv;  // Texture coordinates if needed
+    ImU32 col;
 };
 
 struct OrderbookBatchElement {
@@ -56,7 +56,7 @@ private:
     std::vector<OrderbookBatchElement> batches_;
 
     // Find or create a compatible batch for the given parameters
-    OrderbookBatchElement* findOrCreateCompatibleBatch(ImTextureID texture, int primitive_type);
+    OrderbookBatchElement* findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col);
 
     // Optimize batches by merging compatible ones to reduce draw calls
     void optimizeBatches();

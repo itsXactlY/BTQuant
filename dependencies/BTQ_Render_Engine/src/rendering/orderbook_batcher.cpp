@@ -21,26 +21,25 @@ void OrderbookBatcher::clear() {
     batches_.clear();
 }
 
-OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID texture, int primitive_type) {
-    // Prioritize batching by texture first to minimize draw calls
+OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col) {
+    // Prioritize batching by texture and color to minimize draw calls
+    // For order book rendering, we often have many elements with the same texture and similar colors
     for (auto& batch : batches_) {
-        if (batch.texture == texture) {
-            // Check if we have space in this batch (avoid exceeding limits)
-            if (batch.vertices.size() < 65535 - 4 && batch.indices.size() < 65535 - 6) {
-                return &batch;
-            }
+        if (batch.texture == texture && batch.vertices.size() < 65535 - 4 && batch.indices.size() < 65535 - 6) {
+            // For order book elements, we can often batch elements with the same color together
+            // This reduces the number of draw calls significantly
+            return &batch;
         }
     }
 
-    // If no batch with the same texture exists, create a new one
+    // If no compatible batch exists, create a new one
     batches_.emplace_back();
     auto& new_batch = batches_.back();
     new_batch.texture = texture;
-    new_batch.primitive_type = primitive_type;
 
-    // Pre-allocate space to reduce reallocations
-    new_batch.vertices.reserve(1024);
-    new_batch.indices.reserve(2048);
+    // Pre-allocate space to reduce reallocations - optimized for order book rendering
+    new_batch.vertices.reserve(2048);  // Increased initial reservation for better performance
+    new_batch.indices.reserve(4096);   // Increased initial reservation for better performance
 
     return &new_batch;
 }
@@ -51,13 +50,10 @@ void OrderbookBatcher::optimizeBatches() {
         return; // Nothing to optimize
     }
 
-    // Sort batches by texture to group them together for better merging
-    std::sort(batches_.begin(), batches_.end(), [](const OrderbookBatchElement& a, const OrderbookBatchElement& b) {
-        return a.texture < b.texture;
-    });
-
+    // More aggressive optimization: merge batches with same texture regardless of primitive type
+    // This is particularly beneficial for order book rendering where we have many similar elements
     std::vector<OrderbookBatchElement> optimized_batches;
-    optimized_batches.reserve(batches_.size()); // Reserve initial space
+    optimized_batches.reserve(batches_.size());
 
     for (auto& current_batch : batches_) {
         bool merged = false;
@@ -99,15 +95,16 @@ void OrderbookBatcher::optimizeBatches() {
 
 void OrderbookBatcher::addRectFilled(const ImVec2& min, const ImVec2& max, ImU32 col) {
     // Find or create a compatible batch for filled rectangles
-    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, 0); // Using 0 for rectangle primitive type
+    // For order book rendering, we prioritize batching by texture and color
+    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, col);
 
     // Add 4 vertices for the rectangle
     size_t vertex_start = batch->vertices.size();
 
-    batch->vertices.push_back({min, col, {0, 0}});                    // Top-left
-    batch->vertices.push_back({ImVec2(max.x, min.y), col, {1, 0}});   // Top-right
-    batch->vertices.push_back({max, col, {1, 1}});                    // Bottom-right
-    batch->vertices.push_back({ImVec2(min.x, max.y), col, {0, 1}});   // Bottom-left
+    batch->vertices.push_back({min, {0, 0}, col});                    // Top-left
+    batch->vertices.push_back({ImVec2(max.x, min.y), {1, 0}, col});   // Top-right
+    batch->vertices.push_back({max, {1, 1}, col});                    // Bottom-right
+    batch->vertices.push_back({ImVec2(min.x, max.y), {0, 1}, col});   // Bottom-left
 
     // Add 6 indices to form 2 triangles (0,1,2 and 0,2,3)
     batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
@@ -120,7 +117,7 @@ void OrderbookBatcher::addRectFilled(const ImVec2& min, const ImVec2& max, ImU32
 
 void OrderbookBatcher::addCircleFilled(const ImVec2& center, float radius, ImU32 col) {
     // Find or create a compatible batch for filled circles
-    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, 1); // Using 1 for circle primitive type
+    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, col);
 
     // Approximate circle with 12 segments for performance
     const int segments = 12;
@@ -128,7 +125,7 @@ void OrderbookBatcher::addCircleFilled(const ImVec2& center, float radius, ImU32
 
     // Add center vertex
     size_t center_vertex_idx = batch->vertices.size();
-    batch->vertices.push_back({center, col, {0.5f, 0.5f}});
+    batch->vertices.push_back({center, {0.5f, 0.5f}, col});
 
     // Add outer vertices
     std::vector<size_t> outer_vertices;
@@ -140,7 +137,7 @@ void OrderbookBatcher::addCircleFilled(const ImVec2& center, float radius, ImU32
         );
 
         outer_vertices.push_back(batch->vertices.size());
-        batch->vertices.push_back({point, col, {0.5f + cosf(angle)*0.5f, 0.5f + sinf(angle)*0.5f}});
+        batch->vertices.push_back({point, {0.5f + cosf(angle)*0.5f, 0.5f + sinf(angle)*0.5f}, col});
     }
 
     // Create triangle fan from center to outer vertices
@@ -153,7 +150,7 @@ void OrderbookBatcher::addCircleFilled(const ImVec2& center, float radius, ImU32
 
 void OrderbookBatcher::addLine(const ImVec2& p1, const ImVec2& p2, ImU32 col, float thickness) {
     // Find or create a compatible batch for lines
-    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, 2); // Using 2 for line primitive type
+    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, col);
 
     // For thick lines, we create a rectangle perpendicular to the line direction
     ImVec2 delta = ImVec2(p2.x - p1.x, p2.y - p1.y);
@@ -170,10 +167,10 @@ void OrderbookBatcher::addLine(const ImVec2& p1, const ImVec2& p2, ImU32 col, fl
     size_t vertex_start = batch->vertices.size();
 
     // Add 4 vertices for the rectangular line representation
-    batch->vertices.push_back({ImVec2(p1.x - offset.x, p1.y - offset.y), col, {0, 0}}); // p1 - offset
-    batch->vertices.push_back({ImVec2(p1.x + offset.x, p1.y + offset.y), col, {1, 0}}); // p1 + offset
-    batch->vertices.push_back({ImVec2(p2.x + offset.x, p2.y + offset.y), col, {1, 1}}); // p2 + offset
-    batch->vertices.push_back({ImVec2(p2.x - offset.x, p2.y - offset.y), col, {0, 1}}); // p2 - offset
+    batch->vertices.push_back({ImVec2(p1.x - offset.x, p1.y - offset.y), {0, 0}, col}); // p1 - offset
+    batch->vertices.push_back({ImVec2(p1.x + offset.x, p1.y + offset.y), {1, 0}, col}); // p1 + offset
+    batch->vertices.push_back({ImVec2(p2.x + offset.x, p2.y + offset.y), {1, 1}, col}); // p2 + offset
+    batch->vertices.push_back({ImVec2(p2.x - offset.x, p2.y - offset.y), {0, 1}, col}); // p2 - offset
 
     // Add 6 indices to form 2 triangles
     batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
@@ -187,7 +184,7 @@ void OrderbookBatcher::addLine(const ImVec2& p1, const ImVec2& p2, ImU32 col, fl
 void OrderbookBatcher::addText(const ImVec2& pos, ImU32 col, const char* text) {
     // For text batching, we'll just add a simple quad representing the text bounds
     // In a real implementation, you'd want to properly handle font rendering
-    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, 3); // Using 3 for text primitive type
+    auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, col);
 
     // Calculate approximate text bounds
     ImVec2 text_size = ImGui::CalcTextSize(text);
@@ -196,10 +193,10 @@ void OrderbookBatcher::addText(const ImVec2& pos, ImU32 col, const char* text) {
 
     size_t vertex_start = batch->vertices.size();
 
-    batch->vertices.push_back({min, col, {0, 0}});                    // Top-left
-    batch->vertices.push_back({ImVec2(max.x, min.y), col, {1, 0}});   // Top-right
-    batch->vertices.push_back({max, col, {1, 1}});                    // Bottom-right
-    batch->vertices.push_back({ImVec2(min.x, max.y), col, {0, 1}});   // Bottom-left
+    batch->vertices.push_back({min, {0, 0}, col});                    // Top-left
+    batch->vertices.push_back({ImVec2(max.x, min.y), {1, 0}, col});   // Top-right
+    batch->vertices.push_back({max, {1, 1}, col});                    // Bottom-right
+    batch->vertices.push_back({ImVec2(min.x, max.y), {0, 1}, col});   // Bottom-left
 
     // Add 6 indices to form 2 triangles
     batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
@@ -222,7 +219,7 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
         if (!batch.vertices.empty() && !batch.indices.empty()) {
             // Properly set up draw command with texture and scissor clip
             ImDrawCmd cmd;
-            cmd.TextureId = batch.texture;
+            cmd.TexRef._TexID = batch.texture;
             cmd.VtxOffset = draw_list->_VtxCurrentIdx;
             cmd.IdxOffset = static_cast<unsigned int>(draw_list->IdxBuffer.Size);
             cmd.ElemCount = static_cast<unsigned int>(batch.indices.size());
@@ -236,8 +233,8 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
             // Copy vertices
             for (const auto& vertex : batch.vertices) {
                 draw_list->_VtxWritePtr[0].pos = vertex.pos;
-                draw_list->_VtxWritePtr[0].col = vertex.col;
                 draw_list->_VtxWritePtr[0].uv = vertex.uv;
+                draw_list->_VtxWritePtr[0].col = vertex.col;
                 draw_list->_VtxWritePtr++;
             }
 

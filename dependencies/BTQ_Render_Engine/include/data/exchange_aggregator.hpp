@@ -27,7 +27,8 @@ enum class TimeSyncStrategy {
   LATEST_TIMESTAMP,      // Use latest timestamp among exchanges
   AVERAGE_TIMESTAMP,     // Average timestamps from all exchanges
   REFERENCE_EXCHANGE,    // Use one exchange as time reference
-  OFFSET_COMPENSATION    // Apply calculated offsets to align times
+  OFFSET_COMPENSATION,   // Apply calculated offsets to align times
+  MEDIAN_TIMESTAMP       // Use median timestamp among exchanges
 };
 
 // Exchange-specific features and configurations
@@ -45,20 +46,24 @@ struct ExchangeFeatures {
 struct AggregatedMarketData {
   std::string symbol;
   TimeSyncStrategy sync_strategy = TimeSyncStrategy::EARLIEST_TIMESTAMP;
-  
+
   // Data from different exchanges
   std::unordered_map<std::string, RenderEngine::MarketDataUpdate> exchange_data;
-  
+
   // Aggregated values
   double aggregated_price = 0.0;
   double aggregated_volume = 0.0;
   double weighted_price = 0.0;
+  double aggregated_high = 0.0;          // Highest price among exchanges
+  double aggregated_low = 0.0;           // Lowest price among exchanges
+  double aggregated_bid = 0.0;           // Best bid price among exchanges
+  double aggregated_ask = 0.0;           // Best ask price among exchanges
   uint64_t synchronized_timestamp = 0;
-  
+
   // Time synchronization info
   std::map<std::string, uint64_t> exchange_timestamps;
   uint64_t reference_timestamp = 0;
-  
+
   std::chrono::high_resolution_clock::time_point last_updated;
 };
 
@@ -98,6 +103,9 @@ class ExchangeAggregator {
   // Calculate weighted average price based on volume from different exchanges
   double calculateWeightedAveragePrice(const std::string& symbol) const;
 
+  // Calculate weighted average price with validation of data quality
+  double calculateWeightedAveragePriceWithValidation(const std::string& symbol) const;
+
   // Calculate synchronized timestamp based on strategy
   uint64_t calculateSynchronizedTimestamp(const std::string& symbol) const;
 
@@ -111,10 +119,11 @@ class ExchangeAggregator {
   struct AggregationStats {
     size_t total_symbols_aggregated = 0;
     size_t total_exchanges = 0;
+    size_t valid_exchanges = 0;          // Number of exchanges with valid data
     double avg_latency_difference_us = 0.0;
     std::chrono::high_resolution_clock::time_point last_update;
   };
-  
+
   AggregationStats getStats() const;
 
  private:
@@ -125,7 +134,11 @@ class ExchangeAggregator {
   mutable std::mutex data_mutex_;
   std::unordered_map<std::string, std::unordered_map<std::string, RenderEngine::MarketDataUpdate>> exchange_data_;
   std::unordered_map<std::string, ExchangeFeatures> exchange_features_;
-  
+
+  // Additional data structures for enhanced functionality
+  std::unordered_map<std::string, bool> exchange_validity_;              // Track validity of each exchange
+  std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> exchange_last_update_;  // Track last update time
+
   TimeSyncStrategy sync_strategy_ = TimeSyncStrategy::EARLIEST_TIMESTAMP;
   AggregationStats stats_;
 
@@ -137,6 +150,19 @@ class ExchangeAggregator {
   void synchronizeTimestamps(AggregatedMarketData& data) const;
   double calculateVolumeWeightedPrice(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
   void updateStatistics();
+
+  // Validation and quality control methods
+  bool isExchangeDataValid(const std::string& exchange, const RenderEngine::MarketDataUpdate& data) const;
+  bool isExchangeValid(const std::string& exchange) const;
+  bool isValidData(const RenderEngine::MarketDataUpdate& data) const;
+  double calculateFreshnessWeight(const std::string& exchange) const;
+  void checkStaleData();
+
+  // Enhanced aggregation methods
+  double calculateHighPrice(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateLowPrice(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateBestBid(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
+  double calculateBestAsk(const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data) const;
 };
 
 }  // namespace Data

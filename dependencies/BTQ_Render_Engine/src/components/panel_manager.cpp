@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 
 #include "../../include/components/time_and_sales.hpp"
 #include "../../include/components/historical_time_sales.hpp"
@@ -120,17 +121,42 @@ void PanelManager::render() {
   RenderEngine::PanelCuller culler;
   culler.set_viewport_bounds(ImVec2(0.0f, 0.0f), dashboard_size_);
 
-  for (auto& [id, panel] : panels_) {
-    // Use the culler to determine if the panel should be rendered
-    if (culler.should_render_panel(*panel)) {
-      // Start timing the panel render
-      BTQuant::g_panel_profiler.start_panel_render(id, panel->get_title());
+  // Collect all panels into a vector for batch culling along with their IDs
+  std::vector<std::pair<uint32_t, const BTQuant::PanelBase*>> panels_with_ids;
+  panels_with_ids.reserve(panels_.size());
+  for (const auto& [id, panel] : panels_) {
+    panels_with_ids.emplace_back(id, panel.get());
+  }
 
-      panel->render();
+  // Extract just the panel pointers for culling
+  std::vector<const BTQuant::PanelBase*> all_panels;
+  all_panels.reserve(panels_with_ids.size());
+  for (const auto& [id, panel] : panels_with_ids) {
+    all_panels.push_back(panel);
+  }
 
-      // End timing the panel render
-      BTQuant::g_panel_profiler.end_panel_render(id);
-    }
+  // Perform batch culling to get only visible panels
+  auto visible_panels = culler.cull_panels(all_panels);
+
+  // Create a map from panel pointers to IDs for quick lookup
+  std::unordered_map<const BTQuant::PanelBase*, uint32_t> panel_to_id;
+  panel_to_id.reserve(panels_with_ids.size());
+  for (const auto& [id, panel] : panels_with_ids) {
+    panel_to_id[panel] = id;
+  }
+
+  // Render only the visible panels
+  for (const auto* panel : visible_panels) {
+    uint32_t panel_id = panel_to_id.at(panel);  // Safe lookup with at()
+
+    // Start timing the panel render
+    BTQuant::g_panel_profiler.start_panel_render(panel_id, panel->get_title());
+
+    // Cast back to non-const pointer to call render (since render() is non-const)
+    const_cast<BTQuant::PanelBase*>(panel)->render();
+
+    // End timing the panel render
+    BTQuant::g_panel_profiler.end_panel_render(panel_id);
   }
 }
 

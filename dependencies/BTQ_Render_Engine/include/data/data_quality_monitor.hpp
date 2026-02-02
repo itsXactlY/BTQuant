@@ -135,6 +135,12 @@ public:
   // Method to send alerts to external monitoring systems
   void send_external_alert(const DataQualityIssue& issue);
 
+  // Method to alert users to data problems
+  void alert_user_to_data_problems(const std::string& symbol, const std::string& problem_description, double severity = 0.5);
+
+  // Method to get alert counts by type
+  std::unordered_map<DataQualityIssueType, size_t> get_alert_counts_by_type() const;
+
 private:
   // Structure to track statistics per symbol for advanced data quality checks
   struct SymbolStats {
@@ -154,6 +160,10 @@ private:
   std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> last_received_times_;  // For latency tracking
   std::unordered_map<std::string, SymbolStats> symbol_stats_;  // Statistics per symbol for advanced analysis
   std::unordered_map<std::string, std::vector<uint64_t>> recent_delays_;  // Recent delays for latency trend analysis
+
+  // Alert burst tracking
+  std::vector<std::chrono::high_resolution_clock::time_point> recent_alert_times_;
+  std::unordered_map<DataQualityIssueType, size_t> alert_counts_by_type_;  // Counts of alerts by type
 
   // Thresholds for data quality monitoring
   uint64_t missing_data_threshold_ms_;
@@ -186,6 +196,9 @@ private:
 
   // Helper method to send critical alerts
   void send_critical_alert(const DataQualityIssue& issue);
+
+  // Method to check for alert bursts (many alerts in a short time period)
+  void check_alert_bursts(const DataQualityIssue& issue);
 };
 
 // Global data quality monitor instance

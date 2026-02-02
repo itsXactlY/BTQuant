@@ -29,6 +29,9 @@ DataQualityMonitor::DataQualityMonitor() : alert_callback_(nullptr) {
     duplicate_check_window_ms_ = 100;   // 100ms window for duplicate detection
     latency_alert_threshold_ms_ = 1000; // 1 second latency threshold
     out_of_order_tolerance_ms_ = 5000;  // 5 seconds tolerance for out-of-order detection
+
+    // Initialize alert burst tracking
+    recent_alert_times_.reserve(1000);  // Reserve space for efficiency
 }
 
 std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData& trade, const std::string& symbol) {
@@ -335,6 +338,19 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                 return true;
             }
         }
+
+        // Enhanced duplicate detection: Check for trades with identical characteristics
+        // but potentially different timestamps due to processing delays
+        if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
+            std::abs(recent_trade.volume - trade.volume) < 0.0001f &&
+            recent_trade.side == trade.side &&
+            recent_trade.exchange_id == trade.exchange_id) {
+
+            // If price, volume, side, and exchange match but timestamps are close, likely duplicate
+            if (time_diff <= duplicate_check_window_ms_ * 2) {
+                return true;
+            }
+        }
     }
 
     return false;
@@ -413,6 +429,22 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 if (trade.timestamp < (stats.last_timestamp - (out_of_order_tolerance_ms_ / 2))) {
                     return true;
                 }
+            }
+        }
+
+        // Enhanced out-of-order detection: Check for sequence inconsistencies
+        // If we have a sequence of recent trades, verify that the new trade fits properly
+        const auto& recent_trades = recent_trades_[symbol];
+        if (recent_trades.size() >= 3) {
+            // Check if the new trade is out of sequence with recent trades
+            uint64_t min_recent_ts = recent_trades.back().timestamp;
+            uint64_t max_recent_ts = recent_trades.front().timestamp;
+
+            // If the new trade is earlier than the most recent trade but later than the earliest,
+            // it might be out of order
+            if (trade.timestamp < max_recent_ts && trade.timestamp > min_recent_ts) {
+                // This suggests the trade is inserted somewhere in the middle of recent trades
+                return true;
             }
         }
     }
@@ -731,6 +763,8 @@ void DataQualityMonitor::reset() {
     last_received_times_.clear();
     symbol_stats_.clear();
     recent_delays_.clear();
+    recent_alert_times_.clear();
+    alert_counts_by_type_.clear();
 }
 
 void DataQualityMonitor::set_alert_callback(AlertCallback callback) {
@@ -796,6 +830,34 @@ void DataQualityMonitor::add_issue(const DataQualityIssue& issue) {
         // Send critical alert notification
         send_critical_alert(issue);
     }
+
+    // Update alert counts by type for trending analysis
+    switch (issue.type) {
+        case DataQualityIssueType::MISSING_DATA:
+            alert_counts_by_type_[DataQualityIssueType::MISSING_DATA]++;
+            break;
+        case DataQualityIssueType::DUPLICATE_TRADE:
+            alert_counts_by_type_[DataQualityIssueType::DUPLICATE_TRADE]++;
+            break;
+        case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+            alert_counts_by_type_[DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP]++;
+            break;
+        case DataQualityIssueType::LATENCY_ISSUE:
+            alert_counts_by_type_[DataQualityIssueType::LATENCY_ISSUE]++;
+            break;
+        case DataQualityIssueType::INVALID_PRICE:
+            alert_counts_by_type_[DataQualityIssueType::INVALID_PRICE]++;
+            break;
+        case DataQualityIssueType::INVALID_VOLUME:
+            alert_counts_by_type_[DataQualityIssueType::INVALID_VOLUME]++;
+            break;
+        case DataQualityIssueType::MISSING_FIELD:
+            alert_counts_by_type_[DataQualityIssueType::MISSING_FIELD]++;
+            break;
+    }
+
+    // Check for alert bursts - many alerts in a short time period
+    check_alert_bursts(issue);
 }
 
 void DataQualityMonitor::send_external_alert(const DataQualityIssue& issue) {
@@ -942,6 +1004,113 @@ void DataQualityMonitor::trigger_data_quality_alerts() {
             trigger_alert("SYSTEM", DataQualityIssueType::MISSING_DATA, msg.str(), 0.95);
         }
     }
+}
+
+void DataQualityMonitor::check_alert_bursts(const DataQualityIssue& issue) {
+    auto now = std::chrono::high_resolution_clock::now();
+
+    // Add current alert time to tracking
+    recent_alert_times_.push_back(now);
+
+    // Keep only alerts from the last minute
+    auto one_minute_ago = now - std::chrono::minutes(1);
+    recent_alert_times_.erase(
+        std::remove_if(recent_alert_times_.begin(), recent_alert_times_.end(),
+            [one_minute_ago](const auto& time) {
+                return time < one_minute_ago;
+            }),
+        recent_alert_times_.end()
+    );
+
+    // Check if we have an alert burst (too many alerts in a short time)
+    if (recent_alert_times_.size() > 50) {  // More than 50 alerts in the last minute
+        std::ostringstream oss;
+        oss << "ALERT BURST DETECTED: " << recent_alert_times_.size()
+            << " alerts in the last minute for symbol " << issue.symbol;
+
+        DataQualityIssue burst_issue(DataQualityIssueType::MISSING_DATA, issue.symbol, issue.timestamp,
+                                   oss.str(), 0.95);  // High severity for alert bursts
+
+        // Add the burst issue without triggering recursive burst checking
+        recent_issues_.push_back(burst_issue);
+        if (recent_issues_.size() > MAX_RECENT_ISSUES) {
+            recent_issues_.erase(recent_issues_.begin());
+        }
+
+        if (alert_callback_) {
+            alert_callback_(burst_issue);
+        }
+
+        // Log the burst alert
+        if (console_alerts_enabled_) {
+            std::cout << "[CRITICAL ALERT BURST] " << oss.str() << std::endl;
+        }
+    }
+
+    // Also check for specific issue type bursts
+    size_t current_count = alert_counts_by_type_[issue.type];
+    if (current_count > 0 && current_count % 10 == 0) {  // Every 10th alert of the same type
+        std::ostringstream oss;
+        oss << "HIGH FREQUENCY OF " << static_cast<int>(issue.type)
+            << " ISSUES: " << current_count << " occurrences detected";
+
+        DataQualityIssue freq_issue(DataQualityIssueType::MISSING_DATA, issue.symbol, issue.timestamp,
+                                  oss.str(), 0.85);
+
+        // Add the frequency issue
+        recent_issues_.push_back(freq_issue);
+        if (recent_issues_.size() > MAX_RECENT_ISSUES) {
+            recent_issues_.erase(recent_issues_.begin());
+        }
+
+        if (alert_callback_) {
+            alert_callback_(freq_issue);
+        }
+    }
+}
+
+std::unordered_map<DataQualityIssueType, size_t> DataQualityMonitor::get_alert_counts_by_type() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return alert_counts_by_type_;
+}
+
+void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, const std::string& problem_description, double severity) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    // Determine the appropriate issue type based on the problem description
+    DataQualityIssueType issue_type = DataQualityIssueType::MISSING_DATA; // Default
+
+    if (problem_description.find("duplicate") != std::string::npos) {
+        issue_type = DataQualityIssueType::DUPLICATE_TRADE;
+    } else if (problem_description.find("out of order") != std::string::npos ||
+               problem_description.find("timestamp") != std::string::npos) {
+        issue_type = DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP;
+    } else if (problem_description.find("latency") != std::string::npos) {
+        issue_type = DataQualityIssueType::LATENCY_ISSUE;
+    } else if (problem_description.find("price") != std::string::npos) {
+        issue_type = DataQualityIssueType::INVALID_PRICE;
+    } else if (problem_description.find("volume") != std::string::npos) {
+        issue_type = DataQualityIssueType::INVALID_VOLUME;
+    } else if (problem_description.find("field") != std::string::npos ||
+               problem_description.find("missing") != std::string::npos) {
+        issue_type = DataQualityIssueType::MISSING_FIELD;
+    }
+
+    DataQualityIssue issue(issue_type, symbol, current_timestamp, problem_description, severity);
+    add_issue(issue);
+
+    // Log to console if enabled
+    if (console_alerts_enabled_) {
+        std::cout << "[USER ALERT] Symbol: " << symbol
+                  << ", Problem: " << problem_description
+                  << ", Severity: " << severity << std::endl;
+    }
+
+    // Send to external monitoring if enabled
+    send_external_alert(issue);
 }
 
 } // namespace Data

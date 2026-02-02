@@ -109,6 +109,23 @@ public:
   // Get recent high-severity issues
   std::vector<DataQualityIssue> get_high_severity_issues(double min_severity_threshold = 0.7) const;
 
+  // Configuration methods for adjusting thresholds
+  void set_missing_data_threshold(uint64_t threshold_ms) { missing_data_threshold_ms_ = threshold_ms; }
+  uint64_t get_missing_data_threshold() const { return missing_data_threshold_ms_; }
+
+  void set_duplicate_check_window(uint64_t window_ms) { duplicate_check_window_ms_ = window_ms; }
+  uint64_t get_duplicate_check_window() const { return duplicate_check_window_ms_; }
+
+  void set_latency_alert_threshold(uint64_t threshold_ms) { latency_alert_threshold_ms_ = threshold_ms; }
+  uint64_t get_latency_alert_threshold() const { return latency_alert_threshold_ms_; }
+
+  void set_out_of_order_tolerance(uint64_t tolerance_ms) { out_of_order_tolerance_ms_ = tolerance_ms; }
+  uint64_t get_out_of_order_tolerance() const { return out_of_order_tolerance_ms_; }
+
+  // Enhanced alerting methods
+  void trigger_alert(const std::string& symbol, DataQualityIssueType issue_type, const std::string& description, double severity = 0.5);
+  void trigger_data_quality_alerts();  // Triggers alerts based on current metrics
+
 // Structure to track statistics per symbol for advanced data quality checks
 struct SymbolStats {
   uint64_t last_timestamp = 0;
@@ -127,6 +144,12 @@ private:
   std::unordered_map<std::string, std::vector<TradeData>> recent_trades_;  // Recent trades per symbol for duplicate detection
   std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> last_received_times_;  // For latency tracking
   std::unordered_map<std::string, SymbolStats> symbol_stats_;  // Statistics per symbol for advanced analysis
+
+  // Thresholds for data quality monitoring
+  uint64_t missing_data_threshold_ms_;
+  uint64_t duplicate_check_window_ms_;
+  uint64_t latency_alert_threshold_ms_;
+  uint64_t out_of_order_tolerance_ms_;
 
   static constexpr size_t MAX_RECENT_ISSUES = 1000;
   static constexpr size_t MAX_RECENT_TRADES = 1000;  // Number of recent trades to track for duplicate detection

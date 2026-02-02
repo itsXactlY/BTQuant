@@ -12,6 +12,7 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include <chrono>
 
 namespace BTQuant {
 namespace Data {
@@ -22,6 +23,12 @@ DataQualityMonitor g_data_quality_monitor;
 DataQualityMonitor::DataQualityMonitor() : alert_callback_(nullptr) {
     // Initialize with current time
     metrics_.last_update_time = std::chrono::high_resolution_clock::now();
+
+    // Set default thresholds for data quality alerts
+    missing_data_threshold_ms_ = 5000;  // 5 seconds
+    duplicate_check_window_ms_ = 100;   // 100ms window for duplicate detection
+    latency_alert_threshold_ms_ = 1000; // 1 second latency threshold
+    out_of_order_tolerance_ms_ = 5000;  // 5 seconds tolerance for out-of-order detection
 }
 
 std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData& trade, const std::string& symbol) {
@@ -148,13 +155,7 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                 uint64_t avg_interval = stats.total_interval_sum / (stats.trade_count - 1);
 
                 // Calculate variance to detect unusual gaps
-                uint64_t variance = 0;
                 if (stats.trade_count > 2) {
-                    // Simple variance calculation based on the last few intervals
-                    uint64_t sum_squares = 0;
-                    // We'll use a simplified approach: compare with the average
-                    sum_squares += (time_diff - avg_interval) * (time_diff - avg_interval);
-
                     // If the gap is significantly larger than average, flag as potential missing data
                     // Only check if time_diff is reasonable to avoid overflow issues
                     if (time_diff > 0 && time_diff > avg_interval * 5 && avg_interval > 0) {  // 5x threshold
@@ -168,6 +169,18 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
 
                         DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
                                              oss.str(), 0.85);
+                        metrics_.missing_data_issues++;
+                        add_issue(issue);
+                    }
+
+                    // Additional check: if gap exceeds the configurable threshold
+                    if (time_diff > missing_data_threshold_ms_) {
+                        std::ostringstream oss;
+                        oss << "Extended data gap detected for " << symbol
+                            << ". Gap: " << time_diff << "ms exceeds threshold: " << missing_data_threshold_ms_ << "ms";
+
+                        DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                             oss.str(), 0.9);
                         metrics_.missing_data_issues++;
                         add_issue(issue);
                     }
@@ -222,46 +235,31 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
         // timestamp, price, volume, and exchange_id
         // We allow some flexibility for flags that might differ due to processing
 
-        // Exact match check
-        if (recent_trade.timestamp == trade.timestamp &&
-            recent_trade.price == trade.price &&
-            recent_trade.volume == trade.volume &&
-            recent_trade.exchange_id == trade.exchange_id) {
-
-            // If the core fields match, consider it a duplicate even if flags differ slightly
-            // This handles cases where the same trade gets processed with different flags
-            return true;
-        }
-
-        // Check for near-duplicates with floating-point tolerance
-        // This handles cases where prices or volumes might have minor precision differences
-        if (recent_trade.timestamp == trade.timestamp &&
-            std::abs(recent_trade.price - trade.price) < 0.000001 &&  // Very small price tolerance
-            std::abs(recent_trade.volume - trade.volume) < 0.0001f &&  // Small volume tolerance
-            recent_trade.exchange_id == trade.exchange_id) {
-            return true;
-        }
-
-        // Check for potential duplicates with slight timestamp variations (network delays)
-        // Allow for small timestamp differences if other fields match closely
+        // Check for potential duplicates with configurable timestamp window
         uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
-        if (time_diff <= 10 &&  // Within 10ms window
-            std::abs(recent_trade.price - trade.price) < 0.000001 &&  // Price tolerance
-            std::abs(recent_trade.volume - trade.volume) < 0.0001f &&  // Volume tolerance
-            recent_trade.exchange_id == trade.exchange_id) {
-            return true;
-        }
 
-        // Check for split trades that might be recombined (same timestamp, price, but cumulative volume)
-        if (recent_trade.timestamp == trade.timestamp &&
-            recent_trade.price == trade.price &&
-            recent_trade.exchange_id == trade.exchange_id) {
+        // If timestamp difference is within our duplicate check window, check other fields
+        if (time_diff <= duplicate_check_window_ms_) {
+            // Exact match check
+            if (recent_trade.timestamp == trade.timestamp &&
+                recent_trade.price == trade.price &&
+                recent_trade.volume == trade.volume &&
+                recent_trade.exchange_id == trade.exchange_id) {
 
-            // Look for cases where volumes might represent parts of the same trade
-            // This could happen if a large trade is split into smaller chunks
-            float combined_volume = recent_trade.volume + trade.volume;
-            // Check if this combination matches a previously seen total volume
-            // This is a more advanced check for trade aggregation issues
+                // If the core fields match, consider it a duplicate even if flags differ slightly
+                // This handles cases where the same trade gets processed with different flags
+                return true;
+            }
+
+            // Check for near-duplicates with floating-point tolerance
+            // This handles cases where prices or volumes might have minor precision differences
+            if (std::abs(recent_trade.price - trade.price) < 0.000001 &&  // Very small price tolerance
+                std::abs(recent_trade.volume - trade.volume) < 0.0001f &&  // Small volume tolerance
+                recent_trade.exchange_id == trade.exchange_id) {
+
+                // If price and volume are nearly identical and exchange matches, consider duplicate
+                return true;
+            }
         }
     }
 
@@ -285,7 +283,7 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
             if (stats.trade_count > 10) { // Only check if we have sufficient history
                 // Calculate a dynamic threshold based on recent activity
                 uint64_t avg_interval = stats.total_interval_sum / (stats.trade_count - 1);
-                uint64_t max_acceptable_delay = avg_interval * 10; // Allow up to 10x average interval
+                uint64_t max_acceptable_delay = std::max(avg_interval * 10, out_of_order_tolerance_ms_); // Allow up to 10x average interval or configured tolerance
 
                 // Check if this trade is significantly delayed compared to what we'd expect
                 uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -296,6 +294,12 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                     return true;
                 }
             }
+        }
+
+        // Additional check: if the trade timestamp is significantly behind the last known timestamp
+        // but still chronologically after it, it might indicate a data feed issue
+        if (trade.timestamp < (it->second - out_of_order_tolerance_ms_)) {
+            return true;
         }
     }
 
@@ -309,10 +313,10 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
         auto now = std::chrono::high_resolution_clock::now();
         auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second).count();
 
-        if (latency > MAX_LATENCY_THRESHOLD_MS) {
+        if (latency > latency_alert_threshold_ms_) {
             std::ostringstream oss;
             oss << "High processing latency detected: " << latency << "ms, exceeding threshold of "
-                << MAX_LATENCY_THRESHOLD_MS << "ms";
+                << latency_alert_threshold_ms_ << "ms";
 
             DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
                                  oss.str(), 0.4);
@@ -333,7 +337,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
     if (current_time > trade.timestamp) {
         int64_t delay_ms = current_time - trade.timestamp;
 
-        if (delay_ms > MAX_LATENCY_THRESHOLD_MS * 2) {  // More stringent threshold for data feed delay
+        if (delay_ms > latency_alert_threshold_ms_ * 2) {  // More stringent threshold for data feed delay
             std::ostringstream oss;
             oss << "Significant data feed delay detected: " << delay_ms << "ms";
 
@@ -604,6 +608,72 @@ std::vector<DataQualityIssue> DataQualityMonitor::get_high_severity_issues(doubl
     }
 
     return high_severity_issues;
+}
+
+void DataQualityMonitor::trigger_alert(const std::string& symbol, DataQualityIssueType issue_type,
+                                       const std::string& description, double severity) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Create a new issue with current timestamp
+    uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    DataQualityIssue issue(issue_type, symbol, current_timestamp, description, severity);
+    add_issue(issue);
+}
+
+void DataQualityMonitor::trigger_data_quality_alerts() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Check if we have any significant data quality issues
+    auto current_metrics = metrics_;
+
+    // Trigger alerts based on thresholds
+    if (current_metrics.missing_data_issues > 0) {
+        std::ostringstream msg;
+        msg << "Data quality alert: " << current_metrics.missing_data_issues
+            << " missing data issues detected";
+        trigger_alert("SYSTEM", DataQualityIssueType::MISSING_DATA, msg.str(), 0.8);
+    }
+
+    if (current_metrics.duplicate_trade_issues > 0) {
+        std::ostringstream msg;
+        msg << "Data quality alert: " << current_metrics.duplicate_trade_issues
+            << " duplicate trade issues detected";
+        trigger_alert("SYSTEM", DataQualityIssueType::DUPLICATE_TRADE, msg.str(), 0.7);
+    }
+
+    if (current_metrics.out_of_order_timestamp_issues > 0) {
+        std::ostringstream msg;
+        msg << "Data quality alert: " << current_metrics.out_of_order_timestamp_issues
+            << " out-of-order timestamp issues detected";
+        trigger_alert("SYSTEM", DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, msg.str(), 0.75);
+    }
+
+    if (current_metrics.latency_issues > 0) {
+        std::ostringstream msg;
+        msg << "Data quality alert: " << current_metrics.latency_issues
+            << " latency issues detected";
+        trigger_alert("SYSTEM", DataQualityIssueType::LATENCY_ISSUE, msg.str(), 0.7);
+    }
+
+    // Check for high error rate
+    if (current_metrics.total_trades_processed > 0) {
+        double error_rate = static_cast<double>(current_metrics.missing_data_issues +
+                                               current_metrics.duplicate_trade_issues +
+                                               current_metrics.out_of_order_timestamp_issues +
+                                               current_metrics.latency_issues +
+                                               current_metrics.invalid_price_issues +
+                                               current_metrics.invalid_volume_issues) /
+                           static_cast<double>(current_metrics.total_trades_processed);
+
+        if (error_rate > 0.05) { // More than 5% error rate
+            std::ostringstream msg;
+            msg << "CRITICAL: High data error rate of " << std::fixed << std::setprecision(2)
+                << (error_rate * 100.0) << "% detected";
+            trigger_alert("SYSTEM", DataQualityIssueType::MISSING_DATA, msg.str(), 0.95);
+        }
+    }
 }
 
 } // namespace Data

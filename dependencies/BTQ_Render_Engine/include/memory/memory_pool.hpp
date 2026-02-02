@@ -12,6 +12,10 @@
 #include "../include/data/TradeData.h"
 #include "../include/analytics/cluster_engine.hpp"
 #include "../include/indicator.hpp"
+#include "../include/trading/order_manager.hpp"
+#include "../include/analytics/technical_analysis.hpp"
+#include "../include/data/data_types.hpp"
+#include "../include/trading/position_manager.hpp"
 
 namespace BTQuant {
 
@@ -206,6 +210,92 @@ public:
 private:
     ATRIndicatorPool() = default;
     ObjectPool<ATRIndicator> pool_;
+};
+
+// Additional specialized memory pools for other frequently allocated objects
+class OrderPool {
+public:
+    static OrderPool& getInstance();
+
+    OrderManager::Order* allocate();
+    void deallocate(OrderManager::Order* order);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    OrderPool() = default;
+    ObjectPool<OrderManager::Order> pool_;
+};
+
+class ProcessedTradePool {
+public:
+    static ProcessedTradePool& getInstance();
+
+    ProcessedTrade* allocate();
+    void deallocate(ProcessedTrade* trade);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    ProcessedTradePool() = default;
+    ObjectPool<ProcessedTrade> pool_;
+};
+
+class OHLCVCandlePool {
+public:
+    static OHLCVCandlePool& getInstance();
+
+    RenderEngine::OHLCVCandle* allocate();
+    void deallocate(RenderEngine::OHLCVCandle* candle);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    OHLCVCandlePool() = default;
+    ObjectPool<RenderEngine::OHLCVCandle> pool_;
+};
+
+class VolumeProfileLevelPool {
+public:
+    static VolumeProfileLevelPool& getInstance();
+
+    VolumeProfileLevel* allocate();
+    void deallocate(VolumeProfileLevel* level);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    VolumeProfileLevelPool() = default;
+    ObjectPool<VolumeProfileLevel> pool_;
+};
+
+class TradeRecordPool {
+public:
+    static TradeRecordPool& getInstance();
+
+    PositionManager::TradeRecord* allocate();
+    void deallocate(PositionManager::TradeRecord* record);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradeRecordPool() = default;
+    ObjectPool<PositionManager::TradeRecord> pool_;
 };
 
 // RAII wrapper for automatic deallocation

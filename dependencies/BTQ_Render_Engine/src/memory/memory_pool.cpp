@@ -167,4 +167,94 @@ void ATRIndicatorPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// OrderPool implementation
+OrderPool& OrderPool::getInstance() {
+    static OrderPool instance;
+    return instance;
+}
+
+OrderManager::Order* OrderPool::allocate() {
+    return pool_.allocate();
+}
+
+void OrderPool::deallocate(OrderManager::Order* order) {
+    pool_.deallocate(order);
+}
+
+void OrderPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// ProcessedTradePool implementation
+ProcessedTradePool& ProcessedTradePool::getInstance() {
+    static ProcessedTradePool instance;
+    return instance;
+}
+
+ProcessedTrade* ProcessedTradePool::allocate() {
+    return pool_.allocate();
+}
+
+void ProcessedTradePool::deallocate(ProcessedTrade* trade) {
+    pool_.deallocate(trade);
+}
+
+void ProcessedTradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// OHLCVCandlePool implementation
+OHLCVCandlePool& OHLCVCandlePool::getInstance() {
+    static OHLCVCandlePool instance;
+    return instance;
+}
+
+RenderEngine::OHLCVCandle* OHLCVCandlePool::allocate() {
+    return pool_.allocate();
+}
+
+void OHLCVCandlePool::deallocate(RenderEngine::OHLCVCandle* candle) {
+    pool_.deallocate(candle);
+}
+
+void OHLCVCandlePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// VolumeProfileLevelPool implementation
+VolumeProfileLevelPool& VolumeProfileLevelPool::getInstance() {
+    static VolumeProfileLevelPool instance;
+    return instance;
+}
+
+VolumeProfileLevel* VolumeProfileLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void VolumeProfileLevelPool::deallocate(VolumeProfileLevel* level) {
+    pool_.deallocate(level);
+}
+
+void VolumeProfileLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// TradeRecordPool implementation
+TradeRecordPool& TradeRecordPool::getInstance() {
+    static TradeRecordPool instance;
+    return instance;
+}
+
+PositionManager::TradeRecord* TradeRecordPool::allocate() {
+    return pool_.allocate();
+}
+
+void TradeRecordPool::deallocate(PositionManager::TradeRecord* record) {
+    pool_.deallocate(record);
+}
+
+void TradeRecordPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

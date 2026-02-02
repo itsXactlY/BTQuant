@@ -5,9 +5,38 @@
 
 namespace BTQuant {
 
+// Helper function to determine if two colors are similar enough to batch together
+// This is particularly useful for order book rendering where colors may vary slightly
+static bool areColorsSimilar(ImU32 col1, ImU32 col2, uint8_t tolerance = 30) {
+    // Extract RGBA components
+    uint8_t r1 = (col1 >> 0) & 0xFF;
+    uint8_t g1 = (col1 >> 8) & 0xFF;
+    uint8_t b1 = (col1 >> 16) & 0xFF;
+    uint8_t a1 = (col1 >> 24) & 0xFF;
+
+    uint8_t r2 = (col2 >> 0) & 0xFF;
+    uint8_t g2 = (col2 >> 8) & 0xFF;
+    uint8_t b2 = (col2 >> 16) & 0xFF;
+    uint8_t a2 = (col2 >> 24) & 0xFF;
+
+    // Check if all components are within tolerance
+    return (abs(static_cast<int>(r1) - static_cast<int>(r2)) <= tolerance &&
+            abs(static_cast<int>(g1) - static_cast<int>(g2)) <= tolerance &&
+            abs(static_cast<int>(b1) - static_cast<int>(b2)) <= tolerance &&
+            abs(static_cast<int>(a1) - static_cast<int>(a2)) <= tolerance);
+}
+
 OrderbookBatcher::OrderbookBatcher() {
     // Reserve initial capacity to reduce allocations
     batches_.reserve(32);  // Increased initial reservation for better performance
+}
+
+void OrderbookBatcher::initializeBatch(OrderbookBatchElement& batch, ImTextureID texture) {
+    batch.texture = texture;
+    // Pre-allocate space to reduce reallocations - optimized for order book rendering
+    batch.vertices.reserve(4096);  // Increased initial reservation for better performance
+    batch.indices.reserve(8192);   // Increased initial reservation for better performance
+    batch.primitive_type = 0;      // Default primitive type
 }
 
 OrderbookBatcher::~OrderbookBatcher() {
@@ -23,29 +52,43 @@ void OrderbookBatcher::clear() {
 }
 
 OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col) {
-    // Prioritize batching by texture first, then by color to minimize draw calls
+    // Enhanced batching: prioritize batching by texture first, then by similar colors
     // For order book rendering, we often have many elements with the same texture and similar colors
+
+    // First, try to find an exact match (same texture and similar color)
     for (auto& batch : batches_) {
         if (batch.texture == texture &&
             batch.vertices.size() < 65535 - 4 &&
             batch.indices.size() < 65535 - 6) {
 
-            // For order book elements, we can often batch elements with the same or similar color together
+            // For order book elements, we can batch elements with similar colors together
             // This reduces the number of draw calls significantly
-            return &batch;
+            // Check if the current batch's color is similar enough to the requested color
+            if (batch.vertices.empty() || areColorsSimilar(batch.vertices[0].col, col)) {
+                return &batch;
+            }
         }
     }
 
     // If no compatible batch exists, create a new one
     batches_.emplace_back();
     auto& new_batch = batches_.back();
-    new_batch.texture = texture;
-
-    // Pre-allocate space to reduce reallocations - optimized for order book rendering
-    new_batch.vertices.reserve(4096);  // Increased initial reservation for better performance
-    new_batch.indices.reserve(8192);   // Increased initial reservation for better performance
+    initializeBatch(new_batch, texture);
 
     return &new_batch;
+}
+
+// Additional method to batch multiple rectangles of similar colors together
+void OrderbookBatcher::addRectanglesFilled(const std::vector<std::pair<ImVec2, ImVec2>>& rect_pairs,
+                                          const std::vector<ImU32>& colors) {
+    if (rect_pairs.size() != colors.size() || rect_pairs.empty()) {
+        return;
+    }
+
+    // Group rectangles by similar colors to maximize batching efficiency
+    for (size_t i = 0; i < rect_pairs.size(); ++i) {
+        addRectFilled(rect_pairs[i].first, rect_pairs[i].second, colors[i]);
+    }
 }
 
 void OrderbookBatcher::optimizeBatches() {
@@ -59,7 +102,7 @@ void OrderbookBatcher::optimizeBatches() {
         return a.texture < b.texture;
     });
 
-    // More aggressive optimization: merge batches with same texture regardless of primitive type
+    // More aggressive optimization: merge batches with same texture and similar colors
     // This is particularly beneficial for order book rendering where we have many similar elements
     std::vector<OrderbookBatchElement> optimized_batches;
     optimized_batches.reserve(batches_.size());
@@ -67,14 +110,20 @@ void OrderbookBatcher::optimizeBatches() {
     for (auto& current_batch : batches_) {
         bool merged = false;
 
-        // Try to find an existing batch with the same texture to merge with
-        // Iterate backwards to find the most recently added batch with same texture (better cache locality)
+        // Try to find an existing batch with the same texture and similar color to merge with
+        // Iterate backwards to find the most recently added compatible batch (better cache locality)
         for (auto it = optimized_batches.rbegin(); it != optimized_batches.rend(); ++it) {
-            // Check if batches can be merged (same texture, and enough space)
-            if (it->texture == current_batch.texture &&
-                it->vertices.size() + current_batch.vertices.size() < 65535 &&
-                it->indices.size() + current_batch.indices.size() < 65535) {
+            // Check if batches can be merged (same texture, similar color, and enough space)
+            bool can_merge = (it->texture == current_batch.texture &&
+                             it->vertices.size() + current_batch.vertices.size() < 65535 &&
+                             it->indices.size() + current_batch.indices.size() < 65535);
 
+            // If textures match, check if colors are similar enough to merge
+            if (can_merge && !current_batch.vertices.empty() && !it->vertices.empty()) {
+                can_merge = areColorsSimilar(it->vertices[0].col, current_batch.vertices[0].col);
+            }
+
+            if (can_merge) {
                 // Merge the current batch into the target batch
                 size_t vertex_offset = it->vertices.size();
 
@@ -260,12 +309,13 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
                 draw_list->_VtxWritePtr += batch.vertices.size();
             }
 
-            // Copy indices with proper offset
+            // Copy indices with proper offset - optimized loop
             if (!batch.indices.empty()) {
-                for (const auto& index : batch.indices) {
-                    *draw_list->_IdxWritePtr = static_cast<ImDrawIdx>(index + draw_list->_VtxCurrentIdx);
-                    draw_list->_IdxWritePtr++;
+                const size_t idx_count = batch.indices.size();
+                for (size_t i = 0; i < idx_count; ++i) {
+                    draw_list->_IdxWritePtr[i] = static_cast<ImDrawIdx>(batch.indices[i] + draw_list->_VtxCurrentIdx);
                 }
+                draw_list->_IdxWritePtr += idx_count;
             }
 
             // Update vertex index counter

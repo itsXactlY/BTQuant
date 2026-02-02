@@ -43,6 +43,10 @@ public:
     // Add text to the batch (simplified)
     void addText(const ImVec2& pos, ImU32 col, const char* text);
 
+    // Add multiple rectangles to the batch (for better batching of similar elements)
+    void addRectanglesFilled(const std::vector<std::pair<ImVec2, ImVec2>>& rect_pairs,
+                           const std::vector<ImU32>& colors);
+
     // Submit all batched geometry to the draw list
     void submit(ImDrawList* draw_list);
 
@@ -57,6 +61,9 @@ private:
 
     // Find or create a compatible batch for the given parameters
     OrderbookBatchElement* findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col);
+
+    // Initialize a batch with optimal memory allocation
+    void initializeBatch(OrderbookBatchElement& batch, ImTextureID texture);
 
     // Optimize batches by merging compatible ones to reduce draw calls
     void optimizeBatches();

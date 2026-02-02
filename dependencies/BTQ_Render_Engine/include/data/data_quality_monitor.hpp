@@ -141,6 +141,15 @@ public:
   // Method to get alert counts by type
   std::unordered_map<DataQualityIssueType, size_t> get_alert_counts_by_type() const;
 
+  // Generate a comprehensive alert report
+  void generate_comprehensive_alert_report();
+
+  // Monitor the health of a specific data stream
+  void monitor_data_stream_health(const std::string& symbol);
+
+  // Send notifications to UI components
+  void send_ui_notification(const DataQualityIssue& issue);
+
 private:
   // Structure to track statistics per symbol for advanced data quality checks
   struct SymbolStats {

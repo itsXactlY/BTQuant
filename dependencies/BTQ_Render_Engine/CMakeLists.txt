@@ -137,6 +137,7 @@ set(DASHBOARD_SOURCES
     src/ui/workspace_manager.cpp
     src/ui/settings_manager.cpp
     src/ui/appearance_settings.cpp
+    src/ui/data_settings.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/monitoring/performance_monitor.cpp

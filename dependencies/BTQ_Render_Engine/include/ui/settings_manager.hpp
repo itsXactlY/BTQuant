@@ -152,6 +152,7 @@ private:
     std::unordered_map<std::string, SettingInfo> settings_;
     std::string settings_directory_;
     std::unique_ptr<class AppearanceSettings> appearance_settings_;
+    std::unique_ptr<class DataSettings> data_settings_;
 
     void initialize_default_settings();
     void initialize_appearance_settings();

@@ -1,5 +1,6 @@
 #include "../include/ui/settings_manager.hpp"
 #include "../include/ui/appearance_settings.hpp"
+#include "../include/ui/data_settings.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -99,6 +100,9 @@ void SettingsManager::initialize_data_settings() {
     cache_size_setting.min_int = 64;
     cache_size_setting.max_int = 4096;
     register_setting(cache_size_setting);
+
+    // Create DataSettings instance to handle additional data-related settings
+    data_settings_ = std::make_unique<DataSettings>(*this);
 }
 
 void SettingsManager::initialize_performance_settings() {

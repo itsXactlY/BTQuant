@@ -18,7 +18,6 @@ void PanelCuller::set_visibility_thresholds(float small_area_threshold, float pe
 bool PanelCuller::should_render_panel(const PanelBase& panel) const {
     const auto& config = panel.get_config();
 
-    // IMPLEMENT OFF-SCREEN PANEL CULLING: Don't render panels that are minimized
     // Early exit: Don't render if panel is not visible or minimized
     if (!config.visible || config.minimized) {
         return false;
@@ -33,7 +32,6 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
-    // IMPLEMENT OFF-SCREEN PANEL CULLING: Don't render panels that are off-screen
     // Quick off-screen check using bounding box
     // Check if panel is completely off-screen based on viewport bounds
     const float right_edge = panel_pos.x + panel_size.x;

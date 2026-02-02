@@ -1,15 +1,26 @@
 #include "threading/lockfree_queue.hpp"
+#include <string>
+#include <vector>
+#include <chrono>
 
-// Lock-free queue implementation for thread-safe data passing between calculation and UI threads
-// Implements the Michael & Scott algorithm for lock-free queues using atomic operations
-// All implementation is in the header file due to template nature.
-//
-// This lock-free queue provides:
-// - Wait-free enqueue operations (single consumer)
-// - Lock-free dequeue operations (single producer)
-// - Memory-order optimized for performance
-// - Cache-line alignment to prevent false sharing
-// - Safe memory management with proper cleanup
-//
-// Designed specifically for passing data between calculation threads and UI thread
-// in the BTQ Render Engine, ensuring thread-safe and efficient data transfer.
+// Explicit template instantiations for commonly used types in the BTQ Render Engine
+// This helps reduce compilation times and ensures proper linking of template implementations
+
+namespace btq {
+namespace threading {
+
+// Common data types used for passing data between calculation and UI threads
+template class LockFreeQueue<int>;
+template class LockFreeQueue<double>;
+template class LockFreeQueue<std::string>;
+template class LockFreeQueue<std::vector<double>>;
+template class LockFreeQueue<std::vector<int>>;
+
+// Trading-specific data structures
+template class LockFreeQueue<btq::Trade>;
+template class LockFreeQueue<btq::Candle>;
+template class LockFreeQueue<std::vector<btq::Trade>>;
+template class LockFreeQueue<std::vector<btq::Candle>>;
+
+} // namespace threading
+} // namespace btq

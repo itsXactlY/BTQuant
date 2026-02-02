@@ -96,17 +96,24 @@ public:
 
   // Alert callback function type
   using AlertCallback = std::function<void(const DataQualityIssue&)>;
-  
+
   // Set callback function for when issues are detected
   void set_alert_callback(AlertCallback callback);
+
+  // Generate a summary of current data quality status
+  std::string get_quality_summary() const;
+
+  // Get recent high-severity issues
+  std::vector<DataQualityIssue> get_high_severity_issues(double min_severity_threshold = 0.7) const;
 
 // Structure to track statistics per symbol for advanced data quality checks
 struct SymbolStats {
   uint64_t last_timestamp = 0;
   size_t trade_count = 0;
   uint64_t total_interval_sum = 0;
+  std::vector<uint64_t> recent_intervals;  // Track recent intervals for pattern analysis
 
-  SymbolStats() : last_timestamp(0), trade_count(0), total_interval_sum(0) {}
+  SymbolStats() : last_timestamp(0), trade_count(0), total_interval_sum(0), recent_intervals() {}
 };
 
 private:

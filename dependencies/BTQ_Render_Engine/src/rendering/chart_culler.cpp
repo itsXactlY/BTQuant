@@ -192,6 +192,12 @@ ChartInstance ChartCuller::apply_culling_and_lod(const ChartInstance& chart, flo
     size_t start_index, end_index;
     get_visible_data_range(chart, start_index, end_index);
 
+    // Calculate time and price ranges to determine appropriate padding for off-screen elements
+    double time_range = viewport_.maxTime - viewport_.minTime;
+    double price_range = viewport_.maxPrice - viewport_.minPrice;
+    double time_padding = time_range * 0.001; // 0.1% padding for time
+    double price_padding = price_range * 0.001; // 0.1% padding for price
+
     // Apply LOD by reducing the number of points if needed
     if (lod_factor < 1.0f && lod_factor > 0.0f) {
         // Calculate step size based on LOD factor
@@ -217,14 +223,21 @@ ChartInstance ChartCuller::apply_culling_and_lod(const ChartInstance& chart, flo
         // Sample the data based on the step size
         for (size_t i = start_index; i <= end_index; i += step) {
             if (i < chart.dates.size()) {
-                // Only add points that are within the viewport
-                if (should_render_element(chart.dates[i], chart.closes[i])) {
-                    filtered_dates.push_back(chart.dates[i]);
-                    filtered_opens.push_back(chart.opens[i]);
-                    filtered_highs.push_back(chart.highs[i]);
-                    filtered_lows.push_back(chart.lows[i]);
-                    filtered_closes.push_back(chart.closes[i]);
-                    filtered_volumes.push_back(chart.volumes[i]);
+                // Check if the element with padding would be visible (for off-screen elements that might affect rendering)
+                if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+                    // For candlestick charts, we should also check if the full candle (high-low range) is visible
+                    if (should_render_bounding_box(
+                            chart.dates[i] - time_padding,
+                            chart.dates[i] + time_padding,
+                            chart.lows[i],
+                            chart.highs[i])) {
+                        filtered_dates.push_back(chart.dates[i]);
+                        filtered_opens.push_back(chart.opens[i]);
+                        filtered_highs.push_back(chart.highs[i]);
+                        filtered_lows.push_back(chart.lows[i]);
+                        filtered_closes.push_back(chart.closes[i]);
+                        filtered_volumes.push_back(chart.volumes[i]);
+                    }
                 }
             }
         }
@@ -247,14 +260,21 @@ ChartInstance ChartCuller::apply_culling_and_lod(const ChartInstance& chart, flo
 
         for (size_t i = start_index; i <= end_index; ++i) {
             if (i < chart.dates.size()) {
-                // Only add points that are within the viewport
-                if (should_render_element(chart.dates[i], chart.closes[i])) {
-                    filtered_dates.push_back(chart.dates[i]);
-                    filtered_opens.push_back(chart.opens[i]);
-                    filtered_highs.push_back(chart.highs[i]);
-                    filtered_lows.push_back(chart.lows[i]);
-                    filtered_closes.push_back(chart.closes[i]);
-                    filtered_volumes.push_back(chart.volumes[i]);
+                // Check if the element with padding would be visible (for off-screen elements that might affect rendering)
+                if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+                    // For candlestick charts, we should also check if the full candle (high-low range) is visible
+                    if (should_render_bounding_box(
+                            chart.dates[i] - time_padding,
+                            chart.dates[i] + time_padding,
+                            chart.lows[i],
+                            chart.highs[i])) {
+                        filtered_dates.push_back(chart.dates[i]);
+                        filtered_opens.push_back(chart.opens[i]);
+                        filtered_highs.push_back(chart.highs[i]);
+                        filtered_lows.push_back(chart.lows[i]);
+                        filtered_closes.push_back(chart.closes[i]);
+                        filtered_volumes.push_back(chart.volumes[i]);
+                    }
                 }
             }
         }
@@ -508,6 +528,81 @@ bool ChartCuller::should_render_chart(const ChartInstance& chart) const {
 
     // No elements are visible in the current viewport
     return false;
+}
+
+// Method to reduce polygon count based on zoom level and data density
+ChartInstance ChartCuller::apply_polygon_reduction(const ChartInstance& chart, float zoom_factor,
+                                                  float viewport_width_pixels, float viewport_height_pixels) const {
+    ChartInstance processed_chart = chart;
+
+    if (!viewport_set_ || chart.dates.empty()) {
+        // If no viewport is set or chart is empty, return original chart
+        return processed_chart;
+    }
+
+    // Calculate adaptive LOD based on zoom level and data density
+    size_t start_index, end_index;
+    get_visible_data_range_optimized(chart, start_index, end_index);
+
+    size_t visible_points_count = end_index - start_index + 1;
+    float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
+                                                      viewport_width_pixels, viewport_height_pixels);
+
+    // Create new vectors with reduced data
+    std::vector<double> filtered_dates;
+    std::vector<float> filtered_opens;
+    std::vector<float> filtered_highs;
+    std::vector<float> filtered_lows;
+    std::vector<float> filtered_closes;
+    std::vector<float> filtered_volumes;
+
+    // Calculate time and price ranges to determine appropriate padding
+    double time_range = viewport_.maxTime - viewport_.minTime;
+    double price_range = viewport_.maxPrice - viewport_.minPrice;
+    double time_padding = time_range * 0.001; // 0.1% padding for time
+    double price_padding = price_range * 0.001; // 0.1% padding for price
+
+    // Apply polygon reduction by reducing the number of points based on LOD
+    size_t total_points = end_index - start_index + 1;
+    size_t target_points = static_cast<size_t>(total_points * adaptive_lod);
+
+    if (target_points < 1) target_points = 1;
+
+    // Calculate the step size for polygon reduction
+    size_t step = 1;
+    if (target_points < total_points && adaptive_lod < 1.0f) {
+        step = std::max(static_cast<size_t>(1), total_points / target_points);
+    }
+
+    // Sample the data based on the step size, considering padding for off-screen elements
+    for (size_t i = start_index; i <= end_index && i < chart.dates.size(); i += step) {
+        // Check if the element with padding would be visible (for off-screen elements that might affect rendering)
+        if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+            // For candlestick charts, we should also check if the full candle (high-low range) is visible
+            if (should_render_bounding_box(
+                    chart.dates[i] - time_padding,
+                    chart.dates[i] + time_padding,
+                    chart.lows[i],
+                    chart.highs[i])) {
+                filtered_dates.push_back(chart.dates[i]);
+                filtered_opens.push_back(chart.opens[i]);
+                filtered_highs.push_back(chart.highs[i]);
+                filtered_lows.push_back(chart.lows[i]);
+                filtered_closes.push_back(chart.closes[i]);
+                filtered_volumes.push_back(chart.volumes[i]);
+            }
+        }
+    }
+
+    // Replace the chart data with filtered data
+    processed_chart.dates = std::move(filtered_dates);
+    processed_chart.opens = std::move(filtered_opens);
+    processed_chart.highs = std::move(filtered_highs);
+    processed_chart.lows = std::move(filtered_lows);
+    processed_chart.closes = std::move(filtered_closes);
+    processed_chart.volumes = std::move(filtered_volumes);
+
+    return processed_chart;
 }
 
 } // namespace RenderEngine

@@ -153,6 +153,18 @@ public:
      */
     bool should_render_chart(const ChartInstance& chart) const;
 
+    /**
+     * @brief Applies polygon reduction based on zoom level and data density
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with polygon reduction applied
+     */
+    ChartInstance apply_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                        float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

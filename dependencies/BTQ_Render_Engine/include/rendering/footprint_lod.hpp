@@ -75,12 +75,23 @@ public:
     // Calculate the appropriate LOD level based on cell dimensions and zoom factor
     LODLevel calculateLODLevel(float cell_width_px, float cell_height_px, float zoom_factor) const;
 
+    // Calculate the appropriate LOD level with dynamic thresholds based on view range
+    LODLevel calculateDynamicLODLevel(float cell_width_px, float cell_height_px,
+                                   float zoom_factor, float view_range_x, float view_range_y) const;
+
+    // Calculate LOD level with hierarchical adjustments
+    LODLevel calculateHierarchicalLOD(float cell_width_px, float cell_height_px,
+                                   float zoom_factor, int hierarchy_level) const;
+
     // Calculate LOD level with distance-based adjustment (closer cells get more detail)
     LODLevel calculateDistanceBasedLODLevel(float cell_width_px, float cell_height_px,
                                          float zoom_factor, ImVec2 cell_center, ImVec2 view_center) const;
 
     // Get rendering settings for a specific LOD level
     LODRenderSettings getRenderSettings(LODLevel lod_level) const;
+
+    // Get optimized rendering settings considering cell area to prevent overcrowding
+    LODRenderSettings getOptimizedRenderSettings(LODLevel lod_level, float cell_area_px) const;
 
     // Determine if text should be rendered based on cell size and zoom
     bool shouldRenderText(float cell_height_px, float zoom_factor) const;
@@ -112,9 +123,17 @@ public:
     // Apply performance-based LOD adjustment based on rendering metrics
     void updatePerformanceBasedLOD(const PerformanceMetrics& metrics);
 
+    // Apply adaptive LOD adjustment based on cell density and performance
+    void updateAdaptiveLOD(const PerformanceMetrics& metrics, int total_cells_in_view);
+
     // Cluster nearby cells at low zoom levels to reduce visual clutter
     std::vector<FootprintCell> clusterCells(const std::vector<FootprintCell>& cells,
                                           float zoom_factor) const;
+
+    // Adaptive clustering considering both zoom and cell density
+    std::vector<FootprintCell> adaptiveClusterCells(const std::vector<FootprintCell>& cells,
+                                                 float zoom_factor,
+                                                 int total_cells_in_view) const;
 
     // Apply LOD-based rendering to a single cell
     void applyLODToCell(const FootprintCell& cell,

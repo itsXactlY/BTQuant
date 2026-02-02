@@ -37,6 +37,47 @@ LODLevel FootprintLOD::calculateLODLevel(float cell_width_px, float cell_height_
     }
 }
 
+LODLevel FootprintLOD::calculateDynamicLODLevel(float cell_width_px, float cell_height_px,
+                                              float zoom_factor, float view_range_x, float view_range_y) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate dynamic thresholds based on view range to provide better LOD scaling
+    float dynamic_min_threshold = min_cell_size_px_ * (view_range_x * view_range_y > 100.0f ? 0.5f : 1.0f);
+    float dynamic_medium_threshold = medium_cell_size_px_ * (view_range_x * view_range_y > 100.0f ? 0.7f : 1.0f);
+    float dynamic_max_threshold = max_cell_size_px_ * (view_range_x * view_range_y > 100.0f ? 0.8f : 1.0f);
+
+    // Calculate dynamic zoom thresholds based on view range
+    float dynamic_min_zoom = min_detail_zoom_ * (view_range_x * view_range_y > 100.0f ? 1.2f : 1.0f);
+    float dynamic_medium_zoom = medium_detail_zoom_ * (view_range_x * view_range_y > 100.0f ? 1.1f : 1.0f);
+
+    if (zoom_factor <= dynamic_min_zoom || min_dimension <= dynamic_min_threshold) {
+        return LODLevel::LOW_DETAIL;  // Minimal detail, heatmap only
+    } else if (zoom_factor <= dynamic_medium_zoom || min_dimension <= dynamic_medium_threshold) {
+        return LODLevel::MEDIUM_DETAIL;  // Basic detail with some labels
+    } else if (zoom_factor <= max_detail_zoom_ || min_dimension <= dynamic_max_threshold) {
+        return LODLevel::HIGH_DETAIL;  // Full detail with all information
+    } else {
+        return LODLevel::MAX_DETAIL;  // Ultra detail with additional annotations
+    }
+}
+
+LODLevel FootprintLOD::calculateLODLevel(float cell_width_px, float cell_height_px,
+                                       float zoom_factor) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate LOD based on both cell size and zoom level
+    // Using a more sophisticated approach that considers both factors
+    if (zoom_factor <= min_detail_zoom_ || min_dimension <= min_cell_size_px_) {
+        return LODLevel::LOW_DETAIL;  // Minimal detail, heatmap only
+    } else if (zoom_factor <= medium_detail_zoom_ || min_dimension <= medium_cell_size_px_) {
+        return LODLevel::MEDIUM_DETAIL;  // Basic detail with some labels
+    } else if (zoom_factor <= max_detail_zoom_ || min_dimension <= max_cell_size_px_) {
+        return LODLevel::HIGH_DETAIL;  // Full detail with all information
+    } else {
+        return LODLevel::MAX_DETAIL;  // Ultra detail with additional annotations
+    }
+}
+
 LODLevel FootprintLOD::calculateDistanceBasedLODLevel(float cell_width_px, float cell_height_px,
                                                    float zoom_factor, ImVec2 cell_center, ImVec2 view_center) const {
     float min_dimension = std::min(cell_width_px, cell_height_px);
@@ -87,6 +128,24 @@ LODLevel FootprintLOD::calculateDistanceBasedLODLevel(float cell_width_px, float
     return base_lod;
 }
 
+LODLevel FootprintLOD::calculateHierarchicalLOD(float cell_width_px, float cell_height_px,
+                                               float zoom_factor, int hierarchy_level) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Adjust thresholds based on hierarchy level
+    float hierarchy_adjustment = 1.0f + (hierarchy_level * 0.2f); // More detail at higher hierarchy levels
+
+    if (zoom_factor <= min_detail_zoom_ * hierarchy_adjustment || min_dimension <= min_cell_size_px_ * hierarchy_adjustment) {
+        return LODLevel::LOW_DETAIL;  // Minimal detail, heatmap only
+    } else if (zoom_factor <= medium_detail_zoom_ * hierarchy_adjustment || min_dimension <= medium_cell_size_px_ * hierarchy_adjustment) {
+        return LODLevel::MEDIUM_DETAIL;  // Basic detail with some labels
+    } else if (zoom_factor <= max_detail_zoom_ || min_dimension <= max_cell_size_px_) {
+        return LODLevel::HIGH_DETAIL;  // Full detail with all information
+    } else {
+        return LODLevel::MAX_DETAIL;  // Ultra detail with additional annotations
+    }
+}
+
 LODRenderSettings FootprintLOD::getRenderSettings(LODLevel lod_level) const {
     LODRenderSettings settings;
 
@@ -135,6 +194,24 @@ LODRenderSettings FootprintLOD::getRenderSettings(LODLevel lod_level) const {
     return settings;
 }
 
+LODRenderSettings FootprintLOD::getOptimizedRenderSettings(LODLevel lod_level, float cell_area_px) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+
+    // Further optimize settings based on cell area to prevent overcrowding
+    if (cell_area_px < 16.0f) {  // Less than 4x4 pixels
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+    } else if (cell_area_px < 64.0f) {  // Less than 8x8 pixels
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+    } else if (cell_area_px < 144.0f) {  // Less than 12x12 pixels
+        settings.render_detailed_annotations = false;
+    }
+
+    return settings;
+}
+
 void FootprintLOD::updatePerformanceBasedLOD(const PerformanceMetrics& metrics) {
     if (!performance_lod_enabled_) {
         return;
@@ -161,6 +238,32 @@ void FootprintLOD::updatePerformanceBasedLOD(const PerformanceMetrics& metrics) 
     max_detail_zoom_ = std::clamp(max_detail_zoom_, 2.0f, 5.0f);
     text_render_threshold_ = std::clamp(text_render_threshold_, 8.0f, 20.0f);
     label_render_threshold_ = std::clamp(label_render_threshold_, 12.0f, 30.0f);
+}
+
+void FootprintLOD::updateAdaptiveLOD(const PerformanceMetrics& metrics, int total_cells_in_view) {
+    // Adaptive LOD based on both performance and number of cells in view
+    float cell_density_factor = static_cast<float>(total_cells_in_view) / 1000.0f; // Normalize to 1000 cells
+
+    // Adjust thresholds based on cell density
+    if (cell_density_factor > 2.0f) {  // Very dense view
+        min_detail_zoom_ = std::min(min_detail_zoom_ * 1.2f, 0.6f);
+        medium_detail_zoom_ = std::min(medium_detail_zoom_ * 1.2f, 2.2f);
+        text_render_threshold_ = std::max(text_render_threshold_ * 1.2f, 18.0f);
+        label_render_threshold_ = std::max(label_render_threshold_ * 1.2f, 28.0f);
+    } else if (cell_density_factor > 1.0f) {  // Dense view
+        min_detail_zoom_ = std::min(min_detail_zoom_ * 1.1f, 0.5f);
+        medium_detail_zoom_ = std::min(medium_detail_zoom_ * 1.1f, 2.0f);
+        text_render_threshold_ = std::max(text_render_threshold_ * 1.1f, 15.0f);
+        label_render_threshold_ = std::max(label_render_threshold_ * 1.1f, 25.0f);
+    } else if (cell_density_factor < 0.5f) {  // Sparse view
+        min_detail_zoom_ = std::max(min_detail_zoom_ * 0.9f, 0.05f);
+        medium_detail_zoom_ = std::max(medium_detail_zoom_ * 0.9f, 0.8f);
+        text_render_threshold_ = std::max(text_render_threshold_ * 0.9f, 8.0f);
+        label_render_threshold_ = std::max(label_render_threshold_ * 0.9f, 15.0f);
+    }
+
+    // Apply performance-based adjustments on top of density-based adjustments
+    updatePerformanceBasedLOD(metrics);
 }
 
 bool FootprintLOD::shouldRenderText(float cell_height_px, float zoom_factor) const {
@@ -224,6 +327,85 @@ std::vector<FootprintCell> FootprintLOD::clusterCells(const std::vector<Footprin
                 working_cells[j].width = 0; // Mark as processed by setting width to 0
                 cluster_count++;
             }
+        }
+
+        // Add the clustered cell to the result
+        clustered_cells.push_back(clustered_cell);
+    }
+
+    return clustered_cells;
+}
+
+std::vector<FootprintLOD::FootprintCell> FootprintLOD::adaptiveClusterCells(const std::vector<FootprintCell>& cells,
+                                                                         float zoom_factor,
+                                                                         int total_cells_in_view) const {
+    std::vector<FootprintCell> clustered_cells;
+
+    // Determine if clustering is needed based on zoom and cell density
+    float cell_density = static_cast<float>(total_cells_in_view) / 1000.0f; // Normalize to 1000 cells
+    bool should_cluster = (zoom_factor < medium_detail_zoom_ * 0.7f) || (cell_density > 1.5f);
+
+    if (!should_cluster) {
+        return cells;
+    }
+
+    // Adjust clustering distance based on cell density
+    float base_cluster_distance = 2.0f / zoom_factor;
+    float density_factor = std::min(cell_density, 3.0f); // Cap at 3x density
+    float cluster_distance = base_cluster_distance * density_factor;
+
+    // Create a copy of the input cells
+    std::vector<FootprintCell> working_cells = cells;
+
+    // More efficient clustering algorithm using spatial partitioning concept
+    for (size_t i = 0; i < working_cells.size(); ++i) {
+        const FootprintCell& current_cell = working_cells[i];
+
+        // Skip if this cell has already been processed
+        if (current_cell.width <= 0) continue;
+
+        // Find nearby cells to cluster with
+        FootprintCell clustered_cell = current_cell;
+        double total_weight = 1.0; // Weight based on volume for weighted average
+        double weighted_x = current_cell.x * (current_cell.bid_volume + current_cell.ask_volume + 1);
+        double weighted_y = current_cell.y * (current_cell.bid_volume + current_cell.ask_volume + 1);
+
+        for (size_t j = i + 1; j < working_cells.size(); ++j) {
+            const FootprintCell& other_cell = working_cells[j];
+
+            // Skip if this cell has already been processed
+            if (other_cell.width <= 0) continue;
+
+            // Calculate distance between cells
+            float dx = std::abs(current_cell.x - other_cell.x);
+            float dy = std::abs(current_cell.y - other_cell.y);
+
+            // If cells are close enough, cluster them
+            if (dx < cluster_distance && dy < cluster_distance) {
+                // Merge the cells by combining their volumes and positions
+                clustered_cell.bid_volume += other_cell.bid_volume;
+                clustered_cell.ask_volume += other_cell.ask_volume;
+                clustered_cell.trade_count += other_cell.trade_count;
+
+                // Weighted average for position based on volume
+                double cell_weight = other_cell.bid_volume + other_cell.ask_volume + 1;
+                weighted_x += other_cell.x * cell_weight;
+                weighted_y += other_cell.y * cell_weight;
+                total_weight += cell_weight;
+
+                // Update dimensions to encompass both cells
+                clustered_cell.width = std::max(clustered_cell.width, std::abs(other_cell.x - clustered_cell.x) * 2.0);
+                clustered_cell.height = std::max(clustered_cell.height, std::abs(other_cell.y - clustered_cell.y) * 2.0);
+
+                // Mark this cell as processed
+                working_cells[j].width = 0; // Mark as processed by setting width to 0
+            }
+        }
+
+        // Calculate final weighted position
+        if (total_weight > 1.0) {
+            clustered_cell.x = static_cast<float>(weighted_x / total_weight);
+            clustered_cell.y = static_cast<float>(weighted_y / total_weight);
         }
 
         // Add the clustered cell to the result
@@ -375,7 +557,8 @@ void FootprintLOD::applyLODToCell(const FootprintCell& cell,
 
     // Determine LOD level
     LODLevel lod_level = calculateLODLevel(cell_width_px, cell_height_px, zoom_factor);
-    LODRenderSettings settings = getRenderSettings(lod_level);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getOptimizedRenderSettings(lod_level, cell_area_px);
 
     // Get cell color from panel
     ImU32 cell_color = panel->getCellColor(cell, max_volume);
@@ -505,7 +688,8 @@ void FootprintLOD::applyDistanceBasedLODToCell(const FootprintCell& cell,
 
     // Determine LOD level using distance-based calculation
     LODLevel lod_level = calculateDistanceBasedLODLevel(cell_width_px, cell_height_px, zoom_factor, cell_center, view_center);
-    LODRenderSettings settings = getRenderSettings(lod_level);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getOptimizedRenderSettings(lod_level, cell_area_px);
 
     // Get cell color from panel
     ImU32 cell_color = panel->getCellColor(cell, max_volume);

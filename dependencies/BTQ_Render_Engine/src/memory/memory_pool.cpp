@@ -94,4 +94,22 @@ void RSIIndicatorPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// MACDIndicatorPool implementation
+MACDIndicatorPool& MACDIndicatorPool::getInstance() {
+    static MACDIndicatorPool instance;
+    return instance;
+}
+
+MACDIndicator* MACDIndicatorPool::allocate(int fast_period, int slow_period, int signal_period) {
+    return pool_.allocate(fast_period, slow_period, signal_period);
+}
+
+void MACDIndicatorPool::deallocate(MACDIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void MACDIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

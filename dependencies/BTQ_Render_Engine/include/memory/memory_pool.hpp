@@ -40,15 +40,12 @@ public:
 private:
     struct PoolBlock {
         alignas(T) char data[sizeof(T)];
-        bool is_free;
     };
 
     std::mutex mutex_;
     std::stack<T*> free_list_;
     std::vector<std::unique_ptr<char[]>> blocks_;
-    std::unordered_map<T*, PoolBlock*> obj_to_block_map_;
     size_t total_objects_;
-    size_t block_size_;
     size_t objects_per_block_;
 };
 
@@ -139,6 +136,24 @@ private:
     ObjectPool<RSIIndicator> pool_;
 };
 
+// MACDIndicatorPool for MACD indicators
+class MACDIndicatorPool {
+public:
+    static MACDIndicatorPool& getInstance();
+
+    MACDIndicator* allocate(int fast_period = 12, int slow_period = 26, int signal_period = 9);
+    void deallocate(MACDIndicator* indicator);
+    void preallocate(size_t count = 128);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    MACDIndicatorPool() = default;
+    ObjectPool<MACDIndicator> pool_;
+};
+
 // RAII wrapper for automatic deallocation
 template<typename T>
 class PooledObject {
@@ -165,7 +180,7 @@ private:
 // Template implementations (included in header for template instantiation)
 template<typename T>
 ObjectPool<T>::ObjectPool(size_t initial_capacity)
-    : total_objects_(0), block_size_(4096), objects_per_block_(0) {
+    : total_objects_(0), objects_per_block_(0) {
     preallocate(initial_capacity);
 }
 
@@ -177,7 +192,6 @@ ObjectPool<T>::~ObjectPool() {
     // Clear the stack
     std::stack<T*> empty_stack;
     free_list_.swap(empty_stack);
-    obj_to_block_map_.clear();
 }
 
 template<typename T>
@@ -228,13 +242,9 @@ void ObjectPool<T>::preallocate(size_t count) {
 
     for (size_t i = 0; i < count; ++i) {
         PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
-        pool_block->is_free = true;
 
         // Get the address where the T object will be constructed
         T* obj_addr = reinterpret_cast<T*>(pool_block->data);
-
-        // Store mapping from object address to block
-        obj_to_block_map_[obj_addr] = pool_block;
 
         // Add to free list
         free_list_.push(obj_addr);

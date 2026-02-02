@@ -220,6 +220,32 @@ public:
                                   const std::vector<FootprintCell>& stacked_imbalances,
                                   const FootprintPanel* panel) const;
 
+    // Calculate multi-resolution LOD based on zoom level and cell density
+    LODLevel calculateMultiResolutionLOD(float cell_width_px, float cell_height_px,
+                                      float zoom_factor, int total_cells_in_view) const;
+
+    // Get multi-resolution rendering settings based on cell density
+    LODRenderSettings getMultiResolutionRenderSettings(LODLevel lod_level, int total_cells_in_view) const;
+
+    // Apply multi-resolution LOD to cell rendering
+    void applyMultiResolutionLODToCell(const FootprintCell& cell,
+                                      ImDrawList* draw_list,
+                                      float zoom_factor,
+                                      double max_volume,
+                                      const std::vector<FootprintCell>& diagonal_imbalances,
+                                      const std::vector<FootprintCell>& stacked_imbalances,
+                                      const FootprintPanel* panel,
+                                      int total_cells_in_view) const;
+
+    // Calculate predictive LOD based on expected zoom changes
+    LODLevel calculatePredictiveLOD(float cell_width_px, float cell_height_px,
+                                float current_zoom, float predicted_zoom) const;
+
+    // Calculate hybrid LOD combining multiple factors
+    LODLevel calculateHybridLOD(float cell_width_px, float cell_height_px,
+                            float zoom_factor, int total_cells_in_view,
+                            const PerformanceMetrics& metrics) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

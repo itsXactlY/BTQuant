@@ -218,6 +218,8 @@ class FootprintPanel : public PanelBase {
   // Helper function to get or load monospace font
   ImFont* getOrCreateMonospaceFont() const;
 
+  // Friend class to allow LOD system to access private rendering helpers
+  friend class BTQuant::Rendering::FootprintLOD;
 };
 
 }  // namespace BTQuant

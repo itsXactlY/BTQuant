@@ -386,6 +386,73 @@ void DashboardControls::render_dashboard_controls() {
     ImGui::SameLine();
     ImGui::TextDisabled("(%zu symbols)", all_symbols_.size());
 
+    // Enhanced symbol selection controls with exchange API integration
+    ImGui::Spacing();
+    if (ImGui::CollapsingHeader("Symbol Management", ImGuiTreeNodeFlags_DefaultOpen)) {
+      // Add a button to force refresh symbols from exchange API
+      if (ImGui::Button("Force Refresh All Symbols")) {
+        fetch_symbols_from_api_ = true;
+        needs_refresh_ = true;
+
+        if (panel_manager_) {
+          fetch_symbols_from_exchange_api();
+          fetch_symbols_from_api_ = false;
+          symbols_loaded_ = true;
+          needs_refresh_ = false;
+
+          // Update filtered symbols to match the newly loaded symbols
+          filtered_symbols_ = all_symbols_;
+
+          std::cout << "[DashboardControls] Force refreshed " << all_symbols_.size() << " symbols from exchange API" << std::endl;
+        }
+      }
+
+      ImGui::SameLine();
+      if (ImGui::Button("Sync All Panels")) {
+        // Synchronize the currently selected symbol to all panels
+        if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+          const std::string& symbol = all_symbols_[selected_symbol_idx_];
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            uint32_t symbol_id = symbol_info_opt->id;
+            if (panel_manager_) {
+              panel_manager_->set_active_symbol(symbol_id, symbol);
+              std::cout << "[DashboardControls] Synced symbol " << symbol
+                        << " (ID: " << symbol_id << ") to all panels" << std::endl;
+            }
+          }
+        } else {
+          // If no symbol is selected, clear the symbol for all panels
+          if (panel_manager_) {
+            panel_manager_->set_active_symbol(0, "");
+            std::cout << "[DashboardControls] Cleared symbol for all panels" << std::endl;
+          }
+        }
+      }
+
+      // Show detailed information about the current symbol selection
+      ImGui::Spacing();
+      ImGui::Text("Symbol Selection Info:");
+      ImGui::Indent();
+      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+        const std::string& current_symbol = all_symbols_[selected_symbol_idx_];
+        auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(current_symbol);
+        if (symbol_info_opt) {
+          ImGui::Text("- Current Symbol: %s", current_symbol.c_str());
+          ImGui::Text("- Symbol ID: %u", symbol_info_opt->id);
+          ImGui::Text("- Exchange: %s", symbol_info_opt->exchange.c_str());
+        } else {
+          ImGui::Text("- Current Symbol: %s (Not in registry)", current_symbol.c_str());
+        }
+      } else {
+        ImGui::Text("- Current Symbol: None selected");
+      }
+      ImGui::Text("- Total Available Symbols: %zu", all_symbols_.size());
+      ImGui::Text("- Selected Exchanges: %zu", std::count_if(selected_exchanges_.begin(), selected_exchanges_.end(),
+                                                            [](int val) { return val != 0; }));
+      ImGui::Unindent();
+    }
+
     // Panel management section with all requested panel types
     if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
 

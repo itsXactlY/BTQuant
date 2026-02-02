@@ -43,8 +43,6 @@ class SymbolRegistry {
 
  private:
   SymbolRegistry() = default;
-  std::string make_key(const std::string& exchange, const std::string& symbol) const;
-
   mutable std::mutex mutex_;
   std::unordered_map<uint32_t, SymbolInfo> id_to_info_;
   std::unordered_map<std::string, uint32_t> key_to_id_;

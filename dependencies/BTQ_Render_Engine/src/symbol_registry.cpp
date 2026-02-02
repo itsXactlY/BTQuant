@@ -28,13 +28,13 @@ bool SymbolRegistry::load_from_file(const std::string& filepath) {
       info.exchange = item["exchange"];
       info.id = item["id"];
 
-      symbols_[info.id] = info;
-      if (info.id >= next_id_) {
-        next_id_ = info.id + 1;
+      id_to_info_[info.id] = info;
+      if (info.id >= next_auto_id_) {
+        next_auto_id_ = info.id + 1;
       }
     }
 
-    std::cout << "Loaded " << symbols_.size() << " symbols from registry" << std::endl;
+    std::cout << "Loaded " << id_to_info_.size() << " symbols from registry" << std::endl;
     return true;
   } catch (const std::exception& e) {
     std::cerr << "Error loading symbol registry: " << e.what() << std::endl;
@@ -43,8 +43,8 @@ bool SymbolRegistry::load_from_file(const std::string& filepath) {
 }
 
 std::optional<SymbolInfo> SymbolRegistry::get_symbol_info(uint32_t symbol_id) const {
-  auto it = symbols_.find(symbol_id);
-  if (it != symbols_.end()) {
+  auto it = id_to_info_.find(symbol_id);
+  if (it != id_to_info_.end()) {
     return it->second;
   }
   return std::nullopt;
@@ -52,8 +52,8 @@ std::optional<SymbolInfo> SymbolRegistry::get_symbol_info(uint32_t symbol_id) co
 
 std::vector<SymbolInfo> SymbolRegistry::get_all_symbols() const {
   std::vector<SymbolInfo> result;
-  result.reserve(symbols_.size());
-  for (const auto& pair : symbols_) {
+  result.reserve(id_to_info_.size());
+  for (const auto& pair : id_to_info_) {
     result.push_back(pair.second);
   }
   return result;
@@ -61,7 +61,7 @@ std::vector<SymbolInfo> SymbolRegistry::get_all_symbols() const {
 
 std::vector<std::string> SymbolRegistry::get_exchanges() const {
   std::vector<std::string> exchanges;
-  for (const auto& pair : symbols_) {
+  for (const auto& pair : id_to_info_) {
     if (std::find(exchanges.begin(), exchanges.end(), pair.second.exchange) == exchanges.end()) {
       exchanges.push_back(pair.second.exchange);
     }
@@ -71,7 +71,7 @@ std::vector<std::string> SymbolRegistry::get_exchanges() const {
 
 std::vector<SymbolInfo> SymbolRegistry::get_exchange_symbols(const std::string& exchange) const {
   std::vector<SymbolInfo> result;
-  for (const auto& pair : symbols_) {
+  for (const auto& pair : id_to_info_) {
     if (pair.second.exchange == exchange) {
       result.push_back(pair.second);
     }
@@ -81,9 +81,18 @@ std::vector<SymbolInfo> SymbolRegistry::get_exchange_symbols(const std::string& 
 
 std::optional<uint32_t> SymbolRegistry::get_symbol_id(const std::string& exchange,
                                                       const std::string& symbol) const {
-  for (const auto& pair : symbols_) {
+  for (const auto& pair : id_to_info_) {
     if (pair.second.exchange == exchange && pair.second.symbol == symbol) {
       return pair.second.id;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<SymbolInfo> SymbolRegistry::get_symbol_by_name(const std::string& symbol) const {
+  for (const auto& pair : id_to_info_) {
+    if (pair.second.symbol == symbol) {
+      return pair.second;
     }
   }
   return std::nullopt;
@@ -100,9 +109,9 @@ uint32_t SymbolRegistry::register_symbol(const std::string& exchange, const std:
   SymbolInfo info;
   info.symbol = symbol;
   info.exchange = exchange;
-  info.id = next_id_++;
+  info.id = next_auto_id_++;
 
-  symbols_[info.id] = info;
+  id_to_info_[info.id] = info;
   return info.id;
 }
 
@@ -110,7 +119,7 @@ bool SymbolRegistry::save_to_file(const std::string& filepath) const {
   try {
     nlohmann::json json = nlohmann::json::array();
 
-    for (const auto& pair : symbols_) {
+    for (const auto& pair : id_to_info_) {
       nlohmann::json item;
       item["symbol"] = pair.second.symbol;
       item["exchange"] = pair.second.exchange;
@@ -125,12 +134,24 @@ bool SymbolRegistry::save_to_file(const std::string& filepath) const {
     }
 
     file << json.dump(4);  // Pretty print with 4 spaces
-    std::cout << "Saved " << symbols_.size() << " symbols to registry" << std::endl;
+    std::cout << "Saved " << id_to_info_.size() << " symbols to registry" << std::endl;
     return true;
   } catch (const std::exception& e) {
     std::cerr << "Error saving symbol registry: " << e.what() << std::endl;
     return false;
   }
+}
+
+bool SymbolRegistry::has_symbol(uint32_t id) const {
+  return id_to_info_.find(id) != id_to_info_.end();
+}
+
+bool SymbolRegistry::has_symbol(const std::string& exchange, const std::string& symbol) const {
+  return get_symbol_id(exchange, symbol).has_value();
+}
+
+std::string SymbolRegistry::make_key(const std::string& exchange, const std::string& symbol) const {
+  return exchange + ":" + symbol;
 }
 
 }  // namespace BTQuant

@@ -157,6 +157,7 @@ set(DASHBOARD_SOURCES
     src/monitoring/performance_monitor.cpp
     src/performance/panel_profiler.cpp
     src/performance/frame_time_graph.cpp
+    src/performance/memory_tracker.cpp
     # Threading module
     src/threading/task_scheduler.cpp
     # Analytics and advanced features

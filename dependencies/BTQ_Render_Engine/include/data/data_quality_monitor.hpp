@@ -7,6 +7,7 @@
 #include <mutex>
 #include <memory>
 #include <functional>
+#include <unordered_set>
 
 #include "TradeData.h"
 
@@ -126,24 +127,33 @@ public:
   void trigger_alert(const std::string& symbol, DataQualityIssueType issue_type, const std::string& description, double severity = 0.5);
   void trigger_data_quality_alerts();  // Triggers alerts based on current metrics
 
-// Structure to track statistics per symbol for advanced data quality checks
-struct SymbolStats {
-  uint64_t last_timestamp = 0;
-  size_t trade_count = 0;
-  uint64_t total_interval_sum = 0;
-  std::vector<uint64_t> recent_intervals;  // Track recent intervals for pattern analysis
+  // Methods for configuring alert destinations
+  void set_console_alerts_enabled(bool enabled) { console_alerts_enabled_ = enabled; }
+  void set_file_logging_enabled(bool enabled) { file_logging_enabled_ = enabled; }
+  void set_external_alert_callback(std::function<void(const DataQualityIssue&)> callback) { external_alert_callback_ = callback; }
 
-  SymbolStats() : last_timestamp(0), trade_count(0), total_interval_sum(0), recent_intervals() {}
-};
+  // Method to send alerts to external monitoring systems
+  void send_external_alert(const DataQualityIssue& issue);
 
 private:
+  // Structure to track statistics per symbol for advanced data quality checks
+  struct SymbolStats {
+    uint64_t last_timestamp = 0;
+    size_t trade_count = 0;
+    uint64_t total_interval_sum = 0;
+    std::vector<uint64_t> recent_intervals;  // Track recent intervals for pattern analysis
+
+    SymbolStats() : last_timestamp(0), trade_count(0), total_interval_sum(0), recent_intervals() {}
+  };
   mutable std::mutex mutex_;
   DataQualityMetrics metrics_;
   std::vector<DataQualityIssue> recent_issues_;
   std::unordered_map<std::string, uint64_t> last_timestamps_;  // Last timestamp per symbol
   std::unordered_map<std::string, std::vector<TradeData>> recent_trades_;  // Recent trades per symbol for duplicate detection
+  std::unordered_map<std::string, std::unordered_set<size_t>> recent_trade_hashes_;  // Hashes of recent trades for faster duplicate detection
   std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> last_received_times_;  // For latency tracking
   std::unordered_map<std::string, SymbolStats> symbol_stats_;  // Statistics per symbol for advanced analysis
+  std::unordered_map<std::string, std::vector<uint64_t>> recent_delays_;  // Recent delays for latency trend analysis
 
   // Thresholds for data quality monitoring
   uint64_t missing_data_threshold_ms_;
@@ -159,6 +169,11 @@ private:
   static constexpr float MIN_VALID_VOLUME = 0.0f;  // Minimum valid volume
 
   AlertCallback alert_callback_;
+
+  // Alert configuration
+  bool console_alerts_enabled_ = true;
+  bool file_logging_enabled_ = false;
+  std::function<void(const DataQualityIssue&)> external_alert_callback_ = nullptr;
 
   // Helper method to add an issue
   void add_issue(const DataQualityIssue& issue);

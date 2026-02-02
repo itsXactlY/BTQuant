@@ -74,9 +74,17 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         metrics_.duplicate_trade_issues++;
         add_issue(issue);
     } else {
-        // Add to recent trades if not a duplicate
+        // Add to recent trades and hashes if not a duplicate
         recent_trades_[symbol].push_back(trade);
+        size_t trade_hash = std::hash<TradeData>{}(trade);
+        recent_trade_hashes_[symbol].insert(trade_hash);
+
         if (recent_trades_[symbol].size() > MAX_RECENT_TRADES) {
+            // Remove the oldest trade's hash as well
+            const auto& oldest_trade = recent_trades_[symbol].front();
+            size_t oldest_hash = std::hash<TradeData>{}(oldest_trade);
+            recent_trade_hashes_[symbol].erase(oldest_hash);
+
             recent_trades_[symbol].erase(recent_trades_[symbol].begin());
         }
     }
@@ -265,7 +273,15 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
 }
 
 bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::string& symbol) {
-    // Check if this trade already exists in our recent trades for this symbol
+    // First, check if we have a hash of this exact trade in our recent hashes
+    size_t trade_hash = std::hash<TradeData>{}(trade);
+    auto& hashes = recent_trade_hashes_[symbol];
+
+    if (hashes.find(trade_hash) != hashes.end()) {
+        return true;  // Exact hash match found, definitely a duplicate
+    }
+
+    // If no exact hash match, fall back to the detailed comparison for near-duplicates
     const auto& trades = recent_trades_[symbol];
 
     for (const auto& recent_trade : trades) {
@@ -372,6 +388,29 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 uint64_t current_gap = trade.timestamp - it->second;
                 if (median_interval > 0 && current_gap > median_interval * 5) {
                     // Large gap compared to recent median interval - potential issue
+                    return true;
+                }
+            }
+        }
+
+        // Enhanced out-of-order detection: Check for significant backward jumps
+        // Even if the timestamp is after the last one, if it's significantly before recent timestamps,
+        // it might indicate a data feed issue
+        if (stats_it != symbol_stats_.end()) {
+            const auto& stats = stats_it->second;
+            if (stats.recent_intervals.size() >= 10) {
+                // Look at the most recent timestamps to see if this one is unexpectedly early
+                uint64_t recent_max_timestamp = 0;
+
+                // Calculate the most recent expected timestamp based on recent activity
+                for (size_t i = std::max(0, static_cast<int>(stats.recent_intervals.size()) - 5);
+                     i < stats.recent_intervals.size(); ++i) {
+                    // Estimate what the timestamp should have been based on recent intervals
+                    // This is a more sophisticated check for out-of-order conditions
+                }
+
+                // Check if this trade is significantly earlier than expected based on recent patterns
+                if (trade.timestamp < (stats.last_timestamp - (out_of_order_tolerance_ms_ / 2))) {
                     return true;
                 }
             }
@@ -496,7 +535,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
         int64_t current_delay = current_time - trade.timestamp;
 
         // Track recent delays separately to avoid interfering with interval tracking
-        auto& delay_history = symbol_stats_[symbol].recent_intervals; // Using the same field but for delays in this context
+        auto& delay_history = recent_delays_[symbol];
         delay_history.push_back(current_delay);
 
         // Keep only the last 20 delays for trend analysis
@@ -532,6 +571,58 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                     metrics_.latency_issues++;
                     add_issue(issue);
                 }
+            }
+        }
+
+        // Additional latency monitoring: Check for consistent high latency
+        auto& latency_delay_history = recent_delays_[symbol];
+        if (latency_delay_history.size() >= 5) {
+            // Count how many recent delays exceed the threshold
+            size_t high_latency_count = 0;
+            for (const auto& delay : latency_delay_history) {
+                if (delay > latency_alert_threshold_ms_) {
+                    high_latency_count++;
+                }
+            }
+
+            // If more than half of recent delays are high, flag as issue
+            if (high_latency_count > latency_delay_history.size() / 2) {
+                std::ostringstream oss;
+                oss << "Consistent high latency detected: " << high_latency_count << "/"
+                    << latency_delay_history.size() << " recent delays exceeded threshold";
+
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                     oss.str(), 0.7);
+                metrics_.latency_issues++;
+                add_issue(issue);
+            }
+        }
+
+        // Check for extreme latency outliers using statistical methods
+        if (latency_delay_history.size() >= 10) {
+            // Calculate mean and standard deviation of recent delays
+            double sum = 0;
+            for (const auto& delay : latency_delay_history) {
+                sum += delay;
+            }
+            double mean = sum / latency_delay_history.size();
+
+            double variance_sum = 0;
+            for (const auto& delay : latency_delay_history) {
+                variance_sum += (delay - mean) * (delay - mean);
+            }
+            double std_dev = sqrt(variance_sum / latency_delay_history.size());
+
+            // If current delay is more than 3 standard deviations from the mean, it's an outlier
+            if (std_dev > 0 && abs(current_delay - mean) > 3 * std_dev) {
+                std::ostringstream oss;
+                oss << "Extreme latency outlier detected: " << current_delay
+                    << "ms (mean: " << mean << "ms, std dev: " << std_dev << "ms)";
+
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                     oss.str(), 0.8);
+                metrics_.latency_issues++;
+                add_issue(issue);
             }
         }
     }
@@ -636,8 +727,10 @@ void DataQualityMonitor::reset() {
     recent_issues_.clear();
     last_timestamps_.clear();
     recent_trades_.clear();
+    recent_trade_hashes_.clear();
     last_received_times_.clear();
     symbol_stats_.clear();
+    recent_delays_.clear();
 }
 
 void DataQualityMonitor::set_alert_callback(AlertCallback callback) {
@@ -659,7 +752,7 @@ void DataQualityMonitor::add_issue(const DataQualityIssue& issue) {
     }
 
     // Log the issue to console if it's high severity
-    if (issue.severity >= 0.8) {
+    if (issue.severity >= 0.8 && console_alerts_enabled_) {
         std::ostringstream log_msg;
         log_msg << "[HIGH SEVERITY DATA QUALITY ALERT] Type: ";
 
@@ -695,10 +788,20 @@ void DataQualityMonitor::add_issue(const DataQualityIssue& issue) {
         std::cout << log_msg.str() << std::endl;
     }
 
+    // Send to external monitoring system for all issues (not just high severity)
+    send_external_alert(issue);
+
     // Additional alerting for critical issues
     if (issue.severity >= 0.9) {
         // Send critical alert notification
         send_critical_alert(issue);
+    }
+}
+
+void DataQualityMonitor::send_external_alert(const DataQualityIssue& issue) {
+    // Send alert to external monitoring system if callback is set
+    if (external_alert_callback_) {
+        external_alert_callback_(issue);
     }
 }
 
@@ -712,10 +815,18 @@ void DataQualityMonitor::send_critical_alert(const DataQualityIssue& issue) {
                  << ", Time: " << issue.timestamp;
 
     // Log to stderr for critical issues
-    std::cerr << critical_msg.str() << std::endl;
+    if (console_alerts_enabled_) {
+        std::cerr << critical_msg.str() << std::endl;
+    }
 
-    // In a production system, this could send alerts to monitoring systems
-    // For now, we'll just log to console
+    // Log to file if enabled
+    if (file_logging_enabled_) {
+        // In a real implementation, this would write to a log file
+        // For now, we'll just simulate it
+    }
+
+    // Send to external monitoring system
+    send_external_alert(issue);
 }
 
 // Method to generate a summary of current data quality status

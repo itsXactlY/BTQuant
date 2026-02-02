@@ -52,3 +52,27 @@ inline bool has_flag(const uint8_t& flags, TradeFlags flag) {
 
 }  // namespace Data
 }  // namespace BTQuant
+
+// Hash function for TradeData to enable use in unordered containers
+namespace std {
+template <>
+struct hash<BTQuant::Data::TradeData> {
+  size_t operator()(const BTQuant::Data::TradeData& trade) const {
+    size_t h1 = hash<uint64_t>{}(trade.timestamp);
+    size_t h2 = hash<double>{}(trade.price);
+    size_t h3 = hash<float>{}(trade.volume);
+    size_t h4 = hash<uint8_t>{}(static_cast<uint8_t>(trade.side));
+    size_t h5 = hash<uint8_t>{}(trade.exchange_id);
+    size_t h6 = hash<uint8_t>{}(trade.flags);
+
+    // Combine hashes using boost-style hash combination
+    size_t seed = h1;
+    seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    seed ^= h4 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    seed ^= h5 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    seed ^= h6 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    return seed;
+  }
+};
+} // namespace std

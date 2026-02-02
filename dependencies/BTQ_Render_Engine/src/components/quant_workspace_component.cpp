@@ -157,4 +157,8 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
 
 void QuantWorkspaceComponent::clear_data() { panel_manager_.reset(); }
 
+void QuantWorkspaceComponent::refresh_hierarchical_selector() {
+  hierarchical_selector_.refresh_data(selector_state_, panel_manager_->get_chart_manager());
+}
+
 }  // namespace BTQuant

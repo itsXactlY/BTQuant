@@ -1,4 +1,5 @@
 #include "../include/ui/settings_manager.hpp"
+#include "../include/ui/appearance_settings.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -36,62 +37,8 @@ void SettingsManager::initialize_default_settings() {
 }
 
 void SettingsManager::initialize_appearance_settings() {
-    // Theme selection
-    SettingInfo theme_setting;
-    theme_setting.key = "appearance.theme";
-    theme_setting.display_name = "Theme";
-    theme_setting.description = "Select the application theme";
-    theme_setting.type = SettingType::ENUM;
-    theme_setting.category = SettingCategory::APPEARANCE;
-    theme_setting.enum_options = {"Dark Professional", "Light Professional", "High Contrast"};
-    theme_setting.enum_selected_index = 0;
-    register_setting(theme_setting);
-
-    // Font size
-    SettingInfo font_size_setting;
-    font_size_setting.key = "appearance.font_size";
-    font_size_setting.display_name = "Font Size";
-    font_size_setting.description = "Set the base font size for the interface";
-    font_size_setting.type = SettingType::INTEGER;
-    font_size_setting.category = SettingCategory::APPEARANCE;
-    font_size_setting.int_value = 14;
-    font_size_setting.min_int = 8;
-    font_size_setting.max_int = 24;
-    register_setting(font_size_setting);
-
-    // Window opacity
-    SettingInfo window_opacity_setting;
-    window_opacity_setting.key = "appearance.window_opacity";
-    window_opacity_setting.display_name = "Window Opacity";
-    window_opacity_setting.description = "Set the opacity level for windows";
-    window_opacity_setting.type = SettingType::FLOAT;
-    window_opacity_setting.category = SettingCategory::APPEARANCE;
-    window_opacity_setting.float_value = 1.0f;
-    window_opacity_setting.min_float = 0.1f;
-    window_opacity_setting.max_float = 1.0f;
-    register_setting(window_opacity_setting);
-
-    // Show grid lines
-    SettingInfo show_grid_lines_setting;
-    show_grid_lines_setting.key = "appearance.show_grid_lines";
-    show_grid_lines_setting.display_name = "Show Grid Lines";
-    show_grid_lines_setting.description = "Display grid lines in chart areas";
-    show_grid_lines_setting.type = SettingType::BOOLEAN;
-    show_grid_lines_setting.category = SettingCategory::APPEARANCE;
-    show_grid_lines_setting.bool_value = true;
-    register_setting(show_grid_lines_setting);
-
-    // Animation speed
-    SettingInfo animation_speed_setting;
-    animation_speed_setting.key = "appearance.animation_speed";
-    animation_speed_setting.display_name = "Animation Speed";
-    animation_speed_setting.description = "Control the speed of UI animations";
-    animation_speed_setting.type = SettingType::INTEGER;
-    animation_speed_setting.category = SettingCategory::APPEARANCE;
-    animation_speed_setting.int_value = 100;
-    animation_speed_setting.min_int = 0;
-    animation_speed_setting.max_int = 200;
-    register_setting(animation_speed_setting);
+    // Create AppearanceSettings instance to handle all appearance-related settings
+    appearance_settings_ = std::make_unique<AppearanceSettings>(*this);
 }
 
 void SettingsManager::initialize_data_settings() {

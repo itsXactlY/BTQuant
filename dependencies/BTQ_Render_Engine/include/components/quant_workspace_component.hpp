@@ -65,6 +65,9 @@ class QuantWorkspaceComponent : public UIComponent {
   void render_dashboard_controls();
   void render_orders_panel();
   void render_positions_panel();
+
+  // Workspace management methods
+  void refresh_hierarchical_selector();
 };
 
 }  // namespace BTQuant

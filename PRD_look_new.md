@@ -228,14 +228,14 @@
 ### Phase 10a: Panel Creation [Complexity: S]
 - [x] Create Dashboard Controls panel with buttons to add new panels: Add Chart, Add Footprint, Add Volume Profile, Add Order Book, Add Time&Sales, Add Watchlist, Add News in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
 - [x] Implement symbol selection dropdown in dashboard controls: search-enabled dropdown populated from exchange API, applies to all panels when changed in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
-- [ ] Add exchange selector: multi-select dropdown for choosing active exchanges, filters available symbols in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
-- [ ] Implement timeframe selector: buttons for 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w affecting all chart-based panels simultaneously in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
+- [x] Add exchange selector: multi-select dropdown for choosing active exchanges, filters available symbols in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
+- [x] Implement timeframe selector: buttons for 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w affecting all chart-based panels simultaneously in `dependencies/BTQ_Render_Engine/src/components/dashboard_controls.cpp` [Complexity: M]
 
 ### Phase 10b: Layout Management [Complexity: M]
-- [ ] Add layout presets system: save current panel arrangement as named preset, load preset to restore layout, delete preset in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
+- [x] Add layout presets system: save current panel arrangement as named preset, load preset to restore layout, delete preset in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
 - [x] Implement layout quick-save: hotkeys F5-F8 to save layouts, Shift+F5-F8 to load, visual indicator showing active layout in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: S]
-- [ ] Add panel templates: predefined layouts matching common trading styles (Scalper, Day Trader, Swing Trader, Analysis) one-click load in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
-- [ ] Implement workspace export/import: save entire workspace (layouts, settings, symbols) to file, share with others, load from file in `dependencies/BTQ_Render_Engine/src/ui/workspace_manager.cpp` [Complexity: M]
+- [x] Add panel templates: predefined layouts matching common trading styles (Scalper, Day Trader, Swing Trader, Analysis) one-click load in `dependencies/BTQ_Render_Engine/src/ui/layout_manager.cpp` [Complexity: M]
+- [x] Implement workspace export/import: save entire workspace (layouts, settings, symbols) to file, share with others, load from file in `dependencies/BTQ_Render_Engine/src/ui/workspace_manager.cpp` [Complexity: M]
 
 ---
 
@@ -244,7 +244,7 @@
 **Prerequisites:** Basic understanding of configuration systems  
 
 ### Phase 11a: Settings Framework [Complexity: M]
-- [ ] Create unified settings system with categories: Appearance, Data, Performance, Alerts, Keyboard Shortcuts in `dependencies/BTQ_Render_Engine/src/ui/settings_manager.cpp` [Complexity: M]
+- [x] Create unified settings system with categories: Appearance, Data, Performance, Alerts, Keyboard Shortcuts in `dependencies/BTQ_Render_Engine/src/ui/settings_manager.cpp` [Complexity: M]
 - [ ] Implement appearance settings: color themes (Dark, Light, Custom), font selection, font sizes, panel opacity, border styles in `dependencies/BTQ_Render_Engine/src/ui/appearance_settings.cpp` [Complexity: M]
 - [ ] Add data settings: default timeframe, default symbol, auto-load last used workspace, data retention period, WebSocket reconnection settings in `dependencies/BTQ_Render_Engine/src/ui/data_settings.cpp` [Complexity: M]
 - [ ] Implement performance settings: FPS limiter, V-Sync toggle, LOD thresholds, caching strategy, memory limits in `dependencies/BTQ_Render_Engine/src/ui/performance_settings.cpp` [Complexity: M]

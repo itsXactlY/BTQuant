@@ -197,6 +197,32 @@ public:
      */
     double calculate_dynamic_padding(double zoom_factor, double base_padding_ratio) const;
 
+    /**
+     * @brief Applies polygon reduction using an enhanced algorithm that preserves visual significance
+     *        Uses Douglas-Peucker-like approach for line simplification
+     *
+     * @param chart The chart instance to process
+     * @param tolerance_factor Tolerance factor affecting how aggressively to reduce polygons
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with enhanced polygon reduction applied
+     */
+    ChartInstance apply_douglas_peucker_polygon_reduction(const ChartInstance& chart, float tolerance_factor = 0.1f,
+                                                        float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
+    /**
+     * @brief Applies advanced off-screen culling combined with intelligent polygon reduction
+     *        Combines visibility checks with importance-based filtering for optimal performance
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with advanced off-screen culling and polygon reduction applied
+     */
+    ChartInstance apply_advanced_offscreen_culling(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                 float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

@@ -1,12 +1,13 @@
 #include "../../include/components/orderbook_batcher.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace BTQuant {
 
 OrderbookBatcher::OrderbookBatcher() {
     // Reserve initial capacity to reduce allocations
-    batches_.reserve(16);
+    batches_.reserve(32);  // Increased initial reservation for better performance
 }
 
 OrderbookBatcher::~OrderbookBatcher() {
@@ -22,11 +23,14 @@ void OrderbookBatcher::clear() {
 }
 
 OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col) {
-    // Prioritize batching by texture and color to minimize draw calls
+    // Prioritize batching by texture first, then by color to minimize draw calls
     // For order book rendering, we often have many elements with the same texture and similar colors
     for (auto& batch : batches_) {
-        if (batch.texture == texture && batch.vertices.size() < 65535 - 4 && batch.indices.size() < 65535 - 6) {
-            // For order book elements, we can often batch elements with the same color together
+        if (batch.texture == texture &&
+            batch.vertices.size() < 65535 - 4 &&
+            batch.indices.size() < 65535 - 6) {
+
+            // For order book elements, we can often batch elements with the same or similar color together
             // This reduces the number of draw calls significantly
             return &batch;
         }
@@ -38,8 +42,8 @@ OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID
     new_batch.texture = texture;
 
     // Pre-allocate space to reduce reallocations - optimized for order book rendering
-    new_batch.vertices.reserve(2048);  // Increased initial reservation for better performance
-    new_batch.indices.reserve(4096);   // Increased initial reservation for better performance
+    new_batch.vertices.reserve(4096);  // Increased initial reservation for better performance
+    new_batch.indices.reserve(8192);   // Increased initial reservation for better performance
 
     return &new_batch;
 }
@@ -50,6 +54,11 @@ void OrderbookBatcher::optimizeBatches() {
         return; // Nothing to optimize
     }
 
+    // Sort batches by texture ID to group similar textures together for better merging
+    std::sort(batches_.begin(), batches_.end(), [](const OrderbookBatchElement& a, const OrderbookBatchElement& b) {
+        return a.texture < b.texture;
+    });
+
     // More aggressive optimization: merge batches with same texture regardless of primitive type
     // This is particularly beneficial for order book rendering where we have many similar elements
     std::vector<OrderbookBatchElement> optimized_batches;
@@ -59,23 +68,24 @@ void OrderbookBatcher::optimizeBatches() {
         bool merged = false;
 
         // Try to find an existing batch with the same texture to merge with
-        for (auto& target_batch : optimized_batches) {
+        // Iterate backwards to find the most recently added batch with same texture (better cache locality)
+        for (auto it = optimized_batches.rbegin(); it != optimized_batches.rend(); ++it) {
             // Check if batches can be merged (same texture, and enough space)
-            if (target_batch.texture == current_batch.texture &&
-                target_batch.vertices.size() + current_batch.vertices.size() < 65535 &&
-                target_batch.indices.size() + current_batch.indices.size() < 65535) {
+            if (it->texture == current_batch.texture &&
+                it->vertices.size() + current_batch.vertices.size() < 65535 &&
+                it->indices.size() + current_batch.indices.size() < 65535) {
 
                 // Merge the current batch into the target batch
-                size_t vertex_offset = target_batch.vertices.size();
+                size_t vertex_offset = it->vertices.size();
 
                 // Add vertices from current batch to target batch
-                target_batch.vertices.insert(target_batch.vertices.end(),
-                                           current_batch.vertices.begin(),
-                                           current_batch.vertices.end());
+                it->vertices.insert(it->vertices.end(),
+                                   current_batch.vertices.begin(),
+                                   current_batch.vertices.end());
 
                 // Add indices from current batch to target batch with proper offset
                 for (auto index : current_batch.indices) {
-                    target_batch.indices.push_back(static_cast<ImDrawIdx>(index + vertex_offset));
+                    it->indices.push_back(static_cast<ImDrawIdx>(index + vertex_offset));
                 }
 
                 merged = true;
@@ -215,6 +225,22 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
     // Optimize batches by merging compatible ones before submission
     optimizeBatches();
 
+    // Pre-calculate total vertices and indices to reserve space upfront
+    size_t total_vertices = 0;
+    size_t total_indices = 0;
+
+    for (const auto& batch : batches_) {
+        if (!batch.vertices.empty() && !batch.indices.empty()) {
+            total_vertices += batch.vertices.size();
+            total_indices += batch.indices.size();
+        }
+    }
+
+    // Reserve space in the draw list to minimize reallocations
+    if (total_vertices > 0) {
+        draw_list->PrimReserve(static_cast<int>(total_indices), static_cast<int>(total_vertices));
+    }
+
     for (const auto& batch : batches_) {
         if (!batch.vertices.empty() && !batch.indices.empty()) {
             // Properly set up draw command with texture and scissor clip
@@ -227,21 +253,19 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
             // Add the draw command to the draw list
             draw_list->CmdBuffer.push_back(cmd);
 
-            // Add the vertices and indices to the draw list
-            draw_list->PrimReserve(static_cast<int>(batch.indices.size()), static_cast<int>(batch.vertices.size()));
-
-            // Copy vertices
-            for (const auto& vertex : batch.vertices) {
-                draw_list->_VtxWritePtr[0].pos = vertex.pos;
-                draw_list->_VtxWritePtr[0].uv = vertex.uv;
-                draw_list->_VtxWritePtr[0].col = vertex.col;
-                draw_list->_VtxWritePtr++;
+            // Copy vertices directly using memcpy for better performance
+            if (!batch.vertices.empty()) {
+                memcpy(draw_list->_VtxWritePtr, batch.vertices.data(),
+                       sizeof(OrderbookBatchVertex) * batch.vertices.size());
+                draw_list->_VtxWritePtr += batch.vertices.size();
             }
 
             // Copy indices with proper offset
-            for (const auto& index : batch.indices) {
-                draw_list->_IdxWritePtr[0] = static_cast<ImDrawIdx>(index + draw_list->_VtxCurrentIdx);
-                draw_list->_IdxWritePtr++;
+            if (!batch.indices.empty()) {
+                for (const auto& index : batch.indices) {
+                    *draw_list->_IdxWritePtr = static_cast<ImDrawIdx>(index + draw_list->_VtxCurrentIdx);
+                    draw_list->_IdxWritePtr++;
+                }
             }
 
             // Update vertex index counter

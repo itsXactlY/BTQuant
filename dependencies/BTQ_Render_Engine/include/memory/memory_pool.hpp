@@ -154,6 +154,60 @@ private:
     ObjectPool<MACDIndicator> pool_;
 };
 
+// BollingerBandIndicatorPool for Bollinger Band indicators
+class BollingerBandIndicatorPool {
+public:
+    static BollingerBandIndicatorPool& getInstance();
+
+    BollingerBandIndicator* allocate(int period, double std_dev = 2.0);
+    void deallocate(BollingerBandIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    BollingerBandIndicatorPool() = default;
+    ObjectPool<BollingerBandIndicator> pool_;
+};
+
+// StochasticIndicatorPool for Stochastic indicators
+class StochasticIndicatorPool {
+public:
+    static StochasticIndicatorPool& getInstance();
+
+    StochasticIndicator* allocate(int k_period = 14, int d_period = 3, int slowing_period = 3);
+    void deallocate(StochasticIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    StochasticIndicatorPool() = default;
+    ObjectPool<StochasticIndicator> pool_;
+};
+
+// ATRIndicatorPool for Average True Range indicators
+class ATRIndicatorPool {
+public:
+    static ATRIndicatorPool& getInstance();
+
+    ATRIndicator* allocate(int period = 14);
+    void deallocate(ATRIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    ATRIndicatorPool() = default;
+    ObjectPool<ATRIndicator> pool_;
+};
+
 // RAII wrapper for automatic deallocation
 template<typename T>
 class PooledObject {

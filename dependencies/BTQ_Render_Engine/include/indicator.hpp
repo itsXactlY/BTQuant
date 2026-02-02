@@ -157,4 +157,183 @@ class MACDIndicator : public TechnicalIndicator {
   EMAIndicator fast_ema_, slow_ema_, signal_ema_;
 };
 
+class BollingerBandIndicator : public TechnicalIndicator {
+ public:
+  BollingerBandIndicator(int period, double std_dev = 2.0)
+      : period_(period), std_dev_(std_dev), sma_indicator_(period) {}
+
+  void update(float value) override {
+    sma_indicator_.update(value);
+    prices_.push_back(value);
+    if (prices_.size() > static_cast<size_t>(period_)) {
+      prices_.pop_front();
+    }
+  }
+
+  float get_value() const override {
+    if (!sma_indicator_.is_ready()) return 0.0f;
+    return sma_indicator_.get_value(); // Return middle band
+  }
+
+  float get_upper_band() const {
+    if (!is_ready()) return 0.0f;
+    float sma_val = sma_indicator_.get_value();
+    float variance = calculate_variance();
+    float std_dev_val = std::sqrt(variance);
+    return sma_val + (static_cast<float>(std_dev_) * std_dev_val);
+  }
+
+  float get_lower_band() const {
+    if (!is_ready()) return 0.0f;
+    float sma_val = sma_indicator_.get_value();
+    float variance = calculate_variance();
+    float std_dev_val = std::sqrt(variance);
+    return sma_val - (static_cast<float>(std_dev_) * std_dev_val);
+  }
+
+  bool is_ready() const override {
+    return sma_indicator_.is_ready() && prices_.size() >= static_cast<size_t>(period_);
+  }
+
+  void reset() override {
+    sma_indicator_.reset();
+    prices_.clear();
+  }
+
+ private:
+  float calculate_variance() const {
+    if (prices_.empty()) return 0.0f;
+
+    float mean = sma_indicator_.get_value();
+    float sum_sq_diff = 0.0f;
+
+    for (float price : prices_) {
+      float diff = price - mean;
+      sum_sq_diff += diff * diff;
+    }
+
+    return sum_sq_diff / static_cast<float>(prices_.size());
+  }
+
+ private:
+  int period_;
+  double std_dev_;
+  SMAIndicator sma_indicator_;
+  std::deque<float> prices_;
+};
+
+class StochasticIndicator : public TechnicalIndicator {
+ public:
+  StochasticIndicator(int k_period = 14, int d_period = 3, int slowing_period = 3)
+      : k_period_(k_period), d_period_(d_period), slowing_period_(slowing_period) {}
+
+  void update(float value) override {
+    prices_.push_back(value);
+    if (prices_.size() > static_cast<size_t>(k_period_)) {
+      prices_.pop_front();
+    }
+
+    if (prices_.size() == static_cast<size_t>(k_period_)) {
+      float highest_high = *std::max_element(prices_.begin(), prices_.end());
+      float lowest_low = *std::min_element(prices_.begin(), prices_.end());
+
+      if (highest_high != lowest_low) {
+        float k_val = ((value - lowest_low) / (highest_high - lowest_low)) * 100.0f;
+        k_values_.push_back(k_val);
+
+        if (k_values_.size() > static_cast<size_t>(d_period_)) {
+          k_values_.pop_front();
+        }
+      }
+    }
+  }
+
+  float get_value() const override {
+    if (k_values_.empty()) return 0.0f;
+    // Return the %D value (moving average of %K)
+    float sum = std::accumulate(k_values_.begin(), k_values_.end(), 0.0f);
+    return sum / static_cast<float>(k_values_.size());
+  }
+
+  float get_k_value() const {
+    if (k_values_.empty()) return 0.0f;
+    return k_values_.back(); // Return most recent %K value
+  }
+
+  bool is_ready() const override {
+    return !k_values_.empty();
+  }
+
+  void reset() override {
+    prices_.clear();
+    k_values_.clear();
+  }
+
+ private:
+  int k_period_;
+  int d_period_;
+  int slowing_period_;
+  std::deque<float> prices_;
+  std::deque<float> k_values_;
+};
+
+class ATRIndicator : public TechnicalIndicator {
+ public:
+  ATRIndicator(int period = 14) : period_(period) {}
+
+  void update(float value) override {
+    current_price_ = value;
+
+    if (last_price_ > 0.0f) { // Skip first update
+      float tr = calculate_true_range(value);
+      tr_values_.push_back(tr);
+
+      if (tr_values_.size() > static_cast<size_t>(period_)) {
+        tr_values_.pop_front();
+      }
+    }
+
+    last_price_ = value;
+  }
+
+  float get_value() const override {
+    if (tr_values_.empty()) return 0.0f;
+    float sum = std::accumulate(tr_values_.begin(), tr_values_.end(), 0.0f);
+    return sum / static_cast<float>(tr_values_.size());
+  }
+
+  bool is_ready() const override {
+    return tr_values_.size() >= static_cast<size_t>(period_);
+  }
+
+  void reset() override {
+    tr_values_.clear();
+    last_price_ = 0.0f;
+    current_price_ = 0.0f;
+  }
+
+ private:
+  float calculate_true_range(float current_price) const {
+    if (last_price_ <= 0.0f) return 0.0f; // First price
+
+    float tr1 = std::abs(current_price - last_price_);
+    float tr2 = high_price_ > 0.0f ? std::abs(current_price - high_price_) : 0.0f;
+    float tr3 = low_price_ > 0.0f ? std::abs(current_price - low_price_) : 0.0f;
+
+    // Update high/low for next calculation
+    high_price_ = std::max(current_price, last_price_);
+    low_price_ = std::min(current_price, last_price_);
+
+    return std::max({tr1, tr2, tr3});
+  }
+
+ private:
+  int period_;
+  std::deque<float> tr_values_;
+  float last_price_ = 0.0f;
+  float current_price_ = 0.0f;
+  mutable float high_price_ = 0.0f;
+  mutable float low_price_ = 0.0f;
+};
+
 }  // namespace BTQuant

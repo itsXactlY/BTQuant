@@ -112,4 +112,59 @@ void MACDIndicatorPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// Additional specialized memory pools for other frequently allocated objects
+// BollingerBandIndicatorPool implementation
+BollingerBandIndicatorPool& BollingerBandIndicatorPool::getInstance() {
+    static BollingerBandIndicatorPool instance;
+    return instance;
+}
+
+BollingerBandIndicator* BollingerBandIndicatorPool::allocate(int period, double std_dev) {
+    return pool_.allocate(period, std_dev);
+}
+
+void BollingerBandIndicatorPool::deallocate(BollingerBandIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void BollingerBandIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// StochasticIndicatorPool implementation
+StochasticIndicatorPool& StochasticIndicatorPool::getInstance() {
+    static StochasticIndicatorPool instance;
+    return instance;
+}
+
+StochasticIndicator* StochasticIndicatorPool::allocate(int k_period, int d_period, int slowing_period) {
+    return pool_.allocate(k_period, d_period, slowing_period);
+}
+
+void StochasticIndicatorPool::deallocate(StochasticIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void StochasticIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// ATRIndicatorPool implementation
+ATRIndicatorPool& ATRIndicatorPool::getInstance() {
+    static ATRIndicatorPool instance;
+    return instance;
+}
+
+ATRIndicator* ATRIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void ATRIndicatorPool::deallocate(ATRIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void ATRIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

@@ -223,6 +223,32 @@ public:
     ChartInstance apply_advanced_offscreen_culling(const ChartInstance& chart, float zoom_factor = 1.0f,
                                                  float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
+    /**
+     * @brief Applies frustum-based culling with polygon reduction for improved performance
+     *        Uses extended viewport bounds to account for off-screen elements that might contribute to rendering
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with frustum culling and polygon reduction applied
+     */
+    ChartInstance apply_frustum_culling_and_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                           float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
+    /**
+     * @brief Applies clustering-based polygon reduction that reduces polygon count at lower zoom levels
+     *        Groups nearby points into clusters and selects the most representative point from each cluster
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with clustering-based polygon reduction applied
+     */
+    ChartInstance apply_clustering_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                  float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

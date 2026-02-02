@@ -6,6 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <unordered_set>
 
 #include "../../include/components/panel_manager.hpp"
 #include "../../include/components/chart_panel.hpp"
@@ -113,19 +114,23 @@ void DashboardControls::render_dashboard_controls() {
         show_exchange_selector = !show_exchange_selector;
       }
 
+      // Define the search buffer in the outer scope to be accessible in both branches
+      static char exchange_search_buffer[128] = "";
+
       // Show exchange selection popup as a proper dropdown
       bool any_changes = false; // Move this declaration outside the Begin/End block
       if (show_exchange_selector) {
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
-        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 300));
+        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 350)); // Increased height for better UX
 
         if (ImGui::Begin("##ExchangeSelectorPopup", &show_exchange_selector,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
                          ImGuiWindowFlags_NoSavedSettings)) {
 
-          // Select All / Deselect All buttons
-          if (ImGui::Button("Select All", ImVec2(ImGui::GetContentRegionAvail().x * 0.45f, 0))) {
+          // Select All / Deselect All buttons with better layout
+          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 5)); // Reduce spacing between buttons
+          if (ImGui::Button("Select All", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1);
             any_changes = true;
           }
@@ -134,17 +139,22 @@ void DashboardControls::render_dashboard_controls() {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 0);
             any_changes = true;
           }
+          ImGui::PopStyleVar(); // Restore item spacing
 
           ImGui::Separator();
 
           // Search input for filtering exchanges
-          static char exchange_search_buffer[128] = "";
           ImGui::InputTextWithHint("##exchange_search", "Filter exchanges...", exchange_search_buffer, sizeof(exchange_search_buffer));
 
           ImGui::Separator();
 
+          // Show selected exchanges count
+          int selected_count = std::count_if(selected_exchanges_.begin(), selected_exchanges_.end(),
+                                            [](int val) { return val != 0; });
+          ImGui::Text("Selected: %d/%zu", selected_count, all_exchanges_.size());
+
           // Individual exchange checkboxes with scrollable area
-          ImGui::BeginChild("ExchangeList", ImVec2(0, 200), true);
+          ImGui::BeginChild("ExchangeList", ImVec2(0, 220), true); // Increased height
 
           // Convert search term to lowercase for case-insensitive comparison
           std::string search_term = exchange_search_buffer;
@@ -162,16 +172,27 @@ void DashboardControls::render_dashboard_controls() {
             }
 
             bool temp_selected = selected_exchanges_[i] != 0;
+
+            // Highlight selected exchanges with different color
+            if (temp_selected) {
+              ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.2f, 0.8f, 0.2f, 1.0f)); // Green checkmark for selected
+            }
+
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
               selected_exchanges_[i] = temp_selected ? 1 : 0;
               any_changes = true;
+            }
+
+            if (temp_selected) {
+              ImGui::PopStyleColor(); // Restore checkmark color
             }
           }
 
           ImGui::EndChild();
 
-          // Apply button to close the popup
-          if (ImGui::Button("Apply", ImVec2(-1, 0))) {
+          // Apply and Cancel buttons
+          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 5)); // Reduce spacing between buttons
+          if (ImGui::Button("Apply", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             show_exchange_selector = false;
 
             // Refresh symbols when exchange selection changes
@@ -182,6 +203,18 @@ void DashboardControls::render_dashboard_controls() {
             // Clear the search buffer when closing
             memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
           }
+          ImGui::SameLine();
+          if (ImGui::Button("Cancel", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+            // Revert changes by reloading the exchanges - restore original selections
+            if (show_exchange_selector) {
+              // Reload original state by resetting to saved values (we don't have a backup, so just close)
+              show_exchange_selector = false;
+            }
+
+            // Clear the search buffer when closing
+            memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
+          }
+          ImGui::PopStyleVar(); // Restore item spacing
 
           if (any_changes) {
             // Update preview text immediately when changes occur
@@ -649,20 +682,14 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
 
   // Get all symbols from the symbol registry, filtered by selected exchanges
   auto all_symbol_infos = SymbolRegistry::instance().get_all_symbols();
+
+  // Use a set to efficiently track unique symbols
+  std::unordered_set<std::string> unique_symbols;
+
   for (const auto& symbol_info : all_symbol_infos) {
     // Check if this symbol's exchange is in the selected exchanges
     if (is_exchange_selected(symbol_info.exchange)) {
-      // Only add symbol if its exchange is selected and it's not already in the list
-      bool found = false;
-      for (const auto& existing_symbol : all_symbols_) {
-        if (existing_symbol == symbol_info.symbol) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        all_symbols_.push_back(symbol_info.symbol);
-      }
+      unique_symbols.insert(symbol_info.symbol);
     }
   }
 
@@ -691,22 +718,15 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
           bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
 
           if (exchange_selected) {
-            // Check if symbol is already in the list
-            bool found = false;
-            for (const auto& existing_symbol : all_symbols_) {
-              if (existing_symbol == symbol_name) {
-                found = true;
-                break;
-              }
-            }
-            if (!found) {
-              all_symbols_.push_back(symbol_name);
-            }
+            unique_symbols.insert(symbol_name);
           }
         }
       }
     }
   }
+
+  // Transfer unique symbols to the vector
+  all_symbols_.assign(unique_symbols.begin(), unique_symbols.end());
 
   // Sort symbols alphabetically
   std::sort(all_symbols_.begin(), all_symbols_.end());

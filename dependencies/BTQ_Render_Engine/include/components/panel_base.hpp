@@ -45,6 +45,7 @@ struct PanelConfig {
   ImVec2 position = ImVec2(0, 0);
   ImVec2 size = ImVec2(400, 300);
   bool visible = true;
+  bool minimized = false;  // Whether the panel is minimized/collapsed
   bool resizable = true;
   bool movable = true;
   int grid_x = 0;
@@ -78,12 +79,14 @@ class PanelBase {
   void set_position(const ImVec2& pos) { config_.position = pos; }
   void set_size(const ImVec2& size) { config_.size = size; }
   void set_visible(bool visible) { config_.visible = visible; }
+  void set_minimized(bool minimized) { config_.minimized = minimized; }
   void set_title(const std::string& title) { config_.title = title; }
 
   const PanelConfig& get_config() const { return config_; }
   PanelConfig& get_config() { return config_; }
 
   bool is_visible() const { return config_.visible; }
+  bool is_minimized() const { return config_.minimized; }
   const std::string& get_title() const { return config_.title; }
 
   // Per-panel settings functionality

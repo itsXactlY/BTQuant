@@ -53,11 +53,22 @@ public:
     std::vector<AllocationInfo> getActiveAllocations() const;
     std::vector<LeakCandidate> identifyLeaks(double min_duration_seconds = 10.0) const;
     std::vector<LeakCandidate> getLargestUnreleasedAllocations(size_t max_count = 10) const;
+    std::vector<LeakCandidate> getGrowingAllocations(double growth_threshold_percent = 10.0) const;
 
     void resetBaseline();
     void setSamplingInterval(int milliseconds);
     void setLeakThreshold(double seconds);
+    void setTrendAnalysisWindow(double seconds);
     void exportMemoryReport(const std::string& filename) const;
+
+    // Trend analysis methods
+    double getMemoryGrowthRate(double window_seconds = 10.0) const;
+    std::vector<MemorySample> getTrendData(double window_seconds = 30.0) const;
+    bool isMemoryLeaking(double threshold_rate_bytes_per_second = 100000.0) const;
+
+    // Visualization-ready data
+    std::string getMemoryTrendAsJSON(double window_seconds = 30.0) const;
+    std::vector<std::pair<double, size_t>> getMemoryTimelineForVisualization(double window_seconds = 30.0) const;
 
 private:
     void trackingLoop();
@@ -81,6 +92,7 @@ private:
     size_t current_allocation_count_;
     int sampling_interval_ms_;
     double leak_threshold_seconds_;
+    double trend_analysis_window_seconds_;
 };
 
 // Global memory tracker instance

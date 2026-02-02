@@ -29,7 +29,8 @@ MemoryTracker::MemoryTracker() :
     total_deallocated_bytes_(0),
     current_allocation_count_(0),
     sampling_interval_ms_(100),
-    leak_threshold_seconds_(10.0) {
+    leak_threshold_seconds_(10.0),
+    trend_analysis_window_seconds_(30.0) {
 
     // Initialize baseline memory usage
     baseline_usage_bytes_ = getSystemMemoryUsage();
@@ -286,6 +287,128 @@ void MemoryTracker::setLeakThreshold(double seconds) {
     leak_threshold_seconds_ = std::max(1.0, seconds); // Minimum 1 second threshold
 }
 
+void MemoryTracker::setTrendAnalysisWindow(double seconds) {
+    trend_analysis_window_seconds_ = std::max(1.0, seconds); // Minimum 1 second
+}
+
+double MemoryTracker::getMemoryGrowthRate(double window_seconds) const {
+    std::lock_guard<std::mutex> lock(samples_mutex_);
+
+    if (memory_samples_.empty()) {
+        return 0.0;
+    }
+
+    auto cutoff_time = std::chrono::high_resolution_clock::now() -
+                       std::chrono::duration<double>(window_seconds);
+
+    // Find samples within the time window
+    auto start_it = memory_samples_.begin();
+    for (auto it = memory_samples_.rbegin(); it != memory_samples_.rend(); ++it) {
+        if (it->timestamp < cutoff_time) {
+            start_it = it.base();
+            break;
+        }
+    }
+
+    if (start_it == memory_samples_.end() ||
+        std::distance(start_it, memory_samples_.end()) < 2) {
+        return 0.0;
+    }
+
+    auto start_sample = start_it;
+    auto end_sample = memory_samples_.rbegin();
+
+    double time_diff = std::chrono::duration<double>(
+        end_sample->timestamp - start_sample->timestamp).count();
+    double mem_diff = static_cast<double>(end_sample->memory_usage_bytes) -
+                     static_cast<double>(start_sample->memory_usage_bytes);
+
+    if (time_diff > 0) {
+        return mem_diff / time_diff; // bytes per second
+    }
+
+    return 0.0;
+}
+
+std::vector<MemorySample> MemoryTracker::getTrendData(double window_seconds) const {
+    std::lock_guard<std::mutex> lock(samples_mutex_);
+
+    if (memory_samples_.empty()) {
+        return {};
+    }
+
+    auto cutoff_time = std::chrono::high_resolution_clock::now() -
+                       std::chrono::duration<double>(window_seconds);
+
+    std::vector<MemorySample> result;
+    for (const auto& sample : memory_samples_) {
+        if (sample.timestamp >= cutoff_time) {
+            result.push_back(sample);
+        }
+    }
+
+    return result;
+}
+
+bool MemoryTracker::isMemoryLeaking(double threshold_rate_bytes_per_second) const {
+    double growth_rate = getMemoryGrowthRate(10.0); // Check growth over last 10 seconds
+    return growth_rate > threshold_rate_bytes_per_second;
+}
+
+std::vector<LeakCandidate> MemoryTracker::getGrowingAllocations(double growth_threshold_percent) const {
+    std::vector<LeakCandidate> growing_allocs;
+    auto now = std::chrono::high_resolution_clock::now();
+
+    std::lock_guard<std::mutex> lock(allocations_mutex_);
+
+    // Group allocations by tag to identify growing patterns
+    std::map<std::string, std::vector<const AllocationInfo*>> allocations_by_tag;
+    for (const auto& pair : active_allocations_) {
+        allocations_by_tag[pair.second.tag].push_back(&pair.second);
+    }
+
+    // Analyze each tag group for growth patterns
+    for (const auto& tag_pair : allocations_by_tag) {
+        const auto& allocs = tag_pair.second;
+        if (allocs.empty()) continue;
+
+        // Calculate average age and total size for this tag
+        double total_age = 0.0;
+        size_t total_size = 0;
+        for (const auto* alloc : allocs) {
+            total_age += std::chrono::duration<double>(now - alloc->timestamp).count();
+            total_size += alloc->size;
+        }
+
+        double avg_age = total_age / allocs.size();
+
+        // If there are many allocations with this tag and they're relatively old,
+        // it might indicate a growing pattern
+        if (allocs.size() > 5 && avg_age > 5.0) { // More than 5 allocations older than 5 seconds
+            for (const auto* alloc : allocs) {
+                LeakCandidate candidate;
+                candidate.ptr = alloc->ptr;
+                candidate.size = alloc->size;
+                candidate.duration_seconds = std::chrono::duration<double>(now - alloc->timestamp).count();
+                candidate.tag = alloc->tag;
+
+                // Only include if allocation is significantly old
+                if (candidate.duration_seconds > 10.0) {
+                    growing_allocs.push_back(candidate);
+                }
+            }
+        }
+    }
+
+    // Sort by duration (longest held allocations first)
+    std::sort(growing_allocs.begin(), growing_allocs.end(),
+              [](const LeakCandidate& a, const LeakCandidate& b) {
+                  return a.duration_seconds > b.duration_seconds;
+              });
+
+    return growing_allocs;
+}
+
 void MemoryTracker::exportMemoryReport(const std::string& filename) const {
     std::ofstream file(filename);
     if (!file.is_open()) {
@@ -304,6 +427,11 @@ void MemoryTracker::exportMemoryReport(const std::string& filename) const {
     file << "Total Deallocated: " << formatBytes(getTotalDeallocatedBytes()) << "\n";
     file << "Current Allocation Count: " << getCurrentAllocationCount() << "\n";
     file << "Average Growth Rate: " << formatBytes(static_cast<size_t>(getAverageMemoryGrowthRate())) << "/sec\n\n";
+
+    // Trend analysis
+    file << "Trend Analysis (last 10s): " << formatBytes(static_cast<size_t>(getMemoryGrowthRate(10.0))) << "/sec\n";
+    file << "Trend Analysis (last 30s): " << formatBytes(static_cast<size_t>(getMemoryGrowthRate(30.0))) << "/sec\n";
+    file << "Is Memory Leaking: " << (isMemoryLeaking() ? "YES" : "NO") << "\n\n";
 
     // Active allocations
     auto active_allocs = getActiveAllocations();
@@ -338,7 +466,64 @@ void MemoryTracker::exportMemoryReport(const std::string& filename) const {
              << "s, Tag: " << leak.tag << "\n";
     }
 
+    file << "\nGrowing Allocation Patterns:\n";
+    file << "---------------------------\n";
+    auto growing_allocs = getGrowingAllocations();
+    for (const auto& alloc : growing_allocs) {
+        file << "Ptr: " << alloc.ptr
+             << ", Size: " << formatBytes(alloc.size)
+             << ", Duration: " << std::fixed << std::setprecision(2) << alloc.duration_seconds
+             << "s, Tag: " << alloc.tag << "\n";
+    }
+
     file.close();
+}
+
+std::string MemoryTracker::getMemoryTrendAsJSON(double window_seconds) const {
+    std::ostringstream json_stream;
+    json_stream << "{\n";
+    json_stream << "  \"timestamp\": \"" << getCurrentTimeString() << "\",\n";
+    json_stream << "  \"current_usage_bytes\": " << getCurrentMemoryUsage() << ",\n";
+    json_stream << "  \"peak_usage_bytes\": " << getPeakMemoryUsage() << ",\n";
+    json_stream << "  \"baseline_usage_bytes\": " << getBaselineMemoryUsage() << ",\n";
+    json_stream << "  \"growth_rate_bytes_per_sec\": " << getMemoryGrowthRate(window_seconds) << ",\n";
+    json_stream << "  \"is_leaking\": " << (isMemoryLeaking() ? "true" : "false") << ",\n";
+    json_stream << "  \"samples\": [\n";
+
+    auto samples = getTrendData(window_seconds);
+    for (size_t i = 0; i < samples.size(); ++i) {
+        const auto& sample = samples[i];
+        auto time_point = std::chrono::duration<double>(
+            sample.timestamp.time_since_epoch()).count();
+
+        json_stream << "    {\n";
+        json_stream << "      \"timestamp\": " << time_point << ",\n";
+        json_stream << "      \"memory_usage_bytes\": " << sample.memory_usage_bytes << "\n";
+        json_stream << "    }";
+
+        if (i < samples.size() - 1) {
+            json_stream << ",";
+        }
+        json_stream << "\n";
+    }
+
+    json_stream << "  ]\n";
+    json_stream << "}";
+
+    return json_stream.str();
+}
+
+std::vector<std::pair<double, size_t>> MemoryTracker::getMemoryTimelineForVisualization(double window_seconds) const {
+    auto samples = getTrendData(window_seconds);
+    std::vector<std::pair<double, size_t>> timeline;
+
+    for (const auto& sample : samples) {
+        auto time_point = std::chrono::duration<double>(
+            sample.timestamp.time_since_epoch()).count();
+        timeline.emplace_back(time_point, sample.memory_usage_bytes);
+    }
+
+    return timeline;
 }
 
 std::string MemoryTracker::formatBytes(size_t bytes) const {

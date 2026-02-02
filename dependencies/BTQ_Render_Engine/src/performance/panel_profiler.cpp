@@ -18,6 +18,12 @@ void PanelProfiler::start_panel_render(uint32_t panel_id, const std::string& pan
     std::lock_guard<std::mutex> lock(profiling_data_mutex_);
     profiling_data_[panel_id].start_time = start_time;
     profiling_data_[panel_id].panel_title = panel_title;
+
+    // Also track in active renders
+    {
+        std::lock_guard<std::mutex> active_lock(active_renders_mutex_);
+        active_renders_[panel_id] = start_time;
+    }
 }
 
 void PanelProfiler::end_panel_render(uint32_t panel_id) {
@@ -62,6 +68,12 @@ void PanelProfiler::end_panel_render(uint32_t panel_id) {
             it->second.render_time_history.erase(
                 it->second.render_time_history.begin());
         }
+    }
+
+    // Remove from active renders
+    {
+        std::lock_guard<std::mutex> active_lock(active_renders_mutex_);
+        active_renders_.erase(panel_id);
     }
 }
 
@@ -601,6 +613,147 @@ std::string PanelProfiler::generate_report() const {
     }
 
     return report.str();
+}
+
+std::vector<std::pair<uint32_t, PanelRenderStats>> PanelProfiler::get_high_percentile_panels(double percentile) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, PanelRenderStats>> result;
+
+    if (profiling_data_.empty()) {
+        return result;
+    }
+
+    // Copy all panel stats with valid render counts
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) {
+            result.push_back({panel_id, stats});
+        }
+    }
+
+    // Sort by average render time (ascending for percentile calculation)
+    std::sort(result.begin(), result.end(),
+              [this](const auto& a, const auto& b) {
+                  return get_average_render_time_ms(a.first) < get_average_render_time_ms(b.first);
+              });
+
+    // Calculate the index corresponding to the requested percentile
+    size_t percentile_index = static_cast<size_t>((percentile / 100.0) * result.size());
+
+    // Return panels that are above the specified percentile
+    if (percentile_index < result.size()) {
+        std::vector<std::pair<uint32_t, PanelRenderStats>> high_percentile_result(
+            result.begin() + percentile_index, result.end());
+        return high_percentile_result;
+    }
+
+    return {};
+}
+
+std::vector<std::pair<uint32_t, PanelRenderStats>> PanelProfiler::get_panels_above_threshold(double threshold_ms) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, PanelRenderStats>> result;
+
+    uint64_t threshold_us = static_cast<uint64_t>(threshold_ms * 1000); // Convert ms to us
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) {
+            double avg_time_us = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+            if (avg_time_us >= threshold_us) {
+                result.push_back({panel_id, stats});
+            }
+        }
+    }
+
+    // Sort by average render time (descending)
+    std::sort(result.begin(), result.end(),
+              [this](const auto& a, const auto& b) {
+                  return get_average_render_time_ms(a.first) > get_average_render_time_ms(b.first);
+              });
+
+    return result;
+}
+
+std::pair<double, double> PanelProfiler::get_render_trend_ms(uint32_t panel_id) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    auto it = profiling_data_.find(panel_id);
+    if (it == profiling_data_.end() || it->second.render_time_history.empty()) {
+        return {0.0, 0.0};
+    }
+
+    const auto& history = it->second.render_time_history;
+    size_t total_size = history.size();
+
+    // Calculate recent average (last N renders)
+    size_t recent_count = std::min(static_cast<size_t>(RECENT_RENDER_COUNT), total_size);
+    size_t recent_start_idx = total_size - recent_count;
+
+    double recent_sum = 0.0;
+    for (size_t i = recent_start_idx; i < total_size; ++i) {
+        recent_sum += static_cast<double>(history[i]) / 1000.0; // Convert to ms
+    }
+    double recent_avg = recent_count > 0 ? recent_sum / recent_count : 0.0;
+
+    // Calculate historical average (excluding recent renders)
+    size_t historical_count = total_size - recent_count;
+    double historical_sum = 0.0;
+    for (size_t i = 0; i < recent_start_idx; ++i) {
+        historical_sum += static_cast<double>(history[i]) / 1000.0; // Convert to ms
+    }
+    double historical_avg = historical_count > 0 ? historical_sum / historical_count : 0.0;
+
+    return {recent_avg, historical_avg};
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_degrading_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> degrading_panels;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_time_history.size() >= RECENT_RENDER_COUNT * 2) { // Need enough data for comparison
+            auto [recent_avg, historical_avg] = get_render_trend_ms(panel_id);
+
+            if (historical_avg > 0.0 && recent_avg > historical_avg) {
+                double degradation_factor = recent_avg / historical_avg;
+                degrading_panels.push_back({panel_id, degradation_factor});
+            }
+        }
+    }
+
+    // Sort by degradation factor (descending)
+    std::sort(degrading_panels.begin(), degrading_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (degrading_panels.size() > top_n) {
+        degrading_panels.resize(top_n);
+    }
+
+    return degrading_panels;
+}
+
+std::vector<std::pair<uint32_t, uint64_t>> PanelProfiler::get_active_render_times() const {
+    std::vector<std::pair<uint32_t, uint64_t>> active_times;
+
+    {
+        std::lock_guard<std::mutex> lock(active_renders_mutex_);
+        auto now = std::chrono::high_resolution_clock::now();
+
+        for (const auto& [panel_id, start_time] : active_renders_) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                now - start_time);
+            active_times.push_back({panel_id, duration.count()});
+        }
+    }
+
+    // Sort by render time (descending)
+    std::sort(active_times.begin(), active_times.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    return active_times;
 }
 
 // Global instance

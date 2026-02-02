@@ -90,14 +90,32 @@ public:
     // Generate a detailed bottleneck analysis report with multiple perspectives
     std::string generate_detailed_bottleneck_report() const;
 
+    // Get panels that exceed a specific percentile of render time (e.g., 95th percentile)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_high_percentile_panels(double percentile = 95.0) const;
+
+    // Get panels with render times above a specific threshold (in milliseconds)
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_panels_above_threshold(double threshold_ms) const;
+
+    // Get render time trend for a specific panel (recent vs historical average)
+    std::pair<double, double> get_render_trend_ms(uint32_t panel_id) const; // {recent_avg, historical_avg}
+
+    // Get panels ordered by render time degradation (worse recent performance vs historical)
+    std::vector<std::pair<uint32_t, double>> get_degrading_panels(size_t top_n = 5) const; // {panel_id, degradation_factor}
+
+    // Get real-time render time for active panels (panels currently rendering)
+    std::vector<std::pair<uint32_t, uint64_t>> get_active_render_times() const; // {panel_id, current_render_time_us}
+
 private:
     std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
     mutable std::mutex profiling_data_mutex_;
+    std::unordered_map<uint32_t, std::chrono::high_resolution_clock::time_point> active_renders_; // Track currently rendering panels
+    mutable std::mutex active_renders_mutex_;
     std::atomic<bool> enabled_;
     std::atomic<uint64_t> slow_render_threshold_us_{10000}; // Default 10ms threshold
     std::function<void(uint32_t, const std::string&, uint64_t)> slow_render_callback_{nullptr};
 
     static constexpr size_t MAX_HISTORY_SIZE = 100;
+    static constexpr size_t RECENT_RENDER_COUNT = 10; // Number of recent renders to compare for trends
 };
 
 // Global panel profiler instance

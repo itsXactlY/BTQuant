@@ -165,6 +165,38 @@ public:
     ChartInstance apply_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
                                         float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
+    /**
+     * @brief Determines if an off-screen element should be rendered based on a threshold
+     *        Useful for elements that might contribute to rendering (shadows, highlights, etc.)
+     *
+     * @param time The time value of the chart element
+     * @param price The price value of the chart element
+     * @param offscreen_threshold Threshold for how far off-screen an element can be and still render
+     * @return true if the off-screen element should be rendered, false otherwise
+     */
+    bool should_render_offscreen_element(double time, double price, double offscreen_threshold) const;
+
+    /**
+     * @brief Applies importance-based polygon reduction that prioritizes visually significant elements
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with importance-based polygon reduction applied
+     */
+    ChartInstance apply_importance_based_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                         float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
+    /**
+     * @brief Calculates dynamic padding based on zoom level for better off-screen rendering
+     *
+     * @param zoom_factor Current zoom factor
+     * @param base_padding_ratio Base padding ratio to adjust based on zoom
+     * @return Dynamic padding value adjusted for the current zoom level
+     */
+    double calculate_dynamic_padding(double zoom_factor, double base_padding_ratio) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

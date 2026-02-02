@@ -605,5 +605,157 @@ ChartInstance ChartCuller::apply_polygon_reduction(const ChartInstance& chart, f
     return processed_chart;
 }
 
+// Enhanced method to handle off-screen elements that might contribute to rendering (like shadows, highlights, etc.)
+bool ChartCuller::should_render_offscreen_element(double time, double price, double offscreen_threshold) const {
+    if (!viewport_set_) {
+        // If no viewport is set, render everything
+        return true;
+    }
+
+    // Calculate distance from viewport bounds
+    double time_distance = 0.0;
+    double price_distance = 0.0;
+
+    // Determine time distance from viewport
+    if (time < viewport_.minTime) {
+        time_distance = viewport_.minTime - time;
+    } else if (time > viewport_.maxTime) {
+        time_distance = time - viewport_.maxTime;
+    }
+
+    // Determine price distance from viewport
+    if (price < viewport_.minPrice) {
+        price_distance = viewport_.minPrice - price;
+    } else if (price > viewport_.maxPrice) {
+        price_distance = price - viewport_.maxPrice;
+    }
+
+    // Convert threshold to appropriate units for comparison
+    // The threshold represents how far off-screen an element can be and still render
+    double normalized_time_threshold = (viewport_.maxTime - viewport_.minTime) * offscreen_threshold;
+    double normalized_price_threshold = (viewport_.maxPrice - viewport_.minPrice) * offscreen_threshold;
+
+    // Check if the element is within the off-screen threshold
+    return (time_distance <= normalized_time_threshold && price_distance <= normalized_price_threshold);
+}
+
+// Advanced polygon reduction algorithm that considers visual importance
+ChartInstance ChartCuller::apply_importance_based_polygon_reduction(const ChartInstance& chart, float zoom_factor,
+                                                                 float viewport_width_pixels, float viewport_height_pixels) const {
+    ChartInstance processed_chart = chart;
+
+    if (!viewport_set_ || chart.dates.empty()) {
+        // If no viewport is set or chart is empty, return original chart
+        return processed_chart;
+    }
+
+    // Calculate adaptive LOD based on zoom level and data density
+    size_t start_index, end_index;
+    get_visible_data_range_optimized(chart, start_index, end_index);
+
+    size_t visible_points_count = end_index - start_index + 1;
+    float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
+                                                     viewport_width_pixels, viewport_height_pixels);
+
+    // Create new vectors with reduced data
+    std::vector<double> filtered_dates;
+    std::vector<float> filtered_opens;
+    std::vector<float> filtered_highs;
+    std::vector<float> filtered_lows;
+    std::vector<float> filtered_closes;
+    std::vector<float> filtered_volumes;
+
+    // Calculate time and price ranges to determine appropriate padding
+    double time_range = viewport_.maxTime - viewport_.minTime;
+    double price_range = viewport_.maxPrice - viewport_.minPrice;
+    double time_padding = time_range * 0.001; // 0.1% padding for time
+    double price_padding = price_range * 0.001; // 0.1% padding for price
+
+    // Apply importance-based polygon reduction
+    size_t total_points = end_index - start_index + 1;
+    size_t target_points = static_cast<size_t>(total_points * adaptive_lod);
+
+    if (target_points < 1) target_points = 1;
+
+    // Calculate the step size for initial sampling
+    size_t step = 1;
+    if (target_points < total_points && adaptive_lod < 1.0f) {
+        step = std::max(static_cast<size_t>(1), total_points / target_points);
+    }
+
+    // Importance sampling: prioritize elements with high volatility or significant changes
+    for (size_t i = start_index; i <= end_index && i < chart.dates.size(); i += step) {
+        bool should_include = false;
+
+        // Check if the element with padding would be visible
+        if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+            // For candlestick charts, check if the full candle (high-low range) is visible
+            if (should_render_bounding_box(
+                    chart.dates[i] - time_padding,
+                    chart.dates[i] + time_padding,
+                    chart.lows[i],
+                    chart.highs[i])) {
+
+                // Additional importance criteria:
+                // 1. High volatility (large difference between high and low)
+                float volatility = chart.highs[i] - chart.lows[i];
+                float avg_price = (chart.opens[i] + chart.closes[i]) / 2.0f;
+                float volatility_ratio = (avg_price != 0.0f) ? volatility / std::abs(avg_price) : 0.0f;
+
+                // 2. Significant price change (difference between open and close)
+                float price_change = std::abs(chart.opens[i] - chart.closes[i]);
+                float change_ratio = (avg_price != 0.0f) ? price_change / std::abs(avg_price) : 0.0f;
+
+                // 3. High volume (if available)
+                float volume_ratio = (chart.volumes[i] > 0) ? chart.volumes[i] / 1000.0f : 0.0f; // Normalize volume
+
+                // Determine if this point is "important" enough to include
+                // Adjust these thresholds as needed for your specific use case
+                if (volatility_ratio > 0.02f || change_ratio > 0.015f || volume_ratio > 1.0f) {
+                    should_include = true;
+                } else {
+                    // For less important points, apply stricter LOD filtering
+                    should_include = (static_cast<float>(filtered_dates.size()) / static_cast<float>(target_points) < 1.0f);
+                }
+            }
+        }
+
+        if (should_include) {
+            filtered_dates.push_back(chart.dates[i]);
+            filtered_opens.push_back(chart.opens[i]);
+            filtered_highs.push_back(chart.highs[i]);
+            filtered_lows.push_back(chart.lows[i]);
+            filtered_closes.push_back(chart.closes[i]);
+            filtered_volumes.push_back(chart.volumes[i]);
+        }
+    }
+
+    // Replace the chart data with filtered data
+    processed_chart.dates = std::move(filtered_dates);
+    processed_chart.opens = std::move(filtered_opens);
+    processed_chart.highs = std::move(filtered_highs);
+    processed_chart.lows = std::move(filtered_lows);
+    processed_chart.closes = std::move(filtered_closes);
+    processed_chart.volumes = std::move(filtered_volumes);
+
+    return processed_chart;
+}
+
+// Method to calculate dynamic padding based on zoom level for better off-screen rendering
+double ChartCuller::calculate_dynamic_padding(double zoom_factor, double base_padding_ratio) const {
+    // At higher zoom levels, we might need less padding since elements are larger
+    // At lower zoom levels, we might need more padding to account for anti-aliasing and visual effects
+    if (zoom_factor >= 5.0) {
+        // Highly zoomed in - minimal padding needed
+        return base_padding_ratio * 0.5;
+    } else if (zoom_factor >= 1.0) {
+        // Normal zoom - standard padding
+        return base_padding_ratio;
+    } else {
+        // Zoomed out - increased padding to handle visual artifacts
+        return base_padding_ratio * 1.5;
+    }
+}
+
 } // namespace RenderEngine
 } // namespace BTQuant

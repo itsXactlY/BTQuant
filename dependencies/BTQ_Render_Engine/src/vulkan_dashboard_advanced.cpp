@@ -13,6 +13,7 @@
 #include "imgui.h"
 #include "implot.h"
 #include "performance_monitor.hpp"
+#include "performance/debug_overlay.hpp"
 #include "ui/layout_manager.hpp"
 
 namespace BTQuant {

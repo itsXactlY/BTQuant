@@ -11,6 +11,22 @@
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+#include <thread>
+#include <fstream>
+#include <algorithm>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#elif __linux__
+#include <sys/sysinfo.h>
+#include <unistd.h>
+#include <fstream>
+#else
+#include <mach/mach.h>
+#include <mach/host_info.h>
+#include <mach/mach_host.h>
+#endif
 
 namespace BTQuant {
 
@@ -18,9 +34,15 @@ DebugOverlay::DebugOverlay()
     : visible_(false),
       position_x_(10.0f),
       position_y_(10.0f),
-      window_width_(300.0f),
+      window_width_(350.0f),
       window_height_(200.0f),
-      refresh_rate_(60.0f) { // Update 60 times per second
+      refresh_rate_(60.0f), // Update 60 times per second
+      last_cpu_time_(std::chrono::high_resolution_clock::now()),
+      last_cpu_usage_(0.0),
+      last_process_time_(0),
+      last_system_time_(0) {
+    // Initialize CPU usage tracking
+    update_cpu_usage();
 }
 
 void DebugOverlay::toggle_visibility() {
@@ -46,6 +68,111 @@ void DebugOverlay::set_refresh_rate(float hz) {
 
 float DebugOverlay::get_refresh_rate() const {
     return refresh_rate_;
+}
+
+double DebugOverlay::get_cpu_usage() {
+    return update_cpu_usage();
+}
+
+double DebugOverlay::update_cpu_usage() {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_cpu_time_).count();
+
+    if (duration < 100) { // Only update every 100ms to avoid noise
+        return last_cpu_usage_;
+    }
+
+    #ifdef _WIN32
+        FILETIME creation_time, exit_time, kernel_time, user_time;
+        GetProcessTimes(GetCurrentProcess(), &creation_time, &exit_time, &kernel_time, &user_time);
+
+        ULARGE_INTEGER kernel_time_int, user_time_int;
+        kernel_time_int.LowPart = kernel_time.dwLowDateTime;
+        kernel_time_int.HighPart = kernel_time.dwHighDateTime;
+        user_time_int.LowPart = user_time.dwLowDateTime;
+        user_time_int.HighPart = user_time.dwHighDateTime;
+
+        ULONGLONG total_time = kernel_time_int.QuadPart + user_time_int.QuadPart;
+
+        SYSTEM_INFO sys_info;
+        GetSystemInfo(&sys_info);
+        int num_cores = sys_info.dwNumberOfProcessors;
+
+        last_cpu_usage_ = double(total_time - last_process_time_) / double(duration * 10000 * num_cores);
+        last_process_time_ = total_time;
+
+    #elif __linux__
+        std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+        std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+        std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+        std::string utime, stime, cutime, cstime, priority, nice;
+        std::string O, itrealvalue, starttime;
+        unsigned long vsize;
+        long rss;
+
+        stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+                    >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+                    >> utime >> stime >> cutime >> cstime >> priority >> nice
+                    >> O >> itrealvalue >> starttime >> vsize >> rss;
+
+        unsigned long long process_time = std::stoull(utime) + std::stoull(stime);
+
+        // Get system CPU time
+        std::ifstream cpu_stat("/proc/stat");
+        std::string line;
+        std::getline(cpu_stat, line);
+        cpu_stat.close();
+
+        std::istringstream iss(line);
+        std::string cpu_label;
+        unsigned long long user, nice_val, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
+        iss >> cpu_label >> user >> nice_val >> system >> idle >> iowait >> irq >> softirq >> steal >> guest >> guest_nice;
+
+        unsigned long long total_time_sys = user + nice_val + system + idle + iowait + irq + softirq + steal;
+
+        if (last_process_time_ != 0) {
+            unsigned long long process_delta = process_time - last_process_time_;
+            unsigned long long system_delta = total_time_sys - last_system_time_;
+
+            if (system_delta > 0) {
+                last_cpu_usage_ = 100.0 * process_delta / system_delta;
+            }
+        }
+
+        last_process_time_ = process_time;
+        last_system_time_ = total_time_sys;
+
+    #else
+        // For macOS and other systems, return 0 for now
+        last_cpu_usage_ = 0.0;
+    #endif
+
+    last_cpu_time_ = now;
+    return last_cpu_usage_;
+}
+
+double DebugOverlay::get_memory_usage_mb() {
+    #ifdef _WIN32
+        PROCESS_MEMORY_COUNTERS pmc;
+        GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc));
+        return static_cast<double>(pmc.WorkingSetSize) / (1024.0 * 1024.0);
+    #elif __linux__
+        std::ifstream statm("/proc/self/status");
+        std::string line;
+        while (std::getline(statm, line)) {
+            if (line.substr(0, 6) == "VmRSS:") {
+                std::istringstream iss(line);
+                std::string key;
+                size_t value;
+                iss >> key >> value;
+                return static_cast<double>(value) / 1024.0; // Value is in KB
+            }
+        }
+        return 0.0;
+    #else
+        // For macOS and other systems, return 0 for now
+        return 0.0;
+    #endif
 }
 
 void DebugOverlay::render() {
@@ -104,10 +231,18 @@ void DebugOverlay::render() {
 
     ImGui::Separator();
 
-    // Memory Usage Information
-    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== MEMORY USAGE ===");
+    // CPU and Memory Usage Information
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== SYSTEM RESOURCES ===");
 
-    // Get memory usage from performance monitor
+    // CPU Usage
+    double cpu_usage = get_cpu_usage();
+    ImVec4 cpu_color = cpu_usage < 50.0 ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for low usage
+                       cpu_usage < 80.0 ? ImVec4(1.0f, 1.0f, 0.0f, 1.0f) :  // Yellow for moderate usage
+                                          ImVec4(1.0f, 0.0f, 0.0f, 1.0f);    // Red for high usage
+    ImGui::TextColored(cpu_color, "CPU: %.1f%%", cpu_usage);
+
+    // Memory Usage Information
+    double memory_mb = get_memory_usage_mb();
     size_t used_memory = g_performance_monitor.get_used_memory_bytes();
     size_t total_memory = g_performance_monitor.get_total_memory_bytes();
     double memory_percent = g_performance_monitor.get_memory_usage_percent();
@@ -117,7 +252,7 @@ void DebugOverlay::render() {
                           memory_percent < 80.0 ? ImVec4(1.0f, 1.0f, 0.0f, 1.0f) :  // Yellow for moderate usage
                                                   ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // Red for high usage
 
-    ImGui::TextColored(memory_color, "Memory: %.1f%%", memory_percent);
+    ImGui::TextColored(memory_color, "Memory: %.1f%% (%.1f MB)", memory_percent, memory_mb);
     ImGui::Text("Used: %s", format_bytes(used_memory).c_str());
     ImGui::Text("Total: %s", format_bytes(total_memory).c_str());
 
@@ -127,7 +262,7 @@ void DebugOverlay::render() {
     size_t peak_mem_usage = mem_tracker.getPeakMemoryUsage();
     double growth_rate = mem_tracker.getAverageMemoryGrowthRate();
 
-    ImGui::Text("Current Process: %s", format_bytes(current_mem_usage).c_str());
+    ImGui::Text("Process Mem: %s", format_bytes(current_mem_usage).c_str());
     ImGui::Text("Peak Usage: %s", format_bytes(peak_mem_usage).c_str());
     ImGui::Text("Growth Rate: %s/s", format_bytes(static_cast<size_t>(growth_rate)).c_str());
 

@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <chrono>
 
 namespace BTQuant {
 
@@ -46,6 +47,11 @@ private:
     std::string format_bytes(size_t bytes) const;
     std::string format_large_number(size_t num) const;
 
+    // System resource monitoring
+    double get_cpu_usage();
+    double update_cpu_usage();
+    double get_memory_usage_mb();
+
 private:
     bool visible_;
     float position_x_;
@@ -64,6 +70,12 @@ private:
     uint32_t lob_updates_ = 0;
     uint32_t trade_updates_ = 0;
     uint32_t footprint_cells_rendered_ = 0;
+
+    // System resource tracking
+    std::chrono::high_resolution_clock::time_point last_cpu_time_;
+    double last_cpu_usage_;
+    unsigned long long last_process_time_;
+    unsigned long long last_system_time_;
 };
 
 // Global debug overlay instance

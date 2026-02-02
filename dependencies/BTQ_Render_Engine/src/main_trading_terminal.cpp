@@ -17,6 +17,7 @@
 #include "components/theme_manager.hpp"
 #include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
+#include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
 #include "vulkan_dashboard_advanced.hpp"
 

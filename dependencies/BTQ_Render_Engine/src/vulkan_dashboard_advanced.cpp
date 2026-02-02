@@ -130,6 +130,72 @@ void VulkanDashboard::init_components() {
         }
       },
       "Toggle Fullscreen", false, true);  // Alt+Enter
+
+  // Quick-save hotkeys: F5-F8 to save layouts, Shift+F5-F8 to load layouts
+  // We need to register the same keys with different modifiers to handle both cases
+  im.registerHotKey(ImGuiKey_F5, [workspace]() {
+    if (ImGui::GetIO().KeyShift) {
+      // Shift+F5 - Load layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->load_layout("quick_save_1.json");
+        std::cout << "[Layout] Loaded Quick Save 1 (Shift+F5)" << std::endl;
+      }
+    } else {
+      // F5 - Save layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->save_layout("quick_save_1.json");
+        std::cout << "[Layout] Saved to Quick Save 1 (F5)" << std::endl;
+      }
+    }
+  }, "Quick Save/Load Layout 1", false, false, false); // F5/F5+Shift
+
+  im.registerHotKey(ImGuiKey_F6, [workspace]() {
+    if (ImGui::GetIO().KeyShift) {
+      // Shift+F6 - Load layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->load_layout("quick_save_2.json");
+        std::cout << "[Layout] Loaded Quick Save 2 (Shift+F6)" << std::endl;
+      }
+    } else {
+      // F6 - Save layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->save_layout("quick_save_2.json");
+        std::cout << "[Layout] Saved to Quick Save 2 (F6)" << std::endl;
+      }
+    }
+  }, "Quick Save/Load Layout 2", false, false, false); // F6/F6+Shift
+
+  im.registerHotKey(ImGuiKey_F7, [workspace]() {
+    if (ImGui::GetIO().KeyShift) {
+      // Shift+F7 - Load layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->load_layout("quick_save_3.json");
+        std::cout << "[Layout] Loaded Quick Save 3 (Shift+F7)" << std::endl;
+      }
+    } else {
+      // F7 - Save layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->save_layout("quick_save_3.json");
+        std::cout << "[Layout] Saved to Quick Save 3 (F7)" << std::endl;
+      }
+    }
+  }, "Quick Save/Load Layout 3", false, false, false); // F7/F7+Shift
+
+  im.registerHotKey(ImGuiKey_F8, [workspace]() {
+    if (ImGui::GetIO().KeyShift) {
+      // Shift+F8 - Load layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->load_layout("quick_save_4.json");
+        std::cout << "[Layout] Loaded Quick Save 4 (Shift+F8)" << std::endl;
+      }
+    } else {
+      // F8 - Save layout
+      if (workspace->getPanelManager()) {
+        workspace->getPanelManager()->save_layout("quick_save_4.json");
+        std::cout << "[Layout] Saved to Quick Save 4 (F8)" << std::endl;
+      }
+    }
+  }, "Quick Save/Load Layout 4", false, false, false); // F8/F8+Shift
 }
 
 void VulkanDashboard::render_frame() {
@@ -180,6 +246,9 @@ void VulkanDashboard::render_frame() {
 
   // Performance Overlay
   render_performance_overlay();
+
+  // Visual indicator for active layout
+  render_layout_indicator();
 
   // Process updates and UI
   float dt = m_vulkanCore->get_frame_time_ms() / 1000.0f;
@@ -466,6 +535,45 @@ void VulkanDashboard::render_performance_overlay() {
     }
   }
 
+  ImGui::End();
+}
+
+void VulkanDashboard::render_layout_indicator() {
+  // Get the active layout name from the workspace
+  std::string active_layout = "Default Layout";
+
+  if (m_workspace) {
+    auto* panel_manager = m_workspace->getPanelManager();
+    if (panel_manager) {
+      active_layout = panel_manager->get_current_layout_name();
+    }
+  }
+
+  // Position the layout indicator in the top-right corner
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 200, 30), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(190, 40), ImGuiCond_Always);
+
+  // Create a transparent overlay window for the layout indicator
+  ImGui::Begin("##LayoutIndicator", nullptr,
+               ImGuiWindowFlags_NoTitleBar |
+               ImGuiWindowFlags_NoResize |
+               ImGuiWindowFlags_NoMove |
+               ImGuiWindowFlags_NoScrollbar |
+               ImGuiWindowFlags_NoScrollWithMouse |
+               ImGuiWindowFlags_NoCollapse |
+               ImGuiWindowFlags_AlwaysAutoResize |
+               ImGuiWindowFlags_NoSavedSettings |
+               ImGuiWindowFlags_NoInputs |
+               ImGuiWindowFlags_NoFocusOnAppearing |
+               ImGuiWindowFlags_NoNav);
+
+  // Draw the layout indicator with a semi-transparent background
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f)); // Dark semi-transparent background
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));     // Light text
+
+  ImGui::Text("Layout: %s", active_layout.c_str());
+
+  ImGui::PopStyleColor(2);
   ImGui::End();
 }
 

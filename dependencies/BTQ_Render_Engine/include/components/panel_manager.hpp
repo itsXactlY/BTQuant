@@ -100,6 +100,10 @@ class PanelManager {
   void save_all_panel_configs(const std::string& config_file) const;
   void load_all_panel_configs(const std::string& config_file);
 
+  // Layout name tracking
+  std::string get_current_layout_name() const { return current_layout_name_; }
+  void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -118,6 +122,9 @@ class PanelManager {
   // Active symbol tracking for cross-panel propagation
   uint32_t active_symbol_id_ = 0;
   std::string active_symbol_name_;
+
+  // Current layout tracking
+  std::string current_layout_name_ = "default";
 
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;

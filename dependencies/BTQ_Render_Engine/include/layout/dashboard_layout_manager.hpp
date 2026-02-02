@@ -80,6 +80,7 @@ class DashboardLayoutManager {
   // Layout queries
   std::vector<std::string> get_available_layouts() const;
   DashboardLayout get_current_layout() const;
+  std::string get_current_layout_name() const;
   bool has_layout(const std::string& layout_name) const;
 
   // Panel management

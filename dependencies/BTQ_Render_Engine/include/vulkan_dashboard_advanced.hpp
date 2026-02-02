@@ -308,6 +308,9 @@ class VulkanDashboard {
   /// @brief Render the internal performance overlay
   void render_performance_overlay();
 
+  /// @brief Render the layout indicator showing active layout
+  void render_layout_indicator();
+
   uint32_t width_, height_;
   VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;

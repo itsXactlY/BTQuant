@@ -134,6 +134,10 @@ DashboardLayoutManager::DashboardLayout DashboardLayoutManager::get_current_layo
   return DashboardLayout{};
 }
 
+std::string DashboardLayoutManager::get_current_layout_name() const {
+  return current_layout_name_;
+}
+
 bool DashboardLayoutManager::has_layout(const std::string& layout_name) const {
   return layouts_.find(layout_name) != layouts_.end();
 }

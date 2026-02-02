@@ -889,6 +889,19 @@ void PanelManager::save_layout(const std::string& filename) {
       file << serialize_layout();
       file.close();
       std::cout << "Layout saved to " << filename << std::endl;
+
+      // Update current layout name based on filename
+      std::string layout_name = filename;
+      // Remove path and extension to get clean layout name
+      size_t last_slash = layout_name.find_last_of("/\\");
+      if (last_slash != std::string::npos) {
+        layout_name = layout_name.substr(last_slash + 1);
+      }
+      size_t last_dot = layout_name.find_last_of('.');
+      if (last_dot != std::string::npos) {
+        layout_name = layout_name.substr(0, last_dot);
+      }
+      set_current_layout_name(layout_name);
     } else {
       std::cerr << "Failed to open file for saving layout: " << filename << std::endl;
     }
@@ -906,6 +919,19 @@ void PanelManager::load_layout(const std::string& filename) {
       deserialize_layout(json_str);
       file.close();
       std::cout << "Layout loaded from " << filename << std::endl;
+
+      // Update current layout name based on filename
+      std::string layout_name = filename;
+      // Remove path and extension to get clean layout name
+      size_t last_slash = layout_name.find_last_of("/\\");
+      if (last_slash != std::string::npos) {
+        layout_name = layout_name.substr(last_slash + 1);
+      }
+      size_t last_dot = layout_name.find_last_of('.');
+      if (last_dot != std::string::npos) {
+        layout_name = layout_name.substr(0, last_dot);
+      }
+      set_current_layout_name(layout_name);
     } else {
       std::cerr << "Failed to open file for loading layout: " << filename << std::endl;
     }

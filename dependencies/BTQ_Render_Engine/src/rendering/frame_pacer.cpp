@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <ratio>
 
 namespace RenderEngine {
 
@@ -15,6 +16,10 @@ FramePacer::FramePacer(const Config& config)
     , dropped_frame_counter_(0)
     , adaptive_target_fps_(config.target_fps)
     , last_adaptive_update_(std::chrono::high_resolution_clock::now())
+    , frame_prediction_error_(0.0)
+    , prediction_integral_(0.0)
+    , prediction_derivative_(0.0)
+    , last_prediction_error_(0.0)
 {
     // Initialize stats
     stats_.avg_frame_time_ms = 1000.0 / config.target_fps;
@@ -31,6 +36,11 @@ FramePacer::FramePacer(const Config& config)
     spike_detector_.spike_history.resize(SPIKE_DETECTION_WINDOW, 0.0);
     spike_detector_.spike_index = 0;
     spike_detector_.spike_count_recent = 0;
+
+    // Initialize PID controller parameters for frame prediction
+    pid_controller_.kp = 0.1;  // Proportional gain
+    pid_controller_.ki = 0.01; // Integral gain
+    pid_controller_.kd = 0.001; // Derivative gain
 }
 
 FramePacer::FramePacer()
@@ -130,6 +140,12 @@ void FramePacer::update_config(const Config& new_config) {
         frame_timer_.target_frame_time_us = 1000000.0 / new_config.target_fps;
         spike_detector_.baseline_frame_time = new_target_time;
     }
+
+    // Reset PID controller when config changes to prevent instability
+    frame_prediction_error_ = 0.0;
+    prediction_integral_ = 0.0;
+    prediction_derivative_ = 0.0;
+    last_prediction_error_ = 0.0;
 }
 
 void FramePacer::reset_stats() {
@@ -163,6 +179,12 @@ void FramePacer::reset_stats() {
     // Reset adaptive FPS
     adaptive_target_fps_ = config_.target_fps;
     last_adaptive_update_ = std::chrono::high_resolution_clock::now();
+
+    // Reset PID controller values
+    frame_prediction_error_ = 0.0;
+    prediction_integral_ = 0.0;
+    prediction_derivative_ = 0.0;
+    last_prediction_error_ = 0.0;
 }
 
 double FramePacer::calculate_sleep_duration() const {
@@ -171,10 +193,31 @@ double FramePacer::calculate_sleep_duration() const {
     }
 
     double target_frame_time = 1000.0 / adaptive_target_fps_;
+
+    // Predict the next frame time based on recent performance
+    double predicted_frame_time = predict_frame_time();
+
+    // Adjust target based on prediction to maintain consistency
+    if (config_.enable_frame_smoothing) {
+        target_frame_time = (target_frame_time * 0.7) + (predicted_frame_time * 0.3);
+    }
+
     auto elapsed = std::chrono::duration<double, std::milli>(
         std::chrono::high_resolution_clock::now() - frame_start_time_).count();
 
     double remaining_time = target_frame_time - elapsed;
+
+    // Apply PID-like control to smooth out timing variations
+    if (config_.enable_frame_smoothing && frame_count_ > 2) {
+        double error = target_frame_time - predicted_frame_time;
+
+        // Simple proportional control (without state modification to keep method const)
+        double p_correction = 0.1 * error;  // Proportional term only for const method
+
+        // Apply correction but limit it to prevent over-correction
+        p_correction = std::clamp(p_correction, -target_frame_time * 0.2, target_frame_time * 0.2);
+        remaining_time += p_correction;
+    }
 
     // Apply adaptive sync if enabled and frame time is too variable
     if (config_.enable_adaptive_sync && stats_.frame_time_variance > config_.frame_time_variance_threshold * 1000.0) {
@@ -271,25 +314,40 @@ void FramePacer::update_frame_variance() {
 }
 
 void FramePacer::precise_sleep(double sleep_duration_ms) const {
-    // More precise sleep implementation
+    // More precise sleep implementation using hybrid approach
     auto start = std::chrono::high_resolution_clock::now();
     auto target_time = start + std::chrono::duration<double, std::milli>(sleep_duration_ms);
 
-    // Use nanosleep for higher precision when possible
-    auto remaining_ms = sleep_duration_ms;
-    if (remaining_ms > 2.0) {  // If more than 2ms to sleep, use standard sleep
-        auto sleep_ms = static_cast<int>(remaining_ms - 1.0);  // Sleep slightly less
+    // Use different strategies based on sleep duration
+    if (sleep_duration_ms > 10.0) {
+        // For longer sleeps, use standard sleep with margin
+        auto sleep_ms = static_cast<int>(sleep_duration_ms * 0.8);  // Sleep 80% of the time
+        if (sleep_ms > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+        }
+    } else if (sleep_duration_ms > 2.0) {
+        // For medium sleeps, sleep most of the way
+        auto sleep_ms = static_cast<int>(sleep_duration_ms - 0.5);  // Sleep all but 0.5ms
         if (sleep_ms > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
         }
     }
+    // For very short sleeps (< 2ms), skip the sleep and go directly to busy wait
+    // as the OS sleep functions are not precise enough
 
-    // Busy wait for the final precise timing
-    while (std::chrono::high_resolution_clock::now() < target_time) {
-        // Use a more efficient busy-wait approach
-        std::this_thread::yield();
-        // Small pause to reduce CPU usage during busy wait
-        std::this_thread::sleep_for(std::chrono::nanoseconds(100));
+    // Busy wait for the final precise timing using a more efficient approach
+    auto remaining_time = target_time - std::chrono::high_resolution_clock::now();
+    while (remaining_time.count() > 0) {
+        // For very short waits, use CPU yield to minimize power usage
+        if (remaining_time.count() < 100000) { // Less than 100 microseconds remaining
+            std::this_thread::yield();
+        } else {
+            // For longer busy waits, use a short sleep to reduce CPU usage
+            std::this_thread::sleep_for(std::chrono::microseconds(
+                static_cast<int>(std::min(static_cast<long long>(remaining_time.count() / 10), 500LL)))); // Max 500us sleep
+        }
+
+        remaining_time = target_time - std::chrono::high_resolution_clock::now();
     }
 }
 
@@ -326,10 +384,41 @@ void FramePacer::detect_spikes(double frame_time_ms) {
 void FramePacer::check_dropped_frames(double frame_time_us) {
     // Check if the current frame took significantly longer than expected
     double expected_frame_time_us = 1000000.0 / adaptive_target_fps_;
-    double threshold = expected_frame_time_us * 1.8; // 80% over expected time
 
-    if (frame_time_us > threshold) {
+    // Adaptive threshold based on recent performance
+    double adaptive_threshold = expected_frame_time_us * 1.8; // Base threshold
+
+    // Increase threshold if we're seeing high variance to avoid false positives
+    if (stats_.frame_time_variance > config_.frame_time_variance_threshold * 1000000.0) { // Convert to microseconds^2
+        adaptive_threshold *= 1.3; // Higher tolerance during high variance
+    }
+
+    // Also check against recent frame time history
+    if (frame_count_ > 10) {
+        // Calculate average of recent frame times
+        size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                     static_cast<size_t>(FRAME_HISTORY_SIZE / 4));
+        double recent_avg = 0.0;
+        for (size_t i = 0; i < sample_count; ++i) {
+            size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+            recent_avg += frame_time_history_[idx];
+        }
+        recent_avg = (recent_avg / sample_count) * 1000.0; // Convert to microseconds
+
+        // Use the higher of the two thresholds to be more accurate
+        adaptive_threshold = std::max(adaptive_threshold, recent_avg * 1.8);
+    }
+
+    if (frame_time_us > adaptive_threshold) {
         dropped_frame_counter_++;
+
+        // When a frame is detected as dropped, trigger adaptive FPS adjustment
+        if (config_.enable_adaptive_sync) {
+            // Reduce the adaptive target FPS to account for performance issues
+            adaptive_target_fps_ = static_cast<uint32_t>(std::max(
+                static_cast<double>(config_.target_fps) * 0.7,  // Don't go below 70% of target
+                static_cast<double>(adaptive_target_fps_) * 0.9)); // Reduce by 10%
+        }
     }
 }
 
@@ -364,13 +453,45 @@ void FramePacer::adapt_target_fps() {
                                               static_cast<uint32_t>(config_.target_fps * 0.5)); // Don't go too low
             } else if (avg_recent_fps > adaptive_target_fps_ * 1.1 &&
                       adaptive_target_fps_ < config_.target_fps) { // If we can handle more
+                // Gradually increase FPS when performance is good
                 adaptive_target_fps_ = std::min(config_.target_fps,
                                               adaptive_target_fps_ + 5); // Gradually increase
+            }
+
+            // Recovery logic: if we've been performing well for a sustained period, gradually increase target
+            if (avg_recent_fps > config_.target_fps * 0.95 && adaptive_target_fps_ < config_.target_fps) {
+                // If we're consistently hitting close to our target FPS, gradually increase toward the original target
+                adaptive_target_fps_ = std::min(config_.target_fps,
+                                              adaptive_target_fps_ + 2); // Slow recovery
             }
         }
     }
 
     last_adaptive_update_ = now;
 }
+
+double FramePacer::predict_frame_time() const {
+    if (frame_count_ < 3) {
+        return 1000.0 / config_.target_fps;
+    }
+
+    // Use a weighted average of recent frame times to predict the next frame time
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                 static_cast<size_t>(SMOOTHING_WINDOW));
+
+    double weighted_sum = 0.0;
+    double weight_sum = 0.0;
+
+    for (size_t i = 0; i < sample_count; ++i) {
+        // More recent frames have higher weights
+        double weight = 1.0 + (static_cast<double>(i) / sample_count);
+        size_t idx = (frame_count_ - 1 - i) % SMOOTHING_WINDOW;
+        weighted_sum += smoothed_frame_times_[idx] * weight;
+        weight_sum += weight;
+    }
+
+    return weighted_sum / weight_sum;
+}
+
 
 } // namespace RenderEngine

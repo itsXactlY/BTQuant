@@ -119,6 +119,19 @@ private:
     uint32_t adaptive_target_fps_;  // Adaptively adjusted target FPS
     std::chrono::high_resolution_clock::time_point last_adaptive_update_;
 
+    // PID controller for frame prediction
+    struct PIDController {
+        double kp;  // Proportional gain
+        double ki;  // Integral gain
+        double kd;  // Derivative gain
+    };
+
+    PIDController pid_controller_;
+    mutable double frame_prediction_error_;
+    mutable double prediction_integral_;
+    mutable double prediction_derivative_;
+    mutable double last_prediction_error_;
+
     // Timing helpers
     double calculate_sleep_duration() const;
     void update_statistics(double current_frame_time);
@@ -127,6 +140,8 @@ private:
     void detect_spikes(double frame_time_ms);
     void check_dropped_frames(double frame_time_us);
     void adapt_target_fps();
+    double predict_frame_time() const;
+    double apply_pid_control(double error) const;
 };
 
 } // namespace RenderEngine

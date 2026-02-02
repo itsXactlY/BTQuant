@@ -89,6 +89,7 @@ set(DASHBOARD_SOURCES
     src/rendering/footprint_lod.cpp
     src/rendering/imgui_optimizer.cpp
     src/rendering/frame_pacer.cpp
+    src/rendering/auto_quality.cpp
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
@@ -187,6 +188,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/rendering/footprint_lod.cpp
     src/rendering/imgui_optimizer.cpp
     src/rendering/frame_pacer.cpp
+    src/rendering/auto_quality.cpp
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
@@ -1425,5 +1427,25 @@ target_link_libraries(test_frame_pacer PRIVATE
     dl
     pthread
     TBB::tbb
+)
+
+# Auto Quality Test
+add_executable(test_auto_quality tests/test_auto_quality.cpp src/rendering/auto_quality.cpp)
+target_include_directories(test_auto_quality PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+target_link_libraries(test_auto_quality PRIVATE
+    Vulkan::Vulkan
+    glfw
+    dl
+    pthread
+    TBB::tbb
+    GTest::gtest
+    GTest::gtest_main
 )
 

@@ -58,6 +58,9 @@ class DashboardControls : public UIComponent {
 
   // Method to update all chart panels with the new timeframe
   void update_all_chart_timeframes(RenderEngine::TimeFrame timeframe);
+
+  // Method to sync symbol to all panels
+  void sync_symbol_to_all_panels(uint32_t symbol_id, const std::string& symbol);
 };
 
 }  // namespace BTQuant

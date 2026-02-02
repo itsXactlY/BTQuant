@@ -229,7 +229,7 @@ void DashboardControls::render_dashboard_controls() {
     ImGui::Separator();
     ImGui::Text("ACTIVE SYMBOL:");
 
-    // Search-enabled symbol selection dropdown - more prominent
+    // Enhanced search-enabled symbol selection dropdown - more prominent
     // Search input for filtering the dropdown options
     if (ImGui::InputTextWithHint("##symbol_search_top", "Search symbols...", symbol_input_buffer_.data(), symbol_input_buffer_.size())) {
         // Filter symbols based on search input
@@ -285,6 +285,9 @@ void DashboardControls::render_dashboard_controls() {
                   // Log the symbol change for debugging
                   std::cout << "[DashboardControls] Setting active symbol to: " << symbol
                             << " (ID: " << symbol_id << ")" << std::endl;
+
+                  // Ensure all panels receive the symbol update
+                  sync_symbol_to_all_panels(symbol_id, symbol);
                 }
               } else {
                 // If symbol not found in registry, try to register it
@@ -308,6 +311,9 @@ void DashboardControls::render_dashboard_controls() {
                   // Log the symbol registration and change for debugging
                   std::cout << "[DashboardControls] Registered and set active symbol: " << symbol
                             << " (ID: " << new_symbol_id << ") on exchange: " << exchange_name << std::endl;
+
+                  // Ensure all panels receive the symbol update
+                  sync_symbol_to_all_panels(new_symbol_id, symbol);
                 }
               }
               break;
@@ -883,15 +889,14 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
             case RenderEngine::TimeFrame::TF_1HOUR:
               time_agg_type = Data::TimeAggregationType::T_1HOUR;
               break;
+            case RenderEngine::TimeFrame::TF_2HOUR:
+              time_agg_type = Data::TimeAggregationType::T_2HOUR;
+              break;
             case RenderEngine::TimeFrame::TF_4HOUR:
               time_agg_type = Data::TimeAggregationType::T_4HOUR;
               break;
             case RenderEngine::TimeFrame::TF_1DAY:
-              time_agg_type = Data::TimeAggregationType::T_1DAY;
-              break;
             case RenderEngine::TimeFrame::TF_1WEEK:
-              time_agg_type = Data::TimeAggregationType::T_1WEEK;
-              break;
             default:
               time_agg_type = Data::TimeAggregationType::T_1MIN;
               break;
@@ -904,6 +909,32 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
       // So we don't need to handle PanelType::DEPTH_CHART here
     }
   }
+}
+
+void DashboardControls::sync_symbol_to_all_panels(uint32_t symbol_id, const std::string& symbol) {
+  if (!panel_manager_) {
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot sync symbol to panels" << std::endl;
+    return;
+  }
+
+  // Get all panel IDs
+  auto panel_ids = panel_manager_->get_all_panel_ids();
+
+  // Iterate through all panels and update their symbols
+  for (uint32_t panel_id : panel_ids) {
+    auto panel = panel_manager_->get_panel_by_id(panel_id);
+    if (!panel) continue;
+
+    // Update the panel with the new symbol
+    panel_manager_->set_panel_symbol(panel_id, symbol);
+
+    // Log the update for debugging
+    std::cout << "[DashboardControls] Updated panel " << panel_id
+              << " with symbol: " << symbol << " (ID: " << symbol_id << ")" << std::endl;
+  }
+
+  std::cout << "[DashboardControls] Successfully synced symbol " << symbol
+            << " (ID: " << symbol_id << ") to all " << panel_ids.size() << " panels" << std::endl;
 }
 
 }  // namespace BTQuant

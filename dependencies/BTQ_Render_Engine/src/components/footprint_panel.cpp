@@ -121,6 +121,21 @@ FootprintPanel::FootprintPanel(const PanelConfig& config,
     renderer_->setPriceAggregationType(price_aggregation_type_);
     renderer_->setCustomPriceAggregationValue(custom_price_aggregation_value_);
   }
+
+  // Configure the LOD system with appropriate thresholds for footprint visualization
+  lod_system_.setMinDetailZoom(0.1f);
+  lod_system_.setMediumDetailZoom(1.0f);
+  lod_system_.setMaxDetailZoom(3.0f);
+
+  // Set cell size thresholds in pixels for different LOD levels
+  lod_system_.setMinCellSizePx(4.0f);
+  lod_system_.setMediumCellSizePx(12.0f);
+  lod_system_.setMaxCellSizePx(24.0f);
+
+  // Set thresholds for specific rendering elements
+  lod_system_.setTextRenderThreshold(12.0f);
+  lod_system_.setLabelRenderThreshold(20.0f);
+  lod_system_.setDetailRenderThreshold(8.0f);
 }
 
 void FootprintPanel::update(float dt) {
@@ -528,227 +543,14 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
                                 const std::vector<FootprintCell>& diagonal_imbalances,
                                 const std::vector<FootprintCell>& stacked_imbalances,
                                 double zoom_factor) {
-  // Calculate cell corners in plot coordinates with zoom-based adjustment
-  // At low zoom (zoom_factor < 1), cells collapse to squares to show more cells
-  // At high zoom (zoom_factor > 1), cells expand to show more detail
-  double base_padding = 0.48;
-
-  // Adjust cell padding based on zoom level with more responsive transitions
-  // Use a more sophisticated algorithm that provides better visual feedback at different zoom
-  // levels
-  double adjusted_padding;
-  if (zoom_factor >= 1.0) {
-    // When zoomed in: expand cells to show more detail
-    // Use a logarithmic approach for smoother transitions at high zoom levels
-    // The higher the zoom, the less padding (larger cells)
-    double zoom_effect = std::log10(zoom_factor * zoom_sensitivity_ + 1.0) * 0.3;
-    adjusted_padding = std::max(0.05, base_padding - zoom_effect);
-  } else {
-    // When zoomed out: shrink cells to show more of them, approaching squares
-    // Use an inverse approach to make cells smaller when zoomed out
-    double zoom_effect = std::pow(1.0 / (zoom_factor * zoom_sensitivity_), 0.8) - 1.0;
-    // Increase padding to make cells appear smaller when zoomed out
-    adjusted_padding = std::min(0.48, base_padding + zoom_effect * 0.15);
-  }
-
-  // Ensure padding stays within reasonable bounds to maintain visibility
-  adjusted_padding = std::max(0.01, std::min(0.48, adjusted_padding));
-
-  double x1 = cell.x - cell.width * adjusted_padding;
-  double x2 = cell.x + cell.width * adjusted_padding;
-  double y1 = cell.y - cell.height * adjusted_padding;
-  double y2 = cell.y + cell.height * adjusted_padding;
-
-  // Convert to pixel coordinates
-  ImVec2 p1 = ImPlot::PlotToPixels(x1, y1);
-  ImVec2 p2 = ImPlot::PlotToPixels(x2, y2);
-
-  // Calculate cell dimensions in pixels for level-of-detail decisions
-  float cell_width_px = std::abs(p2.x - p1.x);
-  float cell_height_px = std::abs(p2.y - p1.y);
-  float min_dimension_px = std::min(cell_width_px, cell_height_px);
-
-  // Special handling for SplitVolume mode
-  if (static_cast<BTQuant::Data::VolumeAnalysisType>(volume_data_type_) ==
-      Data::VolumeAnalysisType::SplitVolume) {
-    // Draw split volume: proportional split based on buy/sell volumes
-    // Calculate the proportional split point based on relative volumes
-    double total_volume = cell.bid_volume + cell.ask_volume;
-    float split_x;
-
-    if (total_volume > 0.0) {
-      // Calculate proportional position: left side for buy volume, right side for sell volume
-      float buy_proportion = static_cast<float>(cell.bid_volume / total_volume);
-      split_x = p1.x + (p2.x - p1.x) * buy_proportion;
-    } else {
-      // If no volume, use center (equal split)
-      split_x = (p1.x + p2.x) * 0.5f;
-    }
-
-    // Calculate colors for buy and sell volumes separately
-    float buy_alpha =
-        cell.bid_volume > 0.0
-            ? std::clamp(static_cast<float>(cell.bid_volume / max_volume), 0.05f, 1.0f)
-            : 0.05f;
-    float sell_alpha =
-        cell.ask_volume > 0.0
-            ? std::clamp(static_cast<float>(cell.ask_volume / max_volume), 0.05f, 1.0f)
-            : 0.05f;
-
-    ImU32 buy_color =
-        IM_COL32(0, 200, 0, static_cast<int>(buy_alpha * 255));  // Green for buy volume
-    ImU32 sell_color =
-        IM_COL32(200, 0, 0, static_cast<int>(sell_alpha * 255));  // Red for sell volume
-
-    // Draw left side (buy volume) - proportional to buy volume size
-    if (cell.bid_volume > 0.0) {
-      draw_list->AddRectFilled(p1, ImVec2(split_x, p2.y), buy_color);
-    }
-
-    // Draw right side (sell volume) - proportional to sell volume size
-    if (cell.ask_volume > 0.0) {
-      draw_list->AddRectFilled(ImVec2(split_x, p1.y), p2, sell_color);
-    }
-
-    // Draw dividing line between buy and sell sections
-    // Only draw if both volumes exist to show the boundary clearly
-    if (cell.bid_volume > 0.0 && cell.ask_volume > 0.0) {
-      // Draw a more prominent divider line when both buy and sell volumes exist
-      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 255),
-                         3.0f);  // White line with higher opacity and thickness
-    } else if (total_volume > 0.0) {
-      // If only one side has volume, still draw the boundary at the appropriate position
-      draw_list->AddLine(ImVec2(split_x, p1.y), ImVec2(split_x, p2.y), IM_COL32(255, 255, 255, 200),
-                         2.0f);  // Slightly less prominent when only one volume exists
-    }
-  } else {
-    // Get cell color for other modes
-    ImU32 color = getCellColor(cell, max_volume);
-
-    // Draw filled cell
-    draw_list->AddRectFilled(p1, p2, color);
-  }
-
-  // Check if this cell is part of any imbalances
-  bool is_diagonal = false;
-  bool is_stacked = false;
-
-  // Check against diagonal imbalances
-  for (const auto& diag_cell : diagonal_imbalances) {
-    if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
-      is_diagonal = true;
-      break;
-    }
-  }
-
-  // Check against stacked imbalances
-  for (const auto& stack_cell : stacked_imbalances) {
-    if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
-      is_stacked = true;
-      break;
-    }
-  }
-
-  // Draw border with special highlighting for imbalances
-  if (is_diagonal || is_stacked) {
-    float border_thickness = 5.0f;  // Thicker border for imbalanced cells
-
-    // If both diagonal and stacked imbalances exist, draw both effects
-    if (is_diagonal && is_stacked) {
-      // Draw both borders with slight offset to distinguish them
-      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
-      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255);   // Cyan for stacked
-
-      // Draw diagonal border first (inner) with normal dimensions
-      draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
-
-      // Draw stacked border second (outer) with slightly larger dimensions
-      draw_list->AddRect(ImVec2(p1.x - 2.0f, p1.y - 2.0f), ImVec2(p2.x + 2.0f, p2.y + 2.0f),
-                         stacked_border_color, 0.0f, 0, border_thickness);
-
-      // Add glow effects for both types
-      // Glow for diagonal (inner)
-      ImU32 diagonal_glow_color = IM_COL32(255, 255, 0, 120);  // Semi-transparent yellow
-      ImVec2 diagonal_glow_offset(4.0f, 4.0f);
-      draw_list->AddRect(ImVec2(p1.x - diagonal_glow_offset.x, p1.y - diagonal_glow_offset.y),
-                         ImVec2(p2.x + diagonal_glow_offset.x, p2.y + diagonal_glow_offset.y),
-                         diagonal_glow_color, 0.0f, 0, 2.0f);
-
-      // Glow for stacked (outer)
-      ImU32 stacked_glow_color = IM_COL32(0, 255, 255, 120);  // Semi-transparent cyan
-      ImVec2 stacked_glow_offset(6.0f, 6.0f);
-      draw_list->AddRect(ImVec2(p1.x - stacked_glow_offset.x, p1.y - stacked_glow_offset.y),
-                         ImVec2(p2.x + stacked_glow_offset.x, p2.y + stacked_glow_offset.y),
-                         stacked_glow_color, 0.0f, 0, 2.0f);
-    }
-    // Only diagonal imbalance
-    else if (is_diagonal) {
-      ImU32 diagonal_border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
-      draw_list->AddRect(p1, p2, diagonal_border_color, 0.0f, 0, border_thickness);
-
-      // Glow effect for diagonal imbalance
-      ImU32 glow_color = IM_COL32(255, 255, 0, 180);  // Prominent yellow glow
-      ImVec2 glow_offset(4.0f, 4.0f);
-      draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
-                         ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y), glow_color, 0.0f, 0,
-                         2.5f);
-    }
-    // Only stacked imbalance
-    else if (is_stacked) {
-      ImU32 stacked_border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
-      draw_list->AddRect(p1, p2, stacked_border_color, 0.0f, 0, border_thickness);
-
-      // Glow effect for stacked imbalance
-      ImU32 glow_color = IM_COL32(0, 255, 255, 180);  // Prominent cyan glow
-      ImVec2 glow_offset(4.0f, 4.0f);
-      draw_list->AddRect(ImVec2(p1.x - glow_offset.x, p1.y - glow_offset.y),
-                         ImVec2(p2.x + glow_offset.x, p2.y + glow_offset.y), glow_color, 0.0f, 0,
-                         2.5f);
-    }
-  } else {
-    // Draw subtle border for cell separation (normal case)
-    ImU32 border_color = IM_COL32(255, 255, 255, 13);  // White, 5% alpha
-    // For SplitVolume mode, we still want to draw the border around the whole cell
-    // The individual buy/sell sections are separated by the divider line inside the cell
-    draw_list->AddRect(p1, p2, border_color, 0.0f, 0, 1.5f);
-  }
-
-  // Draw volume label if enabled and cell is large enough
-  // Implement LOD: skip text rendering when cell height < 12px
-  if (show_volume_labels_ && cell_height_px >= 12.0f) {
-    std::string label = getCellLabel(cell);
-    ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
-
-    // Center text in cell
-    ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f, (p1.y + p2.y - text_size.y) * 0.5f);
-
-    draw_list->AddText(text_pos, IM_COL32_WHITE, label.c_str());
-  }
-
-  // Draw delta indicator if enabled and cell is large enough
-  if (show_delta_indicator_ && cell_height_px >= 8.0f) {
-    double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-    if (max_vol > 0.0) {
-      double normalized_delta = cell.delta / max_vol;
-
-      // Draw small indicator bar at the bottom of the cell
-      if (std::abs(normalized_delta) > delta_threshold_) {
-        float bar_height = 3.0f;
-        float bar_width = (p2.x - p1.x) * 0.8f;
-        ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f, p2.y - bar_height - 1.0f);
-
-        ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
-                                               : IM_COL32(255, 0, 0, 200);  // Red
-
-        draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
-                                 ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height), bar_color);
-      }
-    }
-  }
+  // Use the LOD system to render the cell with appropriate level of detail
+  lod_system_.applyLODToCell(cell, draw_list, static_cast<float>(zoom_factor), max_volume,
+                             diagonal_imbalances, stacked_imbalances, this);
 }
 
 void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list,
                                         double max_volume, double zoom_factor) {
+  // For filtered cells, we'll create a temporary version with reduced visibility
   // Calculate cell corners in plot coordinates with zoom-based adjustment
   double base_padding = 0.48;
 

@@ -6,6 +6,7 @@
 
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
 #include "../data/unified_data_pipeline.hpp"  // For DataType enum
+#include "../rendering/footprint_lod.hpp"     // For LOD functionality
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
 
@@ -181,6 +182,9 @@ class FootprintPanel : public PanelBase {
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;
 
+  // Level of Detail (LOD) system for footprint rendering
+  BTQuant::Rendering::FootprintLOD lod_system_;
+
   // Rendering Helpers
   ImU32 getCellColor(const FootprintCell& cell, double max_volume = 10000.0) const;
   ImU32 getDeltaColor(const FootprintCell& cell, float alpha) const;
@@ -213,6 +217,7 @@ class FootprintPanel : public PanelBase {
 
   // Helper function to get or load monospace font
   ImFont* getOrCreateMonospaceFont() const;
+
 };
 
 }  // namespace BTQuant

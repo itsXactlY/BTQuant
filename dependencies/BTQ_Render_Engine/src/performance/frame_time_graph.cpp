@@ -201,6 +201,75 @@ double FrameTimeGraph::get_last_frame_time_deviation() const {
     return last_frame_time_deviation_;
 }
 
+double FrameTimeGraph::get_variance() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.size() < 2) return 0.0;
+
+    double mean = average_frame_time_ms_;
+    double sum_sq_diff = 0.0;
+    for (double ft : frame_times_) {
+        double diff = ft - mean;
+        sum_sq_diff += diff * diff;
+    }
+    return sum_sq_diff / frame_times_.size();
+}
+
+double FrameTimeGraph::get_standard_deviation() const {
+    return std::sqrt(get_variance());
+}
+
+double FrameTimeGraph::get_percentile(double percentile) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.empty()) return 0.0;
+
+    if (percentile < 0.0 || percentile > 100.0) return 0.0;
+
+    std::vector<double> sorted_times = frame_times_;
+    std::sort(sorted_times.begin(), sorted_times.end());
+
+    double index = (percentile / 100.0) * (sorted_times.size() - 1);
+    size_t lower_idx = static_cast<size_t>(std::floor(index));
+    size_t upper_idx = static_cast<size_t>(std::ceil(index));
+
+    if (lower_idx == upper_idx) {
+        return sorted_times[lower_idx];
+    }
+
+    // Linear interpolation between adjacent values
+    double fraction = index - lower_idx;
+    return sorted_times[lower_idx] + fraction * (sorted_times[upper_idx] - sorted_times[lower_idx]);
+}
+
+std::pair<size_t, size_t> FrameTimeGraph::get_frames_outside_thresholds() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    size_t warning_count = 0;
+    size_t critical_count = 0;
+
+    for (double ft : frame_times_) {
+        if (ft > frame_time_threshold_critical_) {
+            critical_count++;
+        } else if (ft > frame_time_threshold_warning_) {
+            warning_count++;
+        }
+    }
+
+    return {warning_count, critical_count};
+}
+
+double FrameTimeGraph::get_smoothed_frame_time(int window_size) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.empty()) return 0.0;
+
+    // Use the most recent frame times up to the window size
+    size_t count = std::min(static_cast<size_t>(window_size), frame_times_.size());
+    double sum = 0.0;
+    for (size_t i = frame_times_.size() - count; i < frame_times_.size(); ++i) {
+        sum += frame_times_[i];
+    }
+
+    return sum / count;
+}
+
 void FrameTimeGraph::render(const char* title, float width, float height) {
     if (!enabled_) return;
 
@@ -229,69 +298,101 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         std::vector<double> warning_values(frame_times_.size(), frame_time_threshold_warning_);
         std::vector<double> critical_values(frame_times_.size(), frame_time_threshold_critical_);
 
-        // Critical threshold line (red dashed)
+        // Critical threshold line (red)
         ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 0.7f), 1.5f); // Red line
+        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
         ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), frame_times_.size());
+        ImPlot::PopStyleVar();
 
-        // Warning threshold line (yellow dashed)
+        // Warning threshold line (yellow)
         ImPlot::SetNextLineStyle(ImVec4(1.0f, 1.0f, 0.0f, 0.7f), 1.5f); // Yellow line
+        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
         ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), frame_times_.size());
+        ImPlot::PopStyleVar();
 
-        // Plot frame times
-        ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 2.0f); // Green line
+        // Plot frame times with enhanced visualization
+        ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), 2.0f); // Light green line
+        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
         ImPlot::PlotLine("Frame Time", x_values.data(), frame_times_.data(), frame_times_.size());
+        ImPlot::PopStyleVar();
 
-        // Highlight performance issues
+        // Highlight performance issues with filled areas
+        std::vector<double> issue_x, issue_y;
         for (size_t i = 0; i < frame_times_.size(); ++i) {
             if (frame_times_[i] > frame_time_threshold_warning_) {
-                // Draw a vertical line to highlight performance issue
-                double x_pos = x_values[i];
-                double y_values[] = {0.0, frame_times_[i]};
-                double x_coords[] = {x_pos, x_pos};
+                issue_x.push_back(x_values[i]);
+                issue_y.push_back(frame_times_[i]);
 
+                // Add a point at the threshold level to create a filled area
                 if (frame_times_[i] > frame_time_threshold_critical_) {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 5, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f, ImVec4(1.0f, 0.0f, 0.0f, 0.5f)); // Red marker for critical
-                    ImPlot::PlotScatter("Critical Issue", &x_pos, &frame_times_[i], 1);
+                    // Critical issue - red
+                    ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.0f, 0.3f));
+                    ImPlot::PlotShaded("Critical Spikes", &issue_x.back(), &issue_y.back(), 1, frame_time_threshold_critical_);
                 } else {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Square, 4, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 1.0f, ImVec4(1.0f, 1.0f, 0.0f, 0.5f)); // Yellow marker for warning
-                    ImPlot::PlotScatter("Warning Issue", &x_pos, &frame_times_[i], 1);
+                    // Warning issue - yellow
+                    ImPlot::SetNextFillStyle(ImVec4(1.0f, 1.0f, 0.0f, 0.3f));
+                    ImPlot::PlotShaded("Warning Spikes", &issue_x.back(), &issue_y.back(), 1, frame_time_threshold_warning_);
                 }
             }
         }
 
-        // Draw horizontal lines for min, max, and average
+        // Draw markers for performance issues
+        for (size_t i = 0; i < frame_times_.size(); ++i) {
+            if (frame_times_[i] > frame_time_threshold_warning_) {
+                double x_pos = x_values[i];
+
+                if (frame_times_[i] > frame_time_threshold_critical_) {
+                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 2.0f, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // Red marker for critical
+                    ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1);
+                } else {
+                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Square, 5, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 2.0f, ImVec4(0.0f, 0.0f, 0.0f, 0.8f)); // Yellow marker for warning
+                    ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1);
+                }
+            }
+        }
+
+        // Draw horizontal lines for min, max, and average with better visibility
         if (!frame_times_.empty()) {
             double avg = average_frame_time_ms_;
             double min_val = min_frame_time_ms_;
             double max_val = max_frame_time_ms_;
 
-            // Average line (yellow)
+            // Average line (orange)
             std::vector<double> avg_values(frame_times_.size(), avg);
-            ImPlot::SetNextLineStyle(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 1.0f); // Yellow solid
+            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.5f); // Orange solid
+            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
             ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), frame_times_.size());
+            ImPlot::PopStyleVar();
 
-            // Min line (cyan)
+            // Min line (light blue)
             std::vector<double> min_values(frame_times_.size(), min_val);
-            ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), 1.0f); // Cyan solid
+            ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f); // Light blue solid
+            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
             ImPlot::PlotLine("Min", x_values.data(), min_values.data(), frame_times_.size());
+            ImPlot::PopStyleVar();
 
-            // Max line (red)
+            // Max line (dark red)
             std::vector<double> max_values(frame_times_.size(), max_val);
-            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f); // Red solid
+            ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), 1.0f); // Dark red solid
+            ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
             ImPlot::PlotLine("Max", x_values.data(), max_values.data(), frame_times_.size());
+            ImPlot::PopStyleVar();
         }
 
         ImPlot::EndPlot();
     }
 
-    // Display statistics with performance issue indicators
+    // Display enhanced statistics with performance issue indicators
     ImGui::Text("Current: %.2f ms (%.1f FPS)", current_frame_time_ms_, current_fps_);
     ImGui::SameLine();
     ImGui::Text("Avg: %.2f ms (%.1f FPS)", average_frame_time_ms_, average_fps_);
     ImGui::SameLine();
     ImGui::Text("Min: %.2f ms | Max: %.2f ms", min_frame_time_ms_, max_frame_time_ms_);
 
-    // Performance issue status
+    // Additional performance metrics
+    ImGui::Text("Sample Count: %zu | Range: %.2f ms", frame_times_.size(), max_frame_time_ms_ - min_frame_time_ms_);
+
+    // Performance issue status with more detail
     if (performance_issue_detected_) {
         auto now = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -303,23 +404,105 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         ImGui::TextColored(issue_color, "PERFORMANCE ISSUE DETECTED!");
         ImGui::SameLine();
         ImGui::Text("Deviation: %.2f ms from average", last_frame_time_deviation_);
+
+        // Show additional performance insights
+        if (current_frame_time_ms_ > frame_time_threshold_critical_) {
+            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "CRITICAL: Frame time exceeds 30 FPS threshold!");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "WARNING: Frame time exceeds 60 FPS threshold!");
+        }
     } else {
         ImGui::Text("Status: OK");
     }
 
-    // Threshold controls
+    // Threshold controls with better layout
     ImGui::Separator();
-    ImGui::Text("Thresholds:");
-    ImGui::SameLine();
-    ImGui::PushItemWidth(100);
+    ImGui::Text("Performance Thresholds:");
+    ImGui::Columns(2, "thresholds"); // Create columns for better layout
+
+    ImGui::SetColumnWidth(0, 150);
+    ImGui::SetColumnWidth(1, 150);
+
+    ImGui::Text("Warning Level:");
+    ImGui::NextColumn();
+    ImGui::PushItemWidth(-1);
     double warning_min = 1.0;
     double warning_max = 50.0;
+    ImGui::DragScalar("##Warning", ImGuiDataType_Double, &frame_time_threshold_warning_, 0.1f, &warning_min, &warning_max, "%.2f ms (~%.1f FPS)");
+    ImGui::PopItemWidth();
+    ImGui::NextColumn();
+
+    ImGui::Text("Critical Level:");
+    ImGui::NextColumn();
+    ImGui::PushItemWidth(-1);
     double critical_min = 1.0;
     double critical_max = 100.0;
-    ImGui::DragScalar("Warning (ms)", ImGuiDataType_Double, &frame_time_threshold_warning_, 0.1f, &warning_min, &warning_max, "%.2f");
-    ImGui::SameLine();
-    ImGui::DragScalar("Critical (ms)", ImGuiDataType_Double, &frame_time_threshold_critical_, 0.1f, &critical_min, &critical_max, "%.2f");
+    ImGui::DragScalar("##Critical", ImGuiDataType_Double, &frame_time_threshold_critical_, 0.1f, &critical_min, &critical_max, "%.2f ms (~%.1f FPS)");
     ImGui::PopItemWidth();
+    ImGui::NextColumn();
+
+    ImGui::Columns(1); // Close columns
+
+    // Additional performance analysis controls
+    if (ImGui::CollapsingHeader("Performance Analysis")) {
+        ImGui::Text("Frame Time Distribution:");
+
+        // Calculate distribution bins
+        if (!frame_times_.empty()) {
+            double min_time = *std::min_element(frame_times_.begin(), frame_times_.end());
+            double max_time = *std::max_element(frame_times_.begin(), frame_times_.end());
+
+            // Create histogram
+            int bins = 10;
+            std::vector<int> counts(bins, 0);
+            double bin_size = (max_time - min_time) / bins;
+
+            for (double ft : frame_times_) {
+                int bin_idx = static_cast<int>((ft - min_time) / bin_size);
+                if (bin_idx >= bins) bin_idx = bins - 1;
+                counts[bin_idx]++;
+            }
+
+            // Display histogram
+            for (int i = 0; i < bins; ++i) {
+                double range_start = min_time + i * bin_size;
+                double range_end = min_time + (i + 1) * bin_size;
+                ImGui::Text("%.2f-%.2f ms: %d frames", range_start, range_end, counts[i]);
+            }
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Statistical Analysis:");
+
+        // Show variance and standard deviation
+        double variance = get_variance();
+        double std_dev = get_standard_deviation();
+        ImGui::Text("Variance: %.4f ms²", variance);
+        ImGui::Text("Standard Deviation: %.4f ms", std_dev);
+
+        // Show percentiles
+        ImGui::Text("Percentiles:");
+        ImGui::Indent();
+        ImGui::Text("50th (Median): %.2f ms", get_percentile(50.0));
+        ImGui::Text("90th: %.2f ms", get_percentile(90.0));
+        ImGui::Text("95th: %.2f ms", get_percentile(95.0));
+        ImGui::Text("99th: %.2f ms", get_percentile(99.0));
+        ImGui::Unindent();
+
+        // Show frames outside thresholds
+        auto [warning_count, critical_count] = get_frames_outside_thresholds();
+        size_t total_frames = frame_times_.size();
+        ImGui::Text("Performance Issues:");
+        ImGui::Indent();
+        ImGui::Text("Warning (>%.2f ms): %zu frames (%.2f%%)", frame_time_threshold_warning_, warning_count,
+                   total_frames > 0 ? (warning_count * 100.0) / total_frames : 0.0);
+        ImGui::Text("Critical (>%.2f ms): %zu frames (%.2f%%)", frame_time_threshold_critical_, critical_count,
+                   total_frames > 0 ? (critical_count * 100.0) / total_frames : 0.0);
+        ImGui::Unindent();
+
+        // Show smoothed frame time
+        ImGui::Text("Smoothed Frame Time (last 5): %.2f ms", get_smoothed_frame_time(5));
+    }
 }
 
 // Global instance

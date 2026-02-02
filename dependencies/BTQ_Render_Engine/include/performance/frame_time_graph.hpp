@@ -61,6 +61,13 @@ public:
     // Render the frame time graph using ImGui/ImPlot
     void render(const char* title = "Frame Time Graph", float width = 0.0f, float height = 200.0f);
 
+    // Get performance analysis data
+    double get_variance() const;
+    double get_standard_deviation() const;
+    double get_percentile(double percentile) const;  // e.g., 95th percentile
+    std::pair<size_t, size_t> get_frames_outside_thresholds() const;  // {warning_count, critical_count}
+    double get_smoothed_frame_time(int window_size = 5) const;  // Moving average
+
 private:
     std::chrono::high_resolution_clock::time_point frame_start_time_;
     std::vector<double> frame_times_;

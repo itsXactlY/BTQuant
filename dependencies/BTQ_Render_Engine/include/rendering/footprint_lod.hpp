@@ -1,10 +1,17 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
+#include <cstdint>
 
 #include "imgui.h"
 #include "implot.h"
-#include "../components/footprint_panel.hpp"  // For FootprintCell struct
+
+// Forward declaration to avoid circular dependency
+namespace BTQuant {
+    struct FootprintCell;  // Defined in footprint_panel.hpp
+    class FootprintPanel;  // Defined in footprint_panel.hpp
+}
 
 namespace BTQuant {
 namespace Rendering {
@@ -75,6 +82,9 @@ public:
     // Calculate the appropriate LOD level based on cell dimensions and zoom factor
     LODLevel calculateLODLevel(float cell_width_px, float cell_height_px, float zoom_factor) const;
 
+    // Calculate progressive LOD level with smooth transitions between levels
+    float calculateProgressiveLOD(float cell_width_px, float cell_height_px, float zoom_factor) const;
+
     // Calculate the appropriate LOD level with dynamic thresholds based on view range
     LODLevel calculateDynamicLODLevel(float cell_width_px, float cell_height_px,
                                    float zoom_factor, float view_range_x, float view_range_y) const;
@@ -89,6 +99,9 @@ public:
 
     // Get rendering settings for a specific LOD level
     LODRenderSettings getRenderSettings(LODLevel lod_level) const;
+
+    // Get progressive rendering settings for smooth transitions between LOD levels
+    LODRenderSettings getProgressiveRenderSettings(float lod_value, float cell_area_px) const;
 
     // Get optimized rendering settings considering cell area to prevent overcrowding
     LODRenderSettings getOptimizedRenderSettings(LODLevel lod_level, float cell_area_px) const;
@@ -119,6 +132,12 @@ public:
     // Calculate LOD transition state for smooth transitions between LOD levels
     LODTransitionState calculateLODTransition(float prev_zoom, float curr_zoom,
                                            float cell_width_px, float cell_height_px) const;
+
+    // Calculate cached LOD level to improve performance
+    LODLevel calculateCachedLOD(float cell_width_px, float cell_height_px, float zoom_factor) const;
+
+    // Clear the LOD cache to free memory
+    void clearLODCache() const;
 
     // Calculate zoom-based LOD with consideration for view range
     LODLevel calculateZoomBasedLOD(float cell_width_px, float cell_height_px,
@@ -192,6 +211,15 @@ public:
                                const std::vector<FootprintCell>& stacked_imbalances,
                                const FootprintPanel* panel) const;
 
+    // Apply progressive LOD rendering to a single cell (smooth transitions between levels)
+    void applyProgressiveLODToCell(const FootprintCell& cell,
+                                  ImDrawList* draw_list,
+                                  float zoom_factor,
+                                  double max_volume,
+                                  const std::vector<FootprintCell>& diagonal_imbalances,
+                                  const std::vector<FootprintCell>& stacked_imbalances,
+                                  const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }
@@ -245,6 +273,12 @@ private:
     // Performance-based LOD parameters
     float target_fps_;                // Target FPS for performance-based LOD
     bool performance_lod_enabled_;    // Whether performance-based LOD is enabled
+
+    // Caching for LOD calculations to improve performance
+    mutable std::unordered_map<uint64_t, LODLevel> lod_cache_;
+
+    // Helper function to create a unique key for caching
+    uint64_t createLODKey(float cell_width_px, float cell_height_px, float zoom_factor) const;
 };
 
 } // namespace Rendering

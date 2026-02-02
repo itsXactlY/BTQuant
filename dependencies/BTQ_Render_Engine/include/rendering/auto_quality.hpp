@@ -39,6 +39,24 @@ struct QualitySettings {
     float shadow_map_resolution = 2048.0f;       ///< Shadow map resolution
     int max_shadow_cascades = 4;                 ///< Maximum shadow cascades
     bool enable_ssao = true;                     ///< Enable screen space ambient occlusion
+
+    // Additional granular controls for fine-tuned quality management
+    bool enable_transparency_aa = true;          ///< Enable transparency anti-aliasing
+    bool enable_hdr_rendering = true;            ///< Enable HDR rendering pipeline
+    bool enable_variable_rate_shading = false;   ///< Enable variable rate shading (if supported)
+    float ui_scaling_factor = 1.0f;              ///< UI scaling factor to reduce UI rendering load
+    bool enable_texture_compression = true;      ///< Enable texture compression
+    int max_animated_objects = 1000;             ///< Maximum number of animated objects
+    bool enable_gpu_skinning = true;             ///< Enable GPU-based skinning
+    float shadow_distance = 100.0f;              ///< Maximum distance for shadow rendering
+    bool enable_contact_hardening = true;        ///< Enable contact hardening for shadows
+    float tessellation_factor = 1.0f;            ///< Tessellation level factor
+    bool enable_ray_tracing_effects = false;     ///< Enable ray tracing effects (if supported)
+    int max_draw_calls_per_frame = 10000;        ///< Maximum draw calls per frame
+    bool enable_instancing = true;               ///< Enable geometry instancing
+    float max_texture_memory_mb = 1024.0f;       ///< Maximum texture memory allocation in MB
+    bool enable_async_compute = true;            ///< Enable asynchronous compute operations
+    int max_buffer_updates_per_frame = 1000;     ///< Maximum buffer updates per frame
 };
 
 /**
@@ -112,17 +130,32 @@ private:
     std::chrono::high_resolution_clock::time_point last_adjustment_time_;
     std::chrono::milliseconds adjustment_cooldown_;
 
+    // Adaptive threshold variables
+    double adaptive_performance_threshold_;
+    double performance_history_[10];  // Track recent performance scores
+    int performance_history_index_ = 0;
+    bool performance_history_full_ = false;
+
     // Private methods
     void initializeQualityLevels();
     void updatePerformanceScore();
     double calculateFrameTimeVariance() const;
     double calculateStabilityScore(double variance) const;
     double calculateResponsivenessScore() const;
+    double calculateTrendPredictionScore() const;
+    double calculateAdaptiveThreshold() const;
+    void updatePerformanceHistory();
     void checkAndAdjustQuality();
     bool hasBeenStableAtCurrentLevel() const;
     int determineQualityReduction();
     int determineQualityIncrease();
     void logPerformanceStats() const;
+
+    // Advanced performance detection methods
+    bool detectPerformanceSpikes() const;
+    double calculateJankPercentage() const;
+    double calculatePerformanceConsistency() const;
+    void updateAdvancedMetrics();
 };
 
 } // namespace RenderEngine

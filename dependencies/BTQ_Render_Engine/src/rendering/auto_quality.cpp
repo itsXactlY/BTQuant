@@ -21,8 +21,14 @@ AutoQualityController::AutoQualityController(const AutoQualityConfig& config)
     , adjustment_cooldown_(std::chrono::milliseconds(static_cast<int>(config.adjustment_cooldown_ms)))
     , performance_score_(100.0)
     , target_performance_threshold_(config.performance_threshold)
+    , adaptive_performance_threshold_(config.performance_threshold)
 {
     initializeQualityLevels();
+
+    // Initialize performance history
+    for (int i = 0; i < 10; ++i) {
+        performance_history_[i] = config.performance_threshold;
+    }
 }
 
 AutoQualityController::~AutoQualityController() = default;
@@ -62,7 +68,23 @@ void AutoQualityController::initializeQualityLevels() {
         .enable_frustum_culling = true,
         .shadow_map_resolution = 2048.0f,
         .max_shadow_cascades = 4,
-        .enable_ssao = true
+        .enable_ssao = true,
+        .enable_transparency_aa = true,
+        .enable_hdr_rendering = true,
+        .enable_variable_rate_shading = true,
+        .ui_scaling_factor = 1.0f,
+        .enable_texture_compression = true,
+        .max_animated_objects = 1000,
+        .enable_gpu_skinning = true,
+        .shadow_distance = 100.0f,
+        .enable_contact_hardening = true,
+        .tessellation_factor = 1.0f,
+        .enable_ray_tracing_effects = true,
+        .max_draw_calls_per_frame = 10000,
+        .enable_instancing = true,
+        .max_texture_memory_mb = 1024.0f,
+        .enable_async_compute = true,
+        .max_buffer_updates_per_frame = 1000
     };
 
     // High Quality (index 1)
@@ -96,7 +118,23 @@ void AutoQualityController::initializeQualityLevels() {
         .enable_frustum_culling = true,
         .shadow_map_resolution = 1024.0f,
         .max_shadow_cascades = 3,
-        .enable_ssao = true
+        .enable_ssao = true,
+        .enable_transparency_aa = true,
+        .enable_hdr_rendering = true,
+        .enable_variable_rate_shading = false,
+        .ui_scaling_factor = 0.95f,
+        .enable_texture_compression = true,
+        .max_animated_objects = 800,
+        .enable_gpu_skinning = true,
+        .shadow_distance = 80.0f,
+        .enable_contact_hardening = true,
+        .tessellation_factor = 0.9f,
+        .enable_ray_tracing_effects = false,
+        .max_draw_calls_per_frame = 8000,
+        .enable_instancing = true,
+        .max_texture_memory_mb = 800.0f,
+        .enable_async_compute = true,
+        .max_buffer_updates_per_frame = 800
     };
 
     // Medium Quality (index 2)
@@ -130,7 +168,23 @@ void AutoQualityController::initializeQualityLevels() {
         .enable_frustum_culling = true,
         .shadow_map_resolution = 512.0f,
         .max_shadow_cascades = 2,
-        .enable_ssao = false
+        .enable_ssao = false,
+        .enable_transparency_aa = false,
+        .enable_hdr_rendering = true,
+        .enable_variable_rate_shading = false,
+        .ui_scaling_factor = 0.9f,
+        .enable_texture_compression = true,
+        .max_animated_objects = 600,
+        .enable_gpu_skinning = false,
+        .shadow_distance = 60.0f,
+        .enable_contact_hardening = false,
+        .tessellation_factor = 0.7f,
+        .enable_ray_tracing_effects = false,
+        .max_draw_calls_per_frame = 6000,
+        .enable_instancing = true,
+        .max_texture_memory_mb = 600.0f,
+        .enable_async_compute = false,
+        .max_buffer_updates_per_frame = 600
     };
 
     // Low Quality (index 3)
@@ -164,7 +218,23 @@ void AutoQualityController::initializeQualityLevels() {
         .enable_frustum_culling = true,
         .shadow_map_resolution = 256.0f,
         .max_shadow_cascades = 1,
-        .enable_ssao = false
+        .enable_ssao = false,
+        .enable_transparency_aa = false,
+        .enable_hdr_rendering = false,
+        .enable_variable_rate_shading = false,
+        .ui_scaling_factor = 0.85f,
+        .enable_texture_compression = true,
+        .max_animated_objects = 400,
+        .enable_gpu_skinning = false,
+        .shadow_distance = 40.0f,
+        .enable_contact_hardening = false,
+        .tessellation_factor = 0.5f,
+        .enable_ray_tracing_effects = false,
+        .max_draw_calls_per_frame = 4000,
+        .enable_instancing = false,
+        .max_texture_memory_mb = 400.0f,
+        .enable_async_compute = false,
+        .max_buffer_updates_per_frame = 400
     };
 
     // Lowest Quality (index 4)
@@ -198,7 +268,23 @@ void AutoQualityController::initializeQualityLevels() {
         .enable_frustum_culling = true,
         .shadow_map_resolution = 128.0f,
         .max_shadow_cascades = 1,
-        .enable_ssao = false
+        .enable_ssao = false,
+        .enable_transparency_aa = false,
+        .enable_hdr_rendering = false,
+        .enable_variable_rate_shading = false,
+        .ui_scaling_factor = 0.8f,
+        .enable_texture_compression = true,
+        .max_animated_objects = 200,
+        .enable_gpu_skinning = false,
+        .shadow_distance = 20.0f,
+        .enable_contact_hardening = false,
+        .tessellation_factor = 0.3f,
+        .enable_ray_tracing_effects = false,
+        .max_draw_calls_per_frame = 2000,
+        .enable_instancing = false,
+        .max_texture_memory_mb = 200.0f,
+        .enable_async_compute = false,
+        .max_buffer_updates_per_frame = 200
     };
 }
 
@@ -209,6 +295,12 @@ void AutoQualityController::recordFrameTime(double frame_time_ms) {
 
     // Calculate current performance score based on frame times
     updatePerformanceScore();
+
+    // Update advanced performance metrics
+    updateAdvancedMetrics();
+
+    // Update performance history for adaptive thresholds
+    updatePerformanceHistory();
 
     // Check if we need to adjust quality
     checkAndAdjustQuality();
@@ -279,9 +371,12 @@ void AutoQualityController::updatePerformanceScore() {
     // Calculate responsiveness score based on worst frame times
     double responsiveness_score = calculateResponsivenessScore();
 
+    // Calculate trend-based prediction score to anticipate performance drops
+    double trend_prediction_score = calculateTrendPredictionScore();
+
     // Weighted combination of all performance factors
-    // FPS efficiency: 50%, Stability: 30%, Responsiveness: 20%
-    performance_score_ = (fps_score * 0.5) + (stability_score * 0.3) + (responsiveness_score * 0.2);
+    // FPS efficiency: 40%, Stability: 25%, Responsiveness: 20%, Trend Prediction: 15%
+    performance_score_ = (fps_score * 0.4) + (stability_score * 0.25) + (responsiveness_score * 0.2) + (trend_prediction_score * 0.15);
 }
 
 double AutoQualityController::calculateStabilityScore(double variance) const {
@@ -326,19 +421,19 @@ double AutoQualityController::calculateFrameTimeVariance() const {
     if (frame_count_ < 2) {
         return 0.0;
     }
-    
+
     size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
     if (sample_count < 2) {
         return 0.0;
     }
-    
+
     // Calculate mean
     double sum = 0.0;
     for (size_t i = 0; i < sample_count; ++i) {
         sum += frame_times_[i];
     }
     double mean = sum / sample_count;
-    
+
     // Calculate variance
     double variance_sum = 0.0;
     for (size_t i = 0; i < sample_count; ++i) {
@@ -346,6 +441,105 @@ double AutoQualityController::calculateFrameTimeVariance() const {
         variance_sum += diff * diff;
     }
     return variance_sum / sample_count;
+}
+
+double AutoQualityController::calculateTrendPredictionScore() const {
+    // Calculate a score based on the trend of frame times to predict future performance
+    if (frame_count_ < 10) {
+        return 100.0; // Not enough data, assume good performance
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 4) {
+        return 100.0; // Need at least 4 samples to calculate trend
+    }
+
+    // Use the most recent half of the frame times to calculate trend
+    size_t recent_count = sample_count / 2;
+    size_t older_count = sample_count - recent_count;
+
+    // Calculate average of older half
+    double older_sum = 0.0;
+    for (size_t i = 0; i < older_count; ++i) {
+        older_sum += frame_times_[i];
+    }
+    double older_avg = older_sum / older_count;
+
+    // Calculate average of more recent half
+    double recent_sum = 0.0;
+    for (size_t i = older_count; i < sample_count; ++i) {
+        recent_sum += frame_times_[i];
+    }
+    double recent_avg = recent_sum / recent_count;
+
+    // Calculate trend ratio (recent vs older)
+    if (older_avg <= 0.0) {
+        return recent_avg <= 0.0 ? 100.0 : 0.0; // Handle edge cases
+    }
+
+    double trend_ratio = recent_avg / older_avg;
+
+    // If trend is improving (recent_avg < older_avg), return higher score
+    // If trend is degrading (recent_avg > older_avg), return lower score
+    if (trend_ratio <= 1.0) {
+        // Improving trend - boost score
+        double improvement_factor = (1.0 - (1.0 - trend_ratio)) * 100.0; // Invert and scale
+        return std::min(100.0, 100.0 * improvement_factor);
+    } else {
+        // Degrading trend - reduce score
+        double degradation_factor = 1.0 / trend_ratio; // Inverse relationship
+        return std::max(0.0, degradation_factor * 100.0);
+    }
+}
+
+double AutoQualityController::calculateAdaptiveThreshold() const {
+    // Calculate adaptive threshold based on historical performance patterns
+    if (!performance_history_full_) {
+        return target_performance_threshold_; // Use default until we have enough history
+    }
+
+    // Calculate average of recent performance scores
+    double sum = 0.0;
+    for (int i = 0; i < 10; ++i) {
+        sum += performance_history_[i];
+    }
+    double avg_performance = sum / 10.0;
+
+    // Adjust threshold based on the average performance
+    // If system typically performs well, be more aggressive with quality maintenance
+    // If system typically performs poorly, be more conservative with quality reduction
+    double performance_baseline = avg_performance;
+
+    // Calculate variance in historical performance to determine stability
+    double variance = 0.0;
+    for (int i = 0; i < 10; ++i) {
+        double diff = performance_history_[i] - performance_baseline;
+        variance += diff * diff;
+    }
+    variance /= 10.0;
+    double stability_factor = 1.0 - std::min(0.5, variance / 1000.0); // Reduce sensitivity for unstable systems
+
+    // Adjust threshold based on baseline performance and stability
+    if (performance_baseline >= target_performance_threshold_) {
+        // System typically performs well, allow slightly lower threshold
+        return target_performance_threshold_ * stability_factor * 0.95;
+    } else {
+        // System typically performs poorly, be more conservative
+        return std::min(target_performance_threshold_, performance_baseline * stability_factor * 1.05);
+    }
+}
+
+void AutoQualityController::updatePerformanceHistory() {
+    // Add current performance score to history
+    performance_history_[performance_history_index_] = performance_score_;
+    performance_history_index_ = (performance_history_index_ + 1) % 10;
+
+    if (!performance_history_full_ && performance_history_index_ == 0) {
+        performance_history_full_ = true;
+    }
+
+    // Update adaptive threshold based on history
+    adaptive_performance_threshold_ = calculateAdaptiveThreshold();
 }
 
 void AutoQualityController::checkAndAdjustQuality() {
@@ -356,10 +550,13 @@ void AutoQualityController::checkAndAdjustQuality() {
         return;
     }
 
+    // Use adaptive threshold for decision making
+    double effective_threshold = adaptive_performance_threshold_;
+
     // Use hysteresis to prevent oscillation
     // Different thresholds for reducing vs increasing quality
-    double lower_threshold = target_performance_threshold_ * (0.9 - (current_quality_index_ * 0.02)); // Lower threshold becomes stricter at lower quality levels
-    double upper_threshold = target_performance_threshold_ * (1.1 + (current_quality_index_ * 0.03)); // Upper threshold becomes more lenient at lower quality levels
+    double lower_threshold = effective_threshold * (0.9 - (current_quality_index_ * 0.02)); // Lower threshold becomes stricter at lower quality levels
+    double upper_threshold = effective_threshold * (1.1 + (current_quality_index_ * 0.03)); // Upper threshold becomes more lenient at lower quality levels
 
     // Determine if we need to adjust quality based on performance
     if (performance_score_ < lower_threshold) {
@@ -374,8 +571,8 @@ void AutoQualityController::checkAndAdjustQuality() {
 
                 // Log the quality reduction
                 if (config_.enable_logging) {
-                    printf("AutoQuality: Reduced quality to level %d (Performance: %.2f%%, Lower Threshold: %.2f%%)\n",
-                           current_quality_index_, performance_score_, lower_threshold);
+                    printf("AutoQuality: Reduced quality to level %d (Performance: %.2f%%, Lower Threshold: %.2f%%, Adaptive Base: %.2f%%)\n",
+                           current_quality_index_, performance_score_, lower_threshold, effective_threshold);
                 }
             }
         }
@@ -392,8 +589,28 @@ void AutoQualityController::checkAndAdjustQuality() {
 
                 // Log the quality increase
                 if (config_.enable_logging) {
-                    printf("AutoQuality: Increased quality to level %d (Performance: %.2f%%, Upper Threshold: %.2f%%)\n",
-                           current_quality_index_, performance_score_, upper_threshold);
+                    printf("AutoQuality: Increased quality to level %d (Performance: %.2f%%, Upper Threshold: %.2f%%, Adaptive Base: %.2f%%)\n",
+                           current_quality_index_, performance_score_, upper_threshold, effective_threshold);
+                }
+            }
+        }
+    }
+
+    // Additional check: if performance is severely degraded, force immediate quality reduction regardless of cooldown
+    if (performance_score_ < effective_threshold * 0.5) { // Below 50% of adaptive target
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            // Immediate quality reduction due to severe performance issues
+            int new_quality_index = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time to prevent immediate further adjustments
+                last_adjustment_time_ = now;
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Emergency quality reduction to level %d (Severe performance: %.2f%%, Adaptive Threshold: %.2f%%)\n",
+                           current_quality_index_, performance_score_, effective_threshold);
                 }
             }
         }
@@ -404,12 +621,34 @@ int AutoQualityController::determineQualityReduction() {
     // Determine how much to reduce quality based on performance severity
     double performance_deficit = target_performance_threshold_ - performance_score_;
 
+    // Check for additional factors that might require more aggressive reduction
+    bool has_spikes = detectPerformanceSpikes();
+    double jank_percentage = calculateJankPercentage();
+    double consistency_score = calculatePerformanceConsistency();
+
     // If performance is extremely poor, reduce quality more aggressively
-    if (performance_deficit > 40.0) {
-        // Very poor performance - jump 2 levels down if possible
-        return std::min(current_quality_index_ + 2, QUALITY_LEVEL_COUNT - 1);
-    } else if (performance_deficit > 20.0) {
-        // Poor performance - jump 1-2 levels down
+    if (performance_deficit > 40.0 || jank_percentage > 25.0) {
+        // Very poor performance OR heavy jank - jump 2 levels down if possible
+        int new_level = std::min(current_quality_index_ + 2, QUALITY_LEVEL_COUNT - 1);
+
+        // If we also have performance spikes, consider jumping 3 levels (but cap at max)
+        if (has_spikes && performance_deficit > 50.0) {
+            new_level = std::min(current_quality_index_ + 3, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        return new_level;
+    } else if (performance_deficit > 20.0 || jank_percentage > 15.0) {
+        // Poor performance OR moderate jank - jump 1-2 levels down
+        int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+        // If we also have performance spikes, consider jumping 2 levels
+        if (has_spikes) {
+            new_level = std::min(current_quality_index_ + 2, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        return new_level;
+    } else if (consistency_score < 60.0) {
+        // Performance is inconsistent - reduce quality by 1 level to stabilize
         return std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
     } else {
         // Moderate performance issues - reduce by 1 level
@@ -420,14 +659,24 @@ int AutoQualityController::determineQualityReduction() {
 int AutoQualityController::determineQualityIncrease() {
     // Determine how much to increase quality based on performance surplus
     // Only increase quality gradually to avoid oscillation
+
+    // Check for additional factors that might affect the decision to increase quality
+    bool has_spikes = detectPerformanceSpikes();
+    double jank_percentage = calculateJankPercentage();
+    double consistency_score = calculatePerformanceConsistency();
+
     double performance_surplus = performance_score_ - target_performance_threshold_;
 
-    if (performance_surplus > 30.0) {
-        // Excellent performance - could increase by 2 levels if stable
+    // Only increase quality if performance is consistently good AND stable
+    if (performance_surplus > 30.0 && !has_spikes && jank_percentage < 5.0 && consistency_score > 80.0) {
+        // Excellent performance, no spikes, low jank, high consistency - could increase by 2 levels if stable
         return std::max(current_quality_index_ - 2, 0);
-    } else {
-        // Good performance - increase by 1 level
+    } else if (performance_surplus > 15.0 && !has_spikes && jank_percentage < 10.0 && consistency_score > 70.0) {
+        // Good performance with acceptable stability - increase by 1 level
         return std::max(current_quality_index_ - 1, 0);
+    } else {
+        // Conditions not met for quality increase, stay at current level
+        return current_quality_index_;
     }
 }
 
@@ -477,11 +726,139 @@ void AutoQualityController::forceQualityLevel(int level) {
     if (level >= 0 && level < QUALITY_LEVEL_COUNT) {
         current_quality_index_ = level;
         last_adjustment_time_ = std::chrono::high_resolution_clock::now();
-        
+
         if (config_.enable_logging) {
             printf("AutoQuality: Forced quality to level %d\n", level);
         }
     }
+}
+
+bool AutoQualityController::detectPerformanceSpikes() const {
+    // Detect sudden performance spikes that indicate potential problems
+    if (frame_count_ < 10) {
+        return false;
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 3) {
+        return false;
+    }
+
+    // Look for sudden increases in frame time (spikes)
+    double target_frame_time = 1000.0 / config_.target_fps;
+    int spike_count = 0;
+    int total_frames = 0;
+
+    for (size_t i = 0; i < sample_count; ++i) {
+        if (frame_times_[i] > target_frame_time * 3.0) { // Spike is 3x target time
+            spike_count++;
+        }
+        total_frames++;
+    }
+
+    // If more than 10% of frames are spikes, consider it problematic
+    double spike_percentage = static_cast<double>(spike_count) / total_frames;
+    return spike_percentage > 0.1; // More than 10% of frames are spikes
+}
+
+double AutoQualityController::calculateJankPercentage() const {
+    // Calculate percentage of janky frames (frames that took significantly longer than average)
+    if (frame_count_ < 10) {
+        return 0.0;
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 2) {
+        return 0.0;
+    }
+
+    // Calculate average frame time
+    double sum = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        sum += frame_times_[i];
+    }
+    double avg_frame_time = sum / sample_count;
+
+    if (avg_frame_time <= 0.0) {
+        return 0.0;
+    }
+
+    // Count frames that are significantly slower than average (jank detection)
+    int jank_count = 0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        if (frame_times_[i] > avg_frame_time * 2.5) { // Jank is 2.5x average time
+            jank_count++;
+        }
+    }
+
+    return static_cast<double>(jank_count) / sample_count * 100.0;
+}
+
+double AutoQualityController::calculatePerformanceConsistency() const {
+    // Calculate a consistency score based on frame time variations
+    if (frame_count_ < 5) {
+        return 100.0; // Not enough data, assume perfect consistency
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 2) {
+        return 100.0;
+    }
+
+    // Calculate mean frame time
+    double sum = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        sum += frame_times_[i];
+    }
+    double mean = sum / sample_count;
+
+    if (mean <= 0.0) {
+        return 100.0;
+    }
+
+    // Calculate standard deviation
+    double variance_sum = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        double diff = frame_times_[i] - mean;
+        variance_sum += diff * diff;
+    }
+    double variance = variance_sum / sample_count;
+    double std_dev = std::sqrt(variance);
+
+    // Calculate coefficient of variation (lower is more consistent)
+    double coefficient_of_variation = (std_dev / mean) * 100.0;
+
+    // Convert to consistency score (higher is better)
+    // Using an inverse relationship: lower variation = higher consistency
+    double consistency_score = std::max(0.0, 100.0 - coefficient_of_variation * 10.0);
+    return consistency_score;
+}
+
+void AutoQualityController::updateAdvancedMetrics() {
+    // Update advanced performance metrics that can be used for quality decisions
+    bool has_spikes = detectPerformanceSpikes();
+    double jank_percentage = calculateJankPercentage();
+    double consistency_score = calculatePerformanceConsistency();
+
+    // Adjust performance score based on these advanced metrics
+    if (has_spikes) {
+        // Significant performance spikes detected, reduce performance score
+        performance_score_ *= 0.9; // 10% reduction
+    }
+
+    if (jank_percentage > 15.0) { // More than 15% janky frames
+        // Heavy jank detected, reduce performance score
+        double jank_penalty = std::min(jank_percentage * 0.5, 30.0); // Up to 30% penalty
+        performance_score_ -= jank_penalty;
+    }
+
+    // Consistency affects the performance score inversely
+    // Less consistent = lower score
+    double consistency_factor = consistency_score / 100.0;
+    performance_score_ *= consistency_factor;
+
+    // Ensure performance score stays within bounds
+    performance_score_ = std::max(0.0, std::min(100.0, performance_score_));
 }
 
 } // namespace RenderEngine

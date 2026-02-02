@@ -78,6 +78,18 @@ public:
     // Register a callback for when a slow render is detected
     void register_slow_render_callback(std::function<void(uint32_t, const std::string&, uint64_t)> callback);
 
+    // Get panels ranked by render time variance (higher variance = more inconsistent performance)
+    std::vector<std::pair<uint32_t, double>> get_panel_variance_ranking() const;
+
+    // Get panels ranked by outlier ratio (panels with inconsistent render times)
+    std::vector<std::pair<uint32_t, double>> get_panel_outlier_ratio_ranking() const;
+
+    // Get panels ranked by resource intensity (combination of average time and slow render frequency)
+    std::vector<std::pair<uint32_t, double>> get_panel_resource_intensity_ranking() const;
+
+    // Generate a detailed bottleneck analysis report with multiple perspectives
+    std::string generate_detailed_bottleneck_report() const;
+
 private:
     std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
     mutable std::mutex profiling_data_mutex_;

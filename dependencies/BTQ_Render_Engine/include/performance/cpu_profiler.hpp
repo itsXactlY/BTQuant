@@ -121,6 +121,28 @@ public:
     // Get call tree for visualization
     std::unique_ptr<CallTreeNode> get_call_tree() const;
 
+    // Get flame graph data for visualization
+    std::vector<std::pair<std::string, std::vector<std::pair<std::string, double>>>> get_flame_graph_data() const;
+
+    // Get function call statistics with percentiles
+    std::map<std::string, FunctionProfileData> get_percentile_statistics(double percentile = 95.0) const;
+
+    // Get exclusive and inclusive timing data
+    struct TimingBreakdown {
+        std::string function_name;
+        double exclusive_time_ms;  // Time spent in function excluding children
+        double inclusive_time_ms;  // Time spent in function including children
+        uint64_t call_count;
+    };
+
+    std::vector<TimingBreakdown> get_timing_breakdown() const;
+
+    // Filter profiles by time range
+    std::map<std::string, FunctionProfileData> get_filtered_profiles(
+        double min_time_ms = 0.0,
+        double max_time_ms = std::numeric_limits<double>::max()
+    ) const;
+
     // RAII wrapper for automatic profiling
     class ProfileScope {
     public:
@@ -131,6 +153,16 @@ public:
         std::string function_name_;
     };
 
+    // RAII wrapper with custom tag for more granular profiling
+    class TaggedProfileScope {
+    public:
+        TaggedProfileScope(const std::string& function_name, const std::string& tag);
+        ~TaggedProfileScope();
+
+    private:
+        std::string function_name_with_tag_;
+    };
+
     // Sampling-based profiling methods
     void start_sampling_profiling(std::chrono::milliseconds interval = std::chrono::milliseconds(1));
     void stop_sampling_profiling();
@@ -138,6 +170,10 @@ public:
 
     // Register callback for sampling results
     void register_sample_callback(std::function<void(const std::map<std::string, FunctionProfileData>&)> callback);
+
+    // Export profiling data in various formats
+    std::string export_to_json() const;
+    std::string export_to_csv() const;
 
 private:
     mutable std::mutex profiles_mutex_;
@@ -153,6 +189,14 @@ private:
     void sampling_loop();
     void print_tree_node(std::ostringstream& report, const CallTreeNode* node, int depth) const;
     std::unique_ptr<CallTreeNode> deep_copy_tree(const CallTreeNode* node) const;
+
+    // Helper methods for enhanced profiling
+    void calculate_exclusive_times(const CallTreeNode* node, std::map<std::string, double>& exclusive_times) const;
+    std::vector<double> get_percentile_values(const std::vector<uint64_t>& values, double percentile) const;
+    void flatten_tree_for_flame_graph(const CallTreeNode* node,
+                                    std::vector<std::pair<std::string, double>>& result,
+                                    const std::string& parent_path) const;
+    std::string escape_json_string(const std::string& str) const;
 };
 
 // Global CPU profiler instance

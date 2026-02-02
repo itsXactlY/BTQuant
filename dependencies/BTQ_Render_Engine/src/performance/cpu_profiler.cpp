@@ -4,6 +4,10 @@
 #include <iomanip>
 #include <sstream>
 #include <memory>
+#include <limits>
+#include <cmath>
+#include <fstream>
+#include <cstdio>
 
 namespace BTQuant {
 
@@ -306,6 +310,52 @@ void CPUProfiler::sampling_loop() {
     }
 }
 
+std::vector<double> CPUProfiler::get_percentile_values(const std::vector<uint64_t>& values, double percentile) const {
+    if (values.empty()) {
+        return {};
+    }
+
+    std::vector<uint64_t> sorted_values = values;
+    std::sort(sorted_values.begin(), sorted_values.end());
+
+    std::vector<double> result;
+    size_t index = static_cast<size_t>((percentile / 100.0) * sorted_values.size());
+    if (index < sorted_values.size()) {
+        result.push_back(static_cast<double>(sorted_values[index]));
+    }
+
+    return result;
+}
+
+std::string CPUProfiler::escape_json_string(const std::string& str) const {
+    std::string result;
+    result.reserve(str.length()); // Reserve space to minimize allocations
+
+    for (char c : str) {
+        switch (c) {
+            case '"':  result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\b': result += "\\b";  break;
+            case '\f': result += "\\f";  break;
+            case '\n': result += "\\n";  break;
+            case '\r': result += "\\r";  break;
+            case '\t': result += "\\t";  break;
+            default:
+                if ('\x00' <= c && c <= '\x1f') {
+                    result += "\\u";
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "%04x", c);
+                    result += buf;
+                } else {
+                    result += c;
+                }
+                break;
+        }
+    }
+
+    return result;
+}
+
 std::string CPUProfiler::generate_report() const {
     std::ostringstream report;
     report << "CPU Profiling Report\n";
@@ -396,6 +446,229 @@ CPUProfiler::get_top_functions_by_average_time(int n) const {
     }
 
     return sorted_profiles;
+}
+
+std::vector<std::pair<std::string, std::vector<std::pair<std::string, double>>>>
+CPUProfiler::get_flame_graph_data() const {
+    std::vector<std::pair<std::string, std::vector<std::pair<std::string, double>>>> flame_data;
+
+    std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+    for (const auto& [thread_id, thread_data] : thread_profiles_) {
+        std::vector<std::pair<std::string, double>> thread_flame_data;
+
+        // Flatten the call tree to generate flame graph data
+        if (thread_data.call_tree_root) {
+            flatten_tree_for_flame_graph(thread_data.call_tree_root.get(), thread_flame_data, "");
+        }
+
+        flame_data.push_back({std::to_string(reinterpret_cast<uintptr_t>(&thread_id)), thread_flame_data});
+    }
+
+    return flame_data;
+}
+
+void CPUProfiler::flatten_tree_for_flame_graph(const CallTreeNode* node,
+                                               std::vector<std::pair<std::string, double>>& result,
+                                               const std::string& parent_path) const {
+    if (!node) return;
+
+    std::string current_path = parent_path.empty() ? node->function_name : parent_path + ";" + node->function_name;
+    double time_ms = node->profile_data.get_total_duration_ms();
+
+    result.push_back({current_path, time_ms});
+
+    for (const auto& child : node->children) {
+        flatten_tree_for_flame_graph(child.get(), result, current_path);
+    }
+}
+
+std::map<std::string, FunctionProfileData>
+CPUProfiler::get_percentile_statistics(double percentile) const {
+    std::map<std::string, FunctionProfileData> percentile_stats;
+
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        FunctionProfileData stat = profile_data;
+
+        if (!profile_data.duration_history.empty()) {
+            std::vector<uint64_t> sorted_durations = profile_data.duration_history;
+            std::sort(sorted_durations.begin(), sorted_durations.end());
+
+            size_t index = static_cast<size_t>((percentile / 100.0) * sorted_durations.size());
+            if (index >= sorted_durations.size()) {
+                index = sorted_durations.size() - 1;
+            }
+
+            stat.min_duration_ns = sorted_durations[0];  // Actual min
+            stat.max_duration_ns = sorted_durations[index];  // Percentile value
+        }
+
+        percentile_stats[func_name] = stat;
+    }
+
+    return percentile_stats;
+}
+
+std::vector<CPUProfiler::TimingBreakdown>
+CPUProfiler::get_timing_breakdown() const {
+    std::vector<TimingBreakdown> breakdowns;
+    std::map<std::string, double> exclusive_times;
+
+    // First, calculate exclusive times while holding the lock
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+        // Calculate exclusive times for each thread
+        for (const auto& [thread_id, thread_data] : thread_profiles_) {
+            if (thread_data.call_tree_root) {
+                calculate_exclusive_times(thread_data.call_tree_root.get(), exclusive_times);
+            }
+        }
+    } // Release the lock here
+
+    // Now aggregate inclusive times from all profiles (this will acquire the lock internally)
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        TimingBreakdown tb;
+        tb.function_name = func_name;
+        tb.inclusive_time_ms = profile_data.get_total_duration_ms();
+        tb.exclusive_time_ms = exclusive_times.count(func_name) ?
+                              exclusive_times[func_name] : 0.0;
+        tb.call_count = profile_data.call_count;
+
+        breakdowns.push_back(tb);
+    }
+
+    // Sort by inclusive time (most time-consuming first)
+    std::sort(breakdowns.begin(), breakdowns.end(),
+              [](const TimingBreakdown& a, const TimingBreakdown& b) {
+                  return a.inclusive_time_ms > b.inclusive_time_ms;
+              });
+
+    return breakdowns;
+}
+
+void CPUProfiler::calculate_exclusive_times(const CallTreeNode* node,
+                                           std::map<std::string, double>& exclusive_times) const {
+    if (!node) return;
+
+    // Calculate exclusive time (total time minus children's time)
+    double total_time = node->profile_data.get_total_duration_ms();
+    double children_time = 0.0;
+
+    for (const auto& child : node->children) {
+        children_time += child->profile_data.get_total_duration_ms();
+        calculate_exclusive_times(child.get(), exclusive_times);  // Recursive call for deeper levels
+    }
+
+    double exclusive_time = total_time - children_time;
+
+    // Accumulate exclusive time for this function name
+    exclusive_times[node->function_name] += exclusive_time;
+}
+
+std::map<std::string, FunctionProfileData>
+CPUProfiler::get_filtered_profiles(double min_time_ms, double max_time_ms) const {
+    std::map<std::string, FunctionProfileData> filtered_profiles;
+
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        double total_time = profile_data.get_total_duration_ms();
+        if (total_time >= min_time_ms && total_time <= max_time_ms) {
+            filtered_profiles[func_name] = profile_data;
+        }
+    }
+
+    return filtered_profiles;
+}
+
+std::string CPUProfiler::export_to_json() const {
+    std::ostringstream json_stream;
+    json_stream << "{\n  \"profiling_data\": [\n";
+
+    bool first_entry = true;
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (!first_entry) {
+            json_stream << ",\n";
+        }
+
+        json_stream << "    {\n";
+        json_stream << "      \"function_name\": \"" << escape_json_string(func_name) << "\",\n";
+        json_stream << "      \"call_count\": " << profile_data.call_count << ",\n";
+        json_stream << "      \"total_time_ms\": " << profile_data.get_total_duration_ms() << ",\n";
+        json_stream << "      \"average_time_ms\": " << profile_data.get_average_duration_ms() << ",\n";
+        json_stream << "      \"min_time_ms\": " << profile_data.get_min_duration_ms() << ",\n";
+        json_stream << "      \"max_time_ms\": " << profile_data.get_max_duration_ms() << "\n";
+        json_stream << "    }";
+
+        first_entry = false;
+    }
+
+    json_stream << "\n  ],\n";
+
+    // Add timing breakdown
+    auto timing_breakdown = get_timing_breakdown();
+    json_stream << "  \"timing_breakdown\": [\n";
+
+    for (size_t i = 0; i < timing_breakdown.size(); ++i) {
+        if (i > 0) json_stream << ",\n";
+
+        json_stream << "    {\n";
+        json_stream << "      \"function_name\": \"" << escape_json_string(timing_breakdown[i].function_name) << "\",\n";
+        json_stream << "      \"exclusive_time_ms\": " << timing_breakdown[i].exclusive_time_ms << ",\n";
+        json_stream << "      \"inclusive_time_ms\": " << timing_breakdown[i].inclusive_time_ms << ",\n";
+        json_stream << "      \"call_count\": " << timing_breakdown[i].call_count << "\n";
+        json_stream << "    }";
+    }
+
+    json_stream << "\n  ]\n}";
+
+    return json_stream.str();
+}
+
+std::string CPUProfiler::export_to_csv() const {
+    std::ostringstream csv_stream;
+
+    // Header
+    csv_stream << "Function Name,Call Count,Total Time (ms),Average Time (ms),Min Time (ms),Max Time (ms),Exclusive Time (ms),Inclusive Time (ms)\n";
+
+    auto timing_breakdown = get_timing_breakdown();
+
+    for (const auto& breakdown : timing_breakdown) {
+        // Find the corresponding profile data
+        auto all_profiles = get_aggregated_profiles();
+        auto profile_it = all_profiles.find(breakdown.function_name);
+
+        if (profile_it != all_profiles.end()) {
+            const auto& profile_data = profile_it->second;
+            csv_stream << "\"" << profile_it->first << "\",";
+            csv_stream << profile_data.call_count << ",";
+            csv_stream << profile_data.get_total_duration_ms() << ",";
+            csv_stream << profile_data.get_average_duration_ms() << ",";
+            csv_stream << profile_data.get_min_duration_ms() << ",";
+            csv_stream << profile_data.get_max_duration_ms() << ",";
+            csv_stream << breakdown.exclusive_time_ms << ",";
+            csv_stream << breakdown.inclusive_time_ms << "\n";
+        }
+    }
+
+    return csv_stream.str();
+}
+
+// TaggedProfileScope implementation
+CPUProfiler::TaggedProfileScope::TaggedProfileScope(const std::string& function_name, const std::string& tag) {
+    function_name_with_tag_ = function_name + "[" + tag + "]";
+    BTQuant::g_cpu_profiler.start_function(function_name_with_tag_);
+}
+
+CPUProfiler::TaggedProfileScope::~TaggedProfileScope() {
+    BTQuant::g_cpu_profiler.end_function(function_name_with_tag_);
 }
 
 // RAII wrapper implementation

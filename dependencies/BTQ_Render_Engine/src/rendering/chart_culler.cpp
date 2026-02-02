@@ -56,6 +56,26 @@ bool ChartCuller::should_render_element_with_padding(double time, double price, 
     return true;
 }
 
+// Enhanced version that considers bounding box for rectangular elements like candles
+bool ChartCuller::should_render_bounding_box(double min_time, double max_time, double min_price, double max_price) const {
+    if (!viewport_set_) {
+        // If no viewport is set, render everything
+        return true;
+    }
+
+    // Check if the bounding box intersects with the viewport
+    if (max_time < viewport_.minTime || min_time > viewport_.maxTime) {
+        return false; // Completely outside time range
+    }
+
+    if (max_price < viewport_.minPrice || min_price > viewport_.maxPrice) {
+        return false; // Completely outside price range
+    }
+
+    // Bounding box intersects with viewport
+    return true;
+}
+
 float ChartCuller::calculate_lod_factor(double zoom_factor) const {
     // Define LOD thresholds based on zoom level
     // Higher zoom = more detail, lower zoom = less detail
@@ -95,6 +115,34 @@ float ChartCuller::calculate_adaptive_lod_factor(double zoom_factor, size_t data
     }
 
     return std::max(0.05f, base_lod); // Minimum 5% detail to maintain some representation
+}
+
+// Advanced LOD calculation that considers both zoom and data density
+float ChartCuller::calculate_advanced_lod_factor(double zoom_factor, size_t data_point_count,
+                                               float viewport_width_pixels, float viewport_height_pixels) const {
+    // Start with the basic adaptive LOD calculation
+    float adaptive_lod = calculate_adaptive_lod_factor(zoom_factor, data_point_count, viewport_width_pixels);
+
+    // Calculate the time range density (points per time unit)
+    if (viewport_.isValid() && data_point_count > 0) {
+        double time_range = viewport_.width();
+        if (time_range > 0) {
+            float points_per_time_unit = static_cast<float>(data_point_count) / static_cast<float>(time_range);
+
+            // If we have too many points per time unit, reduce detail further
+            if (points_per_time_unit > 10.0f) {  // Threshold can be adjusted
+                float time_density_factor = 10.0f / points_per_time_unit;
+                adaptive_lod = std::min(adaptive_lod, time_density_factor);
+            }
+        }
+    }
+
+    // Also consider the price range density if needed
+    if (viewport_.height() > 0) {
+        // Price density could be considered here if needed for specific chart types
+    }
+
+    return std::max(0.05f, adaptive_lod); // Minimum 5% detail to maintain some representation
 }
 
 void ChartCuller::get_visible_data_range(const ChartInstance& chart, size_t& start_index, size_t& end_index) const {
@@ -241,7 +289,7 @@ ChartInstance ChartCuller::apply_advanced_culling_and_lod(const ChartInstance& c
         }
     }
 
-    float adaptive_lod = calculate_adaptive_lod_factor(lod_factor, visible_points_count, viewport_width_pixels);
+    float adaptive_lod = calculate_advanced_lod_factor(lod_factor, visible_points_count, viewport_width_pixels, viewport_height_pixels);
 
     // Get the visible data range
     size_t start_index, end_index;
@@ -278,6 +326,138 @@ ChartInstance ChartCuller::apply_advanced_culling_and_lod(const ChartInstance& c
         if (i < chart.dates.size()) {
             // Check if the element with padding would be visible (for off-screen elements that might affect rendering)
             if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+                // For candlestick charts, we should also check if the full candle (high-low range) is visible
+                if (should_render_bounding_box(
+                        chart.dates[i] - time_padding,
+                        chart.dates[i] + time_padding,
+                        chart.lows[i],
+                        chart.highs[i])) {
+                    filtered_dates.push_back(chart.dates[i]);
+                    filtered_opens.push_back(chart.opens[i]);
+                    filtered_highs.push_back(chart.highs[i]);
+                    filtered_lows.push_back(chart.lows[i]);
+                    filtered_closes.push_back(chart.closes[i]);
+                    filtered_volumes.push_back(chart.volumes[i]);
+                }
+            }
+        }
+    }
+
+    // Replace the chart data with filtered data
+    processed_chart.dates = std::move(filtered_dates);
+    processed_chart.opens = std::move(filtered_opens);
+    processed_chart.highs = std::move(filtered_highs);
+    processed_chart.lows = std::move(filtered_lows);
+    processed_chart.closes = std::move(filtered_closes);
+    processed_chart.volumes = std::move(filtered_volumes);
+
+    return processed_chart;
+}
+
+// Optimized version that uses binary search for finding visible range (more efficient for large datasets)
+void ChartCuller::get_visible_data_range_optimized(const ChartInstance& chart, size_t& start_index, size_t& end_index) const {
+    if (!viewport_set_ || chart.dates.empty()) {
+        // If no viewport is set or chart is empty, return full range
+        start_index = 0;
+        end_index = chart.dates.size() > 0 ? chart.dates.size() - 1 : 0;
+        return;
+    }
+
+    // Binary search for the start index (first date >= minTime)
+    start_index = 0;
+    size_t left = 0, right = chart.dates.size();
+    while (left < right) {
+        size_t mid = left + (right - left) / 2;
+        if (chart.dates[mid] >= viewport_.minTime) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+    start_index = left;
+
+    // Binary search for the end index (last date <= maxTime)
+    end_index = chart.dates.size() > 0 ? chart.dates.size() - 1 : 0;
+    left = 0;
+    right = chart.dates.size();
+    while (left < right) {
+        size_t mid = left + (right - left) / 2;
+        if (chart.dates[mid] <= viewport_.maxTime) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    }
+    end_index = (left > 0) ? left - 1 : 0;
+
+    // Ensure indices are valid
+    if (start_index > end_index && !chart.dates.empty()) {
+        // No data is visible in the current viewport
+        start_index = 0;
+        end_index = 0;
+    }
+}
+
+// Advanced culling with optimized range finding and enhanced polygon reduction
+ChartInstance ChartCuller::apply_optimized_culling_and_lod(const ChartInstance& chart, float lod_factor,
+                                                          float viewport_width_pixels, float viewport_height_pixels) const {
+    ChartInstance processed_chart = chart;
+
+    if (!viewport_set_ || chart.dates.empty()) {
+        // If no viewport is set or chart is empty, return original chart
+        return processed_chart;
+    }
+
+    // Use optimized range finding for better performance with large datasets
+    size_t start_index, end_index;
+    get_visible_data_range_optimized(chart, start_index, end_index);
+
+    // Calculate adaptive LOD based on data density
+    size_t visible_points_count = 0;
+    for (size_t i = start_index; i <= end_index && i < chart.dates.size(); ++i) {
+        if (should_render_element(chart.dates[i], chart.closes[i])) {
+            visible_points_count++;
+        }
+    }
+
+    float adaptive_lod = calculate_advanced_lod_factor(lod_factor, visible_points_count, viewport_width_pixels, viewport_height_pixels);
+
+    // Create new vectors with reduced data
+    std::vector<double> filtered_dates;
+    std::vector<float> filtered_opens;
+    std::vector<float> filtered_highs;
+    std::vector<float> filtered_lows;
+    std::vector<float> filtered_closes;
+    std::vector<float> filtered_volumes;
+
+    // Calculate time and price ranges to determine appropriate padding
+    double time_range = viewport_.maxTime - viewport_.minTime;
+    double price_range = viewport_.maxPrice - viewport_.minPrice;
+    double time_padding = time_range * 0.001; // 0.1% padding for time
+    double price_padding = price_range * 0.001; // 0.1% padding for price
+
+    // Apply LOD by reducing the number of points if needed
+    size_t total_points = end_index - start_index + 1;
+    size_t target_points = static_cast<size_t>(total_points * adaptive_lod);
+
+    if (target_points < 1) target_points = 1;
+
+    // If we need to reduce points, calculate the step size
+    size_t step = 1;
+    if (target_points < total_points && adaptive_lod < 1.0f) {
+        step = std::max(static_cast<size_t>(1), total_points / target_points);
+    }
+
+    // Sample the data based on the step size, considering padding for off-screen elements
+    for (size_t i = start_index; i <= end_index && i < chart.dates.size(); i += step) {
+        // Check if the element with padding would be visible (for off-screen elements that might affect rendering)
+        if (should_render_element_with_padding(chart.dates[i], chart.closes[i], time_padding, price_padding)) {
+            // For candlestick charts, we should also check if the full candle (high-low range) is visible
+            if (should_render_bounding_box(
+                    chart.dates[i] - time_padding,
+                    chart.dates[i] + time_padding,
+                    chart.lows[i],
+                    chart.highs[i])) {
                 filtered_dates.push_back(chart.dates[i]);
                 filtered_opens.push_back(chart.opens[i]);
                 filtered_highs.push_back(chart.highs[i]);
@@ -316,7 +496,11 @@ bool ChartCuller::should_render_chart(const ChartInstance& chart) const {
     }
 
     // Check if any part of the chart's data is within the viewport
-    for (size_t i = 0; i < chart.dates.size(); ++i) {
+    // Use optimized range checking for better performance
+    size_t start_index, end_index;
+    get_visible_data_range_optimized(chart, start_index, end_index);
+
+    for (size_t i = start_index; i <= end_index && i < chart.dates.size(); ++i) {
         if (should_render_element(chart.dates[i], chart.closes[i])) {
             return true; // At least one element is visible
         }

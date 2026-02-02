@@ -53,6 +53,18 @@ public:
     bool should_render_element_with_padding(double time, double price, double time_padding, double price_padding) const;
 
     /**
+     * @brief Determines if a bounding box should be rendered based on visibility
+     *        Useful for rectangular elements like candlesticks that have width and height
+     *
+     * @param min_time The minimum time value of the bounding box
+     * @param max_time The maximum time value of the bounding box
+     * @param min_price The minimum price value of the bounding box
+     * @param max_price The maximum price value of the bounding box
+     * @return true if the bounding box intersects with the viewport, false otherwise
+     */
+    bool should_render_bounding_box(double min_time, double max_time, double min_price, double max_price) const;
+
+    /**
      * @brief Calculates the appropriate level of detail based on zoom level
      *
      * @param zoom_factor Current zoom factor (higher means more zoomed in)
@@ -71,6 +83,18 @@ public:
     float calculate_adaptive_lod_factor(double zoom_factor, size_t data_point_count, float viewport_width_pixels) const;
 
     /**
+     * @brief Calculates advanced LOD factor considering both zoom and data density
+     *
+     * @param zoom_factor Current zoom factor
+     * @param data_point_count Number of data points in the visible range
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Advanced adaptive level of detail factor
+     */
+    float calculate_advanced_lod_factor(double zoom_factor, size_t data_point_count,
+                                      float viewport_width_pixels, float viewport_height_pixels) const;
+
+    /**
      * @brief Filters chart data points to only those within the viewport
      *
      * @param chart The chart instance to cull
@@ -78,6 +102,15 @@ public:
      * @param end_index Output parameter for the end index of visible data
      */
     void get_visible_data_range(const ChartInstance& chart, size_t& start_index, size_t& end_index) const;
+
+    /**
+     * @brief Optimized version that uses binary search to find visible data range (better for large datasets)
+     *
+     * @param chart The chart instance to cull
+     * @param start_index Output parameter for the start index of visible data
+     * @param end_index Output parameter for the end index of visible data
+     */
+    void get_visible_data_range_optimized(const ChartInstance& chart, size_t& start_index, size_t& end_index) const;
 
     /**
      * @brief Applies culling and LOD to chart data for rendering
@@ -99,6 +132,18 @@ public:
      */
     ChartInstance apply_advanced_culling_and_lod(const ChartInstance& chart, float lod_factor = 1.0f,
                                                 float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
+    /**
+     * @brief Applies optimized culling with binary search range finding and enhanced polygon reduction
+     *
+     * @param chart The chart instance to process
+     * @param lod_factor Level of detail factor to apply
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with optimized culling and LOD applied
+     */
+    ChartInstance apply_optimized_culling_and_lod(const ChartInstance& chart, float lod_factor = 1.0f,
+                                                 float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
     /**
      * @brief Determines if a chart should be rendered based on its visibility

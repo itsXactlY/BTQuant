@@ -22,18 +22,7 @@ void OrderbookBatcher::clear() {
 }
 
 OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID texture, int primitive_type) {
-    // Look for an existing compatible batch with sufficient space
-    for (auto& batch : batches_) {
-        if (batch.texture == texture && batch.primitive_type == primitive_type) {
-            // Check if we have space in this batch (avoid exceeding limits)
-            if (batch.vertices.size() < 65535 - 4 && batch.indices.size() < 65535 - 6) {
-                return &batch;
-            }
-        }
-    }
-
-    // If no compatible batch with exact primitive type exists, try to find one with same texture
-    // This allows for better batching when primitive types are different but texture is the same
+    // Prioritize batching by texture first to minimize draw calls
     for (auto& batch : batches_) {
         if (batch.texture == texture) {
             // Check if we have space in this batch (avoid exceeding limits)
@@ -43,7 +32,7 @@ OrderbookBatchElement* OrderbookBatcher::findOrCreateCompatibleBatch(ImTextureID
         }
     }
 
-    // Create a new batch if no compatible one exists
+    // If no batch with the same texture exists, create a new one
     batches_.emplace_back();
     auto& new_batch = batches_.back();
     new_batch.texture = texture;
@@ -62,13 +51,18 @@ void OrderbookBatcher::optimizeBatches() {
         return; // Nothing to optimize
     }
 
+    // Sort batches by texture to group them together for better merging
+    std::sort(batches_.begin(), batches_.end(), [](const OrderbookBatchElement& a, const OrderbookBatchElement& b) {
+        return a.texture < b.texture;
+    });
+
     std::vector<OrderbookBatchElement> optimized_batches;
     optimized_batches.reserve(batches_.size()); // Reserve initial space
 
     for (auto& current_batch : batches_) {
         bool merged = false;
 
-        // Try to find an existing batch to merge with
+        // Try to find an existing batch with the same texture to merge with
         for (auto& target_batch : optimized_batches) {
             // Check if batches can be merged (same texture, and enough space)
             if (target_batch.texture == current_batch.texture &&
@@ -106,15 +100,15 @@ void OrderbookBatcher::optimizeBatches() {
 void OrderbookBatcher::addRectFilled(const ImVec2& min, const ImVec2& max, ImU32 col) {
     // Find or create a compatible batch for filled rectangles
     auto* batch = findOrCreateCompatibleBatch((ImTextureID)0, 0); // Using 0 for rectangle primitive type
-    
+
     // Add 4 vertices for the rectangle
     size_t vertex_start = batch->vertices.size();
-    
+
     batch->vertices.push_back({min, col, {0, 0}});                    // Top-left
     batch->vertices.push_back({ImVec2(max.x, min.y), col, {1, 0}});   // Top-right
     batch->vertices.push_back({max, col, {1, 1}});                    // Bottom-right
     batch->vertices.push_back({ImVec2(min.x, max.y), col, {0, 1}});   // Bottom-left
-    
+
     // Add 6 indices to form 2 triangles (0,1,2 and 0,2,3)
     batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
     batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 1));

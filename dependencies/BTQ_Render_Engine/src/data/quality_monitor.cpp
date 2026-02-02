@@ -53,6 +53,9 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         }
     }
 
+    // Check for missing or invalid fields
+    check_missing_fields(trade, symbol, trade.timestamp);
+
     // Check for missing data based on expected patterns
     check_missing_data_for_symbol(symbol, trade.timestamp);
 
@@ -400,14 +403,70 @@ bool DataQualityMonitor::validate_trade_values(const TradeData& trade) {
         trade.price < MIN_VALID_PRICE || trade.price > MAX_VALID_PRICE) {
         return false;
     }
-    
+
     // Check if volume is valid
     if (trade.volume <= 0 || std::isnan(trade.volume) || std::isinf(trade.volume) ||
         trade.volume < MIN_VALID_VOLUME) {
         return false;
     }
-    
+
     return true;
+}
+
+void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std::string& symbol, uint64_t timestamp) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Check for missing or invalid fields
+    std::vector<std::string> missing_fields;
+
+    // Check if timestamp is reasonable (not too far in the future or past)
+    auto current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    // If timestamp is significantly different from current time (more than 1 hour), it might be invalid
+    if (std::abs(static_cast<int64_t>(timestamp) - static_cast<int64_t>(current_time)) > 3600000) {
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Timestamp is significantly different from current time (> 1 hour)", 0.6);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for potentially invalid exchange_id (assuming valid range is 0-255, but we might expect a smaller range)
+    // Common exchanges might have IDs 1-10, so anything above a threshold might be suspicious
+    if (trade.exchange_id > 50) {  // Assuming most exchanges have IDs under 50
+        std::ostringstream oss;
+        oss << "Unusual exchange ID detected: " << static_cast<int>(trade.exchange_id);
+
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             oss.str(), 0.4);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for potentially invalid flags combination
+    // For example, a trade shouldn't be both market and limit order at the same time
+    if (has_flag(trade.flags, TradeFlags::MARKET_ORDER) && has_flag(trade.flags, TradeFlags::LIMIT_ORDER)) {
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Invalid flag combination: trade marked as both market and limit order", 0.7);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for aggressive and passive order flags together
+    if (has_flag(trade.flags, TradeFlags::AGGRESSIVE_ORDER) && has_flag(trade.flags, TradeFlags::PASSIVE_ORDER)) {
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Invalid flag combination: trade marked as both aggressive and passive order", 0.7);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for liquidity added and removed flags together
+    if (has_flag(trade.flags, TradeFlags::LIQUIDITY_ADDED) && has_flag(trade.flags, TradeFlags::LIQUIDITY_REMOVED)) {
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Invalid flag combination: trade marked as both liquidity added and removed", 0.7);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
 }
 
 DataQualityMetrics DataQualityMonitor::get_metrics() const {

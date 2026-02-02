@@ -85,6 +85,9 @@ public:
   // Validate price and volume values
   bool validate_trade_values(const TradeData& trade);
 
+  // Check for missing or invalid fields
+  void check_missing_fields(const TradeData& trade, const std::string& symbol, uint64_t timestamp);
+
   // Get current data quality metrics
   DataQualityMetrics get_metrics() const;
 

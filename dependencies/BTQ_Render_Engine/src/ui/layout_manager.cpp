@@ -36,7 +36,7 @@ void LayoutManager::initialize_presets_directory() {
 }
 
 // Save current panel arrangement as named preset
-bool LayoutManager::save_current_layout_as_preset(const std::string& preset_name, 
+bool LayoutManager::save_current_layout_as_preset(const std::string& preset_name,
                                                   const std::string& description,
                                                   const std::string& category) {
     if (preset_name.empty()) {
@@ -44,9 +44,17 @@ bool LayoutManager::save_current_layout_as_preset(const std::string& preset_name
         return false;
     }
 
+    // Validate preset name to ensure it contains only valid characters
+    for (char c : preset_name) {
+        if (!std::isalnum(c) && c != '_' && c != '-' && c != ' ') {
+            std::cerr << "Error: Preset name contains invalid characters" << std::endl;
+            return false;
+        }
+    }
+
     // Get current layout from dashboard layout manager
     std::string json_data = get_current_layout_json();
-    
+
     if (json_data.empty()) {
         std::cerr << "Error: Could not retrieve current layout data" << std::endl;
         return false;
@@ -75,6 +83,8 @@ bool LayoutManager::load_preset_layout(const std::string& preset_name) {
         return false;
     }
 
+    std::cout << "Loading preset: " << preset_name << " (Category: " << it->category << ")" << std::endl;
+
     // Apply the preset to the layout
     return apply_layout_from_preset(*it);
 }
@@ -86,8 +96,48 @@ bool LayoutManager::delete_preset(const std::string& preset_name) {
         return false;
     }
 
+    // Check if preset exists before attempting deletion
+    auto all_presets = preset_manager_->get_all_presets();
+    auto it = std::find_if(all_presets.begin(), all_presets.end(),
+                          [&preset_name](const Layout::LayoutPreset& preset) {
+                              return preset.name == preset_name;
+                          });
+
+    if (it == all_presets.end()) {
+        std::cerr << "Error: Preset '" << preset_name << "' not found" << std::endl;
+        return false;
+    }
+
+    // Prevent deletion of built-in presets
+    if (it->is_builtin) {
+        std::cerr << "Error: Cannot delete built-in preset '" << preset_name << "'" << std::endl;
+        return false;
+    }
+
     // Attempt to delete the preset using the preset manager
-    return preset_manager_->delete_preset(preset_name);
+    bool result = preset_manager_->delete_preset(preset_name);
+
+    if (result) {
+        std::cout << "Successfully deleted preset: " << preset_name << std::endl;
+    } else {
+        std::cerr << "Failed to delete preset: " << preset_name << std::endl;
+    }
+
+    return result;
+}
+
+bool LayoutManager::preset_exists(const std::string& preset_name) const {
+    if (preset_name.empty()) {
+        return false;
+    }
+
+    auto all_presets = preset_manager_->get_all_presets();
+    auto it = std::find_if(all_presets.begin(), all_presets.end(),
+                          [&preset_name](const Layout::LayoutPreset& preset) {
+                              return preset.name == preset_name;
+                          });
+
+    return it != all_presets.end();
 }
 
 std::vector<Layout::LayoutPreset> LayoutManager::get_all_presets() const {

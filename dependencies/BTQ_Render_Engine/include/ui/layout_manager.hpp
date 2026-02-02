@@ -39,6 +39,9 @@ public:
     // Get presets by category
     std::vector<Layout::LayoutPreset> get_presets_by_category(const std::string& category) const;
 
+    // Check if a preset exists
+    bool preset_exists(const std::string& preset_name) const;
+
     // Integration methods with dashboard layout manager
     bool save_current_dashboard_layout(const std::string& layout_name);
     bool load_dashboard_layout(const std::string& layout_name);

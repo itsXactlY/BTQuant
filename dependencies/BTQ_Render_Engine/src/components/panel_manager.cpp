@@ -5,6 +5,7 @@
 
 #include "../../include/components/time_and_sales.hpp"
 #include "../../include/components/historical_time_sales.hpp"
+#include "../../include/rendering/panel_culler.hpp"
 #include <nlohmann/json.hpp>
 
 #include "../../include/components/alerts_panel.hpp"
@@ -32,6 +33,7 @@
 #include "../../include/components/watchlist_panel.hpp"
 #include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/symbol_registry.hpp"
+#include "../../include/performance/panel_profiler.hpp"
 
 using json = nlohmann::json;
 
@@ -114,9 +116,20 @@ void PanelManager::render() {
     dashboard_size_ = current_size;
   }
 
+  // Use panel culling to avoid rendering off-screen or minimized panels
+  RenderEngine::PanelCuller culler;
+  culler.set_viewport_bounds(ImVec2(0.0f, 0.0f), dashboard_size_);
+
   for (auto& [id, panel] : panels_) {
-    if (panel->is_visible()) {
+    // Use the culler to determine if the panel should be rendered
+    if (culler.should_render_panel(*panel)) {
+      // Start timing the panel render
+      BTQuant::g_panel_profiler.start_panel_render(id, panel->get_title());
+
       panel->render();
+
+      // End timing the panel render
+      BTQuant::g_panel_profiler.end_panel_render(id);
     }
   }
 }

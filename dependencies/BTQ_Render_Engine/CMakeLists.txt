@@ -155,6 +155,7 @@ set(DASHBOARD_SOURCES
     src/data/quality_monitor.cpp
     src/data/test_quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
+    src/performance/panel_profiler.cpp
     # Threading module
     src/threading/task_scheduler.cpp
     # Analytics and advanced features
@@ -272,6 +273,7 @@ add_executable(realtime_dashboard ${REALTIME_DASHBOARD_SOURCES} ${LIB_SOURCES} $
 target_include_directories(realtime_dashboard PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
@@ -297,6 +299,7 @@ add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED
 target_include_directories(dashboard_advanced PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}

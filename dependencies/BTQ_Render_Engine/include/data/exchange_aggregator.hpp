@@ -50,6 +50,7 @@ struct ExchangeFeatures {
   int min_order_size = 1;                // Minimum order size allowed
   std::string timezone = "UTC";          // Exchange timezone
   bool is_active = true;                 // Whether the exchange is currently active
+  int precision = 8;                     // Decimal precision for price rounding
 };
 
 // Exchange ranking for reliability assessment
@@ -557,6 +558,35 @@ struct AdvancedAggregationResult {
       const std::string& symbol, const std::vector<std::string>& exchanges = {}) const;
   std::optional<ComprehensiveExchangeView> getComprehensiveExchangeView(
       const std::string& symbol) const;
+
+  // Enhanced multi-exchange aggregation with quality weighting and risk assessment
+  std::optional<AggregatedMarketData> getEnhancedAggregatedData(const std::string& symbol) const;
+  std::optional<AggregatedMarketData> getQualityWeightedAggregatedData(const std::string& symbol) const;
+  std::unordered_map<std::string, double> getExchangeQualityScores(const std::string& symbol) const;
+
+  // Enhanced time synchronization methods
+  std::optional<TimestampSynchronizationResult> analyzeHistoricalTimeSync(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
+
+  // Enhanced exchange-specific features handling
+  void handleEnhancedExchangeSpecificFeatures(const std::string& exchange,
+                                           const std::string& symbol,
+                                           RenderEngine::MarketDataUpdate& update);
+  void processEnhancedDataUpdate(const std::string& exchange, const std::string& symbol,
+                               const RenderEngine::MarketDataUpdate& update);
+  std::optional<AggregatedMarketData> getCustomWeightedAggregatedData(
+      const std::string& symbol,
+      const std::unordered_map<std::string, double>& custom_weights) const;
+
+private:
+  // Enhanced risk metrics calculation
+  void calculateEnhancedRiskMetrics(
+      const std::string& symbol,
+      const std::unordered_map<std::string, RenderEngine::MarketDataUpdate>& exchange_data,
+      AggregatedMarketData& result) const;
+
+  // Enhanced time synchronization
+  void enhancedSynchronizeTimestamps(AggregatedMarketData& data) const;
 };
 
 }  // namespace Data

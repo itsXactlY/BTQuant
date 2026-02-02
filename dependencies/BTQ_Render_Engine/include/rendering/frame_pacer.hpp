@@ -35,6 +35,8 @@ public:
         double smoothed_fps = 0.0;          ///< Smoothed frames per second
         uint64_t total_frames = 0;          ///< Total frames rendered
         double frame_time_variance = 0.0;   ///< Variance in frame times
+        uint32_t dropped_frames = 0;        ///< Number of detected dropped frames
+        uint32_t spike_count_recent = 0;    ///< Recent frame spikes detected
     };
 
     explicit FramePacer(const Config& config);
@@ -74,30 +76,57 @@ public:
 private:
     Config config_;
     Stats stats_;
-    
+
     mutable std::mutex stats_mutex_;
-    
+
     std::chrono::high_resolution_clock::time_point frame_start_time_;
     std::chrono::high_resolution_clock::time_point last_frame_time_;
-    
+
     std::vector<double> frame_time_history_;
     static constexpr size_t FRAME_HISTORY_SIZE = 120;  // Keep history of 120 frames
-    
+
     double accumulated_frame_time_ = 0.0;
     uint64_t frame_count_ = 0;
-    
+
     // For adaptive sync
     double recent_avg_frame_time_ = 0.0;
     size_t recent_frame_count_ = 0;
-    
+
     // For frame smoothing
     std::vector<double> smoothed_frame_times_;
     static constexpr size_t SMOOTHING_WINDOW = 5;
-    
+
+    // Enhanced frame timing structures
+    struct FrameTimer {
+        std::chrono::high_resolution_clock::time_point last_frame_time;
+        double target_frame_time_us;  // Target frame time in microseconds
+    };
+
+    static constexpr size_t SPIKE_DETECTION_WINDOW = 30;  // Window size for spike detection
+
+    struct SpikeDetector {
+        std::vector<double> spike_history;
+        size_t spike_index;
+        int spike_count_recent;
+        double baseline_frame_time;
+        double spike_threshold_multiplier;
+        std::chrono::high_resolution_clock::time_point last_spike_decay;
+    };
+
+    FrameTimer frame_timer_;
+    SpikeDetector spike_detector_;
+    uint32_t dropped_frame_counter_;
+    uint32_t adaptive_target_fps_;  // Adaptively adjusted target FPS
+    std::chrono::high_resolution_clock::time_point last_adaptive_update_;
+
     // Timing helpers
     double calculate_sleep_duration() const;
-    void update_statistics();
+    void update_statistics(double current_frame_time);
     void update_frame_variance();
+    void precise_sleep(double sleep_duration_ms) const;
+    void detect_spikes(double frame_time_ms);
+    void check_dropped_frames(double frame_time_us);
+    void adapt_target_fps();
 };
 
 } // namespace RenderEngine

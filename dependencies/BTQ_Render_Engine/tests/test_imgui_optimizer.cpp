@@ -37,9 +37,9 @@ void test_conditional_functions() {
 
 void test_batch_operations() {
     // Test batch text rendering with empty vector (should not crash)
-    std::vector<std::pair<std::string, ImVec2>> empty_texts;
+    std::vector<std::pair<const char*, ImVec2>> empty_texts;
     ImGuiOptimizer::BatchTextRendering(empty_texts);
-    
+
     std::cout << "Batch operations test passed: no crashes with empty vectors" << std::endl;
 }
 

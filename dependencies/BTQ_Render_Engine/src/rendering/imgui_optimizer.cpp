@@ -14,6 +14,7 @@
 #include <vector>
 #include <memory>
 #include <sstream>
+#include <cstdint>
 
 namespace BTQuant {
 namespace Rendering {
@@ -39,10 +40,10 @@ public:
     };
 
 private:
-    // Use uintptr_t as key to avoid string copying - much more efficient
-    std::unordered_map<uintptr_t, CachedTextSize> text_size_cache_;
+    // Use string content as key for reliable caching - handles string literals properly
+    std::unordered_map<std::string, CachedTextSize> text_size_cache_;
     std::unordered_map<uint64_t, ImU32> color_cache_;  // Using uint64_t key for better performance
-    std::unordered_map<uint64_t, CachedTextSize> text_size_cache_by_params_;
+    std::unordered_map<std::string, CachedTextSize> text_size_cache_by_params_;
     CachedStyle current_style_cache_;
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
@@ -52,43 +53,42 @@ public:
 
     /**
      * Get cached text size or compute and cache it
-     * Using pointer address as key to avoid string copying
+     * Using string content as key for reliable caching of string literals
      */
     ImVec2 get_cached_text_size(const char* text) {
         if (!text) return ImVec2(0, 0);
 
-        // Use pointer as key for faster lookup - avoids string copy
-        uintptr_t text_ptr = reinterpret_cast<uintptr_t>(text);
+        // Use string content as key to handle string literals properly
+        std::string text_key(text);
 
-        auto it = text_size_cache_.find(text_ptr);
+        auto it = text_size_cache_.find(text_key);
         if (it != text_size_cache_.end() && it->second.valid) {
             return it->second.size;
         }
 
         // Compute and cache the text size
         ImVec2 size = ImGui::CalcTextSize(text);
-        text_size_cache_[text_ptr] = {size, static_cast<float>(ImGui::GetTime()), true};
+        text_size_cache_[text_key] = {size, static_cast<float>(ImGui::GetTime()), true};
 
         return size;
     }
 
     /**
      * Get cached text size with additional parameters
-     * Optimized key generation to avoid collisions and improve performance
+     * Optimized key generation using content-based hashing for reliability
      */
     ImVec2 get_cached_text_size_ex(const char* text, const char* text_end = nullptr,
                                    bool hide_text_after_double_hash = false,
                                    float wrap_width = -1.0f) {
         if (!text) return ImVec2(0, 0);
 
-        // Create a unique numeric key combining all parameters for better performance
-        // Use hash combination to reduce collision risk
-        uint64_t text_hash = reinterpret_cast<uint64_t>(text);
-        uint64_t text_end_hash = reinterpret_cast<uint64_t>(text_end);
-        uint64_t params_key = text_hash ^
-                             (text_end_hash << 1) ^
-                             (static_cast<uint64_t>(hide_text_after_double_hash) << 32) ^
-                             (static_cast<uint64_t>(static_cast<uint32_t>(wrap_width * 1000000)) << 48);
+        // Create a unique key combining all parameters for reliable caching
+        std::ostringstream key_stream;
+        key_stream << text
+                   << "|" << (text_end ? std::string(text_end) : "NULL")
+                   << "|" << hide_text_after_double_hash
+                   << "|" << wrap_width;
+        std::string params_key = key_stream.str();
 
         auto it = text_size_cache_by_params_.find(params_key);
         if (it != text_size_cache_by_params_.end() && it->second.valid) {
@@ -404,11 +404,118 @@ public:
     }
 
     /**
+     * Enhanced batch operation with visibility checking and performance optimization
+     */
+    template<typename T>
+    static void BatchOperationOptimized(const std::vector<T>& items,
+                                      std::function<void(const T&)> operation,
+                                      bool check_visibility = true) {
+        if (items.empty()) return;
+
+        // Skip if window is not active or collapsed
+        if (check_visibility && (!IsWindowActive() || IsWindowCollapsed())) {
+            return;
+        }
+
+        // Reserve capacity if the operation involves adding elements to containers
+        for (const auto& item : items) {
+            operation(item);
+        }
+    }
+
+    /**
+     * Batch rendering with multiple style groups to minimize state changes
+     */
+    static void BatchMultiStyleTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32>>& texts) {
+        if (texts.empty()) return;
+
+        // Group by color to minimize push/pop operations
+        ImU32 current_color = 0;
+        bool color_set = false;
+        int color_stack_depth = 0;
+
+        for (const auto& text_tuple : texts) {
+            const char* text = std::get<0>(text_tuple);
+            const ImVec2& pos = std::get<1>(text_tuple);
+            ImU32 color = std::get<2>(text_tuple);
+
+            if (!color_set || current_color != color) {
+                if (color_set) {
+                    ImGui::PopStyleColor();
+                    color_stack_depth--;
+                }
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                current_color = color;
+                color_set = true;
+                color_stack_depth++;
+            }
+
+            ImGui::SetCursorPos(pos);
+            ImGui::TextUnformatted(text);
+        }
+
+        // Clean up remaining color pushes
+        for (int i = 0; i < color_stack_depth; i++) {
+            ImGui::PopStyleColor();
+        }
+    }
+
+    /**
+     * Batch rendering with multiple style variations using ImGuiCol indices
+     */
+    static void BatchMultiStyleTextRenderingByIndex(
+        const std::vector<std::tuple<const char*, ImVec2, ImGuiCol, float>>& texts) {
+        if (texts.empty()) return;
+
+        // Group by color to minimize push/pop operations
+        ImGuiCol current_col = ImGuiCol_Text;
+        float current_alpha = 1.0f;
+        bool color_set = false;
+        int color_stack_depth = 0;
+
+        for (const auto& text_tuple : texts) {
+            const char* text = std::get<0>(text_tuple);
+            const ImVec2& pos = std::get<1>(text_tuple);
+            ImGuiCol col = std::get<2>(text_tuple);
+            float alpha = std::get<3>(text_tuple);
+
+            if (!color_set || current_col != col || current_alpha != alpha) {
+                if (color_set) {
+                    ImGui::PopStyleColor();
+                    color_stack_depth--;
+                }
+                ImU32 color = GetColorU32Optimized(col, alpha);
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                current_col = col;
+                current_alpha = alpha;
+                color_set = true;
+                color_stack_depth++;
+            }
+
+            ImGui::SetCursorPos(pos);
+            ImGui::TextUnformatted(text);
+        }
+
+        // Clean up remaining color pushes
+        for (int i = 0; i < color_stack_depth; i++) {
+            ImGui::PopStyleColor();
+        }
+    }
+
+    /**
      * Check if window is active before performing expensive operations
      */
     static bool IsWindowActive() {
         ImGuiWindow* window = ImGui::GetCurrentWindow();
         return window && window->Active;
+    }
+
+    /**
+     * Check if window is collapsed before performing expensive operations
+     */
+    static bool IsWindowCollapsed() {
+        ImGuiWindow* window = ImGui::GetCurrentWindow();
+        return window && window->Collapsed;
     }
 
     /**
@@ -433,6 +540,16 @@ public:
     }
 
     /**
+     * Conditional rendering that skips if window is collapsed
+     */
+    template<typename Func>
+    static void SkipIfCollapsed(Func func) {
+        if (!IsWindowCollapsed()) {
+            func();
+        }
+    }
+
+    /**
      * Update cache periodically
      */
     static void UpdateCache() {
@@ -444,6 +561,70 @@ public:
      */
     static void ClearCache() {
         state_cache_.clear_all_cache();
+    }
+
+    /**
+     * Optimized table row rendering with visibility checking
+     */
+    static bool BeginTableOptimized(const char* str_id, int column, ImGuiTableFlags flags = 0,
+                                   const ImVec2& outer_size = ImVec2(0, 0), float inner_width = 0.0f) {
+        if (!IsWindowActive()) return false;
+        return ImGui::BeginTable(str_id, column, flags, outer_size, inner_width);
+    }
+
+    /**
+     * Optimized table cell rendering with visibility checking
+     */
+    static void TableNextColumnOptimized() {
+        if (IsWindowActive()) {
+            ImGui::TableNextColumn();
+        }
+    }
+
+    /**
+     * Optimized text rendering with automatic visibility check
+     */
+    static void TextOptimized(const char* fmt, ...) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextV(fmt, args);
+        va_end(args);
+    }
+
+    /**
+     * Optimized small text rendering with automatic visibility check
+     */
+    static void SmallTextOptimized(const char* fmt, ...) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextV(fmt, args);  // Use regular TextV since SmallTextV doesn't exist
+        va_end(args);
+    }
+
+    /**
+     * Optimized text disabled rendering with automatic visibility check
+     */
+    static void TextDisabledOptimized(const char* fmt, ...) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextDisabledV(fmt, args);
+        va_end(args);
+    }
+
+    /**
+     * Group widgets together to reduce redundant state changes
+     */
+    template<typename Func>
+    static void WidgetGroup(Func func) {
+        if (IsWindowActive()) {
+            func();
+        }
     }
 };
 
@@ -524,6 +705,22 @@ namespace ImGuiOptimizer {
         optimizer_instance.BatchSameStyledTextRendering(texts, color_idx, alpha_mul);
     }
 
+    template<typename T>
+    void BatchOperationOptimized(const std::vector<T>& items,
+                               std::function<void(const T&)> operation,
+                               bool check_visibility) {
+        optimizer_instance.BatchOperationOptimized(items, operation, check_visibility);
+    }
+
+    void BatchMultiStyleTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32>>& texts) {
+        optimizer_instance.BatchMultiStyleTextRendering(texts);
+    }
+
+    void BatchMultiStyleTextRenderingByIndex(
+        const std::vector<std::tuple<const char*, ImVec2, ImGuiCol, float>>& texts) {
+        optimizer_instance.BatchMultiStyleTextRenderingByIndex(texts);
+    }
+
     bool IsWindowActive() {
         return optimizer_instance.IsWindowActive();
     }
@@ -548,12 +745,60 @@ namespace ImGuiOptimizer {
         optimizer_instance.ClearCache();
     }
 
+    bool BeginTableOptimized(const char* str_id, int column, ImGuiTableFlags flags,
+                            const ImVec2& outer_size, float inner_width) {
+        return optimizer_instance.BeginTableOptimized(str_id, column, flags, outer_size, inner_width);
+    }
+
+    void TableNextColumnOptimized() {
+        optimizer_instance.TableNextColumnOptimized();
+    }
+
+    void TextOptimized(const char* fmt, ...) {
+        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextV(fmt, args);
+        va_end(args);
+    }
+
+    void SmallTextOptimized(const char* fmt, ...) {
+        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextV(fmt, args);  // Use regular TextV since SmallTextV doesn't exist
+        va_end(args);
+    }
+
+    void TextDisabledOptimized(const char* fmt, ...) {
+        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
+
+        va_list args;
+        va_start(args, fmt);
+        ImGui::TextDisabledV(fmt, args);
+        va_end(args);
+    }
+
+    template<typename Func>
+    void WidgetGroup(Func func) {
+        optimizer_instance.WidgetGroup(func);
+    }
+
+    template<typename Func>
+    void SkipIfCollapsed(Func func) {
+        if (!optimizer_instance.IsWindowCollapsed()) {
+            func();
+        }
+    }
+
     // Additional utility functions for performance optimization
 
     /**
      * Begin a child window only if it's visible
      */
-    bool BeginChildConditional(const char* str_id, const ImVec2& size = ImVec2(0, 0), bool border = false, ImGuiWindowFlags flags = 0) {
+    bool BeginChildConditional(const char* str_id, const ImVec2& size, bool border, ImGuiWindowFlags flags) {
         if (!IsWindowActive()) return false;
         return ImGui::BeginChild(str_id, size, border, flags);
     }
@@ -597,7 +842,7 @@ namespace ImGuiOptimizer {
     /**
      * Pop a style color only if condition is met
      */
-    void PopStyleColorConditional(bool condition, int count = 1) {
+    void PopStyleColorConditional(bool condition, int count) {
         if (!condition) return;
         ImGui::PopStyleColor(count);
     }
@@ -621,7 +866,7 @@ namespace ImGuiOptimizer {
     /**
      * Pop a style var only if condition is met
      */
-    void PopStyleVarConditional(bool condition, int count = 1) {
+    void PopStyleVarConditional(bool condition, int count) {
         if (!condition) return;
         ImGui::PopStyleVar(count);
     }

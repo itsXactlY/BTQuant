@@ -12,17 +12,18 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <tuple>
 
 namespace BTQuant {
 namespace Rendering {
 
 namespace ImGuiOptimizer {
-    
+
     /**
      * Optimized version of ImGui::CalcTextSize that caches results
      */
-    ImVec2 CalcTextSize(const char* text, const char* text_end = nullptr, 
-                        bool hide_text_after_double_hash = false, 
+    ImVec2 CalcTextSize(const char* text, const char* text_end = nullptr,
+                        bool hide_text_after_double_hash = false,
                         float wrap_width = -1.0f);
 
     /**
@@ -34,32 +35,70 @@ namespace ImGuiOptimizer {
      * Conditional ImGui calls that only execute if condition is true
      */
     template<typename T>
-    bool ConditionalBegin(T condition_func, const char* name, bool* p_open = nullptr, 
+    bool ConditionalBegin(T condition_func, const char* name, bool* p_open = nullptr,
                          ImGuiWindowFlags flags = 0);
 
     void ConditionalText(bool condition, const char* fmt, ...);
 
     bool ConditionalButton(bool condition, const char* label, const ImVec2& size = ImVec2(0, 0));
 
-    bool ConditionalSliderFloat(bool condition, const char* label, float* v, float v_min, float v_max, 
+    bool ConditionalSliderFloat(bool condition, const char* label, float* v, float v_min, float v_max,
                                const char* format = "%.3f", ImGuiSliderFlags flags = 0);
+
+    bool ConditionalCheckbox(bool condition, const char* label, bool* v);
+
+    bool ConditionalCombo(bool condition, const char* label, int* current_item,
+                         const char* const items[], int items_count, int popup_max_height_in_items = -1);
+
+    bool ConditionalComboStr(bool condition, const char* label, int* current_item,
+                            const char* items_separated_by_zeros, int popup_max_height_in_items = -1);
 
     /**
      * Batch similar operations to minimize state changes
      */
     template<typename T>
-    void BatchOperation(const std::vector<T>& items, 
+    void BatchOperation(const std::vector<T>& items,
                        std::function<void(const T&)> operation);
 
     /**
      * Batch text rendering with same style to minimize state changes
      */
-    void BatchTextRendering(const std::vector<std::pair<std::string, ImVec2>>& texts);
+    void BatchTextRendering(const std::vector<std::pair<const char*, ImVec2>>& texts);
 
     /**
      * Batch colored text rendering
      */
-    void BatchColoredTextRendering(const std::vector<std::tuple<std::string, ImVec2, ImU32>>& texts);
+    void BatchColoredTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32>>& texts);
+
+    /**
+     * Batch same-colored text rendering
+     */
+    void BatchSameColoredTextRendering(const std::vector<std::pair<const char*, ImVec2>>& texts, ImU32 color);
+
+    /**
+     * Batch same-styled text rendering
+     */
+    void BatchSameStyledTextRendering(const std::vector<std::pair<const char*, ImVec2>>& texts,
+                                    ImGuiCol color_idx, float alpha_mul = 1.0f);
+
+    /**
+     * Enhanced batch operation with visibility checking and performance optimization
+     */
+    template<typename T>
+    void BatchOperationOptimized(const std::vector<T>& items,
+                               std::function<void(const T&)> operation,
+                               bool check_visibility = true);
+
+    /**
+     * Batch rendering with multiple style groups to minimize state changes
+     */
+    void BatchMultiStyleTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32>>& texts);
+
+    /**
+     * Batch rendering with multiple style variations using ImGuiCol indices
+     */
+    void BatchMultiStyleTextRenderingByIndex(
+        const std::vector<std::tuple<const char*, ImVec2, ImGuiCol, float>>& texts);
 
     /**
      * Check if window is active before performing expensive operations
@@ -82,6 +121,46 @@ namespace ImGuiOptimizer {
     bool IsRectVisible(const ImVec2& rect_min, const ImVec2& rect_max);
 
     /**
+     * Begin a child window only if it's visible
+     */
+    bool BeginChildConditional(const char* str_id, const ImVec2& size = ImVec2(0, 0), bool border = false, ImGuiWindowFlags flags = 0);
+
+    /**
+     * Render text only if it's going to be visible
+     */
+    void TextVisible(const char* fmt, ...);
+
+    /**
+     * Render text disabled (grayed out) based on condition
+     */
+    void TextDisabledConditional(bool condition, const char* fmt, ...);
+
+    /**
+     * Push a style color only if condition is met
+     */
+    void PushStyleColorConditional(bool condition, ImGuiCol idx, ImU32 col);
+
+    /**
+     * Pop a style color only if condition is met
+     */
+    void PopStyleColorConditional(bool condition, int count = 1);
+
+    /**
+     * Push a style var only if condition is met
+     */
+    void PushStyleVarConditional(bool condition, ImGuiStyleVar idx, float val);
+
+    /**
+     * Push a style var only if condition is met
+     */
+    void PushStyleVarConditional(bool condition, ImGuiStyleVar idx, const ImVec2& val);
+
+    /**
+     * Pop a style var only if condition is met
+     */
+    void PopStyleVarConditional(bool condition, int count = 1);
+
+    /**
      * Update cache periodically
      */
     void UpdateCache();
@@ -90,6 +169,44 @@ namespace ImGuiOptimizer {
      * Clear all caches
      */
     void ClearCache();
+
+    /**
+     * Optimized table row rendering with visibility checking
+     */
+    bool BeginTableOptimized(const char* str_id, int column, ImGuiTableFlags flags = 0,
+                            const ImVec2& outer_size = ImVec2(0, 0), float inner_width = 0.0f);
+
+    /**
+     * Optimized table cell rendering with visibility checking
+     */
+    void TableNextColumnOptimized();
+
+    /**
+     * Optimized text rendering with automatic visibility check
+     */
+    void TextOptimized(const char* fmt, ...);
+
+    /**
+     * Optimized small text rendering with automatic visibility check
+     */
+    void SmallTextOptimized(const char* fmt, ...);
+
+    /**
+     * Optimized text disabled rendering with automatic visibility check
+     */
+    void TextDisabledOptimized(const char* fmt, ...);
+
+    /**
+     * Group widgets together to reduce redundant state changes
+     */
+    template<typename Func>
+    void WidgetGroup(Func func);
+
+    /**
+     * Conditional rendering that skips if window is collapsed
+     */
+    template<typename Func>
+    void SkipIfCollapsed(Func func);
 }
 
 } // namespace Rendering

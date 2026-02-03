@@ -42,11 +42,13 @@ public:
     }
 
     ~LockFreeQueue() {
-        // Clean up all nodes including the sentinel
-        while (Node* const old_head = head_.load(std::memory_order_acquire)) {
-            Node* next = old_head->next.load(std::memory_order_acquire);
-            delete old_head;
-            head_.store(next, std::memory_order_relaxed);
+        // Sequentially clean up all nodes
+        // This assumes that no other threads are accessing the queue during destruction
+        Node* current = head_.load(std::memory_order_acquire);
+        while (current != nullptr) {
+            Node* next = current->next.load(std::memory_order_relaxed);
+            delete current;
+            current = next;
         }
     }
 

@@ -77,6 +77,25 @@ private:
         bool valid;
     };
 
+    // Cache for window scroll information
+    struct CachedScrollInfo {
+        float scroll_x;
+        float scroll_y;
+        float scroll_max_x;
+        float scroll_max_y;
+        float timestamp;
+        bool valid;
+    };
+
+    // Cache for window content region
+    struct CachedContentRegion {
+        ImVec2 min;
+        ImVec2 max;
+        ImVec2 size;
+        float timestamp;
+        bool valid;
+    };
+
 private:
     // Use string content as key for reliable caching - handles string literals properly
     std::unordered_map<std::string, CachedTextSize> text_size_cache_;
@@ -86,6 +105,8 @@ private:
     std::unordered_map<std::string, CachedCursorPosition> cursor_pos_cache_;
     std::unordered_map<std::string, CachedWindowInfo> window_info_cache_;
     std::unordered_map<std::string, CachedWidgetBounds> widget_bounds_cache_;
+    std::unordered_map<std::string, CachedScrollInfo> scroll_info_cache_;
+    std::unordered_map<std::string, CachedContentRegion> content_region_cache_;
     CachedStyle current_style_cache_;
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
@@ -124,7 +145,14 @@ public:
 
         auto it = text_size_cache_.find(temp_key_buffer_);
         if (it != text_size_cache_.end() && it->second.valid) {
-            return it->second.size;
+            float current_time = ImGui::GetTime();
+            // Check if cache entry is still valid (hasn't expired)
+            if (current_time - it->second.timestamp < CACHE_EXPIRY_TIME) {
+                return it->second.size;
+            } else {
+                // Entry has expired, remove it
+                text_size_cache_.erase(it);
+            }
         }
 
         // Compute and cache the text size
@@ -272,6 +300,24 @@ public:
         for (auto it = widget_bounds_cache_.begin(); it != widget_bounds_cache_.end();) {
             if (it->second.timestamp < expiry_threshold) {
                 it = widget_bounds_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Clean up scroll info cache
+        for (auto it = scroll_info_cache_.begin(); it != scroll_info_cache_.end();) {
+            if (it->second.timestamp < expiry_threshold) {
+                it = scroll_info_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Clean up content region cache
+        for (auto it = content_region_cache_.begin(); it != content_region_cache_.end();) {
+            if (it->second.timestamp < expiry_threshold) {
+                it = content_region_cache_.erase(it);
             } else {
                 ++it;
             }
@@ -433,6 +479,67 @@ public:
     }
 
     /**
+     * Get cached scroll information or compute it
+     */
+    bool get_cached_scroll_info(const std::string& window_id, CachedScrollInfo& scroll_info) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
+        auto it = scroll_info_cache_.find(window_id);
+        if (it != scroll_info_cache_.end() && it->second.valid) {
+            float current_time = ImGui::GetTime();
+            // Check if cache entry is still valid (hasn't expired)
+            if (current_time - it->second.timestamp < CACHE_EXPIRY_TIME) {
+                scroll_info = it->second;
+                return true;
+            } else {
+                // Entry has expired, remove it
+                scroll_info_cache_.erase(it);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Set cached scroll information
+     */
+    void set_cached_scroll_info(const std::string& window_id, float scroll_x, float scroll_y,
+                               float scroll_max_x, float scroll_max_y) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        scroll_info_cache_[window_id] = {scroll_x, scroll_y, scroll_max_x, scroll_max_y,
+                                         static_cast<float>(ImGui::GetTime()), true};
+    }
+
+    /**
+     * Get cached content region or compute it
+     */
+    bool get_cached_content_region(const std::string& window_id, CachedContentRegion& content_region) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
+        auto it = content_region_cache_.find(window_id);
+        if (it != content_region_cache_.end() && it->second.valid) {
+            float current_time = ImGui::GetTime();
+            // Check if cache entry is still valid (hasn't expired)
+            if (current_time - it->second.timestamp < CACHE_EXPIRY_TIME) {
+                content_region = it->second;
+                return true;
+            } else {
+                // Entry has expired, remove it
+                content_region_cache_.erase(it);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Set cached content region
+     */
+    void set_cached_content_region(const std::string& window_id, const ImVec2& min,
+                                  const ImVec2& max, const ImVec2& size) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        content_region_cache_[window_id] = {min, max, size, static_cast<float>(ImGui::GetTime()), true};
+    }
+
+    /**
      * Clear all caches
      */
     void clear_all_cache() {
@@ -443,6 +550,8 @@ public:
         cursor_pos_cache_.clear();
         window_info_cache_.clear();
         widget_bounds_cache_.clear();
+        scroll_info_cache_.clear();
+        content_region_cache_.clear();
     }
 };
 
@@ -670,6 +779,82 @@ public:
     }
 
     /**
+     * Batch rendering with multiple attributes to minimize state changes
+     * Combines color, font size, and positioning changes
+     */
+    static void BatchAdvancedTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32, float>>& texts) {
+        if (texts.empty()) return;
+
+        // Group by color to minimize push/pop operations
+        ImU32 current_color = 0;
+        float current_font_scale = 1.0f;
+        bool style_set = false;
+        int color_stack_depth = 0;
+        int font_stack_depth = 0;
+
+        for (const auto& text_tuple : texts) {
+            const char* text = std::get<0>(text_tuple);
+            const ImVec2& pos = std::get<1>(text_tuple);
+            ImU32 color = std::get<2>(text_tuple);
+            float font_scale = std::get<3>(text_tuple);
+
+            // Handle color changes
+            if (!style_set || current_color != color) {
+                if (style_set) {
+                    ImGui::PopStyleColor();
+                    color_stack_depth--;
+                }
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                current_color = color;
+                style_set = true;
+                color_stack_depth++;
+            }
+
+            // Handle font scaling changes
+            if (!style_set || current_font_scale != font_scale) {
+                if (font_stack_depth > 0) {
+                    ImGui::PopFont();
+                    font_stack_depth--;
+                }
+                // Note: Actual font scaling would require font management
+                // For now, we just track the change
+                current_font_scale = font_scale;
+            }
+
+            ImGui::SetCursorPos(pos);
+            ImGui::TextUnformatted(text);
+        }
+
+        // Clean up remaining pushes
+        if (color_stack_depth > 0) {
+            ImGui::PopStyleColor(color_stack_depth);
+        }
+        if (font_stack_depth > 0) {
+            ImGui::PopFont();
+        }
+    }
+
+    /**
+     * Optimized group of widgets that share the same style properties
+     */
+    template<typename T>
+    static void GroupStyledWidgets(const std::vector<T>& widgets,
+                                  std::function<void(const T&, int)> render_func,
+                                  ImGuiCol color_idx, float alpha_mul = 1.0f) {
+        if (widgets.empty()) return;
+
+        // Apply style once for all widgets
+        ImU32 color = GetColorU32Optimized(color_idx, alpha_mul);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, color);
+
+        for (size_t i = 0; i < widgets.size(); ++i) {
+            render_func(widgets[i], static_cast<int>(i));
+        }
+
+        ImGui::PopStyleColor();
+    }
+
+    /**
      * Enhanced batch operation with visibility checking and performance optimization
      */
     template<typename T>
@@ -864,6 +1049,75 @@ public:
         state_cache_.set_cached_widget_bounds(widget_id, min_bound, max_bound);
         func();
         return true;
+    }
+
+    /**
+     * Get cached scroll information for a window
+     */
+    static bool GetCachedScrollInfo(const char* window_id, float& scroll_x, float& scroll_y,
+                                   float& scroll_max_x, float& scroll_max_y) {
+        ImGuiStateCache::CachedScrollInfo info;
+        if (state_cache_.get_cached_scroll_info(std::string(window_id), info)) {
+            scroll_x = info.scroll_x;
+            scroll_y = info.scroll_y;
+            scroll_max_x = info.scroll_max_x;
+            scroll_max_y = info.scroll_max_y;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get cached content region for a window
+     */
+    static bool GetCachedContentRegion(const char* window_id, ImVec2& min, ImVec2& max, ImVec2& size) {
+        ImGuiStateCache::CachedContentRegion region;
+        if (state_cache_.get_cached_content_region(std::string(window_id), region)) {
+            min = region.min;
+            max = region.max;
+            size = region.size;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Optimized scroll information retrieval
+     */
+    static void GetScrollInfoOptimized(const char* window_id, float& scroll_x, float& scroll_y,
+                                      float& scroll_max_x, float& scroll_max_y) {
+        if (!GetCachedScrollInfo(window_id, scroll_x, scroll_y, scroll_max_x, scroll_max_y)) {
+            // Get actual scroll information from ImGui
+            ImGuiWindow* window = ImGui::GetCurrentWindow();
+            if (window) {
+                scroll_x = window->Scroll.x;
+                scroll_y = window->Scroll.y;
+                scroll_max_x = window->ScrollMax.x;
+                scroll_max_y = window->ScrollMax.y;
+
+                // Cache the values
+                state_cache_.set_cached_scroll_info(std::string(window_id), scroll_x, scroll_y,
+                                                   scroll_max_x, scroll_max_y);
+            } else {
+                scroll_x = scroll_y = scroll_max_x = scroll_max_y = 0.0f;
+            }
+        }
+    }
+
+    /**
+     * Optimized content region retrieval
+     */
+    static void GetContentRegionOptimized(const char* window_id, ImVec2& min, ImVec2& max, ImVec2& size) {
+        if (!GetCachedContentRegion(window_id, min, max, size)) {
+            // Get actual content region from ImGui
+            min = ImGui::GetContentRegionAvail();
+            size = ImVec2(ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x,
+                         ImGui::GetWindowContentRegionMax().y - ImGui::GetWindowContentRegionMin().y);
+            max = ImVec2(min.x + size.x, min.y + size.y);
+
+            // Cache the values
+            state_cache_.set_cached_content_region(std::string(window_id), min, max, size);
+        }
     }
 
     /**
@@ -1438,6 +1692,28 @@ namespace ImGuiOptimizer {
     template<typename Func>
     bool ConditionalRenderWithBounds(const char* widget_id, const ImVec2& min_bound, const ImVec2& max_bound, Func func) {
         return optimizer_instance.ConditionalRenderWithBounds(widget_id, min_bound, max_bound, func);
+    }
+
+    /**
+     * Optimized scroll information retrieval
+     */
+    void GetScrollInfoOptimized(const char* window_id, float& scroll_x, float& scroll_y,
+                               float& scroll_max_x, float& scroll_max_y) {
+        optimizer_instance.GetScrollInfoOptimized(window_id, scroll_x, scroll_y, scroll_max_x, scroll_max_y);
+    }
+
+    /**
+     * Optimized content region retrieval
+     */
+    void GetContentRegionOptimized(const char* window_id, ImVec2& min, ImVec2& max, ImVec2& size) {
+        optimizer_instance.GetContentRegionOptimized(window_id, min, max, size);
+    }
+
+    /**
+     * Batch rendering with multiple attributes to minimize state changes
+     */
+    void BatchAdvancedTextRendering(const std::vector<std::tuple<const char*, ImVec2, ImU32, float>>& texts) {
+        optimizer_instance.BatchAdvancedTextRendering(texts);
     }
 }
 

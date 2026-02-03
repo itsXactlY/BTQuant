@@ -465,6 +465,59 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
             ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
             ImPlot::PlotLine("Max", x_values.data(), max_values.data(), frame_times_.size());
             ImPlot::PopStyleVar();
+
+            // Add a trend line to show performance direction
+            if (frame_times_.size() >= 2) {
+                // Calculate linear regression for trend
+                double sum_x = 0, sum_y = 0, sum_xx = 0, sum_xy = 0;
+                size_t n = frame_times_.size();
+
+                for (size_t i = 0; i < n; ++i) {
+                    double x = static_cast<double>(i);
+                    double y = frame_times_[i];
+                    sum_x += x;
+                    sum_y += y;
+                    sum_xx += x * x;
+                    sum_xy += x * y;
+                }
+
+                double slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
+                double intercept = (sum_y - slope * sum_x) / n;
+
+                // Create trend line points
+                std::vector<double> trend_x = {0.0, static_cast<double>(n - 1)};
+                std::vector<double> trend_y = {intercept, intercept + slope * (n - 1)};
+
+                // Color the trend line based on performance direction
+                ImVec4 trend_color = slope > 0.1 ? ImVec4(0.8f, 0.0f, 0.0f, 1.0f) :  // Red if degrading
+                                    slope < -0.1 ? ImVec4(0.0f, 0.8f, 0.0f, 1.0f) :  // Green if improving
+                                                 ImVec4(0.0f, 0.5f, 1.0f, 1.0f);    // Blue if stable
+
+                ImPlot::SetNextLineStyle(trend_color, 1.5f);
+                ImPlot::PlotLine("Trend", trend_x.data(), trend_y.data(), 2);
+            }
+
+            // Add a rolling average line for smoother trend visualization
+            if (frame_times_.size() >= 10) {
+                std::vector<double> rolling_avg_x, rolling_avg_y;
+                int window_size = std::min(10, static_cast<int>(frame_times_.size()));
+
+                for (size_t i = window_size - 1; i < frame_times_.size(); ++i) {
+                    double sum = 0.0;
+                    for (int j = 0; j < window_size; ++j) {
+                        sum += frame_times_[i - j];
+                    }
+                    double avg = sum / window_size;
+
+                    rolling_avg_x.push_back(x_values[i]);
+                    rolling_avg_y.push_back(avg);
+                }
+
+                ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 1.0f, 0.8f), 1.2f); // Purple for rolling average
+                ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.2f);
+                ImPlot::PlotLine("Rolling Avg", rolling_avg_x.data(), rolling_avg_y.data(), rolling_avg_x.size());
+                ImPlot::PopStyleVar();
+            }
         }
 
         ImPlot::EndPlot();
@@ -501,6 +554,48 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         }
     } else {
         ImGui::Text("Status: OK");
+    }
+
+    // Visual performance indicator bar
+    float health_ratio = 0.0f;
+    if (current_frame_time_ms_ > 0) {
+        // Calculate health as inverse of frame time relative to critical threshold
+        health_ratio = std::min(1.0f, static_cast<float>(frame_time_threshold_critical_ / current_frame_time_ms_));
+    }
+
+    // Draw a horizontal bar to represent performance health
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImVec2 bar_size = ImVec2(ImGui::GetContentRegionAvail().x, 8.0f);
+
+    // Background of the health bar
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + bar_size.x, pos.y + bar_size.y), IM_COL32(50, 50, 50, 255));
+
+    // Health portion of the bar (green to red based on performance)
+    ImU32 health_color = health_ratio > 0.7f ? IM_COL32(0, 255, 0, 255) :  // Green for good performance
+                         health_ratio > 0.4f ? IM_COL32(255, 255, 0, 255) : // Yellow for moderate
+                                             IM_COL32(255, 0, 0, 255);     // Red for poor
+
+    draw_list->AddRectFilled(pos, ImVec2(pos.x + (bar_size.x * health_ratio), pos.y + bar_size.y), health_color);
+
+    // Advance cursor past the bar
+    ImGui::Dummy(bar_size);
+
+    // Real-time performance alerts section
+    ImGui::Separator();
+    ImGui::Text("Real-time Alerts:");
+
+    // Check for recent performance issues
+    auto [warning_count, critical_count] = get_frames_outside_thresholds();
+    if (warning_count > 0 || critical_count > 0) {
+        if (critical_count > 0) {
+            ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "Critical Issues: %zu", critical_count);
+        }
+        if (warning_count > 0) {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "Warning Issues: %zu", warning_count);
+        }
+    } else {
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "No recent performance issues");
     }
 
     // Threshold controls with better layout
@@ -669,6 +764,35 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         }
         ImGui::SameLine();
         ImGui::Text("(Std Dev: %.2f ms)", std_dev);
+
+        // Add frame rate trend analysis
+        ImGui::Separator();
+        ImGui::Text("Trend Analysis:");
+        if (frame_times_.size() >= 10) {
+            // Calculate recent trend (last 10% of frames vs first 10% of frames)
+            size_t sample_size = frame_times_.size() / 10;
+            sample_size = std::max(static_cast<size_t>(1), sample_size);
+
+            double early_avg = 0.0, late_avg = 0.0;
+            for (size_t i = 0; i < sample_size; ++i) {
+                early_avg += frame_times_[i];
+                late_avg += frame_times_[frame_times_.size() - sample_size + i];
+            }
+            early_avg /= sample_size;
+            late_avg /= sample_size;
+
+            double trend_change = ((late_avg - early_avg) / early_avg) * 100.0;
+
+            if (trend_change > 5.0) {
+                ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "Performance Degrading: +%.2f%%", trend_change);
+            } else if (trend_change < -5.0) {
+                ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "Performance Improving: %.2f%%", trend_change);
+            } else {
+                ImGui::Text("Performance Stable: %.2f%%", trend_change);
+            }
+        } else {
+            ImGui::Text("Not enough data for trend analysis");
+        }
     }
 
     // Add a button to reset statistics

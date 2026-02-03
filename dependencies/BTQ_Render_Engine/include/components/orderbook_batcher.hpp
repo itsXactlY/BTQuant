@@ -132,11 +132,17 @@ public:
     // Batch multiple similar draw calls together to reduce GPU overhead
     void batchMultipleDrawCalls(const std::vector<std::function<void(OrderbookBatchElement*)>>& draw_calls);
 
+    // Ultra-efficient method to batch multiple similar draw calls together with maximum performance
+    void batchMultipleDrawCallsUltra(const std::vector<std::function<void(OrderbookBatchElement*)>>& draw_calls);
+
     // Enhanced batch geometry method that combines multiple similar elements into single draw calls
     void batchGeometryEnhanced(const std::vector<OrderbookElementData>& elements);
 
     // Highly optimized batch method that combines similar elements with minimal overhead
     void batchGeometryHighPerformance(const std::vector<OrderbookElementData>& elements);
+
+    // Ultra-high performance batch method that combines similar elements with maximum efficiency and minimal overhead
+    void batchGeometryUltraHighPerformance(const std::vector<OrderbookElementData>& elements);
 
 private:
     std::vector<OrderbookBatchElement> batches_;

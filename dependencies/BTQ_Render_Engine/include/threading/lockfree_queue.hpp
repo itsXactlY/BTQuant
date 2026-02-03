@@ -33,42 +33,6 @@ private:
         explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
     };
 
-    // Memory pool for nodes to reduce allocation overhead and improve cache locality
-    struct NodePool {
-        std::mutex pool_mutex;
-        std::deque<Node*> free_nodes;
-
-        static constexpr size_t MAX_POOL_SIZE = 1000;
-
-        Node* acquire() {
-            std::lock_guard<std::mutex> lock(pool_mutex);
-            if (!free_nodes.empty()) {
-                Node* node = free_nodes.front();
-                free_nodes.pop_front();
-                // Reset the node's next pointer
-                node->next.store(nullptr, std::memory_order_relaxed);
-                return node;
-            }
-            return new Node();
-        }
-
-        void release(Node* node) {
-            if (!node) return;
-
-            std::lock_guard<std::mutex> lock(pool_mutex);
-            if (free_nodes.size() < MAX_POOL_SIZE) {
-                // Reset the node before returning to pool
-                node->next.store(nullptr, std::memory_order_relaxed);
-                // Destruct and reinitialize the data
-                node->data.~T();
-                new (&node->data) T{}; // Reinitialize with default value
-                free_nodes.push_front(node);
-            } else {
-                delete node;
-            }
-        }
-    };
-
     static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size to prevent false sharing
 
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
@@ -77,13 +41,10 @@ private:
     // Additional padding to avoid false sharing between head and tail
     alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
 
-    // Static memory pool shared among all instances of the same type
-    static inline NodePool node_pool_{};
-
 public:
     explicit LockFreeQueue() {
         // Initialize with a dummy sentinel node to simplify the algorithm
-        Node* sentinel = node_pool_.acquire();
+        Node* sentinel = new Node();
         head_.store(sentinel, std::memory_order_relaxed);
         tail_.store(sentinel, std::memory_order_relaxed);
     }
@@ -95,14 +56,13 @@ public:
 
         while (current != nullptr) {
             Node* next = current->next.load(std::memory_order_relaxed);
-            node_pool_.release(current);
+            delete current;
             current = next;
         }
     }
 
     void push(const T& new_value) {
-        Node* new_node = node_pool_.acquire();
-        new (static_cast<void*>(&new_node->data)) T(new_value); // Placement new
+        Node* new_node = new Node(new_value);
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -132,8 +92,7 @@ public:
     }
 
     void push(T&& new_value) {
-        Node* new_node = node_pool_.acquire();
-        new (static_cast<void*>(&new_node->data)) T(std::move(new_value)); // Placement new
+        Node* new_node = new Node(std::move(new_value));
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -189,9 +148,9 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Return the old head node to the pool (the sentinel node that was previously at head)
-                    // We only return the old head after advancing the head pointer
-                    node_pool_.release(head_snapshot);
+                    // Delete the old head node (the sentinel node that was previously at head)
+                    // We only delete the old head after advancing the head pointer
+                    delete head_snapshot;
 
                     return std::make_shared<T>(std::move(data));
                 }
@@ -228,8 +187,8 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Return the old head node to the pool (the sentinel node that was previously at head)
-                    node_pool_.release(head_snapshot);
+                    // Delete the old head node (the sentinel node that was previously at head)
+                    delete head_snapshot;
 
                     return std::move(data);
                 }
@@ -283,11 +242,10 @@ public:
         }
     }
 
-    // Wait-free push operation with memory pool for better performance
+    // Wait-free push operation for better performance
     template<typename... Args>
     void emplace(Args&&... args) {
-        Node* new_node = node_pool_.acquire();
-        new (static_cast<void*>(&new_node->data)) T(std::forward<Args>(args)...); // Placement new
+        Node* new_node = new Node(std::forward<Args>(args)...);
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -421,7 +379,7 @@ public:
         // Move head to tail position, releasing all intermediate nodes
         while (current != tail_snapshot) {
             Node* next = current->next.load(std::memory_order_relaxed);
-            node_pool_.release(current);
+            delete current;
             current = next;
         }
 
@@ -446,42 +404,6 @@ private:
         explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
     };
 
-    // Memory pool for nodes to reduce allocation overhead
-    struct NodePool {
-        std::mutex pool_mutex;
-        std::deque<Node*> free_nodes;
-
-        static constexpr size_t MAX_POOL_SIZE = 1000;
-
-        Node* acquire() {
-            std::lock_guard<std::mutex> lock(pool_mutex);
-            if (!free_nodes.empty()) {
-                Node* node = free_nodes.front();
-                free_nodes.pop_front();
-                // Reset the node's next pointer
-                node->next.store(nullptr, std::memory_order_relaxed);
-                return node;
-            }
-            return new Node();
-        }
-
-        void release(Node* node) {
-            if (!node) return;
-
-            std::lock_guard<std::mutex> lock(pool_mutex);
-            if (free_nodes.size() < MAX_POOL_SIZE) {
-                // Reset the node before returning to pool
-                node->next.store(nullptr, std::memory_order_relaxed);
-                // Destruct and reinitialize the data
-                node->data.~T();
-                new (&node->data) T{}; // Reinitialize with default value
-                free_nodes.push_front(node);
-            } else {
-                delete node;
-            }
-        }
-    };
-
     static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size to prevent false sharing
 
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
@@ -490,13 +412,10 @@ private:
     // Additional padding to avoid false sharing between head and tail
     alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
 
-    // Static memory pool shared among all instances of the same type
-    static inline NodePool node_pool_{};
-
 public:
     MPSCQueue() {
         // Initialize with a dummy sentinel node to simplify the algorithm
-        Node* sentinel = node_pool_.acquire();
+        Node* sentinel = new Node();
         head_.store(sentinel, std::memory_order_relaxed);
         tail_.store(sentinel, std::memory_order_relaxed);
     }
@@ -508,14 +427,13 @@ public:
 
         while (current != nullptr) {
             Node* next = current->next.load(std::memory_order_relaxed);
-            node_pool_.release(current);
+            delete current;
             current = next;
         }
     }
 
     void push(const T& item) {
-        Node* new_node = node_pool_.acquire();
-        new (static_cast<void*>(&new_node->data)) T(item); // Placement new
+        Node* new_node = new Node(item);
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -545,8 +463,7 @@ public:
     }
 
     void push(T&& item) {
-        Node* new_node = node_pool_.acquire();
-        new (static_cast<void*>(&new_node->data)) T(std::move(item)); // Placement new
+        Node* new_node = new Node(std::move(item));
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -602,8 +519,8 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Return the old head node to the pool (the sentinel node that was previously at head)
-                    node_pool_.release(head_snapshot);
+                    // Delete the old head node (the sentinel node that was previously at head)
+                    delete head_snapshot;
 
                     return std::move(data);
                 }

@@ -185,6 +185,9 @@ public:
   // Get a real-time dashboard of data quality issues
   std::string get_real_time_dashboard() const;
 
+  // NEW: Get a comprehensive data quality summary for user interfaces
+  std::string get_data_quality_summary() const;
+
   // Start continuous monitoring of data quality
   void start_continuous_monitoring();
 
@@ -223,7 +226,7 @@ private:
 
     SymbolStats() : last_timestamp(0), trade_count(0), total_interval_sum(0), recent_intervals() {}
   };
-  mutable std::mutex mutex_;
+  mutable std::recursive_mutex mutex_;
   DataQualityMetrics metrics_;
   std::vector<DataQualityIssue> recent_issues_;
   std::unordered_map<std::string, uint64_t> last_timestamps_;  // Last timestamp per symbol

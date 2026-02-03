@@ -80,7 +80,7 @@ bool DataQualityMonitor::are_trades_equivalent(const TradeData& trade1, const Tr
 }
 
 std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData& trade, const std::string& symbol) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<DataQualityIssue> detected_issues;
 
     // Increment total trades processed
@@ -182,7 +182,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trades_batch(const std
 
 void DataQualityMonitor::check_missing_data(const std::string& symbol, uint64_t current_timestamp,
                                            uint64_t expected_interval_ms) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     auto it = last_timestamps_.find(symbol);
     if (it != last_timestamps_.end()) {
@@ -457,6 +457,33 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
 
                                 alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                             }
+                        }
+                    }
+
+                    // NEW: Enhanced missing data detection: Check for data stream gaps using sliding window analysis
+                    if (stats.recent_intervals.size() >= 20) {
+                        // Use a sliding window to detect patterns of missing data
+                        std::vector<uint64_t> window_intervals(stats.recent_intervals.end() - 10, stats.recent_intervals.end());
+
+                        // Calculate average of the sliding window
+                        uint64_t window_avg = 0;
+                        for (const auto& interval : window_intervals) {
+                            window_avg += interval;
+                        }
+                        window_avg /= window_intervals.size();
+
+                        // If the current gap is significantly larger than the recent window average
+                        if (window_avg > 0 && time_diff > window_avg * 8) { // 8x recent average
+                            std::ostringstream oss;
+                            oss << "Sliding window analysis detected missing data for " << symbol
+                                << ". Current gap: " << time_diff << "ms vs recent window avg: " << window_avg << "ms";
+
+                            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                                 oss.str(), 0.9);
+                            metrics_.missing_data_issues++;
+                            add_issue(issue);
+
+                            alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
                         }
                     }
                 }
@@ -745,6 +772,42 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
                 }
             }
         }
+
+        // NEW: Enhanced duplicate detection: Check for systematic duplication based on trade sequence patterns
+        if (time_diff <= duplicate_check_window_ms_ * 3) {
+            // Look for sequences of trades that appear multiple times in similar patterns
+            // This detects systematic duplication where the same sequence of trades repeats
+            std::vector<std::tuple<double, float, uint64_t>> current_sequence;
+            current_sequence.emplace_back(trade.price, trade.volume, trade.timestamp);
+
+            // Look for similar sequences in recent trades
+            for (size_t seq_start = 0; seq_start < trades.size(); ++seq_start) {
+                std::vector<std::tuple<double, float, uint64_t>> existing_sequence;
+
+                // Build a sequence starting from seq_start
+                for (size_t k = seq_start; k < std::min(seq_start + 3, trades.size()); ++k) {
+                    existing_sequence.emplace_back(trades[k].price, trades[k].volume, trades[k].timestamp);
+                }
+
+                // Compare the current trade with the sequence to see if it continues a pattern
+                if (existing_sequence.size() >= 2) {
+                    // Check if the current trade continues a pattern seen before
+                    double price_diff = std::abs(std::get<0>(existing_sequence.back()) - trade.price);
+                    double volume_diff = std::abs(std::get<1>(existing_sequence.back()) - trade.volume);
+
+                    if (price_diff < 0.000001 && volume_diff < 0.0001f) {
+                        // If the current trade matches the last element of an existing sequence,
+                        // it might be a duplicate of that sequence
+                        uint64_t time_diff_seq = std::abs(static_cast<int64_t>(std::get<2>(existing_sequence.back())) -
+                                                         static_cast<int64_t>(trade.timestamp));
+
+                        if (time_diff_seq <= duplicate_check_window_ms_) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return false;
@@ -1015,6 +1078,35 @@ bool DataQualityMonitor::is_out_of_order_timestamp(const TradeData& trade, const
                 if (trade.timestamp < min_recent_ts) {
                     return true;
                 }
+            }
+        }
+
+        // NEW: Enhanced out-of-order detection: Check for timestamp clustering and anomalies using statistical methods
+        if (current_recent_trades.size() >= 15) {
+            // Calculate statistical measures of recent timestamps
+            std::vector<uint64_t> recent_timestamps;
+            for (const auto& recent_trade : current_recent_trades) {
+                recent_timestamps.push_back(recent_trade.timestamp);
+            }
+
+            // Sort to calculate percentiles
+            std::sort(recent_timestamps.begin(), recent_timestamps.end());
+
+            // Calculate quartiles
+            size_t q1_idx = recent_timestamps.size() / 4;
+            size_t q3_idx = 3 * recent_timestamps.size() / 4;
+
+            uint64_t q1 = recent_timestamps[q1_idx];
+            uint64_t q3 = recent_timestamps[q3_idx];
+            uint64_t iqr = q3 - q1;  // Interquartile range
+
+            // Calculate bounds for outliers
+            uint64_t lower_bound = q1 - (iqr * 1.5);
+            uint64_t upper_bound = q3 + (iqr * 1.5);
+
+            // If the current trade timestamp is below the lower bound, it's an early outlier (out-of-order)
+            if (trade.timestamp < lower_bound) {
+                return true;
             }
         }
     }
@@ -1469,6 +1561,42 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 }
             }
         }
+
+        // NEW: Enhanced latency monitoring: Check for latency spikes using moving averages
+        if (latency_delay_history.size() >= 10) {
+            // Calculate a short-term and long-term moving average
+            size_t short_term_window = std::min(static_cast<size_t>(5), latency_delay_history.size());
+            size_t long_term_window = std::min(static_cast<size_t>(10), latency_delay_history.size());
+
+            uint64_t short_avg = 0, long_avg = 0;
+
+            // Calculate short-term average (most recent)
+            for (size_t i = latency_delay_history.size() - short_term_window; i < latency_delay_history.size(); ++i) {
+                short_avg += latency_delay_history[i];
+            }
+            short_avg /= short_term_window;
+
+            // Calculate long-term average
+            for (size_t i = latency_delay_history.size() - long_term_window; i < latency_delay_history.size(); ++i) {
+                long_avg += latency_delay_history[i];
+            }
+            long_avg /= long_term_window;
+
+            // If short-term average is significantly higher than long-term average, it indicates a spike
+            if (long_avg > 0 && (static_cast<double>(short_avg) / long_avg) > 2.0) { // 2x higher than long-term
+                std::ostringstream oss;
+                oss << "Latency spike detected using moving average analysis: short-term avg " << short_avg
+                    << "ms vs long-term avg " << long_avg << "ms";
+
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                     oss.str(), 0.65);
+                metrics_.latency_issues++;
+                add_issue(issue);
+
+                // Alert the user about the latency spike
+                alert_on_latency_issue(trade, symbol, short_avg);
+            }
+        }
     }
 }
 
@@ -1646,12 +1774,12 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
 }
 
 DataQualityMetrics DataQualityMonitor::get_metrics() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return metrics_;
 }
 
 std::vector<DataQualityIssue> DataQualityMonitor::get_recent_issues(size_t limit) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     
     if (recent_issues_.size() <= limit) {
         return recent_issues_;
@@ -1668,7 +1796,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::get_recent_issues(size_t limit
 }
 
 void DataQualityMonitor::reset() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     metrics_ = DataQualityMetrics();
     recent_issues_.clear();
@@ -1683,7 +1811,7 @@ void DataQualityMonitor::reset() {
 }
 
 void DataQualityMonitor::set_alert_callback(AlertCallback callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     alert_callback_ = callback;
 }
 
@@ -1813,7 +1941,7 @@ void DataQualityMonitor::send_critical_alert(const DataQualityIssue& issue) {
 
 // Method to generate a summary of current data quality status
 std::string DataQualityMonitor::get_quality_summary() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream summary;
     summary << "=== Data Quality Summary ===" << std::endl;
@@ -1848,7 +1976,7 @@ std::string DataQualityMonitor::get_quality_summary() const {
 
 // Method to get recent high-severity issues
 std::vector<DataQualityIssue> DataQualityMonitor::get_high_severity_issues(double min_severity_threshold) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::vector<DataQualityIssue> high_severity_issues;
     for (const auto& issue : recent_issues_) {
@@ -1862,7 +1990,7 @@ std::vector<DataQualityIssue> DataQualityMonitor::get_high_severity_issues(doubl
 
 void DataQualityMonitor::trigger_alert(const std::string& symbol, DataQualityIssueType issue_type,
                                        const std::string& description, double severity) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Create a new issue with current timestamp
     uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1873,7 +2001,7 @@ void DataQualityMonitor::trigger_alert(const std::string& symbol, DataQualityIss
 }
 
 void DataQualityMonitor::trigger_data_quality_alerts() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Check if we have any significant data quality issues
     auto current_metrics = metrics_;
@@ -1990,12 +2118,12 @@ void DataQualityMonitor::check_alert_bursts(const DataQualityIssue& issue) {
 }
 
 std::unordered_map<DataQualityIssueType, size_t> DataQualityMonitor::get_alert_counts_by_type() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     return alert_counts_by_type_;
 }
 
 void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, const std::string& problem_description, double severity) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
@@ -2253,6 +2381,22 @@ void DataQualityMonitor::alert_user_to_data_problems(const std::string& symbol, 
         }
     }
 
+    // NEW: Enhanced alerting with priority queuing for critical issues
+    if (severity >= 0.95) {
+        // For critical issues, immediately escalate to emergency channels
+        std::ostringstream emergency_msg;
+        emergency_msg << "{\"type\":\"EMERGENCY_ALERT\",\"severity\":\"CRITICAL\",\"symbol\":\""
+                      << symbol << "\",\"description\":\"" << problem_description
+                      << "\",\"timestamp\":" << current_timestamp << "}";
+
+        if (console_alerts_enabled_) {
+            std::cout << "[EMERGENCY ALERT] " << emergency_msg.str() << std::endl;
+        }
+
+        // In a real system, this would send to emergency notification systems
+        // like PagerDuty, Slack, email, etc.
+    }
+
     // NEW: Add a method to specifically notify users of data problems in a clear way
     notify_users_of_data_problem(symbol, problem_description, severity, issue_type);
 }
@@ -2325,7 +2469,7 @@ void DataQualityMonitor::notify_users_of_data_problem(const std::string& symbol,
 
 // NEW: Method to provide a real-time dashboard of data quality issues
 std::string DataQualityMonitor::get_real_time_dashboard() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream dashboard;
     dashboard << "\n" << std::string(60, '=') << std::endl;
@@ -2433,7 +2577,7 @@ void DataQualityMonitor::alert_user_to_data_problems_with_context(const std::str
                                                                  double severity,
                                                                  const std::string& source_component,
                                                                  const std::string& additional_context) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
@@ -2521,7 +2665,7 @@ void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const s
 
 // Method to get a user-friendly summary of data quality issues
 std::string DataQualityMonitor::get_user_friendly_summary() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream summary;
     summary << "\n=== DATA QUALITY STATUS ===" << std::endl;
@@ -2591,7 +2735,7 @@ std::string DataQualityMonitor::get_user_friendly_summary() const {
 }
 
 void DataQualityMonitor::alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     uint64_t gap_ms = actual_time - expected_time;
     std::ostringstream description;
@@ -2611,7 +2755,7 @@ void DataQualityMonitor::alert_on_missing_data(const std::string& symbol, uint64
 }
 
 void DataQualityMonitor::alert_on_duplicate_trade(const TradeData& trade, const std::string& symbol) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream description;
     description << "Duplicate trade detected for " << symbol
@@ -2628,7 +2772,7 @@ void DataQualityMonitor::alert_on_duplicate_trade(const TradeData& trade, const 
 }
 
 void DataQualityMonitor::alert_on_out_of_order_timestamp(const TradeData& trade, const std::string& symbol, uint64_t last_timestamp) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream description;
     description << "Out-of-order timestamp detected for " << symbol
@@ -2649,7 +2793,7 @@ void DataQualityMonitor::alert_on_out_of_order_timestamp(const TradeData& trade,
 }
 
 void DataQualityMonitor::alert_on_latency_issue(const TradeData& trade, const std::string& symbol, int64_t latency_ms) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream description;
     description << "High latency detected for " << symbol
@@ -2704,7 +2848,7 @@ void DataQualityMonitor::send_ui_notification(const DataQualityIssue& issue) {
 }
 
 void DataQualityMonitor::generate_comprehensive_alert_report() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream report;
     report << "\n=== COMPREHENSIVE DATA QUALITY REPORT ===\n";
@@ -2809,7 +2953,7 @@ void DataQualityMonitor::generate_comprehensive_alert_report() {
 }
 
 void DataQualityMonitor::monitor_data_stream_health(const std::string& symbol) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     auto stats_it = symbol_stats_.find(symbol);
     if (stats_it == symbol_stats_.end()) {
@@ -3184,7 +3328,7 @@ void DataQualityMonitor::check_latency_issue_patterns(const std::string& symbol)
 
 // Additional method to provide a comprehensive summary of data quality
 std::string DataQualityMonitor::get_comprehensive_summary() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     std::ostringstream summary;
     summary << "\n=== COMPREHENSIVE DATA QUALITY REPORT ===\n";
@@ -3289,7 +3433,7 @@ void DataQualityMonitor::start_continuous_monitoring() {
 
 // NEW: Method to run periodic health checks on data streams
 void DataQualityMonitor::run_periodic_health_checks() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Perform health checks on all monitored symbols
     for (const auto& [symbol, _] : symbol_stats_) {
@@ -3304,7 +3448,7 @@ void DataQualityMonitor::run_periodic_health_checks() {
 
 // NEW: Unified method to alert users about all types of data quality problems
 void DataQualityMonitor::alert_users_to_all_data_problems() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Check for each type of data quality issue and alert if present
     if (metrics_.missing_data_issues > 0) {
@@ -3378,7 +3522,7 @@ void DataQualityMonitor::alert_users_to_all_data_problems() {
 
 // NEW: Additional method to provide real-time alerts to users about data quality issues
 void DataQualityMonitor::provide_real_time_alerts_to_users() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Get recent high severity issues
     auto high_severity_issues = get_high_severity_issues(0.7);
@@ -3428,7 +3572,7 @@ void DataQualityMonitor::provide_real_time_alerts_to_users() {
 
 // NEW: Enhanced method to provide immediate user notifications for critical data quality issues
 void DataQualityMonitor::immediate_user_notification(const DataQualityIssue& issue) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Format a clear, immediate notification for the user
     std::string severity_label;
@@ -3511,7 +3655,7 @@ void DataQualityMonitor::immediate_user_notification(const DataQualityIssue& iss
 
 // NEW: Method to send consolidated alerts to users at regular intervals
 void DataQualityMonitor::send_consolidated_alerts() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Get all recent issues
     auto all_recent_issues = get_recent_issues(50); // Get last 50 issues
@@ -3590,7 +3734,7 @@ void DataQualityMonitor::configure_alert_types(bool enable_missing_data,
                                               bool enable_out_of_order,
                                               bool enable_latency_issues,
                                               bool enable_invalid_data) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     // Store alert configuration for future reference
     alert_config_ = {
@@ -3613,7 +3757,7 @@ void DataQualityMonitor::configure_alert_types(bool enable_missing_data,
 
 // NEW: Method to check if specific alert types are enabled
 bool DataQualityMonitor::is_alert_type_enabled(DataQualityIssueType type) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
 
     switch (type) {
         case DataQualityIssueType::MISSING_DATA:
@@ -3631,6 +3775,96 @@ bool DataQualityMonitor::is_alert_type_enabled(DataQualityIssueType type) const 
         default:
             return true; // Default to enabled for unknown types
     }
+}
+
+// NEW: Method to provide a comprehensive data quality summary for user interfaces
+std::string DataQualityMonitor::get_data_quality_summary() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    std::ostringstream summary;
+    summary << "\n" << std::string(80, '=') << std::endl;
+    summary << "DATA QUALITY MONITOR SUMMARY" << std::endl;
+    summary << std::string(80, '=') << std::endl;
+
+    // Overall statistics
+    summary << "Overall Statistics:" << std::endl;
+    summary << "  Total trades processed: " << metrics_.total_trades_processed << std::endl;
+    summary << "  Average latency: " << std::fixed << std::setprecision(2) << metrics_.average_latency_ms << " ms" << std::endl;
+
+    // Issue breakdown
+    summary << "\nDetected Issues:" << std::endl;
+    summary << "  Missing data issues: " << metrics_.missing_data_issues << std::endl;
+    summary << "  Duplicate trade issues: " << metrics_.duplicate_trade_issues << std::endl;
+    summary << "  Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << std::endl;
+    summary << "  Latency issues: " << metrics_.latency_issues << std::endl;
+    summary << "  Invalid price issues: " << metrics_.invalid_price_issues << std::endl;
+    summary << "  Invalid volume issues: " << metrics_.invalid_volume_issues << std::endl;
+    summary << "  Missing field issues: " << metrics_.missing_field_issues << std::endl;
+
+    // Calculate quality score
+    double total_issues = metrics_.missing_data_issues +
+                         metrics_.duplicate_trade_issues +
+                         metrics_.out_of_order_timestamp_issues +
+                         metrics_.latency_issues +
+                         metrics_.invalid_price_issues +
+                         metrics_.invalid_volume_issues +
+                         metrics_.missing_field_issues;
+
+    double quality_score = 100.0;
+    if (metrics_.total_trades_processed > 0) {
+        double error_rate = total_issues / metrics_.total_trades_processed;
+        quality_score = (1.0 - std::min(error_rate, 1.0)) * 100.0;
+    }
+
+    summary << "\nQuality Score: " << std::fixed << std::setprecision(2) << quality_score << "%" << std::endl;
+
+    if (quality_score >= 95.0) {
+        summary << "Status: EXCELLENT" << std::endl;
+    } else if (quality_score >= 90.0) {
+        summary << "Status: GOOD" << std::endl;
+    } else if (quality_score >= 80.0) {
+        summary << "Status: FAIR" << std::endl;
+    } else if (quality_score >= 70.0) {
+        summary << "Status: POOR" << std::endl;
+    } else {
+        summary << "Status: CRITICAL" << std::endl;
+    }
+
+    // Top affected symbols
+    if (!recent_issues_.empty()) {
+        std::unordered_map<std::string, size_t> symbol_counts;
+        for (const auto& issue : recent_issues_) {
+            symbol_counts[issue.symbol]++;
+        }
+
+        std::vector<std::pair<std::string, size_t>> sorted_symbols(symbol_counts.begin(), symbol_counts.end());
+        std::sort(sorted_symbols.begin(), sorted_symbols.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        if (!sorted_symbols.empty()) {
+            summary << "\nTop Affected Symbols:" << std::endl;
+            for (size_t i = 0; i < std::min(sorted_symbols.size(), static_cast<size_t>(5)); ++i) {
+                summary << "  " << (i+1) << ". " << sorted_symbols[i].first
+                        << ": " << sorted_symbols[i].second << " issues" << std::endl;
+            }
+        }
+    }
+
+    // Recent high severity issues
+    auto high_severity_issues = get_high_severity_issues(0.7);
+    if (!high_severity_issues.empty()) {
+        summary << "\nRecent High Severity Issues:" << std::endl;
+        for (size_t i = 0; i < std::min(high_severity_issues.size(), static_cast<size_t>(5)); ++i) {
+            summary << "  - " << high_severity_issues[i].symbol << ": "
+                    << high_severity_issues[i].description.substr(0, 60);
+            if (high_severity_issues[i].description.length() > 60) summary << "...";
+            summary << " (Severity: " << high_severity_issues[i].severity << ")" << std::endl;
+        }
+    }
+
+    summary << std::string(80, '=') << std::endl;
+
+    return summary.str();
 }
 
 } // namespace Data

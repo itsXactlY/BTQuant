@@ -22,12 +22,20 @@ AutoQualityController::AutoQualityController(const AutoQualityConfig& config)
     , performance_score_(100.0)
     , target_performance_threshold_(config.performance_threshold)
     , adaptive_performance_threshold_(config.performance_threshold)
+    , peak_performance_score_(100.0)
+    , cumulative_performance_score_(0.0)
+    , performance_sample_count_(0)
 {
     initializeQualityLevels();
 
     // Initialize performance history
     for (int i = 0; i < 10; ++i) {
         performance_history_[i] = config.performance_threshold;
+    }
+
+    // Initialize recent performance trend buffer
+    for (int i = 0; i < 30; ++i) {
+        recent_performance_trend_[i] = config.performance_threshold;
     }
 }
 
@@ -298,6 +306,9 @@ void AutoQualityController::recordFrameTime(double frame_time_ms) {
 
     // Update advanced performance metrics
     updateAdvancedMetrics();
+
+    // Update real-time performance metrics
+    updateRealTimePerformanceMetrics();
 
     // Update performance history for adaptive thresholds
     updatePerformanceHistory();
@@ -590,10 +601,8 @@ void AutoQualityController::updatePerformanceHistory() {
 void AutoQualityController::checkAndAdjustQuality() {
     auto now = std::chrono::high_resolution_clock::now();
 
-    // Check if we're past the cooldown period
-    if (now - last_adjustment_time_ < adjustment_cooldown_) {
-        return;
-    }
+    // Check if we're past the cooldown period (except for emergency situations)
+    bool past_cooldown = (now - last_adjustment_time_ >= adjustment_cooldown_);
 
     // Use adaptive threshold for decision making
     double effective_threshold = adaptive_performance_threshold_;
@@ -603,6 +612,9 @@ void AutoQualityController::checkAndAdjustQuality() {
     double lower_threshold = effective_threshold * (0.9 - (current_quality_index_ * 0.02)); // Lower threshold becomes stricter at lower quality levels
     double upper_threshold = effective_threshold * (1.1 + (current_quality_index_ * 0.03)); // Upper threshold becomes more lenient at lower quality levels
 
+    // Check for rapid performance degradation that requires immediate action
+    bool rapid_degradation = isPerformanceDegradingRapidly();
+
     // Determine if we need to adjust quality based on performance
     if (performance_score_ < lower_threshold) {
         // Performance is below threshold, reduce quality
@@ -610,21 +622,27 @@ void AutoQualityController::checkAndAdjustQuality() {
             // Adjust quality gradually based on performance drop severity
             int new_quality_index = determineQualityReduction();
 
-            if (new_quality_index != current_quality_index_) {
+            // For rapid degradation, bypass cooldown if needed
+            bool can_adjust = past_cooldown || rapid_degradation;
+
+            if (can_adjust && new_quality_index != current_quality_index_) {
                 current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time
                 last_adjustment_time_ = now;
 
                 // Log the quality reduction
                 if (config_.enable_logging) {
-                    printf("AutoQuality: Reduced quality to level %d (Performance: %.2f%%, Lower Threshold: %.2f%%, Adaptive Base: %.2f%%)\n",
-                           current_quality_index_, performance_score_, lower_threshold, effective_threshold);
+                    printf("AutoQuality: Reduced quality to level %d (Performance: %.2f%%, Lower Threshold: %.2f%%, Adaptive Base: %.2f%%, Rapid Degradation: %s)\n",
+                           current_quality_index_, performance_score_, lower_threshold, effective_threshold,
+                           rapid_degradation ? "YES" : "NO");
                 }
             }
         }
     } else if (performance_score_ > upper_threshold && current_quality_index_ > 0) {
         // Performance is above threshold, try to increase quality
         // But only if we've been stable at current level for a while
-        if (hasBeenStableAtCurrentLevel()) {
+        if (hasBeenStableAtCurrentLevel() && past_cooldown) {
             // Gradually increase quality if performance is consistently good
             int new_quality_index = determineQualityIncrease();
 
@@ -657,6 +675,22 @@ void AutoQualityController::checkAndAdjustQuality() {
                     printf("AutoQuality: Emergency quality reduction to level %d (Severe performance: %.2f%%, Adaptive Threshold: %.2f%%)\n",
                            current_quality_index_, performance_score_, effective_threshold);
                 }
+            }
+        }
+    }
+
+    // Additional check: if rapid degradation is detected, force immediate quality reduction
+    if (rapid_degradation && current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+        // Rapid degradation detected, reduce quality immediately
+        int new_quality_index = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+        if (new_quality_index != current_quality_index_) {
+            current_quality_index_ = new_quality_index;
+            last_adjustment_time_ = now;
+
+            if (config_.enable_logging) {
+                printf("AutoQuality: Rapid degradation detected, immediate quality reduction to level %d (Performance: %.2f%%, Adaptive Threshold: %.2f%%)\n",
+                       current_quality_index_, performance_score_, effective_threshold);
             }
         }
     }
@@ -822,9 +856,19 @@ void AutoQualityController::reset() {
     performance_score_ = 100.0;
     frame_count_ = 0;
     last_adjustment_time_ = std::chrono::high_resolution_clock::now();
+    peak_performance_score_ = 100.0;
+    cumulative_performance_score_ = 0.0;
+    performance_sample_count_ = 0;
+    trend_index_ = 0;
+    trend_buffer_full_ = false;
 
     // Reset frame time history
     std::fill(frame_times_.begin(), frame_times_.end(), 1000.0 / config_.target_fps);
+
+    // Reset recent performance trend buffer
+    for (int i = 0; i < 30; ++i) {
+        recent_performance_trend_[i] = config_.performance_threshold;
+    }
 }
 
 void AutoQualityController::updateConfig(const AutoQualityConfig& new_config) {
@@ -832,9 +876,12 @@ void AutoQualityController::updateConfig(const AutoQualityConfig& new_config) {
     target_performance_threshold_ = new_config.performance_threshold;
     adjustment_cooldown_ = std::chrono::milliseconds(
         static_cast<int>(new_config.adjustment_cooldown_ms));
-    
+
     // Reinitialize quality levels if needed
     initializeQualityLevels();
+
+    // Update adaptive threshold with new config
+    adaptive_performance_threshold_ = new_config.performance_threshold;
 }
 
 void AutoQualityController::forceQualityLevel(int level) {
@@ -1177,6 +1224,70 @@ double AutoQualityController::calculateFramePacingIrregularity() const {
     // Convert to a score (higher is better pacing)
     double pacing_score = std::max(0.0, 100.0 - (coefficient_of_variation * 500.0));
     return std::min(100.0, pacing_score);
+}
+
+double AutoQualityController::calculatePeakPerformanceScore() const {
+    // Return the highest performance score recorded
+    return peak_performance_score_;
+}
+
+double AutoQualityController::calculateAveragePerformanceScore() const {
+    // Calculate the average performance score over all samples
+    if (performance_sample_count_ == 0) {
+        return 100.0; // Default to perfect performance if no samples
+    }
+
+    return cumulative_performance_score_ / performance_sample_count_;
+}
+
+bool AutoQualityController::isPerformanceDegradingRapidly() const {
+    // Check if performance is degrading rapidly by looking at recent trend
+    if (!trend_buffer_full_) {
+        return false; // Not enough data to determine
+    }
+
+    // Look at the most recent 10 samples vs the 10 samples before that
+    const int sample_size = 10;
+    double recent_avg = 0.0;
+    double previous_avg = 0.0;
+
+    // Calculate average of most recent samples
+    for (int i = 0; i < sample_size; ++i) {
+        int idx = (trend_index_ - 1 - i + 30) % 30; // Recent samples
+        recent_avg += recent_performance_trend_[idx];
+    }
+    recent_avg /= sample_size;
+
+    // Calculate average of previous samples
+    for (int i = 0; i < sample_size; ++i) {
+        int idx = (trend_index_ - 1 - sample_size - i + 30) % 30; // Previous samples
+        previous_avg += recent_performance_trend_[idx];
+    }
+    previous_avg /= sample_size;
+
+    // If recent performance is significantly worse than previous performance,
+    // we're degrading rapidly
+    double degradation_threshold = previous_avg * 0.85; // 15% degradation
+    return recent_avg < degradation_threshold;
+}
+
+void AutoQualityController::updateRealTimePerformanceMetrics() {
+    // Update cumulative performance statistics
+    cumulative_performance_score_ += performance_score_;
+    performance_sample_count_++;
+
+    // Update peak performance score
+    if (performance_score_ > peak_performance_score_) {
+        peak_performance_score_ = performance_score_;
+    }
+
+    // Update recent performance trend buffer
+    recent_performance_trend_[trend_index_] = performance_score_;
+    trend_index_ = (trend_index_ + 1) % 30;
+
+    if (!trend_buffer_full_ && trend_index_ == 0) {
+        trend_buffer_full_ = true;
+    }
 }
 
 } // namespace RenderEngine

@@ -164,6 +164,26 @@ public:
      */
     double calculateHistoricalPerformanceFactor() const;
 
+    /**
+     * @brief Calculate the peak performance score recorded
+     */
+    double calculatePeakPerformanceScore() const;
+
+    /**
+     * @brief Calculate the average performance score over all samples
+     */
+    double calculateAveragePerformanceScore() const;
+
+    /**
+     * @brief Check if performance is degrading rapidly
+     */
+    bool isPerformanceDegradingRapidly() const;
+
+    /**
+     * @brief Update real-time performance metrics
+     */
+    void updateRealTimePerformanceMetrics();
+
 private:
     AutoQualityConfig config_;
     std::vector<double> frame_times_;
@@ -181,6 +201,14 @@ private:
     double performance_history_[10];  // Track recent performance scores
     int performance_history_index_ = 0;
     bool performance_history_full_ = false;
+
+    // Enhanced performance tracking variables
+    double peak_performance_score_ = 0.0;
+    double cumulative_performance_score_ = 0.0;
+    int performance_sample_count_ = 0;
+    double recent_performance_trend_[30];  // Track trend over last 30 samples
+    int trend_index_ = 0;
+    bool trend_buffer_full_ = false;
 
     // Private methods
     void initializeQualityLevels();

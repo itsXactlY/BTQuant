@@ -76,6 +76,9 @@ set(LIB_SOURCES
     src/threading/lockfree_queue.cpp
     src/performance/frame_time_graph.cpp
     src/performance/regression_detector.cpp
+    src/ui/loading_states.cpp
+    src/ui/loading_state_integration.cpp
+    src/ui/empty_states.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -153,6 +156,9 @@ set(DASHBOARD_SOURCES
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
     src/ui/haptic_feedback.cpp
+    src/ui/loading_states.cpp
+    src/ui/loading_state_integration.cpp
+    src/ui/empty_states.cpp
     src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
 )
@@ -231,6 +237,9 @@ set(REALTIME_DASHBOARD_SOURCES
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
+    src/ui/loading_states.cpp
+    src/ui/loading_state_integration.cpp
+    src/ui/empty_states.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/data/cache_manager.cpp

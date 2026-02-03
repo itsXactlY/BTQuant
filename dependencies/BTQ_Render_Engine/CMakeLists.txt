@@ -80,6 +80,7 @@ set(LIB_SOURCES
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
     src/ui/tooltips.cpp
+    src/ui/context_menus.cpp
 )
 
 set(DASHBOARD_SOURCES

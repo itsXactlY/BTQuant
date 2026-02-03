@@ -81,6 +81,7 @@ set(LIB_SOURCES
     src/ui/empty_states.cpp
     src/ui/tooltips.cpp
     src/ui/context_menus.cpp
+    src/ui/quick_actions.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -161,6 +162,7 @@ set(DASHBOARD_SOURCES
     src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
+    src/ui/quick_actions.cpp
     src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
 )
@@ -242,6 +244,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
+    src/ui/quick_actions.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/data/cache_manager.cpp
@@ -408,6 +411,29 @@ target_include_directories(test_tooltips PRIVATE
 )
 
 target_link_libraries(test_tooltips PRIVATE
+    btq_engine_lib
+    Threads::Threads
+    TBB::tbb
+)
+
+# Quick Actions test executable
+add_executable(test_quick_actions
+    src/ui/test_quick_actions.cpp
+)
+
+target_include_directories(test_quick_actions PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_quick_actions PRIVATE
     btq_engine_lib
     Threads::Threads
     TBB::tbb

@@ -120,6 +120,21 @@ public:
     // Check if there are any batched elements
     bool isEmpty() const { return batches_.empty(); }
 
+    // Advanced batch optimization that minimizes draw calls by maximizing batch sizes
+    void advancedBatchOptimization();
+
+    // GPU-optimized batching that focuses on reducing draw calls and memory allocations
+    void gpuOptimizedBatching();
+
+    // Memory-efficient batching that reduces memory fragmentation and allocation overhead
+    void memoryEfficientBatching();
+
+    // Batch multiple similar draw calls together to reduce GPU overhead
+    void batchMultipleDrawCalls(const std::vector<std::function<void(OrderbookBatchElement*)>>& draw_calls);
+
+    // Enhanced batch geometry method that combines multiple similar elements into single draw calls
+    void batchGeometryEnhanced(const std::vector<OrderbookElementData>& elements);
+
 private:
     std::vector<OrderbookBatchElement> batches_;
 
@@ -168,9 +183,6 @@ private:
 
     // Enhanced method to batch geometry with maximum efficiency for order book rendering
     void batchGeometry(const std::vector<OrderbookElementData>& elements);
-
-    // Advanced batch optimization that minimizes draw calls by maximizing batch sizes
-    void advancedBatchOptimization();
 
     // Fast batch consolidation to reduce GPU overhead
     void fastConsolidateBatches();

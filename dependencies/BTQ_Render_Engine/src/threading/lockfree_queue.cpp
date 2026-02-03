@@ -4,6 +4,7 @@
 #include <vector>
 #include <chrono>
 #include <tuple>
+#include <optional>
 
 // Explicit template instantiations for commonly used types in the BTQ Render Engine
 // This helps reduce compilation times and ensures proper linking of template implementations
@@ -33,6 +34,12 @@ template class LockFreeQueue<std::vector<btq::Candle>>;
 // Additional data structures for UI updates and indicator data
 template class LockFreeQueue<std::pair<double, double>>;  // For histogram data
 template class LockFreeQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality
+template class LockFreeQueue<std::optional<int>>;
+template class LockFreeQueue<std::optional<double>>;
+template class LockFreeQueue<std::optional<btq::Trade>>;
+template class LockFreeQueue<std::optional<btq::Candle>>;
 
 } // namespace threading
 } // namespace btq

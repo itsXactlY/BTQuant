@@ -25,6 +25,8 @@
 #include "../include/components/orderbook_panel.hpp"
 #include "../include/widgets/VolumeProfileNode.h"
 #include "../include/widgets/FootprintCell.h"
+#include "../include/analytics/trading_analytics.hpp"
+#include "../include/hotspine_data_bridge.hpp"
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
@@ -1055,6 +1057,160 @@ public:
 private:
     FastFootprintCellPool() = default;
     ThreadLocalObjectPool<FootprintCell> pool_;
+};
+
+// Additional memory pools for other frequently allocated objects
+
+// TradePool for generic trade objects
+class TradePool {
+public:
+    static TradePool& getInstance();
+
+    BTQuant::Trade* allocate();
+    void deallocate(BTQuant::Trade* trade);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradePool() = default;
+    ObjectPool<BTQuant::Trade> pool_;
+};
+
+// FastTradePool for high-performance trade allocation
+class FastTradePool {
+public:
+    static FastTradePool& getInstance();
+
+    BTQuant::Trade* allocate();
+    void deallocate(BTQuant::Trade* trade);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradePool() = default;
+    ThreadLocalObjectPool<BTQuant::Trade> pool_;
+};
+
+// HotOrderbookSnapshotPool for frequently allocated snapshots
+class HotOrderbookSnapshotPool {
+public:
+    static HotOrderbookSnapshotPool& getInstance();
+
+    BTQuant::HotOrderbookSnapshot* allocate();
+    void deallocate(BTQuant::HotOrderbookSnapshot* snapshot);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    HotOrderbookSnapshotPool() = default;
+    ObjectPool<BTQuant::HotOrderbookSnapshot> pool_;
+};
+
+// FastHotOrderbookSnapshotPool for high-performance snapshot allocation
+class FastHotOrderbookSnapshotPool {
+public:
+    static FastHotOrderbookSnapshotPool& getInstance();
+
+    BTQuant::HotOrderbookSnapshot* allocate();
+    void deallocate(BTQuant::HotOrderbookSnapshot* snapshot);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastHotOrderbookSnapshotPool() = default;
+    ThreadLocalObjectPool<BTQuant::HotOrderbookSnapshot> pool_;
+};
+
+// IndicatorResultPool for frequently allocated indicator results
+class IndicatorResultPool {
+public:
+    static IndicatorResultPool& getInstance();
+
+    BTQuant::TechnicalIndicators::IndicatorResult* allocate();
+    void deallocate(BTQuant::TechnicalIndicators::IndicatorResult* result);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    IndicatorResultPool() = default;
+    ObjectPool<BTQuant::TechnicalIndicators::IndicatorResult> pool_;
+};
+
+// FastIndicatorResultPool for high-performance indicator result allocation
+class FastIndicatorResultPool {
+public:
+    static FastIndicatorResultPool& getInstance();
+
+    BTQuant::TechnicalIndicators::IndicatorResult* allocate();
+    void deallocate(BTQuant::TechnicalIndicators::IndicatorResult* result);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastIndicatorResultPool() = default;
+    ThreadLocalObjectPool<BTQuant::TechnicalIndicators::IndicatorResult> pool_;
+};
+
+// OrderExecutionPool for frequently allocated order executions
+class OrderExecutionPool {
+public:
+    static OrderExecutionPool& getInstance();
+
+    OrderManager::OrderExecution* allocate();
+    void deallocate(OrderManager::OrderExecution* execution);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    OrderExecutionPool() = default;
+    ObjectPool<OrderManager::OrderExecution> pool_;
+};
+
+// FastOrderExecutionPool for high-performance order execution allocation
+class FastOrderExecutionPool {
+public:
+    static FastOrderExecutionPool& getInstance();
+
+    OrderManager::OrderExecution* allocate();
+    void deallocate(OrderManager::OrderExecution* execution);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastOrderExecutionPool() = default;
+    ThreadLocalObjectPool<OrderManager::OrderExecution> pool_;
 };
 
 // Template implementations (included in header for template instantiation)

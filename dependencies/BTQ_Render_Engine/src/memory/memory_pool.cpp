@@ -911,4 +911,150 @@ void FastFootprintCellPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// Additional memory pool implementations for other frequently allocated objects
+
+// TradePool implementation
+TradePool& TradePool::getInstance() {
+    static TradePool instance;
+    return instance;
+}
+
+BTQuant::Trade* TradePool::allocate() {
+    return pool_.allocate();
+}
+
+void TradePool::deallocate(BTQuant::Trade* trade) {
+    pool_.deallocate(trade);
+}
+
+void TradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastTradePool implementation
+FastTradePool& FastTradePool::getInstance() {
+    static FastTradePool instance;
+    return instance;
+}
+
+BTQuant::Trade* FastTradePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastTradePool::deallocate(BTQuant::Trade* trade) {
+    pool_.deallocate(trade);
+}
+
+void FastTradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// HotOrderbookSnapshotPool implementation
+HotOrderbookSnapshotPool& HotOrderbookSnapshotPool::getInstance() {
+    static HotOrderbookSnapshotPool instance;
+    return instance;
+}
+
+BTQuant::HotOrderbookSnapshot* HotOrderbookSnapshotPool::allocate() {
+    return pool_.allocate();
+}
+
+void HotOrderbookSnapshotPool::deallocate(BTQuant::HotOrderbookSnapshot* snapshot) {
+    pool_.deallocate(snapshot);
+}
+
+void HotOrderbookSnapshotPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastHotOrderbookSnapshotPool implementation
+FastHotOrderbookSnapshotPool& FastHotOrderbookSnapshotPool::getInstance() {
+    static FastHotOrderbookSnapshotPool instance;
+    return instance;
+}
+
+BTQuant::HotOrderbookSnapshot* FastHotOrderbookSnapshotPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastHotOrderbookSnapshotPool::deallocate(BTQuant::HotOrderbookSnapshot* snapshot) {
+    pool_.deallocate(snapshot);
+}
+
+void FastHotOrderbookSnapshotPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// IndicatorResultPool implementation
+IndicatorResultPool& IndicatorResultPool::getInstance() {
+    static IndicatorResultPool instance;
+    return instance;
+}
+
+BTQuant::TechnicalIndicators::IndicatorResult* IndicatorResultPool::allocate() {
+    return pool_.allocate();
+}
+
+void IndicatorResultPool::deallocate(BTQuant::TechnicalIndicators::IndicatorResult* result) {
+    pool_.deallocate(result);
+}
+
+void IndicatorResultPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastIndicatorResultPool implementation
+FastIndicatorResultPool& FastIndicatorResultPool::getInstance() {
+    static FastIndicatorResultPool instance;
+    return instance;
+}
+
+BTQuant::TechnicalIndicators::IndicatorResult* FastIndicatorResultPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastIndicatorResultPool::deallocate(BTQuant::TechnicalIndicators::IndicatorResult* result) {
+    pool_.deallocate(result);
+}
+
+void FastIndicatorResultPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// OrderExecutionPool implementation
+OrderExecutionPool& OrderExecutionPool::getInstance() {
+    static OrderExecutionPool instance;
+    return instance;
+}
+
+OrderManager::OrderExecution* OrderExecutionPool::allocate() {
+    return pool_.allocate();
+}
+
+void OrderExecutionPool::deallocate(OrderManager::OrderExecution* execution) {
+    pool_.deallocate(execution);
+}
+
+void OrderExecutionPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastOrderExecutionPool implementation
+FastOrderExecutionPool& FastOrderExecutionPool::getInstance() {
+    static FastOrderExecutionPool instance;
+    return instance;
+}
+
+OrderManager::OrderExecution* FastOrderExecutionPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastOrderExecutionPool::deallocate(OrderManager::OrderExecution* execution) {
+    pool_.deallocate(execution);
+}
+
+void FastOrderExecutionPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

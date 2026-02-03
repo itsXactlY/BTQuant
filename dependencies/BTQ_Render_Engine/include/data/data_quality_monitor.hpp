@@ -194,6 +194,9 @@ public:
   // Alert users to all data quality problems
   void alert_users_to_all_data_problems();
 
+  // Provide real-time alerts to users about data quality issues
+  void provide_real_time_alerts_to_users();
+
   // Public methods for enhanced data quality monitoring
   uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
   bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,

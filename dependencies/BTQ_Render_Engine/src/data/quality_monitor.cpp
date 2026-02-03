@@ -3289,9 +3289,80 @@ void DataQualityMonitor::alert_users_to_all_data_problems() {
         alert_user_to_data_problems("SYSTEM", msg.str(), 0.5);
     }
 
+    // NEW: Additional alerting for specific data quality problems with more detailed information
+    // Check for critical data quality issues that require immediate attention
+    if (metrics_.missing_data_issues > 10 ||
+        metrics_.duplicate_trade_issues > 10 ||
+        metrics_.out_of_order_timestamp_issues > 10 ||
+        metrics_.latency_issues > 10) {
+
+        std::ostringstream critical_msg;
+        critical_msg << "CRITICAL DATA QUALITY ALERT: Multiple high-frequency issues detected. "
+                     << "Missing: " << metrics_.missing_data_issues
+                     << ", Duplicates: " << metrics_.duplicate_trade_issues
+                     << ", Out-of-order: " << metrics_.out_of_order_timestamp_issues
+                     << ", Latency: " << metrics_.latency_issues;
+
+        alert_user_to_data_problems_with_context("SYSTEM", critical_msg.str(), 0.95,
+                                               "DataQualityMonitor", "Multiple concurrent data quality issues");
+    }
+
     // Also provide a summary of the current state
     if (console_alerts_enabled_) {
         std::cout << get_user_friendly_summary() << std::endl;
+    }
+
+    // NEW: Generate a comprehensive report for user visibility
+    generate_comprehensive_alert_report();
+}
+
+// NEW: Additional method to provide real-time alerts to users about data quality issues
+void DataQualityMonitor::provide_real_time_alerts_to_users() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Get recent high severity issues
+    auto high_severity_issues = get_high_severity_issues(0.7);
+
+    if (!high_severity_issues.empty()) {
+        std::cout << "\n" << std::string(80, '=') << std::endl;
+        std::cout << "REAL-TIME DATA QUALITY ALERTS" << std::endl;
+        std::cout << std::string(80, '=') << std::endl;
+
+        for (const auto& issue : high_severity_issues) {
+            std::cout << "Symbol: " << issue.symbol << std::endl;
+            std::cout << "Type: ";
+
+            switch (issue.type) {
+                case DataQualityIssueType::MISSING_DATA:
+                    std::cout << "MISSING_DATA";
+                    break;
+                case DataQualityIssueType::DUPLICATE_TRADE:
+                    std::cout << "DUPLICATE_TRADE";
+                    break;
+                case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+                    std::cout << "OUT_OF_ORDER_TIMESTAMP";
+                    break;
+                case DataQualityIssueType::LATENCY_ISSUE:
+                    std::cout << "LATENCY_ISSUE";
+                    break;
+                case DataQualityIssueType::INVALID_PRICE:
+                    std::cout << "INVALID_PRICE";
+                    break;
+                case DataQualityIssueType::INVALID_VOLUME:
+                    std::cout << "INVALID_VOLUME";
+                    break;
+                case DataQualityIssueType::MISSING_FIELD:
+                    std::cout << "MISSING_FIELD";
+                    break;
+            }
+
+            std::cout << std::endl;
+            std::cout << "Severity: " << issue.severity << std::endl;
+            std::cout << "Description: " << issue.description << std::endl;
+            std::cout << std::string(50, '-') << std::endl;
+        }
+
+        std::cout << std::string(80, '=') << std::endl;
     }
 }
 

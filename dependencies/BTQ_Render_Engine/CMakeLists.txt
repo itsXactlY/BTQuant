@@ -71,6 +71,8 @@ set(LIB_SOURCES
     ${IMPLOT_DIR}/implot.cpp
     ${IMPLOT_DIR}/implot_items.cpp
     ${IMPLOT_DIR}/implot_demo.cpp
+    # Threading module - this is the main focus of our task
+    src/threading/task_scheduler.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -147,32 +149,7 @@ set(DASHBOARD_SOURCES
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
-    src/data/market_data_processor.cpp
-    src/data/symbol_manager.cpp
-    src/data/cache_manager.cpp
-    src/data/persistence.cpp
-    src/data/incremental_updater.cpp
-    src/data/exchange_aggregator.cpp
-    src/data/quality_monitor.cpp
-    src/data/test_quality_monitor.cpp
-    src/monitoring/performance_monitor.cpp
-    src/performance/panel_profiler.cpp
-    src/performance/frame_time_graph.cpp
-    src/performance/memory_tracker.cpp
-    src/performance/debug_overlay.cpp
-    # Threading module
-    src/threading/task_scheduler.cpp
-    # Analytics and advanced features
-    src/analytics/technical_analysis.cpp
-    src/analytics/trading_analytics.cpp
-    src/analytics/cluster_engine.cpp
-    src/analytics/volume_calculator.cpp
-    src/indicators/session_vwap.cpp
-    src/indicators/rolling_vwap.cpp
-    src/indicators/vwap_alerts.cpp
-    src/indicators/indicator_alerts.cpp
     src/layout/dashboard_layout_manager.cpp
-    src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp
 )
 
@@ -273,6 +250,29 @@ set(REALTIME_DASHBOARD_SOURCES
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp
+)
+
+# Create a library target for shared components
+add_library(btq_engine_lib STATIC ${LIB_SOURCES})
+
+target_include_directories(btq_engine_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/analytics
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/indicators
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/data
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${glm_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
+)
+
+target_link_libraries(btq_engine_lib PUBLIC
+    Vulkan::Vulkan
+    Threads::Threads
 )
 
 add_executable(realtime_dashboard ${REALTIME_DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})

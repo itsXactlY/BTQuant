@@ -135,6 +135,9 @@ public:
     // Enhanced batch geometry method that combines multiple similar elements into single draw calls
     void batchGeometryEnhanced(const std::vector<OrderbookElementData>& elements);
 
+    // Highly optimized batch method that combines similar elements with minimal overhead
+    void batchGeometryHighPerformance(const std::vector<OrderbookElementData>& elements);
+
 private:
     std::vector<OrderbookBatchElement> batches_;
 

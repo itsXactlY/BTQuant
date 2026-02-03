@@ -3555,12 +3555,26 @@ std::vector<FootprintCell> FootprintLOD::aggregateCellsForZoomOut(const std::vec
         auto grid_key = std::make_pair(grid_x, grid_y);
 
         if (grid_map.find(grid_key) == grid_map.end()) {
-            // Create new aggregated cell
-            FootprintCell aggregated_cell = cell;
-            aggregated_cell.x = grid_x * grid_size + grid_size * 0.5f;  // Center in grid
-            aggregated_cell.y = grid_y * grid_size + grid_size * 0.5f;
-            aggregated_cell.width = grid_size * 0.9f;  // Slightly smaller to avoid overlap
-            aggregated_cell.height = grid_size * 0.9f;
+            // Create new aggregated cell using the constructor
+            FootprintCell aggregated_cell(
+                grid_x * grid_size + grid_size * 0.5f,  // x: Center in grid
+                grid_y * grid_size + grid_size * 0.5f,  // y: Center in grid
+                grid_size * 0.9f,                       // width: Slightly smaller to avoid overlap
+                grid_size * 0.9f,                       // height: Slightly smaller to avoid overlap
+                cell.bid_volume,                        // bid_volume
+                cell.ask_volume,                        // ask_volume
+                cell.trade_count,                       // trade_count
+                cell.vwap                               // vwap
+            );
+
+            // Copy additional properties
+            aggregated_cell.delta = cell.delta;
+            aggregated_cell.buy_trade_count = cell.buy_trade_count;
+            aggregated_cell.sell_trade_count = cell.sell_trade_count;
+            aggregated_cell.max_single_trade_volume = cell.max_single_trade_volume;
+            aggregated_cell.start_time_ns = cell.start_time_ns;
+            aggregated_cell.end_time_ns = cell.end_time_ns;
+
             grid_map[grid_key] = aggregated_cell;
         } else {
             // Aggregate with existing cell in grid
@@ -4036,6 +4050,308 @@ void FootprintLOD::applyMultiScaleLODToCell(const FootprintCell& cell,
                                            bar_color);
                 }
             }
+        }
+    }
+}
+
+// Implementation for continuous LOD that provides smooth transitions between zoom levels
+LODLevel FootprintLOD::calculateContinuousLOD(float cell_width_px, float cell_height_px,
+                                           float zoom_factor) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate continuous LOD value that smoothly transitions between discrete levels
+    // This creates a continuous value between LOD levels for smooth transitions
+
+    // Base thresholds with some overlap to ensure smooth transitions
+    float low_to_medium_threshold = min_detail_zoom_ * 0.7f;
+    float medium_to_high_threshold = medium_detail_zoom_ * 0.8f;
+    float high_to_max_threshold = max_detail_zoom_ * 0.9f;
+
+    float size_low_threshold = min_cell_size_px_ * 0.8f;
+    float size_medium_threshold = medium_cell_size_px_ * 0.9f;
+    float size_high_threshold = max_cell_size_px_;
+
+    // Determine which range the cell falls into
+    if (zoom_factor <= low_to_medium_threshold || min_dimension <= size_low_threshold) {
+        return LODLevel::LOW_DETAIL;
+    } else if (zoom_factor <= medium_to_high_threshold || min_dimension <= size_medium_threshold) {
+        // In transition zone between low and medium
+        float zoom_ratio = (zoom_factor - low_to_medium_threshold) / (medium_to_high_threshold - low_to_medium_threshold);
+        float size_ratio = (min_dimension - size_low_threshold) / (size_medium_threshold - size_low_threshold);
+
+        // Use the higher of the two ratios to determine LOD
+        float ratio = std::max(zoom_ratio, size_ratio);
+        return (ratio > 0.5f) ? LODLevel::MEDIUM_DETAIL : LODLevel::LOW_DETAIL;
+    } else if (zoom_factor <= high_to_max_threshold || min_dimension <= size_high_threshold) {
+        // In transition zone between medium and high
+        float zoom_ratio = (zoom_factor - medium_to_high_threshold) / (high_to_max_threshold - medium_to_high_threshold);
+        float size_ratio = (min_dimension - size_medium_threshold) / (size_high_threshold - size_medium_threshold);
+
+        float ratio = std::max(zoom_ratio, size_ratio);
+        return (ratio > 0.5f) ? LODLevel::HIGH_DETAIL : LODLevel::MEDIUM_DETAIL;
+    } else {
+        // In transition zone between high and max
+        float zoom_ratio = (zoom_factor - high_to_max_threshold) / (max_detail_zoom_ * 1.5f - high_to_max_threshold);
+        float size_ratio = (min_dimension - size_high_threshold) / (max_cell_size_px_ * 1.5f - size_high_threshold);
+
+        float ratio = std::max(zoom_ratio, size_ratio);
+        return (ratio > 0.3f) ? LODLevel::MAX_DETAIL : LODLevel::HIGH_DETAIL;
+    }
+}
+
+LODRenderSettings FootprintLOD::getContinuousLODRenderSettings(LODLevel lod_level, float zoom_factor) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+
+    // Apply continuous adjustments based on zoom level for smooth transitions
+    if (zoom_factor < 0.1f) {
+        // Very zoomed out - minimize visual complexity
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier = 0.6f;
+        settings.border_thickness = 0.5f;
+    } else if (zoom_factor < 0.3f) {
+        // Moderately zoomed out - basic detail
+        settings.render_text = false;
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier = 0.7f;
+        settings.border_thickness = 0.8f;
+    } else if (zoom_factor < 0.7f) {
+        // Approaching normal zoom - medium detail
+        settings.render_text = false;
+        settings.render_labels = true;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier = 0.85f;
+        settings.border_thickness = 1.0f;
+    } else if (zoom_factor < 1.5f) {
+        // Normal zoom - high detail
+        settings.render_text = true;
+        settings.render_labels = true;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier = 1.0f;
+        settings.border_thickness = 1.5f;
+    } else if (zoom_factor < 3.0f) {
+        // Zoomed in - maximum detail
+        settings.render_text = true;
+        settings.render_labels = true;
+        settings.render_detailed_annotations = true;
+        settings.alpha_multiplier = 1.1f;
+        settings.border_thickness = 2.0f;
+    } else {
+        // Highly zoomed in - ultra detail
+        settings.render_text = true;
+        settings.render_labels = true;
+        settings.render_detailed_annotations = true;
+        settings.alpha_multiplier = 1.2f;
+        settings.border_thickness = 2.5f;
+    }
+
+    return settings;
+}
+
+void FootprintLOD::applyContinuousLODToCell(const FootprintCell& cell,
+                                       ImDrawList* draw_list,
+                                       float zoom_factor,
+                                       double max_volume,
+                                       const std::vector<FootprintCell>& diagonal_imbalances,
+                                       const std::vector<FootprintCell>& stacked_imbalances,
+                                       const FootprintPanel* panel) const {
+    // Calculate cell dimensions in pixels
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+
+    float cell_width_px = std::abs(p2.x - p1.x);
+    float cell_height_px = std::abs(p2.y - p1.y);
+
+    // Determine LOD level using continuous calculation
+    LODLevel lod_level = calculateContinuousLOD(cell_width_px, cell_height_px, zoom_factor);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getContinuousLODRenderSettings(lod_level, zoom_factor);
+
+    // Get cell color from panel
+    ImU32 cell_color = panel->getCellColor(cell, max_volume);
+
+    // Get cell label from panel
+    std::string cell_label = panel->getCellLabel(cell);
+
+    // Apply alpha multiplier based on LOD
+    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
+
+    // Apply zoom-based alpha adjustment for continuous transitions
+    if (zoom_factor < 0.2f) {
+        alpha_multiplier *= 0.6f; // Reduce alpha when heavily zoomed out
+    } else if (zoom_factor > 2.5f) {
+        alpha_multiplier = std::min(alpha_multiplier * 1.2f, 1.3f); // Increase alpha when zoomed in
+    }
+
+    // Render heatmap/fill based on continuous LOD settings
+    if (settings.render_heatmap) {
+        // Modify alpha based on LOD and zoom level
+        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
+        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
+
+        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+    }
+
+    // Render borders based on continuous LOD settings
+    if (settings.render_borders) {
+        // Check for imbalances to determine border color/type
+        bool is_diagonal = false;
+        bool is_stacked = false;
+
+        for (const auto& diag_cell : diagonal_imbalances) {
+            if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
+                is_diagonal = true;
+                break;
+            }
+        }
+
+        for (const auto& stack_cell : stacked_imbalances) {
+            if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
+                is_stacked = true;
+                break;
+            }
+        }
+
+        ImU32 border_color;
+        float thickness = settings.border_thickness;
+
+        if (is_diagonal || is_stacked) {
+            // Highlight imbalanced cells with special colors
+            if (is_diagonal && is_stacked) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                ImVec2 offset_p1(p1.x - 1.0f, p1.y - 1.0f);
+                ImVec2 offset_p2(p2.x + 1.0f, p2.y + 1.0f);
+                draw_list->AddRect(offset_p1, offset_p2, border_color, 0.0f, 0, thickness);
+            } else if (is_diagonal) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            } else if (is_stacked) {
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            }
+        } else {
+            // Regular border based on LOD
+            unsigned char border_alpha = static_cast<unsigned char>(13 * alpha_multiplier);
+            border_color = IM_COL32(255, 255, 255, border_alpha);
+            draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+        }
+    }
+
+    // Render text/labels based on continuous LOD settings
+    if (settings.render_text && shouldRenderText(cell_height_px, zoom_factor)) {
+        if (settings.render_labels && shouldRenderLabels(cell_height_px, zoom_factor)) {
+            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
+
+            // Center text in cell
+            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
+                           (p1.y + p2.y - text_size.y) * 0.5f);
+
+            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+        }
+    }
+
+    // Render detailed annotations based on continuous LOD settings
+    if (settings.render_detailed_annotations &&
+        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
+
+        // Example: render delta indicator if enabled and conditions met
+        if (panel->getShowDeltaIndicator()) {
+            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+            if (max_vol > 0.0) {
+                double normalized_delta = cell.delta / max_vol;
+
+                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
+                    float bar_height = (zoom_factor > 2.0f) ? 4.0f : 3.0f;  // Taller bars when zoomed in
+                    float bar_width = (p2.x - p1.x) * 0.8f;
+                    ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f,
+                                  p2.y - bar_height - (zoom_factor > 2.0f ? 1.5f : 1.0f));
+
+                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
+                                                           : IM_COL32(255, 0, 0, 200);  // Red
+
+                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
+                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
+                                           bar_color);
+                }
+            }
+        }
+    }
+}
+
+// Implementation for zoom-based simplification when zoomed out
+void FootprintLOD::applyZoomOutSimplificationLODToCell(const FootprintCell& cell,
+                                                      ImDrawList* draw_list,
+                                                      float zoom_factor,
+                                                      double max_volume,
+                                                      const FootprintPanel* panel) const {
+    // Calculate cell dimensions in pixels
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+
+    float cell_width_px = std::abs(p2.x - p1.x);
+    float cell_height_px = std::abs(p2.y - p1.y);
+
+    // Early exit if cell should not be rendered at all
+    if (shouldCompletelySkipRendering(cell_width_px, cell_height_px, zoom_factor)) {
+        return;
+    }
+
+    // Determine LOD level using simplified zoom-out calculation
+    LODLevel lod_level = calculateSimplifiedZoomOutLOD(cell_width_px, cell_height_px, zoom_factor);
+    LODRenderSettings settings = getSimplifiedZoomOutRenderSettings(lod_level, zoom_factor);
+
+    // Get cell color from panel
+    ImU32 cell_color = panel->getCellColor(cell, max_volume);
+
+    // Apply alpha multiplier based on LOD
+    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
+
+    // Apply additional zoom-based alpha adjustment for zoomed-out views
+    if (zoom_factor < 0.2f) {
+        alpha_multiplier *= 0.6f;  // Reduce alpha significantly when heavily zoomed out
+    } else if (zoom_factor < 0.4f) {
+        alpha_multiplier *= 0.8f;  // Reduce alpha moderately when zoomed out
+    }
+
+    // Render heatmap/fill based on simplified zoom-out LOD settings
+    if (settings.render_heatmap) {
+        // Modify alpha based on LOD and zoom level
+        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
+        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
+
+        // When zoomed out significantly, use a simplified representation
+        if (zoom_factor < 0.1f) {
+            // At extreme zoom out, draw a smaller centered rectangle to reduce visual clutter
+            ImVec2 center_p1 = ImVec2((p1.x + p2.x) * 0.5f - 2.0f, (p1.y + p2.y) * 0.5f - 2.0f);
+            ImVec2 center_p2 = ImVec2((p1.x + p2.x) * 0.5f + 2.0f, (p1.y + p2.y) * 0.5f + 2.0f);
+            draw_list->AddRectFilled(center_p1, center_p2, color_with_lod_alpha);
+        } else {
+            draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+        }
+    }
+
+    // Render borders based on simplified zoom-out LOD settings
+    if (settings.render_borders) {
+        // Use a simpler border approach when zoomed out
+        unsigned char border_alpha = static_cast<unsigned char>(10 * alpha_multiplier);  // Reduced alpha for borders
+        ImU32 border_color = IM_COL32(255, 255, 255, border_alpha);
+        float thickness = settings.border_thickness;
+
+        // Draw a simpler border when zoomed out
+        if (zoom_factor < 0.1f) {
+            // At extreme zoom out, use a minimal border
+            ImVec2 center_p1 = ImVec2((p1.x + p2.x) * 0.5f - 2.5f, (p1.y + p2.y) * 0.5f - 2.5f);
+            ImVec2 center_p2 = ImVec2((p1.x + p2.x) * 0.5f + 2.5f, (p1.y + p2.y) * 0.5f + 2.5f);
+            draw_list->AddRect(center_p1, center_p2, border_color, 0.0f, 0, thickness * 0.5f);
+        } else {
+            draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
         }
     }
 }

@@ -472,6 +472,29 @@ public:
                                  const FootprintPanel* panel,
                                  float view_scale) const;
 
+    // Calculate continuous LOD for smooth transitions between zoom levels
+    LODLevel calculateContinuousLOD(float cell_width_px, float cell_height_px,
+                               float zoom_factor) const;
+
+    // Get continuous LOD render settings for smooth transitions
+    LODRenderSettings getContinuousLODRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply continuous LOD to cell rendering for smooth transitions
+    void applyContinuousLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel) const;
+
+    // Apply zoom-out simplification LOD to cell rendering
+    void applyZoomOutSimplificationLODToCell(const FootprintCell& cell,
+                                           ImDrawList* draw_list,
+                                           float zoom_factor,
+                                           double max_volume,
+                                           const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

@@ -380,13 +380,13 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         std::vector<double> critical_values(frame_times_.size(), frame_time_threshold_critical_);
 
         // Critical threshold line (red)
-        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 0.7f), 1.5f); // Red line
-        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
+        ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.0f, 0.0f, 0.8f), 2.0f); // Thicker red line
+        ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
         ImPlot::PlotLine("Critical Threshold", x_values.data(), critical_values.data(), frame_times_.size());
         ImPlot::PopStyleVar();
 
-        // Warning threshold line (yellow)
-        ImPlot::SetNextLineStyle(ImVec4(1.0f, 1.0f, 0.0f, 0.7f), 1.5f); // Yellow line
+        // Warning threshold line (yellow/orange)
+        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.6f, 0.0f, 0.8f), 1.5f); // Orange line
         ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
         ImPlot::PlotLine("Warning Threshold", x_values.data(), warning_values.data(), frame_times_.size());
         ImPlot::PopStyleVar();
@@ -398,23 +398,30 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         ImPlot::PopStyleVar();
 
         // Highlight performance issues with filled areas
-        std::vector<double> issue_x, issue_y;
+        std::vector<double> warning_x, warning_y, critical_x, critical_y;
         for (size_t i = 0; i < frame_times_.size(); ++i) {
             if (frame_times_[i] > frame_time_threshold_warning_) {
-                issue_x.push_back(x_values[i]);
-                issue_y.push_back(frame_times_[i]);
-
-                // Add a point at the threshold level to create a filled area
                 if (frame_times_[i] > frame_time_threshold_critical_) {
                     // Critical issue - red
-                    ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.0f, 0.3f));
-                    ImPlot::PlotShaded("Critical Spikes", &issue_x.back(), &issue_y.back(), 1, frame_time_threshold_critical_);
+                    critical_x.push_back(x_values[i]);
+                    critical_y.push_back(frame_times_[i]);
                 } else {
-                    // Warning issue - yellow
-                    ImPlot::SetNextFillStyle(ImVec4(1.0f, 1.0f, 0.0f, 0.3f));
-                    ImPlot::PlotShaded("Warning Spikes", &issue_x.back(), &issue_y.back(), 1, frame_time_threshold_warning_);
+                    // Warning issue - orange
+                    warning_x.push_back(x_values[i]);
+                    warning_y.push_back(frame_times_[i]);
                 }
             }
+        }
+
+        // Fill areas for warning and critical issues separately
+        if (!warning_x.empty()) {
+            ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.6f, 0.0f, 0.2f)); // Semi-transparent orange
+            ImPlot::PlotShaded("Warning Spikes", warning_x.data(), warning_y.data(), warning_x.size(), frame_time_threshold_warning_);
+        }
+
+        if (!critical_x.empty()) {
+            ImPlot::SetNextFillStyle(ImVec4(0.8f, 0.0f, 0.0f, 0.3f)); // Semi-transparent red
+            ImPlot::PlotShaded("Critical Spikes", critical_x.data(), critical_y.data(), critical_x.size(), frame_time_threshold_critical_);
         }
 
         // Draw markers for performance issues
@@ -423,10 +430,10 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                 double x_pos = x_values[i];
 
                 if (frame_times_[i] > frame_time_threshold_critical_) {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6, ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 2.0f, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // Red marker for critical
+                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 8, ImVec4(0.8f, 0.0f, 0.0f, 1.0f), 3.0f, ImVec4(1.0f, 1.0f, 1.0f, 0.8f)); // Large red circle for critical
                     ImPlot::PlotScatter("Critical", &x_pos, &frame_times_[i], 1);
                 } else {
-                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Square, 5, ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 2.0f, ImVec4(0.0f, 0.0f, 0.0f, 0.8f)); // Yellow marker for warning
+                    ImPlot::SetNextMarkerStyle(ImPlotMarker_Diamond, 7, ImVec4(1.0f, 0.6f, 0.0f, 1.0f), 2.5f, ImVec4(0.0f, 0.0f, 0.0f, 0.8f)); // Orange diamond for warning
                     ImPlot::PlotScatter("Warning", &x_pos, &frame_times_[i], 1);
                 }
             }
@@ -438,23 +445,23 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
             double min_val = min_frame_time_ms_;
             double max_val = max_frame_time_ms_;
 
-            // Average line (orange)
+            // Average line (blue)
             std::vector<double> avg_values(frame_times_.size(), avg);
-            ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 1.5f); // Orange solid
+            ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.5f, 1.0f, 0.9f), 1.5f); // Blue solid
             ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
             ImPlot::PlotLine("Average", x_values.data(), avg_values.data(), frame_times_.size());
             ImPlot::PopStyleVar();
 
-            // Min line (light blue)
+            // Min line (light blue) - using stipple pattern to simulate dashed
             std::vector<double> min_values(frame_times_.size(), min_val);
-            ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), 1.0f); // Light blue solid
+            ImPlot::SetNextLineStyle(ImVec4(0.2f, 0.8f, 1.0f, 0.7f), 1.0f); // Light blue
             ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
             ImPlot::PlotLine("Min", x_values.data(), min_values.data(), frame_times_.size());
             ImPlot::PopStyleVar();
 
-            // Max line (dark red)
+            // Max line (purple) - using stipple pattern to simulate dashed
             std::vector<double> max_values(frame_times_.size(), max_val);
-            ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), 1.0f); // Dark red solid
+            ImPlot::SetNextLineStyle(ImVec4(0.8f, 0.4f, 1.0f, 0.7f), 1.0f); // Purple
             ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
             ImPlot::PlotLine("Max", x_values.data(), max_values.data(), frame_times_.size());
             ImPlot::PopStyleVar();
@@ -480,7 +487,7 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
             now - last_performance_issue_time_);
 
         ImVec4 issue_color = current_frame_time_ms_ > frame_time_threshold_critical_ ?
-                            ImVec4(1.0f, 0.0f, 0.0f, 1.0f) : ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+                            ImVec4(0.8f, 0.0f, 0.0f, 1.0f) : ImVec4(1.0f, 0.6f, 0.0f, 1.0f);
 
         ImGui::TextColored(issue_color, "PERFORMANCE ISSUE DETECTED!");
         ImGui::SameLine();
@@ -488,9 +495,9 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
         // Show additional performance insights
         if (current_frame_time_ms_ > frame_time_threshold_critical_) {
-            ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "CRITICAL: Frame time exceeds 30 FPS threshold!");
+            ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "CRITICAL: Frame time exceeds 30 FPS threshold!");
         } else {
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "WARNING: Frame time exceeds 60 FPS threshold!");
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "WARNING: Frame time exceeds 60 FPS threshold!");
         }
     } else {
         ImGui::Text("Status: OK");
@@ -544,11 +551,20 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
                 counts[bin_idx]++;
             }
 
-            // Display histogram
+            // Display histogram with color coding
             for (int i = 0; i < bins; ++i) {
                 double range_start = min_time + i * bin_size;
                 double range_end = min_time + (i + 1) * bin_size;
-                ImGui::Text("%.2f-%.2f ms: %d frames", range_start, range_end, counts[i]);
+
+                // Color code based on performance
+                ImVec4 bin_color = ImVec4(0.2f, 0.8f, 0.2f, 1.0f); // Green for good
+                if (range_start >= frame_time_threshold_critical_) {
+                    bin_color = ImVec4(0.8f, 0.0f, 0.0f, 1.0f); // Red for critical
+                } else if (range_start >= frame_time_threshold_warning_) {
+                    bin_color = ImVec4(1.0f, 0.6f, 0.0f, 1.0f); // Orange for warning
+                }
+
+                ImGui::TextColored(bin_color, "%.2f-%.2f ms: %d frames", range_start, range_end, counts[i]);
             }
         }
 
@@ -616,7 +632,7 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         } else if (health_score >= 60) {
             health_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
         } else {
-            health_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+            health_color = ImVec4(0.8f, 0.0f, 0.0f, 1.0f); // Red
         }
 
         ImGui::TextColored(health_color, "Health Score: %.1f/100", health_score);
@@ -628,7 +644,9 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         ImGui::Text("Spikes detected: %zu", spikes.size());
         if (!spikes.empty() && ImGui::TreeNode("View Spike Details")) {
             for (const auto& spike : spikes) {
-                ImGui::Text("Frame #%zu: %.2f ms", spike.first, spike.second);
+                ImVec4 spike_color = spike.second > frame_time_threshold_critical_ ?
+                                   ImVec4(0.8f, 0.0f, 0.0f, 1.0f) : ImVec4(1.0f, 0.6f, 0.0f, 1.0f);
+                ImGui::TextColored(spike_color, "Frame #%zu: %.2f ms", spike.first, spike.second);
             }
             ImGui::TreePop();
         }
@@ -636,6 +654,21 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
         // Show consecutive frame drops
         size_t consecutive_drops = get_consecutive_frame_drops(3, 33.33); // 3+ consecutive frames > 33.33ms
         ImGui::Text("Longest sequence of slow frames: %zu", consecutive_drops);
+
+        // Add a visual representation of frame time stability
+        ImGui::Separator();
+        ImGui::Text("Stability Indicator:");
+        if (std_dev < 2.0) {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Very Stable");
+        } else if (std_dev < 5.0) {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Stable");
+        } else if (std_dev < 10.0) {
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moderately Stable");
+        } else {
+            ImGui::TextColored(ImVec4(0.8f, 0.0f, 0.0f, 1.0f), "Unstable");
+        }
+        ImGui::SameLine();
+        ImGui::Text("(Std Dev: %.2f ms)", std_dev);
     }
 
     // Add a button to reset statistics

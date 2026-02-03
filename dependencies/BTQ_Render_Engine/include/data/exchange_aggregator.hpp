@@ -210,6 +210,7 @@ struct MultiExchangeTimeSyncResult {
   std::unordered_map<std::string, uint64_t> synchronization_accuracy;  // Accuracy of sync for each exchange (in microseconds)
   uint64_t average_original_timestamp = 0;  // Average of original timestamps
   double timestamp_variance = 0.0;          // Variance of timestamps across exchanges
+  double cross_correlation = 0.0;           // Cross-correlation between exchanges
   std::chrono::high_resolution_clock::time_point timestamp;
 };
 
@@ -358,6 +359,25 @@ struct MultiExchangeConsolidatedView {
   std::chrono::high_resolution_clock::time_point timestamp;
 };
 
+// Unified view combining all multi-exchange features
+struct UnifiedMultiExchangeView {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeConsolidatedData> exchange_data;  // Detailed data per exchange
+  ConsolidatedMarketMetrics market_metrics;                                 // Overall market metrics
+  ConsolidatedRiskMetrics risk_metrics;                                     // Risk metrics
+  ExchangeDataQualityMetrics data_quality;                                  // Data quality metrics
+  std::vector<ExchangeRanking> exchange_rankings;                           // Rankings of exchanges by reliability
+  MultiExchangeTimeSyncResult time_sync_result;                             // Time synchronization result
+
+  // Arbitrage detection
+  bool arbitrage_opportunity_exists = false;
+  double arbitrage_profit_potential = 0.0;
+  std::string best_arbitrage_buy_exchange = "";
+  std::string best_arbitrage_sell_exchange = "";
+
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
 // Cross-exchange analytics for a symbol
 struct SymbolCrossExchangeAnalytics {
   std::string symbol;
@@ -452,6 +472,11 @@ struct AdvancedAggregationResult {
       const std::string& symbol, TimeSyncStrategy strategy) const;
   std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeView(
       const std::string& symbol) const;
+  std::optional<UnifiedMultiExchangeView> getUnifiedMultiExchangeView(
+      const std::string& symbol) const;
+  std::vector<UnifiedMultiExchangeView> getAllSymbolsUnifiedView() const;
+  std::optional<MultiExchangeTimeSyncResult> performAdvancedTimeSyncWithPrediction(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
 
   // Exchange-specific feature handling methods
   void updateExchangeSpecificFeatures(const std::string& exchange, const ExchangeFeatures& new_features);
@@ -577,6 +602,12 @@ struct AdvancedAggregationResult {
   std::optional<AggregatedMarketData> getCustomWeightedAggregatedData(
       const std::string& symbol,
       const std::unordered_map<std::string, double>& custom_weights) const;
+  void handleComprehensiveExchangeSpecificFeatures(const std::string& exchange,
+                                               const std::string& symbol,
+                                               RenderEngine::MarketDataUpdate& update);
+  void processDataUpdateWithComprehensiveFeatures(const std::string& exchange,
+                                               const std::string& symbol,
+                                               const RenderEngine::MarketDataUpdate& update);
 
   // Exchange-specific quality and feature management
   bool performExchangeSpecificQualityChecks(const std::string& exchange,
@@ -590,6 +621,8 @@ struct AdvancedAggregationResult {
   std::optional<AggregatedMarketData> getMLWeightedAggregatedData(
       const std::string& symbol) const;
   std::optional<AggregatedMarketData> getOutlierResistantAggregatedData(
+      const std::string& symbol) const;
+  std::optional<AggregatedMarketData> getUltimateAggregatedData(
       const std::string& symbol) const;
 
   // New methods for comprehensive multi-exchange aggregation

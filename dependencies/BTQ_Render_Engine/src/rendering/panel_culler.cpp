@@ -74,6 +74,18 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
+    // Additional check: If the panel is mostly off-screen (>90% outside viewport),
+    // consider it for culling even if it meets the thresholds
+    const float panel_outside_x = std::max(0.0f,
+        std::max(viewport_min_.x - panel_pos.x, panel_pos.x + panel_size.x - viewport_max_.x) / panel_size.x);
+    const float panel_outside_y = std::max(0.0f,
+        std::max(viewport_min_.y - panel_pos.y, panel_pos.y + panel_size.y - viewport_max_.y) / panel_size.y);
+
+    // If more than 90% of the panel is outside the viewport in either dimension, cull it
+    if (panel_outside_x > 0.9f || panel_outside_y > 0.9f) {
+        return false;
+    }
+
     // If we got here, the panel should be rendered
     return true;
 }

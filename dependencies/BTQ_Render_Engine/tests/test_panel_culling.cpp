@@ -207,6 +207,43 @@ int main() {
         std::cout << "✓ Test 10 PASSED: Small visible area with strict thresholds correctly culled\n";
     }
 
+    // Test 11: Panel that is mostly off-screen (>90% outside viewport) should not render
+    {
+        BTQuant::PanelConfig config;
+        config.visible = true;
+        config.position = ImVec2(-460, 100);  // 92% of a 500px wide panel is outside to the left
+        config.size = ImVec2(500, 100);       // Large panel
+
+        MockPanel panel(config);
+
+        culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
+
+        // Set lenient thresholds to isolate the >90% off-screen check
+        culler.set_visibility_thresholds(1.0f, 0.01f);  // Very lenient thresholds
+
+        bool should_render = culler.should_render_panel(panel);
+        // Panel is 92% off-screen horizontally, so it should NOT render
+        assert(should_render == false);
+        std::cout << "✓ Test 11 PASSED: Panel mostly off-screen (>90%) correctly culled\n";
+    }
+
+    // Test 12: Panel that is partially off-screen but <90% outside should still render
+    {
+        BTQuant::PanelConfig config;
+        config.visible = true;
+        config.position = ImVec2(-40, 100);  // 8% of a 500px wide panel is outside to the left
+        config.size = ImVec2(500, 100);      // Large panel
+
+        MockPanel panel(config);
+
+        culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
+
+        bool should_render = culler.should_render_panel(panel);
+        // Panel is only 8% off-screen horizontally, so it should render
+        assert(should_render == true);
+        std::cout << "✓ Test 12 PASSED: Panel partially off-screen (<90%) still renders\n";
+    }
+
     std::cout << "\nAll tests passed! Panel culling functionality is working correctly.\n";
 
     return 0;

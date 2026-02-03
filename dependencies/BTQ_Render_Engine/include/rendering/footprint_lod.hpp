@@ -673,6 +673,60 @@ public:
     LODRenderSettings getEnhancedSmoothTransitionRenderSettings(LODLevel from_lod, LODLevel to_lod,
                                                               float transition_progress, float zoom_factor) const;
 
+    // Calculate performance-aware LOD that dynamically adjusts based on real-time performance metrics
+    LODLevel calculatePerformanceAwareLOD(float cell_width_px, float cell_height_px,
+                                       float zoom_factor, const PerformanceMetrics& metrics) const;
+
+    // Get performance-aware render settings
+    LODRenderSettings getPerformanceAwareRenderSettings(LODLevel lod_level,
+                                                     const PerformanceMetrics& metrics) const;
+
+    // Apply performance-aware LOD to cell rendering
+    void applyPerformanceAwareLODToCell(const FootprintCell& cell,
+                                      ImDrawList* draw_list,
+                                      float zoom_factor,
+                                      const PerformanceMetrics& metrics,
+                                      double max_volume,
+                                      const std::vector<FootprintCell>& diagonal_imbalances,
+                                      const std::vector<FootprintCell>& stacked_imbalances,
+                                      const FootprintPanel* panel) const;
+
+    // Calculate density-adaptive LOD that adjusts based on the number of cells in the viewport
+    LODLevel calculateDensityAdaptiveLOD(float cell_width_px, float cell_height_px,
+                                      float zoom_factor, int total_cells_in_view) const;
+
+    // Get density-adaptive render settings
+    LODRenderSettings getDensityAdaptiveRenderSettings(LODLevel lod_level, int total_cells_in_view) const;
+
+    // Apply density-adaptive LOD to cell rendering
+    void applyDensityAdaptiveLODToCell(const FootprintCell& cell,
+                                     ImDrawList* draw_list,
+                                     float zoom_factor,
+                                     int total_cells_in_view,
+                                     double max_volume,
+                                     const std::vector<FootprintCell>& diagonal_imbalances,
+                                     const std::vector<FootprintCell>& stacked_imbalances,
+                                     const FootprintPanel* panel) const;
+
+    // Calculate hybrid zoom-density LOD combining both zoom level and cell density considerations
+    LODLevel calculateHybridZoomDensityLOD(float cell_width_px, float cell_height_px,
+                                        float zoom_factor, int total_cells_in_view) const;
+
+    // Get hybrid zoom-density render settings
+    LODRenderSettings getHybridZoomDensityRenderSettings(LODLevel lod_level,
+                                                      float zoom_factor,
+                                                      int total_cells_in_view) const;
+
+    // Apply hybrid zoom-density LOD to cell rendering
+    void applyHybridZoomDensityLODToCell(const FootprintCell& cell,
+                                       ImDrawList* draw_list,
+                                       float zoom_factor,
+                                       int total_cells_in_view,
+                                       double max_volume,
+                                       const std::vector<FootprintCell>& diagonal_imbalances,
+                                       const std::vector<FootprintCell>& stacked_imbalances,
+                                       const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

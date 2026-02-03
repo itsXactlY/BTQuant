@@ -66,6 +66,8 @@ void TaskScheduler::enqueue_task(std::function<void()> task) {
     condition_.notify_one();
 }
 
+// Template method implementation moved to header file
+
 // Volume Calculations
 std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
     const std::vector<Trade>& trades,
@@ -76,6 +78,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
     auto promise = std::make_shared<std::promise<std::vector<double>>>();
     auto future = promise->get_future();
 
+    // Main task runs on background thread via enqueue_task
     enqueue_task([trades, min_price, max_price, resolution, promise]() {
         try {
             std::vector<double> volume_profile(resolution, 0.0);
@@ -151,6 +154,7 @@ std::future<double> TaskScheduler::calculate_volume_weighted_average_price_async
     auto promise = std::make_shared<std::promise<double>>();
     auto future = promise->get_future();
 
+    // Main task runs on background thread via enqueue_task
     enqueue_task([trades, promise]() {
         try {
             if (trades.empty()) {
@@ -325,6 +329,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
     auto promise = std::make_shared<std::promise<std::vector<double>>>();
     auto future = promise->get_future();
 
+    // Main task runs on background thread via enqueue_task
     enqueue_task([prices, period, promise]() {
         try {
             std::vector<double> sma_values;
@@ -727,6 +732,7 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
     auto promise = std::make_shared<std::promise<std::vector<Candle>>>();
     auto future = promise->get_future();
 
+    // Main task runs on background thread via enqueue_task
     enqueue_task([trades, timeframe, promise]() {
         try {
             std::vector<Candle> candles;

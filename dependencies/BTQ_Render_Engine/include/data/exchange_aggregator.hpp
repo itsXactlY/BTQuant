@@ -765,10 +765,22 @@ struct AdvancedAggregationResult {
       const std::string& symbol) const;
   std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeViewWithAnalytics(
       const std::string& symbol) const;
+  std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeViewWithAllAnalytics(
+      const std::string& symbol) const;
   std::optional<UnifiedMultiExchangeView> getUnifiedMultiExchangeView(
+      const std::string& symbol) const;
+  std::optional<UnifiedMultiExchangeView> getAdvancedUnifiedMultiExchangeView(
       const std::string& symbol) const;
   std::optional<MultiExchangeTimeSyncResult> performComprehensiveTimeSync(
       const std::string& symbol, TimeSyncStrategy strategy) const;
+  std::optional<MultiExchangeTimeSyncResult> performAdvancedTimeSync(
+      const std::string& symbol, TimeSyncStrategy strategy) const;
+  void handleAdvancedExchangeSpecificFeatures(const std::string& exchange,
+                                           const std::string& symbol,
+                                           RenderEngine::MarketDataUpdate& update);
+  void processDataUpdateWithAdvancedFeatures(const std::string& exchange,
+                                          const std::string& symbol,
+                                          const RenderEngine::MarketDataUpdate& update);
 
 private:
   // Enhanced risk metrics calculation

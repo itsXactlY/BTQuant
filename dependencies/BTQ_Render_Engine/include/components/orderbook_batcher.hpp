@@ -132,6 +132,12 @@ private:
     // Ultra-performance version that prioritizes maximum batching with minimum computational overhead
     OrderbookBatchElement* findOrCreateBestCompatibleBatchUltraPerformance(ImTextureID texture, ImU32 col);
 
+    // Ultra-compatible version that prioritizes maximum batching with ultra-relaxed color matching
+    OrderbookBatchElement* findOrCreateBestCompatibleBatchUltra(ImTextureID texture, ImU32 col);
+
+    // Super-compatible version that prioritizes maximum batching with super-relaxed color matching
+    OrderbookBatchElement* findOrCreateBestCompatibleBatchSuper(ImTextureID texture, ImU32 col);
+
     // Initialize a batch with optimal memory allocation
     void initializeBatch(OrderbookBatchElement& batch, ImTextureID texture);
 
@@ -169,8 +175,11 @@ private:
     // Fast batch consolidation to reduce GPU overhead
     void fastConsolidateBatches();
 
-    // Super optimization that aggressively combines batches to minimize draw calls even further
-    void superOptimizeBatches();
+    // Maximum optimization that uses the ultimate approach to minimize GPU overhead
+    void maximumOptimizeBatches();
+
+    // Ultimate optimization that uses the most comprehensive approach to minimize GPU overhead
+    void ultimateOptimizeBatches();
 };
 
 } // namespace BTQuant

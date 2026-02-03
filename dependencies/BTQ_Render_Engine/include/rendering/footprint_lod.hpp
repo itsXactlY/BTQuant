@@ -669,6 +669,23 @@ public:
                                   const std::vector<FootprintCell>& stacked_imbalances,
                                   const FootprintPanel* panel) const;
 
+    // Calculate zoom-based LOD that specifically focuses on reducing detail when zoomed out
+    // and increasing detail when zoomed in with optimized performance and smooth transitions
+    LODLevel calculateZoomBasedLOD(float cell_width_px, float cell_height_px,
+                                 float zoom_factor) const;
+
+    // Get zoom-based LOD render settings for reducing detail when zoomed out and increasing detail when zoomed in
+    LODRenderSettings getZoomBasedLODRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply zoom-based LOD to cell rendering that reduces detail when zoomed out and increases detail when zoomed in
+    void applyZoomBasedLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel) const;
+
     // Get enhanced smooth transition render settings for transitioning between LOD levels
     LODRenderSettings getEnhancedSmoothTransitionRenderSettings(LODLevel from_lod, LODLevel to_lod,
                                                               float transition_progress, float zoom_factor) const;

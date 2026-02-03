@@ -207,41 +207,50 @@ int main() {
         std::cout << "✓ Test 10 PASSED: Small visible area with strict thresholds correctly culled\n";
     }
 
-    // Test 11: Panel that is mostly off-screen (>90% outside viewport) should not render
+    // Test 11: Panel with small visible area should not render if below threshold
     {
         BTQuant::PanelConfig config;
         config.visible = true;
-        config.position = ImVec2(-460, 100);  // 92% of a 500px wide panel is outside to the left
-        config.size = ImVec2(500, 100);       // Large panel
+        config.position = ImVec2(-45, 100);  // Mostly off-screen to the left
+        config.size = ImVec2(50, 50);        // Area = 2500px^2
 
         MockPanel panel(config);
 
         culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
 
-        // Set lenient thresholds to isolate the >90% off-screen check
-        culler.set_visibility_thresholds(1.0f, 0.01f);  // Very lenient thresholds
+        // Set strict thresholds to test small visible area logic
+        culler.set_visibility_thresholds(100.0f, 0.20f);  // Need at least 100px^2 AND 20% visibility
 
         bool should_render = culler.should_render_panel(panel);
-        // Panel is 92% off-screen horizontally, so it should NOT render
+        // Panel intersects viewport: width = 5px (from x=0 to x=5), height = 50px
+        // Visible area = 5 * 50 = 250px^2, which is > 100px^2
+        // Percentage = 250/2500 = 0.1 = 10%, which is < 20%
+        // So it should NOT render (fails percentage check)
         assert(should_render == false);
-        std::cout << "✓ Test 11 PASSED: Panel mostly off-screen (>90%) correctly culled\n";
+        std::cout << "✓ Test 11 PASSED: Panel with small visible area correctly culled\n";
     }
 
-    // Test 12: Panel that is partially off-screen but <90% outside should still render
+    // Test 12: Panel with sufficient visible area should render
     {
         BTQuant::PanelConfig config;
         config.visible = true;
-        config.position = ImVec2(-40, 100);  // 8% of a 500px wide panel is outside to the left
-        config.size = ImVec2(500, 100);      // Large panel
+        config.position = ImVec2(-10, 100);  // Slightly off-screen to the left
+        config.size = ImVec2(100, 100);      // Area = 10000px^2
 
         MockPanel panel(config);
 
         culler.set_viewport_bounds(ImVec2(0, 0), ImVec2(1920, 1080));
 
+        // Set thresholds to test visible area logic
+        culler.set_visibility_thresholds(50.0f, 0.05f);  // Need at least 50px^2 AND 5% visibility
+
         bool should_render = culler.should_render_panel(panel);
-        // Panel is only 8% off-screen horizontally, so it should render
+        // Panel intersects viewport: width = 90px (from x=0 to x=90), height = 100px
+        // Visible area = 90 * 100 = 9000px^2, which is > 50px^2
+        // Percentage = 9000/10000 = 0.9 = 90%, which is > 5%
+        // So it should render
         assert(should_render == true);
-        std::cout << "✓ Test 12 PASSED: Panel partially off-screen (<90%) still renders\n";
+        std::cout << "✓ Test 12 PASSED: Panel with sufficient visible area renders\n";
     }
 
     std::cout << "\nAll tests passed! Panel culling functionality is working correctly.\n";

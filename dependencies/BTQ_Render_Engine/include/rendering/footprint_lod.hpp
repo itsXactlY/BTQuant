@@ -617,6 +617,22 @@ public:
                        const std::vector<FootprintCell>& stacked_imbalances,
                        const FootprintPanel* panel) const;
 
+    // Calculate ultimate zoom-based LOD for the best balance of performance and visual quality
+    LODLevel calculateUltimateZoomLOD(float cell_width_px, float cell_height_px,
+                                 float zoom_factor) const;
+
+    // Get ultimate zoom-based render settings for the best balance of performance and visual quality
+    LODRenderSettings getUltimateZoomRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply ultimate zoom-based LOD to cell rendering for the best balance of performance and visual quality
+    void applyUltimateZoomLODToCell(const FootprintCell& cell,
+                               ImDrawList* draw_list,
+                               float zoom_factor,
+                               double max_volume,
+                               const std::vector<FootprintCell>& diagonal_imbalances,
+                               const std::vector<FootprintCell>& stacked_imbalances,
+                               const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

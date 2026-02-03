@@ -729,6 +729,9 @@ struct AdvancedAggregationResult {
   void handleEnhancedExchangeSpecificFeatures(const std::string& exchange,
                                            const std::string& symbol,
                                            RenderEngine::MarketDataUpdate& update);
+  void handleSophisticatedExchangeSpecificFeatures(const std::string& exchange,
+                                           const std::string& symbol,
+                                           RenderEngine::MarketDataUpdate& update);
   void processEnhancedDataUpdate(const std::string& exchange, const std::string& symbol,
                                const RenderEngine::MarketDataUpdate& update);
   std::optional<AggregatedMarketData> getCustomWeightedAggregatedData(
@@ -758,6 +761,10 @@ struct AdvancedAggregationResult {
       const std::string& symbol) const;
 
   // New methods for comprehensive multi-exchange aggregation
+  std::optional<AggregatedMarketData> getAdvancedMultiExchangeAggregatedData(
+      const std::string& symbol) const;
+  std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeViewWithAnalytics(
+      const std::string& symbol) const;
   std::optional<UnifiedMultiExchangeView> getUnifiedMultiExchangeView(
       const std::string& symbol) const;
   std::optional<MultiExchangeTimeSyncResult> performComprehensiveTimeSync(

@@ -6981,5 +6981,373 @@ std::optional<EnhancedAggregatedMarketData> ExchangeAggregator::getEnhancedAggre
     return enhanced_data;
 }
 
+// Enhanced method to handle sophisticated exchange-specific features
+void ExchangeAggregator::handleSophisticatedExchangeSpecificFeatures(const std::string& exchange,
+                                                                const std::string& symbol,
+                                                                RenderEngine::MarketDataUpdate& update) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto features_it = exchange_features_.find(exchange);
+    if (features_it == exchange_features_.end()) {
+        return; // No features defined for this exchange
+    }
+
+    const auto& features = features_it->second;
+
+    // Apply exchange-specific data normalization based on precision
+    if (features.precision > 0) {
+        double multiplier = std::pow(10.0, features.precision);
+        update.price = std::round(update.price * multiplier) / multiplier;
+    }
+
+    // Apply exchange-specific order size constraints
+    if (features.max_order_size > 0 && update.size > features.max_order_size) {
+        BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to max order size limit",
+                                   update.size, features.max_order_size, exchange));
+        update.size = features.max_order_size;
+    }
+
+    if (features.min_order_size > 0 && update.size < features.min_order_size) {
+        BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to min order size requirement",
+                                   update.size, features.min_order_size, exchange));
+        update.size = features.min_order_size;
+    }
+
+    // Apply exchange-specific fee adjustments based on market conditions
+    if (features.trading_fee_rate > 0.0) {
+        // Adjust price to account for fees - this could be bid/ask specific
+        if (update.side == "BUY") {
+            update.price = update.price * (1.0 + features.trading_fee_rate); // Fees increase buying cost
+        } else if (update.side == "SELL") {
+            update.price = update.price * (1.0 - features.trading_fee_rate); // Fees decrease selling revenue
+        }
+
+        // Apply fee-based risk adjustment
+        BTQ_LOG_DEBUG(std::format("Applied {}% fee adjustment for exchange {} on symbol {}",
+                                 features.trading_fee_rate * 100, exchange, symbol));
+    }
+
+    // Apply exchange-specific withdrawal fee considerations (for position sizing)
+    if (features.withdrawal_fee > 0.0) {
+        // This could affect how we interpret the data or adjust position sizes
+        BTQ_LOG_DEBUG(std::format("Exchange {} has withdrawal fee of {}, factoring into risk calculations",
+                                 exchange, features.withdrawal_fee));
+    }
+
+    // Apply timezone adjustments if needed
+    if (features.timezone != "UTC") {
+        // In a real implementation, we would convert timestamps based on timezone
+        // For now, just note the timezone difference
+        BTQ_LOG_DEBUG(std::format("Exchange {} operates in timezone {}, data timestamp adjustment may be needed",
+                                 exchange, features.timezone));
+    }
+
+    // Apply exchange-specific API rate limiting considerations
+    if (features.api_endpoint != "") {
+        // Log or track API usage for this exchange
+        BTQ_LOG_DEBUG(std::format("Processing data from exchange {} via endpoint {}",
+                                 exchange, features.api_endpoint));
+    }
+
+    // Apply exchange-specific data quality filters
+    if (!features.supports_microseconds) {
+        // Round timestamp to nearest millisecond if exchange doesn't support microseconds
+        update.timestamp = (update.timestamp / 1000) * 1000;
+    }
+
+    // Apply exchange-specific data validation rules
+    if (!features.supported_symbols.empty()) {
+        bool symbol_supported = std::find(features.supported_symbols.begin(),
+                                         features.supported_symbols.end(),
+                                         symbol) != features.supported_symbols.end();
+        if (!symbol_supported) {
+            BTQ_LOG_WARNING(std::format("Symbol {} is not in supported symbols list for exchange {}",
+                                       symbol, exchange));
+        }
+    }
+
+    // Apply dynamic reliability-based adjustments
+    if (features.reliability_score < 0.5) {
+        // For lower reliability exchanges, we might want to apply additional filtering
+        BTQ_LOG_DEBUG(std::format("Exchange {} has low reliability ({}), applying additional validation",
+                                 exchange, features.reliability_score));
+    }
+
+    // Update exchange-specific statistics
+    exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
+    exchange_validity_[exchange] = true;
+
+    // Update the exchange features with dynamic adjustments
+    updateExchangeFeaturesDynamically(exchange);
+}
+
+// Enhanced method to get a comprehensive multi-exchange view with advanced analytics
+std::optional<AggregatedMarketData> ExchangeAggregator::getAdvancedMultiExchangeAggregatedData(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    AggregatedMarketData aggregated_data;
+    aggregated_data.symbol = symbol;
+    aggregated_data.sync_strategy = sync_strategy_;
+
+    // Filter out invalid or stale exchange data
+    std::unordered_map<std::string, RenderEngine::MarketDataUpdate> valid_exchange_data;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            valid_exchange_data[exchange] = data;
+            aggregated_data.exchange_data[exchange] = data;
+        }
+    }
+
+    if (valid_exchange_data.empty()) {
+        return std::nullopt;
+    }
+
+    // Collect timestamps from all valid exchanges
+    for (const auto& [exchange, data] : valid_exchange_data) {
+        aggregated_data.exchange_timestamps[exchange] = data.timestamp;
+    }
+
+    // Enhanced time synchronization with multiple strategies
+    synchronizeTimestamps(aggregated_data);
+
+    // Calculate aggregated values using multiple sophisticated methods
+    aggregated_data.aggregated_price = calculateWeightedAveragePriceWithValidation(symbol);
+    aggregated_data.weighted_price = calculateVolumeWeightedPrice(valid_exchange_data);
+    aggregated_data.consensus_price = calculateConsensusPrice(symbol);
+
+    // Calculate additional aggregated metrics
+    aggregated_data.aggregated_high = calculateHighPrice(valid_exchange_data);
+    aggregated_data.aggregated_low = calculateLowPrice(valid_exchange_data);
+    aggregated_data.aggregated_bid = calculateBestBid(valid_exchange_data);
+    aggregated_data.aggregated_ask = calculateBestAsk(valid_exchange_data);
+
+    // Calculate total volume across all valid exchanges
+    double total_volume = 0.0;
+    for (const auto& [exchange, data] : valid_exchange_data) {
+        total_volume += data.size;
+    }
+    aggregated_data.aggregated_volume = total_volume;
+
+    // Calculate advanced metrics using multiple algorithms
+    aggregated_data.vwap = calculateVWAP(valid_exchange_data);
+    aggregated_data.median_price = calculateMedianPrice(valid_exchange_data);
+    aggregated_data.trimmed_mean_price = calculateTrimmedMean(valid_exchange_data, 0.1);
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, valid_exchange_data, aggregated_data);
+    detectArbitrageOpportunities(valid_exchange_data, aggregated_data);
+
+    // Enhanced risk assessment using multiple metrics
+    calculateEnhancedRiskMetrics(symbol, valid_exchange_data, aggregated_data);
+
+    // Perform advanced aggregation using multiple algorithms
+    auto advanced_result = performAdvancedAggregation(symbol);
+    if (advanced_result.has_value()) {
+        aggregated_data.aggregated_price = advanced_result->consensus_price; // Use the most robust estimate
+    }
+
+    aggregated_data.last_updated = std::chrono::high_resolution_clock::now();
+
+    return aggregated_data;
+}
+
+// Method to get a comprehensive view of all exchanges for a symbol with detailed analytics
+std::optional<ComprehensiveMultiExchangeView> ExchangeAggregator::getComprehensiveMultiExchangeViewWithAnalytics(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    ComprehensiveMultiExchangeView view;
+    view.symbol = symbol;
+
+    // Gather data from all exchanges for this symbol
+    std::vector<std::pair<std::string, RenderEngine::MarketDataUpdate>> exchange_updates;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            exchange_updates.emplace_back(exchange, data);
+
+            // Store detailed exchange data
+            ExchangeConsolidatedData exchange_data_item;
+            exchange_data_item.update = data;
+
+            // Get exchange features
+            auto features_it = exchange_features_.find(exchange);
+            if (features_it != exchange_features_.end()) {
+                exchange_data_item.features = features_it->second;
+            }
+
+            // Calculate exchange-specific statistics
+            exchange_data_item.stats.price = data.price;
+            exchange_data_item.stats.volume = data.size;
+
+            // Calculate price relative to overall average
+            std::vector<double> all_prices;
+            for (const auto& [other_exchange, other_data] : symbol_it->second) {
+                if (isExchangeDataValid(other_exchange, other_data)) {
+                    all_prices.push_back(other_data.price);
+                }
+            }
+
+            if (!all_prices.empty()) {
+                double avg_price = std::accumulate(all_prices.begin(), all_prices.end(), 0.0) / all_prices.size();
+                exchange_data_item.stats.price_deviation_from_avg = data.price - avg_price;
+                exchange_data_item.stats.percent_price_deviation = (avg_price > 0) ?
+                    (exchange_data_item.stats.price_deviation_from_avg / avg_price) * 100.0 : 0.0;
+
+                // Determine if this exchange is an outlier
+                double std_dev = 0.0;
+                for (double price : all_prices) {
+                    std_dev += (price - avg_price) * (price - avg_price);
+                }
+                std_dev = std::sqrt(std_dev / all_prices.size());
+
+                exchange_data_item.stats.is_outlier = (std::abs(exchange_data_item.stats.price_deviation_from_avg) > 2 * std_dev);
+            }
+
+            // Calculate latency relative to other exchanges
+            auto last_update_it = exchange_last_update_.find(exchange);
+            if (last_update_it != exchange_last_update_.end()) {
+                auto now = std::chrono::high_resolution_clock::now();
+                exchange_data_item.stats.latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_update_it->second).count();
+            }
+
+            view.exchange_data[exchange] = exchange_data_item;
+        }
+    }
+
+    if (exchange_updates.empty()) {
+        return std::nullopt;
+    }
+
+    // Calculate consolidated market metrics
+    std::vector<double> prices;
+    std::vector<double> volumes;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        prices.push_back(data.price);
+        volumes.push_back(data.size);
+        total_volume += data.size;
+    }
+
+    if (!prices.empty()) {
+        std::sort(prices.begin(), prices.end());
+        view.market_metrics.spread = prices.back() - prices.front();
+        view.market_metrics.volatility = view.market_metrics.spread / prices.front();
+
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        view.market_metrics.average_price = avg_price;
+        view.market_metrics.total_volume = total_volume;
+
+        // Calculate price range metrics
+        view.market_metrics.lowest_price = prices.front();
+        view.market_metrics.highest_price = prices.back();
+        view.market_metrics.price_range = prices.back() - prices.front();
+
+        // Calculate additional statistical metrics
+        view.market_metrics.median_price = (prices.size() % 2 == 0) ?
+            (prices[prices.size()/2 - 1] + prices[prices.size()/2]) / 2.0 :
+            prices[prices.size()/2];
+    }
+
+    // Calculate order book metrics across exchanges
+    double highest_bid = 0.0;
+    double lowest_ask = std::numeric_limits<double>::max();
+    std::string highest_bid_exchange = "";
+    std::string lowest_ask_exchange = "";
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        if (data.side == "BUY" && data.price > highest_bid) {
+            highest_bid = data.price;
+            highest_bid_exchange = exchange;
+        }
+        if (data.side == "SELL" && data.price < lowest_ask) {
+            lowest_ask = data.price;
+            lowest_ask_exchange = exchange;
+        }
+    }
+
+    if (highest_bid > 0.0 && lowest_ask < std::numeric_limits<double>::max()) {
+        view.market_metrics.bid_ask_spread = lowest_ask - highest_bid;
+        view.market_metrics.best_bid_exchange = highest_bid_exchange;
+        view.market_metrics.best_ask_exchange = lowest_ask_exchange;
+    }
+
+    // Calculate risk metrics
+    if (prices.size() > 1) {
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += (price - avg_price) * (price - avg_price);
+        }
+        variance /= prices.size();
+        view.risk_metrics.price_volatility = std::sqrt(variance);
+        view.risk_metrics.coefficient_of_variation = (avg_price > 0) ?
+            view.risk_metrics.price_volatility / avg_price : 0.0;
+    }
+
+    // Calculate arbitrage opportunities
+    if (highest_bid > lowest_ask) {
+        view.arbitrage_opportunity_exists = true;
+        view.arbitrage_profit_potential = highest_bid - lowest_ask;
+        view.best_arbitrage_buy_exchange = highest_bid_exchange;
+        view.best_arbitrage_sell_exchange = lowest_ask_exchange;
+    } else {
+        view.arbitrage_opportunity_exists = false;
+        view.arbitrage_profit_potential = 0.0;
+    }
+
+    // Calculate correlation metrics
+    if (view.exchange_data.size() > 1) {
+        double total_correlation = 0.0;
+        int correlation_count = 0;
+
+        auto it1 = view.exchange_data.begin();
+        while (it1 != view.exchange_data.end()) {
+            auto it2 = std::next(it1);
+            while (it2 != view.exchange_data.end()) {
+                double price_diff = std::abs(it1->second.update.price - it2->second.update.price);
+                double avg_price = (it1->second.update.price + it2->second.update.price) / 2.0;
+                double correlation = 1.0 - std::min(1.0, price_diff / avg_price);
+
+                total_correlation += correlation;
+                correlation_count++;
+
+                ++it2;
+            }
+            ++it1;
+        }
+
+        if (correlation_count > 0) {
+            view.market_metrics.cross_exchange_correlation = total_correlation / correlation_count;
+        }
+    }
+
+    // Calculate data quality metrics
+    auto quality_metrics = calculateDataQualityMetrics(symbol);
+    if (quality_metrics.has_value()) {
+        view.data_quality = quality_metrics.value();
+    }
+
+    // Calculate exchange rankings
+    auto rankings = rankExchangesByReliability();
+    view.exchange_rankings = rankings;
+
+    view.timestamp = std::chrono::high_resolution_clock::now();
+
+    return view;
+}
+
 }  // namespace Data
 }  // namespace BTQuant

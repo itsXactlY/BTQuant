@@ -92,6 +92,10 @@ public:
     void addRectanglesFilled(const std::vector<std::pair<ImVec2, ImVec2>>& rect_pairs,
                            const std::vector<ImU32>& colors);
 
+    // Add multiple rectangles to the batch with optimized grouping for maximum batching
+    void addRectanglesFilledOptimized(const std::vector<std::pair<ImVec2, ImVec2>>& rect_pairs,
+                                    const std::vector<ImU32>& colors);
+
     // Enhanced method to batch multiple similar elements together for maximum efficiency
     void batchSimilarElements(const std::vector<std::function<void(OrderbookBatchElement*)>>& element_adders);
 
@@ -113,14 +117,24 @@ private:
     // Find or create a compatible batch for the given parameters
     OrderbookBatchElement* findOrCreateCompatibleBatch(ImTextureID texture, ImU32 col);
 
+    // Find or create the best compatible batch considering multiple factors
+    OrderbookBatchElement* findOrCreateBestCompatibleBatch(ImTextureID texture, ImU32 col);
+
     // Initialize a batch with optimal memory allocation
     void initializeBatch(OrderbookBatchElement& batch, ImTextureID texture);
+
+    // Initialize a batch with expected size for optimal memory allocation
+    void initializeBatchWithExpectedSize(OrderbookBatchElement& batch, ImTextureID texture,
+                                       size_t expected_vertices, size_t expected_indices);
 
     // Resize batch capacity intelligently based on usage
     void resizeBatchIfNeeded(OrderbookBatchElement& batch);
 
     // Optimize batches by merging compatible ones to reduce draw calls
     void optimizeBatches();
+
+    // Advanced optimization that groups batches by texture first, then by color similarity
+    void advancedOptimizeBatches();
 };
 
 } // namespace BTQuant

@@ -114,6 +114,9 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
     // Check for missing data based on expected patterns
     check_missing_data_for_symbol(symbol, trade.timestamp);
 
+    // NEW: Enhanced missing data gap detection
+    detect_and_alert_data_gaps(symbol, trade.timestamp);
+
     // Check for duplicate trades
     if (is_duplicate_trade(trade, symbol)) {
         DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
@@ -140,6 +143,9 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         }
     }
 
+    // NEW: Enhanced duplicate detection with pattern recognition
+    enhanced_duplicate_detection(trade, symbol);
+
     // Check for out-of-order timestamps
     auto last_timestamp_it = last_timestamps_.find(symbol);
     if (is_out_of_order_timestamp(trade, symbol)) {
@@ -158,8 +164,14 @@ std::vector<DataQualityIssue> DataQualityMonitor::process_trade(const TradeData&
         last_timestamps_[symbol] = trade.timestamp;
     }
 
+    // NEW: Enhanced out-of-order detection with predictive modeling
+    enhanced_out_of_order_detection(trade, symbol);
+
     // Check for latency issues
     check_latency_issue(trade, symbol);
+
+    // NEW: Enhanced latency monitoring with predictive analysis
+    enhanced_latency_monitoring(trade, symbol);
 
     // Update metrics
     metrics_.last_timestamp = trade.timestamp;
@@ -3752,6 +3764,486 @@ void DataQualityMonitor::configure_alert_types(bool enable_missing_data,
         std::cout << "  Out-of-Order Alerts: " << (enable_out_of_order ? "ON" : "OFF") << std::endl;
         std::cout << "  Latency Issue Alerts: " << (enable_latency_issues ? "ON" : "OFF") << std::endl;
         std::cout << "  Invalid Data Alerts: " << (enable_invalid_data ? "ON" : "OFF") << std::endl;
+    }
+}
+
+// NEW: Enhanced method to detect and alert on data gaps with more sophisticated analysis
+void DataQualityMonitor::detect_and_alert_data_gaps(const std::string& symbol, uint64_t current_timestamp) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    auto stats_it = symbol_stats_.find(symbol);
+    if (stats_it == symbol_stats_.end()) {
+        return; // No data for this symbol yet
+    }
+
+    const auto& stats = stats_it->second;
+
+    if (stats.trade_count < 5) {
+        return; // Not enough data to perform gap analysis
+    }
+
+    // Calculate expected interval based on historical data
+    uint64_t expected_interval = (stats.trade_count > 1) ? stats.total_interval_sum / (stats.trade_count - 1) : 1000;
+
+    // Check if there's a significant gap compared to the expected interval
+    if (stats.last_timestamp != 0) {
+        uint64_t actual_gap = current_timestamp - stats.last_timestamp;
+
+        // Define gap thresholds based on expected interval
+        uint64_t minor_gap_threshold = expected_interval * 3;      // 3x expected
+        uint64_t moderate_gap_threshold = expected_interval * 10;  // 10x expected
+        uint64_t major_gap_threshold = expected_interval * 50;     // 50x expected
+
+        if (actual_gap > major_gap_threshold) {
+            std::ostringstream oss;
+            oss << "MAJOR DATA GAP DETECTED for " << symbol
+                << ". Expected interval: " << expected_interval << "ms, "
+                << "Actual gap: " << actual_gap << "ms, "
+                << "which is " << (actual_gap / expected_interval) << "x the expected interval";
+
+            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                 oss.str(), 0.95); // Very high severity for major gaps
+            metrics_.missing_data_issues++;
+            add_issue(issue);
+
+            // Alert user with high priority
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.95,
+                                                   "DataGapDetector", "Major data gap detected");
+
+        } else if (actual_gap > moderate_gap_threshold) {
+            std::ostringstream oss;
+            oss << "MODERATE DATA GAP DETECTED for " << symbol
+                << ". Expected interval: " << expected_interval << "ms, "
+                << "Actual gap: " << actual_gap << "ms";
+
+            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                 oss.str(), 0.8); // High severity for moderate gaps
+            metrics_.missing_data_issues++;
+            add_issue(issue);
+
+            // Alert user
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.8,
+                                                   "DataGapDetector", "Moderate data gap detected");
+
+        } else if (actual_gap > minor_gap_threshold) {
+            std::ostringstream oss;
+            oss << "MINOR DATA GAP DETECTED for " << symbol
+                << ". Expected interval: " << expected_interval << "ms, "
+                << "Actual gap: " << actual_gap << "ms";
+
+            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                 oss.str(), 0.6); // Medium severity for minor gaps
+            metrics_.missing_data_issues++;
+            add_issue(issue);
+
+            // Alert user
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.6,
+                                                   "DataGapDetector", "Minor data gap detected");
+        }
+    }
+
+    // NEW: Enhanced gap detection using statistical methods
+    if (stats.recent_intervals.size() >= 20) {
+        // Calculate statistical measures of recent intervals
+        double sum = 0;
+        for (const auto& interval : stats.recent_intervals) {
+            sum += interval;
+        }
+        double mean = sum / stats.recent_intervals.size();
+
+        double variance_sum = 0;
+        for (const auto& interval : stats.recent_intervals) {
+            variance_sum += (interval - mean) * (interval - mean);
+        }
+        double std_dev = sqrt(variance_sum / stats.recent_intervals.size());
+
+        // Check if current gap is an outlier using statistical methods
+        uint64_t current_gap = (stats.last_timestamp != 0) ? (current_timestamp - stats.last_timestamp) : 0;
+
+        if (std_dev > 0 && current_gap > mean + (3 * std_dev)) {
+            std::ostringstream oss;
+            oss << "STATISTICAL OUTLIER DATA GAP for " << symbol
+                << ". Gap: " << current_gap << "ms, "
+                << "Mean recent interval: " << std::fixed << std::setprecision(2) << mean << "ms, "
+                << "Std Dev: " << std_dev << "ms, "
+                << "This gap is " << std::fixed << std::setprecision(2)
+                << ((current_gap - mean) / std_dev) << " standard deviations above the mean";
+
+            DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                 oss.str(), 0.85); // High severity for statistical outliers
+            metrics_.missing_data_issues++;
+            add_issue(issue);
+
+            // Alert user about statistical outlier
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.85,
+                                                   "StatisticalGapDetector", "Statistical outlier gap detected");
+        }
+    }
+
+    // NEW: Trend-based gap detection - look for increasing gaps over time
+    if (stats.recent_intervals.size() >= 30) {
+        // Compare early intervals vs recent intervals to detect increasing trend
+        size_t quarter_size = stats.recent_intervals.size() / 4;
+
+        if (quarter_size >= 5) { // Make sure we have enough data points
+            uint64_t early_avg = 0, recent_avg = 0;
+
+            // Calculate average of first quarter
+            for (size_t i = 0; i < quarter_size; ++i) {
+                early_avg += stats.recent_intervals[i];
+            }
+            early_avg /= quarter_size;
+
+            // Calculate average of last quarter
+            for (size_t i = stats.recent_intervals.size() - quarter_size; i < stats.recent_intervals.size(); ++i) {
+                recent_avg += stats.recent_intervals[i];
+            }
+            recent_avg /= quarter_size;
+
+            // If recent intervals are significantly larger, it indicates increasing gaps
+            if (early_avg > 0 && recent_avg > early_avg * 2) {
+                std::ostringstream oss;
+                oss << "INCREASING DATA GAPS TREND for " << symbol
+                    << ". Early avg interval: " << early_avg << "ms, "
+                    << "Recent avg interval: " << recent_avg << "ms, "
+                    << "Trend shows " << std::fixed << std::setprecision(2)
+                    << (static_cast<double>(recent_avg) / early_avg) << "x increase";
+
+                DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                     oss.str(), 0.75); // High-medium severity for increasing trend
+                metrics_.missing_data_issues++;
+                add_issue(issue);
+
+                // Alert user about the trend
+                alert_user_to_data_problems_with_context(symbol, oss.str(), 0.75,
+                                                       "TrendAnalyzer", "Increasing data gaps trend detected");
+            }
+        }
+    }
+}
+
+// NEW: Enhanced duplicate detection with pattern recognition
+void DataQualityMonitor::enhanced_duplicate_detection(const TradeData& trade, const std::string& symbol) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // This method adds more sophisticated duplicate detection beyond the basic checks
+    const auto& trades = recent_trades_[symbol];
+
+    if (trades.size() < 3) {
+        return; // Need more data to detect patterns
+    }
+
+    // Check for systematic duplication patterns (same trade appearing at regular intervals)
+    std::vector<uint64_t> matching_timestamps;
+    for (const auto& recent_trade : trades) {
+        if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
+            std::abs(recent_trade.volume - trade.volume) < 0.0001f &&
+            recent_trade.side == trade.side) {
+            matching_timestamps.push_back(recent_trade.timestamp);
+        }
+    }
+
+    // If we have 3 or more similar trades, check for arithmetic progression (regular intervals)
+    if (matching_timestamps.size() >= 3) {
+        std::sort(matching_timestamps.begin(), matching_timestamps.end());
+
+        // Check if timestamps form an arithmetic sequence (indicating systematic duplication)
+        if (matching_timestamps.size() >= 3) {
+            std::vector<uint64_t> intervals;
+            for (size_t i = 1; i < matching_timestamps.size(); ++i) {
+                intervals.push_back(matching_timestamps[i] - matching_timestamps[i-1]);
+            }
+
+            // Check if intervals are roughly constant (within 10% tolerance)
+            if (intervals.size() >= 2) {
+                uint64_t first_interval = intervals[0];
+                bool is_arithmetic = true;
+
+                for (size_t i = 1; i < intervals.size(); ++i) {
+                    uint64_t diff = (first_interval > intervals[i]) ? (first_interval - intervals[i]) : (intervals[i] - first_interval);
+                    if (diff > first_interval * 0.1) { // 10% tolerance
+                        is_arithmetic = false;
+                        break;
+                    }
+                }
+
+                if (is_arithmetic) {
+                    std::ostringstream oss;
+                    oss << "SYSTEMATIC DUPLICATION PATTERN DETECTED for " << symbol
+                        << ". Same trade characteristics appearing at regular " << first_interval << "ms intervals";
+
+                    DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+                                         oss.str(), 0.85); // High severity for systematic duplication
+                    metrics_.duplicate_trade_issues++;
+                    add_issue(issue);
+
+                    // Alert user about systematic duplication
+                    alert_user_to_data_problems_with_context(symbol, oss.str(), 0.85,
+                                                           "PatternDetector", "Systematic duplication pattern detected");
+                }
+            }
+        }
+    }
+
+    // NEW: Check for cluster-based duplication (many similar trades in a short time window)
+    if (trades.size() >= 5) {
+        uint64_t cluster_timeframe = 100; // 100ms timeframe for clustering
+        size_t similar_in_cluster = 0;
+
+        for (const auto& recent_trade : trades) {
+            uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+
+            if (time_diff <= cluster_timeframe &&
+                std::abs(recent_trade.price - trade.price) < 0.000001 &&
+                std::abs(recent_trade.volume - trade.volume) < 0.0001f) {
+                similar_in_cluster++;
+            }
+        }
+
+        // If we have 3 or more similar trades in a short timeframe, it's a cluster
+        if (similar_in_cluster >= 3) {
+            std::ostringstream oss;
+            oss << "DUPLICATE CLUSTER DETECTED for " << symbol
+                << ". " << similar_in_cluster << " similar trades within " << cluster_timeframe << "ms timeframe";
+
+            DataQualityIssue issue(DataQualityIssueType::DUPLICATE_TRADE, symbol, trade.timestamp,
+                                 oss.str(), 0.8); // High severity for clusters
+            metrics_.duplicate_trade_issues++;
+            add_issue(issue);
+
+            // Alert user about duplicate cluster
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.8,
+                                                   "ClusterDetector", "Duplicate cluster detected");
+        }
+    }
+}
+
+// NEW: Enhanced out-of-order detection with predictive modeling
+void DataQualityMonitor::enhanced_out_of_order_detection(const TradeData& trade, const std::string& symbol) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    auto last_timestamp_it = last_timestamps_.find(symbol);
+    if (last_timestamp_it == last_timestamps_.end()) {
+        return; // No previous timestamp to compare with
+    }
+
+    uint64_t last_timestamp = last_timestamp_it->second;
+
+    // If the trade is actually out of order, we've already handled it elsewhere
+    // This method focuses on predictive analysis of timestamp patterns
+    if (trade.timestamp >= last_timestamp) {
+        // Check if the interval between trades is significantly different from expected
+        uint64_t interval = trade.timestamp - last_timestamp;
+
+        auto stats_it = symbol_stats_.find(symbol);
+        if (stats_it != symbol_stats_.end()) {
+            const auto& stats = stats_it->second;
+
+            if (stats.trade_count > 5) { // Need sufficient history
+                uint64_t expected_interval = stats.total_interval_sum / (stats.trade_count - 1);
+
+                // If the interval is much larger than expected, it might indicate that
+                // we missed some trades that should have come between these two
+                if (interval > expected_interval * 10 && expected_interval > 0) {
+                    std::ostringstream oss;
+                    oss << "POTENTIAL MISSED TRADES BETWEEN TIMESTAMPS for " << symbol
+                        << ". Expected interval: " << expected_interval << "ms, "
+                        << "Actual interval: " << interval << "ms, "
+                        << "Suggests " << (interval / expected_interval) << " trades may have been missed";
+
+                    DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+                                         oss.str(), 0.7); // Medium-high severity
+                    metrics_.out_of_order_timestamp_issues++;
+                    add_issue(issue);
+
+                    // Alert user about potential missed trades
+                    alert_user_to_data_problems_with_context(symbol, oss.str(), 0.7,
+                                                           "PredictiveAnalyzer", "Potential missed trades detected");
+                }
+            }
+        }
+    }
+
+    // NEW: Check for timestamp sequence anomalies using moving statistics
+    const auto& recent_trades = recent_trades_[symbol];
+    if (recent_trades.size() >= 10) {
+        // Calculate statistics of recent timestamp intervals
+        std::vector<uint64_t> recent_intervals;
+        for (size_t i = 1; i < recent_trades.size(); ++i) {
+            if (recent_trades[i].timestamp >= recent_trades[i-1].timestamp) {
+                recent_intervals.push_back(recent_trades[i].timestamp - recent_trades[i-1].timestamp);
+            }
+        }
+
+        if (!recent_intervals.empty()) {
+            // Calculate mean and std dev of recent intervals
+            double sum = 0;
+            for (const auto& interval : recent_intervals) {
+                sum += interval;
+            }
+            double mean = sum / recent_intervals.size();
+
+            double variance_sum = 0;
+            for (const auto& interval : recent_intervals) {
+                variance_sum += (interval - mean) * (interval - mean);
+            }
+            double std_dev = sqrt(variance_sum / recent_intervals.size());
+
+            // If we have a previous trade in the recent list, check its interval
+            if (recent_trades.size() >= 2) {
+                const auto& prev_trade = recent_trades[recent_trades.size() - 2];
+
+                if (trade.timestamp >= prev_trade.timestamp) {
+                    uint64_t current_interval = trade.timestamp - prev_trade.timestamp;
+
+                    // If current interval is a statistical outlier, flag it
+                    if (std_dev > 0 && std::abs(static_cast<double>(current_interval) - mean) > 3 * std_dev) {
+                        std::ostringstream oss;
+                        oss << "TIMESTAMP INTERVAL OUTLIER for " << symbol
+                            << ". Interval: " << current_interval << "ms, "
+                            << "Mean: " << std::fixed << std::setprecision(2) << mean << "ms, "
+                            << "Std Dev: " << std_dev << "ms";
+
+                        DataQualityIssue issue(DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP, symbol, trade.timestamp,
+                                             oss.str(), 0.75); // High-medium severity
+                        metrics_.out_of_order_timestamp_issues++;
+                        add_issue(issue);
+
+                        // Alert user about timestamp interval outlier
+                        alert_user_to_data_problems_with_context(symbol, oss.str(), 0.75,
+                                                               "StatisticalAnalyzer", "Timestamp interval outlier detected");
+                    }
+                }
+            }
+        }
+    }
+}
+
+// NEW: Enhanced latency monitoring with predictive analysis
+void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, const std::string& symbol) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // Calculate the delay between trade occurrence and our processing
+    auto current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    int64_t processing_delay = (current_time > trade.timestamp) ? (current_time - trade.timestamp) : 0;
+
+    // Track this delay for trend analysis
+    auto& delay_history = recent_delays_[symbol];
+    delay_history.push_back(processing_delay);
+
+    // Keep only the last N delays for analysis
+    if (delay_history.size() > 50) {
+        delay_history.erase(delay_history.begin(), delay_history.end() - 50);
+    }
+
+    // NEW: Predictive latency analysis - detect emerging trends early
+    if (delay_history.size() >= 15) {
+        // Compare first half vs second half of recent delays to detect increasing trend
+        size_t mid = delay_history.size() / 2;
+        uint64_t first_half_avg = 0, second_half_avg = 0;
+
+        for (size_t i = 0; i < mid; ++i) {
+            first_half_avg += delay_history[i];
+        }
+        first_half_avg /= mid;
+
+        for (size_t i = mid; i < delay_history.size(); ++i) {
+            second_half_avg += delay_history[i];
+        }
+        second_half_avg /= (delay_history.size() - mid);
+
+        // If second half has significantly higher average, we have an increasing trend
+        if (first_half_avg > 0 && second_half_avg > first_half_avg * 1.5) {
+            std::ostringstream oss;
+            oss << "LATENCY INCREASING TREND DETECTED for " << symbol
+                << ". Previous avg: " << first_half_avg << "ms, "
+                << "Recent avg: " << second_half_avg << "ms, "
+                << "Increase factor: " << std::fixed << std::setprecision(2)
+                << (static_cast<double>(second_half_avg) / first_half_avg);
+
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                 oss.str(), 0.7); // Medium-high severity
+            metrics_.latency_issues++;
+            add_issue(issue);
+
+            // Alert user about the increasing trend
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.7,
+                                                   "TrendAnalyzer", "Latency increasing trend detected");
+        }
+    }
+
+    // NEW: Latency percentile analysis for early warning
+    if (delay_history.size() >= 25) {
+        // Calculate percentiles to identify if we're approaching problematic levels
+        std::vector<uint64_t> sorted_delays = delay_history;
+        std::sort(sorted_delays.begin(), sorted_delays.end());
+
+        // Calculate 90th and 95th percentiles
+        size_t p90_idx = static_cast<size_t>(0.90 * sorted_delays.size());
+        size_t p95_idx = static_cast<size_t>(0.95 * sorted_delays.size());
+
+        if (p90_idx >= sorted_delays.size()) p90_idx = sorted_delays.size() - 1;
+        if (p95_idx >= sorted_delays.size()) p95_idx = sorted_delays.size() - 1;
+
+        uint64_t p90_latency = sorted_delays[p90_idx];
+        uint64_t p95_latency = sorted_delays[p95_idx];
+
+        // If current delay is approaching the 95th percentile, issue early warning
+        if (processing_delay > p90_latency * 0.8 && processing_delay < p95_latency) {
+            std::ostringstream oss;
+            oss << "LATENCY APPROACHING CRITICAL LEVELS for " << symbol
+                << ". Current: " << processing_delay << "ms, "
+                << "90th percentile: " << p90_latency << "ms, "
+                << "95th percentile: " << p95_latency << "ms";
+
+            DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                 oss.str(), 0.6); // Medium severity for early warning
+            metrics_.latency_issues++;
+            add_issue(issue);
+
+            // Alert user about approaching critical levels
+            alert_user_to_data_problems_with_context(symbol, oss.str(), 0.6,
+                                                   "PercentileAnalyzer", "Latency approaching critical levels");
+        }
+    }
+
+    // NEW: Correlation analysis between trade volume and latency
+    auto stats_it = symbol_stats_.find(symbol);
+    if (delay_history.size() >= 10 && stats_it != symbol_stats_.end()) {
+        const auto& stats = stats_it->second;
+
+        // Only analyze if we have enough corresponding data
+        if (stats.recent_intervals.size() >= delay_history.size()) {
+            // Simple correlation check: do high-volume trades correlate with high latency?
+            // This is a simplified version - a full implementation would use proper correlation coefficients
+            size_t high_volume_high_latency_pairs = 0;
+            size_t total_pairs = std::min(delay_history.size(), static_cast<size_t>(10)); // Check last 10
+
+            // Get the last N trades and delays to compare
+            for (size_t i = 0; i < total_pairs && i < stats.recent_intervals.size(); ++i) {
+                // Note: This is a simplified check - in reality, we'd need to correlate trade volumes with processing delays
+                // For now, we'll just note that this analysis could be performed
+            }
+
+            // Placeholder for more sophisticated correlation analysis
+            if (processing_delay > latency_alert_threshold_ms_ && trade.volume > 1000.0f) {
+                // High latency combined with high volume might indicate system stress
+                std::ostringstream oss;
+                oss << "HIGH LATENCY WITH HIGH VOLUME for " << symbol
+                    << ". Delay: " << processing_delay << "ms, Volume: " << trade.volume;
+
+                DataQualityIssue issue(DataQualityIssueType::LATENCY_ISSUE, symbol, trade.timestamp,
+                                     oss.str(), 0.65); // Medium-high severity
+                metrics_.latency_issues++;
+                add_issue(issue);
+
+                // Alert user about high latency with high volume
+                alert_user_to_data_problems_with_context(symbol, oss.str(), 0.65,
+                                                       "CorrelationAnalyzer", "High latency with high volume detected");
+            }
+        }
     }
 }
 

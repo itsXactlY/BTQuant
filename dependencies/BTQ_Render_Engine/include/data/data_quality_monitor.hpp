@@ -210,6 +210,12 @@ public:
                            bool enable_invalid_data);
   bool is_alert_type_enabled(DataQualityIssueType type) const;
 
+  // NEW: Enhanced data quality monitoring methods
+  void detect_and_alert_data_gaps(const std::string& symbol, uint64_t current_timestamp);
+  void enhanced_duplicate_detection(const TradeData& trade, const std::string& symbol);
+  void enhanced_out_of_order_detection(const TradeData& trade, const std::string& symbol);
+  void enhanced_latency_monitoring(const TradeData& trade, const std::string& symbol);
+
   // Public methods for enhanced data quality monitoring
   uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
   bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,

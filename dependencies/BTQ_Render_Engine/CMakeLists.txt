@@ -73,6 +73,9 @@ set(LIB_SOURCES
     ${IMPLOT_DIR}/implot_demo.cpp
     # Threading module - this is the main focus of our task
     src/threading/task_scheduler.cpp
+    src/threading/lockfree_queue.cpp
+    src/performance/frame_time_graph.cpp
+    src/performance/regression_detector.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -149,6 +152,7 @@ set(DASHBOARD_SOURCES
     src/ui/data_settings.cpp
     src/ui/alert_settings.cpp
     src/ui/keyboard_shortcuts.cpp
+    src/ui/haptic_feedback.cpp
     src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
 )
@@ -239,6 +243,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/performance/frame_time_graph.cpp
     src/performance/debug_overlay.cpp
     src/threading/task_scheduler.cpp
+    src/threading/lockfree_queue.cpp
     src/analytics/technical_analysis.cpp
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp

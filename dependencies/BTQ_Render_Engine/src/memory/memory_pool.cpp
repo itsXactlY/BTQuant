@@ -275,4 +275,76 @@ void HotspineTradeTickPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// OrderBookLevelPool implementation
+OrderBookLevelPool& OrderBookLevelPool::getInstance() {
+    static OrderBookLevelPool instance;
+    return instance;
+}
+
+RenderEngine::OrderBookLevel* OrderBookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void OrderBookLevelPool::deallocate(RenderEngine::OrderBookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void OrderBookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// CompressedCandlePool implementation
+CompressedCandlePool& CompressedCandlePool::getInstance() {
+    static CompressedCandlePool instance;
+    return instance;
+}
+
+Data::CompressedCandle* CompressedCandlePool::allocate() {
+    return pool_.allocate();
+}
+
+void CompressedCandlePool::deallocate(Data::CompressedCandle* candle) {
+    pool_.deallocate(candle);
+}
+
+void CompressedCandlePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// CompressedTradePool implementation
+CompressedTradePool& CompressedTradePool::getInstance() {
+    static CompressedTradePool instance;
+    return instance;
+}
+
+Data::CompressedTrade* CompressedTradePool::allocate() {
+    return pool_.allocate();
+}
+
+void CompressedTradePool::deallocate(Data::CompressedTrade* trade) {
+    pool_.deallocate(trade);
+}
+
+void CompressedTradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FibonacciLevelPool implementation
+FibonacciLevelPool& FibonacciLevelPool::getInstance() {
+    static FibonacciLevelPool instance;
+    return instance;
+}
+
+FibonacciLevel* FibonacciLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FibonacciLevelPool::deallocate(FibonacciLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FibonacciLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

@@ -90,6 +90,7 @@ set(DASHBOARD_SOURCES
     src/rendering/imgui_optimizer.cpp
     src/rendering/frame_pacer.cpp
     src/rendering/auto_quality.cpp
+    src/rendering/orderbook_batcher.cpp
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
@@ -193,6 +194,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/rendering/imgui_optimizer.cpp
     src/rendering/frame_pacer.cpp
     src/rendering/auto_quality.cpp
+    src/rendering/orderbook_batcher.cpp
     src/components/indicator_renderer.cpp
     src/components/hierarchical_selector.cpp
     src/components/orderbook_panel.cpp
@@ -320,6 +322,52 @@ target_link_libraries(dashboard_advanced PRIVATE
     glfw
     dl
     pthread
+    TBB::tbb
+)
+
+# Memory pool test executable
+add_executable(test_extended_memory_pool
+    src/memory/test_extended_memory_pool.cpp
+    src/memory/memory_pool.cpp
+)
+
+target_include_directories(test_extended_memory_pool PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_extended_memory_pool PRIVATE
+    Threads::Threads
+    TBB::tbb
+)
+
+# Original memory pool test executable
+add_executable(test_memory_pool
+    src/memory/test_memory_pool.cpp
+    src/memory/memory_pool.cpp
+)
+
+target_include_directories(test_memory_pool PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_memory_pool PRIVATE
+    Threads::Threads
     TBB::tbb
 )
 

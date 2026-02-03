@@ -17,6 +17,9 @@
 #include "../include/data/data_types.hpp"
 #include "../include/trading/position_manager.hpp"
 #include "../include/trading/HotspineData.h"
+#include "../include/data/compression.hpp"
+#include "../include/components/chart_panel.hpp"
+#include "../include/vulkan_dashboard_advanced.hpp"
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
@@ -322,6 +325,78 @@ public:
 private:
     HotspineTradeTickPool() = default;
     ObjectPool<RenderEngine::HotspineTradeTick> pool_;
+};
+
+// OrderBookLevelPool for order book levels
+class OrderBookLevelPool {
+public:
+    static OrderBookLevelPool& getInstance();
+
+    RenderEngine::OrderBookLevel* allocate();
+    void deallocate(RenderEngine::OrderBookLevel* level);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    OrderBookLevelPool() = default;
+    ObjectPool<RenderEngine::OrderBookLevel> pool_;
+};
+
+// CompressedCandlePool for compressed candle data
+class CompressedCandlePool {
+public:
+    static CompressedCandlePool& getInstance();
+
+    Data::CompressedCandle* allocate();
+    void deallocate(Data::CompressedCandle* candle);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    CompressedCandlePool() = default;
+    ObjectPool<Data::CompressedCandle> pool_;
+};
+
+// CompressedTradePool for compressed trade data
+class CompressedTradePool {
+public:
+    static CompressedTradePool& getInstance();
+
+    Data::CompressedTrade* allocate();
+    void deallocate(Data::CompressedTrade* trade);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    CompressedTradePool() = default;
+    ObjectPool<Data::CompressedTrade> pool_;
+};
+
+// FibonacciLevelPool for fibonacci retracement levels
+class FibonacciLevelPool {
+public:
+    static FibonacciLevelPool& getInstance();
+
+    FibonacciLevel* allocate();
+    void deallocate(FibonacciLevel* level);
+    void preallocate(size_t count = 64);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    FibonacciLevelPool() = default;
+    ObjectPool<FibonacciLevel> pool_;
 };
 
 // RAII wrapper for automatic deallocation

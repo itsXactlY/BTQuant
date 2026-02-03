@@ -1004,8 +1004,10 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
         }
 
         // Update average latency
-        metrics_.average_latency_ms = (metrics_.average_latency_ms * (metrics_.total_trades_processed - 1) + latency) /
-                                      metrics_.total_trades_processed;
+        if (metrics_.total_trades_processed > 0) {
+            metrics_.average_latency_ms = (metrics_.average_latency_ms * (metrics_.total_trades_processed - 1) + latency) /
+                                          metrics_.total_trades_processed;
+        }
     }
 
     // Also check for potential data feed delays by comparing trade timestamp to current time
@@ -2871,6 +2873,93 @@ void DataQualityMonitor::check_latency_issue_patterns(const std::string& symbol)
             }
         }
     }
+}
+
+// Additional method to provide a comprehensive summary of data quality
+std::string DataQualityMonitor::get_comprehensive_summary() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream summary;
+    summary << "\n=== COMPREHENSIVE DATA QUALITY REPORT ===\n";
+    summary << "Generated: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count() << " ms\n";
+    summary << "Total trades processed: " << metrics_.total_trades_processed << "\n";
+    summary << "Missing data issues: " << metrics_.missing_data_issues << "\n";
+    summary << "Duplicate trade issues: " << metrics_.duplicate_trade_issues << "\n";
+    summary << "Out-of-order timestamp issues: " << metrics_.out_of_order_timestamp_issues << "\n";
+    summary << "Latency issues: " << metrics_.latency_issues << "\n";
+    summary << "Invalid price issues: " << metrics_.invalid_price_issues << "\n";
+    summary << "Invalid volume issues: " << metrics_.invalid_volume_issues << "\n";
+    summary << "Missing field issues: " << metrics_.missing_field_issues << "\n";
+    summary << "Average latency: " << std::fixed << std::setprecision(2) << metrics_.average_latency_ms << " ms\n";
+
+    // Calculate and report severity distribution
+    size_t critical_issues = 0, high_issues = 0, medium_issues = 0, low_issues = 0;
+
+    for (const auto& issue : recent_issues_) {
+        if (issue.severity >= 0.9) {
+            critical_issues++;
+        } else if (issue.severity >= 0.7) {
+            high_issues++;
+        } else if (issue.severity >= 0.5) {
+            medium_issues++;
+        } else {
+            low_issues++;
+        }
+    }
+
+    summary << "\nSeverity Distribution:\n";
+    summary << "Critical issues (0.9-1.0): " << critical_issues << "\n";
+    summary << "High issues (0.7-0.89): " << high_issues << "\n";
+    summary << "Medium issues (0.5-0.69): " << medium_issues << "\n";
+    summary << "Low issues (0.0-0.49): " << low_issues << "\n";
+
+    // Report top affected symbols
+    std::unordered_map<std::string, size_t> symbol_issue_counts;
+    for (const auto& issue : recent_issues_) {
+        symbol_issue_counts[issue.symbol]++;
+    }
+
+    summary << "\nTop 5 Symbols with Most Issues:\n";
+    std::vector<std::pair<std::string, size_t>> sorted_symbols(symbol_issue_counts.begin(), symbol_issue_counts.end());
+    std::sort(sorted_symbols.begin(), sorted_symbols.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    for (size_t i = 0; i < std::min(sorted_symbols.size(), static_cast<size_t>(5)); ++i) {
+        summary << "  " << i+1 << ". " << sorted_symbols[i].first
+               << ": " << sorted_symbols[i].second << " issues\n";
+    }
+
+    // Calculate data quality score
+    double quality_score = 100.0;
+    if (metrics_.total_trades_processed > 0) {
+        double error_rate = static_cast<double>(metrics_.missing_data_issues +
+                                               metrics_.duplicate_trade_issues +
+                                               metrics_.out_of_order_timestamp_issues +
+                                               metrics_.latency_issues +
+                                               metrics_.invalid_price_issues +
+                                               metrics_.invalid_volume_issues +
+                                               metrics_.missing_field_issues) /
+                           static_cast<double>(metrics_.total_trades_processed);
+        quality_score = (1.0 - std::min(error_rate, 1.0)) * 100.0;
+    }
+
+    summary << "\nOverall Data Quality Score: " << std::fixed << std::setprecision(2)
+           << quality_score << "%\n";
+
+    if (quality_score < 80.0) {
+        summary << "STATUS: CRITICAL - Immediate attention required!\n";
+    } else if (quality_score < 90.0) {
+        summary << "STATUS: WARNING - Data quality needs attention\n";
+    } else if (quality_score < 95.0) {
+        summary << "STATUS: FAIR - Minor issues detected\n";
+    } else {
+        summary << "STATUS: GOOD - Data quality is satisfactory\n";
+    }
+
+    summary << "=========================================\n";
+
+    return summary.str();
 }
 
 } // namespace Data

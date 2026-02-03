@@ -172,6 +172,9 @@ public:
   // Get a user-friendly summary of data quality issues
   std::string get_user_friendly_summary() const;
 
+  // Get a comprehensive summary of data quality issues
+  std::string get_comprehensive_summary() const;
+
   // Public methods for enhanced data quality monitoring
   uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
   bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,

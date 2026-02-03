@@ -105,6 +105,21 @@ public:
     // Get real-time render time for active panels (panels currently rendering)
     std::vector<std::pair<uint32_t, uint64_t>> get_active_render_times() const; // {panel_id, current_render_time_us}
 
+    // Get panels with highest peak render times
+    std::vector<std::pair<uint32_t, PanelRenderStats>> get_peak_render_time_panels(size_t top_n = 5) const;
+
+    // Get panels with increasing render time trends
+    std::vector<std::pair<uint32_t, double>> get_increasing_trend_panels(size_t top_n = 5) const;
+
+    // Get panels with the highest resource utilization
+    std::vector<std::pair<uint32_t, double>> get_resource_utilization_ranking() const;
+
+    // Get comprehensive bottleneck ranking considering multiple factors
+    std::vector<std::pair<uint32_t, double>> get_comprehensive_bottleneck_ranking() const;
+
+    // Get top bottleneck panels with detailed information
+    std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>> get_top_bottleneck_details(size_t top_n = 5) const;
+
 private:
     std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
     mutable std::mutex profiling_data_mutex_;

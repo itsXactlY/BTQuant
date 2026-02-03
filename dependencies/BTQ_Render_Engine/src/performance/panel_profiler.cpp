@@ -756,6 +756,198 @@ std::vector<std::pair<uint32_t, uint64_t>> PanelProfiler::get_active_render_time
     return active_times;
 }
 
+std::vector<std::pair<uint32_t, PanelRenderStats>> PanelProfiler::get_peak_render_time_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, PanelRenderStats>> result;
+
+    // Copy all panel stats
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) { // Only include panels that have been rendered
+            result.push_back({panel_id, stats});
+        }
+    }
+
+    // Sort by max render time (descending)
+    std::sort(result.begin(), result.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second.max_render_time_us > b.second.max_render_time_us;
+              });
+
+    // Limit to top N
+    if (result.size() > top_n) {
+        result.resize(top_n);
+    }
+
+    return result;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_increasing_trend_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> increasing_trend_panels;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_time_history.size() >= RECENT_RENDER_COUNT * 2) { // Need enough data for comparison
+            auto [recent_avg, historical_avg] = get_render_trend_ms(panel_id);
+
+            if (historical_avg > 0.0 && recent_avg > historical_avg) {
+                double increase_ratio = (recent_avg - historical_avg) / historical_avg; // Percentage increase
+                increasing_trend_panels.push_back({panel_id, increase_ratio});
+            } else if (historical_avg > 0.0 && recent_avg <= historical_avg) {
+                // Even if decreasing, we might want to track the stability
+                double change_ratio = (recent_avg - historical_avg) / historical_avg;
+                increasing_trend_panels.push_back({panel_id, change_ratio});
+            }
+        }
+    }
+
+    // Sort by increase ratio (descending) - most increasing panels first
+    std::sort(increasing_trend_panels.begin(), increasing_trend_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (increasing_trend_panels.size() > top_n) {
+        increasing_trend_panels.resize(top_n);
+    }
+
+    return increasing_trend_panels;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_resource_utilization_ranking() const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> utilization_ranking;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) {
+            // Calculate resource utilization as a combination of factors:
+            // 1. Average render time
+            // 2. Frequency of slow renders
+            // 3. Peak render time impact
+            double avg_time = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+            double slow_render_ratio = static_cast<double>(stats.slow_render_count) / static_cast<double>(stats.render_count);
+            double peak_impact = static_cast<double>(stats.max_render_time_us) / static_cast<double>(avg_time > 0 ? avg_time : 1.0);
+
+            // Weighted score combining all factors
+            double utilization_score = avg_time * (1.0 + slow_render_ratio * 5.0 + peak_impact * 0.5);
+            utilization_ranking.push_back({panel_id, utilization_score});
+        }
+    }
+
+    // Sort by utilization score (descending)
+    std::sort(utilization_ranking.begin(), utilization_ranking.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    return utilization_ranking;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_comprehensive_bottleneck_ranking() const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> bottleneck_ranking;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) {
+            // Comprehensive scoring algorithm considering multiple factors:
+            // 1. Average render time (primary factor)
+            double avg_time = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+
+            // 2. Frequency of slow renders (secondary factor)
+            double slow_render_ratio = static_cast<double>(stats.slow_render_count) / static_cast<double>(stats.render_count);
+
+            // 3. Peak render time impact (tertiary factor)
+            double peak_impact = static_cast<double>(stats.max_render_time_us) / static_cast<double>(avg_time > 0 ? avg_time : 1.0);
+
+            // 4. Variance in render times (indicates instability)
+            double mean = avg_time;
+            double variance = 0.0;
+            for (uint64_t render_time : stats.render_time_history) {
+                double diff = static_cast<double>(render_time) - mean;
+                variance += diff * diff;
+            }
+            variance /= static_cast<double>(stats.render_time_history.size());
+            double stability_factor = 1.0 + (variance / (mean > 0 ? mean : 1.0));
+
+            // 5. Recent trend (is performance getting worse?) - calculate inline to avoid mutex issues
+            double trend_factor = 1.0;
+            if (stats.render_time_history.size() >= RECENT_RENDER_COUNT * 2) { // Need enough data for comparison
+                // Calculate recent average (last N renders)
+                size_t recent_count = std::min(static_cast<size_t>(RECENT_RENDER_COUNT), stats.render_time_history.size());
+                size_t recent_start_idx = stats.render_time_history.size() - recent_count;
+
+                double recent_sum = 0.0;
+                for (size_t i = recent_start_idx; i < stats.render_time_history.size(); ++i) {
+                    recent_sum += static_cast<double>(stats.render_time_history[i]) / 1000.0; // Convert to ms
+                }
+                double recent_avg = recent_count > 0 ? recent_sum / recent_count : 0.0;
+
+                // Calculate historical average (excluding recent renders)
+                size_t historical_count = stats.render_time_history.size() - recent_count;
+                double historical_sum = 0.0;
+                for (size_t i = 0; i < recent_start_idx; ++i) {
+                    historical_sum += static_cast<double>(stats.render_time_history[i]) / 1000.0; // Convert to ms
+                }
+                double historical_avg = historical_count > 0 ? historical_sum / historical_count : 0.0;
+
+                if (historical_avg > 0.0 && recent_avg > historical_avg) {
+                    trend_factor = 1.0 + ((recent_avg - historical_avg) / historical_avg);
+                }
+            }
+
+            // Weighted comprehensive score
+            double bottleneck_score = avg_time *
+                                    (1.0 + slow_render_ratio * 8.0 +  // Heavy weight on slow renders
+                                     peak_impact * 0.5 +              // Moderate weight on peaks
+                                     stability_factor * 0.3 +         // Light weight on stability
+                                     trend_factor * 1.0);             // Moderate weight on trends
+
+            bottleneck_ranking.push_back({panel_id, bottleneck_score});
+        }
+    }
+
+    // Sort by bottleneck score (descending) - highest scores are biggest bottlenecks
+    std::sort(bottleneck_ranking.begin(), bottleneck_ranking.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    return bottleneck_ranking;
+}
+
+std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>> PanelProfiler::get_top_bottleneck_details(size_t top_n) const {
+    std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>> bottleneck_details;
+
+    // Get comprehensive bottleneck ranking (this will acquire its own lock)
+    auto bottleneck_ranking = get_comprehensive_bottleneck_ranking();
+
+    // Take top N bottlenecks and get detailed information
+    size_t count = std::min(top_n, bottleneck_ranking.size());
+    for (size_t i = 0; i < count; ++i) {
+        uint32_t panel_id = bottleneck_ranking[i].first;
+        double bottleneck_score = bottleneck_ranking[i].second;
+
+        // Get stats for this panel (this will acquire its own lock)
+        auto stats = get_panel_stats(panel_id);
+        if (!stats.panel_title.empty() || stats.render_count > 0) { // Check if valid stats
+            double avg_render_time_ms = get_average_render_time_ms(panel_id);
+            double slow_render_percentage = get_slow_render_percentage(panel_id);
+            uint64_t total_renders = stats.render_count;
+
+            bottleneck_details.emplace_back(
+                panel_id,
+                stats.panel_title,
+                avg_render_time_ms,
+                bottleneck_score,
+                total_renders,
+                slow_render_percentage
+            );
+        }
+    }
+
+    return bottleneck_details;
+}
+
 // Global instance
 PanelProfiler g_panel_profiler;
 

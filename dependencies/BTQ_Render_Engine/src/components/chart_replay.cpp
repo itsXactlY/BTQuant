@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/ui/tooltips.hpp"
 
 namespace BTQuant {
 
@@ -520,15 +521,19 @@ void ChartReplay::render_replay_controls() {
     if (ImGui::SliderFloat("Speed", &speed, 0.1f, 10.0f, "%.1fx", ImGuiSliderFlags_Logarithmic)) {
         config_.playback_speed = static_cast<double>(speed);
     }
+    BTQuant::UI::show_control_tooltip("chart_replay_speed");
 
     // Loop checkbox
     ImGui::Checkbox("Loop", &config_.loop_enabled);
+    BTQuant::UI::show_control_tooltip("chart_replay_loop");
 
     // Step-by-step mode
     ImGui::Checkbox("Step-by-step mode", &config_.enable_step_by_step);
+    BTQuant::UI::show_control_tooltip("chart_replay_step_by_step");
 
     // Manual control option
     ImGui::Checkbox("Manual control", &config_.enable_manual_control);
+    BTQuant::UI::show_control_tooltip("chart_replay_manual_control");
 
     // Backtesting practice mode - separate from manual control
     static bool backtesting_practice_mode = false;
@@ -537,6 +542,7 @@ void ChartReplay::render_replay_controls() {
         config_.enable_manual_control = backtesting_practice_mode;
         config_.enable_step_by_step = backtesting_practice_mode;
     }
+    BTQuant::UI::show_control_tooltip("chart_replay_backtesting_mode");
 
     // Control buttons
     if (ImGui::Button(is_playing_ ? "Pause" : "Play")) {
@@ -546,17 +552,20 @@ void ChartReplay::render_replay_controls() {
             start_replay();
         }
     }
+    BTQuant::UI::show_control_tooltip(is_playing_ ? "chart_replay_pause" : "chart_replay_play");
 
     ImGui::SameLine();
     if (ImGui::Button("Stop")) {
         stop_replay();
         reset_replay();
     }
+    BTQuant::UI::show_control_tooltip("chart_replay_stop");
 
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
         reset_replay();
     }
+    BTQuant::UI::show_control_tooltip("chart_replay_reset");
 
     // Step controls (only visible in manual control mode)
     if (config_.enable_manual_control) {
@@ -564,11 +573,13 @@ void ChartReplay::render_replay_controls() {
         if (ImGui::Button("<< Prev")) {
             step_backward();
         }
+        BTQuant::UI::show_control_tooltip("chart_replay_prev");
 
         ImGui::SameLine();
         if (ImGui::Button("Next >>")) {
             step_forward();
         }
+        BTQuant::UI::show_control_tooltip("chart_replay_next");
     }
 
     // Seek slider

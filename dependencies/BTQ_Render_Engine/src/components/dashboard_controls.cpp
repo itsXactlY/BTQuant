@@ -15,6 +15,7 @@
 #include "../../include/ui/ui_base.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
+#include "../../include/ui/tooltips.hpp"
 
 namespace BTQuant {
 
@@ -531,7 +532,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::CHART);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a price chart panel for technical analysis");
+      BTQuant::UI::show_control_tooltip("add_chart_panel");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Footprint", ImVec2(-1, 30))) {
@@ -539,7 +540,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::FOOTPRINT_CHART);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a footprint chart showing trade volume at price levels");
+      BTQuant::UI::show_control_tooltip("add_footprint_panel");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Volume Profile", ImVec2(-1, 30))) {
@@ -547,7 +548,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::VOLUME_PROFILE);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a volume profile chart showing volume distribution by price");
+      BTQuant::UI::show_control_tooltip("add_volume_profile_panel");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Order Book", ImVec2(-1, 30))) {
@@ -555,7 +556,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::ORDERBOOK);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add an order book panel showing buy/sell orders at different price levels");
+      BTQuant::UI::show_control_tooltip("add_order_book_panel");
       ImGui::NextColumn();
 
       // Second column buttons
@@ -564,7 +565,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::TIME_AND_SALES);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a time and sales panel showing recent trades");
+      BTQuant::UI::show_control_tooltip("add_time_sales_panel");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add Watchlist", ImVec2(-1, 30))) {
@@ -572,7 +573,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::WATCHLIST);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a watchlist panel to monitor multiple symbols");
+      BTQuant::UI::show_control_tooltip("add_watchlist_panel");
       ImGui::NextColumn();
 
       if (ImGui::Button("Add News", ImVec2(-1, 30))) {
@@ -580,7 +581,7 @@ void DashboardControls::render_dashboard_controls() {
           panel_manager_->add_panel(PanelType::ALERTS);
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add a news and alerts panel for market updates");
+      BTQuant::UI::show_control_tooltip("add_news_panel");
       ImGui::NextColumn();
 
       ImGui::Columns(1); // Reset to single column

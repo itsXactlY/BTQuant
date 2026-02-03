@@ -79,6 +79,7 @@ set(LIB_SOURCES
     src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
+    src/ui/tooltips.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -387,4 +388,27 @@ target_link_libraries(test_memory_pool PRIVATE
 
 # Add tests subdirectory
 add_subdirectory(tests)
+
+# Tooltip test executable
+add_executable(test_tooltips
+    src/ui/test_tooltips.cpp
+)
+
+target_include_directories(test_tooltips PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_tooltips PRIVATE
+    btq_engine_lib
+    Threads::Threads
+    TBB::tbb
+)
 

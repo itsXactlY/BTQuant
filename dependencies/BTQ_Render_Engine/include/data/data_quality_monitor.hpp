@@ -197,6 +197,16 @@ public:
   // Provide real-time alerts to users about data quality issues
   void provide_real_time_alerts_to_users();
 
+  // NEW: Enhanced methods for user notifications
+  void immediate_user_notification(const DataQualityIssue& issue);
+  void send_consolidated_alerts();
+  void configure_alert_types(bool enable_missing_data,
+                           bool enable_duplicate_trades,
+                           bool enable_out_of_order,
+                           bool enable_latency_issues,
+                           bool enable_invalid_data);
+  bool is_alert_type_enabled(DataQualityIssueType type) const;
+
   // Public methods for enhanced data quality monitoring
   uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
   bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,
@@ -246,6 +256,16 @@ private:
   bool console_alerts_enabled_ = true;
   bool file_logging_enabled_ = false;
   std::function<void(const DataQualityIssue&)> external_alert_callback_ = nullptr;
+
+  // Alert configuration structure
+  struct AlertConfig {
+    bool enable_missing_data = true;
+    bool enable_duplicate_trades = true;
+    bool enable_out_of_order = true;
+    bool enable_latency_issues = true;
+    bool enable_invalid_data = true;
+  };
+  AlertConfig alert_config_;
 
   // Helper method to add an issue
   void add_issue(const DataQualityIssue& issue);

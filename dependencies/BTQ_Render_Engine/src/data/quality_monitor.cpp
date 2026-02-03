@@ -40,6 +40,15 @@ DataQualityMonitor::DataQualityMonitor() : alert_callback_(nullptr) {
     // Initialize additional tracking structures
     recent_delays_.clear();
     alert_counts_by_type_.clear();
+
+    // Initialize alert configuration with all alerts enabled by default
+    alert_config_ = {
+        true,  // enable_missing_data
+        true,  // enable_duplicate_trades
+        true,  // enable_out_of_order
+        true,  // enable_latency_issues
+        true   // enable_invalid_data
+    };
 }
 
 uint64_t DataQualityMonitor::calculate_safe_time_diff(uint64_t current, uint64_t previous) const {
@@ -1679,6 +1688,11 @@ void DataQualityMonitor::set_alert_callback(AlertCallback callback) {
 }
 
 void DataQualityMonitor::add_issue(const DataQualityIssue& issue) {
+    // Check if this alert type is enabled before proceeding
+    if (!is_alert_type_enabled(issue.type)) {
+        return; // Skip adding this issue if its type is disabled
+    }
+
     recent_issues_.push_back(issue);
 
     // Maintain the size limit
@@ -3409,6 +3423,213 @@ void DataQualityMonitor::provide_real_time_alerts_to_users() {
         }
 
         std::cout << std::string(80, '=') << std::endl;
+    }
+}
+
+// NEW: Enhanced method to provide immediate user notifications for critical data quality issues
+void DataQualityMonitor::immediate_user_notification(const DataQualityIssue& issue) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Format a clear, immediate notification for the user
+    std::string severity_label;
+    if (issue.severity >= 0.9) {
+        severity_label = "CRITICAL";
+    } else if (issue.severity >= 0.7) {
+        severity_label = "HIGH";
+    } else if (issue.severity >= 0.5) {
+        severity_label = "MEDIUM";
+    } else {
+        severity_label = "LOW";
+    }
+
+    // Print a highly visible alert to get user attention
+    std::cout << "\n" << std::string(80, '!') << std::endl;
+    std::cout << "🚨 DATA QUALITY ALERT 🚨" << std::endl;
+    std::cout << std::string(80, '!') << std::endl;
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count() << std::endl;
+    std::cout << "Symbol: " << issue.symbol << std::endl;
+    std::cout << "Issue: ";
+
+    switch (issue.type) {
+        case DataQualityIssueType::MISSING_DATA:
+            std::cout << "Missing Data";
+            break;
+        case DataQualityIssueType::DUPLICATE_TRADE:
+            std::cout << "Duplicate Trade";
+            break;
+        case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+            std::cout << "Out-of-Order Timestamp";
+            break;
+        case DataQualityIssueType::LATENCY_ISSUE:
+            std::cout << "Latency Issue";
+            break;
+        case DataQualityIssueType::INVALID_PRICE:
+            std::cout << "Invalid Price";
+            break;
+        case DataQualityIssueType::INVALID_VOLUME:
+            std::cout << "Invalid Volume";
+            break;
+        case DataQualityIssueType::MISSING_FIELD:
+            std::cout << "Missing Field";
+            break;
+    }
+
+    std::cout << std::endl;
+    std::cout << "Severity: " << severity_label << " (" << issue.severity << ")" << std::endl;
+    std::cout << "Details: " << issue.description << std::endl;
+
+    // Provide immediate recommendation based on issue type
+    std::cout << "Recommendation: ";
+    switch (issue.type) {
+        case DataQualityIssueType::MISSING_DATA:
+            std::cout << "Check data feed connectivity";
+            break;
+        case DataQualityIssueType::DUPLICATE_TRADE:
+            std::cout << "Review duplicate filtering";
+            break;
+        case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+            std::cout << "Verify timestamp synchronization";
+            break;
+        case DataQualityIssueType::LATENCY_ISSUE:
+            std::cout << "Investigate system performance";
+            break;
+        case DataQualityIssueType::INVALID_PRICE:
+            std::cout << "Validate price normalization";
+            break;
+        case DataQualityIssueType::INVALID_VOLUME:
+            std::cout << "Check volume validation";
+            break;
+        case DataQualityIssueType::MISSING_FIELD:
+            std::cout << "Ensure complete data feeds";
+            break;
+    }
+    std::cout << std::endl;
+
+    std::cout << std::string(80, '!') << std::endl << std::endl;
+}
+
+// NEW: Method to send consolidated alerts to users at regular intervals
+void DataQualityMonitor::send_consolidated_alerts() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Get all recent issues
+    auto all_recent_issues = get_recent_issues(50); // Get last 50 issues
+
+    if (all_recent_issues.empty()) {
+        return; // No issues to report
+    }
+
+    // Group issues by type
+    std::unordered_map<DataQualityIssueType, std::vector<DataQualityIssue>> grouped_issues;
+    for (const auto& issue : all_recent_issues) {
+        grouped_issues[issue.type].push_back(issue);
+    }
+
+    // Count total issues by type
+    std::unordered_map<DataQualityIssueType, size_t> issue_counts;
+    for (const auto& [type, issues] : grouped_issues) {
+        issue_counts[type] = issues.size();
+    }
+
+    // Create a consolidated report
+    std::cout << "\n" << std::string(70, '-') << std::endl;
+    std::cout << "CONSOLIDATED DATA QUALITY REPORT" << std::endl;
+    std::cout << std::string(70, '-') << std::endl;
+    std::cout << "Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count() << std::endl;
+
+    for (const auto& [type, count] : issue_counts) {
+        std::string type_name;
+        switch (type) {
+            case DataQualityIssueType::MISSING_DATA:
+                type_name = "Missing Data";
+                break;
+            case DataQualityIssueType::DUPLICATE_TRADE:
+                type_name = "Duplicate Trades";
+                break;
+            case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+                type_name = "Out-of-Order Timestamps";
+                break;
+            case DataQualityIssueType::LATENCY_ISSUE:
+                type_name = "Latency Issues";
+                break;
+            case DataQualityIssueType::INVALID_PRICE:
+                type_name = "Invalid Prices";
+                break;
+            case DataQualityIssueType::INVALID_VOLUME:
+                type_name = "Invalid Volumes";
+                break;
+            case DataQualityIssueType::MISSING_FIELD:
+                type_name = "Missing Fields";
+                break;
+        }
+
+        std::cout << type_name << ": " << count << " issues" << std::endl;
+    }
+
+    std::cout << std::string(70, '-') << std::endl;
+
+    // If there are high severity issues, provide a summary
+    auto high_severity = get_high_severity_issues(0.8);
+    if (!high_severity.empty()) {
+        std::cout << "\nHIGH SEVERITY ISSUES SUMMARY:" << std::endl;
+        for (size_t i = 0; i < std::min(high_severity.size(), static_cast<size_t>(5)); ++i) { // Show top 5
+            std::cout << "  - " << high_severity[i].symbol << ": " << high_severity[i].description.substr(0, 50);
+            if (high_severity[i].description.length() > 50) std::cout << "...";
+            std::cout << " (Severity: " << high_severity[i].severity << ")" << std::endl;
+        }
+    }
+
+    std::cout << std::string(70, '-') << std::endl << std::endl;
+}
+
+// NEW: Method to enable/disable different types of alerts
+void DataQualityMonitor::configure_alert_types(bool enable_missing_data,
+                                              bool enable_duplicate_trades,
+                                              bool enable_out_of_order,
+                                              bool enable_latency_issues,
+                                              bool enable_invalid_data) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Store alert configuration for future reference
+    alert_config_ = {
+        enable_missing_data,
+        enable_duplicate_trades,
+        enable_out_of_order,
+        enable_latency_issues,
+        enable_invalid_data
+    };
+
+    if (console_alerts_enabled_) {
+        std::cout << "[CONFIG] Alert configuration updated:" << std::endl;
+        std::cout << "  Missing Data Alerts: " << (enable_missing_data ? "ON" : "OFF") << std::endl;
+        std::cout << "  Duplicate Trade Alerts: " << (enable_duplicate_trades ? "ON" : "OFF") << std::endl;
+        std::cout << "  Out-of-Order Alerts: " << (enable_out_of_order ? "ON" : "OFF") << std::endl;
+        std::cout << "  Latency Issue Alerts: " << (enable_latency_issues ? "ON" : "OFF") << std::endl;
+        std::cout << "  Invalid Data Alerts: " << (enable_invalid_data ? "ON" : "OFF") << std::endl;
+    }
+}
+
+// NEW: Method to check if specific alert types are enabled
+bool DataQualityMonitor::is_alert_type_enabled(DataQualityIssueType type) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    switch (type) {
+        case DataQualityIssueType::MISSING_DATA:
+            return alert_config_.enable_missing_data;
+        case DataQualityIssueType::DUPLICATE_TRADE:
+            return alert_config_.enable_duplicate_trades;
+        case DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP:
+            return alert_config_.enable_out_of_order;
+        case DataQualityIssueType::LATENCY_ISSUE:
+            return alert_config_.enable_latency_issues;
+        case DataQualityIssueType::INVALID_PRICE:
+        case DataQualityIssueType::INVALID_VOLUME:
+        case DataQualityIssueType::MISSING_FIELD:
+            return alert_config_.enable_invalid_data;
+        default:
+            return true; // Default to enabled for unknown types
     }
 }
 

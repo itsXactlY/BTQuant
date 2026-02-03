@@ -122,6 +122,9 @@ public:
     // Optimized submit method that reduces GPU overhead by minimizing draw calls and memory operations
     void submitOptimized(ImDrawList* draw_list);
 
+    // Ultra-optimized submit method that implements the most efficient approach to minimize GPU overhead
+    void submitUltraOptimized(ImDrawList* draw_list);
+
     // Get the number of batched elements
     size_t getBatchCount() const { return batches_.size(); }
 
@@ -163,6 +166,12 @@ public:
 
     // Advanced batch optimization that uses hierarchical grouping to minimize GPU overhead
     void hierarchicalOptimizeBatches();
+
+    // Optimized method to batch multiple similar draw calls with maximum efficiency
+    void batchMultipleDrawCallsOptimized(const std::vector<std::function<void(OrderbookBatchElement*)>>& draw_calls);
+
+    // Ultimate optimization that combines multiple techniques to minimize GPU overhead
+    void ultimateBatchOptimization();
 
 private:
     std::vector<OrderbookBatchElement> batches_;

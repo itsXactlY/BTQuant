@@ -753,6 +753,111 @@ CPUProfiler::get_function_level_breakdown() const {
     return function_breakdowns;
 }
 
+std::vector<CPUProfiler::DetailedCPUTimeBreakdown>
+CPUProfiler::get_detailed_cpu_time_breakdown() const {
+    std::vector<DetailedCPUTimeBreakdown> detailed_breakdowns;
+    std::map<std::string, double> exclusive_times;
+
+    // Calculate exclusive times
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+        for (const auto& [thread_id, thread_data] : thread_profiles_) {
+            if (thread_data.call_tree_root) {
+                calculate_exclusive_times(thread_data.call_tree_root.get(), exclusive_times);
+            }
+        }
+    }
+
+    auto all_profiles = get_aggregated_profiles();
+    uint64_t total_time_ns = 0;
+
+    // Calculate total time for percentage calculation
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_time_ns += profile_data.total_duration_ns;
+    }
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        DetailedCPUTimeBreakdown dtb;
+        dtb.function_name = func_name;
+        dtb.call_count = profile_data.call_count;
+        dtb.total_time_ms = profile_data.get_total_duration_ms();
+        dtb.exclusive_time_ms = exclusive_times.count(func_name) ?
+                               exclusive_times[func_name] : 0.0;
+        dtb.inclusive_time_ms = profile_data.get_total_duration_ms(); // Same as total for root level
+        dtb.min_time_ms = profile_data.get_min_duration_ms();
+        dtb.max_time_ms = profile_data.get_max_duration_ms();
+        dtb.avg_time_ms = profile_data.get_average_duration_ms();
+        dtb.variance_time_ms = 0.0; // Will be calculated later if needed
+
+        // Calculate variance and standard deviation
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double sum_squares = 0.0;
+            double mean = dtb.avg_time_ms;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            double variance_time_ms = sum_squares / profile_data.duration_history.size();
+            dtb.std_deviation_ms = std::sqrt(variance_time_ms);
+        } else {
+            dtb.std_deviation_ms = 0.0;
+        }
+
+        dtb.percentage_of_total = total_time_ns > 0 ?
+                                 (static_cast<double>(profile_data.total_duration_ns) /
+                                  static_cast<double>(total_time_ns)) * 100.0 : 0.0;
+
+        // Calculate percentiles (25th, 50th, 75th, 90th, 95th, 99th)
+        if (!profile_data.duration_history.empty()) {
+            std::vector<uint64_t> sorted_durations = profile_data.duration_history;
+            std::sort(sorted_durations.begin(), sorted_durations.end());
+
+            auto get_percentile = [&](double percentile) -> double {
+                if (sorted_durations.empty()) return 0.0;
+                size_t index = static_cast<size_t>((percentile / 100.0) * sorted_durations.size());
+                if (index >= sorted_durations.size()) index = sorted_durations.size() - 1;
+                return static_cast<double>(sorted_durations[index]) / 1000000.0;
+            };
+
+            dtb.percentiles.push_back(get_percentile(25));  // 25th percentile
+            dtb.percentiles.push_back(get_percentile(50));  // 50th percentile (median)
+            dtb.percentiles.push_back(get_percentile(75));  // 75th percentile
+            dtb.percentiles.push_back(get_percentile(90));  // 90th percentile
+            dtb.percentiles.push_back(get_percentile(95));  // 95th percentile
+            dtb.percentiles.push_back(get_percentile(99));  // 99th percentile
+        } else {
+            dtb.percentiles = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+
+        // Set thread ID (for aggregated data, we'll use a generic identifier)
+        dtb.thread_id = "aggregated";
+
+        // Estimate CPU utilization (simplified calculation)
+        dtb.cpu_utilization = dtb.percentage_of_total; // For now, use percentage as proxy
+
+        // Set sample count
+        dtb.total_samples = profile_data.duration_history.size();
+
+        // Set time bounds (these would need to be tracked separately in a full implementation)
+        dtb.first_call_time = std::chrono::steady_clock::time_point{}; // Placeholder
+        dtb.last_call_time = std::chrono::steady_clock::time_point{};  // Placeholder
+
+        detailed_breakdowns.push_back(dtb);
+    }
+
+    // Sort by total time (most time-consuming first)
+    std::sort(detailed_breakdowns.begin(), detailed_breakdowns.end(),
+              [](const DetailedCPUTimeBreakdown& a, const DetailedCPUTimeBreakdown& b) {
+                  return a.total_time_ms > b.total_time_ms;
+              });
+
+    return detailed_breakdowns;
+}
+
 std::map<std::string, double>
 CPUProfiler::get_cpu_time_distribution() const {
     std::map<std::string, double> time_distribution;
@@ -1097,6 +1202,84 @@ std::string CPUProfiler::generate_overhead_analysis_report() const {
         report << "Total profiling time: " << total_time << " ms\n";
         report << "Average time per call: " << (total_time / total_calls) << " ms\n";
     }
+
+    return report.str();
+}
+
+std::string CPUProfiler::generate_detailed_cpu_time_breakdown_report() const {
+    std::ostringstream report;
+    report << "Detailed CPU Time Breakdown Report\n";
+    report << "==================================\n\n";
+
+    auto detailed_breakdowns = get_detailed_cpu_time_breakdown();
+
+    if (detailed_breakdowns.empty()) {
+        report << "No profiling data collected.\n";
+        return report.str();
+    }
+
+    report << std::fixed << std::setprecision(3);
+    report << "Function-Level CPU Time Analysis\n";
+    report << "--------------------------------\n";
+    report << "Function Name                        Calls     Total(ms)  Exclusive(ms)  Inclusive(ms)  Avg(ms)    Min(ms)    Max(ms)    StdDev(ms)  %Total   Samples\n";
+    report << "--------------------------------------------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& breakdown : detailed_breakdowns) {
+        report << std::left << std::setw(35) << breakdown.function_name.substr(0, 34);
+        report << std::right << std::setw(10) << breakdown.call_count;
+        report << std::right << std::setw(11) << breakdown.total_time_ms;
+        report << std::right << std::setw(13) << breakdown.exclusive_time_ms;
+        report << std::right << std::setw(13) << breakdown.inclusive_time_ms;
+        report << std::right << std::setw(9) << breakdown.avg_time_ms;
+        report << std::right << std::setw(9) << breakdown.min_time_ms;
+        report << std::right << std::setw(9) << breakdown.max_time_ms;
+        report << std::right << std::setw(12) << breakdown.std_deviation_ms;
+        report << std::right << std::setw(7) << breakdown.percentage_of_total << "%";
+        report << std::right << std::setw(8) << breakdown.total_samples << "\n";
+    }
+
+    report << "\nPercentile Analysis (Top 10 Functions by Total Time):\n";
+    report << "----------------------------------------------------\n";
+    report << "Function Name                        25th       50th       75th       90th       95th       99th\n";
+    report << "-------------------------------------------------------------------------------------------------------\n";
+
+    // Show percentiles for top 10 functions
+    int count = 0;
+    for (const auto& breakdown : detailed_breakdowns) {
+        if (count++ >= 10) break;
+
+        report << std::left << std::setw(35) << breakdown.function_name.substr(0, 34);
+        if (breakdown.percentiles.size() >= 6) {
+            report << std::right << std::setw(11) << breakdown.percentiles[0];  // 25th
+            report << std::right << std::setw(11) << breakdown.percentiles[1];  // 50th (median)
+            report << std::right << std::setw(11) << breakdown.percentiles[2];  // 75th
+            report << std::right << std::setw(11) << breakdown.percentiles[3];  // 90th
+            report << std::right << std::setw(11) << breakdown.percentiles[4];  // 95th
+            report << std::right << std::setw(11) << breakdown.percentiles[5];  // 99th
+        }
+        report << "\n";
+    }
+
+    // Highlight the most expensive functions
+    report << "\nMost CPU-Intensive Functions (>1% of total CPU time):\n";
+    report << "----------------------------------------------------\n";
+    for (const auto& breakdown : detailed_breakdowns) {
+        if (breakdown.percentage_of_total > 1.0) {
+            report << "- " << breakdown.function_name << ": " << breakdown.percentage_of_total
+                   << "% of total CPU time (" << breakdown.total_time_ms << " ms total, "
+                   << breakdown.call_count << " calls)\n";
+        }
+    }
+
+    // Summary statistics
+    auto stats = get_profiling_stats();
+    report << "\nSummary Statistics:\n";
+    report << "-------------------\n";
+    report << "Total functions profiled: " << stats.unique_functions << "\n";
+    report << "Total calls: " << stats.total_calls << "\n";
+    report << "Total CPU time: " << stats.total_time_ms << " ms\n";
+    report << "Average time per call: " << stats.avg_time_per_call_ms << " ms\n";
+    report << "Active profiling: " << (stats.is_active ? "Yes" : "No") << "\n";
 
     return report.str();
 }

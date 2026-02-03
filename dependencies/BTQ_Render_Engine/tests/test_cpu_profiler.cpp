@@ -90,13 +90,29 @@ int main() {
     std::cout << "\nFinal report after multi-threaded test:\n";
     std::string final_report = g_cpu_profiler.generate_report();
     std::cout << final_report << std::endl;
-    
+
+    // Test the new detailed CPU time breakdown functionality
+    std::cout << "\nTesting detailed CPU time breakdown functionality:\n";
+    std::string detailed_report = g_cpu_profiler.generate_detailed_cpu_time_breakdown_report();
+    std::cout << detailed_report << std::endl;
+
+    // Get detailed CPU time breakdown data
+    auto detailed_breakdown = g_cpu_profiler.get_detailed_cpu_time_breakdown();
+    std::cout << "\nDetailed CPU Time Breakdown (Top 5 functions):\n";
+    for (size_t i = 0; i < std::min(size_t(5), detailed_breakdown.size()); ++i) {
+        const auto& breakdown = detailed_breakdown[i];
+        std::cout << "- " << breakdown.function_name
+                  << ": " << breakdown.total_time_ms << " ms total, "
+                  << breakdown.call_count << " calls, "
+                  << breakdown.percentage_of_total << "% of total CPU time\n";
+    }
+
     // Reset profiler
     g_cpu_profiler.reset();
     std::cout << "Profiler reset. Report after reset:\n";
     std::cout << g_cpu_profiler.generate_report() << std::endl;
-    
+
     std::cout << "CPU Profiler Test Completed Successfully!\n";
-    
+
     return 0;
 }

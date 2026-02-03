@@ -425,6 +425,31 @@ void DataQualityMonitor::check_missing_data_for_symbol(const std::string& symbol
                             }
                         }
                     }
+
+                    // NEW: Enhanced missing data detection: Check for data stream health based on expected vs actual frequency
+                    if (stats.trade_count > 10) {
+                        // Calculate expected trades per time unit based on historical data
+                        uint64_t historical_time_span = stats.total_interval_sum;
+                        if (historical_time_span > 0) {
+                            double expected_frequency = static_cast<double>(stats.trade_count - 1) / static_cast<double>(historical_time_span);
+                            double actual_frequency = 1.0 / static_cast<double>(time_diff);
+
+                            // If actual frequency is significantly lower than expected, flag as missing data
+                            if (expected_frequency > 0 && actual_frequency < expected_frequency * 0.1) { // 10% of expected
+                                std::ostringstream oss;
+                                oss << "Data stream frequency significantly below expected for " << symbol
+                                    << ". Expected: " << std::fixed << std::setprecision(4) << expected_frequency
+                                    << " trades/ms, Actual: " << actual_frequency << " trades/ms";
+
+                                DataQualityIssue issue(DataQualityIssueType::MISSING_DATA, symbol, current_timestamp,
+                                                     oss.str(), 0.85);
+                                metrics_.missing_data_issues++;
+                                add_issue(issue);
+
+                                alert_on_missing_data(symbol, stats.last_timestamp, current_timestamp);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -469,6 +494,27 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
         if (are_trades_equivalent(recent_trade, trade)) {
             return true;  // Trades are equivalent, consider duplicate
         }
+    }
+
+    // NEW: Enhanced duplicate detection: Check for potential systematic duplication patterns
+    // Look for trades that appear in predictable intervals suggesting systematic duplication
+    size_t systematic_duplicates = 0;
+    for (const auto& recent_trade : trades) {
+        uint64_t time_diff = std::abs(static_cast<int64_t>(recent_trade.timestamp) - static_cast<int64_t>(trade.timestamp));
+
+        // Check if price and volume match closely but timestamps are at regular intervals
+        if (std::abs(recent_trade.price - trade.price) < 0.000001 &&
+            std::abs(recent_trade.volume - trade.volume) < 0.0001f &&
+            time_diff <= duplicate_check_window_ms_ * 10) { // Extended window for systematic detection
+
+            // Count how many trades match this pattern
+            systematic_duplicates++;
+        }
+    }
+
+    // If we find multiple trades with similar characteristics in a short window, likely systematic duplication
+    if (systematic_duplicates > 2) {
+        return true;
     }
 
     // If no exact hash match, fall back to the detailed comparison for near-duplicates

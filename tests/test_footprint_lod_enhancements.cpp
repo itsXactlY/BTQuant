@@ -88,6 +88,44 @@ int main() {
                                                                focus_radius_inner, focus_radius_outer);
     std::cout << "Foveated LOD Level (distant focus): " << static_cast<int>(foveated_lod_distant) << std::endl;
 
-    std::cout << "\nAll tests completed successfully!" << std::endl;
+    // Test new zoom-specific LOD functionality
+    std::cout << "\nTesting New Zoom-Specific LOD Features:" << std::endl;
+
+    // Test zoom-out LOD calculation
+    auto zoom_out_lod = lod_system.calculateZoomOutLOD(10.0f, 10.0f, 0.1f);
+    std::cout << "Zoom-out LOD Level (0.1 zoom): " << static_cast<int>(zoom_out_lod) << std::endl;
+
+    // Test zoom-in LOD calculation
+    auto zoom_in_lod = lod_system.calculateZoomInLOD(10.0f, 10.0f, 4.0f);
+    std::cout << "Zoom-in LOD Level (4.0 zoom): " << static_cast<int>(zoom_in_lod) << std::endl;
+
+    // Test zoom-specific render settings
+    auto zoom_out_settings = lod_system.getZoomOutOptimizedRenderSettings(BTQuant::Rendering::LODLevel::HIGH_DETAIL, 0.2f);
+    std::cout << "Zoom-out optimized settings - render_text: " << zoom_out_settings.render_text
+              << ", render_labels: " << zoom_out_settings.render_labels << std::endl;
+
+    auto zoom_in_settings = lod_system.getZoomInEnhancedRenderSettings(BTQuant::Rendering::LODLevel::MEDIUM_DETAIL, 3.0f);
+    std::cout << "Zoom-in enhanced settings - render_text: " << zoom_in_settings.render_text
+              << ", render_detailed_annotations: " << zoom_in_settings.render_detailed_annotations
+              << ", border_thickness: " << zoom_in_settings.border_thickness << std::endl;
+
+    // Test adaptive zoom LOD calculation
+    auto adaptive_lod = lod_system.calculateAdaptiveZoomLOD(10.0f, 10.0f, 0.1f, 800.0f, 600.0f, 10000);
+    std::cout << "Adaptive zoom LOD Level (high density): " << static_cast<int>(adaptive_lod) << std::endl;
+
+    auto adaptive_lod_sparse = lod_system.calculateAdaptiveZoomLOD(10.0f, 10.0f, 3.0f, 800.0f, 600.0f, 100);
+    std::cout << "Adaptive zoom LOD Level (sparse, zoomed in): " << static_cast<int>(adaptive_lod_sparse) << std::endl;
+
+    // Test adaptive zoom render settings
+    auto adaptive_settings = lod_system.getAdaptiveZoomRenderSettings(BTQuant::Rendering::LODLevel::HIGH_DETAIL, 0.1f, 10000);
+    std::cout << "Adaptive zoom settings (high density) - render_text: " << adaptive_settings.render_text
+              << ", alpha_multiplier: " << adaptive_settings.alpha_multiplier << std::endl;
+
+    auto adaptive_settings_sparse = lod_system.getAdaptiveZoomRenderSettings(BTQuant::Rendering::LODLevel::MEDIUM_DETAIL, 3.0f, 100);
+    std::cout << "Adaptive zoom settings (sparse, zoomed in) - render_detailed_annotations: "
+              << adaptive_settings_sparse.render_detailed_annotations
+              << ", border_thickness: " << adaptive_settings_sparse.border_thickness << std::endl;
+
+    std::cout << "\nAll enhanced LOD tests completed successfully!" << std::endl;
     return 0;
 }

@@ -284,6 +284,51 @@ public:
                                float focus_radius_inner,
                                float focus_radius_outer) const;
 
+    // Calculate LOD level specifically optimized for zoomed-out views
+    LODLevel calculateZoomOutLOD(float cell_width_px, float cell_height_px,
+                               float zoom_factor) const;
+
+    // Calculate LOD level specifically optimized for zoomed-in views
+    LODLevel calculateZoomInLOD(float cell_width_px, float cell_height_px,
+                              float zoom_factor) const;
+
+    // Get render settings optimized for zoomed-out views
+    LODRenderSettings getZoomOutOptimizedRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Get render settings enhanced for zoomed-in views
+    LODRenderSettings getZoomInEnhancedRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply zoom-aware LOD to cell rendering (combines zoom-out and zoom-in optimizations)
+    void applyZoomInOutLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel) const;
+
+    // Calculate adaptive zoom LOD considering both zoom level and cell density
+    LODLevel calculateAdaptiveZoomLOD(float cell_width_px, float cell_height_px,
+                                   float zoom_factor, float view_width, float view_height,
+                                   int total_cells_in_view) const;
+
+    // Get adaptive zoom render settings based on zoom level and cell count
+    LODRenderSettings getAdaptiveZoomRenderSettings(LODLevel lod_level,
+                                               float zoom_factor,
+                                               int total_cells_in_view) const;
+
+    // Apply adaptive zoom LOD to cell rendering considering view parameters and cell density
+    void applyAdaptiveZoomLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel,
+                                   float view_width,
+                                   float view_height,
+                                   int total_cells_in_view) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

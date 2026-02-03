@@ -173,6 +173,15 @@ public:
     // Ultimate optimization that combines multiple techniques to minimize GPU overhead
     void ultimateBatchOptimization();
 
+    // Ultra-efficient batch consolidation that uses advanced algorithms to minimize draw calls
+    void ultraEfficientConsolidateBatches();
+
+    // Advanced geometry batching with spatial coherence optimization for order book rendering
+    void batchGeometrySpatiallyCoherent(const std::vector<OrderbookElementData>& elements);
+
+    // Maximum throughput batching that prioritizes highest possible batching efficiency
+    void maximumThroughputBatching(const std::vector<OrderbookElementData>& elements);
+
 private:
     std::vector<OrderbookBatchElement> batches_;
 

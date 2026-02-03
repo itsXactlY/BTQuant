@@ -39,11 +39,20 @@ public:
         bool valid;
     };
 
+    // Cache for font sizes to avoid repeated calculations
+    struct CachedFontSize {
+        ImVec2 size;
+        ImFont* font;
+        float scale;
+        bool valid;
+    };
+
 private:
     // Use string content as key for reliable caching - handles string literals properly
     std::unordered_map<std::string, CachedTextSize> text_size_cache_;
     std::unordered_map<uint64_t, ImU32> color_cache_;  // Using uint64_t key for better performance
     std::unordered_map<std::string, CachedTextSize> text_size_cache_by_params_;
+    std::unordered_map<uint64_t, CachedFontSize> font_size_cache_;
     CachedStyle current_style_cache_;
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
@@ -103,6 +112,37 @@ public:
     }
 
     /**
+     * Get cached font size for a specific font and scale
+     */
+    ImVec2 get_cached_font_size(ImFont* font, float scale = 1.0f) {
+        if (!font) return ImVec2(0, 0);
+
+        // Create a unique key combining font pointer and scale
+        uint64_t font_key = (reinterpret_cast<uintptr_t>(font) << 32) |
+                           static_cast<uint32_t>(static_cast<int32_t>(scale * 1000000) & 0xFFFFFFFF);
+
+        auto it = font_size_cache_.find(font_key);
+        if (it != font_size_cache_.end() && it->second.valid) {
+            return it->second.size;
+        }
+
+        // Temporarily set font and get its size
+        ImFont* current_font = ImGui::GetFont();
+        if (current_font != font) {
+            ImGui::PushFont(font);
+        }
+
+        ImVec2 size = ImVec2(font->FontSize * scale, font->FontSize * scale);
+
+        if (current_font != font) {
+            ImGui::PopFont();
+        }
+
+        font_size_cache_[font_key] = {size, font, scale, true};
+        return size;
+    }
+
+    /**
      * Invalidate expired cache entries
      * Optimized to reduce iteration overhead
      */
@@ -127,6 +167,13 @@ public:
                 ++it;
             }
         }
+
+        // Clean up font size cache
+        for (auto it = font_size_cache_.begin(); it != font_size_cache_.end();) {
+            // Font cache doesn't use timestamps, so we'll clear it differently
+            // For now, we'll keep it simple and not expire font cache based on time
+            ++it;
+        }
     }
 
     /**
@@ -135,6 +182,13 @@ public:
     void clear_text_cache() {
         text_size_cache_.clear();
         text_size_cache_by_params_.clear();
+    }
+
+    /**
+     * Clear font cache
+     */
+    void clear_font_cache() {
+        font_size_cache_.clear();
     }
 
     /**
@@ -190,6 +244,7 @@ public:
     void clear_all_cache() {
         clear_text_cache();
         clear_color_cache();
+        clear_font_cache();
     }
 };
 
@@ -224,6 +279,16 @@ public:
         } else {
             return state_cache_.get_cached_color_with_alpha(idx, alpha_mul);
         }
+    }
+
+    /**
+     * Optimized version of ImGui::GetFont to cache font sizes
+     */
+    static ImVec2 GetFontSizeOptimized(ImFont* font = nullptr, float scale = 1.0f) {
+        if (!font) {
+            font = ImGui::GetFont();
+        }
+        return state_cache_.get_cached_font_size(font, scale);
     }
 
     /**
@@ -550,6 +615,16 @@ public:
     }
 
     /**
+     * Conditional rendering that skips if window is not active or collapsed
+     */
+    template<typename Func>
+    static void SkipIfNotActive(Func func) {
+        if (IsWindowActive() && !IsWindowCollapsed()) {
+            func();
+        }
+    }
+
+    /**
      * Update cache periodically
      */
     static void UpdateCache() {
@@ -561,6 +636,55 @@ public:
      */
     static void ClearCache() {
         state_cache_.clear_all_cache();
+    }
+
+    /**
+     * Optimized button that checks visibility before rendering
+     */
+    static bool ButtonOptimized(const char* label, const ImVec2& size = ImVec2(0, 0)) {
+        if (!IsWindowActive() || !IsItemVisible()) return false;
+        return ImGui::Button(label, size);
+    }
+
+    /**
+     * Optimized small button that checks visibility before rendering
+     */
+    static bool SmallButtonOptimized(const char* label) {
+        if (!IsWindowActive() || !IsItemVisible()) return false;
+        return ImGui::SmallButton(label);
+    }
+
+    /**
+     * Optimized invisible button that checks visibility before rendering
+     */
+    static bool InvisibleButtonOptimized(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags = 0) {
+        if (!IsWindowActive() || !IsItemVisible()) return false;
+        return ImGui::InvisibleButton(str_id, size, flags);
+    }
+
+    /**
+     * Optimized checkbox that checks visibility before rendering
+     */
+    static bool CheckboxOptimized(const char* label, bool* v) {
+        if (!IsWindowActive() || !IsItemVisible()) return false;
+        return ImGui::Checkbox(label, v);
+    }
+
+    /**
+     * Optimized slider float that checks visibility before rendering
+     */
+    static bool SliderFloatOptimized(const char* label, float* v, float v_min, float v_max,
+                                   const char* format = "%.3f", ImGuiSliderFlags flags = 0) {
+        if (!IsWindowActive() || !IsItemVisible()) return false;
+        return ImGui::SliderFloat(label, v, v_min, v_max, format, flags);
+    }
+
+    /**
+     * Optimized progress bar that checks visibility before rendering
+     */
+    static void ProgressBarOptimized(float fraction, const ImVec2& size_arg = ImVec2(-FLT_MIN, 0.0f), const char* overlay = nullptr) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+        ImGui::ProgressBar(fraction, size_arg, overlay);
     }
 
     /**
@@ -640,6 +764,10 @@ namespace ImGuiOptimizer {
     ImVec2 CalcTextSize(const char* text, const char* text_end,
                         bool hide_text_after_double_hash, float wrap_width) {
         return optimizer_instance.CalcTextSizeOptimized(text, text_end, hide_text_after_double_hash, wrap_width);
+    }
+
+    ImVec2 GetFontSize(ImFont* font, float scale) {
+        return optimizer_instance.GetFontSizeOptimized(font, scale);
     }
 
     ImU32 GetColorU32(ImGuiCol idx, float alpha_mul) {
@@ -754,6 +882,31 @@ namespace ImGuiOptimizer {
         optimizer_instance.TableNextColumnOptimized();
     }
 
+    bool ButtonOptimized(const char* label, const ImVec2& size) {
+        return optimizer_instance.ButtonOptimized(label, size);
+    }
+
+    bool SmallButtonOptimized(const char* label) {
+        return optimizer_instance.SmallButtonOptimized(label);
+    }
+
+    bool InvisibleButtonOptimized(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags) {
+        return optimizer_instance.InvisibleButtonOptimized(str_id, size, flags);
+    }
+
+    bool CheckboxOptimized(const char* label, bool* v) {
+        return optimizer_instance.CheckboxOptimized(label, v);
+    }
+
+    bool SliderFloatOptimized(const char* label, float* v, float v_min, float v_max,
+                             const char* format, ImGuiSliderFlags flags) {
+        return optimizer_instance.SliderFloatOptimized(label, v, v_min, v_max, format, flags);
+    }
+
+    void ProgressBarOptimized(float fraction, const ImVec2& size_arg, const char* overlay) {
+        optimizer_instance.ProgressBarOptimized(fraction, size_arg, overlay);
+    }
+
     void TextOptimized(const char* fmt, ...) {
         if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
 
@@ -791,6 +944,11 @@ namespace ImGuiOptimizer {
         if (!optimizer_instance.IsWindowCollapsed()) {
             func();
         }
+    }
+
+    template<typename Func>
+    void SkipIfNotActive(Func func) {
+        optimizer_instance.SkipIfNotActive(func);
     }
 
     // Additional utility functions for performance optimization

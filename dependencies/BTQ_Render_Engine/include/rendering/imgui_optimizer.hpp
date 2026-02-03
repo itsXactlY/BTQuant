@@ -27,6 +27,11 @@ namespace ImGuiOptimizer {
                         float wrap_width = -1.0f);
 
     /**
+     * Optimized version of ImGui::GetFontSize that caches results
+     */
+    ImVec2 GetFontSize(ImFont* font = nullptr, float scale = 1.0f);
+
+    /**
      * Optimized version of ImGui::GetColorU32 that caches results
      */
     ImU32 GetColorU32(ImGuiCol idx, float alpha_mul = 1.0f);
@@ -207,6 +212,43 @@ namespace ImGuiOptimizer {
      */
     template<typename Func>
     void SkipIfCollapsed(Func func);
+
+    /**
+     * Conditional rendering that skips if window is not active or collapsed
+     */
+    template<typename Func>
+    void SkipIfNotActive(Func func);
+
+    /**
+     * Optimized button that checks visibility before rendering
+     */
+    bool ButtonOptimized(const char* label, const ImVec2& size = ImVec2(0, 0));
+
+    /**
+     * Optimized small button that checks visibility before rendering
+     */
+    bool SmallButtonOptimized(const char* label);
+
+    /**
+     * Optimized invisible button that checks visibility before rendering
+     */
+    bool InvisibleButtonOptimized(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags = 0);
+
+    /**
+     * Optimized checkbox that checks visibility before rendering
+     */
+    bool CheckboxOptimized(const char* label, bool* v);
+
+    /**
+     * Optimized slider float that checks visibility before rendering
+     */
+    bool SliderFloatOptimized(const char* label, float* v, float v_min, float v_max,
+                             const char* format = "%.3f", ImGuiSliderFlags flags = 0);
+
+    /**
+     * Optimized progress bar that checks visibility before rendering
+     */
+    void ProgressBarOptimized(float fraction, const ImVec2& size_arg = ImVec2(-FLT_MIN, 0.0f), const char* overlay = nullptr);
 }
 
 } // namespace Rendering

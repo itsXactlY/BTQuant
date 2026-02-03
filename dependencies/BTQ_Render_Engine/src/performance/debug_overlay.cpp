@@ -291,6 +291,22 @@ void DebugOverlay::render() {
     ImGui::Text("Trade Updates: %s", format_large_number(trade_updates_).c_str());
     ImGui::Text("Footprint Cells: %s", format_large_number(footprint_cells_rendered_).c_str());
 
+    // Additional performance metrics
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== ADDITIONAL METRICS ===");
+
+    // Thread count information (if available)
+    ImGui::Text("Threads: %d", static_cast<int>(std::thread::hardware_concurrency()));
+
+    // Additional memory tracker metrics
+    size_t total_allocated = mem_tracker.getTotalAllocatedBytes();
+    size_t total_deallocated = mem_tracker.getTotalDeallocatedBytes();
+    size_t current_alloc_count = mem_tracker.getCurrentAllocationCount();
+
+    ImGui::Text("Total Allocated: %s", format_bytes(total_allocated).c_str());
+    ImGui::Text("Total Deallocated: %s", format_bytes(total_deallocated).c_str());
+    ImGui::Text("Active Allocations: %zu", current_alloc_count);
+
     // Close the window
     ImGui::End();
 }

@@ -107,7 +107,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
                     [&trades, min_price, bin_size, resolution, &thread_results, chunk_size](const std::pair<size_t, size_t>& range) {
                         size_t start = range.first;
                         size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
+                        size_t thread_id = start / chunk_size; // Calculate correct thread_id
 
                         for (size_t i = start; i < end; ++i) {
                             const auto& trade = trades[i];
@@ -679,13 +679,15 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
                         size_t chunk_end = range.second;
 
                         for (size_t i = chunk_start; i < chunk_end; ++i) {
-                            size_t start_idx = i + period - sma_values.size(); // Adjust index to align with original prices
+                            size_t start_idx = i; // sma_values[i] corresponds to window starting at prices[i]
 
                             // Calculate variance for the corresponding window
                             double sum_sq_diff = 0.0;
                             for (int j = 0; j < period; ++j) {
-                                double diff = prices[start_idx + j] - sma_values[i];
-                                sum_sq_diff += diff * diff;
+                                if ((start_idx + j) < prices.size()) {
+                                    double diff = prices[start_idx + j] - sma_values[i];
+                                    sum_sq_diff += diff * diff;
+                                }
                             }
                             double variance = sum_sq_diff / period;
                             double std_dev = std::sqrt(variance);
@@ -697,7 +699,7 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
             } else {
                 // Sequential processing for smaller datasets
                 for (size_t i = 0; i < sma_values.size(); ++i) {
-                    size_t start_idx = i + period - sma_values.size(); // Adjust index to align with original prices
+                    size_t start_idx = i; // The SMA at index i corresponds to the window ending at index i+period-1
 
                     // Calculate variance for the corresponding window
                     double sum_sq_diff = 0.0;
@@ -1035,6 +1037,147 @@ std::future<std::vector<std::pair<double, double>>> TaskScheduler::calculate_his
             }
 
             promise->set_value(std::move(histogram));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Additional utility methods for parallel processing
+
+std::future<std::vector<double>> TaskScheduler::transform_data_parallel_async(
+    const std::vector<double>& input,
+    std::function<double(double)> transform_func) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([input, transform_func, promise]() {
+        try {
+            std::vector<double> result(input.size());
+
+            if (input.size() > 10000) {
+                // Use parallel execution for large datasets
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), input.size());
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::pair<size_t, size_t>> ranges;
+                size_t chunk_size = input.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? input.size() : (t + 1) * chunk_size;
+                    ranges.push_back({start, end});
+                }
+
+                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
+                    [&input, &result, &transform_func](const std::pair<size_t, size_t>& range) {
+                        size_t start = range.first;
+                        size_t end = range.second;
+
+                        for (size_t i = start; i < end; ++i) {
+                            result[i] = transform_func(input[i]);
+                        }
+                    });
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i < input.size(); ++i) {
+                    result[i] = transform_func(input[i]);
+                }
+            }
+
+            promise->set_value(std::move(result));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_moving_average_async(
+    const std::vector<double>& prices,
+    int period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([prices, period, promise]() {
+        try {
+            std::vector<double> ma_values;
+
+            if (prices.size() < static_cast<size_t>(period)) {
+                ma_values.resize(prices.size());
+                promise->set_value(std::move(ma_values));
+                return;
+            }
+
+            ma_values.reserve(prices.size() - period + 1);
+
+            // Calculate initial sum for the first period
+            double sum = 0.0;
+            for (int i = 0; i < period; ++i) {
+                sum += prices[i];
+            }
+            ma_values.push_back(sum / period);
+
+            // Use parallel algorithm for large datasets
+            if (prices.size() > 10000) {
+                size_t num_threads = std::thread::hardware_concurrency();
+                if (num_threads < 2) num_threads = 2;
+
+                size_t start_idx = period;
+                size_t total_elements = prices.size() - start_idx;
+
+                if (total_elements >= num_threads) {
+                    ma_values.resize(prices.size() - period + 1);
+
+                    std::vector<std::thread> processing_threads;
+                    size_t chunk_size = total_elements / num_threads;
+
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        size_t chunk_start = start_idx + t * chunk_size;
+                        size_t chunk_end = (t == num_threads - 1) ? prices.size() : start_idx + (t + 1) * chunk_size;
+
+                        processing_threads.emplace_back([chunk_start, chunk_end, &prices, period, &ma_values]() {
+                            double local_sum = 0.0;
+
+                            // Calculate the initial sum for this chunk's starting point
+                            size_t initial_pos = chunk_start - period;
+                            local_sum = 0.0;
+                            for (int k = 0; k < period; ++k) {
+                                local_sum += prices[initial_pos + k];
+                            }
+
+                            for (size_t i = chunk_start; i < chunk_end; ++i) {
+                                // Update the sum using the sliding window technique
+                                local_sum += prices[i] - prices[i - period];
+                                ma_values[i - period + 1] = local_sum / period;
+                            }
+                        });
+                    }
+
+                    for (auto& thread : processing_threads) {
+                        thread.join();
+                    }
+                } else {
+                    // Sequential processing for smaller datasets
+                    for (size_t i = period; i < prices.size(); ++i) {
+                        sum += prices[i] - prices[i - period];
+                        ma_values.push_back(sum / period);
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = period; i < prices.size(); ++i) {
+                    sum += prices[i] - prices[i - period];
+                    ma_values.push_back(sum / period);
+                }
+            }
+
+            promise->set_value(std::move(ma_values));
         } catch (...) {
             promise->set_exception(std::current_exception());
         }

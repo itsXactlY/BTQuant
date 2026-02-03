@@ -86,8 +86,17 @@ public:
         std::function<bool(const Trade&)> filter_func);
 
     std::future<std::vector<std::pair<double, double>>> calculate_histogram_async(
-        const std::vector<double>& values, 
+        const std::vector<double>& values,
         int num_bins);
+
+    // Additional utility methods for parallel processing
+    std::future<std::vector<double>> transform_data_parallel_async(
+        const std::vector<double>& input,
+        std::function<double(double)> transform_func);
+
+    std::future<std::vector<double>> calculate_moving_average_async(
+        const std::vector<double>& prices,
+        int period);
 
 private:
     void worker_loop();

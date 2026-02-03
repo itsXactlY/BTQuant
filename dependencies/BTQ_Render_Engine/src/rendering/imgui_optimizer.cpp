@@ -15,6 +15,7 @@
 #include <memory>
 #include <sstream>
 #include <cstdint>
+#include <mutex>
 
 namespace BTQuant {
 namespace Rendering {
@@ -51,18 +52,38 @@ private:
         bool valid;
     };
 
+    // Cache for cursor positions to avoid redundant SetCursorPos calls
+    struct CachedCursorPosition {
+        ImVec2 position;
+        bool valid;
+    };
+
+    // Cache for window positions and sizes
+    struct CachedWindowInfo {
+        ImVec2 pos;
+        ImVec2 size;
+        bool visible;
+        float timestamp;
+        bool valid;
+    };
+
 private:
     // Use string content as key for reliable caching - handles string literals properly
     std::unordered_map<std::string, CachedTextSize> text_size_cache_;
     std::unordered_map<uint64_t, ImU32> color_cache_;  // Using uint64_t key for better performance
     std::unordered_map<std::string, CachedTextSize> text_size_cache_by_params_;
     std::unordered_map<uint64_t, CachedFontSize> font_size_cache_;
+    std::unordered_map<std::string, CachedCursorPosition> cursor_pos_cache_;
+    std::unordered_map<std::string, CachedWindowInfo> window_info_cache_;
     CachedStyle current_style_cache_;
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
 
     // Pre-allocated buffers to reduce allocations
     mutable std::string temp_key_buffer_;
+
+    // Mutex for thread safety
+    mutable std::mutex cache_mutex_;
 
 public:
     ImGuiStateCache() {
@@ -75,6 +96,8 @@ public:
      */
     ImVec2 get_cached_text_size(const char* text) {
         if (!text) return ImVec2(0, 0);
+
+        std::lock_guard<std::mutex> lock(cache_mutex_);
 
         // Check if ImGui context has changed
         if (ImGui::GetCurrentContext() != imgui_context_) {
@@ -108,6 +131,8 @@ public:
                                    float wrap_width) {
         if (!text) return ImVec2(0, 0);
 
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
         // Create a unique key combining all parameters for reliable caching
         // Use pre-allocated buffer to reduce allocations
         temp_key_buffer_.clear();
@@ -137,6 +162,8 @@ public:
     ImVec2 get_cached_font_size(ImFont* font, float scale = 1.0f) {
         if (!font) return ImVec2(0, 0);
 
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
         // Check if ImGui context has changed
         if (ImGui::GetCurrentContext() != imgui_context_) {
             // Context changed, clear cache and update reference
@@ -154,7 +181,7 @@ public:
         }
 
         // Calculate font size directly without pushing/popping
-        ImVec2 size = ImVec2(font->FontSize * scale, font->FontSize * scale);
+        ImVec2 size = ImVec2(ImGui::GetFontSize() * scale, ImGui::GetFontSize() * scale);
 
         font_size_cache_[font_key] = {size, font, scale, true};
         return size;
@@ -221,6 +248,8 @@ public:
      * Get cached color or compute it
      */
     ImU32 get_cached_color(ImGuiCol idx) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
         // Check if ImGui context has changed
         if (ImGui::GetCurrentContext() != imgui_context_) {
             // Context changed, clear cache and update reference
@@ -248,6 +277,8 @@ public:
      * Improved key generation to reduce collision risk
      */
     ImU32 get_cached_color_with_alpha(ImGuiCol idx, float alpha_mul) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
         // Check if ImGui context has changed
         if (ImGui::GetCurrentContext() != imgui_context_) {
             // Context changed, clear cache and update reference
@@ -279,12 +310,60 @@ public:
     }
 
     /**
+     * Get cached cursor position or set it if not cached
+     */
+    bool get_cached_cursor_pos(const std::string& widget_id, ImVec2& pos) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
+        auto it = cursor_pos_cache_.find(widget_id);
+        if (it != cursor_pos_cache_.end() && it->second.valid) {
+            pos = it->second.position;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Set cached cursor position
+     */
+    void set_cached_cursor_pos(const std::string& widget_id, const ImVec2& pos) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        cursor_pos_cache_[widget_id] = {pos, true};
+    }
+
+    /**
+     * Get cached window information
+     */
+    bool get_cached_window_info(const std::string& window_id, CachedWindowInfo& info) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
+        auto it = window_info_cache_.find(window_id);
+        if (it != window_info_cache_.end() && it->second.valid) {
+            info = it->second;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Set cached window information
+     */
+    void set_cached_window_info(const std::string& window_id, const ImVec2& pos,
+                               const ImVec2& size, bool visible) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        window_info_cache_[window_id] = {pos, size, visible, static_cast<float>(ImGui::GetTime()), true};
+    }
+
+    /**
      * Clear all caches
      */
     void clear_all_cache() {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
         clear_text_cache();
         clear_color_cache();
         clear_font_cache();
+        cursor_pos_cache_.clear();
+        window_info_cache_.clear();
     }
 };
 
@@ -680,6 +759,30 @@ public:
     }
 
     /**
+     * Optimized SetCursorPos that avoids redundant calls
+     */
+    static void SetCursorPosOptimized(const ImVec2& pos, const char* widget_id = nullptr) {
+        if (!IsWindowActive()) return;
+
+        if (widget_id) {
+            ImVec2 cached_pos;
+            if (state_cache_.get_cached_cursor_pos(widget_id, cached_pos)) {
+                // Only set cursor position if it's different from cached position
+                if (cached_pos.x != pos.x || cached_pos.y != pos.y) {
+                    ImGui::SetCursorPos(pos);
+                    state_cache_.set_cached_cursor_pos(widget_id, pos);
+                }
+            } else {
+                ImGui::SetCursorPos(pos);
+                state_cache_.set_cached_cursor_pos(widget_id, pos);
+            }
+        } else {
+            // Without widget ID, just call SetCursorPos normally
+            ImGui::SetCursorPos(pos);
+        }
+    }
+
+    /**
      * Optimized button that checks visibility before rendering
      */
     static bool ButtonOptimized(const char* label, const ImVec2& size = ImVec2(0, 0)) {
@@ -807,6 +910,45 @@ public:
         if (!IsWindowActive() || !IsItemVisible()) return;
 
         ImGui::TextDisabledV(fmt, args);
+    }
+
+    /**
+     * Optimized text rendering with position caching to avoid redundant SetCursorPos calls
+     */
+    static void TextAtPositionOptimized(const char* text, const ImVec2& pos, const char* widget_id = nullptr) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        if (widget_id) {
+            SetCursorPosOptimized(pos, widget_id);
+        } else {
+            ImGui::SetCursorPos(pos);
+        }
+
+        ImGui::TextUnformatted(text);
+    }
+
+    /**
+     * Optimized same-line positioning with caching
+     */
+    static void SameLineOptimized(float offset_from_start_x = 0.0f, float spacing = -1.0f, const char* widget_id = nullptr) {
+        if (!IsWindowActive()) return;
+
+        // Cache the same line operation if widget_id is provided
+        if (widget_id) {
+            std::string cache_key = std::string(widget_id) + "_sameline";
+            ImVec2 cached_pos;
+            if (state_cache_.get_cached_cursor_pos(cache_key, cached_pos)) {
+                // Only call SameLine if the parameters differ from the last call
+                // For simplicity, we'll just call SameLine since it's lightweight
+                ImGui::SameLine(offset_from_start_x, spacing);
+            } else {
+                ImGui::SameLine(offset_from_start_x, spacing);
+                // Store a dummy position to indicate this widget has been processed
+                state_cache_.set_cached_cursor_pos(cache_key, ImVec2(offset_from_start_x, spacing));
+            }
+        } else {
+            ImGui::SameLine(offset_from_start_x, spacing);
+        }
     }
 
     /**
@@ -1016,10 +1158,33 @@ namespace ImGuiOptimizer {
     // Additional utility functions for performance optimization
 
     /**
+     * Optimized SetCursorPos that avoids redundant calls
+     */
+    void SetCursorPosOptimized(const ImVec2& pos, const char* widget_id) {
+        optimizer_instance.SetCursorPosOptimized(pos, widget_id);
+    }
+
+    /**
+     * Optimized text rendering with position caching
+     */
+    void TextAtPositionOptimized(const char* text, const ImVec2& pos, const char* widget_id) {
+        optimizer_instance.TextAtPositionOptimized(text, pos, widget_id);
+    }
+
+    /**
+     * Optimized SameLine with caching
+     */
+    void SameLineOptimized(float offset_from_start_x, float spacing, const char* widget_id) {
+        optimizer_instance.SameLineOptimized(offset_from_start_x, spacing, widget_id);
+    }
+
+    // Additional utility functions for performance optimization
+
+    /**
      * Begin a child window only if it's visible
      */
     bool BeginChildConditional(const char* str_id, const ImVec2& size, bool border, ImGuiWindowFlags flags) {
-        if (!IsWindowActive()) return false;
+        if (!optimizer_instance.IsWindowActive()) return false;
         return ImGui::BeginChild(str_id, size, border, flags);
     }
 
@@ -1027,7 +1192,7 @@ namespace ImGuiOptimizer {
      * Render text only if it's going to be visible
      */
     void TextVisible(const char* fmt, ...) {
-        if (!IsItemVisible()) return;
+        if (!optimizer_instance.IsItemVisible()) return;
 
         va_list args;
         va_start(args, fmt);

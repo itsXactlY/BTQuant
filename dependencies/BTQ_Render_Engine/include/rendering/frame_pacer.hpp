@@ -157,6 +157,8 @@ private:
     double calculate_frame_time_trend() const;
     void apply_advanced_spike_smoothing(double current_frame_time);
     void apply_dropped_frame_recovery();
+    void apply_frame_pacing_consistency_check();
+    void apply_performance_recovery();
 };
 
 } // namespace RenderEngine

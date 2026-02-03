@@ -148,6 +148,11 @@ void FramePacer::wait_for_next_frame() {
 
     // Update frame timer
     frame_timer_.last_frame_time = std::chrono::high_resolution_clock::now();
+
+    // Apply frame pacing consistency improvements
+    if (config_.enable_frame_smoothing) {
+        apply_frame_pacing_consistency_check();
+    }
 }
 
 FramePacer::Stats FramePacer::get_stats() const {
@@ -499,8 +504,50 @@ void FramePacer::check_dropped_frames(double frame_time_us) {
         }
     }
 
-    // Check if frame time exceeds adaptive threshold
+    // Enhanced dropped frame detection using multiple criteria
+    bool is_dropped_frame = false;
+
+    // Primary check: frame time exceeds adaptive threshold
     if (frame_time_us > adaptive_threshold) {
+        is_dropped_frame = true;
+    }
+
+    // Secondary check: compare against statistical outliers
+    if (frame_count_ > 15) {
+        // Calculate statistical measures to detect outliers
+        std::vector<double> recent_frame_times;
+        size_t samples_to_analyze = std::min(static_cast<size_t>(frame_count_),
+                                           static_cast<size_t>(FRAME_HISTORY_SIZE / 3));
+
+        for (size_t i = 0; i < samples_to_analyze; ++i) {
+            size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+            if (frame_time_history_[idx] > 0) {
+                recent_frame_times.push_back(frame_time_history_[idx] * 1000.0); // Convert to microseconds
+            }
+        }
+
+        if (recent_frame_times.size() >= 10) {
+            // Calculate mean and standard deviation
+            double sum = std::accumulate(recent_frame_times.begin(), recent_frame_times.end(), 0.0);
+            double mean = sum / recent_frame_times.size();
+
+            double sq_sum = 0.0;
+            for (double val : recent_frame_times) {
+                sq_sum += (val - mean) * (val - mean);
+            }
+            double std_dev = std::sqrt(sq_sum / recent_frame_times.size());
+
+            // Use 2.5 standard deviations as outlier threshold
+            double outlier_threshold = mean + (std_dev * 2.5);
+
+            if (frame_time_us > outlier_threshold) {
+                is_dropped_frame = true;
+            }
+        }
+    }
+
+    // Check if frame time exceeds adaptive threshold
+    if (is_dropped_frame) {
         dropped_frame_counter_++;
 
         // When a frame is detected as dropped, trigger adaptive FPS adjustment
@@ -518,6 +565,9 @@ void FramePacer::check_dropped_frames(double frame_time_us) {
         // Only do this if we're not already at the target FPS
         adaptive_target_fps_ = std::min(config_.target_fps,
                                       adaptive_target_fps_ + 1); // Conservative increase
+
+        // Apply recovery mechanism when performance improves
+        apply_performance_recovery();
     }
 }
 
@@ -540,6 +590,65 @@ void FramePacer::apply_dropped_frame_recovery() {
     // Schedule a reset of phase reference after a few frames
     auto now = std::chrono::high_resolution_clock::now();
     phase_reference_time_ = now - std::chrono::microseconds(static_cast<int>(target_frame_time * 1000 * 0.5));
+
+    // Enhanced recovery mechanism
+    // Apply more aggressive frame time prediction adjustments
+    if (frame_count_ > 5) {
+        // Predict the next few frames based on recent performance
+        double recent_avg_frame_time = 0.0;
+        size_t valid_samples = 0;
+
+        size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                     static_cast<size_t>(FRAME_HISTORY_SIZE / 4));
+        for (size_t i = 0; i < sample_count; ++i) {
+            size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+            if (frame_time_history_[idx] > 0) {
+                recent_avg_frame_time += frame_time_history_[idx];
+                valid_samples++;
+            }
+        }
+
+        if (valid_samples > 0) {
+            recent_avg_frame_time /= valid_samples;
+
+            // If recent average is much higher than target, be more aggressive in adjustment
+            if (recent_avg_frame_time > target_frame_time * 1.5) {
+                // Reduce adaptive FPS more aggressively
+                adaptive_target_fps_ = static_cast<uint32_t>(
+                    std::max(static_cast<double>(config_.target_fps) * 0.5,  // Don't go below 50% of target
+                            static_cast<double>(adaptive_target_fps_) * 0.8)); // Reduce by 20%
+
+                // Further reduce stability score
+                frame_stability_score_ = std::max(frame_stability_score_ * 0.7, 0.1);
+            }
+        }
+    }
+}
+
+void FramePacer::apply_performance_recovery() {
+    // Apply recovery mechanisms when performance improves
+    if (dropped_frame_counter_ == 0 && frame_stability_score_ > 0.7) {
+        // Performance has improved, gradually restore settings
+
+        // Gradually increase adaptive FPS back toward target
+        if (adaptive_target_fps_ < config_.target_fps) {
+            adaptive_target_fps_ = std::min(config_.target_fps,
+                                          adaptive_target_fps_ + 2); // Faster recovery when stable
+        }
+
+        // Gradually improve stability score
+        frame_stability_score_ = std::min(frame_stability_score_ * 1.05, 1.0);
+
+        // Restore frame budget tracker toward target
+        double target_frame_time = 1000.0 / config_.target_fps;
+        frame_budget_tracker_ = (frame_budget_tracker_ * 0.8) + (target_frame_time * 0.2);
+
+        // Re-enable phase locking if conditions are favorable
+        if (frame_stability_score_ > 0.8) {
+            frame_phase_lock_ = true;
+            phase_reference_time_ = std::chrono::high_resolution_clock::now();
+        }
+    }
 }
 
 void FramePacer::adapt_target_fps() {
@@ -870,6 +979,114 @@ void FramePacer::apply_advanced_spike_smoothing(double current_frame_time) {
                                              -max_compensation, max_compensation);
         }
     }
+
+    // Enhanced spike detection and smoothing
+    if (frame_count_ >= 10) {
+        // Use a more sophisticated statistical approach to detect and smooth spikes
+        std::vector<double> recent_frame_times;
+        size_t samples_to_analyze = std::min(static_cast<size_t>(frame_count_),
+                                           static_cast<size_t>(FRAME_HISTORY_SIZE / 3));
+
+        for (size_t i = 0; i < samples_to_analyze; ++i) {
+            size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+            if (frame_time_history_[idx] > 0) {
+                recent_frame_times.push_back(frame_time_history_[idx]);
+            }
+        }
+
+        if (recent_frame_times.size() >= 5) {
+            // Calculate median to be more robust against outliers
+            std::sort(recent_frame_times.begin(), recent_frame_times.end());
+            double median_frame_time = recent_frame_times[recent_frame_times.size() / 2];
+
+            // Calculate MAD (Median Absolute Deviation) for robust variance estimation
+            std::vector<double> deviations;
+            for (double ft : recent_frame_times) {
+                deviations.push_back(std::abs(ft - median_frame_time));
+            }
+            std::sort(deviations.begin(), deviations.end());
+            double mad = deviations[deviations.size() / 2];
+
+            // Define spike threshold based on MAD
+            double mad_based_threshold = median_frame_time + (mad * 2.5);
+
+            if (current_frame_time > mad_based_threshold) {
+                // Detected a significant spike using robust statistics
+                // Apply more aggressive smoothing
+                frame_budget_tracker_ = median_frame_time;
+
+                // Adjust stability score downward due to the spike
+                frame_stability_score_ = std::max(frame_stability_score_ * 0.85, 0.2);
+
+                // Apply additional compensation to prevent future spikes
+                double spike_magnitude = current_frame_time - median_frame_time;
+                frame_jitter_compensator_ -= spike_magnitude * 0.4; // Increased compensation
+
+                // Clamp to prevent overcorrection
+                double target_frame_time = 1000.0 / adaptive_target_fps_;
+                double max_compensation = target_frame_time * 0.6; // Increased max compensation
+                frame_jitter_compensator_ = std::clamp(frame_jitter_compensator_,
+                                                 -max_compensation, max_compensation);
+            }
+        }
+    }
+}
+
+void FramePacer::apply_frame_pacing_consistency_check() {
+    // Check if the current frame timing is consistent with the target
+    if (frame_count_ < 5) {
+        return; // Need sufficient history
+    }
+
+    // Calculate the expected frame time based on target FPS
+    double target_frame_time = 1000.0 / adaptive_target_fps_;
+
+    // Calculate recent average frame time
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                 static_cast<size_t>(FRAME_HISTORY_SIZE / 4));
+    if (sample_count < 3) {
+        return;
+    }
+
+    double recent_avg = 0.0;
+    size_t valid_samples = 0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        if (frame_time_history_[idx] > 0) {
+            recent_avg += frame_time_history_[idx];
+            valid_samples++;
+        }
+    }
+
+    if (valid_samples < 3) {
+        return;
+    }
+
+    recent_avg /= valid_samples;
+
+    // If recent average is significantly different from target, adjust frame budget
+    double deviation = std::abs(recent_avg - target_frame_time) / target_frame_time;
+
+    if (deviation > 0.15) { // 15% deviation threshold
+        // Adjust frame budget tracker to compensate for the deviation
+        frame_budget_tracker_ = (frame_budget_tracker_ * 0.7) + (target_frame_time * 0.3);
+
+        // If we're consistently slower than target, reduce adaptive FPS temporarily
+        if (recent_avg > target_frame_time * 1.15) {
+            adaptive_target_fps_ = static_cast<uint32_t>(
+                std::max(static_cast<double>(adaptive_target_fps_) * 0.95,
+                        static_cast<double>(config_.target_fps) * 0.5));
+        }
+        // If we're consistently faster than target, gradually increase towards target
+        else if (recent_avg < target_frame_time * 0.85 &&
+                 adaptive_target_fps_ < config_.target_fps) {
+            adaptive_target_fps_ = std::min(config_.target_fps,
+                                          adaptive_target_fps_ + 1);
+        }
+    }
+
+    // Enhance frame stability scoring based on consistency
+    update_frame_stability();
 }
 
 } // namespace RenderEngine

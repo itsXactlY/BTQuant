@@ -329,6 +329,41 @@ public:
                                    float view_height,
                                    int total_cells_in_view) const;
 
+    // Calculate smooth zoom LOD to prevent flickering during zoom transitions
+    LODLevel calculateSmoothZoomLOD(float cell_width_px, float cell_height_px,
+                                float zoom_factor, float prev_zoom_factor) const;
+
+    // Get smooth zoom render settings to prevent flickering
+    LODRenderSettings getSmoothZoomRenderSettings(LODLevel lod_level,
+                                               float zoom_factor,
+                                               float prev_zoom_factor) const;
+
+    // Apply smooth zoom LOD to cell rendering to prevent flickering during zoom transitions
+    void applySmoothZoomLODToCell(const FootprintCell& cell,
+                                 ImDrawList* draw_list,
+                                 float zoom_factor,
+                                 float prev_zoom_factor,
+                                 double max_volume,
+                                 const std::vector<FootprintCell>& diagonal_imbalances,
+                                 const std::vector<FootprintCell>& stacked_imbalances,
+                                 const FootprintPanel* panel) const;
+
+    // Calculate gradient-based LOD considering volume/activity differences with neighboring cells
+    LODLevel calculateGradientBasedLOD(const FootprintCell& cell,
+                                   float cell_width_px, float cell_height_px,
+                                   float zoom_factor,
+                                   const std::vector<FootprintCell>& gradient_neighbors) const;
+
+    // Apply gradient-based LOD to cell rendering considering volume/activity differences with neighboring cells
+    void applyGradientBasedLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel,
+                                   const std::vector<FootprintCell>& gradient_neighbors) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

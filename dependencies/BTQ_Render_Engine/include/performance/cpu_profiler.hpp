@@ -137,6 +137,47 @@ public:
 
     std::vector<TimingBreakdown> get_timing_breakdown() const;
 
+    // Enhanced detailed breakdown with additional metrics
+    struct DetailedTimingBreakdown {
+        std::string function_name;
+        double exclusive_time_ms;      // Time spent in function excluding children
+        double inclusive_time_ms;      // Time spent in function including children
+        uint64_t call_count;          // Number of times function was called
+        double min_time_ms;           // Minimum time taken by function
+        double max_time_ms;           // Maximum time taken by function
+        double avg_time_ms;           // Average time taken by function
+        double variance_time_ms;      // Variance of execution time
+        double std_deviation_ms;      // Standard deviation of execution time
+        double percentage_of_total;   // Percentage of total CPU time
+        std::vector<double> percentiles; // Various percentiles (50th, 90th, 95th, 99th)
+    };
+
+    std::vector<DetailedTimingBreakdown> get_detailed_timing_breakdown() const;
+
+    // Hot path detection - identifies most time-consuming call paths
+    std::vector<std::vector<std::string>> get_hot_paths(int max_paths = 10) const;
+
+    // Get profiling statistics summary
+    struct ProfilingStats {
+        uint64_t total_calls;
+        double total_time_ms;
+        double avg_time_per_call_ms;
+        double min_time_per_call_ms;
+        double max_time_per_call_ms;
+        uint64_t unique_functions;
+        std::chrono::steady_clock::time_point start_time;
+        std::chrono::steady_clock::time_point end_time;
+        bool is_active;
+    };
+
+    ProfilingStats get_profiling_stats() const;
+
+    // Get functions with highest variance in execution time
+    std::vector<std::pair<std::string, double>> get_high_variance_functions(int n = 10) const;
+
+    // Get functions with highest call frequency
+    std::vector<std::pair<std::string, uint64_t>> get_most_frequent_functions(int n = 10) const;
+
     // Filter profiles by time range
     std::map<std::string, FunctionProfileData> get_filtered_profiles(
         double min_time_ms = 0.0,
@@ -184,6 +225,7 @@ private:
     std::atomic<bool> sampling_active_{false};
     std::thread sampling_thread_;
     std::chrono::milliseconds sampling_interval_{1};
+    std::chrono::steady_clock::time_point sampling_start_time_;
     std::function<void(const std::map<std::string, FunctionProfileData>&)> sample_callback_;
 
     void sampling_loop();
@@ -197,6 +239,13 @@ private:
                                     std::vector<std::pair<std::string, double>>& result,
                                     const std::string& parent_path) const;
     std::string escape_json_string(const std::string& str) const;
+
+    // Helper methods for hot path detection
+    void collect_hot_paths_from_tree(const CallTreeNode* node,
+                                   std::vector<std::string> current_path,
+                                   std::vector<std::vector<std::string>>& hot_paths,
+                                   int depth) const;
+    double get_path_total_time(const std::vector<std::string>& path) const;
 };
 
 // Global CPU profiler instance

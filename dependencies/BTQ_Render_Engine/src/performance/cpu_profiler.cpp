@@ -11,7 +11,7 @@
 
 namespace BTQuant {
 
-CPUProfiler::CPUProfiler() : enabled_(true) {}
+CPUProfiler::CPUProfiler() : enabled_(true), sampling_start_time_(std::chrono::steady_clock::now()) {}
 
 CPUProfiler::~CPUProfiler() {
     stop_sampling_profiling();
@@ -281,6 +281,7 @@ void CPUProfiler::start_sampling_profiling(std::chrono::milliseconds interval) {
 
     sampling_interval_ = interval;
     sampling_active_.store(true);
+    sampling_start_time_ = std::chrono::steady_clock::now();
 
     sampling_thread_ = std::thread(&CPUProfiler::sampling_loop, this);
 }
@@ -568,6 +569,271 @@ void CPUProfiler::calculate_exclusive_times(const CallTreeNode* node,
 
     // Accumulate exclusive time for this function name
     exclusive_times[node->function_name] += exclusive_time;
+}
+
+std::vector<CPUProfiler::DetailedTimingBreakdown>
+CPUProfiler::get_detailed_timing_breakdown() const {
+    std::vector<DetailedTimingBreakdown> detailed_breakdowns;
+    std::map<std::string, double> exclusive_times;
+
+    // Calculate exclusive times
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+        for (const auto& [thread_id, thread_data] : thread_profiles_) {
+            if (thread_data.call_tree_root) {
+                calculate_exclusive_times(thread_data.call_tree_root.get(), exclusive_times);
+            }
+        }
+    }
+
+    auto all_profiles = get_aggregated_profiles();
+    uint64_t total_time_ns = 0;
+
+    // Calculate total time for percentage calculation
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_time_ns += profile_data.total_duration_ns;
+    }
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        DetailedTimingBreakdown dtb;
+        dtb.function_name = func_name;
+        dtb.inclusive_time_ms = profile_data.get_total_duration_ms();
+        dtb.exclusive_time_ms = exclusive_times.count(func_name) ?
+                               exclusive_times[func_name] : 0.0;
+        dtb.call_count = profile_data.call_count;
+        dtb.min_time_ms = profile_data.get_min_duration_ms();
+        dtb.max_time_ms = profile_data.get_max_duration_ms();
+        dtb.avg_time_ms = profile_data.get_average_duration_ms();
+
+        // Calculate variance and standard deviation
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double sum_squares = 0.0;
+            double mean = dtb.avg_time_ms;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            dtb.variance_time_ms = sum_squares / profile_data.duration_history.size();
+            dtb.std_deviation_ms = std::sqrt(dtb.variance_time_ms);
+        } else {
+            dtb.variance_time_ms = 0.0;
+            dtb.std_deviation_ms = 0.0;
+        }
+
+        dtb.percentage_of_total = total_time_ns > 0 ?
+                                 (static_cast<double>(profile_data.total_duration_ns) /
+                                  static_cast<double>(total_time_ns)) * 100.0 : 0.0;
+
+        // Calculate percentiles (50th, 90th, 95th, 99th)
+        if (!profile_data.duration_history.empty()) {
+            std::vector<uint64_t> sorted_durations = profile_data.duration_history;
+            std::sort(sorted_durations.begin(), sorted_durations.end());
+
+            auto get_percentile = [&](double percentile) -> double {
+                if (sorted_durations.empty()) return 0.0;
+                size_t index = static_cast<size_t>((percentile / 100.0) * sorted_durations.size());
+                if (index >= sorted_durations.size()) index = sorted_durations.size() - 1;
+                return static_cast<double>(sorted_durations[index]) / 1000000.0;
+            };
+
+            dtb.percentiles.push_back(get_percentile(50));  // Median
+            dtb.percentiles.push_back(get_percentile(90));  // 90th percentile
+            dtb.percentiles.push_back(get_percentile(95));  // 95th percentile
+            dtb.percentiles.push_back(get_percentile(99));  // 99th percentile
+        } else {
+            dtb.percentiles = {0.0, 0.0, 0.0, 0.0};
+        }
+
+        detailed_breakdowns.push_back(dtb);
+    }
+
+    // Sort by inclusive time (most time-consuming first)
+    std::sort(detailed_breakdowns.begin(), detailed_breakdowns.end(),
+              [](const DetailedTimingBreakdown& a, const DetailedTimingBreakdown& b) {
+                  return a.inclusive_time_ms > b.inclusive_time_ms;
+              });
+
+    return detailed_breakdowns;
+}
+
+std::vector<std::vector<std::string>>
+CPUProfiler::get_hot_paths(int max_paths) const {
+    std::vector<std::vector<std::string>> hot_paths;
+
+    std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+    for (const auto& [thread_id, thread_data] : thread_profiles_) {
+        if (thread_data.call_tree_root) {
+            std::vector<std::vector<std::string>> thread_hot_paths;
+            collect_hot_paths_from_tree(thread_data.call_tree_root.get(), {}, thread_hot_paths, 0);
+
+            // Sort paths by total time and take top ones
+            std::sort(thread_hot_paths.begin(), thread_hot_paths.end(),
+                      [this](const std::vector<std::string>& a, const std::vector<std::string>& b) {
+                          double time_a = get_path_total_time(a);
+                          double time_b = get_path_total_time(b);
+                          return time_a > time_b;
+                      });
+
+            // Add to global list
+            for (const auto& path : thread_hot_paths) {
+                if (hot_paths.size() >= static_cast<size_t>(max_paths)) break;
+                hot_paths.push_back(path);
+            }
+        }
+    }
+
+    // Sort all paths by total time and return top ones
+    std::sort(hot_paths.begin(), hot_paths.end(),
+              [this](const std::vector<std::string>& a, const std::vector<std::string>& b) {
+                  double time_a = get_path_total_time(a);
+                  double time_b = get_path_total_time(b);
+                  return time_a > time_b;
+              });
+
+    if (hot_paths.size() > static_cast<size_t>(max_paths)) {
+        hot_paths.resize(max_paths);
+    }
+
+    return hot_paths;
+}
+
+void CPUProfiler::collect_hot_paths_from_tree(const CallTreeNode* node,
+                                              std::vector<std::string> current_path,
+                                              std::vector<std::vector<std::string>>& hot_paths,
+                                              int depth) const {
+    if (!node) return;
+
+    // Prevent infinite recursion by limiting depth
+    if (depth > 50) {
+        return;
+    }
+
+    current_path.push_back(node->function_name);
+
+    // Only add paths that have meaningful duration (more than 0.1ms total)
+    if (node->profile_data.get_total_duration_ms() > 0.1) {
+        hot_paths.push_back(current_path);
+    }
+
+    // Recursively explore children
+    for (const auto& child : node->children) {
+        collect_hot_paths_from_tree(child.get(), current_path, hot_paths, depth + 1);
+    }
+}
+
+double CPUProfiler::get_path_total_time(const std::vector<std::string>& path) const {
+    double total_time = 0.0;
+
+    for (const auto& func_name : path) {
+        auto all_profiles = get_aggregated_profiles();
+        auto it = all_profiles.find(func_name);
+        if (it != all_profiles.end()) {
+            total_time += it->second.get_total_duration_ms();
+        }
+    }
+
+    return total_time;
+}
+
+CPUProfiler::ProfilingStats
+CPUProfiler::get_profiling_stats() const {
+    ProfilingStats stats{};
+
+    auto all_profiles = get_aggregated_profiles();
+
+    stats.unique_functions = all_profiles.size();
+    stats.is_active = enabled_;
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        stats.total_calls += profile_data.call_count;
+        stats.total_time_ms += profile_data.get_total_duration_ms();
+
+        if (profile_data.call_count > 0) {
+            double avg_time = profile_data.get_average_duration_ms();
+            if (stats.avg_time_per_call_ms == 0.0 || avg_time < stats.min_time_per_call_ms) {
+                stats.min_time_per_call_ms = avg_time;
+            }
+            if (avg_time > stats.max_time_per_call_ms) {
+                stats.max_time_per_call_ms = avg_time;
+            }
+        }
+    }
+
+    if (stats.total_calls > 0) {
+        stats.avg_time_per_call_ms = stats.total_time_ms / static_cast<double>(stats.total_calls);
+    }
+
+    // Set start and end times based on the sampling state
+    std::lock_guard<std::mutex> lock(profiles_mutex_);
+    if (sampling_active_.load()) {
+        stats.start_time = sampling_start_time_;
+        stats.end_time = std::chrono::steady_clock::now();
+    }
+
+    return stats;
+}
+
+std::vector<std::pair<std::string, double>>
+CPUProfiler::get_high_variance_functions(int n) const {
+    std::vector<std::pair<std::string, double>> high_variance_funcs;
+
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double mean = profile_data.get_average_duration_ms();
+            double sum_squares = 0.0;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            double variance = sum_squares / profile_data.duration_history.size();
+            high_variance_funcs.push_back({func_name, variance});
+        }
+    }
+
+    // Sort by variance (highest first)
+    std::sort(high_variance_funcs.begin(), high_variance_funcs.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    if (high_variance_funcs.size() > static_cast<size_t>(n)) {
+        high_variance_funcs.resize(n);
+    }
+
+    return high_variance_funcs;
+}
+
+std::vector<std::pair<std::string, uint64_t>>
+CPUProfiler::get_most_frequent_functions(int n) const {
+    std::vector<std::pair<std::string, uint64_t>> frequent_funcs;
+
+    auto all_profiles = get_aggregated_profiles();
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        frequent_funcs.push_back({func_name, profile_data.call_count});
+    }
+
+    // Sort by call count (highest first)
+    std::sort(frequent_funcs.begin(), frequent_funcs.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    if (frequent_funcs.size() > static_cast<size_t>(n)) {
+        frequent_funcs.resize(n);
+    }
+
+    return frequent_funcs;
 }
 
 std::map<std::string, FunctionProfileData>

@@ -74,13 +74,6 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
-    // Additional check: If the visible area is extremely small compared to the panel,
-    // we might want to skip rendering for performance reasons
-    // This is especially useful for panels that are mostly off-screen but have a tiny visible portion
-    if (visible_area < 1.0f) {  // Less than 1 pixel^2 visible
-        return false;
-    }
-
     // If we got here, the panel should be rendered
     return true;
 }

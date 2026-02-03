@@ -22,6 +22,8 @@ struct PipelineMetrics {
     double max_processing_time_ms = 0.0;
     uint64_t total_processing_time_ns = 0;
     uint64_t dropped_events = 0;
+    uint64_t events_processed_at_last_calc = 0;
+    uint64_t bytes_processed_at_last_calc = 0;
     std::chrono::high_resolution_clock::time_point last_update;
 };
 
@@ -91,6 +93,15 @@ public:
 
     // Get current throughput in bytes per second
     uint64_t getCurrentBytesPerSecond() const;
+
+    // Get detailed throughput statistics for all stages
+    std::map<std::string, double> getStageThroughputRatios() const;
+
+    // Get pipeline efficiency metrics
+    double getPipelineEfficiency() const;
+
+    // Get stage processing time percentiles
+    std::map<std::string, std::pair<double, double>> getStageProcessingTimePercentiles() const;
 
 private:
     void updateThroughputCalculations();

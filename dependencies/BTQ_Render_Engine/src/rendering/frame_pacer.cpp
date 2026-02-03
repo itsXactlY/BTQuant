@@ -74,6 +74,9 @@ void FramePacer::begin_frame() {
 
     // Apply predictive timing adjustments to maintain consistent frame rate
     apply_predictive_timing();
+
+    // Apply frame rate stabilization techniques
+    apply_frame_rate_stabilization();
 }
 
 void FramePacer::end_frame() {
@@ -118,6 +121,12 @@ void FramePacer::end_frame() {
 
         // Apply advanced spike smoothing
         apply_advanced_spike_smoothing(frame_time_ms);
+
+        // Apply enhanced spike detection and suppression
+        enhance_spike_detection_and_suppression();
+
+        // Apply improved dropped frame prevention
+        improve_dropped_frame_prevention();
     }
 
     // Increment frame counters before updating statistics
@@ -1087,6 +1096,194 @@ void FramePacer::apply_frame_pacing_consistency_check() {
 
     // Enhance frame stability scoring based on consistency
     update_frame_stability();
+}
+
+void FramePacer::apply_frame_rate_stabilization() {
+    if (!config_.enable_frame_smoothing || frame_count_ < 10) {
+        return;
+    }
+
+    // Calculate recent frame rate stability metrics
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                 static_cast<size_t>(FRAME_HISTORY_SIZE / 3));
+
+    if (sample_count < 5) {
+        return;
+    }
+
+    // Calculate coefficient of variation to measure frame rate consistency
+    double sum = 0.0, sum_sq = 0.0;
+    size_t valid_samples = 0;
+
+    for (size_t i = 0; i < sample_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        double frame_time = frame_time_history_[idx];
+
+        if (frame_time > 0) {
+            sum += frame_time;
+            sum_sq += frame_time * frame_time;
+            valid_samples++;
+        }
+    }
+
+    if (valid_samples < 5) {
+        return;
+    }
+
+    double mean = sum / valid_samples;
+    double variance = (sum_sq / valid_samples) - (mean * mean);
+    double std_dev = std::sqrt(variance);
+    double coefficient_of_variation = (mean > 0) ? std_dev / mean : 0.0;
+
+    // Adjust frame pacing based on stability metrics
+    if (coefficient_of_variation > 0.1) {  // High variation detected
+        // Increase smoothing to stabilize frame rate
+        frame_stability_score_ = std::max(frame_stability_score_ - 0.1, 0.2);
+
+        // Apply more conservative frame budgeting
+        double target_frame_time = 1000.0 / adaptive_target_fps_;
+        frame_budget_tracker_ = std::min(frame_budget_tracker_, target_frame_time * 0.9);
+
+        // Reduce adaptive FPS slightly to maintain stability
+        if (adaptive_target_fps_ > config_.target_fps * 0.7) {
+            adaptive_target_fps_ = static_cast<uint32_t>(adaptive_target_fps_ * 0.98);
+        }
+    } else if (coefficient_of_variation < 0.05 && frame_stability_score_ < 0.95) {  // Very stable
+        // Gradually improve frame stability score
+        frame_stability_score_ = std::min(frame_stability_score_ * 1.02, 1.0);
+
+        // Allow for more aggressive frame rate if stable
+        if (adaptive_target_fps_ < config_.target_fps) {
+            adaptive_target_fps_ = std::min(config_.target_fps,
+                                          adaptive_target_fps_ + 1);
+        }
+    }
+}
+
+void FramePacer::enhance_spike_detection_and_suppression() {
+    if (!config_.enable_frame_smoothing || frame_count_ < 5) {
+        return;
+    }
+
+    // Use a more sophisticated approach to detect and suppress spikes
+    double current_frame_time = frame_time_history_[(frame_count_ - 1) % FRAME_HISTORY_SIZE];
+
+    // Calculate a robust estimate of typical frame time using median
+    std::vector<double> recent_times;
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                 static_cast<size_t>(SMOOTHING_WINDOW * 3));
+
+    for (size_t i = 0; i < sample_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        if (frame_time_history_[idx] > 0) {
+            recent_times.push_back(frame_time_history_[idx]);
+        }
+    }
+
+    if (recent_times.empty()) {
+        return;
+    }
+
+    std::sort(recent_times.begin(), recent_times.end());
+    double median_frame_time = recent_times[recent_times.size() / 2];
+
+    // Calculate interquartile range for robust outlier detection
+    size_t q1_idx = recent_times.size() / 4;
+    size_t q3_idx = 3 * recent_times.size() / 4;
+    double q1 = recent_times[q1_idx];
+    double q3 = recent_times[q3_idx];
+    double iqr = q3 - q1;
+
+    // Outlier threshold using IQR method (similar to box plot)
+    double outlier_threshold = q3 + (1.5 * iqr);
+
+    if (current_frame_time > outlier_threshold) {
+        // This is a significant spike - apply suppression
+        double spike_amount = current_frame_time - outlier_threshold;
+
+        // Compensate by adjusting the frame budget tracker
+        frame_budget_tracker_ = (frame_budget_tracker_ * 0.8) + (median_frame_time * 0.2);
+
+        // Apply stronger jitter compensation
+        frame_jitter_compensator_ -= spike_amount * 0.5;  // Stronger compensation for outliers
+
+        // Reduce stability score due to the spike
+        frame_stability_score_ = std::max(frame_stability_score_ * 0.8, 0.1);
+
+        // Temporarily reduce target FPS to handle the load
+        if (adaptive_target_fps_ > config_.target_fps * 0.6) {
+            adaptive_target_fps_ = static_cast<uint32_t>(adaptive_target_fps_ * 0.95);
+        }
+    }
+}
+
+void FramePacer::improve_dropped_frame_prevention() {
+    if (frame_count_ < 10) {
+        return;
+    }
+
+    // Look for patterns that indicate potential dropped frames before they happen
+    double target_frame_time = 1000.0 / adaptive_target_fps_;
+
+    // Check recent frame times for increasing trend
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                 static_cast<size_t>(SMOOTHING_WINDOW * 2));
+
+    if (sample_count < 5) {
+        return;
+    }
+
+    // Calculate trend of recent frame times
+    std::vector<double> recent_frame_times;
+    for (size_t i = 0; i < sample_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        if (frame_time_history_[idx] > 0) {
+            recent_frame_times.push_back(frame_time_history_[idx]);
+        }
+    }
+
+    if (recent_frame_times.size() < 5) {
+        return;
+    }
+
+    // Check if recent frame times are trending upward (potential performance degradation)
+    bool trending_up = true;
+    for (size_t i = 1; i < std::min(static_cast<size_t>(5), recent_frame_times.size()); ++i) {
+        if (recent_frame_times[i] <= recent_frame_times[i-1]) {
+            trending_up = false;
+            break;
+        }
+    }
+
+    if (trending_up) {
+        // Proactively reduce target FPS to prevent dropped frames
+        if (adaptive_target_fps_ > config_.target_fps * 0.5) {
+            adaptive_target_fps_ = static_cast<uint32_t>(adaptive_target_fps_ * 0.97);
+        }
+
+        // Increase frame budget to provide more headroom
+        frame_budget_tracker_ = std::min(frame_budget_tracker_ * 1.1, target_frame_time * 1.2);
+
+        // Reduce stability expectations temporarily
+        frame_stability_score_ = std::max(frame_stability_score_ * 0.9, 0.2);
+    }
+
+    // Also check if we're consistently coming in under budget, and gradually increase FPS
+    if (frame_stability_score_ > 0.8 && adaptive_target_fps_ < config_.target_fps) {
+        bool trending_down = true;
+        for (size_t i = 1; i < std::min(static_cast<size_t>(5), recent_frame_times.size()); ++i) {
+            if (recent_frame_times[i] >= recent_frame_times[i-1]) {
+                trending_down = false;
+                break;
+            }
+        }
+
+        if (trending_down && recent_frame_times[0] < target_frame_time * 0.7) {
+            // Performance is improving, cautiously increase target FPS
+            adaptive_target_fps_ = std::min(config_.target_fps,
+                                          adaptive_target_fps_ + 1);
+        }
+    }
 }
 
 } // namespace RenderEngine

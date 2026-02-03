@@ -159,6 +159,9 @@ private:
     void apply_dropped_frame_recovery();
     void apply_frame_pacing_consistency_check();
     void apply_performance_recovery();
+    void apply_frame_rate_stabilization();
+    void enhance_spike_detection_and_suppression();
+    void improve_dropped_frame_prevention();
 };
 
 } // namespace RenderEngine

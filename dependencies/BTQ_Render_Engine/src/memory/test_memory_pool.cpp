@@ -195,6 +195,108 @@ int main() {
                   << ", Used: " << trade_pool.getUsedObjects() << std::endl;
     }
 
+    // Test CandleCluster pool
+    {
+        std::cout << "\nTesting CandleCluster Pool:" << std::endl;
+        auto& cluster_pool = BTQuant::CandleClusterPool::getInstance();
+
+        std::cout << "Initial stats - Total: " << cluster_pool.getTotalObjects()
+                  << ", Free: " << cluster_pool.getFreeObjects()
+                  << ", Used: " << cluster_pool.getUsedObjects() << std::endl;
+
+        // Allocate some CandleCluster objects
+        auto* cluster1 = cluster_pool.allocate(10.0f, 20.0f, 5.0f, 2.0f, 100, 150, 10, 101.5f, true);
+        auto* cluster2 = cluster_pool.allocate();
+
+        if (cluster1) {
+            cluster1->bidVolume = 200;
+            cluster1->askVolume = 180;
+            cluster1->tradeCount = 15;
+            cluster1->vwap = 102.0f;
+        }
+
+        std::cout << "After allocation - Total: " << cluster_pool.getTotalObjects()
+                  << ", Free: " << cluster_pool.getFreeObjects()
+                  << ", Used: " << cluster_pool.getUsedObjects() << std::endl;
+
+        // Deallocate
+        if (cluster1) cluster_pool.deallocate(cluster1);
+
+        std::cout << "After deallocation - Total: " << cluster_pool.getTotalObjects()
+                  << ", Free: " << cluster_pool.getFreeObjects()
+                  << ", Used: " << cluster_pool.getUsedObjects() << std::endl;
+    }
+
+    // Test VolumeProfileNode pool
+    {
+        std::cout << "\nTesting VolumeProfileNode Pool:" << std::endl;
+        auto& node_pool = BTQuant::VolumeProfileNodePool::getInstance();
+
+        std::cout << "Initial stats - Total: " << node_pool.getTotalObjects()
+                  << ", Free: " << node_pool.getFreeObjects()
+                  << ", Used: " << node_pool.getUsedObjects() << std::endl;
+
+        // Allocate some VolumeProfileNode objects
+        auto* node1 = node_pool.allocate();
+        auto* node2 = node_pool.allocate();
+
+        if (node1) {
+            node1->priceLevel = 100.50;
+            node1->totalVolume = 1000.0;
+            node1->buyVolume = 600.0;
+            node1->sellVolume = 400.0;
+            node1->delta = 200.0;
+            node1->numTrades = 25;
+        }
+
+        std::cout << "After allocation - Total: " << node_pool.getTotalObjects()
+                  << ", Free: " << node_pool.getFreeObjects()
+                  << ", Used: " << node_pool.getUsedObjects() << std::endl;
+
+        // Deallocate
+        if (node1) node_pool.deallocate(node1);
+
+        std::cout << "After deallocation - Total: " << node_pool.getTotalObjects()
+                  << ", Free: " << node_pool.getFreeObjects()
+                  << ", Used: " << node_pool.getUsedObjects() << std::endl;
+    }
+
+    // Test FootprintCell pool
+    {
+        std::cout << "\nTesting FootprintCell Pool:" << std::endl;
+        auto& cell_pool = BTQuant::FootprintCellPool::getInstance();
+
+        std::cout << "Initial stats - Total: " << cell_pool.getTotalObjects()
+                  << ", Free: " << cell_pool.getFreeObjects()
+                  << ", Used: " << cell_pool.getUsedObjects() << std::endl;
+
+        // Allocate some FootprintCell objects
+        auto* cell1 = cell_pool.allocate();
+        auto* cell2 = cell_pool.allocate();
+
+        if (cell1) {
+            cell1->priceLevel = 100.50;
+            cell1->timeBucket = 1234567890;
+            cell1->buyVolume = 600.0;
+            cell1->sellVolume = 400.0;
+            cell1->delta = 200.0;
+            cell1->numBuyTrades = 15;
+            cell1->numSellTrades = 10;
+            cell1->maxSingleTrade = 50.0;
+        }
+
+        std::cout << "After allocation - Total: " << cell_pool.getTotalObjects()
+                  << ", Free: " << cell_pool.getFreeObjects()
+                  << ", Used: " << cell_pool.getUsedObjects() << std::endl;
+
+        // Deallocate
+        if (cell1) cell_pool.deallocate(cell1);
+
+        std::cout << "After deallocation - Total: " << cell_pool.getTotalObjects()
+                  << ", Free: " << cell_pool.getFreeObjects()
+                  << ", Used: " << cell_pool.getUsedObjects() << std::endl;
+    }
+
     std::cout << "\nMemory Pool tests completed successfully!" << std::endl;
 
     return 0;

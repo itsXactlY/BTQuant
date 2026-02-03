@@ -22,6 +22,8 @@
 #include "../include/vulkan_dashboard_advanced.hpp"
 #include "../include/components/volume_profile_panel.hpp"
 #include "../include/components/orderbook_panel.hpp"
+#include "../include/widgets/VolumeProfileNode.h"
+#include "../include/widgets/FootprintCell.h"
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
@@ -454,6 +456,63 @@ private:
     HotOrderbookLevelPool() = default;
     ObjectPool<HotOrderbookLevel> pool_;
 };
+
+// CandleClusterPool for frequently allocated candle clusters
+class CandleClusterPool {
+public:
+    static CandleClusterPool& getInstance();
+
+    RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+                                         uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t tradeCnt = 0,
+                                         float vw = 0.0f, bool hasTrades = false);
+    void deallocate(RenderEngine::CandleCluster* cluster);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    CandleClusterPool() = default;
+    ObjectPool<RenderEngine::CandleCluster> pool_;
+};
+
+// VolumeProfileNodePool for frequently allocated volume profile nodes
+class VolumeProfileNodePool {
+public:
+    static VolumeProfileNodePool& getInstance();
+
+    VolumeProfileNode* allocate();
+    void deallocate(VolumeProfileNode* node);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    VolumeProfileNodePool() = default;
+    ObjectPool<VolumeProfileNode> pool_;
+};
+
+// FootprintCellPool for frequently allocated footprint cells
+class FootprintCellPool {
+public:
+    static FootprintCellPool& getInstance();
+
+    FootprintCell* allocate();
+    void deallocate(FootprintCell* cell);
+    void preallocate(size_t count = 2048);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    FootprintCellPool() = default;
+    ObjectPool<FootprintCell> pool_;
+};
+
 
 // RAII wrapper for automatic deallocation
 template<typename T>

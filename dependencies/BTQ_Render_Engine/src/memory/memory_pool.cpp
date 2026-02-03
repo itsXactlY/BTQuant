@@ -402,4 +402,61 @@ void HotOrderbookLevelPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// CandleClusterPool implementation
+CandleClusterPool& CandleClusterPool::getInstance() {
+    static CandleClusterPool instance;
+    return instance;
+}
+
+RenderEngine::CandleCluster* CandleClusterPool::allocate(float x, float y, float w, float h,
+                                                        uint32_t bidVol, uint32_t askVol, uint32_t tradeCnt,
+                                                        float vw, bool hasTrades) {
+    return pool_.allocate(x, y, w, h, bidVol, askVol, tradeCnt, vw, hasTrades);
+}
+
+void CandleClusterPool::deallocate(RenderEngine::CandleCluster* cluster) {
+    pool_.deallocate(cluster);
+}
+
+void CandleClusterPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// VolumeProfileNodePool implementation
+VolumeProfileNodePool& VolumeProfileNodePool::getInstance() {
+    static VolumeProfileNodePool instance;
+    return instance;
+}
+
+VolumeProfileNode* VolumeProfileNodePool::allocate() {
+    return pool_.allocate();
+}
+
+void VolumeProfileNodePool::deallocate(VolumeProfileNode* node) {
+    pool_.deallocate(node);
+}
+
+void VolumeProfileNodePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FootprintCellPool implementation
+FootprintCellPool& FootprintCellPool::getInstance() {
+    static FootprintCellPool instance;
+    return instance;
+}
+
+FootprintCell* FootprintCellPool::allocate() {
+    return pool_.allocate();
+}
+
+void FootprintCellPool::deallocate(FootprintCell* cell) {
+    pool_.deallocate(cell);
+}
+
+void FootprintCellPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+
 } // namespace BTQuant

@@ -73,8 +73,12 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
-    // Additional check: if the panel is completely covered by other panels or UI elements,
-    // we might want to skip rendering (this would require z-order information which is not available here)
+    // Additional check: Handle floating-point precision issues that might cause
+    // very thin panels to be rendered unnecessarily
+    if (intersect_width < 1.0f || intersect_height < 1.0f) {
+        // If the visible portion is less than 1 pixel in either dimension, skip rendering
+        return false;
+    }
 
     // If we got here, the panel should be rendered
     return true;

@@ -17,7 +17,7 @@
 namespace btq {
 namespace threading {
 
-// Enhanced LockFreeQueue with better memory management
+// Enhanced LockFreeQueue with better memory management and thread safety
 template<typename T>
 class LockFreeQueue {
 private:
@@ -33,7 +33,7 @@ private:
         explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
     };
 
-    // Memory pool for nodes to reduce allocation overhead
+    // Memory pool for nodes to reduce allocation overhead and improve cache locality
     struct NodePool {
         std::mutex pool_mutex;
         std::deque<Node*> free_nodes;
@@ -45,6 +45,8 @@ private:
             if (!free_nodes.empty()) {
                 Node* node = free_nodes.front();
                 free_nodes.pop_front();
+                // Reset the node's next pointer
+                node->next.store(nullptr, std::memory_order_relaxed);
                 return node;
             }
             return new Node();
@@ -57,6 +59,8 @@ private:
             if (free_nodes.size() < MAX_POOL_SIZE) {
                 // Reset the node before returning to pool
                 node->next.store(nullptr, std::memory_order_relaxed);
+                // Destruct and reinitialize the data
+                node->data.~T();
                 new (&node->data) T{}; // Reinitialize with default value
                 free_nodes.push_front(node);
             } else {
@@ -65,7 +69,7 @@ private:
         }
     };
 
-    static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size
+    static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size to prevent false sharing
 
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> tail_;
@@ -369,6 +373,205 @@ public:
     }
 };
 
+// Lock-free multi-producer single-consumer queue using Michael & Scott algorithm with enhancements
+template<typename T>
+class MPSCQueue {
+private:
+    struct Node {
+        std::atomic<Node*> next{nullptr};
+        T data{};
+
+        Node() = default;
+        explicit Node(const T& value) : data(value) {}
+        explicit Node(T&& value) : data(std::move(value)) {}
+
+        template<typename... Args>
+        explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
+    };
+
+    // Memory pool for nodes to reduce allocation overhead
+    struct NodePool {
+        std::mutex pool_mutex;
+        std::deque<Node*> free_nodes;
+
+        static constexpr size_t MAX_POOL_SIZE = 1000;
+
+        Node* acquire() {
+            std::lock_guard<std::mutex> lock(pool_mutex);
+            if (!free_nodes.empty()) {
+                Node* node = free_nodes.front();
+                free_nodes.pop_front();
+                // Reset the node's next pointer
+                node->next.store(nullptr, std::memory_order_relaxed);
+                return node;
+            }
+            return new Node();
+        }
+
+        void release(Node* node) {
+            if (!node) return;
+
+            std::lock_guard<std::mutex> lock(pool_mutex);
+            if (free_nodes.size() < MAX_POOL_SIZE) {
+                // Reset the node before returning to pool
+                node->next.store(nullptr, std::memory_order_relaxed);
+                // Destruct and reinitialize the data
+                node->data.~T();
+                new (&node->data) T{}; // Reinitialize with default value
+                free_nodes.push_front(node);
+            } else {
+                delete node;
+            }
+        }
+    };
+
+    static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size to prevent false sharing
+
+    alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
+    alignas(CACHE_LINE_SIZE) std::atomic<Node*> tail_;
+
+    // Additional padding to avoid false sharing between head and tail
+    alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
+
+    // Static memory pool shared among all instances of the same type
+    static inline NodePool node_pool_{};
+
+public:
+    MPSCQueue() {
+        // Initialize with a dummy sentinel node to simplify the algorithm
+        Node* sentinel = node_pool_.acquire();
+        head_.store(sentinel, std::memory_order_relaxed);
+        tail_.store(sentinel, std::memory_order_relaxed);
+    }
+
+    ~MPSCQueue() {
+        // Sequentially clean up all nodes
+        // This assumes that no other threads are accessing the queue during destruction
+        Node* current = head_.load(std::memory_order_acquire);
+
+        while (current != nullptr) {
+            Node* next = current->next.load(std::memory_order_relaxed);
+            node_pool_.release(current);
+            current = next;
+        }
+    }
+
+    void push(const T& item) {
+        Node* new_node = node_pool_.acquire();
+        new (static_cast<void*>(&new_node->data)) T(item); // Placement new
+
+        Node* prev_tail = tail_.load(std::memory_order_acquire);
+
+        while (true) {
+            Node* next = prev_tail->next.load(std::memory_order_acquire);
+
+            // Check if tail is still pointing to the same node
+            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
+            if (prev_tail != tail_snapshot) {
+                // Another thread advanced tail, update our view
+                prev_tail = tail_snapshot;
+                continue;
+            }
+
+            if (next == nullptr) {
+                // Tail was pointing to the last node, try to link our new node
+                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                    // Successfully added the node, now advance the tail
+                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
+                    return;
+                }
+            } else {
+                // Tail wasn't pointing to the last node, advance it
+                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
+            }
+        }
+    }
+
+    void push(T&& item) {
+        Node* new_node = node_pool_.acquire();
+        new (static_cast<void*>(&new_node->data)) T(std::move(item)); // Placement new
+
+        Node* prev_tail = tail_.load(std::memory_order_acquire);
+
+        while (true) {
+            Node* next = prev_tail->next.load(std::memory_order_acquire);
+
+            // Check if tail is still pointing to the same node
+            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
+            if (prev_tail != tail_snapshot) {
+                // Another thread advanced tail, update our view
+                prev_tail = tail_snapshot;
+                continue;
+            }
+
+            if (next == nullptr) {
+                // Tail was pointing to the last node, try to link our new node
+                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                    // Successfully added the node, now advance the tail
+                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
+                    return;
+                }
+            } else {
+                // Tail wasn't pointing to the last node, advance it
+                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
+            }
+        }
+    }
+
+    std::optional<T> try_pop() {
+        Node* prev_head = head_.load(std::memory_order_acquire);
+
+        while (true) {
+            Node* head_snapshot = head_.load(std::memory_order_acquire);
+            Node* tail_snapshot = tail_.load(std::memory_order_acquire);
+            Node* next = head_snapshot->next.load(std::memory_order_acquire);
+
+            if (head_snapshot == tail_snapshot) {
+                // Queue is empty or tail is falling behind
+                if (next == nullptr) {
+                    return std::nullopt; // Queue is actually empty
+                }
+                // Tail is falling behind, try to advance it
+                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_release, std::memory_order_acquire);
+                continue;
+            } else {
+                if (next == nullptr) {
+                    // This shouldn't happen in a consistent state, but handle it
+                    return std::nullopt;
+                }
+
+                // Try to advance the head to the next node
+                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_release, std::memory_order_acquire)) {
+                    // Successfully dequeued, extract the data
+                    T data = std::move(next->data);
+
+                    // Return the old head node to the pool (the sentinel node that was previously at head)
+                    node_pool_.release(head_snapshot);
+
+                    return std::move(data);
+                }
+                // If compare_exchange failed, continue loop to try again
+            }
+        }
+    }
+
+    bool empty() const {
+        Node* head_snapshot = head_.load(std::memory_order_acquire);
+        Node* tail_snapshot = tail_.load(std::memory_order_acquire);
+        Node* next = head_snapshot->next.load(std::memory_order_acquire);
+
+        if (head_snapshot == tail_snapshot) {
+            return (next == nullptr);
+        }
+        return false; // There are definitely elements in the queue
+    }
+
+    template<typename... Args>
+    void emplace(Args&&... args) {
+        push(T(std::forward<Args>(args)...));
+    }
+};
+
 // Lock-free stack implementation for LIFO operations
 template<typename T>
 class LockFreeStack {
@@ -549,6 +752,48 @@ public:
     template<typename... Args>
     bool emplace(Args&&... args) {
         return push(T(std::forward<Args>(args)...));
+    }
+};
+
+// Atomic wrapper for simple data types to ensure thread-safe access
+template<typename T>
+class AtomicWrapper {
+private:
+    mutable std::atomic<T> value_;
+
+public:
+    explicit AtomicWrapper(const T& initial_value = T{}) : value_(initial_value) {}
+
+    T load(std::memory_order order = std::memory_order_seq_cst) const {
+        return value_.load(order);
+    }
+
+    void store(const T& desired, std::memory_order order = std::memory_order_seq_cst) {
+        value_.store(desired, order);
+    }
+
+    T exchange(const T& desired, std::memory_order order = std::memory_order_seq_cst) {
+        return value_.exchange(desired, order);
+    }
+
+    bool compare_exchange_weak(T& expected, const T& desired,
+                              std::memory_order success, std::memory_order failure) {
+        return value_.compare_exchange_weak(expected, desired, success, failure);
+    }
+
+    bool compare_exchange_strong(T& expected, const T& desired,
+                                std::memory_order success, std::memory_order failure) {
+        return value_.compare_exchange_strong(expected, desired, success, failure);
+    }
+
+    // Assignment operators
+    AtomicWrapper& operator=(const T& desired) {
+        store(desired);
+        return *this;
+    }
+
+    operator T() const {
+        return load();
     }
 };
 

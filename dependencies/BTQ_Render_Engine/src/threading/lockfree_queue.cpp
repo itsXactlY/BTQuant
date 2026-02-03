@@ -46,6 +46,39 @@ template class LockFreeQueue<std::optional<btq::Candle>>;
 template class LockFreeQueue<std::pair<btq::Trade, btq::Candle>>;
 template class LockFreeQueue<std::vector<std::pair<double, double>>>;
 
+// Template instantiations for the new MPSCQueue
+template class MPSCQueue<int>;
+template class MPSCQueue<double>;
+template class MPSCQueue<float>;
+template class MPSCQueue<long>;
+template class MPSCQueue<bool>;
+template class MPSCQueue<std::string>;
+template class MPSCQueue<std::vector<double>>;
+template class MPSCQueue<std::vector<float>>;
+template class MPSCQueue<std::vector<int>>;
+template class MPSCQueue<std::vector<long>>;
+template class MPSCQueue<std::vector<bool>>;
+
+// Trading-specific data structures for MPSCQueue
+template class MPSCQueue<btq::Trade>;
+template class MPSCQueue<btq::Candle>;
+template class MPSCQueue<std::vector<btq::Trade>>;
+template class MPSCQueue<std::vector<btq::Candle>>;
+
+// Additional data structures for UI updates and indicator data for MPSCQueue
+template class MPSCQueue<std::pair<double, double>>;  // For histogram data
+template class MPSCQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality for MPSCQueue
+template class MPSCQueue<std::optional<int>>;
+template class MPSCQueue<std::optional<double>>;
+template class MPSCQueue<std::optional<btq::Trade>>;
+template class MPSCQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality for MPSCQueue
+template class MPSCQueue<std::pair<btq::Trade, btq::Candle>>;
+template class MPSCQueue<std::vector<std::pair<double, double>>>;
+
 // Template instantiations for the new LockFreeStack
 template class LockFreeStack<int>;
 template class LockFreeStack<double>;
@@ -111,6 +144,13 @@ template class SPSCRingBuffer<std::optional<btq::Candle>>;
 // Additional template instantiations for new functionality for SPSCRingBuffer
 template class SPSCRingBuffer<std::pair<btq::Trade, btq::Candle>>;
 template class SPSCRingBuffer<std::vector<std::pair<double, double>>>;
+
+// Template instantiations for the new AtomicWrapper
+template class AtomicWrapper<int>;
+template class AtomicWrapper<double>;
+template class AtomicWrapper<float>;
+template class AtomicWrapper<long>;
+template class AtomicWrapper<bool>;
 
 } // namespace threading
 } // namespace btq

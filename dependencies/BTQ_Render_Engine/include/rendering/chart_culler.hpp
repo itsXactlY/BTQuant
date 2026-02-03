@@ -304,6 +304,33 @@ public:
     ChartInstance apply_efficient_offscreen_culling_and_lod(const ChartInstance& chart, float zoom_factor = 1.0f,
                                                           float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
+    /**
+     * @brief Applies task-specific off-screen culling and polygon reduction
+     *        Specifically optimized for the task requirements: efficient off-screen chart item culling
+     *        and significant polygon count reduction at lower zoom levels
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with task-specific off-screen culling and zoom-based polygon reduction applied
+     */
+    ChartInstance apply_task_specific_culling_and_lod(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                    float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
+    /**
+     * @brief Main method to cull off-screen items and reduce polygons based on zoom level
+     *        This is the primary method that addresses the core task requirements
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with off-screen culling and zoom-based polygon reduction applied
+     */
+    ChartInstance cull_offscreen_items_and_reduce_polygons(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                        float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

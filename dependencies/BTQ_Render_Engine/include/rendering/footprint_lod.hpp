@@ -568,6 +568,38 @@ public:
                             const std::vector<FootprintCell>& stacked_imbalances,
                             const FootprintPanel* panel) const;
 
+    // Calculate zoom-dependent LOD for managing detail based on zoom level
+    LODLevel calculateZoomDependentLOD(float cell_width_px, float cell_height_px,
+                                  float zoom_factor) const;
+
+    // Get zoom-dependent render settings for managing detail based on zoom level
+    LODRenderSettings getZoomDependentRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply zoom-dependent LOD to cell rendering
+    void applyZoomDependentLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel) const;
+
+    // Calculate progressive zoom-based LOD for smooth transitions
+    LODLevel calculateProgressiveZoomLOD(float cell_width_px, float cell_height_px,
+                                    float zoom_factor) const;
+
+    // Get progressive zoom-based render settings for smooth transitions
+    LODRenderSettings getProgressiveZoomRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply progressive zoom-based LOD to cell rendering for smooth transitions
+    void applyProgressiveZoomLODToCell(const FootprintCell& cell,
+                                  ImDrawList* draw_list,
+                                  float zoom_factor,
+                                  double max_volume,
+                                  const std::vector<FootprintCell>& diagonal_imbalances,
+                                  const std::vector<FootprintCell>& stacked_imbalances,
+                                  const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

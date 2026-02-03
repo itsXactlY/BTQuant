@@ -129,12 +129,6 @@ private:
     // Find or create the best compatible batch considering multiple factors
     OrderbookBatchElement* findOrCreateBestCompatibleBatch(ImTextureID texture, ImU32 col);
 
-    // Ultra-efficient version that prioritizes maximum batching for order book rendering
-    OrderbookBatchElement* findOrCreateBestCompatibleBatchUltra(ImTextureID texture, ImU32 col);
-
-    // Super-efficient version that prioritizes maximum batching for order book rendering with super-lenient matching
-    OrderbookBatchElement* findOrCreateBestCompatibleBatchSuper(ImTextureID texture, ImU32 col);
-
     // Ultra-performance version that prioritizes maximum batching with minimum computational overhead
     OrderbookBatchElement* findOrCreateBestCompatibleBatchUltraPerformance(ImTextureID texture, ImU32 col);
 
@@ -162,6 +156,9 @@ private:
 
     // Ultra-performance optimization that uses the fastest possible merging to minimize GPU overhead
     void ultraPerformanceOptimizeBatches();
+
+    // Efficient method to combine similar batches and reduce draw calls
+    void combineSimilarBatches();
 };
 
 } // namespace BTQuant

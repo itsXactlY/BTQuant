@@ -102,6 +102,9 @@ public:
     // Advanced method for order book specific batching - combines multiple elements with intelligent grouping
     void addOrderbookElements(const std::vector<OrderbookElementData>& elements);
 
+    // Ultra-efficient method for order book specific batching - maximizes batching by using ultra-compatible grouping
+    void addOrderbookElementsUltra(const std::vector<OrderbookElementData>& elements);
+
     // Submit all batched geometry to the draw list
     void submit(ImDrawList* draw_list);
 
@@ -120,6 +123,9 @@ private:
     // Find or create the best compatible batch considering multiple factors
     OrderbookBatchElement* findOrCreateBestCompatibleBatch(ImTextureID texture, ImU32 col);
 
+    // Ultra-efficient version that prioritizes maximum batching for order book rendering
+    OrderbookBatchElement* findOrCreateBestCompatibleBatchUltra(ImTextureID texture, ImU32 col);
+
     // Initialize a batch with optimal memory allocation
     void initializeBatch(OrderbookBatchElement& batch, ImTextureID texture);
 
@@ -135,6 +141,9 @@ private:
 
     // Advanced optimization that groups batches by texture first, then by color similarity
     void advancedOptimizeBatches();
+
+    // Ultra-optimized optimization that aggressively combines batches to minimize draw calls
+    void ultraOptimizeBatches();
 };
 
 } // namespace BTQuant

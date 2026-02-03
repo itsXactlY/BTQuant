@@ -12,6 +12,11 @@ struct OrderbookBatchVertex {
     ImVec2 pos;
     ImVec2 uv;  // Texture coordinates if needed
     ImU32 col;
+
+    // Constructor for easy initialization
+    OrderbookBatchVertex() : pos(0, 0), uv(0, 0), col(0) {}
+    OrderbookBatchVertex(const ImVec2& position, const ImVec2& texture_coords, ImU32 color)
+        : pos(position), uv(texture_coords), col(color) {}
 };
 
 struct OrderbookBatchElement {
@@ -114,6 +119,9 @@ public:
     // Submit all batched geometry to the draw list
     void submit(ImDrawList* draw_list);
 
+    // Optimized submit method that reduces GPU overhead by minimizing draw calls and memory operations
+    void submitOptimized(ImDrawList* draw_list);
+
     // Get the number of batched elements
     size_t getBatchCount() const { return batches_.size(); }
 
@@ -143,6 +151,9 @@ public:
 
     // Ultra-high performance batch method that combines similar elements with maximum efficiency and minimal overhead
     void batchGeometryUltraHighPerformance(const std::vector<OrderbookElementData>& elements);
+
+    // Maximum performance batch method that combines similar elements with ultimate efficiency and minimal GPU overhead
+    void batchGeometryMaximumPerformance(const std::vector<OrderbookElementData>& elements);
 
 private:
     std::vector<OrderbookBatchElement> batches_;

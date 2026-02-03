@@ -2815,4 +2815,261 @@ void OrderbookBatcher::batchGeometryUltraHighPerformance(const std::vector<Order
     }
 }
 
+// Optimized submit method that reduces GPU overhead by minimizing draw calls and memory operations
+void OrderbookBatcher::submitOptimized(ImDrawList* draw_list) {
+    if (!draw_list || batches_.empty()) {
+        return;
+    }
+
+    // Apply maximum optimization to minimize draw calls before submission
+    maximumOptimizeBatches();
+
+    // Pre-calculate total vertices and indices to reserve space upfront
+    size_t total_vertices = 0;
+    size_t total_indices = 0;
+
+    for (const auto& batch : batches_) {
+        if (!batch.vertices.empty() && !batch.indices.empty()) {
+            total_vertices += batch.vertices.size();
+            total_indices += batch.indices.size();
+        }
+    }
+
+    // Reserve space in the draw list to minimize reallocations
+    if (total_vertices > 0) {
+        draw_list->PrimReserve(static_cast<int>(total_indices), static_cast<int>(total_vertices));
+    }
+
+    // Process batches efficiently to minimize overhead
+    for (const auto& batch : batches_) {
+        if (!batch.vertices.empty() && !batch.indices.empty()) {
+            // Set up draw command with texture and scissor clip
+            ImDrawCmd cmd;
+            cmd.TexRef = ImTextureRef(batch.texture);  // Use the batch's texture ID
+            cmd.ClipRect = draw_list->_CmdHeader.ClipRect;
+            cmd.VtxOffset = draw_list->_VtxCurrentIdx;
+            cmd.IdxOffset = static_cast<unsigned int>(draw_list->IdxBuffer.Size);
+            cmd.ElemCount = static_cast<unsigned int>(batch.indices.size());
+
+            // Add the draw command to the draw list
+            draw_list->CmdBuffer.push_back(cmd);
+
+            // Copy vertices efficiently
+            if (!batch.vertices.empty()) {
+                const size_t vertex_count = batch.vertices.size();
+
+                // Copy vertices using optimized memory operations
+                for (size_t i = 0; i < vertex_count; ++i) {
+                    const OrderbookBatchVertex& src_vertex = batch.vertices[i];
+
+                    ImDrawVert dst_vertex;
+                    dst_vertex.pos = src_vertex.pos;
+                    dst_vertex.uv = src_vertex.uv;
+                    dst_vertex.col = src_vertex.col;
+
+                    draw_list->_VtxWritePtr[0] = dst_vertex;
+                    draw_list->_VtxWritePtr++;
+                }
+            }
+
+            // Copy indices with proper offset - optimized loop
+            if (!batch.indices.empty()) {
+                const size_t idx_count = batch.indices.size();
+                const ImDrawIdx* src_indices = batch.indices.data();
+                ImDrawIdx* dst_indices = draw_list->_IdxWritePtr;
+
+                // Optimize index copying with vertex offset applied
+                const ImDrawIdx vtx_offset = static_cast<ImDrawIdx>(draw_list->_VtxCurrentIdx);
+                for (size_t i = 0; i < idx_count; ++i) {
+                    dst_indices[i] = static_cast<ImDrawIdx>(src_indices[i] + vtx_offset);
+                }
+                draw_list->_IdxWritePtr += idx_count;
+            }
+
+            // Update vertex index counter
+            draw_list->_VtxCurrentIdx += static_cast<unsigned int>(batch.vertices.size());
+        }
+    }
+
+    // Clear the batcher after submitting
+    clear();
+}
+
+// Ultra-efficient method to batch geometry with maximum performance and minimal GPU overhead
+void OrderbookBatcher::batchGeometryMaximumPerformance(const std::vector<OrderbookElementData>& elements) {
+    if (elements.empty()) {
+        return;
+    }
+
+    // Use an ultra-efficient approach with quantized grouping and pre-allocated containers
+    struct MaxPerfBatchKey {
+        ImTextureID texture;
+        uint8_t quantized_r, quantized_g, quantized_b, quantized_a;  // Aggressively quantized color components
+
+        bool operator==(const MaxPerfBatchKey& other) const {
+            return texture == other.texture &&
+                   quantized_r == other.quantized_r &&
+                   quantized_g == other.quantized_g &&
+                   quantized_b == other.quantized_b &&
+                   quantized_a == other.quantized_a;
+        }
+    };
+
+    // Custom hash function for MaxPerfBatchKey
+    struct MaxPerfBatchKeyHash {
+        std::size_t operator()(const MaxPerfBatchKey& k) const {
+            // Ultra-efficient hash combining all components with bit shifting
+            return (static_cast<std::size_t>((intptr_t)k.texture) << 16) ^
+                   (static_cast<std::size_t>(k.quantized_r) << 12) ^
+                   (static_cast<std::size_t>(k.quantized_g) << 8) ^
+                   (static_cast<std::size_t>(k.quantized_b) << 4) ^
+                   static_cast<std::size_t>(k.quantized_a);
+        }
+    };
+
+    // Use a more efficient container with custom allocator if needed
+    std::unordered_map<MaxPerfBatchKey, std::vector<const OrderbookElementData*>, MaxPerfBatchKeyHash> max_perf_grouped_elements;
+
+    // Group elements by texture and aggressively quantized color in a single pass
+    for (const auto& element : elements) {
+        // Aggressively quantize the color to maximize batching opportunities
+        // Using only 4-bit precision (16 levels) to maximize grouping
+        uint8_t quantized_r = ((element.color >> 0) & 0xFF) >> 4;   // Top 4 bits
+        uint8_t quantized_g = ((element.color >> 8) & 0xFF) >> 4;
+        uint8_t quantized_b = ((element.color >> 16) & 0xFF) >> 4;
+        uint8_t quantized_a = ((element.color >> 24) & 0xFF) >> 4;
+
+        MaxPerfBatchKey key{element.texture, quantized_r, quantized_g, quantized_b, quantized_a};
+        max_perf_grouped_elements[key].push_back(&element);
+    }
+
+    // Process each group with maximum efficiency
+    for (const auto& [key, element_ptrs] : max_perf_grouped_elements) {
+        // Find or create a compatible batch for this group using the most efficient method
+        ImU32 representative_color = (key.quantized_a << 28) | (key.quantized_b << 20) | (key.quantized_g << 12) | (key.quantized_r << 4);
+        auto* batch = findOrCreateBestCompatibleBatchUltraPerformance(key.texture, representative_color);
+
+        // Pre-allocate space for all elements in this group to minimize reallocations
+        size_t estimated_vertices = element_ptrs.size() * 4; // 4 vertices per element typically
+        size_t estimated_indices = element_ptrs.size() * 6;  // 6 indices per element typically
+
+        // Reserve extra space to account for potential growth
+        batch->vertices.reserve(batch->vertices.size() + estimated_vertices + 1024);
+        batch->indices.reserve(batch->indices.size() + estimated_indices + 2048);
+
+        // Process all elements in this group in a single contiguous block
+        for (const auto* element_ptr : element_ptrs) {
+            const auto& element = *element_ptr;
+
+            // Add the element based on its type with maximum efficiency
+            switch (element.type) {
+                case OrderbookElementType::RECT_FILLED:
+                    {
+                        size_t vertex_start = batch->vertices.size();
+
+                        // Use emplace_back for maximum efficiency
+                        batch->vertices.emplace_back(element.rect.min, ImVec2(0.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.rect.max.x, element.rect.min.y), ImVec2(1.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(element.rect.max, ImVec2(1.0f, 1.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.rect.min.x, element.rect.max.y), ImVec2(0.0f, 1.0f), element.color);
+
+                        // Add indices efficiently
+                        ImDrawIdx base_idx = static_cast<ImDrawIdx>(vertex_start);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 1);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx + 3);
+                    }
+                    break;
+
+                case OrderbookElementType::LINE:
+                    {
+                        ImVec2 delta = ImVec2(element.line.p2.x - element.line.p1.x, element.line.p2.y - element.line.p1.y);
+                        float length_sq = delta.x * delta.x + delta.y * delta.y;
+                        if (length_sq == 0.0f) continue;
+
+                        float length = sqrtf(length_sq);
+                        ImVec2 dir = ImVec2(delta.x / length, delta.y / length);
+                        ImVec2 perp = ImVec2(-dir.y, dir.x);
+
+                        float half_thickness = element.thickness * 0.5f;
+                        ImVec2 offset = ImVec2(perp.x * half_thickness, perp.y * half_thickness);
+
+                        size_t vertex_start = batch->vertices.size();
+
+                        batch->vertices.emplace_back(ImVec2(element.line.p1.x - offset.x, element.line.p1.y - offset.y), ImVec2(0.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.line.p1.x + offset.x, element.line.p1.y + offset.y), ImVec2(1.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.line.p2.x + offset.x, element.line.p2.y + offset.y), ImVec2(1.0f, 1.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.line.p2.x - offset.x, element.line.p2.y - offset.y), ImVec2(0.0f, 1.0f), element.color);
+
+                        ImDrawIdx base_idx = static_cast<ImDrawIdx>(vertex_start);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 1);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx + 3);
+                    }
+                    break;
+
+                case OrderbookElementType::CIRCLE_FILLED:
+                    {
+                        const int segments = 12;
+                        const float segment_angle = 2.0f * 3.14159265358979323846f / segments;
+
+                        // Add center vertex
+                        size_t center_vertex_idx = batch->vertices.size();
+                        batch->vertices.emplace_back(element.rect.min, ImVec2(0.5f, 0.5f), element.color);
+
+                        // Add outer vertices efficiently
+                        size_t initial_vertex_count = batch->vertices.size();
+                        batch->vertices.reserve(batch->vertices.size() + segments + 1); // Reserve space for all outer vertices
+
+                        for (int i = 0; i <= segments; i++) {
+                            float angle = i * segment_angle;
+                            ImVec2 point = ImVec2(
+                                element.rect.min.x + cosf(angle) * 10.0f, // Using 10.0f as radius
+                                element.rect.min.y + sinf(angle) * 10.0f
+                            );
+
+                            batch->vertices.emplace_back(point, ImVec2(0.5f + cosf(angle)*0.5f, 0.5f + sinf(angle)*0.5f), element.color);
+                        }
+
+                        // Create triangle fan from center to outer vertices efficiently
+                        size_t outer_start_idx = center_vertex_idx + 1;
+                        batch->indices.reserve(batch->indices.size() + segments * 3); // Reserve space for all indices
+
+                        for (int i = 0; i < segments; i++) {
+                            batch->indices.push_back(static_cast<ImDrawIdx>(center_vertex_idx));
+                            batch->indices.push_back(static_cast<ImDrawIdx>(outer_start_idx + i));
+                            batch->indices.push_back(static_cast<ImDrawIdx>(outer_start_idx + i + 1));
+                        }
+                    }
+                    break;
+
+                default:
+                    {
+                        size_t vertex_start = batch->vertices.size();
+
+                        batch->vertices.emplace_back(element.rect.min, ImVec2(0.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.rect.max.x, element.rect.min.y), ImVec2(1.0f, 0.0f), element.color);
+                        batch->vertices.emplace_back(element.rect.max, ImVec2(1.0f, 1.0f), element.color);
+                        batch->vertices.emplace_back(ImVec2(element.rect.min.x, element.rect.max.y), ImVec2(0.0f, 1.0f), element.color);
+
+                        ImDrawIdx base_idx = static_cast<ImDrawIdx>(vertex_start);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 1);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx);
+                        batch->indices.push_back(base_idx + 2);
+                        batch->indices.push_back(base_idx + 3);
+                    }
+                    break;
+            }
+        }
+    }
+}
+
 } // namespace BTQuant

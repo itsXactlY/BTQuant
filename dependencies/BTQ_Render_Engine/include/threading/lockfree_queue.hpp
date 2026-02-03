@@ -9,10 +9,15 @@
 #include <utility>
 #include <vector>
 #include <memory_resource> // For potential memory resource support
+#include <deque>
+#include <mutex>
+#include <condition_variable>
+#include <cstddef>  // For ptrdiff_t
 
 namespace btq {
 namespace threading {
 
+// Enhanced LockFreeQueue with better memory management
 template<typename T>
 class LockFreeQueue {
 private:
@@ -28,6 +33,38 @@ private:
         explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
     };
 
+    // Memory pool for nodes to reduce allocation overhead
+    struct NodePool {
+        std::mutex pool_mutex;
+        std::deque<Node*> free_nodes;
+
+        static constexpr size_t MAX_POOL_SIZE = 1000;
+
+        Node* acquire() {
+            std::lock_guard<std::mutex> lock(pool_mutex);
+            if (!free_nodes.empty()) {
+                Node* node = free_nodes.front();
+                free_nodes.pop_front();
+                return node;
+            }
+            return new Node();
+        }
+
+        void release(Node* node) {
+            if (!node) return;
+
+            std::lock_guard<std::mutex> lock(pool_mutex);
+            if (free_nodes.size() < MAX_POOL_SIZE) {
+                // Reset the node before returning to pool
+                node->next.store(nullptr, std::memory_order_relaxed);
+                new (&node->data) T{}; // Reinitialize with default value
+                free_nodes.push_front(node);
+            } else {
+                delete node;
+            }
+        }
+    };
+
     static constexpr size_t CACHE_LINE_SIZE = 64; // Typical cache line size
 
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
@@ -36,10 +73,13 @@ private:
     // Additional padding to avoid false sharing between head and tail
     alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
 
+    // Static memory pool shared among all instances of the same type
+    static inline NodePool node_pool_{};
+
 public:
     explicit LockFreeQueue() {
         // Initialize with a dummy sentinel node to simplify the algorithm
-        Node* sentinel = new Node();
+        Node* sentinel = node_pool_.acquire();
         head_.store(sentinel, std::memory_order_relaxed);
         tail_.store(sentinel, std::memory_order_relaxed);
     }
@@ -51,13 +91,14 @@ public:
 
         while (current != nullptr) {
             Node* next = current->next.load(std::memory_order_relaxed);
-            delete current;
+            node_pool_.release(current);
             current = next;
         }
     }
 
     void push(const T& new_value) {
-        Node* new_node = new Node(new_value);
+        Node* new_node = node_pool_.acquire();
+        new (static_cast<void*>(&new_node->data)) T(new_value); // Placement new
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -87,7 +128,8 @@ public:
     }
 
     void push(T&& new_value) {
-        Node* new_node = new Node(std::move(new_value));
+        Node* new_node = node_pool_.acquire();
+        new (static_cast<void*>(&new_node->data)) T(std::move(new_value)); // Placement new
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -143,9 +185,9 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Delete the old head (the sentinel node that was previously at head)
-                    // We only delete the old head after advancing the head pointer
-                    delete head_snapshot;
+                    // Return the old head node to the pool (the sentinel node that was previously at head)
+                    // We only return the old head after advancing the head pointer
+                    node_pool_.release(head_snapshot);
 
                     return std::make_shared<T>(std::move(data));
                 }
@@ -182,8 +224,8 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Delete the old head (the sentinel node that was previously at head)
-                    delete head_snapshot;
+                    // Return the old head node to the pool (the sentinel node that was previously at head)
+                    node_pool_.release(head_snapshot);
 
                     return std::move(data);
                 }
@@ -240,7 +282,8 @@ public:
     // Wait-free push operation with memory pool for better performance
     template<typename... Args>
     void emplace(Args&&... args) {
-        Node* new_node = new Node(std::forward<Args>(args)...);
+        Node* new_node = node_pool_.acquire();
+        new (static_cast<void*>(&new_node->data)) T(std::forward<Args>(args)...); // Placement new
 
         Node* prev_tail = tail_.load(std::memory_order_acquire);
 
@@ -323,6 +366,189 @@ public:
     bool has_waiting_consumers() const {
         // This is a simplified check - in practice, you'd need more sophisticated tracking
         return !empty();
+    }
+};
+
+// Lock-free stack implementation for LIFO operations
+template<typename T>
+class LockFreeStack {
+private:
+    struct Node {
+        std::atomic<Node*> next{nullptr};
+        T data{};
+
+        Node() = default;
+        explicit Node(const T& value) : data(value) {}
+        explicit Node(T&& value) : data(std::move(value)) {}
+
+        template<typename... Args>
+        explicit Node(Args&&... args) : data(std::forward<Args>(args)...) {}
+    };
+
+    alignas(64) std::atomic<Node*> head_{nullptr};
+
+public:
+    void push(const T& item) {
+        Node* new_node = new Node(item);
+        Node* current_head = head_.load(std::memory_order_relaxed);
+
+        do {
+            new_node->next.store(current_head, std::memory_order_relaxed);
+        } while (!head_.compare_exchange_weak(current_head, new_node,
+                                             std::memory_order_acq_rel,
+                                             std::memory_order_relaxed));
+    }
+
+    void push(T&& item) {
+        Node* new_node = new Node(std::move(item));
+        Node* current_head = head_.load(std::memory_order_relaxed);
+
+        do {
+            new_node->next.store(current_head, std::memory_order_relaxed);
+        } while (!head_.compare_exchange_weak(current_head, new_node,
+                                             std::memory_order_acq_rel,
+                                             std::memory_order_relaxed));
+    }
+
+    std::shared_ptr<T> pop() {
+        Node* old_head = head_.load(std::memory_order_relaxed);
+
+        while (old_head != nullptr) {
+            Node* new_head = old_head->next.load(std::memory_order_relaxed);
+
+            if (head_.compare_exchange_weak(old_head, new_head,
+                                           std::memory_order_acq_rel,
+                                           std::memory_order_relaxed)) {
+                std::shared_ptr<T> result = std::make_shared<T>(std::move(old_head->data));
+                delete old_head;
+                return result;
+            }
+        }
+
+        return nullptr;
+    }
+
+    std::optional<T> try_pop() {
+        Node* old_head = head_.load(std::memory_order_relaxed);
+
+        while (old_head != nullptr) {
+            Node* new_head = old_head->next.load(std::memory_order_relaxed);
+
+            if (head_.compare_exchange_weak(old_head, new_head,
+                                           std::memory_order_acq_rel,
+                                           std::memory_order_relaxed)) {
+                T result = std::move(old_head->data);
+                delete old_head;
+                return result;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    bool empty() const {
+        return head_.load(std::memory_order_acquire) == nullptr;
+    }
+
+    template<typename... Args>
+    void emplace(Args&&... args) {
+        push(T(std::forward<Args>(args)...));
+    }
+};
+
+// Single-producer single-consumer ring buffer for high-performance scenarios
+template<typename T>
+class SPSCRingBuffer {
+private:
+    struct BufferNode {
+        alignas(64) std::atomic<bool> ready{false};
+        T data{};
+    };
+
+    std::vector<BufferNode> buffer_;
+    const size_t capacity_;
+
+    alignas(64) std::atomic<size_t> write_pos_{0};
+    alignas(64) std::atomic<size_t> read_pos_{0};
+
+public:
+    explicit SPSCRingBuffer(size_t capacity)
+        : capacity_(capacity), buffer_(capacity) {}
+
+    bool push(const T& item) {
+        size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        size_t next_write_idx = (write_idx + 1) % capacity_;
+
+        // Check if buffer is full (leave one slot empty to distinguish from empty)
+        if (next_write_idx == read_pos_.load(std::memory_order_acquire)) {
+            return false; // Buffer is full
+        }
+
+        buffer_[write_idx].data = item;
+        buffer_[write_idx].ready.store(true, std::memory_order_release);
+        write_pos_.store(next_write_idx, std::memory_order_release);
+
+        return true;
+    }
+
+    bool push(T&& item) {
+        size_t write_idx = write_pos_.load(std::memory_order_relaxed);
+        size_t next_write_idx = (write_idx + 1) % capacity_;
+
+        // Check if buffer is full (leave one slot empty to distinguish from empty)
+        if (next_write_idx == read_pos_.load(std::memory_order_acquire)) {
+            return false; // Buffer is full
+        }
+
+        buffer_[write_idx].data = std::move(item);
+        buffer_[write_idx].ready.store(true, std::memory_order_release);
+        write_pos_.store(next_write_idx, std::memory_order_release);
+
+        return true;
+    }
+
+    std::optional<T> try_pop() {
+        size_t read_idx = read_pos_.load(std::memory_order_relaxed);
+
+        if (read_idx == write_pos_.load(std::memory_order_acquire)) {
+            return std::nullopt; // Buffer is empty
+        }
+
+        // Ensure data is ready before consuming
+        if (!buffer_[read_idx].ready.load(std::memory_order_acquire)) {
+            return std::nullopt; // Data not ready yet
+        }
+
+        T result = std::move(buffer_[read_idx].data);
+        buffer_[read_idx].ready.store(false, std::memory_order_release);
+        read_pos_.store((read_idx + 1) % capacity_, std::memory_order_release);
+
+        return result;
+    }
+
+    bool empty() const {
+        return read_pos_.load(std::memory_order_acquire) == write_pos_.load(std::memory_order_acquire);
+    }
+
+    bool full() const {
+        size_t next_write_pos = (write_pos_.load(std::memory_order_acquire) + 1) % capacity_;
+        return next_write_pos == read_pos_.load(std::memory_order_acquire);
+    }
+
+    size_t size() const {
+        ptrdiff_t sz = static_cast<ptrdiff_t>(write_pos_.load(std::memory_order_acquire)) -
+                       static_cast<ptrdiff_t>(read_pos_.load(std::memory_order_acquire));
+        if (sz < 0) sz += static_cast<ptrdiff_t>(capacity_);
+        return static_cast<size_t>(sz);
+    }
+
+    size_t capacity() const {
+        return capacity_;
+    }
+
+    template<typename... Args>
+    bool emplace(Args&&... args) {
+        return push(T(std::forward<Args>(args)...));
     }
 };
 

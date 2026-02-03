@@ -13,6 +13,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/concurrentqueue-src)
 
 # Define test executables
 add_executable(test_lockfree_queue test_lockfree_queue.cpp)
+add_executable(test_lockfree_structures test_lockfree_structures.cpp)
 add_executable(test_memory_tracker
     test_memory_tracker.cpp
     ../src/performance/memory_tracker.cpp
@@ -20,6 +21,7 @@ add_executable(test_memory_tracker
 
 # Link against Threads library
 target_link_libraries(test_lockfree_queue Threads::Threads)
+target_link_libraries(test_lockfree_structures Threads::Threads)
 target_link_libraries(test_memory_tracker Threads::Threads)
 
 # Set properties for the tests

@@ -138,6 +138,10 @@ public:
   // Method to alert users to data problems
   void alert_user_to_data_problems(const std::string& symbol, const std::string& problem_description, double severity = 0.5);
 
+  // NEW: Method to specifically notify users of data problems in a clear way
+  void notify_users_of_data_problem(const std::string& symbol, const std::string& problem_description,
+                                   double severity, DataQualityIssueType issue_type);
+
   // Enhanced alerting methods for specific data quality issues
   void alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time);
   void alert_on_duplicate_trade(const TradeData& trade, const std::string& symbol);
@@ -156,11 +160,23 @@ public:
   // Monitor the health of a specific data stream
   void monitor_data_stream_health(const std::string& symbol);
 
+  // NEW: Enhanced monitoring methods for specific data quality patterns
+  void check_missing_data_patterns(const std::string& symbol);
+  void check_duplicate_trade_patterns(const std::string& symbol);
+  void check_out_of_order_timestamp_patterns(const std::string& symbol);
+  void check_latency_issue_patterns(const std::string& symbol);
+
   // Send notifications to UI components
   void send_ui_notification(const DataQualityIssue& issue);
 
   // Get a user-friendly summary of data quality issues
   std::string get_user_friendly_summary() const;
+
+  // Public methods for enhanced data quality monitoring
+  uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
+  bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,
+                           double price_tolerance = 0.000001,
+                           double volume_tolerance = 0.0001f) const;
 
 private:
   // Structure to track statistics per symbol for advanced data quality checks

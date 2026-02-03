@@ -154,6 +154,39 @@ public:
 
     std::vector<DetailedTimingBreakdown> get_detailed_timing_breakdown() const;
 
+    // Enhanced function-level profiling with detailed breakdown
+    struct FunctionLevelBreakdown {
+        std::string function_name;
+        uint64_t call_count;
+        double total_time_ms;
+        double exclusive_time_ms;
+        double inclusive_time_ms;
+        double min_time_ms;
+        double max_time_ms;
+        double avg_time_ms;
+        double std_deviation_ms;
+        double percentage_of_total;
+        std::vector<double> percentiles; // 25th, 50th, 75th, 95th, 99th percentiles
+        std::string thread_id;
+    };
+
+    std::vector<FunctionLevelBreakdown> get_function_level_breakdown() const;
+
+    // Get CPU time distribution by function
+    std::map<std::string, double> get_cpu_time_distribution() const;
+
+    // Get functions with similar execution patterns
+    std::vector<std::vector<std::string>> get_function_similarity_clusters() const;
+
+    // Generate detailed breakdown report showing where CPU time is spent
+    std::string generate_detailed_breakdown_report() const;
+
+    // Generate a report focusing on CPU time distribution
+    std::string generate_cpu_time_distribution_report() const;
+
+    // Generate a report showing function call overhead
+    std::string generate_overhead_analysis_report() const;
+
     // Hot path detection - identifies most time-consuming call paths
     std::vector<std::vector<std::string>> get_hot_paths(int max_paths = 10) const;
 

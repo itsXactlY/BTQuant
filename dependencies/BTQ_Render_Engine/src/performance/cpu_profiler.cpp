@@ -660,6 +660,447 @@ CPUProfiler::get_detailed_timing_breakdown() const {
     return detailed_breakdowns;
 }
 
+std::vector<CPUProfiler::FunctionLevelBreakdown>
+CPUProfiler::get_function_level_breakdown() const {
+    std::vector<FunctionLevelBreakdown> function_breakdowns;
+    std::map<std::string, double> exclusive_times;
+
+    // Calculate exclusive times
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+        for (const auto& [thread_id, thread_data] : thread_profiles_) {
+            if (thread_data.call_tree_root) {
+                calculate_exclusive_times(thread_data.call_tree_root.get(), exclusive_times);
+            }
+        }
+    }
+
+    auto all_profiles = get_aggregated_profiles();
+    uint64_t total_time_ns = 0;
+
+    // Calculate total time for percentage calculation
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_time_ns += profile_data.total_duration_ns;
+    }
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        FunctionLevelBreakdown flb;
+        flb.function_name = func_name;
+        flb.call_count = profile_data.call_count;
+        flb.total_time_ms = profile_data.get_total_duration_ms();
+        flb.exclusive_time_ms = exclusive_times.count(func_name) ?
+                               exclusive_times[func_name] : 0.0;
+        flb.inclusive_time_ms = profile_data.get_total_duration_ms();
+        flb.min_time_ms = profile_data.get_min_duration_ms();
+        flb.max_time_ms = profile_data.get_max_duration_ms();
+        flb.avg_time_ms = profile_data.get_average_duration_ms();
+
+        // Calculate standard deviation
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double sum_squares = 0.0;
+            double mean = flb.avg_time_ms;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            double variance = sum_squares / profile_data.duration_history.size();
+            flb.std_deviation_ms = std::sqrt(variance);
+        } else {
+            flb.std_deviation_ms = 0.0;
+        }
+
+        flb.percentage_of_total = total_time_ns > 0 ?
+                                 (static_cast<double>(profile_data.total_duration_ns) /
+                                  static_cast<double>(total_time_ns)) * 100.0 : 0.0;
+
+        // Calculate percentiles (25th, 50th, 75th, 95th, 99th)
+        if (!profile_data.duration_history.empty()) {
+            std::vector<uint64_t> sorted_durations = profile_data.duration_history;
+            std::sort(sorted_durations.begin(), sorted_durations.end());
+
+            auto get_percentile = [&](double percentile) -> double {
+                if (sorted_durations.empty()) return 0.0;
+                size_t index = static_cast<size_t>((percentile / 100.0) * sorted_durations.size());
+                if (index >= sorted_durations.size()) index = sorted_durations.size() - 1;
+                return static_cast<double>(sorted_durations[index]) / 1000000.0;
+            };
+
+            flb.percentiles.push_back(get_percentile(25));  // 25th percentile
+            flb.percentiles.push_back(get_percentile(50));  // Median
+            flb.percentiles.push_back(get_percentile(75));  // 75th percentile
+            flb.percentiles.push_back(get_percentile(95));  // 95th percentile
+            flb.percentiles.push_back(get_percentile(99));  // 99th percentile
+        } else {
+            flb.percentiles = {0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+
+        // Add thread ID information
+        flb.thread_id = "aggregated";
+
+        function_breakdowns.push_back(flb);
+    }
+
+    // Sort by total time (most time-consuming first)
+    std::sort(function_breakdowns.begin(), function_breakdowns.end(),
+              [](const FunctionLevelBreakdown& a, const FunctionLevelBreakdown& b) {
+                  return a.total_time_ms > b.total_time_ms;
+              });
+
+    return function_breakdowns;
+}
+
+std::map<std::string, double>
+CPUProfiler::get_cpu_time_distribution() const {
+    std::map<std::string, double> time_distribution;
+
+    auto all_profiles = get_aggregated_profiles();
+    uint64_t total_time_ns = 0;
+
+    // Calculate total time for percentage calculation
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_time_ns += profile_data.total_duration_ns;
+    }
+
+    if (total_time_ns == 0) {
+        return time_distribution;
+    }
+
+    // Calculate percentage for each function
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        double percentage = (static_cast<double>(profile_data.total_duration_ns) /
+                            static_cast<double>(total_time_ns)) * 100.0;
+        time_distribution[func_name] = percentage;
+    }
+
+    return time_distribution;
+}
+
+std::vector<std::vector<std::string>>
+CPUProfiler::get_function_similarity_clusters() const {
+    std::vector<std::vector<std::string>> clusters;
+
+    // This is a simplified clustering algorithm based on execution time similarity
+    auto all_profiles = get_aggregated_profiles();
+
+    if (all_profiles.empty()) {
+        return clusters;
+    }
+
+    // Group functions by similar average execution time (within 10% tolerance)
+    std::vector<std::pair<std::string, double>> func_times;
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (profile_data.call_count > 0) {
+            func_times.push_back({func_name, profile_data.get_average_duration_ms()});
+        }
+    }
+
+    // Sort by average execution time
+    std::sort(func_times.begin(), func_times.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second < b.second;
+              });
+
+    // Cluster functions with similar execution times
+    if (!func_times.empty()) {
+        std::vector<std::string> current_cluster;
+        current_cluster.push_back(func_times[0].first);
+
+        for (size_t i = 1; i < func_times.size(); ++i) {
+            double prev_time = func_times[i-1].second;
+            double curr_time = func_times[i].second;
+
+            // If the difference is within 10% of the previous time, cluster them together
+            if (curr_time <= prev_time * 1.1 && curr_time >= prev_time * 0.9) {
+                current_cluster.push_back(func_times[i].first);
+            } else {
+                // Start a new cluster
+                if (!current_cluster.empty()) {
+                    clusters.push_back(current_cluster);
+                }
+                current_cluster.clear();
+                current_cluster.push_back(func_times[i].first);
+            }
+        }
+
+        // Add the last cluster
+        if (!current_cluster.empty()) {
+            clusters.push_back(current_cluster);
+        }
+    }
+
+    return clusters;
+}
+
+std::string CPUProfiler::generate_detailed_breakdown_report() const {
+    std::ostringstream report;
+    report << "Detailed CPU Profiling Breakdown Report\n";
+    report << "=======================================\n\n";
+
+    auto function_breakdowns = get_function_level_breakdown();
+    auto time_distribution = get_cpu_time_distribution();
+
+    if (function_breakdowns.empty()) {
+        report << "No profiling data collected.\n";
+        return report.str();
+    }
+
+    report << std::fixed << std::setprecision(3);
+    report << "Function-Level CPU Time Analysis\n";
+    report << "--------------------------------\n";
+    report << "Function Name                        Calls     Total(ms)  Exclusive(ms)  Inclusive(ms)  Avg(ms)    Min(ms)    Max(ms)    StdDev(ms)  %Total\n";
+    report << "----------------------------------------------------------------------------------------------------------------------------------------\n";
+
+    for (const auto& breakdown : function_breakdowns) {
+        report << std::left << std::setw(35) << breakdown.function_name.substr(0, 34);
+        report << std::right << std::setw(10) << breakdown.call_count;
+        report << std::right << std::setw(11) << breakdown.total_time_ms;
+        report << std::right << std::setw(13) << breakdown.exclusive_time_ms;
+        report << std::right << std::setw(13) << breakdown.inclusive_time_ms;
+        report << std::right << std::setw(9) << breakdown.avg_time_ms;
+        report << std::right << std::setw(9) << breakdown.min_time_ms;
+        report << std::right << std::setw(9) << breakdown.max_time_ms;
+        report << std::right << std::setw(12) << breakdown.std_deviation_ms;
+        report << std::right << std::setw(7) << time_distribution.at(breakdown.function_name) << "%\n";
+    }
+
+    report << "\nPercentile Analysis (Top 10 Functions by Total Time):\n";
+    report << "----------------------------------------------------\n";
+    report << "Function Name                        25th       50th       75th       95th       99th\n";
+    report << "-------------------------------------------------------------------------------------\n";
+
+    // Show percentiles for top 10 functions
+    int count = 0;
+    for (const auto& breakdown : function_breakdowns) {
+        if (count++ >= 10) break;
+
+        report << std::left << std::setw(35) << breakdown.function_name.substr(0, 34);
+        if (breakdown.percentiles.size() >= 5) {
+            report << std::right << std::setw(11) << breakdown.percentiles[0];  // 25th
+            report << std::right << std::setw(11) << breakdown.percentiles[1];  // 50th (median)
+            report << std::right << std::setw(11) << breakdown.percentiles[2];  // 75th
+            report << std::right << std::setw(11) << breakdown.percentiles[3];  // 95th
+            report << std::right << std::setw(11) << breakdown.percentiles[4];  // 99th
+        }
+        report << "\n";
+    }
+
+    // Show function similarity clusters
+    auto clusters = get_function_similarity_clusters();
+    report << "\nFunction Similarity Clusters (by execution time):\n";
+    report << "-------------------------------------------------\n";
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        report << "Cluster " << (i + 1) << " (" << clusters[i].size() << " functions): ";
+        for (size_t j = 0; j < clusters[i].size(); ++j) {
+            if (j > 0) report << ", ";
+            report << clusters[i][j];
+        }
+        report << "\n";
+    }
+
+    // Summary statistics
+    auto stats = get_profiling_stats();
+    report << "\nSummary Statistics:\n";
+    report << "-------------------\n";
+    report << "Total functions profiled: " << stats.unique_functions << "\n";
+    report << "Total calls: " << stats.total_calls << "\n";
+    report << "Total CPU time: " << stats.total_time_ms << " ms\n";
+    report << "Average time per call: " << stats.avg_time_per_call_ms << " ms\n";
+    report << "Minimum time per call: " << stats.min_time_per_call_ms << " ms\n";
+    report << "Maximum time per call: " << stats.max_time_per_call_ms << " ms\n";
+
+    return report.str();
+}
+
+std::string CPUProfiler::generate_cpu_time_distribution_report() const {
+    std::ostringstream report;
+    report << "CPU Time Distribution Analysis Report\n";
+    report << "=====================================\n\n";
+
+    auto time_distribution = get_cpu_time_distribution();
+    auto all_profiles = get_aggregated_profiles();
+
+    if (time_distribution.empty()) {
+        report << "No profiling data collected.\n";
+        return report.str();
+    }
+
+    report << std::fixed << std::setprecision(3);
+    report << "CPU Time Distribution by Function\n";
+    report << "---------------------------------\n";
+    report << "Function Name                        % of Total  Total Time(ms)  Calls\n";
+    report << "--------------------------------------------------------------------\n";
+
+    // Sort by percentage of total time
+    std::vector<std::pair<std::string, double>> sorted_distribution(
+        time_distribution.begin(), time_distribution.end());
+
+    std::sort(sorted_distribution.begin(), sorted_distribution.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    for (const auto& [func_name, percentage] : sorted_distribution) {
+        auto profile_it = all_profiles.find(func_name);
+        if (profile_it != all_profiles.end()) {
+            report << std::left << std::setw(35) << func_name.substr(0, 34);
+            report << std::right << std::setw(10) << percentage << "%";
+            report << std::right << std::setw(14) << profile_it->second.get_total_duration_ms();
+            report << std::right << std::setw(8) << profile_it->second.call_count << "\n";
+        }
+    }
+
+    // Create a simple text-based pie chart representation
+    report << "\nCPU Time Distribution Visualization (Top 10 Functions):\n";
+    report << "------------------------------------------------------\n";
+
+    int displayed = 0;
+    for (const auto& [func_name, percentage] : sorted_distribution) {
+        if (displayed++ >= 10) break;
+
+        report << std::left << std::setw(35) << func_name.substr(0, 34) << "|";
+
+        // Draw a bar proportional to the percentage (scale to 40 characters)
+        int bar_length = static_cast<int>(percentage * 0.4); // 100% = 40 chars
+        for (int i = 0; i < bar_length && i < 40; ++i) {
+            report << "=";
+        }
+        report << " " << percentage << "%\n";
+    }
+
+    // Calculate and show the cumulative percentage for top functions
+    report << "\nCumulative CPU Time Analysis:\n";
+    report << "----------------------------\n";
+    double cumulative_percentage = 0.0;
+    int top_functions_count = 0;
+    for (const auto& [func_name, percentage] : sorted_distribution) {
+        cumulative_percentage += percentage;
+        top_functions_count++;
+        report << "Top " << top_functions_count << " functions account for "
+               << std::fixed << std::setprecision(2) << cumulative_percentage
+               << "% of total CPU time\n";
+
+        if (cumulative_percentage >= 80.0) {
+            break; // Stop when we reach 80% of the total time
+        }
+    }
+
+    return report.str();
+}
+
+std::string CPUProfiler::generate_overhead_analysis_report() const {
+    std::ostringstream report;
+    report << "Function Call Overhead Analysis Report\n";
+    report << "======================================\n\n";
+
+    auto all_profiles = get_aggregated_profiles();
+
+    if (all_profiles.empty()) {
+        report << "No profiling data collected.\n";
+        return report.str();
+    }
+
+    report << std::fixed << std::setprecision(3);
+    report << "Function Call Overhead Analysis\n";
+    report << "-------------------------------\n";
+    report << "Function Name                        Calls     Total(ms)  Avg(ms)    Min(ms)    Max(ms)    Variance\n";
+    report << "------------------------------------------------------------------------------------------------\n";
+
+    // Calculate overhead metrics for each function
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        // Calculate variance
+        double variance = 0.0;
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double mean = profile_data.get_average_duration_ms();
+            double sum_squares = 0.0;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            variance = sum_squares / profile_data.duration_history.size();
+        }
+
+        report << std::left << std::setw(35) << func_name.substr(0, 34);
+        report << std::right << std::setw(10) << profile_data.call_count;
+        report << std::right << std::setw(11) << profile_data.get_total_duration_ms();
+        report << std::right << std::setw(9) << profile_data.get_average_duration_ms();
+        report << std::right << std::setw(9) << profile_data.get_min_duration_ms();
+        report << std::right << std::setw(9) << profile_data.get_max_duration_ms();
+        report << std::right << std::setw(9) << variance << "\n";
+    }
+
+    // Identify functions with high call frequency
+    report << "\nHigh-Frequency Functions (>100 calls):\n";
+    report << "-------------------------------------\n";
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (profile_data.call_count > 100) {
+            report << "- " << func_name << ": " << profile_data.call_count << " calls, "
+                   << profile_data.get_average_duration_ms() << " ms avg\n";
+        }
+    }
+
+    // Identify functions with high variance (potential bottlenecks)
+    report << "\nHigh-Variance Functions (Potential Bottlenecks):\n";
+    report << "------------------------------------------------\n";
+    std::vector<std::pair<std::string, double>> high_variance_funcs;
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double mean = profile_data.get_average_duration_ms();
+            double sum_squares = 0.0;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            double variance = sum_squares / profile_data.duration_history.size();
+            if (variance > 0.1) { // Threshold for high variance
+                high_variance_funcs.push_back({func_name, variance});
+            }
+        }
+    }
+
+    std::sort(high_variance_funcs.begin(), high_variance_funcs.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    for (const auto& [func_name, variance] : high_variance_funcs) {
+        auto profile_it = all_profiles.find(func_name);
+        if (profile_it != all_profiles.end()) {
+            report << "- " << func_name << ": variance=" << variance << " ms², "
+                   << profile_it->second.call_count << " calls, "
+                   << profile_it->second.get_average_duration_ms() << " ms avg\n";
+        }
+    }
+
+    // Calculate efficiency metrics
+    report << "\nEfficiency Metrics:\n";
+    report << "-------------------\n";
+    uint64_t total_calls = 0;
+    double total_time = 0.0;
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_calls += profile_data.call_count;
+        total_time += profile_data.get_total_duration_ms();
+    }
+
+    if (total_calls > 0) {
+        report << "Total function calls: " << total_calls << "\n";
+        report << "Total profiling time: " << total_time << " ms\n";
+        report << "Average time per call: " << (total_time / total_calls) << " ms\n";
+    }
+
+    return report.str();
+}
+
 std::vector<std::vector<std::string>>
 CPUProfiler::get_hot_paths(int max_paths) const {
     std::vector<std::vector<std::string>> hot_paths;

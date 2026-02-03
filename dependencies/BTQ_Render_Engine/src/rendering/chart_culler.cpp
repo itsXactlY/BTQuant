@@ -1413,6 +1413,26 @@ ChartInstance ChartCuller::apply_offscreen_culling_with_zoom_reduction(const Cha
     // Track points added to respect the maximum limit
     size_t points_added = 0;
 
+    // Pre-calculate importance metrics for all points to avoid repeated calculations
+    std::vector<float> importance_scores;
+    if (zoom_factor <= 2.0f) { // Only calculate if we need importance scores
+        importance_scores.reserve(end_index - start_index + 1);
+        for (size_t i = start_index; i <= end_index && i < chart.dates.size(); ++i) {
+            float volatility = chart.highs[i] - chart.lows[i];
+            float avg_price = (chart.opens[i] + chart.closes[i]) / 2.0f;
+            float volatility_ratio = (avg_price != 0.0f) ? volatility / std::abs(avg_price) : 0.0f;
+
+            float price_change = std::abs(chart.opens[i] - chart.closes[i]);
+            float change_ratio = (avg_price != 0.0f) ? price_change / std::abs(avg_price) : 0.0f;
+
+            float volume_ratio = (chart.volumes[i] > 0) ? chart.volumes[i] / 1000.0f : 0.0f;
+
+            // Calculate importance score combining multiple factors
+            float importance_score = volatility_ratio * 0.4f + change_ratio * 0.4f + volume_ratio * 0.2f;
+            importance_scores.push_back(importance_score);
+        }
+    }
+
     // Off-screen culling: Only include elements that are within or very near the viewport
     for (size_t i = start_index; i <= end_index && i < chart.dates.size() && points_added < max_renderable_points; ++i) {
         // Perform culling with calculated padding
@@ -1429,22 +1449,36 @@ ChartInstance ChartCuller::apply_offscreen_culling_with_zoom_reduction(const Cha
 
                 // At very low zoom levels, only include points that meet certain criteria
                 if (zoom_factor <= 0.5f) {
-                    // Calculate importance metrics for low zoom levels
-                    float volatility = chart.highs[i] - chart.lows[i];
-                    float avg_price = (chart.opens[i] + chart.closes[i]) / 2.0f;
-                    float volatility_ratio = (avg_price != 0.0f) ? volatility / std::abs(avg_price) : 0.0f;
+                    // Use pre-calculated importance score for efficiency
+                    size_t importance_idx = i - start_index;
+                    if (importance_idx < importance_scores.size()) {
+                        // At very low zoom, only include highly important points
+                        should_include = importance_scores[importance_idx] > 0.01f; // Threshold for importance
+                    } else {
+                        // Fallback calculation if index is out of bounds
+                        float volatility = chart.highs[i] - chart.lows[i];
+                        float avg_price = (chart.opens[i] + chart.closes[i]) / 2.0f;
+                        float volatility_ratio = (avg_price != 0.0f) ? volatility / std::abs(avg_price) : 0.0f;
 
-                    float price_change = std::abs(chart.opens[i] - chart.closes[i]);
-                    float change_ratio = (avg_price != 0.0f) ? price_change / std::abs(avg_price) : 0.0f;
+                        float price_change = std::abs(chart.opens[i] - chart.closes[i]);
+                        float change_ratio = (avg_price != 0.0f) ? price_change / std::abs(avg_price) : 0.0f;
 
-                    // Check for significant movements
-                    should_include = (volatility_ratio > 0.02f || change_ratio > 0.015f);
+                        should_include = (volatility_ratio > 0.02f || change_ratio > 0.015f);
+                    }
                 }
-                // At moderate zoom levels, include points based on spacing
+                // At moderate zoom levels, include points based on spacing and importance
                 else if (zoom_factor <= 2.0f) {
                     // Include every nth point depending on zoom level to reduce polygon count
                     size_t skip_factor = static_cast<size_t>(std::max(1.0f, 2.0f / zoom_factor));
-                    should_include = (i % skip_factor == 0) || points_added < max_renderable_points * 0.1f; // Always include some points
+
+                    // Use importance score to decide whether to include this point
+                    size_t importance_idx = i - start_index;
+                    bool is_important = false;
+                    if (importance_idx < importance_scores.size()) {
+                        is_important = importance_scores[importance_idx] > 0.005f;
+                    }
+
+                    should_include = (i % skip_factor == 0) || is_important || points_added < max_renderable_points * 0.05f; // Always include some points
                 }
                 // At higher zoom levels, be more permissive but still respect the limit
                 else {

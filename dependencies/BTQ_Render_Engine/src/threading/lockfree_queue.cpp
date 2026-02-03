@@ -152,5 +152,71 @@ template class AtomicWrapper<float>;
 template class AtomicWrapper<long>;
 template class AtomicWrapper<bool>;
 
+// Template instantiations for the new UIUpdateQueue
+template class UIUpdateQueue<int>;
+template class UIUpdateQueue<double>;
+template class UIUpdateQueue<float>;
+template class UIUpdateQueue<long>;
+template class UIUpdateQueue<bool>;
+template class UIUpdateQueue<std::string>;
+template class UIUpdateQueue<std::vector<double>>;
+template class UIUpdateQueue<std::vector<float>>;
+template class UIUpdateQueue<std::vector<int>>;
+template class UIUpdateQueue<std::vector<long>>;
+template class UIUpdateQueue<std::vector<bool>>;
+
+// Trading-specific data structures for UIUpdateQueue
+template class UIUpdateQueue<btq::Trade>;
+template class UIUpdateQueue<btq::Candle>;
+template class UIUpdateQueue<std::vector<btq::Trade>>;
+template class UIUpdateQueue<std::vector<btq::Candle>>;
+
+// Additional data structures for UI updates and indicator data for UIUpdateQueue
+template class UIUpdateQueue<std::pair<double, double>>;  // For histogram data
+template class UIUpdateQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality for UIUpdateQueue
+template class UIUpdateQueue<std::optional<int>>;
+template class UIUpdateQueue<std::optional<double>>;
+template class UIUpdateQueue<std::optional<btq::Trade>>;
+template class UIUpdateQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality for UIUpdateQueue
+template class UIUpdateQueue<std::pair<btq::Trade, btq::Candle>>;
+template class UIUpdateQueue<std::vector<std::pair<double, double>>>;
+
+// Template instantiations for the new HighFrequencyUpdateQueue
+template class HighFrequencyUpdateQueue<int>;
+template class HighFrequencyUpdateQueue<double>;
+template class HighFrequencyUpdateQueue<float>;
+template class HighFrequencyUpdateQueue<long>;
+template class HighFrequencyUpdateQueue<bool>;
+template class HighFrequencyUpdateQueue<std::string>;
+template class HighFrequencyUpdateQueue<std::vector<double>>;
+template class HighFrequencyUpdateQueue<std::vector<float>>;
+template class HighFrequencyUpdateQueue<std::vector<int>>;
+template class HighFrequencyUpdateQueue<std::vector<long>>;
+template class HighFrequencyUpdateQueue<std::vector<bool>>;
+
+// Trading-specific data structures for HighFrequencyUpdateQueue
+template class HighFrequencyUpdateQueue<btq::Trade>;
+template class HighFrequencyUpdateQueue<btq::Candle>;
+template class HighFrequencyUpdateQueue<std::vector<btq::Trade>>;
+template class HighFrequencyUpdateQueue<std::vector<btq::Candle>>;
+
+// Additional data structures for UI updates and indicator data for HighFrequencyUpdateQueue
+template class HighFrequencyUpdateQueue<std::pair<double, double>>;  // For histogram data
+template class HighFrequencyUpdateQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality for HighFrequencyUpdateQueue
+template class HighFrequencyUpdateQueue<std::optional<int>>;
+template class HighFrequencyUpdateQueue<std::optional<double>>;
+template class HighFrequencyUpdateQueue<std::optional<btq::Trade>>;
+template class HighFrequencyUpdateQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality for HighFrequencyUpdateQueue
+template class HighFrequencyUpdateQueue<std::pair<btq::Trade, btq::Candle>>;
+template class HighFrequencyUpdateQueue<std::vector<std::pair<double, double>>>;
+
 } // namespace threading
 } // namespace btq

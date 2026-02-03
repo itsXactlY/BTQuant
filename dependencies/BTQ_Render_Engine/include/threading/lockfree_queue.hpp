@@ -540,6 +540,23 @@ public:
         return false; // There are definitely elements in the queue
     }
 
+    // Note: size_approx() is not lock-free and should be used carefully in concurrent environments
+    size_t size_approx() const {
+        size_t count = 0;
+        Node* current = head_.load(std::memory_order_acquire)->next.load(std::memory_order_acquire);
+
+        while (current != nullptr) {
+            current = current->next.load(std::memory_order_acquire);
+            count++;
+        }
+        return count;
+    }
+
+    // For compatibility with existing interface
+    size_t size() const {
+        return size_approx();
+    }
+
     template<typename... Args>
     void emplace(Args&&... args) {
         push(T(std::forward<Args>(args)...));
@@ -564,16 +581,20 @@ public:
 
     // Limited push - only push if queue size is below threshold (prevents memory buildup)
     bool push_if_not_full(const T& item, size_t max_size = 1000) {
-        // Since we don't have an efficient size() method for MPSC, we'll use a different approach
-        // This is a simplified version - in production, you might track count separately
+        if (size_approx() >= max_size) {
+            return false; // Queue is too full
+        }
         push(item);
-        return true; // Always return true since we can't efficiently check size
+        return true;
     }
 
     // Limited push with rvalue reference
     bool push_if_not_full(T&& item, size_t max_size = 1000) {
+        if (size_approx() >= max_size) {
+            return false; // Queue is too full
+        }
         push(std::move(item));
-        return true; // Always return true since we can't efficiently check size
+        return true;
     }
 };
 
@@ -863,6 +884,218 @@ public:
 
     operator T() const {
         return load();
+    }
+};
+
+// Specialized queue for UI updates - optimized for the calculation thread to UI thread pattern
+// This queue prioritizes UI updates and provides mechanisms to prevent UI thread starvation
+template<typename T>
+class UIUpdateQueue {
+private:
+    // Use MPSC queue as the underlying implementation since we typically have
+    // multiple calculation threads producing data and one UI thread consuming it
+    MPSCQueue<T> underlying_queue_;
+
+    // Statistics for monitoring queue health
+    AtomicWrapper<size_t> total_pushed_{0};
+    AtomicWrapper<size_t> total_popped_{0};
+    AtomicWrapper<size_t> dropped_count_{0}; // Items dropped due to overflow protection
+
+    // Maximum queue size to prevent memory buildup
+    const size_t max_size_;
+
+public:
+    explicit UIUpdateQueue(size_t max_size = 10000) : max_size_(max_size) {}
+
+    // Push an item to the queue, with overflow protection
+    bool push(const T& item) {
+        if (underlying_queue_.size_approx() >= max_size_) {
+            dropped_count_.store(dropped_count_.load() + 1);
+            return false; // Queue is too full, drop the item to prevent memory buildup
+        }
+
+        underlying_queue_.push(item);
+        total_pushed_.store(total_pushed_.load() + 1);
+        return true;
+    }
+
+    // Push with rvalue reference
+    bool push(T&& item) {
+        if (underlying_queue_.size_approx() >= max_size_) {
+            dropped_count_.store(dropped_count_.load() + 1);
+            return false; // Queue is too full, drop the item to prevent memory buildup
+        }
+
+        underlying_queue_.push(std::move(item));
+        total_pushed_.store(total_pushed_.load() + 1);
+        return true;
+    }
+
+    // Pop an item from the queue
+    std::optional<T> try_pop() {
+        auto result = underlying_queue_.try_pop();
+        if (result.has_value()) {
+            total_popped_.store(total_popped_.load() + 1);
+        }
+        return result;
+    }
+
+    // Pop multiple items at once - useful for UI thread to process batches efficiently
+    std::vector<T> pop_batch(size_t max_items = 100) {
+        std::vector<T> result;
+        result.reserve(std::min(max_items, static_cast<size_t>(100)));
+
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = try_pop();
+            if (item.has_value()) {
+                result.emplace_back(std::move(item.value()));
+            } else {
+                break; // Queue is empty
+            }
+        }
+
+        return result;
+    }
+
+    // Drain all available items - useful for UI thread to catch up quickly
+    std::vector<T> drain_all() {
+        auto result = underlying_queue_.drain_all();
+        total_popped_.store(total_popped_.load() + result.size());
+        return result;
+    }
+
+    // Check if queue is empty
+    bool empty() const {
+        return underlying_queue_.empty();
+    }
+
+    // Get approximate size
+    size_t size_approx() const {
+        return underlying_queue_.size_approx();
+    }
+
+    // Get statistics
+    size_t total_pushed() const { return total_pushed_.load(); }
+    size_t total_popped() const { return total_popped_.load(); }
+    size_t dropped_count() const { return dropped_count_.load(); }
+    size_t max_size() const { return max_size_; }
+
+    // Reset statistics
+    void reset_stats() {
+        total_pushed_.store(0);
+        total_popped_.store(0);
+        dropped_count_.store(0);
+    }
+
+    // Emplace construction
+    template<typename... Args>
+    bool emplace(Args&&... args) {
+        T item(std::forward<Args>(args)...);
+        return push(std::move(item));
+    }
+};
+
+// Specialized queue for high-frequency trading data updates
+// Optimized for scenarios where calculation threads generate frequent updates
+// that need to be consumed by UI thread without overwhelming it
+template<typename T>
+class HighFrequencyUpdateQueue {
+private:
+    SPSCRingBuffer<T> underlying_buffer_;
+
+    // Track the last update time to enable rate limiting
+    std::atomic<std::chrono::steady_clock::time_point> last_update_time_{std::chrono::steady_clock::now()};
+
+    // Minimum time interval between updates (for rate limiting)
+    std::chrono::microseconds min_update_interval_{std::chrono::microseconds(1000)}; // 1ms default
+
+public:
+    explicit HighFrequencyUpdateQueue(size_t buffer_size = 1024)
+        : underlying_buffer_(buffer_size) {}
+
+    // Push an item with rate limiting consideration
+    bool push_with_rate_limit(const T& item) {
+        auto now = std::chrono::steady_clock::now();
+        auto last_time = last_update_time_.load(std::memory_order_acquire);
+
+        // Check if enough time has passed since the last update
+        if (now - last_time < min_update_interval_) {
+            // Too soon, try to push anyway but return false if buffer is full
+            return underlying_buffer_.push_if_not_full(item);
+        }
+
+        // Update the last update time and push
+        last_update_time_.store(now, std::memory_order_release);
+        return underlying_buffer_.push(item);
+    }
+
+    // Push without rate limiting
+    bool push(const T& item) {
+        return underlying_buffer_.push(item);
+    }
+
+    // Push with rvalue reference
+    bool push(T&& item) {
+        return underlying_buffer_.push(std::move(item));
+    }
+
+    // Set minimum update interval for rate limiting
+    void set_min_update_interval(std::chrono::microseconds interval) {
+        min_update_interval_ = interval;
+    }
+
+    // Get minimum update interval
+    std::chrono::microseconds get_min_update_interval() const {
+        return min_update_interval_;
+    }
+
+    // Pop an item
+    std::optional<T> try_pop() {
+        return underlying_buffer_.try_pop();
+    }
+
+    // Pop multiple items
+    std::vector<T> pop_batch(size_t max_items = 64) {
+        std::vector<T> result;
+        result.reserve(std::min(max_items, static_cast<size_t>(64)));
+
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = try_pop();
+            if (item.has_value()) {
+                result.emplace_back(std::move(item.value()));
+            } else {
+                break; // Buffer is empty
+            }
+        }
+
+        return result;
+    }
+
+    // Check if buffer is empty
+    bool empty() const {
+        return underlying_buffer_.empty();
+    }
+
+    // Check if buffer is full
+    bool full() const {
+        return underlying_buffer_.full();
+    }
+
+    // Get size
+    size_t size() const {
+        return underlying_buffer_.size();
+    }
+
+    // Get capacity
+    size_t capacity() const {
+        return underlying_buffer_.capacity();
+    }
+
+    // Emplace construction
+    template<typename... Args>
+    bool emplace(Args&&... args) {
+        T item(std::forward<Args>(args)...);
+        return underlying_buffer_.push_if_not_full(std::move(item));
     }
 };
 

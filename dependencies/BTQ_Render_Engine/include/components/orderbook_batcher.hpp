@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <vector>
 #include <array>
+#include <functional>
 
 namespace BTQuant {
 
@@ -20,6 +21,50 @@ struct OrderbookBatchElement {
     int primitive_type;   // ImGui's primitive type (ImDrawList flags)
 
     OrderbookBatchElement() : texture((ImTextureID)0), primitive_type(0) {}
+};
+
+// Enum for different types of orderbook elements
+enum class OrderbookElementType {
+    RECT_FILLED,
+    LINE,
+    CIRCLE_FILLED,
+    TEXT
+};
+
+// Structure for line data
+struct LineData {
+    ImVec2 p1, p2;
+};
+
+// Structure for rectangle data
+struct RectData {
+    ImVec2 min, max;
+};
+
+// Structure for orderbook element data
+struct OrderbookElementData {
+    OrderbookElementType type;
+    ImU32 color;
+    ImTextureID texture;
+    float thickness;  // For lines
+    union {
+        LineData line;
+        RectData rect;
+    };
+
+    // Constructor for rectangle
+    OrderbookElementData(ImVec2 min, ImVec2 max, ImU32 col, ImTextureID tex = (ImTextureID)0)
+        : type(OrderbookElementType::RECT_FILLED), color(col), texture(tex), thickness(1.0f) {
+        rect.min = min;
+        rect.max = max;
+    }
+
+    // Constructor for line
+    OrderbookElementData(ImVec2 p1, ImVec2 p2, ImU32 col, float thick, ImTextureID tex = (ImTextureID)0)
+        : type(OrderbookElementType::LINE), color(col), texture(tex), thickness(thick) {
+        line.p1 = p1;
+        line.p2 = p2;
+    }
 };
 
 // Batched geometry for order book rendering
@@ -47,6 +92,12 @@ public:
     void addRectanglesFilled(const std::vector<std::pair<ImVec2, ImVec2>>& rect_pairs,
                            const std::vector<ImU32>& colors);
 
+    // Enhanced method to batch multiple similar elements together for maximum efficiency
+    void batchSimilarElements(const std::vector<std::function<void(OrderbookBatchElement*)>>& element_adders);
+
+    // Advanced method for order book specific batching - combines multiple elements with intelligent grouping
+    void addOrderbookElements(const std::vector<OrderbookElementData>& elements);
+
     // Submit all batched geometry to the draw list
     void submit(ImDrawList* draw_list);
 
@@ -64,6 +115,9 @@ private:
 
     // Initialize a batch with optimal memory allocation
     void initializeBatch(OrderbookBatchElement& batch, ImTextureID texture);
+
+    // Resize batch capacity intelligently based on usage
+    void resizeBatchIfNeeded(OrderbookBatchElement& batch);
 
     // Optimize batches by merging compatible ones to reduce draw calls
     void optimizeBatches();

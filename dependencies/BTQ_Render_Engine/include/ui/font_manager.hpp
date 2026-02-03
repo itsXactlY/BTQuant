@@ -77,6 +77,20 @@ public:
     void renderNumericalValue(int value) const;
 
     /**
+     * @brief Render a numerical value with consistent monospace formatting and custom format
+     * @param value The double value to render
+     * @param format The printf-style format string for the value
+     */
+    void renderFormattedNumericalValue(double value, const char* format = "%.2f") const;
+
+    /**
+     * @brief Render a numerical value with consistent monospace formatting and custom format
+     * @param value The float value to render
+     * @param format The printf-style format string for the value
+     */
+    void renderFormattedNumericalValue(float value, const char* format = "%.2f") const;
+
+    /**
      * @brief Check if the font manager has been initialized
      */
     bool isInitialized() const;

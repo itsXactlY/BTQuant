@@ -76,14 +76,20 @@ bool FontManager::initialize() {
     strcpy(mono_config.Name, "MonoFont");
 
     // Try to load a monospace font - prioritize common monospace fonts optimized for numerical data
+    // Enhanced priority list with fonts known for excellent numerical digit clarity
     std::vector<std::string> monospace_fonts = {
         "fonts/JetBrainsMono-Regular.ttf",      // Excellent for numerical data, clear digit differentiation
+        "fonts/JetBrainsMono-Medium.ttf",       // Medium weight variant for better readability
         "fonts/RobotoMono-Regular.ttf",         // Good for numerical displays
+        "fonts/RobotoMono-Medium.ttf",          // Medium weight for enhanced readability
+        "fonts/Inconsolata-Regular.ttf",        // Designed for numerical data, clear digit shapes
         "fonts/FiraCode-Regular.ttf",           // Programming font with good digit clarity
         "fonts/SourceCodePro-Regular.ttf",      // Clean monospace for data
+        "fonts/SourceCodePro-Medium.ttf",       // Medium weight for better readability
         "fonts/Consolas.ttf",                   // Standard programming font
         "fonts/CourierNew.ttf",                 // Classic monospace
-        "fonts/DejaVuSansMono.ttf"              // Reliable fallback
+        "fonts/DejaVuSansMono.ttf",             // Reliable fallback
+        "fonts/LiberationMono-Regular.ttf"      // Open source alternative with good digit clarity
     };
 
     bool font_loaded = false;
@@ -91,6 +97,7 @@ bool FontManager::initialize() {
         if (std::filesystem::exists(font_path)) {
             monospace_font_ = io.Fonts->AddFontFromFileTTF(font_path.c_str(), 13.0f, &mono_config);
             font_loaded = true;
+            std::cout << "[FontManager] Loaded monospace font: " << font_path << " for numerical displays." << std::endl;
             break;
         }
     }
@@ -98,7 +105,7 @@ bool FontManager::initialize() {
     // If no monospace font file found, create a default one but mark it specially
     if (!font_loaded) {
         monospace_font_ = io.Fonts->AddFontDefault(&mono_config);
-        std::cout << "[FontManager] Warning: No monospace font file found, using default. Consider adding JetBrainsMono or RobotoMono." << std::endl;
+        std::cout << "[FontManager] Warning: No monospace font file found, using default. Consider adding JetBrainsMono or RobotoMono for optimal numerical display readability." << std::endl;
     }
 
     // Build the font atlas
@@ -173,6 +180,26 @@ void FontManager::renderNumericalValue(int value) const {
         ImGui::PopFont();
     } else {
         ImGui::Text("%d", value);
+    }
+}
+
+void FontManager::renderFormattedNumericalValue(double value, const char* format) const {
+    if (monospace_font_) {
+        ImGui::PushFont(monospace_font_);
+        ImGui::Text(format, value);
+        ImGui::PopFont();
+    } else {
+        ImGui::Text(format, value);
+    }
+}
+
+void FontManager::renderFormattedNumericalValue(float value, const char* format) const {
+    if (monospace_font_) {
+        ImGui::PushFont(monospace_font_);
+        ImGui::Text(format, value);
+        ImGui::PopFont();
+    } else {
+        ImGui::Text(format, value);
     }
 }
 

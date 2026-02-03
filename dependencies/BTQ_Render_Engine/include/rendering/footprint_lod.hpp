@@ -495,6 +495,24 @@ public:
                                            double max_volume,
                                            const FootprintPanel* panel) const;
 
+    // Calculate intelligent zoom LOD that adapts based on user interaction patterns
+    LODLevel calculateIntelligentZoomLOD(float cell_width_px, float cell_height_px,
+                                    float zoom_factor, float time_spent_at_zoom) const;
+
+    // Get intelligent zoom render settings based on user interaction patterns
+    LODRenderSettings getIntelligentZoomRenderSettings(LODLevel lod_level,
+                                                  float time_spent_at_zoom) const;
+
+    // Apply intelligent zoom LOD to cell rendering based on user interaction patterns
+    void applyIntelligentZoomLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   float time_spent_at_zoom,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

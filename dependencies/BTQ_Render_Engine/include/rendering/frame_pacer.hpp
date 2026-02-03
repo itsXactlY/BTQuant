@@ -153,6 +153,10 @@ private:
     void apply_jitter_compensation();
     void update_frame_budget();
     void synchronize_frame_phase();
+    void apply_predictive_timing();
+    double calculate_frame_time_trend() const;
+    void apply_advanced_spike_smoothing(double current_frame_time);
+    void apply_dropped_frame_recovery();
 };
 
 } // namespace RenderEngine

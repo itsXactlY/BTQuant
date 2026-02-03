@@ -71,6 +71,9 @@ void FramePacer::begin_frame() {
     if (config_.enable_frame_smoothing && frame_phase_lock_) {
         synchronize_frame_phase();
     }
+
+    // Apply predictive timing adjustments to maintain consistent frame rate
+    apply_predictive_timing();
 }
 
 void FramePacer::end_frame() {
@@ -112,6 +115,9 @@ void FramePacer::end_frame() {
         apply_jitter_compensation();
         update_frame_budget();
         synchronize_frame_phase();
+
+        // Apply advanced spike smoothing
+        apply_advanced_spike_smoothing(frame_time_ms);
     }
 
     // Increment frame counters before updating statistics
@@ -504,12 +510,36 @@ void FramePacer::check_dropped_frames(double frame_time_us) {
                 static_cast<double>(config_.target_fps) * 0.6,  // Don't go below 60% of target
                 static_cast<double>(adaptive_target_fps_) * 0.85)); // Reduce by 15% for more aggressive response
         }
+
+        // Apply additional dropped frame prevention mechanisms
+        apply_dropped_frame_recovery();
     } else if (frame_time_us < expected_frame_time_us * 0.7 && adaptive_target_fps_ < config_.target_fps) {
         // If we're consistently under budget, gradually increase target FPS
         // Only do this if we're not already at the target FPS
         adaptive_target_fps_ = std::min(config_.target_fps,
                                       adaptive_target_fps_ + 1); // Conservative increase
     }
+}
+
+void FramePacer::apply_dropped_frame_recovery() {
+    // Apply recovery mechanisms when dropped frames are detected
+
+    // Reduce the frame budget temporarily to allow the system to catch up
+    double target_frame_time = 1000.0 / adaptive_target_fps_;
+    frame_budget_tracker_ = target_frame_time * 0.8; // Reduce budget by 20% temporarily
+
+    // Increase the stability score threshold to be more conservative
+    frame_stability_score_ = std::max(frame_stability_score_ * 0.9, 0.3); // Reduce by 10%, min 0.3
+
+    // Adjust the jitter compensator to account for the performance issue
+    frame_jitter_compensator_ *= 0.7; // Reduce jitter compensation by 30%
+
+    // Temporarily disable phase locking to allow recovery
+    frame_phase_lock_ = false;
+
+    // Schedule a reset of phase reference after a few frames
+    auto now = std::chrono::high_resolution_clock::now();
+    phase_reference_time_ = now - std::chrono::microseconds(static_cast<int>(target_frame_time * 1000 * 0.5));
 }
 
 void FramePacer::adapt_target_fps() {
@@ -725,6 +755,120 @@ void FramePacer::synchronize_frame_phase() {
 
         // Apply correction gradually to avoid jarring transitions
         frame_jitter_compensator_ += phase_correction * 0.1;
+    }
+}
+
+void FramePacer::apply_predictive_timing() {
+    if (!config_.enable_frame_smoothing || frame_count_ < 5) {
+        return;
+    }
+
+    // Predict the next frame's timing based on recent performance trends
+    double trend = calculate_frame_time_trend();
+
+    // Adjust timing based on the predicted trend
+    if (std::abs(trend) > 0.5) { // If there's a significant trend
+        // Adjust the frame budget tracker based on the trend
+        frame_budget_tracker_ *= (1.0 + (trend * 0.1)); // Small adjustment factor
+
+        // Clamp the budget to reasonable bounds
+        double target_frame_time = 1000.0 / adaptive_target_fps_;
+        frame_budget_tracker_ = std::clamp(frame_budget_tracker_,
+                                          target_frame_time * 0.5,
+                                          target_frame_time * 1.5);
+    }
+}
+
+double FramePacer::calculate_frame_time_trend() const {
+    if (frame_count_ < 10) {
+        return 0.0; // Not enough data to determine trend
+    }
+
+    // Calculate the trend over the last N frames using linear regression
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                  static_cast<size_t>(FRAME_HISTORY_SIZE / 2));
+
+    if (sample_count < 5) {
+        return 0.0;
+    }
+
+    // Get recent frame times
+    std::vector<double> recent_times(sample_count);
+    for (size_t i = 0; i < sample_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        recent_times[i] = frame_time_history_[idx];
+    }
+
+    // Calculate linear regression coefficients
+    double sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0, sum_x2 = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        double x = static_cast<double>(i); // Time index
+        double y = recent_times[i];        // Frame time
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_x2 += x * x;
+    }
+
+    double denominator = sample_count * sum_x2 - sum_x * sum_x;
+    if (std::abs(denominator) < 1e-10) {
+        return 0.0; // Avoid division by zero
+    }
+
+    // Slope represents the trend
+    double slope = (sample_count * sum_xy - sum_x * sum_y) / denominator;
+
+    return slope;
+}
+
+void FramePacer::apply_advanced_spike_smoothing(double current_frame_time) {
+    if (!config_.enable_frame_smoothing) {
+        return;
+    }
+
+    // Use a more sophisticated approach to smooth out spikes
+    // Apply temporal filtering to frame times
+
+    // Calculate a weighted average of recent frame times with emphasis on recent values
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_),
+                                  static_cast<size_t>(SMOOTHING_WINDOW * 2));
+
+    if (sample_count < 2) {
+        return;
+    }
+
+    double weighted_sum = 0.0;
+    double weight_sum = 0.0;
+
+    // Use exponentially decreasing weights for more recent frames
+    for (size_t i = 0; i < sample_count; ++i) {
+        double weight = std::pow(0.8, static_cast<double>(i)); // Exponential decay
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        weighted_sum += frame_time_history_[idx] * weight;
+        weight_sum += weight;
+    }
+
+    if (weight_sum > 0) {
+        double smoothed_time = weighted_sum / weight_sum;
+
+        // If current frame time is significantly different from the smoothed time,
+        // it indicates a potential spike that we should smooth out
+        double spike_threshold = smoothed_time * 1.5; // 150% of smoothed time
+
+        if (current_frame_time > spike_threshold) {
+            // This is a spike - adjust the frame budget to compensate
+            frame_budget_tracker_ = smoothed_time;
+
+            // Also adjust the jitter compensator to account for the spike
+            double excess_time = current_frame_time - smoothed_time;
+            frame_jitter_compensator_ -= excess_time * 0.3; // Compensate for 30% of excess
+
+            // Clamp the jitter compensator to prevent overcorrection
+            double target_frame_time = 1000.0 / adaptive_target_fps_;
+            double max_compensation = target_frame_time * 0.5; // Max 50% compensation
+            frame_jitter_compensator_ = std::clamp(frame_jitter_compensator_,
+                                             -max_compensation, max_compensation);
+        }
     }
 }
 

@@ -122,6 +122,23 @@ public:
         const std::vector<double>& series1,
         const std::vector<double>& series2);
 
+    // Advanced multi-threaded batch processing methods
+    std::future<std::vector<std::vector<double>>> calculate_batch_indicators_async(
+        const std::vector<std::vector<double>>& price_series,
+        const std::vector<std::pair<std::string, int>>& indicator_configs);
+
+    std::future<std::vector<std::vector<double>>> calculate_multiple_timeframe_indicators_async(
+        const std::vector<double>& prices,
+        const std::vector<std::pair<std::string, std::vector<int>>>& indicator_configs);
+
+    std::future<std::vector<std::vector<Trade>>> process_batch_trades_async(
+        const std::vector<std::vector<Trade>>& trade_batches,
+        std::function<std::vector<Trade>(const std::vector<Trade>&)> processor_func);
+
+    std::future<std::vector<std::vector<Candle>>> aggregate_batch_candles_async(
+        const std::vector<std::vector<Trade>>& trade_batches,
+        std::chrono::seconds timeframe);
+
 private:
     void worker_loop();
 

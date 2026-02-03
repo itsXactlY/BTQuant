@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <thread>
 
 #include "../include/data/TradeData.h"
 #include "../include/analytics/cluster_engine.hpp"
@@ -537,6 +538,525 @@ private:
     std::function<void(T*)> deleter_func_;
 };
 
+// Thread-local memory pool for even better performance in multi-threaded scenarios
+template<typename T>
+class ThreadLocalObjectPool {
+public:
+    explicit ThreadLocalObjectPool(size_t initial_capacity = 1024);
+
+    // Allocate an object from the pool
+    template<typename... Args>
+    T* allocate(Args&&... args);
+
+    // Deallocate an object back to the pool
+    void deallocate(T* obj);
+
+    // Pre-allocate more objects to the pool
+    void preallocate(size_t count);
+
+    // Get pool statistics
+    size_t get_total_objects() const { return total_objects_; }
+    size_t get_free_objects() const { return free_list_.size(); }
+    size_t get_used_objects() const { return total_objects_ - free_list_.size(); }
+
+    // Get allocation/deallocation counters for performance monitoring
+    size_t get_allocation_count() const { return allocation_count_.load(std::memory_order_relaxed); }
+    size_t get_deallocation_count() const { return deallocation_count_.load(std::memory_order_relaxed); }
+
+private:
+    struct PoolBlock {
+        alignas(T) char data[sizeof(T)];
+    };
+
+    std::mutex mutex_;
+    std::stack<T*> free_list_;
+    std::vector<std::unique_ptr<char[]>> blocks_;
+    size_t total_objects_;
+    size_t objects_per_block_;
+
+    // Performance counters
+    std::atomic<size_t> allocation_count_{0};
+    std::atomic<size_t> deallocation_count_{0};
+};
+
+// Enhanced memory pools with thread-local storage for frequently allocated objects
+class FastTradeDataPool {
+public:
+    static FastTradeDataPool& getInstance();
+
+    Data::TradeData* allocate();
+    void deallocate(Data::TradeData* trade);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradeDataPool() = default;
+    ThreadLocalObjectPool<Data::TradeData> pool_;
+};
+
+class FastClusterCellPool {
+public:
+    static FastClusterCellPool& getInstance();
+
+    Analytics::ClusterCell* allocate();
+    void deallocate(Analytics::ClusterCell* cell);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastClusterCellPool() = default;
+    ThreadLocalObjectPool<Analytics::ClusterCell> pool_;
+};
+
+class FastEMAIndicatorPool {
+public:
+    static FastEMAIndicatorPool& getInstance();
+
+    EMAIndicator* allocate(int period);
+    void deallocate(EMAIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastEMAIndicatorPool() = default;
+    ThreadLocalObjectPool<EMAIndicator> pool_;
+};
+
+class FastSMAIndicatorPool {
+public:
+    static FastSMAIndicatorPool& getInstance();
+
+    SMAIndicator* allocate(int period);
+    void deallocate(SMAIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastSMAIndicatorPool() = default;
+    ThreadLocalObjectPool<SMAIndicator> pool_;
+};
+
+class FastRSIIndicatorPool {
+public:
+    static FastRSIIndicatorPool& getInstance();
+
+    RSIIndicator* allocate(int period);
+    void deallocate(RSIIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastRSIIndicatorPool() = default;
+    ThreadLocalObjectPool<RSIIndicator> pool_;
+};
+
+class FastMACDIndicatorPool {
+public:
+    static FastMACDIndicatorPool& getInstance();
+
+    MACDIndicator* allocate(int fast_period, int slow_period, int signal_period);
+    void deallocate(MACDIndicator* indicator);
+    void preallocate(size_t count = 256); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastMACDIndicatorPool() = default;
+    ThreadLocalObjectPool<MACDIndicator> pool_;
+};
+
+class FastBollingerBandIndicatorPool {
+public:
+    static FastBollingerBandIndicatorPool& getInstance();
+
+    BollingerBandIndicator* allocate(int period, double std_dev);
+    void deallocate(BollingerBandIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastBollingerBandIndicatorPool() = default;
+    ThreadLocalObjectPool<BollingerBandIndicator> pool_;
+};
+
+class FastStochasticIndicatorPool {
+public:
+    static FastStochasticIndicatorPool& getInstance();
+
+    StochasticIndicator* allocate(int k_period, int d_period, int slowing_period);
+    void deallocate(StochasticIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastStochasticIndicatorPool() = default;
+    ThreadLocalObjectPool<StochasticIndicator> pool_;
+};
+
+class FastATRIndicatorPool {
+public:
+    static FastATRIndicatorPool& getInstance();
+
+    ATRIndicator* allocate(int period);
+    void deallocate(ATRIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastATRIndicatorPool() = default;
+    ThreadLocalObjectPool<ATRIndicator> pool_;
+};
+
+class FastOrderPool {
+public:
+    static FastOrderPool& getInstance();
+
+    OrderManager::Order* allocate();
+    void deallocate(OrderManager::Order* order);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastOrderPool() = default;
+    ThreadLocalObjectPool<OrderManager::Order> pool_;
+};
+
+class FastProcessedTradePool {
+public:
+    static FastProcessedTradePool& getInstance();
+
+    ProcessedTrade* allocate();
+    void deallocate(ProcessedTrade* trade);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastProcessedTradePool() = default;
+    ThreadLocalObjectPool<ProcessedTrade> pool_;
+};
+
+class FastOHLCVCandlePool {
+public:
+    static FastOHLCVCandlePool& getInstance();
+
+    RenderEngine::OHLCVCandle* allocate();
+    void deallocate(RenderEngine::OHLCVCandle* candle);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastOHLCVCandlePool() = default;
+    ThreadLocalObjectPool<RenderEngine::OHLCVCandle> pool_;
+};
+
+class FastVolumeProfileLevelPool {
+public:
+    static FastVolumeProfileLevelPool& getInstance();
+
+    VolumeProfileLevel* allocate();
+    void deallocate(VolumeProfileLevel* level);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastVolumeProfileLevelPool() = default;
+    ThreadLocalObjectPool<VolumeProfileLevel> pool_;
+};
+
+class FastTradeRecordPool {
+public:
+    static FastTradeRecordPool& getInstance();
+
+    PositionManager::TradeRecord* allocate();
+    void deallocate(PositionManager::TradeRecord* record);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradeRecordPool() = default;
+    ThreadLocalObjectPool<PositionManager::TradeRecord> pool_;
+};
+
+class FastHotspineTradeTickPool {
+public:
+    static FastHotspineTradeTickPool& getInstance();
+
+    RenderEngine::HotspineTradeTick* allocate();
+    void deallocate(RenderEngine::HotspineTradeTick* tick);
+    void preallocate(size_t count = 4096); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastHotspineTradeTickPool() = default;
+    ThreadLocalObjectPool<RenderEngine::HotspineTradeTick> pool_;
+};
+
+class FastOrderBookLevelPool {
+public:
+    static FastOrderBookLevelPool& getInstance();
+
+    RenderEngine::OrderBookLevel* allocate();
+    void deallocate(RenderEngine::OrderBookLevel* level);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastOrderBookLevelPool() = default;
+    ThreadLocalObjectPool<RenderEngine::OrderBookLevel> pool_;
+};
+
+class FastCompressedCandlePool {
+public:
+    static FastCompressedCandlePool& getInstance();
+
+    Data::CompressedCandle* allocate();
+    void deallocate(Data::CompressedCandle* candle);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastCompressedCandlePool() = default;
+    ThreadLocalObjectPool<Data::CompressedCandle> pool_;
+};
+
+class FastCompressedTradePool {
+public:
+    static FastCompressedTradePool& getInstance();
+
+    Data::CompressedTrade* allocate();
+    void deallocate(Data::CompressedTrade* trade);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastCompressedTradePool() = default;
+    ThreadLocalObjectPool<Data::CompressedTrade> pool_;
+};
+
+class FastFibonacciLevelPool {
+public:
+    static FastFibonacciLevelPool& getInstance();
+
+    FibonacciLevel* allocate();
+    void deallocate(FibonacciLevel* level);
+    void preallocate(size_t count = 128); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastFibonacciLevelPool() = default;
+    ThreadLocalObjectPool<FibonacciLevel> pool_;
+};
+
+class FastGpuOrderBookLevelPool {
+public:
+    static FastGpuOrderBookLevelPool& getInstance();
+
+    RenderEngine::GpuOrderBookLevel* allocate();
+    void deallocate(RenderEngine::GpuOrderBookLevel* level);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastGpuOrderBookLevelPool() = default;
+    ThreadLocalObjectPool<RenderEngine::GpuOrderBookLevel> pool_;
+};
+
+class FastDepthLevelPool {
+public:
+    static FastDepthLevelPool& getInstance();
+
+    BTQuant::MarketDepthAnalyzer::DepthLevel* allocate();
+    void deallocate(BTQuant::MarketDepthAnalyzer::DepthLevel* level);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastDepthLevelPool() = default;
+    ThreadLocalObjectPool<BTQuant::MarketDepthAnalyzer::DepthLevel> pool_;
+};
+
+class FastHotOrderbookLevelPool {
+public:
+    static FastHotOrderbookLevelPool& getInstance();
+
+    HotOrderbookLevel* allocate();
+    void deallocate(HotOrderbookLevel* level);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastHotOrderbookLevelPool() = default;
+    ThreadLocalObjectPool<HotOrderbookLevel> pool_;
+};
+
+class FastCandleClusterPool {
+public:
+    static FastCandleClusterPool& getInstance();
+
+    RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+                                         uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t tradeCnt = 0,
+                                         float vw = 0.0f, bool hasTrades = false);
+    void deallocate(RenderEngine::CandleCluster* cluster);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastCandleClusterPool() = default;
+    ThreadLocalObjectPool<RenderEngine::CandleCluster> pool_;
+};
+
+class FastVolumeProfileNodePool {
+public:
+    static FastVolumeProfileNodePool& getInstance();
+
+    VolumeProfileNode* allocate();
+    void deallocate(VolumeProfileNode* node);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastVolumeProfileNodePool() = default;
+    ThreadLocalObjectPool<VolumeProfileNode> pool_;
+};
+
+class FastFootprintCellPool {
+public:
+    static FastFootprintCellPool& getInstance();
+
+    FootprintCell* allocate();
+    void deallocate(FootprintCell* cell);
+    void preallocate(size_t count = 4096); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastFootprintCellPool() = default;
+    ThreadLocalObjectPool<FootprintCell> pool_;
+};
+
 // Template implementations (included in header for template instantiation)
 template<typename T>
 ObjectPool<T>::ObjectPool(size_t initial_capacity)
@@ -591,6 +1111,82 @@ void ObjectPool<T>::deallocate(T* obj) {
 
 template<typename T>
 void ObjectPool<T>::preallocate(size_t count) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Calculate how much memory we need
+    size_t total_size = count * sizeof(PoolBlock);
+    auto block_memory = std::make_unique<char[]>(total_size);
+
+    // Initialize each PoolBlock and add to free list
+    char* block_ptr = block_memory.get();
+
+    for (size_t i = 0; i < count; ++i) {
+        PoolBlock* pool_block = reinterpret_cast<PoolBlock*>(block_ptr);
+
+        // Get the address where the T object will be constructed
+        T* obj_addr = reinterpret_cast<T*>(pool_block->data);
+
+        // Add to free list
+        free_list_.push(obj_addr);
+        total_objects_++;
+
+        // Move to next PoolBlock
+        block_ptr += sizeof(PoolBlock);
+    }
+
+    blocks_.push_back(std::move(block_memory));
+}
+
+// ThreadLocalObjectPool implementation
+template<typename T>
+ThreadLocalObjectPool<T>::ThreadLocalObjectPool(size_t initial_capacity)
+    : total_objects_(0), objects_per_block_(0) {
+    preallocate(initial_capacity);
+}
+
+template<typename T>
+template<typename... Args>
+T* ThreadLocalObjectPool<T>::allocate(Args&&... args) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (free_list_.empty()) {
+        // Double the capacity if we run out
+        size_t new_count = total_objects_ > 0 ? total_objects_ : 128;
+        preallocate(new_count);
+    }
+
+    if (free_list_.empty()) {
+        return nullptr; // No memory available
+    }
+
+    T* obj = free_list_.top();
+    free_list_.pop();
+
+    // Increment allocation counter
+    allocation_count_.fetch_add(1, std::memory_order_relaxed);
+
+    // Construct the object in place with provided arguments and return it
+    return new (obj) T(std::forward<Args>(args)...);
+}
+
+template<typename T>
+void ThreadLocalObjectPool<T>::deallocate(T* obj) {
+    if (!obj) return;
+
+    // Destruct the object
+    obj->~T();
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Add back to free list
+    free_list_.push(obj);
+
+    // Increment deallocation counter
+    deallocation_count_.fetch_add(1, std::memory_order_relaxed);
+}
+
+template<typename T>
+void ThreadLocalObjectPool<T>::preallocate(size_t count) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     // Calculate how much memory we need

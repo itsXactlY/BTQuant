@@ -459,4 +459,456 @@ void FootprintCellPool::preallocate(size_t count) {
 }
 
 
+// FastTradeDataPool implementation
+FastTradeDataPool& FastTradeDataPool::getInstance() {
+    static FastTradeDataPool instance;
+    return instance;
+}
+
+Data::TradeData* FastTradeDataPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastTradeDataPool::deallocate(Data::TradeData* trade) {
+    pool_.deallocate(trade);
+}
+
+void FastTradeDataPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastClusterCellPool implementation
+FastClusterCellPool& FastClusterCellPool::getInstance() {
+    static FastClusterCellPool instance;
+    return instance;
+}
+
+Analytics::ClusterCell* FastClusterCellPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastClusterCellPool::deallocate(Analytics::ClusterCell* cell) {
+    pool_.deallocate(cell);
+}
+
+void FastClusterCellPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastEMAIndicatorPool implementation
+FastEMAIndicatorPool& FastEMAIndicatorPool::getInstance() {
+    static FastEMAIndicatorPool instance;
+    return instance;
+}
+
+EMAIndicator* FastEMAIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastEMAIndicatorPool::deallocate(EMAIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastEMAIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastSMAIndicatorPool implementation
+FastSMAIndicatorPool& FastSMAIndicatorPool::getInstance() {
+    static FastSMAIndicatorPool instance;
+    return instance;
+}
+
+SMAIndicator* FastSMAIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastSMAIndicatorPool::deallocate(SMAIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastSMAIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastRSIIndicatorPool implementation
+FastRSIIndicatorPool& FastRSIIndicatorPool::getInstance() {
+    static FastRSIIndicatorPool instance;
+    return instance;
+}
+
+RSIIndicator* FastRSIIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastRSIIndicatorPool::deallocate(RSIIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastRSIIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastMACDIndicatorPool implementation
+FastMACDIndicatorPool& FastMACDIndicatorPool::getInstance() {
+    static FastMACDIndicatorPool instance;
+    return instance;
+}
+
+MACDIndicator* FastMACDIndicatorPool::allocate(int fast_period, int slow_period, int signal_period) {
+    return pool_.allocate(fast_period, slow_period, signal_period);
+}
+
+void FastMACDIndicatorPool::deallocate(MACDIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastMACDIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastBollingerBandIndicatorPool implementation
+FastBollingerBandIndicatorPool& FastBollingerBandIndicatorPool::getInstance() {
+    static FastBollingerBandIndicatorPool instance;
+    return instance;
+}
+
+BollingerBandIndicator* FastBollingerBandIndicatorPool::allocate(int period, double std_dev) {
+    return pool_.allocate(period, std_dev);
+}
+
+void FastBollingerBandIndicatorPool::deallocate(BollingerBandIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastBollingerBandIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastStochasticIndicatorPool implementation
+FastStochasticIndicatorPool& FastStochasticIndicatorPool::getInstance() {
+    static FastStochasticIndicatorPool instance;
+    return instance;
+}
+
+StochasticIndicator* FastStochasticIndicatorPool::allocate(int k_period, int d_period, int slowing_period) {
+    return pool_.allocate(k_period, d_period, slowing_period);
+}
+
+void FastStochasticIndicatorPool::deallocate(StochasticIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastStochasticIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastATRIndicatorPool implementation
+FastATRIndicatorPool& FastATRIndicatorPool::getInstance() {
+    static FastATRIndicatorPool instance;
+    return instance;
+}
+
+ATRIndicator* FastATRIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastATRIndicatorPool::deallocate(ATRIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastATRIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastOrderPool implementation
+FastOrderPool& FastOrderPool::getInstance() {
+    static FastOrderPool instance;
+    return instance;
+}
+
+OrderManager::Order* FastOrderPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastOrderPool::deallocate(OrderManager::Order* order) {
+    pool_.deallocate(order);
+}
+
+void FastOrderPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastProcessedTradePool implementation
+FastProcessedTradePool& FastProcessedTradePool::getInstance() {
+    static FastProcessedTradePool instance;
+    return instance;
+}
+
+ProcessedTrade* FastProcessedTradePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastProcessedTradePool::deallocate(ProcessedTrade* trade) {
+    pool_.deallocate(trade);
+}
+
+void FastProcessedTradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastOHLCVCandlePool implementation
+FastOHLCVCandlePool& FastOHLCVCandlePool::getInstance() {
+    static FastOHLCVCandlePool instance;
+    return instance;
+}
+
+RenderEngine::OHLCVCandle* FastOHLCVCandlePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastOHLCVCandlePool::deallocate(RenderEngine::OHLCVCandle* candle) {
+    pool_.deallocate(candle);
+}
+
+void FastOHLCVCandlePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastVolumeProfileLevelPool implementation
+FastVolumeProfileLevelPool& FastVolumeProfileLevelPool::getInstance() {
+    static FastVolumeProfileLevelPool instance;
+    return instance;
+}
+
+VolumeProfileLevel* FastVolumeProfileLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastVolumeProfileLevelPool::deallocate(VolumeProfileLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastVolumeProfileLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastTradeRecordPool implementation
+FastTradeRecordPool& FastTradeRecordPool::getInstance() {
+    static FastTradeRecordPool instance;
+    return instance;
+}
+
+PositionManager::TradeRecord* FastTradeRecordPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastTradeRecordPool::deallocate(PositionManager::TradeRecord* record) {
+    pool_.deallocate(record);
+}
+
+void FastTradeRecordPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastHotspineTradeTickPool implementation
+FastHotspineTradeTickPool& FastHotspineTradeTickPool::getInstance() {
+    static FastHotspineTradeTickPool instance;
+    return instance;
+}
+
+RenderEngine::HotspineTradeTick* FastHotspineTradeTickPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastHotspineTradeTickPool::deallocate(RenderEngine::HotspineTradeTick* tick) {
+    pool_.deallocate(tick);
+}
+
+void FastHotspineTradeTickPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastOrderBookLevelPool implementation
+FastOrderBookLevelPool& FastOrderBookLevelPool::getInstance() {
+    static FastOrderBookLevelPool instance;
+    return instance;
+}
+
+RenderEngine::OrderBookLevel* FastOrderBookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastOrderBookLevelPool::deallocate(RenderEngine::OrderBookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastOrderBookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastCompressedCandlePool implementation
+FastCompressedCandlePool& FastCompressedCandlePool::getInstance() {
+    static FastCompressedCandlePool instance;
+    return instance;
+}
+
+Data::CompressedCandle* FastCompressedCandlePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastCompressedCandlePool::deallocate(Data::CompressedCandle* candle) {
+    pool_.deallocate(candle);
+}
+
+void FastCompressedCandlePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastCompressedTradePool implementation
+FastCompressedTradePool& FastCompressedTradePool::getInstance() {
+    static FastCompressedTradePool instance;
+    return instance;
+}
+
+Data::CompressedTrade* FastCompressedTradePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastCompressedTradePool::deallocate(Data::CompressedTrade* trade) {
+    pool_.deallocate(trade);
+}
+
+void FastCompressedTradePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastFibonacciLevelPool implementation
+FastFibonacciLevelPool& FastFibonacciLevelPool::getInstance() {
+    static FastFibonacciLevelPool instance;
+    return instance;
+}
+
+FibonacciLevel* FastFibonacciLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastFibonacciLevelPool::deallocate(FibonacciLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastFibonacciLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastGpuOrderBookLevelPool implementation
+FastGpuOrderBookLevelPool& FastGpuOrderBookLevelPool::getInstance() {
+    static FastGpuOrderBookLevelPool instance;
+    return instance;
+}
+
+RenderEngine::GpuOrderBookLevel* FastGpuOrderBookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastGpuOrderBookLevelPool::deallocate(RenderEngine::GpuOrderBookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastGpuOrderBookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastDepthLevelPool implementation
+FastDepthLevelPool& FastDepthLevelPool::getInstance() {
+    static FastDepthLevelPool instance;
+    return instance;
+}
+
+BTQuant::MarketDepthAnalyzer::DepthLevel* FastDepthLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastDepthLevelPool::deallocate(BTQuant::MarketDepthAnalyzer::DepthLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastDepthLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastHotOrderbookLevelPool implementation
+FastHotOrderbookLevelPool& FastHotOrderbookLevelPool::getInstance() {
+    static FastHotOrderbookLevelPool instance;
+    return instance;
+}
+
+HotOrderbookLevel* FastHotOrderbookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastHotOrderbookLevelPool::deallocate(HotOrderbookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void FastHotOrderbookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastCandleClusterPool implementation
+FastCandleClusterPool& FastCandleClusterPool::getInstance() {
+    static FastCandleClusterPool instance;
+    return instance;
+}
+
+RenderEngine::CandleCluster* FastCandleClusterPool::allocate(float x, float y, float w, float h,
+                                                            uint32_t bidVol, uint32_t askVol, uint32_t tradeCnt,
+                                                            float vw, bool hasTrades) {
+    return pool_.allocate(x, y, w, h, bidVol, askVol, tradeCnt, vw, hasTrades);
+}
+
+void FastCandleClusterPool::deallocate(RenderEngine::CandleCluster* cluster) {
+    pool_.deallocate(cluster);
+}
+
+void FastCandleClusterPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastVolumeProfileNodePool implementation
+FastVolumeProfileNodePool& FastVolumeProfileNodePool::getInstance() {
+    static FastVolumeProfileNodePool instance;
+    return instance;
+}
+
+VolumeProfileNode* FastVolumeProfileNodePool::allocate() {
+    return pool_.allocate();
+}
+
+void FastVolumeProfileNodePool::deallocate(VolumeProfileNode* node) {
+    pool_.deallocate(node);
+}
+
+void FastVolumeProfileNodePool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastFootprintCellPool implementation
+FastFootprintCellPool& FastFootprintCellPool::getInstance() {
+    static FastFootprintCellPool instance;
+    return instance;
+}
+
+FootprintCell* FastFootprintCellPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastFootprintCellPool::deallocate(FootprintCell* cell) {
+    pool_.deallocate(cell);
+}
+
+void FastFootprintCellPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

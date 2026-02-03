@@ -32,6 +32,12 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
+    // Validate viewport bounds to prevent incorrect culling
+    if (viewport_min_.x >= viewport_max_.x || viewport_min_.y >= viewport_max_.y) {
+        // Invalid viewport bounds - don't render anything
+        return false;
+    }
+
     // Quick off-screen check using bounding box
     // Check if panel is completely off-screen based on viewport bounds
     const float right_edge = panel_pos.x + panel_size.x;

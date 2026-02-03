@@ -3554,7 +3554,8 @@ std::vector<FootprintCell> FootprintLOD::aggregateCellsForZoomOut(const std::vec
 
         auto grid_key = std::make_pair(grid_x, grid_y);
 
-        if (grid_map.find(grid_key) == grid_map.end()) {
+        auto iter = grid_map.find(grid_key);
+        if (iter == grid_map.end()) {
             // Create new aggregated cell using the constructor
             FootprintCell aggregated_cell(
                 grid_x * grid_size + grid_size * 0.5f,  // x: Center in grid
@@ -3575,10 +3576,10 @@ std::vector<FootprintCell> FootprintLOD::aggregateCellsForZoomOut(const std::vec
             aggregated_cell.start_time_ns = cell.start_time_ns;
             aggregated_cell.end_time_ns = cell.end_time_ns;
 
-            grid_map[grid_key] = aggregated_cell;
+            grid_map.emplace(grid_key, aggregated_cell);
         } else {
             // Aggregate with existing cell in grid
-            FootprintCell& existing_cell = grid_map[grid_key];
+            FootprintCell& existing_cell = iter->second;
 
             // Sum volumes
             existing_cell.bid_volume += cell.bid_volume;

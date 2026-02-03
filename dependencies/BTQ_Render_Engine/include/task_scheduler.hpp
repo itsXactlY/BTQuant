@@ -54,8 +54,29 @@ public:
         const std::vector<Trade>& trades);
 
     std::future<std::vector<double>> calculate_volume_by_time_async(
-        const std::vector<Trade>& trades, 
+        const std::vector<Trade>& trades,
         int time_resolution_minutes);
+
+    // Enhanced volume calculation methods
+    std::future<std::vector<double>> calculate_rolling_volume_profile_async(
+        const std::vector<Trade>& trades,
+        double min_price,
+        double max_price,
+        int resolution,
+        int window_size);
+
+    std::future<std::vector<double>> calculate_time_based_volume_async(
+        const std::vector<Trade>& trades,
+        int time_resolution_seconds);
+
+    // Additional advanced volume calculation methods
+    std::future<std::vector<double>> calculate_volume_at_price_levels_async(
+        const std::vector<Trade>& trades,
+        const std::vector<double>& price_levels);
+
+    std::future<std::vector<double>> calculate_time_weighted_volume_async(
+        const std::vector<Trade>& trades,
+        int time_window_minutes);
 
     // Indicator Computations
     std::future<std::vector<double>> calculate_sma_async(
@@ -75,6 +96,26 @@ public:
         const std::vector<double>& prices,
         int period,
         double num_std_dev = 2.0);
+
+    // Enhanced indicator computation methods
+    std::future<std::vector<double>> calculate_adaptive_sma_async(
+        const std::vector<double>& prices,
+        int min_period,
+        int max_period);
+
+    std::future<std::vector<double>> calculate_parabolic_sar_async(
+        const std::vector<Candle>& candles,
+        double acceleration_factor_step = 0.02,
+        double max_acceleration_factor = 0.2);
+
+    // Additional advanced indicator computation methods
+    std::future<std::vector<double>> calculate_hull_moving_average_async(
+        const std::vector<double>& prices,
+        int period);
+
+    std::future<std::vector<double>> calculate_triangular_moving_average_async(
+        const std::vector<double>& prices,
+        int period);
 
     // Data Processing
     std::future<std::vector<Candle>> aggregate_candles_async(
@@ -138,6 +179,26 @@ public:
     std::future<std::vector<std::vector<Candle>>> aggregate_batch_candles_async(
         const std::vector<std::vector<Trade>>& trade_batches,
         std::chrono::seconds timeframe);
+
+    // Enhanced data processing methods
+    std::future<std::vector<std::vector<Trade>>> partition_and_process_trades_async(
+        const std::vector<Trade>& trades,
+        std::function<std::vector<Trade>(const std::vector<Trade>&)> processor_func,
+        int num_partitions = 0);
+
+    std::future<std::vector<Candle>> create_dynamic_timeframe_candles_async(
+        const std::vector<Trade>& trades,
+        std::chrono::seconds base_timeframe,
+        double volume_threshold = 0.0);
+
+    // Additional advanced data processing methods
+    std::future<std::vector<std::vector<double>>> calculate_normalized_correlation_matrix_async(
+        const std::vector<std::vector<double>>& data_series);
+
+    std::future<std::vector<Trade>> apply_market_microstructure_filters_async(
+        const std::vector<Trade>& trades,
+        double tick_size,
+        std::chrono::milliseconds min_time_diff = std::chrono::milliseconds(0));
 
 private:
     void worker_loop();

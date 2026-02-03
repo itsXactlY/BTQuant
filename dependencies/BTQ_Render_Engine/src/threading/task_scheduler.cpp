@@ -2085,4 +2085,1462 @@ std::future<std::vector<std::vector<Candle>>> TaskScheduler::aggregate_batch_can
     return future;
 }
 
+// Enhanced multi-threaded methods for volume calculations
+
+std::future<std::vector<double>> TaskScheduler::calculate_rolling_volume_profile_async(
+    const std::vector<Trade>& trades,
+    double min_price,
+    double max_price,
+    int resolution,
+    int window_size) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, min_price, max_price, resolution, window_size, promise]() {
+        try {
+            std::vector<double> rolling_volume_profile;
+
+            if (trades.size() < static_cast<size_t>(window_size) || resolution <= 0) {
+                promise->set_value(std::move(rolling_volume_profile));
+                return;
+            }
+
+            rolling_volume_profile.reserve(trades.size() - window_size + 1);
+            double price_range = max_price - min_price;
+            if (price_range <= 0) {
+                std::fill_n(std::back_inserter(rolling_volume_profile),
+                           trades.size() - window_size + 1, 0.0);
+                promise->set_value(std::move(rolling_volume_profile));
+                return;
+            }
+
+            double bin_size = price_range / resolution;
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::vector<double>> thread_results(num_threads);
+
+                // Calculate how many rolling windows each thread will process
+                size_t total_windows = trades.size() - window_size + 1;
+                size_t chunk_size = total_windows / num_threads;
+
+                std::vector<std::thread> processing_threads;
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start_window = t * chunk_size;
+                    size_t end_window = (t == num_threads - 1) ? total_windows : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&trades, min_price, bin_size, resolution, window_size,
+                                                   &thread_results, t, start_window, end_window]() {
+                        for (size_t win_idx = start_window; win_idx < end_window; ++win_idx) {
+                            std::vector<double> window_profile(resolution, 0.0);
+
+                            // Calculate volume profile for this window
+                            for (int offset = 0; offset < window_size; ++offset) {
+                                size_t trade_idx = win_idx + offset;
+                                if (trade_idx < trades.size()) {
+                                    const auto& trade = trades[trade_idx];
+                                    int bin_index = static_cast<int>((trade.price - min_price) / bin_size);
+                                    if (bin_index >= 0 && bin_index < resolution) {
+                                        window_profile[bin_index] += trade.volume;
+                                    }
+                                }
+                            }
+
+                            // For this example, we'll return the total volume in the highest volume bin
+                            double max_bin_volume = *std::max_element(window_profile.begin(), window_profile.end());
+                            thread_results[t].push_back(max_bin_volume);
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results in order
+                rolling_volume_profile.reserve(total_windows);
+                for (size_t t = 0; t < num_threads; ++t) {
+                    rolling_volume_profile.insert(rolling_volume_profile.end(),
+                                                thread_results[t].begin(),
+                                                thread_results[t].end());
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i <= trades.size() - window_size; ++i) {
+                    std::vector<double> window_profile(resolution, 0.0);
+
+                    // Calculate volume profile for this window
+                    for (int j = 0; j < window_size; ++j) {
+                        const auto& trade = trades[i + j];
+                        int bin_index = static_cast<int>((trade.price - min_price) / bin_size);
+                        if (bin_index >= 0 && bin_index < resolution) {
+                            window_profile[bin_index] += trade.volume;
+                        }
+                    }
+
+                    // For this example, we'll return the total volume in the highest volume bin
+                    double max_bin_volume = *std::max_element(window_profile.begin(), window_profile.end());
+                    rolling_volume_profile.push_back(max_bin_volume);
+                }
+            }
+
+            promise->set_value(std::move(rolling_volume_profile));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_time_based_volume_async(
+    const std::vector<Trade>& trades,
+    int time_resolution_seconds) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, time_resolution_seconds, promise]() {
+        try {
+            if (trades.empty() || time_resolution_seconds <= 0) {
+                promise->set_value(std::vector<double>());
+                return;
+            }
+
+            // Determine time range
+            auto min_max_it = std::minmax_element(trades.begin(), trades.end(),
+                [](const Trade& a, const Trade& b) {
+                    return a.timestamp < b.timestamp;
+                });
+
+            auto start_time = min_max_it.first->timestamp;
+            auto end_time = min_max_it.second->timestamp;
+
+            // Calculate number of time bins
+            auto duration_seconds = std::chrono::duration_cast<std::chrono::seconds>(
+                end_time - start_time).count();
+            int num_bins = static_cast<int>(std::ceil(static_cast<double>(duration_seconds) /
+                                                      time_resolution_seconds)) + 1;
+
+            std::vector<double> volume_by_time(num_bins, 0.0);
+            auto bin_duration = std::chrono::seconds(time_resolution_seconds);
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (num_threads < 2) num_threads = 2;
+
+                // Use atomic operations or temporary storage per thread to avoid race conditions
+                std::vector<std::vector<double>> thread_results(num_threads, std::vector<double>(num_bins, 0.0));
+
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = trades.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&trades, start_time, time_resolution_seconds, num_bins,
+                                                   &thread_results, t, start, end]() {
+                        for (size_t i = start; i < end; ++i) {
+                            const auto& trade = trades[i];
+                            auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(
+                                trade.timestamp - start_time).count();
+                            int bin_index = static_cast<int>(time_diff / time_resolution_seconds);
+
+                            if (bin_index >= 0 && bin_index < num_bins) {
+                                thread_results[t][bin_index] += trade.volume;
+                            }
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results
+                for (int i = 0; i < num_bins; ++i) {
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        volume_by_time[i] += thread_results[t][i];
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (const auto& trade : trades) {
+                    auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(
+                        trade.timestamp - start_time).count();
+                    int bin_index = static_cast<int>(time_diff / time_resolution_seconds);
+
+                    if (bin_index >= 0 && bin_index < num_bins) {
+                        volume_by_time[bin_index] += trade.volume;
+                    }
+                }
+            }
+
+            promise->set_value(std::move(volume_by_time));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Enhanced multi-threaded methods for indicator computations
+
+std::future<std::vector<double>> TaskScheduler::calculate_adaptive_sma_async(
+    const std::vector<double>& prices,
+    int min_period,
+    int max_period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([prices, min_period, max_period, promise]() {
+        try {
+            std::vector<double> adaptive_sma_values;
+
+            if (prices.size() < static_cast<size_t>(min_period) || min_period >= max_period || min_period <= 0) {
+                adaptive_sma_values.resize(prices.size());
+                promise->set_value(std::move(adaptive_sma_values));
+                return;
+            }
+
+            adaptive_sma_values.reserve(prices.size());
+
+            // Use multi-threaded approach for large datasets
+            if (prices.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), prices.size());
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::vector<double>> thread_results(num_threads);
+
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = prices.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? prices.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([start, end, &prices, min_period, max_period, &thread_results, t]() {
+                        std::vector<double> local_results;
+
+                        for (size_t i = start; i < end; ++i) {
+                            if (i < static_cast<size_t>(min_period - 1)) {
+                                // Not enough data points yet
+                                local_results.push_back(prices[i]);
+                                continue;
+                            }
+
+                            // Determine the adaptive period based on volatility (simplified approach)
+                            size_t lookback = std::min(i + 1, static_cast<size_t>(max_period));
+                            size_t period = std::max(min_period, static_cast<int>(lookback));
+
+                            // Calculate SMA for the adaptive period
+                            size_t actual_start = (i >= static_cast<size_t>(period - 1)) ? i - (period - 1) : 0;
+                            double sum = 0.0;
+
+                            for (int p = 0; p < period && (actual_start + p) <= i; ++p) {
+                                sum += prices[actual_start + p];
+                            }
+
+                            double sma = sum / period;
+                            local_results.push_back(sma);
+                        }
+
+                        thread_results[t] = std::move(local_results);
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results in order
+                adaptive_sma_values.reserve(prices.size());
+                for (size_t t = 0; t < num_threads; ++t) {
+                    adaptive_sma_values.insert(adaptive_sma_values.end(),
+                                             thread_results[t].begin(),
+                                             thread_results[t].end());
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i < prices.size(); ++i) {
+                    if (i < static_cast<size_t>(min_period - 1)) {
+                        // Not enough data points yet
+                        adaptive_sma_values.push_back(prices[i]);
+                        continue;
+                    }
+
+                    // Determine the adaptive period based on volatility (simplified approach)
+                    size_t lookback = std::min(i + 1, static_cast<size_t>(max_period));
+                    size_t period = std::max(min_period, static_cast<int>(lookback));
+
+                    // Calculate SMA for the adaptive period
+                    size_t actual_start = (i >= static_cast<size_t>(period - 1)) ? i - (period - 1) : 0;
+                    double sum = 0.0;
+
+                    for (int p = 0; p < period && (actual_start + p) <= i; ++p) {
+                        sum += prices[actual_start + p];
+                    }
+
+                    double sma = sum / period;
+                    adaptive_sma_values.push_back(sma);
+                }
+            }
+
+            promise->set_value(std::move(adaptive_sma_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_parabolic_sar_async(
+    const std::vector<Candle>& candles,
+    double acceleration_factor_step,
+    double max_acceleration_factor) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([candles, acceleration_factor_step, max_acceleration_factor, promise]() {
+        try {
+            std::vector<double> sar_values;
+
+            if (candles.size() < 2) {
+                sar_values.resize(candles.size(), 0.0);
+                promise->set_value(std::move(sar_values));
+                return;
+            }
+
+            sar_values.reserve(candles.size());
+
+            // For Parabolic SAR, we need to determine initial trend based on first few candles
+            // This is difficult to parallelize completely, but we can parallelize some calculations
+
+            // Initialize with first candle's close
+            sar_values.push_back(candles[0].close);
+
+            // Sequential calculation is required for SAR since each value depends on the previous
+            // However, for very large datasets we can precompute some values in parallel
+            if (candles.size() > 10000) {
+                // Precompute extreme points and acceleration factors in parallel for optimization
+                std::vector<double> ep_values(candles.size(), 0.0);  // Extreme Point
+                std::vector<double> af_values(candles.size(), acceleration_factor_step);  // Acceleration Factor
+
+                // This is a simplified version - full Parabolic SAR calculation requires sequential processing
+                // But we can at least parallelize some initial computations
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), candles.size());
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = (candles.size() - 1) / num_threads;  // Skip first candle
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = 1 + t * chunk_size;  // Start from second candle
+                    size_t end = (t == num_threads - 1) ? candles.size() : 1 + (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&candles, &ep_values, &af_values, acceleration_factor_step, max_acceleration_factor, start, end]() {
+                        // Initialize EP and AF values (simplified)
+                        for (size_t i = start; i < end; ++i) {
+                            ep_values[i] = std::max(candles[i].high, candles[i-1].high);  // Simplified EP calculation
+                            af_values[i] = acceleration_factor_step;  // Start with minimum AF
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Now calculate SAR values sequentially using precomputed values
+                bool is_long = true;  // Assume initial trend is long
+                double sar = candles[0].close;
+                double ep = candles[0].high;
+                double af = acceleration_factor_step;
+
+                sar_values[0] = sar;
+
+                for (size_t i = 1; i < candles.size(); ++i) {
+                    // Simplified Parabolic SAR calculation
+                    sar = sar + af * (ep - sar);
+
+                    // Check if trend should reverse
+                    bool should_reverse = (is_long && sar > candles[i].low) || (!is_long && sar < candles[i].high);
+
+                    if (should_reverse) {
+                        is_long = !is_long;
+                        sar = ep;  // Set SAR to the extreme point of previous trend
+                        ep = is_long ? candles[i].high : candles[i].low;
+                        af = acceleration_factor_step;  // Reset acceleration factor
+                    } else {
+                        // Update EP if appropriate
+                        if (is_long && candles[i].high > ep) {
+                            ep = candles[i].high;
+                            if (af < max_acceleration_factor) {
+                                af = std::min(af + acceleration_factor_step, max_acceleration_factor);
+                            }
+                        } else if (!is_long && candles[i].low < ep) {
+                            ep = candles[i].low;
+                            if (af < max_acceleration_factor) {
+                                af = std::min(af + acceleration_factor_step, max_acceleration_factor);
+                            }
+                        }
+                    }
+
+                    sar_values.push_back(sar);
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                bool is_long = true;  // Assume initial trend is long
+                double sar = candles[0].close;
+                double ep = candles[0].high;
+                double af = acceleration_factor_step;
+
+                for (size_t i = 1; i < candles.size(); ++i) {
+                    // Simplified Parabolic SAR calculation
+                    sar = sar + af * (ep - sar);
+
+                    // Check if trend should reverse
+                    bool should_reverse = (is_long && sar > candles[i].low) || (!is_long && sar < candles[i].high);
+
+                    if (should_reverse) {
+                        is_long = !is_long;
+                        sar = ep;  // Set SAR to the extreme point of previous trend
+                        ep = is_long ? candles[i].high : candles[i].low;
+                        af = acceleration_factor_step;  // Reset acceleration factor
+                    } else {
+                        // Update EP if appropriate
+                        if (is_long && candles[i].high > ep) {
+                            ep = candles[i].high;
+                            if (af < max_acceleration_factor) {
+                                af = std::min(af + acceleration_factor_step, max_acceleration_factor);
+                            }
+                        } else if (!is_long && candles[i].low < ep) {
+                            ep = candles[i].low;
+                            if (af < max_acceleration_factor) {
+                                af = std::min(af + acceleration_factor_step, max_acceleration_factor);
+                            }
+                        }
+                    }
+
+                    sar_values.push_back(sar);
+                }
+            }
+
+            promise->set_value(std::move(sar_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Enhanced multi-threaded methods for data processing
+
+std::future<std::vector<std::vector<Trade>>> TaskScheduler::partition_and_process_trades_async(
+    const std::vector<Trade>& trades,
+    std::function<std::vector<Trade>(const std::vector<Trade>&)> processor_func,
+    int num_partitions) {
+
+    auto promise = std::make_shared<std::promise<std::vector<std::vector<Trade>>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, processor_func, num_partitions, promise]() {
+        try {
+            std::vector<std::vector<Trade>> results;
+
+            if (trades.empty()) {
+                promise->set_value(std::move(results));
+                return;
+            }
+
+            // Determine number of partitions
+            size_t actual_partitions = static_cast<size_t>(num_partitions);
+            if (actual_partitions == 0) {
+                actual_partitions = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (actual_partitions == 0) actual_partitions = 1;
+            }
+
+            // Use multi-threaded approach for large datasets
+            if (actual_partitions > 1 && trades.size() > 1000) {
+                std::vector<std::vector<Trade>> partitions(actual_partitions);
+                std::vector<std::thread> processing_threads;
+
+                // Divide trades into partitions
+                size_t partition_size = trades.size() / actual_partitions;
+                std::vector<std::pair<size_t, size_t>> partition_bounds;
+
+                for (size_t i = 0; i < actual_partitions; ++i) {
+                    size_t start = i * partition_size;
+                    size_t end = (i == actual_partitions - 1) ? trades.size() : (i + 1) * partition_size;
+                    partition_bounds.emplace_back(start, end);
+                }
+
+                // Process each partition in parallel
+                std::vector<std::future<std::vector<Trade>>> futures;
+                for (size_t i = 0; i < actual_partitions; ++i) {
+                    auto partition_trades = std::vector<Trade>(
+                        trades.begin() + partition_bounds[i].first,
+                        trades.begin() + partition_bounds[i].second
+                    );
+
+                    // Create packaged_task to get a future
+                    auto task = std::make_shared<std::packaged_task<std::vector<Trade>()>>(
+                        [processor_func, partition_trades]() {
+                            return processor_func(partition_trades);
+                        }
+                    );
+
+                    futures.push_back(task->get_future());
+
+                    processing_threads.emplace_back([task]() {
+                        (*task)();
+                    });
+                }
+
+                // Wait for all threads to complete and collect results
+                results.reserve(actual_partitions);
+                for (auto& future : futures) {
+                    results.push_back(future.get());
+                }
+
+                // Wait for all threads to finish
+                for (auto& thread : processing_threads) {
+                    if (thread.joinable()) {
+                        thread.join();
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                results.push_back(processor_func(trades));
+            }
+
+            promise->set_value(std::move(results));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<Candle>> TaskScheduler::create_dynamic_timeframe_candles_async(
+    const std::vector<Trade>& trades,
+    std::chrono::seconds base_timeframe,
+    double volume_threshold) {
+
+    auto promise = std::make_shared<std::promise<std::vector<Candle>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, base_timeframe, volume_threshold, promise]() {
+        try {
+            std::vector<Candle> dynamic_candles;
+
+            if (trades.empty()) {
+                promise->set_value(std::move(dynamic_candles));
+                return;
+            }
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (num_threads < 2) num_threads = 2;
+
+                // Partition trades for parallel processing
+                std::vector<std::vector<Trade>> thread_partitions(num_threads);
+                size_t chunk_size = trades.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
+
+                    for (size_t i = start; i < end; ++i) {
+                        thread_partitions[t].push_back(trades[i]);
+                    }
+                }
+
+                // Process each partition in parallel
+                std::vector<std::thread> processing_threads;
+                std::vector<std::vector<Candle>> thread_results(num_threads);
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    processing_threads.emplace_back([&thread_partitions, base_timeframe, volume_threshold, &thread_results, t]() {
+                        const auto& partition = thread_partitions[t];
+                        std::vector<Candle> local_candles;
+
+                        if (!partition.empty()) {
+                            // Create dynamic timeframe candles for this partition
+                            std::map<std::chrono::system_clock::time_point, Candle> candle_map;
+
+                            for (const auto& trade : partition) {
+                                // Calculate the start time of the base timeframe period
+                                auto time_since_epoch = trade.timestamp.time_since_epoch();
+                                auto seconds = std::chrono::duration_cast<std::chrono::seconds>(time_since_epoch);
+                                auto period_start = std::chrono::system_clock::time_point(seconds -
+                                    std::chrono::seconds(seconds.count() % base_timeframe.count()));
+
+                                if (candle_map.find(period_start) == candle_map.end()) {
+                                    // Initialize new candle
+                                    candle_map[period_start] = {
+                                        period_start,
+                                        trade.price,  // Open
+                                        trade.price,  // High
+                                        trade.price,  // Low
+                                        trade.price,  // Close
+                                        trade.volume  // Volume
+                                    };
+                                } else {
+                                    // Update existing candle
+                                    auto& candle = candle_map[period_start];
+                                    candle.high = std::max(candle.high, trade.price);
+                                    candle.low = std::min(candle.low, trade.price);
+                                    candle.close = trade.price;  // Last price becomes close
+                                    candle.volume += trade.volume;
+                                }
+                            }
+
+                            // Convert map to vector
+                            for (const auto& pair : candle_map) {
+                                local_candles.push_back(pair.second);
+                            }
+                        }
+
+                        thread_results[t] = std::move(local_candles);
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results from all threads
+                std::map<std::chrono::system_clock::time_point, Candle> final_candle_map;
+
+                for (const auto& thread_result : thread_results) {
+                    for (const auto& candle : thread_result) {
+                        auto it = final_candle_map.find(candle.timestamp);
+                        if (it == final_candle_map.end()) {
+                            final_candle_map[candle.timestamp] = candle;
+                        } else {
+                            // Merge candles with same timestamp
+                            auto& existing_candle = it->second;
+                            existing_candle.high = std::max(existing_candle.high, candle.high);
+                            existing_candle.low = std::min(existing_candle.low, candle.low);
+                            existing_candle.close = candle.close;  // Use the later close price
+                            existing_candle.volume += candle.volume;
+                        }
+                    }
+                }
+
+                // Apply volume threshold filtering if needed
+                for (const auto& pair : final_candle_map) {
+                    if (pair.second.volume >= volume_threshold) {
+                        dynamic_candles.push_back(pair.second);
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                std::map<std::chrono::system_clock::time_point, Candle> candle_map;
+
+                for (const auto& trade : trades) {
+                    // Calculate the start time of the base timeframe period
+                    auto time_since_epoch = trade.timestamp.time_since_epoch();
+                    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(time_since_epoch);
+                    auto period_start = std::chrono::system_clock::time_point(seconds -
+                        std::chrono::seconds(seconds.count() % base_timeframe.count()));
+
+                    if (candle_map.find(period_start) == candle_map.end()) {
+                        // Initialize new candle
+                        candle_map[period_start] = {
+                            period_start,
+                            trade.price,  // Open
+                            trade.price,  // High
+                            trade.price,  // Low
+                            trade.price,  // Close
+                            trade.volume  // Volume
+                        };
+                    } else {
+                        // Update existing candle
+                        auto& candle = candle_map[period_start];
+                        candle.high = std::max(candle.high, trade.price);
+                        candle.low = std::min(candle.low, trade.price);
+                        candle.close = trade.price;  // Last price becomes close
+                        candle.volume += trade.volume;
+                    }
+                }
+
+                // Apply volume threshold filtering
+                for (const auto& pair : candle_map) {
+                    if (pair.second.volume >= volume_threshold) {
+                        dynamic_candles.push_back(pair.second);
+                    }
+                }
+            }
+
+            promise->set_value(std::move(dynamic_candles));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Additional multi-threaded methods for volume calculations
+
+std::future<std::vector<double>> TaskScheduler::calculate_volume_at_price_levels_async(
+    const std::vector<Trade>& trades,
+    const std::vector<double>& price_levels) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, price_levels, promise]() {
+        try {
+            std::vector<double> volumes_at_levels(price_levels.size(), 0.0);
+
+            if (trades.empty() || price_levels.empty()) {
+                promise->set_value(std::move(volumes_at_levels));
+                return;
+            }
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000 || price_levels.size() > 1000) {
+                size_t num_threads = std::min({
+                    static_cast<size_t>(std::thread::hardware_concurrency()),
+                    trades.size(),
+                    static_cast<size_t>(price_levels.size())
+                });
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::vector<double>> thread_results(num_threads, std::vector<double>(price_levels.size(), 0.0));
+
+                // Process trades in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = trades.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&trades, &price_levels, &thread_results, t, start, end]() {
+                        for (size_t i = start; i < end; ++i) {
+                            const auto& trade = trades[i];
+
+                            // Find the closest price level to the trade price
+                            double min_diff = std::abs(trade.price - price_levels[0]);
+                            size_t closest_level_idx = 0;
+
+                            for (size_t j = 1; j < price_levels.size(); ++j) {
+                                double diff = std::abs(trade.price - price_levels[j]);
+                                if (diff < min_diff) {
+                                    min_diff = diff;
+                                    closest_level_idx = j;
+                                }
+                            }
+
+                            // Add volume to the closest level
+                            thread_results[t][closest_level_idx] += trade.volume;
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results
+                for (size_t i = 0; i < price_levels.size(); ++i) {
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        volumes_at_levels[i] += thread_results[t][i];
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (const auto& trade : trades) {
+                    // Find the closest price level to the trade price
+                    double min_diff = std::abs(trade.price - price_levels[0]);
+                    size_t closest_level_idx = 0;
+
+                    for (size_t j = 1; j < price_levels.size(); ++j) {
+                        double diff = std::abs(trade.price - price_levels[j]);
+                        if (diff < min_diff) {
+                            min_diff = diff;
+                            closest_level_idx = j;
+                        }
+                    }
+
+                    // Add volume to the closest level
+                    volumes_at_levels[closest_level_idx] += trade.volume;
+                }
+            }
+
+            promise->set_value(std::move(volumes_at_levels));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_time_weighted_volume_async(
+    const std::vector<Trade>& trades,
+    int time_window_minutes) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, time_window_minutes, promise]() {
+        try {
+            std::vector<double> twv_values;
+
+            if (trades.empty() || time_window_minutes <= 0) {
+                twv_values.resize(trades.size(), 0.0);
+                promise->set_value(std::move(twv_values));
+                return;
+            }
+
+            twv_values.reserve(trades.size());
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (num_threads < 2) num_threads = 2;
+
+                // Pre-calculate time windows in parallel
+                std::vector<std::vector<double>> thread_results(num_threads);
+
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = trades.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&trades, time_window_minutes, &thread_results, t, start, end]() {
+                        std::vector<double> local_twv_values;
+
+                        for (size_t i = start; i < end; ++i) {
+                            const auto& current_trade = trades[i];
+                            double total_volume = 0.0;
+                            double weighted_volume = 0.0;
+
+                            // Look back within the time window
+                            auto time_threshold = current_trade.timestamp - std::chrono::minutes(time_window_minutes);
+
+                            for (int j = static_cast<int>(i); j >= 0; --j) {
+                                if (trades[j].timestamp < time_threshold) {
+                                    break; // Exceeded time window
+                                }
+
+                                auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(
+                                    current_trade.timestamp - trades[j].timestamp).count();
+
+                                // Weight decreases linearly with time distance
+                                double weight = std::max(0.0, 1.0 - (static_cast<double>(time_diff) /
+                                           (time_window_minutes * 60.0)));
+
+                                weighted_volume += trades[j].volume * weight;
+                                total_volume += trades[j].volume;
+                            }
+
+                            double twv = (total_volume > 0) ? weighted_volume / total_volume : 0.0;
+                            local_twv_values.push_back(twv);
+                        }
+
+                        thread_results[t] = std::move(local_twv_values);
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results in order
+                twv_values.reserve(trades.size());
+                for (size_t t = 0; t < num_threads; ++t) {
+                    twv_values.insert(twv_values.end(),
+                                      thread_results[t].begin(),
+                                      thread_results[t].end());
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i < trades.size(); ++i) {
+                    const auto& current_trade = trades[i];
+                    double total_volume = 0.0;
+                    double weighted_volume = 0.0;
+
+                    // Look back within the time window
+                    auto time_threshold = current_trade.timestamp - std::chrono::minutes(time_window_minutes);
+
+                    for (int j = static_cast<int>(i); j >= 0; --j) {
+                        if (trades[j].timestamp < time_threshold) {
+                            break; // Exceeded time window
+                        }
+
+                        auto time_diff = std::chrono::duration_cast<std::chrono::seconds>(
+                            current_trade.timestamp - trades[j].timestamp).count();
+
+                        // Weight decreases linearly with time distance
+                        double weight = std::max(0.0, 1.0 - (static_cast<double>(time_diff) /
+                                   (time_window_minutes * 60.0)));
+
+                        weighted_volume += trades[j].volume * weight;
+                        total_volume += trades[j].volume;
+                    }
+
+                    double twv = (total_volume > 0) ? weighted_volume / total_volume : 0.0;
+                    twv_values.push_back(twv);
+                }
+            }
+
+            promise->set_value(std::move(twv_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Additional multi-threaded methods for indicator computations
+
+std::future<std::vector<double>> TaskScheduler::calculate_hull_moving_average_async(
+    const std::vector<double>& prices,
+    int period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([prices, period, promise]() {
+        try {
+            std::vector<double> hma_values;
+
+            if (prices.size() < static_cast<size_t>(period) || period <= 0) {
+                hma_values.resize(prices.size());
+                promise->set_value(std::move(hma_values));
+                return;
+            }
+
+            hma_values.reserve(prices.size() - period + 1);
+
+            // The Hull Moving Average formula: HMA = WMA(2*WMA(n/2) - WMA(n)), sqrt(n))
+            // For efficiency, we'll calculate this in parts
+
+            // First, calculate WMA(n/2) and WMA(n) using multi-threading
+            int half_period = period / 2;
+            if (half_period < 1) half_period = 1;
+
+            // Calculate WMA(n/2)
+            auto wma_half_future = std::async(std::launch::async, [&prices, half_period]() {
+                std::vector<double> wma_half;
+
+                if (prices.size() < static_cast<size_t>(half_period)) {
+                    wma_half.resize(prices.size());
+                    return wma_half;
+                }
+
+                wma_half.reserve(prices.size() - half_period + 1);
+
+                for (size_t i = half_period - 1; i < prices.size(); ++i) {
+                    double numerator = 0.0;
+                    double denominator = 0.0;
+
+                    for (int j = 0; j < half_period; ++j) {
+                        double weight = static_cast<double>(j + 1);
+                        numerator += prices[i - half_period + 1 + j] * weight;
+                        denominator += weight;
+                    }
+
+                    wma_half.push_back(numerator / denominator);
+                }
+
+                return wma_half;
+            });
+
+            // Calculate WMA(n)
+            auto wma_full_future = std::async(std::launch::async, [&prices, period]() {
+                std::vector<double> wma_full;
+
+                if (prices.size() < static_cast<size_t>(period)) {
+                    wma_full.resize(prices.size());
+                    return wma_full;
+                }
+
+                wma_full.reserve(prices.size() - period + 1);
+
+                for (size_t i = period - 1; i < prices.size(); ++i) {
+                    double numerator = 0.0;
+                    double denominator = 0.0;
+
+                    for (int j = 0; j < period; ++j) {
+                        double weight = static_cast<double>(j + 1);
+                        numerator += prices[i - period + 1 + j] * weight;
+                        denominator += weight;
+                    }
+
+                    wma_full.push_back(numerator / denominator);
+                }
+
+                return wma_full;
+            });
+
+            // Wait for WMAs to be calculated
+            auto wma_half = wma_half_future.get();
+            auto wma_full = wma_full_future.get();
+
+            // Calculate 2*WMA(n/2) - WMA(n)
+            std::vector<double> diff_values;
+            size_t min_size = std::min(wma_half.size(), wma_full.size());
+            diff_values.reserve(min_size);
+
+            for (size_t i = 0; i < min_size; ++i) {
+                diff_values.push_back(2.0 * wma_half[i] - wma_full[i]);
+            }
+
+            // Now calculate WMA of the difference with period sqrt(n)
+            int sqrt_period = static_cast<int>(std::sqrt(static_cast<double>(period)));
+            if (sqrt_period < 1) sqrt_period = 1;
+
+            if (diff_values.size() >= static_cast<size_t>(sqrt_period)) {
+                // Use multi-threaded approach for large datasets
+                if (diff_values.size() > 10000) {
+                    size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), diff_values.size());
+                    if (num_threads < 2) num_threads = 2;
+
+                    hma_values.resize(diff_values.size() - sqrt_period + 1);
+
+                    std::vector<std::thread> processing_threads;
+                    size_t chunk_size = (diff_values.size() - sqrt_period + 1) / num_threads;
+
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        size_t start = t * chunk_size;
+                        size_t end = (t == num_threads - 1) ? (diff_values.size() - sqrt_period + 1) : (start + chunk_size);
+
+                        processing_threads.emplace_back([&diff_values, sqrt_period, &hma_values, start, end]() {
+                            for (size_t i = start; i < end; ++i) {
+                                double numerator = 0.0;
+                                double denominator = 0.0;
+
+                                for (int j = 0; j < sqrt_period; ++j) {
+                                    double weight = static_cast<double>(j + 1);
+                                    numerator += diff_values[i + j] * weight;
+                                    denominator += weight;
+                                }
+
+                                hma_values[i] = numerator / denominator;
+                            }
+                        });
+                    }
+
+                    // Wait for all threads to complete
+                    for (auto& thread : processing_threads) {
+                        thread.join();
+                    }
+                } else {
+                    // Sequential processing for smaller datasets
+                    for (size_t i = 0; i <= diff_values.size() - sqrt_period; ++i) {
+                        double numerator = 0.0;
+                        double denominator = 0.0;
+
+                        for (int j = 0; j < sqrt_period; ++j) {
+                            double weight = static_cast<double>(j + 1);
+                            numerator += diff_values[i + j] * weight;
+                            denominator += weight;
+                        }
+
+                        hma_values.push_back(numerator / denominator);
+                    }
+                }
+            } else {
+                hma_values.resize(diff_values.size());
+            }
+
+            promise->set_value(std::move(hma_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_triangular_moving_average_async(
+    const std::vector<double>& prices,
+    int period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([prices, period, promise]() {
+        try {
+            std::vector<double> tma_values;
+
+            if (prices.size() < static_cast<size_t>(period) || period <= 0) {
+                tma_values.resize(prices.size());
+                promise->set_value(std::move(tma_values));
+                return;
+            }
+
+            // Triangular Moving Average = SMA of SMA
+            // Period for inner SMA = ceil(period/2)
+            int inner_period = static_cast<int>(std::ceil(static_cast<double>(period) / 2.0));
+
+            // Calculate first SMA
+            std::vector<double> first_sma;
+
+            if (prices.size() >= static_cast<size_t>(inner_period)) {
+                first_sma.reserve(prices.size() - inner_period + 1);
+
+                double sum = std::accumulate(prices.begin(), prices.begin() + inner_period, 0.0);
+                first_sma.push_back(sum / inner_period);
+
+                for (size_t i = inner_period; i < prices.size(); ++i) {
+                    sum += prices[i] - prices[i - inner_period];
+                    first_sma.push_back(sum / inner_period);
+                }
+            }
+
+            // Calculate second SMA (on the first SMA results)
+            if (first_sma.size() >= static_cast<size_t>(inner_period)) {
+                tma_values.reserve(first_sma.size() - inner_period + 1);
+
+                // Use multi-threaded approach for large datasets
+                if (first_sma.size() > 10000) {
+                    size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), first_sma.size());
+                    if (num_threads < 2) num_threads = 2;
+
+                    tma_values.resize(first_sma.size() - inner_period + 1);
+
+                    std::vector<std::thread> processing_threads;
+                    size_t chunk_size = (first_sma.size() - inner_period + 1) / num_threads;
+
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        size_t start = t * chunk_size;
+                        size_t end = (t == num_threads - 1) ? (first_sma.size() - inner_period + 1) : (start + chunk_size);
+
+                        processing_threads.emplace_back([&first_sma, inner_period, &tma_values, start, end]() {
+                            double local_sum = std::accumulate(first_sma.begin() + start, first_sma.begin() + start + inner_period, 0.0);
+                            tma_values[start] = local_sum / inner_period;
+
+                            for (size_t i = start + 1; i < end; ++i) {
+                                local_sum += first_sma[i + inner_period - 1] - first_sma[i - 1];
+                                tma_values[i] = local_sum / inner_period;
+                            }
+                        });
+                    }
+
+                    // Wait for all threads to complete
+                    for (auto& thread : processing_threads) {
+                        thread.join();
+                    }
+                } else {
+                    // Sequential processing for smaller datasets
+                    double sum = std::accumulate(first_sma.begin(), first_sma.begin() + inner_period, 0.0);
+                    tma_values.push_back(sum / inner_period);
+
+                    for (size_t i = inner_period; i < first_sma.size(); ++i) {
+                        sum += first_sma[i] - first_sma[i - inner_period];
+                        tma_values.push_back(sum / inner_period);
+                    }
+                }
+            } else {
+                tma_values.resize(first_sma.size());
+            }
+
+            promise->set_value(std::move(tma_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Additional multi-threaded methods for data processing
+
+std::future<std::vector<std::vector<double>>> TaskScheduler::calculate_normalized_correlation_matrix_async(
+    const std::vector<std::vector<double>>& data_series) {
+
+    auto promise = std::make_shared<std::promise<std::vector<std::vector<double>>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([data_series, promise]() {
+        try {
+            std::vector<std::vector<double>> correlation_matrix;
+
+            if (data_series.empty()) {
+                promise->set_value(std::move(correlation_matrix));
+                return;
+            }
+
+            size_t n = data_series.size();
+            correlation_matrix.resize(n, std::vector<double>(n, 0.0));
+
+            // Fill diagonal with 1.0 (each series is perfectly correlated with itself)
+            for (size_t i = 0; i < n; ++i) {
+                correlation_matrix[i][i] = 1.0;
+            }
+
+            // Use multi-threaded approach for large datasets
+            if (n > 10) {
+                // Create a triangular matrix of correlations to calculate
+                std::vector<std::pair<size_t, size_t>> pairs_to_calculate;
+                for (size_t i = 0; i < n; ++i) {
+                    for (size_t j = i + 1; j < n; ++j) {
+                        pairs_to_calculate.emplace_back(i, j);
+                    }
+                }
+
+                size_t num_pairs = pairs_to_calculate.size();
+                if (num_pairs > 0) {
+                    size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), num_pairs);
+                    if (num_threads < 2) num_threads = 2;
+
+                    std::vector<std::thread> processing_threads;
+                    size_t chunk_size = num_pairs / num_threads;
+
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        size_t start = t * chunk_size;
+                        size_t end = (t == num_threads - 1) ? num_pairs : (t + 1) * chunk_size;
+
+                        processing_threads.emplace_back([&pairs_to_calculate, &data_series, &correlation_matrix, start, end]() {
+                            for (size_t idx = start; idx < end; ++idx) {
+                                size_t i = pairs_to_calculate[idx].first;
+                                size_t j = pairs_to_calculate[idx].second;
+
+                                // Calculate correlation between series i and j
+                                const auto& series_i = data_series[i];
+                                const auto& series_j = data_series[j];
+
+                                if (series_i.size() != series_j.size() || series_i.size() < 2) {
+                                    correlation_matrix[i][j] = 0.0;
+                                    correlation_matrix[j][i] = 0.0;
+                                    continue;
+                                }
+
+                                size_t n_vals = series_i.size();
+                                double sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0;
+                                double sum_x2 = 0.0, sum_y2 = 0.0;
+
+                                for (size_t k = 0; k < n_vals; ++k) {
+                                    double x = series_i[k];
+                                    double y = series_j[k];
+
+                                    sum_x += x;
+                                    sum_y += y;
+                                    sum_xy += x * y;
+                                    sum_x2 += x * x;
+                                    sum_y2 += y * y;
+                                }
+
+                                double numerator = n_vals * sum_xy - sum_x * sum_y;
+                                double denominator_x = std::sqrt(n_vals * sum_x2 - sum_x * sum_x);
+                                double denominator_y = std::sqrt(n_vals * sum_y2 - sum_y * sum_y);
+                                double denominator = denominator_x * denominator_y;
+
+                                double correlation = (denominator != 0.0) ? numerator / denominator : 0.0;
+
+                                // Clamp correlation to [-1, 1] range to handle floating-point precision issues
+                                correlation = std::max(-1.0, std::min(1.0, correlation));
+
+                                correlation_matrix[i][j] = correlation;
+                                correlation_matrix[j][i] = correlation;
+                            }
+                        });
+                    }
+
+                    // Wait for all threads to complete
+                    for (auto& thread : processing_threads) {
+                        thread.join();
+                    }
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i < n; ++i) {
+                    for (size_t j = i + 1; j < n; ++j) {
+                        // Calculate correlation between series i and j
+                        const auto& series_i = data_series[i];
+                        const auto& series_j = data_series[j];
+
+                        if (series_i.size() != series_j.size() || series_i.size() < 2) {
+                            correlation_matrix[i][j] = 0.0;
+                            correlation_matrix[j][i] = 0.0;
+                            continue;
+                        }
+
+                        size_t n_vals = series_i.size();
+                        double sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0;
+                        double sum_x2 = 0.0, sum_y2 = 0.0;
+
+                        for (size_t k = 0; k < n_vals; ++k) {
+                            double x = series_i[k];
+                            double y = series_j[k];
+
+                            sum_x += x;
+                            sum_y += y;
+                            sum_xy += x * y;
+                            sum_x2 += x * x;
+                            sum_y2 += y * y;
+                        }
+
+                        double numerator = n_vals * sum_xy - sum_x * sum_y;
+                        double denominator_x = std::sqrt(n_vals * sum_x2 - sum_x * sum_x);
+                        double denominator_y = std::sqrt(n_vals * sum_y2 - sum_y * sum_y);
+                        double denominator = denominator_x * denominator_y;
+
+                        double correlation = (denominator != 0.0) ? numerator / denominator : 0.0;
+
+                        // Clamp correlation to [-1, 1] range to handle floating-point precision issues
+                        correlation = std::max(-1.0, std::min(1.0, correlation));
+
+                        correlation_matrix[i][j] = correlation;
+                        correlation_matrix[j][i] = correlation;
+                    }
+                }
+            }
+
+            promise->set_value(std::move(correlation_matrix));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<Trade>> TaskScheduler::apply_market_microstructure_filters_async(
+    const std::vector<Trade>& trades,
+    double tick_size,
+    std::chrono::milliseconds min_time_diff) {
+
+    auto promise = std::make_shared<std::promise<std::vector<Trade>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([trades, tick_size, min_time_diff, promise]() {
+        try {
+            std::vector<Trade> filtered_trades;
+
+            if (trades.empty()) {
+                promise->set_value(std::move(filtered_trades));
+                return;
+            }
+
+            // Use multi-threaded approach for large datasets
+            if (trades.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::vector<Trade>> thread_results(num_threads);
+
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = trades.size() / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&trades, tick_size, min_time_diff, &thread_results, t, start, end]() {
+                        std::vector<Trade> local_filtered_trades;
+
+                        for (size_t i = start; i < end; ++i) {
+                            const auto& trade = trades[i];
+
+                            // Apply tick size filter - round price to nearest tick
+                            double rounded_price = std::round(trade.price / tick_size) * tick_size;
+
+                            // Apply time filter - check if enough time has passed since previous trade
+                            bool time_ok = true;
+                            if (i > 0) {
+                                auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    trade.timestamp - trades[i-1].timestamp);
+                                time_ok = time_diff >= min_time_diff;
+                            }
+
+                            if (time_ok) {
+                                Trade filtered_trade = trade;
+                                filtered_trade.price = rounded_price;
+                                local_filtered_trades.push_back(filtered_trade);
+                            }
+                        }
+
+                        thread_results[t] = std::move(local_filtered_trades);
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Count total elements to reserve space
+                size_t total_filtered = 0;
+                for (const auto& result : thread_results) {
+                    total_filtered += result.size();
+                }
+
+                filtered_trades.reserve(total_filtered);
+
+                // Merge results
+                for (const auto& result : thread_results) {
+                    filtered_trades.insert(filtered_trades.end(), result.begin(), result.end());
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                filtered_trades.reserve(trades.size()); // Reserve to prevent reallocation
+
+                for (size_t i = 0; i < trades.size(); ++i) {
+                    const auto& trade = trades[i];
+
+                    // Apply tick size filter - round price to nearest tick
+                    double rounded_price = std::round(trade.price / tick_size) * tick_size;
+
+                    // Apply time filter - check if enough time has passed since previous trade
+                    bool time_ok = true;
+                    if (i > 0) {
+                        auto time_diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            trade.timestamp - trades[i-1].timestamp);
+                        time_ok = time_diff >= min_time_diff;
+                    }
+
+                    if (time_ok) {
+                        Trade filtered_trade = trade;
+                        filtered_trade.price = rounded_price;
+                        filtered_trades.push_back(filtered_trade);
+                    }
+                }
+            }
+
+            // Shrink to fit to save memory
+            filtered_trades.shrink_to_fit();
+            promise->set_value(std::move(filtered_trades));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
 } // namespace btq

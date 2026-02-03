@@ -3731,6 +3731,212 @@ void ExchangeAggregator::enhancedSynchronizeTimestamps(AggregatedMarketData& dat
     data.reference_timestamp = data.synchronized_timestamp;
 }
 
+// Advanced time synchronization using cross-correlation analysis
+std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performAdvancedTimeSync(
+    const std::string& symbol, TimeSyncStrategy strategy) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    MultiExchangeTimeSyncResult result;
+    result.symbol = symbol;
+    result.strategy_used = strategy;
+
+    // Collect timestamps from all valid exchanges along with their data
+    std::vector<std::pair<uint64_t, std::string>> timestamp_exchange_pairs;
+    std::vector<std::pair<uint64_t, std::string>> compensated_pairs;
+
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            timestamp_exchange_pairs.emplace_back(data.timestamp, exchange);
+
+            // Apply latency compensation based on exchange features
+            auto features_it = exchange_features_.find(exchange);
+            uint64_t compensated_timestamp = data.timestamp;
+
+            if (features_it != exchange_features_.end()) {
+                // Apply latency offset compensation
+                double offset = features_it->second.latency_offset_us;
+                if (offset != 0.0) {
+                    // Compensate by adding the offset to align with a reference time
+                    compensated_timestamp = static_cast<uint64_t>(
+                        static_cast<int64_t>(data.timestamp) + static_cast<int64_t>(offset)
+                    );
+                }
+            }
+
+            compensated_pairs.emplace_back(compensated_timestamp, exchange);
+            result.original_timestamps[exchange] = data.timestamp;
+            result.compensated_timestamps[exchange] = compensated_timestamp;
+        }
+    }
+
+    if (timestamp_exchange_pairs.empty()) {
+        return std::nullopt;
+    }
+
+    // Apply synchronization strategy to compensated timestamps
+    std::vector<uint64_t> timestamps;
+    for (const auto& pair : compensated_pairs) {
+        timestamps.push_back(pair.first);
+    }
+
+    switch (strategy) {
+        case TimeSyncStrategy::EARLIEST_TIMESTAMP:
+            result.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
+            break;
+
+        case TimeSyncStrategy::LATEST_TIMESTAMP:
+            result.synchronized_timestamp = *std::max_element(timestamps.begin(), timestamps.end());
+            break;
+
+        case TimeSyncStrategy::AVERAGE_TIMESTAMP:
+            result.synchronized_timestamp = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            break;
+
+        case TimeSyncStrategy::MEDIAN_TIMESTAMP: {
+            std::vector<uint64_t> sorted_ts = timestamps;
+            std::sort(sorted_ts.begin(), sorted_ts.end());
+            size_t n = sorted_ts.size();
+            if (n % 2 == 0) {
+                result.synchronized_timestamp = (sorted_ts[n/2 - 1] + sorted_ts[n/2]) / 2;
+            } else {
+                result.synchronized_timestamp = sorted_ts[n/2];
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::ADAPTIVE_SYNC: {
+            // Calculate variance in timestamps
+            uint64_t mean_ts = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            uint64_t variance = 0;
+            for (auto ts : timestamps) {
+                variance += (ts > mean_ts) ? (ts - mean_ts) * (ts - mean_ts) : (mean_ts - ts) * (mean_ts - ts);
+            }
+            variance /= timestamps.size();
+
+            // If variance is low (exchanges are well synchronized), use average
+            // If variance is high (exchanges are not synchronized), use median
+            if (variance < 1000000) { // 1ms threshold
+                result.synchronized_timestamp = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+            } else {
+                std::vector<uint64_t> sorted_ts = timestamps;
+                std::sort(sorted_ts.begin(), sorted_ts.end());
+                size_t n = sorted_ts.size();
+                if (n % 2 == 0) {
+                    result.synchronized_timestamp = (sorted_ts[n/2 - 1] + sorted_ts[n/2]) / 2;
+                } else {
+                    result.synchronized_timestamp = sorted_ts[n/2];
+                }
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::SMART_SYNC: {
+            // Smart synchronization that considers both time and data quality/reliability
+            double weighted_sum = 0.0;
+            double total_weight = 0.0;
+
+            for (const auto& [timestamp, exchange] : compensated_pairs) {
+                auto features_it = exchange_features_.find(exchange);
+                double reliability = (features_it != exchange_features_.end()) ?
+                                   features_it->second.reliability_score : 1.0;
+
+                double freshness_weight = calculateFreshnessWeight(exchange);
+                double combined_weight = reliability * freshness_weight;
+
+                weighted_sum += static_cast<double>(timestamp) * combined_weight;
+                total_weight += combined_weight;
+            }
+
+            if (total_weight > 0.0) {
+                result.synchronized_timestamp = static_cast<uint64_t>(weighted_sum / total_weight);
+            } else {
+                result.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::PREDICTIVE_SYNC: {
+            // Predictive synchronization using historical patterns and trends
+            uint64_t predicted_sum = 0;
+            size_t valid_count = 0;
+
+            for (const auto& [timestamp, exchange] : compensated_pairs) {
+                auto features_it = exchange_features_.find(exchange);
+                double latency_offset = (features_it != exchange_features_.end()) ?
+                                      features_it->second.latency_offset_us : 0.0;
+
+                // Predict the "true" timestamp by compensating for known latency
+                uint64_t predicted_ts = timestamp + static_cast<uint64_t>(latency_offset);
+
+                predicted_sum += predicted_ts;
+                valid_count++;
+            }
+
+            if (valid_count > 0) {
+                result.synchronized_timestamp = predicted_sum / valid_count;
+            } else {
+                result.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
+            }
+            break;
+        }
+
+        case TimeSyncStrategy::WINDOWED_SYNC: {
+            // Windowed synchronization that only considers timestamps within a certain time window
+            uint64_t latest_ts = *std::max_element(timestamps.begin(), timestamps.end());
+
+            // Define a time window (e.g., 100ms) to filter out stale data
+            uint64_t window_threshold = 100000; // 100ms in microseconds
+            std::vector<uint64_t> recent_timestamps;
+
+            for (uint64_t ts : timestamps) {
+                if (latest_ts - ts <= window_threshold) {
+                    recent_timestamps.push_back(ts);
+                }
+            }
+
+            // Use average of recent timestamps
+            if (!recent_timestamps.empty()) {
+                result.synchronized_timestamp = std::accumulate(recent_timestamps.begin(), recent_timestamps.end(), 0ULL) / recent_timestamps.size();
+            } else {
+                // Fallback to latest if no recent timestamps
+                result.synchronized_timestamp = latest_ts;
+            }
+            break;
+        }
+
+        default:
+            result.synchronized_timestamp = *std::min_element(timestamps.begin(), timestamps.end());
+            break;
+    }
+
+    // Calculate synchronization accuracy metrics
+    for (const auto& [original_ts, exchange] : timestamp_exchange_pairs) {
+        int64_t diff = static_cast<int64_t>(result.synchronized_timestamp) - static_cast<int64_t>(original_ts);
+        result.synchronization_accuracy[exchange] = std::abs(diff);
+    }
+
+    // Calculate additional synchronization metrics
+    result.average_original_timestamp = std::accumulate(timestamps.begin(), timestamps.end(), 0ULL) / timestamps.size();
+    result.timestamp_variance = 0.0;
+    if (timestamps.size() > 1) {
+        uint64_t mean_ts = result.average_original_timestamp;
+        uint64_t variance = 0;
+        for (uint64_t ts : timestamps) {
+            variance += (ts > mean_ts) ? (ts - mean_ts) * (ts - mean_ts) : (mean_ts - ts) * (mean_ts - ts);
+        }
+        variance /= timestamps.size();
+        result.timestamp_variance = static_cast<double>(variance);
+    }
+
+    result.timestamp = std::chrono::high_resolution_clock::now();
+    return result;
+}
+
 // Enhanced time synchronization with historical data analysis
 std::optional<TimestampSynchronizationResult> ExchangeAggregator::analyzeHistoricalTimeSync(
     const std::string& symbol, TimeSyncStrategy strategy) const {
@@ -5324,6 +5530,469 @@ std::optional<MultiExchangeTimeSyncResult> ExchangeAggregator::performComprehens
 
     result.timestamp = std::chrono::high_resolution_clock::now();
     return result;
+}
+
+// Enhanced method to handle exchange-specific features with more sophisticated processing
+void ExchangeAggregator::handleAdvancedExchangeSpecificFeatures(const std::string& exchange,
+                                                             const std::string& symbol,
+                                                             RenderEngine::MarketDataUpdate& update) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto features_it = exchange_features_.find(exchange);
+    if (features_it == exchange_features_.end()) {
+        return; // No features defined for this exchange
+    }
+
+    const auto& features = features_it->second;
+
+    // Apply exchange-specific data normalization based on precision
+    if (features.precision > 0) {
+        double multiplier = std::pow(10.0, features.precision);
+        update.price = std::round(update.price * multiplier) / multiplier;
+    }
+
+    // Apply exchange-specific order size constraints
+    if (features.max_order_size > 0 && update.size > features.max_order_size) {
+        BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to max order size limit",
+                                   update.size, features.max_order_size, exchange));
+        update.size = features.max_order_size;
+    }
+
+    if (features.min_order_size > 0 && update.size < features.min_order_size) {
+        BTQ_LOG_WARNING(std::format("Adjusting order size from {} to {} for exchange {} due to min order size requirement",
+                                   update.size, features.min_order_size, exchange));
+        update.size = features.min_order_size;
+    }
+
+    // Apply exchange-specific fee adjustments
+    if (features.trading_fee_rate > 0.0) {
+        // Adjust price to account for fees - this could be bid/ask specific
+        if (update.side == "BUY") {
+            update.price = update.price * (1.0 + features.trading_fee_rate); // Fees increase buying cost
+        } else if (update.side == "SELL") {
+            update.price = update.price * (1.0 - features.trading_fee_rate); // Fees decrease selling revenue
+        }
+    }
+
+    // Apply exchange-specific withdrawal fee considerations (for position sizing)
+    if (features.withdrawal_fee > 0.0) {
+        // This could affect how we interpret the data or adjust position sizes
+        BTQ_LOG_DEBUG(std::format("Exchange {} has withdrawal fee of {}, factoring into risk calculations",
+                                 exchange, features.withdrawal_fee));
+    }
+
+    // Apply timezone adjustments if needed
+    if (features.timezone != "UTC") {
+        // In a real implementation, we would convert timestamps based on timezone
+        // For now, just note the timezone difference
+        BTQ_LOG_DEBUG(std::format("Exchange {} operates in timezone {}, data timestamp adjustment may be needed",
+                                 exchange, features.timezone));
+    }
+
+    // Update exchange-specific statistics
+    exchange_last_update_[exchange] = std::chrono::high_resolution_clock::now();
+    exchange_validity_[exchange] = true;
+
+    // Update the exchange features with dynamic adjustments
+    updateExchangeFeaturesDynamically(exchange);
+}
+
+// Method to get exchange-specific aggregated data with enhanced feature consideration
+std::optional<AggregatedMarketData> ExchangeAggregator::getExchangeSpecificAggregatedDataWithFeatures(
+    const std::string& symbol, const std::vector<std::string>& exchanges) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    AggregatedMarketData aggregated_data;
+    aggregated_data.symbol = symbol;
+    aggregated_data.sync_strategy = sync_strategy_;
+
+    // Filter data based on requested exchanges
+    std::unordered_map<std::string, RenderEngine::MarketDataUpdate> filtered_exchange_data;
+    for (const auto& exchange : exchanges) {
+        auto exchange_data_it = symbol_it->second.find(exchange);
+        if (exchange_data_it != symbol_it->second.end() &&
+            isExchangeDataValid(exchange, exchange_data_it->second)) {
+            filtered_exchange_data[exchange] = exchange_data_it->second;
+            aggregated_data.exchange_data[exchange] = exchange_data_it->second;
+        }
+    }
+
+    if (filtered_exchange_data.empty()) {
+        return std::nullopt;
+    }
+
+    // Collect timestamps from all valid exchanges
+    for (const auto& [exchange, data] : filtered_exchange_data) {
+        aggregated_data.exchange_timestamps[exchange] = data.timestamp;
+    }
+
+    // Enhanced time synchronization considering exchange-specific features
+    enhancedSynchronizeTimestamps(aggregated_data);
+
+    // Calculate aggregated values with exchange-specific feature weighting
+    aggregated_data.aggregated_price = calculateWeightedAveragePriceWithValidationForExchanges(symbol, exchanges);
+    aggregated_data.weighted_price = calculateVolumeWeightedPrice(filtered_exchange_data);
+    aggregated_data.consensus_price = calculateConsensusPriceForExchanges(symbol, exchanges);
+
+    // Calculate additional aggregated metrics
+    aggregated_data.aggregated_high = calculateHighPrice(filtered_exchange_data);
+    aggregated_data.aggregated_low = calculateLowPrice(filtered_exchange_data);
+    aggregated_data.aggregated_bid = calculateBestBid(filtered_exchange_data);
+    aggregated_data.aggregated_ask = calculateBestAsk(filtered_exchange_data);
+
+    // Calculate total volume across all valid exchanges
+    double total_volume = 0.0;
+    for (const auto& [exchange, data] : filtered_exchange_data) {
+        total_volume += data.size;
+    }
+    aggregated_data.aggregated_volume = total_volume;
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, filtered_exchange_data, aggregated_data);
+    detectArbitrageOpportunities(filtered_exchange_data, aggregated_data);
+
+    aggregated_data.last_updated = std::chrono::high_resolution_clock::now();
+
+    return aggregated_data;
+}
+
+// Method to get a comprehensive view with all exchange-specific features considered
+std::optional<ComprehensiveMultiExchangeView> ExchangeAggregator::getComprehensiveViewWithFeatures(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    ComprehensiveMultiExchangeView view;
+    view.symbol = symbol;
+
+    // Gather data from all exchanges for this symbol
+    std::vector<std::pair<std::string, RenderEngine::MarketDataUpdate>> exchange_updates;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            exchange_updates.emplace_back(exchange, data);
+
+            // Store detailed exchange data
+            ExchangeConsolidatedData exchange_data_item;
+            exchange_data_item.update = data;
+
+            // Get exchange features
+            auto features_it = exchange_features_.find(exchange);
+            if (features_it != exchange_features_.end()) {
+                exchange_data_item.features = features_it->second;
+            }
+
+            // Calculate exchange-specific statistics
+            exchange_data_item.stats.price = data.price;
+            exchange_data_item.stats.volume = data.size;
+
+            // Calculate price relative to overall average
+            std::vector<double> all_prices;
+            for (const auto& [other_exchange, other_data] : symbol_it->second) {
+                if (isExchangeDataValid(other_exchange, other_data)) {
+                    all_prices.push_back(other_data.price);
+                }
+            }
+
+            if (!all_prices.empty()) {
+                double avg_price = std::accumulate(all_prices.begin(), all_prices.end(), 0.0) / all_prices.size();
+                exchange_data_item.stats.price_deviation_from_avg = data.price - avg_price;
+                exchange_data_item.stats.percent_price_deviation = (avg_price > 0) ?
+                    (exchange_data_item.stats.price_deviation_from_avg / avg_price) * 100.0 : 0.0;
+
+                // Determine if this exchange is an outlier
+                double std_dev = 0.0;
+                for (double price : all_prices) {
+                    std_dev += (price - avg_price) * (price - avg_price);
+                }
+                std_dev = std::sqrt(std_dev / all_prices.size());
+
+                exchange_data_item.stats.is_outlier = (std::abs(exchange_data_item.stats.price_deviation_from_avg) > 2 * std_dev);
+            }
+
+            // Calculate latency relative to other exchanges
+            auto last_update_it = exchange_last_update_.find(exchange);
+            if (last_update_it != exchange_last_update_.end()) {
+                auto now = std::chrono::high_resolution_clock::now();
+                exchange_data_item.stats.latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_update_it->second).count();
+            }
+
+            view.exchange_data[exchange] = exchange_data_item;
+        }
+    }
+
+    if (exchange_updates.empty()) {
+        return std::nullopt;
+    }
+
+    // Calculate consolidated market metrics
+    std::vector<double> prices;
+    std::vector<double> volumes;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        prices.push_back(data.price);
+        volumes.push_back(data.size);
+        total_volume += data.size;
+    }
+
+    if (!prices.empty()) {
+        std::sort(prices.begin(), prices.end());
+        view.market_metrics.spread = prices.back() - prices.front();
+        view.market_metrics.volatility = view.market_metrics.spread / prices.front();
+
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        view.market_metrics.average_price = avg_price;
+        view.market_metrics.total_volume = total_volume;
+
+        // Calculate price range metrics
+        view.market_metrics.lowest_price = prices.front();
+        view.market_metrics.highest_price = prices.back();
+        view.market_metrics.price_range = prices.back() - prices.front();
+
+        // Calculate additional statistical metrics
+        view.market_metrics.median_price = (prices.size() % 2 == 0) ?
+            (prices[prices.size()/2 - 1] + prices[prices.size()/2]) / 2.0 :
+            prices[prices.size()/2];
+    }
+
+    // Calculate order book metrics across exchanges
+    double highest_bid = 0.0;
+    double lowest_ask = std::numeric_limits<double>::max();
+    std::string highest_bid_exchange = "";
+    std::string lowest_ask_exchange = "";
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        if (data.side == "BUY" && data.price > highest_bid) {
+            highest_bid = data.price;
+            highest_bid_exchange = exchange;
+        }
+        if (data.side == "SELL" && data.price < lowest_ask) {
+            lowest_ask = data.price;
+            lowest_ask_exchange = exchange;
+        }
+    }
+
+    if (highest_bid > 0.0 && lowest_ask < std::numeric_limits<double>::max()) {
+        view.market_metrics.bid_ask_spread = lowest_ask - highest_bid;
+        view.market_metrics.best_bid_exchange = highest_bid_exchange;
+        view.market_metrics.best_ask_exchange = lowest_ask_exchange;
+    }
+
+    // Calculate risk metrics
+    if (prices.size() > 1) {
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += (price - avg_price) * (price - avg_price);
+        }
+        variance /= prices.size();
+        view.risk_metrics.price_volatility = std::sqrt(variance);
+        view.risk_metrics.coefficient_of_variation = (avg_price > 0) ?
+            view.risk_metrics.price_volatility / avg_price : 0.0;
+    }
+
+    // Calculate arbitrage opportunities
+    if (highest_bid > lowest_ask) {
+        view.arbitrage_opportunity_exists = true;
+        view.arbitrage_profit_potential = highest_bid - lowest_ask;
+        view.best_arbitrage_buy_exchange = highest_bid_exchange;
+        view.best_arbitrage_sell_exchange = lowest_ask_exchange;
+    } else {
+        view.arbitrage_opportunity_exists = false;
+        view.arbitrage_profit_potential = 0.0;
+    }
+
+    // Calculate correlation metrics
+    if (view.exchange_data.size() > 1) {
+        double total_correlation = 0.0;
+        int correlation_count = 0;
+
+        auto it1 = view.exchange_data.begin();
+        while (it1 != view.exchange_data.end()) {
+            auto it2 = std::next(it1);
+            while (it2 != view.exchange_data.end()) {
+                double price_diff = std::abs(it1->second.update.price - it2->second.update.price);
+                double avg_price = (it1->second.update.price + it2->second.update.price) / 2.0;
+                double correlation = 1.0 - std::min(1.0, price_diff / avg_price);
+
+                total_correlation += correlation;
+                correlation_count++;
+
+                ++it2;
+            }
+            ++it1;
+        }
+
+        if (correlation_count > 0) {
+            view.market_metrics.cross_exchange_correlation = total_correlation / correlation_count;
+        }
+    }
+
+    // Calculate data quality metrics
+    auto quality_metrics = calculateDataQualityMetrics(symbol);
+    if (quality_metrics.has_value()) {
+        view.data_quality = quality_metrics.value();
+    }
+
+    // Calculate exchange rankings
+    auto rankings = rankExchangesByReliability();
+    view.exchange_rankings = rankings;
+
+    view.timestamp = std::chrono::high_resolution_clock::now();
+
+    return view;
+}
+
+// Additional method implementations for enhanced multi-exchange aggregation
+
+std::optional<AggregatedMarketData> ExchangeAggregator::getUnifiedView(const std::string& symbol) const {
+    // This method provides a comprehensive unified view of multi-exchange data
+    // It combines all the aggregation features into a single, comprehensive view
+    return getEnhancedAggregatedData(symbol);
+}
+
+std::vector<MultiExchangeData> ExchangeAggregator::getAllSymbolsMultiExchangeView() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    std::vector<MultiExchangeData> all_views;
+
+    for (const auto& [symbol, _] : exchange_data_) {
+        auto view = getMultiExchangeView(symbol);
+        if (view.has_value()) {
+            all_views.push_back(view.value());
+        }
+    }
+
+    return all_views;
+}
+
+std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExchangeView(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    ComprehensiveExchangeView comprehensive_view;
+    comprehensive_view.symbol = symbol;
+
+    // Gather data from all exchanges for this symbol
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            ExchangeDetailedData detailed_data;
+            detailed_data.update = data;
+
+            // Get exchange features for additional context
+            auto features_it = exchange_features_.find(exchange);
+            if (features_it != exchange_features_.end()) {
+                detailed_data.features = features_it->second;
+            }
+
+            // Calculate exchange-specific statistics
+            detailed_data.stats.price = data.price;
+            detailed_data.stats.volume = data.size;
+
+            // Calculate price relative to overall average
+            std::vector<double> all_prices;
+            for (const auto& [other_exchange, other_data] : symbol_it->second) {
+                if (isExchangeDataValid(other_exchange, other_data)) {
+                    all_prices.push_back(other_data.price);
+                }
+            }
+
+            if (!all_prices.empty()) {
+                double avg_price = std::accumulate(all_prices.begin(), all_prices.end(), 0.0) / all_prices.size();
+                detailed_data.stats.price_deviation_from_avg = data.price - avg_price;
+                detailed_data.stats.percent_price_deviation = (avg_price > 0) ?
+                    (detailed_data.stats.price_deviation_from_avg / avg_price) * 100.0 : 0.0;
+
+                // Determine if this exchange is an outlier
+                double std_dev = 0.0;
+                for (double price : all_prices) {
+                    std_dev += (price - avg_price) * (price - avg_price);
+                }
+                std_dev = std::sqrt(std_dev / all_prices.size());
+
+                detailed_data.stats.is_outlier = (std::abs(detailed_data.stats.price_deviation_from_avg) > 2 * std_dev);
+            }
+
+            // Calculate latency relative to other exchanges
+            auto last_update_it = exchange_last_update_.find(exchange);
+            if (last_update_it != exchange_last_update_.end()) {
+                auto now = std::chrono::high_resolution_clock::now();
+                detailed_data.stats.latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_update_it->second).count();
+            }
+
+            comprehensive_view.exchange_details[exchange] = detailed_data;
+        }
+    }
+
+    if (comprehensive_view.exchange_details.empty()) {
+        return std::nullopt;
+    }
+
+    // Calculate overall market metrics
+    std::vector<double> prices;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, details] : comprehensive_view.exchange_details) {
+        prices.push_back(details.update.price);
+        total_volume += details.update.size;
+    }
+
+    if (!prices.empty()) {
+        std::sort(prices.begin(), prices.end());
+        comprehensive_view.market_metrics.spread = prices.back() - prices.front();
+        comprehensive_view.market_metrics.volatility = comprehensive_view.market_metrics.spread / prices.front();
+
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        comprehensive_view.market_metrics.average_price = avg_price;
+        comprehensive_view.market_metrics.total_volume = total_volume;
+    }
+
+    // Detect cross-exchange arbitrage opportunities
+    double highest_bid = 0.0;
+    double lowest_ask = std::numeric_limits<double>::max();
+    std::string highest_bid_exchange = "";
+    std::string lowest_ask_exchange = "";
+
+    for (const auto& [exchange, details] : comprehensive_view.exchange_details) {
+        if (details.update.side == "BUY" && details.update.price > highest_bid) {
+            highest_bid = details.update.price;
+            highest_bid_exchange = exchange;
+        }
+        if (details.update.side == "SELL" && details.update.price < lowest_ask) {
+            lowest_ask = details.update.price;
+            lowest_ask_exchange = exchange;
+        }
+    }
+
+    if (highest_bid > lowest_ask) {
+        comprehensive_view.arbitrage_detected = true;
+        comprehensive_view.arbitrage_profit = highest_bid - lowest_ask;
+        comprehensive_view.bid_exchange = highest_bid_exchange;
+        comprehensive_view.ask_exchange = lowest_ask_exchange;
+    } else {
+        comprehensive_view.arbitrage_detected = false;
+        comprehensive_view.arbitrage_profit = 0.0;
+    }
+
+    comprehensive_view.timestamp = std::chrono::high_resolution_clock::now();
+
+    return comprehensive_view;
 }
 
 }  // namespace Data

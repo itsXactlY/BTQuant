@@ -80,6 +80,11 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
         try {
             std::vector<double> volume_profile(resolution, 0.0);
             double price_range = max_price - min_price;
+            if (price_range <= 0) {
+                promise->set_value(std::move(volume_profile));
+                return;
+            }
+
             double bin_size = price_range / resolution;
 
             // Use multi-threaded approach for large datasets
@@ -116,9 +121,9 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
                 }
 
                 // Merge results
-                for (const auto& thread_result : thread_results) {
-                    for (int i = 0; i < resolution; ++i) {
-                        volume_profile[i] += thread_result[i];
+                for (int i = 0; i < resolution; ++i) {
+                    for (size_t t = 0; t < num_threads; ++t) {
+                        volume_profile[i] += thread_results[t][i];
                     }
                 }
             } else {
@@ -1293,20 +1298,54 @@ std::future<std::vector<double>> TaskScheduler::calculate_atr_async(
             }
 
             // Calculate True Range for each candle
-            std::vector<double> true_ranges;
-            true_ranges.reserve(candles.size() - 1); // Need at least 2 candles for first TR
+            std::vector<double> true_ranges(candles.size() - 1);
 
-            for (size_t i = 1; i < candles.size(); ++i) {
-                double high = candles[i].high;
-                double low = candles[i].low;
-                double prev_close = candles[i-1].close;
+            // Use multi-threaded approach for large datasets when calculating True Range
+            if (candles.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), candles.size());
+                if (num_threads < 2) num_threads = 2;
 
-                double tr1 = high - low;
-                double tr2 = std::abs(high - prev_close);
-                double tr3 = std::abs(low - prev_close);
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = (candles.size() - 1) / num_threads; // Skip first candle since TR needs previous close
 
-                double true_range = std::max({tr1, tr2, tr3});
-                true_ranges.push_back(true_range);
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? candles.size() - 1 : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&candles, &true_ranges, start, end]() {
+                        for (size_t i = start; i < end; ++i) {
+                            double high = candles[i + 1].high;
+                            double low = candles[i + 1].low;
+                            double prev_close = candles[i].close;
+
+                            double tr1 = high - low;
+                            double tr2 = std::abs(high - prev_close);
+                            double tr3 = std::abs(low - prev_close);
+
+                            true_ranges[i] = std::max({tr1, tr2, tr3});
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 1; i < candles.size(); ++i) {
+                    double high = candles[i].high;
+                    double low = candles[i].low;
+                    double prev_close = candles[i-1].close;
+
+                    double tr1 = high - low;
+                    double tr2 = std::abs(high - prev_close);
+                    double tr3 = std::abs(low - prev_close);
+
+                    double true_range = std::max({tr1, tr2, tr3});
+                    true_ranges[i - 1] = true_range;
+                }
             }
 
             if (true_ranges.size() < static_cast<size_t>(period)) {
@@ -1319,6 +1358,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_atr_async(
             atr_values.push_back(initial_atr);
 
             // Calculate subsequent ATR values using the smoothing formula
+            // This part must remain sequential since each value depends on the previous ATR
             for (size_t i = period; i < true_ranges.size(); ++i) {
                 double current_atr = ((atr_values.back() * (period - 1)) + true_ranges[i]) / period;
                 atr_values.push_back(current_atr);
@@ -1419,31 +1459,31 @@ std::future<std::vector<double>> TaskScheduler::calculate_on_balance_volume_asyn
             double current_obv = 0.0; // Starting OBV is typically 0
             obv_values.push_back(current_obv);
 
-            // Use multi-threaded approach for large datasets
+            // Sequential processing is required for OBV since each value depends on the previous
+            // However, for very large datasets we can at least precompute the daily changes
             if (candles.size() > 10000) {
-                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), candles.size());
-                if (num_threads < 2) num_threads = 2;
+                // Precompute the daily changes in parallel
+                std::vector<double> daily_changes(candles.size() - 1);
 
-                // Since OBV calculation is sequential (each value depends on the previous),
-                // we'll calculate differences in parallel and then compute cumulative sum sequentially
-                std::vector<double> daily_changes(candles.size(), 0.0);
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), (candles.size() - 1));
+                if (num_threads < 2) num_threads = 2;
 
                 // Process data in chunks using separate threads
                 std::vector<std::thread> processing_threads;
-                size_t chunk_size = (candles.size() - 1) / num_threads; // Skip first element since it's 0
+                size_t chunk_size = (candles.size() - 1) / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
-                    size_t start = std::max(static_cast<size_t>(1), t * chunk_size); // Start from index 1
-                    size_t end = (t == num_threads - 1) ? candles.size() : (t + 1) * chunk_size;
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? candles.size() - 1 : (t + 1) * chunk_size;
 
                     processing_threads.emplace_back([&candles, &daily_changes, start, end]() {
                         for (size_t i = start; i < end; ++i) {
-                            if (candles[i].close > candles[i-1].close) {
-                                daily_changes[i] = daily_changes[i-1] + candles[i].volume;
-                            } else if (candles[i].close < candles[i-1].close) {
-                                daily_changes[i] = daily_changes[i-1] - candles[i].volume;
+                            if (candles[i + 1].close > candles[i].close) {
+                                daily_changes[i] = candles[i + 1].volume;  // Price went up, add volume
+                            } else if (candles[i + 1].close < candles[i].close) {
+                                daily_changes[i] = -candles[i + 1].volume;  // Price went down, subtract volume
                             } else {
-                                daily_changes[i] = daily_changes[i-1]; // No change if prices are equal
+                                daily_changes[i] = 0.0;  // No change in price
                             }
                         }
                     });
@@ -1454,14 +1494,9 @@ std::future<std::vector<double>> TaskScheduler::calculate_on_balance_volume_asyn
                     thread.join();
                 }
 
-                // Now compute the actual OBV values sequentially
-                for (size_t i = 1; i < candles.size(); ++i) {
-                    if (candles[i].close > candles[i-1].close) {
-                        current_obv += candles[i].volume;
-                    } else if (candles[i].close < candles[i-1].close) {
-                        current_obv -= candles[i].volume;
-                    }
-                    // If equal, OBV remains unchanged
+                // Now compute the actual OBV values sequentially using precomputed changes
+                for (size_t i = 0; i < candles.size() - 1; ++i) {
+                    current_obv += daily_changes[i];
                     obv_values.push_back(current_obv);
                 }
             } else {
@@ -1478,6 +1513,110 @@ std::future<std::vector<double>> TaskScheduler::calculate_on_balance_volume_asyn
             }
 
             promise->set_value(std::move(obv_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// New method for calculating correlation between two series
+std::future<double> TaskScheduler::calculate_correlation_async(
+    const std::vector<double>& series1,
+    const std::vector<double>& series2) {
+
+    auto promise = std::make_shared<std::promise<double>>();
+    auto future = promise->get_future();
+
+    enqueue_task([series1, series2, promise]() {
+        try {
+            if (series1.size() != series2.size() || series1.size() < 2) {
+                promise->set_value(0.0);
+                return;
+            }
+
+            size_t n = series1.size();
+            double sum_x = 0.0, sum_y = 0.0, sum_xy = 0.0;
+            double sum_x2 = 0.0, sum_y2 = 0.0;
+
+            // Use multi-threaded approach for large datasets
+            if (n > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), n);
+                if (num_threads < 2) num_threads = 2;
+
+                std::vector<std::array<double, 5>> thread_results(num_threads, {0.0, 0.0, 0.0, 0.0, 0.0});
+
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = n / num_threads;
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = t * chunk_size;
+                    size_t end = (t == num_threads - 1) ? n : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&series1, &series2, &thread_results, t, start, end]() {
+                        double local_sum_x = 0.0, local_sum_y = 0.0, local_sum_xy = 0.0;
+                        double local_sum_x2 = 0.0, local_sum_y2 = 0.0;
+
+                        for (size_t i = start; i < end; ++i) {
+                            double x = series1[i];
+                            double y = series2[i];
+
+                            local_sum_x += x;
+                            local_sum_y += y;
+                            local_sum_xy += x * y;
+                            local_sum_x2 += x * x;
+                            local_sum_y2 += y * y;
+                        }
+
+                        thread_results[t][0] = local_sum_x;
+                        thread_results[t][1] = local_sum_y;
+                        thread_results[t][2] = local_sum_xy;
+                        thread_results[t][3] = local_sum_x2;
+                        thread_results[t][4] = local_sum_y2;
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Merge results
+                for (size_t t = 0; t < num_threads; ++t) {
+                    sum_x += thread_results[t][0];
+                    sum_y += thread_results[t][1];
+                    sum_xy += thread_results[t][2];
+                    sum_x2 += thread_results[t][3];
+                    sum_y2 += thread_results[t][4];
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 0; i < n; ++i) {
+                    double x = series1[i];
+                    double y = series2[i];
+
+                    sum_x += x;
+                    sum_y += y;
+                    sum_xy += x * y;
+                    sum_x2 += x * x;
+                    sum_y2 += y * y;
+                }
+            }
+
+            // Calculate correlation coefficient
+            double numerator = n * sum_xy - sum_x * sum_y;
+            double denominator_x = std::sqrt(n * sum_x2 - sum_x * sum_x);
+            double denominator_y = std::sqrt(n * sum_y2 - sum_y * sum_y);
+            double denominator = denominator_x * denominator_y;
+
+            double correlation = (denominator != 0.0) ? numerator / denominator : 0.0;
+
+            // Clamp correlation to [-1, 1] range to handle floating-point precision issues
+            correlation = std::max(-1.0, std::min(1.0, correlation));
+
+            promise->set_value(correlation);
         } catch (...) {
             promise->set_exception(std::current_exception());
         }

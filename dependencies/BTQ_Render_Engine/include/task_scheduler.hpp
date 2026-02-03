@@ -117,6 +117,11 @@ public:
     std::future<std::vector<double>> calculate_on_balance_volume_async(
         const std::vector<Candle>& candles);
 
+    // New method for calculating correlation between two series
+    std::future<double> calculate_correlation_async(
+        const std::vector<double>& series1,
+        const std::vector<double>& series2);
+
 private:
     void worker_loop();
 

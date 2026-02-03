@@ -8,6 +8,7 @@
 #include <optional>
 #include <utility>
 #include <vector>
+#include <memory_resource> // For potential memory resource support
 
 namespace btq {
 namespace threading {
@@ -32,8 +33,8 @@ private:
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> head_;
     alignas(CACHE_LINE_SIZE) std::atomic<Node*> tail_;
 
-    // Padding to avoid false sharing
-    char padding_[CACHE_LINE_SIZE - sizeof(std::atomic<Node*>)];
+    // Additional padding to avoid false sharing between head and tail
+    alignas(CACHE_LINE_SIZE) char padding_[CACHE_LINE_SIZE];
 
 public:
     explicit LockFreeQueue() {
@@ -47,10 +48,9 @@ public:
         // Sequentially clean up all nodes
         // This assumes that no other threads are accessing the queue during destruction
         Node* current = head_.load(std::memory_order_acquire);
-        Node* next = nullptr;
 
         while (current != nullptr) {
-            next = current->next.load(std::memory_order_relaxed);
+            Node* next = current->next.load(std::memory_order_relaxed);
             delete current;
             current = next;
         }
@@ -59,7 +59,7 @@ public:
     void push(const T& new_value) {
         Node* new_node = new Node(new_value);
 
-        Node* prev_tail = tail_.load(std::memory_order_relaxed);
+        Node* prev_tail = tail_.load(std::memory_order_acquire);
 
         while (true) {
             Node* next = prev_tail->next.load(std::memory_order_acquire);
@@ -74,14 +74,14 @@ public:
 
             if (next == nullptr) {
                 // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
+                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
                     // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
+                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
                     return;
                 }
             } else {
                 // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
+                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
             }
         }
     }
@@ -89,7 +89,7 @@ public:
     void push(T&& new_value) {
         Node* new_node = new Node(std::move(new_value));
 
-        Node* prev_tail = tail_.load(std::memory_order_relaxed);
+        Node* prev_tail = tail_.load(std::memory_order_acquire);
 
         while (true) {
             Node* next = prev_tail->next.load(std::memory_order_acquire);
@@ -104,20 +104,20 @@ public:
 
             if (next == nullptr) {
                 // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
+                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
                     // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
+                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
                     return;
                 }
             } else {
                 // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
+                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
             }
         }
     }
 
     std::shared_ptr<T> pop() {
-        Node* prev_head = head_.load(std::memory_order_relaxed);
+        Node* prev_head = head_.load(std::memory_order_acquire);
 
         while (true) {
             Node* head_snapshot = head_.load(std::memory_order_acquire);
@@ -130,7 +130,7 @@ public:
                     return nullptr; // Queue is actually empty
                 }
                 // Tail is falling behind, try to advance it
-                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_release, std::memory_order_acquire);
+                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire);
                 continue;
             } else {
                 if (next == nullptr) {
@@ -139,7 +139,7 @@ public:
                 }
 
                 // Try to advance the head to the next node
-                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_release, std::memory_order_acquire)) {
+                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire)) {
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
@@ -156,7 +156,7 @@ public:
 
     // Non-blocking try_pop with std::optional return
     std::optional<T> try_pop() {
-        Node* prev_head = head_.load(std::memory_order_relaxed);
+        Node* prev_head = head_.load(std::memory_order_acquire);
 
         while (true) {
             Node* head_snapshot = head_.load(std::memory_order_acquire);
@@ -169,7 +169,7 @@ public:
                     return std::nullopt; // Queue is actually empty
                 }
                 // Tail is falling behind, try to advance it
-                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_release, std::memory_order_acquire);
+                tail_.compare_exchange_strong(tail_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire);
                 continue;
             } else {
                 if (next == nullptr) {
@@ -178,7 +178,7 @@ public:
                 }
 
                 // Try to advance the head to the next node
-                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_release, std::memory_order_acquire)) {
+                if (head_.compare_exchange_weak(head_snapshot, next, std::memory_order_acq_rel, std::memory_order_acquire)) {
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
@@ -242,7 +242,7 @@ public:
     void emplace(Args&&... args) {
         Node* new_node = new Node(std::forward<Args>(args)...);
 
-        Node* prev_tail = tail_.load(std::memory_order_relaxed);
+        Node* prev_tail = tail_.load(std::memory_order_acquire);
 
         while (true) {
             Node* next = prev_tail->next.load(std::memory_order_acquire);
@@ -257,14 +257,14 @@ public:
 
             if (next == nullptr) {
                 // Tail was pointing to the last node, try to link our new node
-                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_release)) {
+                if (prev_tail->next.compare_exchange_weak(next, new_node, std::memory_order_acq_rel, std::memory_order_acquire)) {
                     // Successfully added the node, now advance the tail
-                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_release, std::memory_order_acquire);
+                    tail_.compare_exchange_strong(prev_tail, new_node, std::memory_order_acq_rel, std::memory_order_acquire);
                     return;
                 }
             } else {
                 // Tail wasn't pointing to the last node, advance it
-                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
+                tail_.compare_exchange_strong(prev_tail, next, std::memory_order_acq_rel, std::memory_order_acquire);
             }
         }
     }
@@ -309,6 +309,20 @@ public:
         }
 
         return nullptr; // Timeout reached
+    }
+
+    // Method to check if the queue has data without fully consuming it
+    bool has_data() const {
+        Node* head_snapshot = head_.load(std::memory_order_acquire);
+        Node* tail_snapshot = tail_.load(std::memory_order_acquire);
+
+        return head_snapshot != tail_snapshot || head_snapshot->next.load(std::memory_order_acquire) != nullptr;
+    }
+
+    // Method to get approximate number of waiting consumers (not exact, for optimization hints)
+    bool has_waiting_consumers() const {
+        // This is a simplified check - in practice, you'd need more sophisticated tracking
+        return !empty();
     }
 };
 

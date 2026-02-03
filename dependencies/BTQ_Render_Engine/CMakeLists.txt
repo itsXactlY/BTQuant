@@ -371,3 +371,6 @@ target_link_libraries(test_memory_pool PRIVATE
     TBB::tbb
 )
 
+# Add tests subdirectory
+add_subdirectory(tests)
+

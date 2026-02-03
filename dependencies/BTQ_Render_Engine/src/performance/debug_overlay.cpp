@@ -34,8 +34,8 @@ DebugOverlay::DebugOverlay()
     : visible_(false),
       position_x_(10.0f),
       position_y_(10.0f),
-      window_width_(350.0f),
-      window_height_(200.0f),
+      window_width_(400.0f),
+      window_height_(300.0f),
       refresh_rate_(60.0f), // Update 60 times per second
       last_cpu_time_(std::chrono::high_resolution_clock::now()),
       last_cpu_usage_(0.0),
@@ -306,6 +306,28 @@ void DebugOverlay::render() {
     ImGui::Text("Total Allocated: %s", format_bytes(total_allocated).c_str());
     ImGui::Text("Total Deallocated: %s", format_bytes(total_deallocated).c_str());
     ImGui::Text("Active Allocations: %zu", current_alloc_count);
+
+    // Memory leak detection info
+    auto leaks = mem_tracker.identifyLeaks(5.0); // Find allocations older than 5 seconds
+    if (!leaks.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Potential Leaks: %zu", leaks.size());
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            for (const auto& leak : leaks) {
+                ImGui::Text("%s: %s for %.1fs",
+                           leak.tag.c_str(),
+                           format_bytes(leak.size).c_str(),
+                           leak.duration_seconds);
+            }
+            ImGui::EndTooltip();
+        }
+    }
+
+    // System uptime information
+    static auto app_start_time = std::chrono::high_resolution_clock::now();
+    auto current_time = std::chrono::high_resolution_clock::now();
+    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(current_time - app_start_time);
+    ImGui::Text("Uptime: %lds", static_cast<long>(uptime.count()));
 
     // Close the window
     ImGui::End();

@@ -10,25 +10,25 @@
 namespace BTQuant {
 
 struct ThemeColors {
-  ImVec4 background = ImVec4(0.04f, 0.05f, 0.10f, 1.0f);  // #0a0e1a - Dark background
-  ImVec4 text = ImVec4(0.88f, 0.88f, 0.88f, 1.0f);        // #e0e0e0 - Light text for good contrast
-  ImVec4 text_dim = ImVec4(0.65f, 0.65f, 0.65f, 1.0f);    // Muted text with sufficient contrast
+  ImVec4 background = ImVec4(0.06f, 0.07f, 0.12f, 1.0f);  // #10121f - Dark background with enhanced contrast
+  ImVec4 text = ImVec4(0.92f, 0.92f, 0.92f, 1.0f);        // #ebebeb - Light text for excellent contrast (WCAG AAA)
+  ImVec4 text_dim = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);    // #8c8c8c - Muted text with sufficient contrast (WCAG AA)
 
   // Accents
-  ImVec4 accent_green = ImVec4(0.3f, 0.9f, 0.3f, 1.0f);   // Improved green for better contrast
-  ImVec4 accent_red = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);     // Improved red for better contrast
-  ImVec4 accent_cyan = ImVec4(0.2f, 0.8f, 0.9f, 1.0f);    // Cyan accent
-  ImVec4 accent_magenta = ImVec4(0.9f, 0.2f, 0.8f, 1.0f); // Magenta accent
+  ImVec4 accent_green = ImVec4(0.35f, 0.95f, 0.35f, 1.0f); // #59f259 - Enhanced green for optimal contrast
+  ImVec4 accent_red = ImVec4(0.95f, 0.35f, 0.35f, 1.0f);   // #f25959 - Enhanced red for optimal contrast
+  ImVec4 accent_cyan = ImVec4(0.25f, 0.85f, 0.95f, 1.0f);  // #40d9f5 - Enhanced cyan accent
+  ImVec4 accent_magenta = ImVec4(0.95f, 0.25f, 0.85f, 1.0f); // #f540d9 - Enhanced magenta accent
 
   // UI Elements
-  ImVec4 panel_bg = ImVec4(0.07f, 0.09f, 0.12f, 0.9f);   // #12171f - Panel background with good contrast
-  ImVec4 border = ImVec4(0.16f, 0.18f, 0.23f, 0.6f);      // #2a2e3a - Borders with sufficient contrast
-  ImVec4 header_bg = ImVec4(0.10f, 0.12f, 0.17f, 0.95f);  // Header background with good contrast
+  ImVec4 panel_bg = ImVec4(0.09f, 0.11f, 0.15f, 0.92f);   // #171c26 - Panel background with enhanced contrast
+  ImVec4 border = ImVec4(0.20f, 0.22f, 0.28f, 0.65f);     // #333847 - Borders with enhanced contrast
+  ImVec4 header_bg = ImVec4(0.12f, 0.14f, 0.20f, 0.97f);  // #1f2433 - Header background with enhanced contrast
 
   // Chart specific
-  ImVec4 chart_grid = ImVec4(0.16f, 0.18f, 0.23f, 0.3f);  // #2a2e3a - Grid with improved contrast
-  ImVec4 candle_up = ImVec4(0.3f, 0.9f, 0.3f, 1.0f);      // Consistent with accent green
-  ImVec4 candle_down = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);    // Consistent with accent red
+  ImVec4 chart_grid = ImVec4(0.20f, 0.22f, 0.28f, 0.35f);  // #333847 - Grid with enhanced contrast
+  ImVec4 candle_up = ImVec4(0.35f, 0.95f, 0.35f, 1.0f);    // Consistent with accent green
+  ImVec4 candle_down = ImVec4(0.95f, 0.35f, 0.35f, 1.0f);  // Consistent with accent red
 };
 
 enum class ThemeType {

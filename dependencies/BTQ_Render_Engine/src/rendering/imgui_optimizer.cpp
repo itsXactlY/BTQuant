@@ -39,6 +39,10 @@ public:
         bool valid;
     };
 
+private:
+    // Store ImGui context to ensure thread safety
+    ImGuiContext* imgui_context_;
+
     // Cache for font sizes to avoid repeated calculations
     struct CachedFontSize {
         ImVec2 size;
@@ -57,8 +61,13 @@ private:
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
 
+    // Pre-allocated buffers to reduce allocations
+    mutable std::string temp_key_buffer_;
+
 public:
-    ImGuiStateCache() = default;
+    ImGuiStateCache() {
+        imgui_context_ = ImGui::GetCurrentContext();
+    }
 
     /**
      * Get cached text size or compute and cache it
@@ -67,17 +76,25 @@ public:
     ImVec2 get_cached_text_size(const char* text) {
         if (!text) return ImVec2(0, 0);
 
-        // Use string content as key to handle string literals properly
-        std::string text_key(text);
+        // Check if ImGui context has changed
+        if (ImGui::GetCurrentContext() != imgui_context_) {
+            // Context changed, clear cache and update reference
+            clear_all_cache();
+            imgui_context_ = ImGui::GetCurrentContext();
+        }
 
-        auto it = text_size_cache_.find(text_key);
+        // Use string content as key to handle string literals properly
+        // Reuse buffer to reduce allocations
+        temp_key_buffer_ = text;
+
+        auto it = text_size_cache_.find(temp_key_buffer_);
         if (it != text_size_cache_.end() && it->second.valid) {
             return it->second.size;
         }
 
         // Compute and cache the text size
         ImVec2 size = ImGui::CalcTextSize(text);
-        text_size_cache_[text_key] = {size, static_cast<float>(ImGui::GetTime()), true};
+        text_size_cache_[std::move(temp_key_buffer_)] = {size, static_cast<float>(ImGui::GetTime()), true};
 
         return size;
     }
@@ -86,27 +103,30 @@ public:
      * Get cached text size with additional parameters
      * Optimized key generation using content-based hashing for reliability
      */
-    ImVec2 get_cached_text_size_ex(const char* text, const char* text_end = nullptr,
-                                   bool hide_text_after_double_hash = false,
-                                   float wrap_width = -1.0f) {
+    ImVec2 get_cached_text_size_ex(const char* text, const char* text_end,
+                                   bool hide_text_after_double_hash,
+                                   float wrap_width) {
         if (!text) return ImVec2(0, 0);
 
         // Create a unique key combining all parameters for reliable caching
-        std::ostringstream key_stream;
-        key_stream << text
-                   << "|" << (text_end ? std::string(text_end) : "NULL")
-                   << "|" << hide_text_after_double_hash
-                   << "|" << wrap_width;
-        std::string params_key = key_stream.str();
+        // Use pre-allocated buffer to reduce allocations
+        temp_key_buffer_.clear();
+        temp_key_buffer_.append(text);
+        temp_key_buffer_.append("|");
+        temp_key_buffer_.append(text_end ? text_end : "NULL");
+        temp_key_buffer_.append("|");
+        temp_key_buffer_.append(hide_text_after_double_hash ? "1" : "0");
+        temp_key_buffer_.append("|");
+        temp_key_buffer_.append(std::to_string(wrap_width));
 
-        auto it = text_size_cache_by_params_.find(params_key);
+        auto it = text_size_cache_by_params_.find(temp_key_buffer_);
         if (it != text_size_cache_by_params_.end() && it->second.valid) {
             return it->second.size;
         }
 
         // Compute and cache the text size
         ImVec2 size = ImGui::CalcTextSize(text, text_end, hide_text_after_double_hash, wrap_width);
-        text_size_cache_by_params_[params_key] = {size, static_cast<float>(ImGui::GetTime()), true};
+        text_size_cache_by_params_[std::move(temp_key_buffer_)] = {size, static_cast<float>(ImGui::GetTime()), true};
 
         return size;
     }
@@ -117,6 +137,13 @@ public:
     ImVec2 get_cached_font_size(ImFont* font, float scale = 1.0f) {
         if (!font) return ImVec2(0, 0);
 
+        // Check if ImGui context has changed
+        if (ImGui::GetCurrentContext() != imgui_context_) {
+            // Context changed, clear cache and update reference
+            clear_all_cache();
+            imgui_context_ = ImGui::GetCurrentContext();
+        }
+
         // Create a unique key combining font pointer and scale
         uint64_t font_key = (reinterpret_cast<uintptr_t>(font) << 32) |
                            static_cast<uint32_t>(static_cast<int32_t>(scale * 1000000) & 0xFFFFFFFF);
@@ -126,17 +153,8 @@ public:
             return it->second.size;
         }
 
-        // Temporarily set font and get its size
-        ImFont* current_font = ImGui::GetFont();
-        if (current_font != font) {
-            ImGui::PushFont(font);
-        }
-
+        // Calculate font size directly without pushing/popping
         ImVec2 size = ImVec2(font->FontSize * scale, font->FontSize * scale);
-
-        if (current_font != font) {
-            ImGui::PopFont();
-        }
 
         font_size_cache_[font_key] = {size, font, scale, true};
         return size;
@@ -147,6 +165,14 @@ public:
      * Optimized to reduce iteration overhead
      */
     void invalidate_expired_cache() {
+        // Check if ImGui context has changed
+        if (ImGui::GetCurrentContext() != imgui_context_) {
+            // Context changed, clear cache and update reference
+            clear_all_cache();
+            imgui_context_ = ImGui::GetCurrentContext();
+            return;
+        }
+
         float current_time = ImGui::GetTime();
         float expiry_threshold = current_time - CACHE_EXPIRY_TIME;
 
@@ -195,6 +221,13 @@ public:
      * Get cached color or compute it
      */
     ImU32 get_cached_color(ImGuiCol idx) {
+        // Check if ImGui context has changed
+        if (ImGui::GetCurrentContext() != imgui_context_) {
+            // Context changed, clear cache and update reference
+            clear_all_cache();
+            imgui_context_ = ImGui::GetCurrentContext();
+        }
+
         // Direct indexing approach - more efficient than hashing
         uint64_t color_key = static_cast<uint64_t>(idx);
 
@@ -215,6 +248,13 @@ public:
      * Improved key generation to reduce collision risk
      */
     ImU32 get_cached_color_with_alpha(ImGuiCol idx, float alpha_mul) {
+        // Check if ImGui context has changed
+        if (ImGui::GetCurrentContext() != imgui_context_) {
+            // Context changed, clear cache and update reference
+            clear_all_cache();
+            imgui_context_ = ImGui::GetCurrentContext();
+        }
+
         // Create a unique key combining index and alpha multiplier with better distribution
         uint64_t color_key = (static_cast<uint64_t>(static_cast<uint32_t>(idx)) << 32) |
                             (static_cast<uint32_t>(static_cast<int32_t>(alpha_mul * 1000000)) & 0xFFFFFFFF);
@@ -483,6 +523,7 @@ public:
         }
 
         // Reserve capacity if the operation involves adding elements to containers
+        // Note: This is a hint for performance, though std::function doesn't directly benefit
         for (const auto& item : items) {
             operation(item);
         }
@@ -713,8 +754,17 @@ public:
 
         va_list args;
         va_start(args, fmt);
-        ImGui::TextV(fmt, args);
+        TextOptimizedV(fmt, args);
         va_end(args);
+    }
+
+    /**
+     * Optimized text rendering with automatic visibility check (va_list version)
+     */
+    static void TextOptimizedV(const char* fmt, va_list args) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        ImGui::TextV(fmt, args);
     }
 
     /**
@@ -725,8 +775,17 @@ public:
 
         va_list args;
         va_start(args, fmt);
-        ImGui::TextV(fmt, args);  // Use regular TextV since SmallTextV doesn't exist
+        SmallTextOptimizedV(fmt, args);
         va_end(args);
+    }
+
+    /**
+     * Optimized small text rendering with automatic visibility check (va_list version)
+     */
+    static void SmallTextOptimizedV(const char* fmt, va_list args) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        ImGui::TextV(fmt, args);  // Use regular TextV since SmallTextV doesn't exist
     }
 
     /**
@@ -737,8 +796,17 @@ public:
 
         va_list args;
         va_start(args, fmt);
-        ImGui::TextDisabledV(fmt, args);
+        TextDisabledOptimizedV(fmt, args);
         va_end(args);
+    }
+
+    /**
+     * Optimized text disabled rendering with automatic visibility check (va_list version)
+     */
+    static void TextDisabledOptimizedV(const char* fmt, va_list args) {
+        if (!IsWindowActive() || !IsItemVisible()) return;
+
+        ImGui::TextDisabledV(fmt, args);
     }
 
     /**
@@ -908,29 +976,23 @@ namespace ImGuiOptimizer {
     }
 
     void TextOptimized(const char* fmt, ...) {
-        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
-
         va_list args;
         va_start(args, fmt);
-        ImGui::TextV(fmt, args);
+        optimizer_instance.TextOptimizedV(fmt, args);
         va_end(args);
     }
 
     void SmallTextOptimized(const char* fmt, ...) {
-        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
-
         va_list args;
         va_start(args, fmt);
-        ImGui::TextV(fmt, args);  // Use regular TextV since SmallTextV doesn't exist
+        optimizer_instance.SmallTextOptimizedV(fmt, args);
         va_end(args);
     }
 
     void TextDisabledOptimized(const char* fmt, ...) {
-        if (!optimizer_instance.IsWindowActive() || !optimizer_instance.IsItemVisible()) return;
-
         va_list args;
         va_start(args, fmt);
-        ImGui::TextDisabledV(fmt, args);
+        optimizer_instance.TextDisabledOptimizedV(fmt, args);
         va_end(args);
     }
 

@@ -326,6 +326,9 @@ void AutoQualityController::recordFrameTime(double frame_time_ms) {
     // Check if we need to adjust quality
     checkAndAdjustQuality();
 
+    // Additional check for memory constraints
+    adjustQualityForMemoryConstraints();
+
     // Log performance stats periodically
     if (config_.enable_logging && frame_count_ % 60 == 0) {  // Every 60 frames
         logPerformanceStats();
@@ -704,6 +707,9 @@ void AutoQualityController::checkAndAdjustQuality() {
             }
         }
     }
+
+    // Predictive quality adjustment based on trend analysis
+    predictAndAdjustQuality();
 }
 
 int AutoQualityController::determineQualityReduction() {
@@ -1284,6 +1290,12 @@ double AutoQualityController::calculateGPUUtilizationScore() const {
     }
 #endif
 
+    // Additional enhancement: Check for frame time spikes that might indicate GPU pressure
+    double spike_factor = detectGpuPressureFromSpikes();
+    if (spike_factor > 0.0) {
+        base_score *= (1.0 - spike_factor * 0.3); // Reduce score if GPU pressure detected
+    }
+
     return base_score;
 }
 
@@ -1317,6 +1329,74 @@ double AutoQualityController::getNvidiaGpuUtilization() const {
     return -1.0;
 }
 #endif
+
+double AutoQualityController::detectGpuPressureFromSpikes() const {
+    // Detect GPU pressure by analyzing frame time patterns that suggest GPU bottlenecking
+    if (frame_count_ < 10) {
+        return 0.0;
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 3) {
+        return 0.0;
+    }
+
+    // Look for patterns where frame times are consistently high (suggesting GPU bottleneck)
+    double target_frame_time = 1000.0 / config_.target_fps;
+    int high_frame_time_count = 0;
+
+    for (size_t i = 0; i < sample_count; ++i) {
+        if (frame_times_[i] > target_frame_time * 1.5) { // Frame is 50% over target
+            high_frame_time_count++;
+        }
+    }
+
+    // Calculate pressure factor based on percentage of high frame times
+    double pressure_factor = static_cast<double>(high_frame_time_count) / sample_count;
+
+    // Also check for sustained periods of high frame times (not just spikes)
+    int sustained_high_count = 0;
+    for (size_t i = 2; i < sample_count; ++i) {
+        // Check if three consecutive frames are high (suggesting sustained GPU pressure)
+        if (frame_times_[i] > target_frame_time &&
+            frame_times_[i-1] > target_frame_time &&
+            frame_times_[i-2] > target_frame_time) {
+            sustained_high_count++;
+        }
+    }
+
+    double sustained_pressure = static_cast<double>(sustained_high_count) / (sample_count - 2);
+
+    // Combine both factors with more weight on sustained pressure
+    return (pressure_factor * 0.3) + (sustained_pressure * 0.7);
+}
+
+void AutoQualityController::adjustQualityForMemoryConstraints() {
+    // Additional quality adjustment based on memory pressure
+    double memory_pressure_score = calculateMemoryPressureScore();
+
+    if (memory_pressure_score < 50.0) { // High memory pressure
+        // Increase quality level (reduce quality) based on memory pressure
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            // Calculate how much to reduce based on memory pressure
+            double pressure_ratio = (50.0 - memory_pressure_score) / 50.0; // 0.0 to 1.0
+
+            // Determine new quality level based on pressure
+            int levels_to_increase = static_cast<int>(pressure_ratio * 2.0); // Up to 2 levels
+            int new_quality_index = std::min(current_quality_index_ + levels_to_increase,
+                                           QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index > current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Memory pressure triggered quality reduction to level %d (Memory Pressure Score: %.2f)\n",
+                           current_quality_index_, memory_pressure_score);
+                }
+            }
+        }
+    }
+}
 
 double AutoQualityController::calculateCPUUtilizationScore() const {
     // Interface with system monitoring APIs to determine actual CPU utilization
@@ -1454,6 +1534,40 @@ double AutoQualityController::calculateFramePacingIrregularity() const {
 double AutoQualityController::calculatePeakPerformanceScore() const {
     // Return the highest performance score recorded
     return peak_performance_score_;
+}
+
+void AutoQualityController::predictAndAdjustQuality() {
+    // Use predictive algorithm to anticipate performance drops before they happen
+    auto now = std::chrono::high_resolution_clock::now();
+    bool past_cooldown = (now - last_adjustment_time_ >= adjustment_cooldown_);
+
+    // Predict future performance based on current trends
+    double predicted_performance = predictFuturePerformance();
+
+    // If predicted performance is significantly below current performance, consider preemptive quality reduction
+    if (predicted_performance < performance_score_ * 0.8 && // Predicted to drop by 20%
+        predicted_performance < adaptive_performance_threshold_ * 0.9 && // Below threshold
+        current_quality_index_ < QUALITY_LEVEL_COUNT - 1) { // Can still reduce quality
+
+        // Calculate how much ahead we're predicting the drop
+        double performance_gap = performance_score_ - predicted_performance;
+
+        // Only act if the gap is significant (> 10 points) and we're past cooldown
+        if (performance_gap > 10.0 && past_cooldown) {
+            // Preemptively reduce quality to prevent the predicted performance drop
+            int new_quality_index = current_quality_index_ + 1;
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+                last_adjustment_time_ = now;
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Preemptive quality reduction to level %d (Predicted Performance: %.2f%%, Current: %.2f%%)\n",
+                           current_quality_index_, predicted_performance, performance_score_);
+                }
+            }
+        }
+    }
 }
 
 double AutoQualityController::calculateAveragePerformanceScore() const {

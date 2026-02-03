@@ -184,6 +184,11 @@ public:
      */
     void updateRealTimePerformanceMetrics();
 
+    /**
+     * @brief Predict and adjust quality based on trend analysis
+     */
+    void predictAndAdjustQuality();
+
 private:
     AutoQualityConfig config_;
     std::vector<double> frame_times_;
@@ -237,6 +242,10 @@ private:
     bool checkNvmlAvailability() const;
     double getNvidiaGpuUtilization() const;
 #endif
+
+    // Additional helper methods for enhanced performance detection
+    double detectGpuPressureFromSpikes() const;
+    void adjustQualityForMemoryConstraints();
 
     // Methods moved to public section above
 };

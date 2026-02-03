@@ -118,6 +118,32 @@ public:
      */
     void forceQualityLevel(int level);
 
+    /**
+     * @brief Get recommended rendering settings based on current quality level
+     * This method provides the actual rendering parameters that should be used
+     */
+    QualitySettings getRecommendedRenderingSettings() const;
+
+    /**
+     * @brief Predict future performance based on current trends
+     */
+    double predictFuturePerformance() const;
+
+    /**
+     * @brief Calculate the rate of performance degradation
+     */
+    double calculateDegradationRate() const;
+
+    /**
+     * @brief Calculate memory pressure score (0-100, higher is better)
+     */
+    double calculateMemoryPressureScore() const;
+
+    /**
+     * @brief Calculate thermal pressure score (0-100, higher is better)
+     */
+    double calculateThermalPressureScore() const;
+
 private:
     AutoQualityConfig config_;
     std::vector<double> frame_times_;
@@ -156,6 +182,8 @@ private:
     double calculateJankPercentage() const;
     double calculatePerformanceConsistency() const;
     void updateAdvancedMetrics();
+
+    // Methods moved to public section above
 };
 
 } // namespace RenderEngine

@@ -492,6 +492,51 @@ double AutoQualityController::calculateTrendPredictionScore() const {
     }
 }
 
+double AutoQualityController::predictFuturePerformance() const {
+    // Predict future performance based on current trends and historical data
+    if (frame_count_ < 15) {
+        return performance_score_; // Not enough data for reliable prediction
+    }
+
+    // Calculate weighted prediction based on multiple factors
+    double trend_factor = calculateTrendPredictionScore() / 100.0;  // 0.0 to 1.0
+    double current_factor = performance_score_ / 100.0;             // 0.0 to 1.0
+    double historical_factor = calculateHistoricalPerformanceFactor();
+
+    // Weight the factors: 40% current performance, 35% trend, 25% historical
+    double predicted_score = (current_factor * 0.4) + (trend_factor * 0.35) + (historical_factor * 0.25);
+
+    return predicted_score * 100.0;  // Convert back to 0-100 scale
+}
+
+double AutoQualityController::calculateHistoricalPerformanceFactor() const {
+    // Calculate a factor based on historical performance patterns
+    if (!performance_history_full_) {
+        return 1.0; // Assume neutral if not enough history
+    }
+
+    // Calculate average of historical performance
+    double sum = 0.0;
+    for (int i = 0; i < 10; ++i) {
+        sum += performance_history_[i];
+    }
+    double historical_avg = sum / 10.0;
+
+    // Calculate variance in historical performance
+    double variance = 0.0;
+    for (int i = 0; i < 10; ++i) {
+        double diff = performance_history_[i] - historical_avg;
+        variance += diff * diff;
+    }
+    variance /= 10.0;
+
+    // Normalize to 0.0-1.0 range (1.0 being stable performance)
+    double stability_factor = 1.0 - std::min(0.5, variance / 1000.0);
+
+    // Return normalized historical performance (0.0 to 1.0)
+    return std::max(0.0, std::min(1.0, historical_avg / 100.0)) * stability_factor;
+}
+
 double AutoQualityController::calculateAdaptiveThreshold() const {
     // Calculate adaptive threshold based on historical performance patterns
     if (!performance_history_full_) {
@@ -626,6 +671,9 @@ int AutoQualityController::determineQualityReduction() {
     double jank_percentage = calculateJankPercentage();
     double consistency_score = calculatePerformanceConsistency();
 
+    // Calculate the rate of performance degradation
+    double degradation_rate = calculateDegradationRate();
+
     // If performance is extremely poor, reduce quality more aggressively
     if (performance_deficit > 40.0 || jank_percentage > 25.0) {
         // Very poor performance OR heavy jank - jump 2 levels down if possible
@@ -636,12 +684,22 @@ int AutoQualityController::determineQualityReduction() {
             new_level = std::min(current_quality_index_ + 3, QUALITY_LEVEL_COUNT - 1);
         }
 
+        // If degradation is happening rapidly, be even more aggressive
+        if (degradation_rate > 0.5) { // Performance dropping by more than 50% per second
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
         return new_level;
     } else if (performance_deficit > 20.0 || jank_percentage > 15.0) {
         // Poor performance OR moderate jank - jump 1-2 levels down
         int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
 
-        // If we also have performance spikes, consider jumping 2 levels
+        // If degradation is rapid, add an extra level
+        if (degradation_rate > 0.3) { // Performance dropping by more than 30% per second
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If we also have performance spikes
         if (has_spikes) {
             new_level = std::min(current_quality_index_ + 2, QUALITY_LEVEL_COUNT - 1);
         }
@@ -649,10 +707,24 @@ int AutoQualityController::determineQualityReduction() {
         return new_level;
     } else if (consistency_score < 60.0) {
         // Performance is inconsistent - reduce quality by 1 level to stabilize
-        return std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+        int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+        // If degradation is rapid, add an extra level
+        if (degradation_rate > 0.4) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        return new_level;
     } else {
         // Moderate performance issues - reduce by 1 level
-        return std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+        int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+        // If degradation is rapid, add an extra level
+        if (degradation_rate > 0.25) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        return new_level;
     }
 }
 
@@ -731,6 +803,10 @@ void AutoQualityController::forceQualityLevel(int level) {
             printf("AutoQuality: Forced quality to level %d\n", level);
         }
     }
+}
+
+QualitySettings AutoQualityController::getRecommendedRenderingSettings() const {
+    return quality_levels_[current_quality_index_];
 }
 
 bool AutoQualityController::detectPerformanceSpikes() const {
@@ -834,11 +910,67 @@ double AutoQualityController::calculatePerformanceConsistency() const {
     return consistency_score;
 }
 
+double AutoQualityController::calculateDegradationRate() const {
+    // Calculate the rate of performance degradation over time
+    if (frame_count_ < 10) {
+        return 0.0; // Not enough data to calculate degradation rate
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 4) {
+        return 0.0; // Need at least 4 samples to calculate meaningful trend
+    }
+
+    // Split the history into early and late halves to compare performance
+    size_t early_start = 0;
+    size_t early_end = sample_count / 2;
+    size_t late_start = sample_count / 2;
+    size_t late_end = sample_count;
+
+    // Calculate average performance in early period
+    double early_sum = 0.0;
+    for (size_t i = early_start; i < early_end; ++i) {
+        early_sum += (1000.0 / std::max(frame_times_[i], 1.0)); // Convert to FPS
+    }
+    double early_avg_fps = early_sum / (early_end - early_start);
+
+    // Calculate average performance in later period
+    double late_sum = 0.0;
+    for (size_t i = late_start; i < late_end; ++i) {
+        late_sum += (1000.0 / std::max(frame_times_[i], 1.0)); // Convert to FPS
+    }
+    double late_avg_fps = late_sum / (late_end - late_start);
+
+    // Calculate degradation rate as percentage change per second
+    // Assuming 60 FPS as target, normalize the degradation rate
+    if (early_avg_fps <= 0.0) {
+        return late_avg_fps <= 0.0 ? 0.0 : 1.0; // If early was 0, but late is positive, no degradation
+    }
+
+    double fps_change = late_avg_fps - early_avg_fps;
+    double relative_change = fps_change / early_avg_fps;
+
+    // Calculate time difference (approximate based on frame count)
+    double time_period_seconds = (sample_count / 2) / static_cast<double>(config_.target_fps);
+
+    // Return degradation rate per second (negative values indicate improvement)
+    double degradation_rate = relative_change / time_period_seconds;
+
+    // Return only positive values for degradation (negative means improvement)
+    return std::max(0.0, -degradation_rate); // Negative of negative is positive for degradation
+}
+
 void AutoQualityController::updateAdvancedMetrics() {
     // Update advanced performance metrics that can be used for quality decisions
     bool has_spikes = detectPerformanceSpikes();
     double jank_percentage = calculateJankPercentage();
     double consistency_score = calculatePerformanceConsistency();
+
+    // Calculate memory pressure if available (placeholder for future integration)
+    double memory_pressure_score = calculateMemoryPressureScore();
+
+    // Calculate thermal pressure if available (placeholder for future integration)
+    double thermal_pressure_score = calculateThermalPressureScore();
 
     // Adjust performance score based on these advanced metrics
     if (has_spikes) {
@@ -852,6 +984,18 @@ void AutoQualityController::updateAdvancedMetrics() {
         performance_score_ -= jank_penalty;
     }
 
+    // Apply memory pressure penalty if needed
+    if (memory_pressure_score < 70.0) {
+        double memory_penalty = (70.0 - memory_pressure_score) * 0.3;
+        performance_score_ -= memory_penalty;
+    }
+
+    // Apply thermal pressure penalty if needed
+    if (thermal_pressure_score < 75.0) {
+        double thermal_penalty = (75.0 - thermal_pressure_score) * 0.2;
+        performance_score_ -= thermal_penalty;
+    }
+
     // Consistency affects the performance score inversely
     // Less consistent = lower score
     double consistency_factor = consistency_score / 100.0;
@@ -859,6 +1003,20 @@ void AutoQualityController::updateAdvancedMetrics() {
 
     // Ensure performance score stays within bounds
     performance_score_ = std::max(0.0, std::min(100.0, performance_score_));
+}
+
+double AutoQualityController::calculateMemoryPressureScore() const {
+    // Placeholder implementation - in a real system, this would interface with
+    // memory monitoring systems to determine how much memory pressure the app is under
+    // For now, return a baseline score indicating no memory pressure
+    return 100.0; // No memory pressure detected
+}
+
+double AutoQualityController::calculateThermalPressureScore() const {
+    // Placeholder implementation - in a real system, this would interface with
+    // thermal monitoring APIs to determine device temperature
+    // For now, return a baseline score indicating no thermal pressure
+    return 100.0; // No thermal pressure detected
 }
 
 } // namespace RenderEngine

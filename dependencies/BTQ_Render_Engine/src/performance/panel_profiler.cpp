@@ -52,6 +52,15 @@ void PanelProfiler::end_panel_render(uint32_t panel_id) {
             it->second.max_render_time_us = duration.count();
         }
 
+        // Update cumulative squared time for variance calculation
+        it->second.cumulative_squared_time_us += duration.count() * duration.count();
+
+        // Record first render time if not already recorded
+        if (!it->second.first_render_recorded) {
+            it->second.first_render_time = std::chrono::high_resolution_clock::now();
+            it->second.first_render_recorded = true;
+        }
+
         // Check if this render exceeded the slow render threshold
         uint64_t threshold = slow_render_threshold_us_.load();
         if (duration.count() > threshold) {
@@ -1217,6 +1226,149 @@ double PanelProfiler::calculate_standard_deviation(const std::vector<uint64_t>& 
 
     // Standard deviation is square root of variance
     return std::sqrt(variance);
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_highest_variance_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> variance_panels;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 1) { // Need at least 2 samples for variance
+            // Calculate variance using the formula: variance = E[X^2] - (E[X])^2
+            double mean = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+            double mean_squared = mean * mean;
+            double mean_of_squares = static_cast<double>(stats.cumulative_squared_time_us) / static_cast<double>(stats.render_count);
+
+            double variance = mean_of_squares - mean_squared;
+
+            variance_panels.push_back({panel_id, variance});
+        }
+    }
+
+    // Sort by variance (descending)
+    std::sort(variance_panels.begin(), variance_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (variance_panels.size() > top_n) {
+        variance_panels.resize(top_n);
+    }
+
+    return variance_panels;
+}
+
+std::vector<std::pair<uint32_t, std::pair<double, double>>> PanelProfiler::get_high_percentile_render_times(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, std::pair<double, double>>> percentile_panels;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_time_history.size() >= 5) { // Need minimum data points
+            // Calculate 95th and 99th percentiles
+            double p95 = calculate_percentile(stats.render_time_history, 95.0) / 1000.0; // Convert to ms
+            double p99 = calculate_percentile(stats.render_time_history, 99.0) / 1000.0; // Convert to ms
+
+            percentile_panels.push_back({panel_id, {p95, p99}});
+        }
+    }
+
+    // Sort by 99th percentile (descending)
+    std::sort(percentile_panels.begin(), percentile_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second.second > b.second.second; // Compare p99 values
+              });
+
+    // Limit to top N
+    if (percentile_panels.size() > top_n) {
+        percentile_panels.resize(top_n);
+    }
+
+    return percentile_panels;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_longest_running_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> running_time_panels;
+    auto now = std::chrono::high_resolution_clock::now();
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.first_render_recorded) {
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - stats.first_render_time);
+            double duration_seconds = static_cast<double>(duration.count()) / 1000.0;
+
+            running_time_panels.push_back({panel_id, duration_seconds});
+        }
+    }
+
+    // Sort by duration (descending)
+    std::sort(running_time_panels.begin(), running_time_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (running_time_panels.size() > top_n) {
+        running_time_panels.resize(top_n);
+    }
+
+    return running_time_panels;
+}
+
+std::tuple<double, double, double, double, double> PanelProfiler::get_detailed_panel_metrics(uint32_t panel_id) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    auto it = profiling_data_.find(panel_id);
+    if (it != profiling_data_.end() && it->second.render_count > 0) {
+        const auto& stats = it->second;
+
+        // Calculate average
+        double avg_ms = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count) / 1000.0;
+
+        // Calculate variance and standard deviation
+        double mean = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+        double mean_squared = mean * mean;
+        double mean_of_squares = static_cast<double>(stats.cumulative_squared_time_us) / static_cast<double>(stats.render_count);
+        double variance = mean_of_squares - mean_squared;
+        double std_dev = std::sqrt(std::max(0.0, variance)) / 1000.0; // Convert to ms
+
+        // Calculate percentiles
+        double p95 = 0.0, p99 = 0.0;
+        if (!stats.render_time_history.empty()) {
+            p95 = calculate_percentile(stats.render_time_history, 95.0) / 1000.0; // Convert to ms
+            p99 = calculate_percentile(stats.render_time_history, 99.0) / 1000.0; // Convert to ms
+        }
+
+        return std::make_tuple(avg_ms, std_dev, p95, p99, variance / 1000000.0); // Convert variance to ms^2
+    }
+
+    return std::make_tuple(0.0, 0.0, 0.0, 0.0, 0.0);
+}
+
+double PanelProfiler::calculate_percentile(const std::vector<uint64_t>& values, double percentile) const {
+    if (values.empty()) {
+        return 0.0;
+    }
+
+    // Create a copy and sort it
+    std::vector<uint64_t> sorted_values = values;
+    std::sort(sorted_values.begin(), sorted_values.end());
+
+    // Calculate the index for the percentile
+    double idx = (percentile / 100.0) * (sorted_values.size() - 1);
+    size_t lower_idx = static_cast<size_t>(std::floor(idx));
+    size_t upper_idx = static_cast<size_t>(std::ceil(idx));
+
+    if (lower_idx == upper_idx) {
+        return static_cast<double>(sorted_values[lower_idx]);
+    }
+
+    // Linear interpolation between adjacent values
+    double fraction = idx - lower_idx;
+    double lower_val = static_cast<double>(sorted_values[lower_idx]);
+    double upper_val = static_cast<double>(sorted_values[upper_idx]);
+
+    return lower_val + fraction * (upper_val - lower_val);
 }
 
 // Global instance

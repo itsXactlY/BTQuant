@@ -23,6 +23,11 @@ struct PanelRenderStats {
     // Additional fields for bottleneck detection
     uint64_t slow_render_threshold_us = 10000; // 10ms threshold for slow renders
     uint64_t slow_render_count = 0; // Count of renders exceeding threshold
+
+    // Additional detailed tracking
+    uint64_t cumulative_squared_time_us = 0; // For variance calculation
+    std::chrono::high_resolution_clock::time_point first_render_time; // Track when panel was first profiled
+    bool first_render_recorded = false;
 };
 
 class PanelProfiler {
@@ -129,6 +134,18 @@ public:
     // Get panels that are approaching bottleneck status (early warning)
     std::vector<std::pair<uint32_t, double>> get_potential_bottleneck_warnings(size_t top_n = 5) const;
 
+    // Get panels with highest standard deviation (most inconsistent performance)
+    std::vector<std::pair<uint32_t, double>> get_highest_variance_panels(size_t top_n = 5) const;
+
+    // Get panels with highest render time percentiles (95th, 99th percentile)
+    std::vector<std::pair<uint32_t, std::pair<double, double>>> get_high_percentile_render_times(size_t top_n = 5) const; // {panel_id, {p95_ms, p99_ms}}
+
+    // Get panels with longest time since first profiling (for identifying long-running performance issues)
+    std::vector<std::pair<uint32_t, double>> get_longest_running_panels(size_t top_n = 5) const; // {panel_id, duration_seconds}
+
+    // Get detailed performance metrics for a specific panel
+    std::tuple<double, double, double, double, double> get_detailed_panel_metrics(uint32_t panel_id) const; // {avg_ms, std_dev_ms, p95_ms, p99_ms, variance}
+
 private:
     std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
     mutable std::mutex profiling_data_mutex_;
@@ -143,6 +160,9 @@ private:
 
     // Helper method to calculate standard deviation
     double calculate_standard_deviation(const std::vector<uint64_t>& values) const;
+
+    // Helper method to calculate percentile from history
+    double calculate_percentile(const std::vector<uint64_t>& values, double percentile) const;
 };
 
 // Global panel profiler instance

@@ -120,6 +120,15 @@ public:
     // Get top bottleneck panels with detailed information
     std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>> get_top_bottleneck_details(size_t top_n = 5) const;
 
+    // Detect panels with sudden performance degradation
+    std::vector<std::pair<uint32_t, double>> get_sudden_degradation_panels(size_t top_n = 5) const;
+
+    // Get panels with highest performance volatility
+    std::vector<std::pair<uint32_t, double>> get_performance_volatility_ranking() const;
+
+    // Get panels that are approaching bottleneck status (early warning)
+    std::vector<std::pair<uint32_t, double>> get_potential_bottleneck_warnings(size_t top_n = 5) const;
+
 private:
     std::unordered_map<uint32_t, PanelRenderStats> profiling_data_;
     mutable std::mutex profiling_data_mutex_;
@@ -131,6 +140,9 @@ private:
 
     static constexpr size_t MAX_HISTORY_SIZE = 100;
     static constexpr size_t RECENT_RENDER_COUNT = 10; // Number of recent renders to compare for trends
+
+    // Helper method to calculate standard deviation
+    double calculate_standard_deviation(const std::vector<uint64_t>& values) const;
 };
 
 // Global panel profiler instance

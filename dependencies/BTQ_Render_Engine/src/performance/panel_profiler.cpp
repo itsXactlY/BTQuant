@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 #include <numeric>
+#include <cmath>
 
 namespace BTQuant {
 
@@ -533,6 +534,80 @@ std::string PanelProfiler::generate_detailed_bottleneck_report() const {
         }
     }
 
+    // Additional analysis sections
+    auto sudden_degradation = get_sudden_degradation_panels(5);
+    auto volatility_ranking = get_performance_volatility_ranking();
+    auto potential_warnings = get_potential_bottleneck_warnings(5);
+
+    // Sudden Degradation Section
+    if (!sudden_degradation.empty()) {
+        report << "Panels with Sudden Performance Degradation:\n";
+        report << "------------------------------------------\n";
+        for (size_t i = 0; i < std::min(size_t(5), sudden_degradation.size()); ++i) {
+            uint32_t panel_id = sudden_degradation[i].first;
+            double degradation_factor = sudden_degradation[i].second;
+            auto stats_it = std::find_if(all_stats.begin(), all_stats.end(),
+                                         [panel_id](const auto& pair) { return pair.first == panel_id; });
+
+            if (stats_it != all_stats.end()) {
+                const auto& [id, stats] = *stats_it;
+                double avg_ms = get_average_render_time_ms(panel_id);
+
+                report << (i + 1) << ". Panel ID: " << panel_id
+                       << ", Title: " << stats.panel_title << "\n";
+                report << "   Avg: " << std::fixed << std::setprecision(3) << avg_ms << " ms, "
+                       << "Degradation Factor: " << std::fixed << std::setprecision(2) << degradation_factor * 100.0 << "%\n";
+                report << "\n";
+            }
+        }
+    }
+
+    // Performance Volatility Section
+    if (!volatility_ranking.empty()) {
+        report << "Panels with Highest Performance Volatility:\n";
+        report << "------------------------------------------\n";
+        for (size_t i = 0; i < std::min(size_t(5), volatility_ranking.size()); ++i) {
+            uint32_t panel_id = volatility_ranking[i].first;
+            double volatility = volatility_ranking[i].second;
+            auto stats_it = std::find_if(all_stats.begin(), all_stats.end(),
+                                         [panel_id](const auto& pair) { return pair.first == panel_id; });
+
+            if (stats_it != all_stats.end()) {
+                const auto& [id, stats] = *stats_it;
+                double avg_ms = get_average_render_time_ms(panel_id);
+
+                report << (i + 1) << ". Panel ID: " << panel_id
+                       << ", Title: " << stats.panel_title << "\n";
+                report << "   Avg: " << std::fixed << std::setprecision(3) << avg_ms << " ms, "
+                       << "Volatility: " << std::fixed << std::setprecision(3) << volatility << "\n";
+                report << "\n";
+            }
+        }
+    }
+
+    // Potential Bottleneck Warnings Section
+    if (!potential_warnings.empty()) {
+        report << "Potential Future Bottleneck Warnings:\n";
+        report << "-------------------------------------\n";
+        for (size_t i = 0; i < std::min(size_t(5), potential_warnings.size()); ++i) {
+            uint32_t panel_id = potential_warnings[i].first;
+            double proximity = potential_warnings[i].second;
+            auto stats_it = std::find_if(all_stats.begin(), all_stats.end(),
+                                         [panel_id](const auto& pair) { return pair.first == panel_id; });
+
+            if (stats_it != all_stats.end()) {
+                const auto& [id, stats] = *stats_it;
+                double avg_ms = get_average_render_time_ms(panel_id);
+
+                report << (i + 1) << ". Panel ID: " << panel_id
+                       << ", Title: " << stats.panel_title << "\n";
+                report << "   Avg: " << std::fixed << std::setprecision(3) << avg_ms << " ms, "
+                       << "Proximity to Threshold: " << std::fixed << std::setprecision(1) << proximity * 100.0 << "%\n";
+                report << "\n";
+            }
+        }
+    }
+
     // Recommendations section
     report << "Recommendations:\n";
     report << "----------------\n";
@@ -569,6 +644,30 @@ std::string PanelProfiler::generate_detailed_bottleneck_report() const {
             const auto& [id, stats] = *outlier_panel_it;
             report << "- Examine irregular behavior in: Panel '" << stats.panel_title
                    << "' (ID: " << id << ") due to high outlier ratio\n";
+        }
+    }
+
+    if (!sudden_degradation.empty()) {
+        uint32_t degraded_panel_id = sudden_degradation[0].first;
+        auto degraded_panel_it = std::find_if(all_stats.begin(), all_stats.end(),
+                                              [degraded_panel_id](const auto& pair) { return pair.first == degraded_panel_id; });
+
+        if (degraded_panel_it != all_stats.end()) {
+            const auto& [id, stats] = *degraded_panel_it;
+            report << "- Urgent attention needed for: Panel '" << stats.panel_title
+                   << "' (ID: " << id << ") due to sudden performance degradation\n";
+        }
+    }
+
+    if (!potential_warnings.empty()) {
+        uint32_t warning_panel_id = potential_warnings[0].first;
+        auto warning_panel_it = std::find_if(all_stats.begin(), all_stats.end(),
+                                             [warning_panel_id](const auto& pair) { return pair.first == warning_panel_id; });
+
+        if (warning_panel_it != all_stats.end()) {
+            const auto& [id, stats] = *warning_panel_it;
+            report << "- Monitor closely: Panel '" << stats.panel_title
+                   << "' (ID: " << id << ") - approaching bottleneck status\n";
         }
     }
 
@@ -946,6 +1045,178 @@ std::vector<std::tuple<uint32_t, std::string, double, double, uint64_t, double>>
     }
 
     return bottleneck_details;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_sudden_degradation_panels(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> degradation_panels;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_time_history.size() >= RECENT_RENDER_COUNT * 3) { // Need sufficient data
+            // Split history into early and late periods
+            size_t total_size = stats.render_time_history.size();
+            size_t early_end = total_size / 3;  // First third
+            size_t middle_start = early_end;
+            size_t middle_end = 2 * total_size / 3;  // Second third
+            size_t late_start = middle_end;  // Last third
+
+            // Calculate averages for each period
+            double early_avg = 0.0;
+            for (size_t i = 0; i < early_end; ++i) {
+                early_avg += static_cast<double>(stats.render_time_history[i]);
+            }
+            early_avg /= static_cast<double>(early_end);
+
+            double late_avg = 0.0;
+            for (size_t i = late_start; i < total_size; ++i) {
+                late_avg += static_cast<double>(stats.render_time_history[i]);
+            }
+            late_avg /= static_cast<double>(total_size - late_start);
+
+            // Calculate degradation factor (how much worse the late period is compared to early)
+            if (early_avg > 0.0 && late_avg > early_avg) {
+                double degradation_factor = (late_avg - early_avg) / early_avg;
+
+                // Only consider significant degradations (more than 50% increase)
+                if (degradation_factor > 0.5) {
+                    degradation_panels.push_back({panel_id, degradation_factor});
+                }
+            }
+        }
+    }
+
+    // Sort by degradation factor (descending) - most degraded panels first
+    std::sort(degradation_panels.begin(), degradation_panels.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (degradation_panels.size() > top_n) {
+        degradation_panels.resize(top_n);
+    }
+
+    return degradation_panels;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_performance_volatility_ranking() const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> volatility_ranking;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_time_history.size() >= 5) { // Need minimum data points
+            // Calculate coefficient of variation (standard deviation / mean)
+            double mean = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+
+            if (mean > 0.0) {
+                double variance = 0.0;
+                for (uint64_t render_time : stats.render_time_history) {
+                    double diff = static_cast<double>(render_time) - mean;
+                    variance += diff * diff;
+                }
+                variance /= static_cast<double>(stats.render_time_history.size());
+
+                double std_dev = std::sqrt(variance);
+                double coefficient_of_variation = std_dev / mean;
+
+                volatility_ranking.push_back({panel_id, coefficient_of_variation});
+            }
+        }
+    }
+
+    // Sort by coefficient of variation (descending) - higher volatility first
+    std::sort(volatility_ranking.begin(), volatility_ranking.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    return volatility_ranking;
+}
+
+std::vector<std::pair<uint32_t, double>> PanelProfiler::get_potential_bottleneck_warnings(size_t top_n) const {
+    std::lock_guard<std::mutex> lock(profiling_data_mutex_);
+    std::vector<std::pair<uint32_t, double>> potential_bottlenecks;
+
+    for (const auto& [panel_id, stats] : profiling_data_) {
+        if (stats.render_count > 0) {
+            double avg_time = static_cast<double>(stats.total_render_time_us) / static_cast<double>(stats.render_count);
+            double current_threshold = slow_render_threshold_us_.load() / 1000.0; // Convert to ms
+
+            // Calculate how close the average render time is to the slow render threshold
+            // Values closer to 1.0 indicate approaching bottleneck status
+            double proximity_to_threshold = avg_time / current_threshold;
+
+            // Also consider recent trend - if performance is getting worse
+            if (stats.render_time_history.size() >= RECENT_RENDER_COUNT * 2) {
+                // Calculate recent average (last N renders)
+                size_t recent_count = std::min(static_cast<size_t>(RECENT_RENDER_COUNT), stats.render_time_history.size());
+                size_t recent_start_idx = stats.render_time_history.size() - recent_count;
+
+                double recent_sum = 0.0;
+                for (size_t i = recent_start_idx; i < stats.render_time_history.size(); ++i) {
+                    recent_sum += static_cast<double>(stats.render_time_history[i]) / 1000.0; // Convert to ms
+                }
+                double recent_avg = recent_count > 0 ? recent_sum / recent_count : 0.0;
+
+                // Calculate historical average (excluding recent renders)
+                size_t historical_count = stats.render_time_history.size() - recent_count;
+                double historical_sum = 0.0;
+                for (size_t i = 0; i < recent_start_idx; ++i) {
+                    historical_sum += static_cast<double>(stats.render_time_history[i]) / 1000.0; // Convert to ms
+                }
+                double historical_avg = historical_count > 0 ? historical_sum / historical_count : 0.0;
+
+                // Adjust proximity based on trend
+                if (historical_avg > 0.0 && recent_avg > historical_avg) {
+                    double trend_factor = recent_avg / historical_avg;
+                    proximity_to_threshold *= trend_factor; // Amplify if trending toward bottleneck
+                }
+            }
+
+            // Only include panels that are approaching bottleneck status (within 20% of threshold)
+            // or showing concerning trends
+            if (proximity_to_threshold >= 0.8 || (proximity_to_threshold >= 0.5 && proximity_to_threshold > 0.0)) {
+                potential_bottlenecks.push_back({panel_id, proximity_to_threshold});
+            }
+        }
+    }
+
+    // Sort by proximity to threshold (descending) - closest to becoming bottlenecks first
+    std::sort(potential_bottlenecks.begin(), potential_bottlenecks.end(),
+              [](const auto& a, const auto& b) {
+                  return a.second > b.second;
+              });
+
+    // Limit to top N
+    if (potential_bottlenecks.size() > top_n) {
+        potential_bottlenecks.resize(top_n);
+    }
+
+    return potential_bottlenecks;
+}
+
+double PanelProfiler::calculate_standard_deviation(const std::vector<uint64_t>& values) const {
+    if (values.empty()) {
+        return 0.0;
+    }
+
+    // Calculate mean
+    double sum = 0.0;
+    for (uint64_t val : values) {
+        sum += static_cast<double>(val);
+    }
+    double mean = sum / static_cast<double>(values.size());
+
+    // Calculate variance
+    double variance = 0.0;
+    for (uint64_t val : values) {
+        double diff = static_cast<double>(val) - mean;
+        variance += diff * diff;
+    }
+    variance /= static_cast<double>(values.size());
+
+    // Standard deviation is square root of variance
+    return std::sqrt(variance);
 }
 
 // Global instance

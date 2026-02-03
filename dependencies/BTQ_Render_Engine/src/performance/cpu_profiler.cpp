@@ -1571,6 +1571,204 @@ CPUProfiler::ProfileScope::~ProfileScope() {
     BTQuant::g_cpu_profiler.end_function(function_name_);
 }
 
+std::vector<CPUProfiler::ResourceUtilizationBreakdown>
+CPUProfiler::get_resource_utilization_breakdown() const {
+    std::vector<ResourceUtilizationBreakdown> resource_breakdowns;
+    std::map<std::string, double> exclusive_times;
+
+    // Calculate exclusive times
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+        for (const auto& [thread_id, thread_data] : thread_profiles_) {
+            if (thread_data.call_tree_root) {
+                calculate_exclusive_times(thread_data.call_tree_root.get(), exclusive_times);
+            }
+        }
+    }
+
+    auto all_profiles = get_aggregated_profiles();
+    uint64_t total_time_ns = 0;
+
+    // Calculate total time for percentage calculation
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        total_time_ns += profile_data.total_duration_ns;
+    }
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        ResourceUtilizationBreakdown rub;
+        rub.function_name = func_name;
+        rub.call_count = profile_data.call_count;
+        rub.total_time_ms = profile_data.get_total_duration_ms();
+        rub.exclusive_time_ms = exclusive_times.count(func_name) ?
+                               exclusive_times[func_name] : 0.0;
+        rub.inclusive_time_ms = profile_data.get_total_duration_ms();
+        rub.min_time_ms = profile_data.get_min_duration_ms();
+        rub.max_time_ms = profile_data.get_max_duration_ms();
+        rub.avg_time_ms = profile_data.get_average_duration_ms();
+
+        // Calculate standard deviation
+        if (profile_data.call_count > 1 && !profile_data.duration_history.empty()) {
+            double sum_squares = 0.0;
+            double mean = rub.avg_time_ms;
+
+            for (uint64_t duration_ns : profile_data.duration_history) {
+                double duration_ms = static_cast<double>(duration_ns) / 1000000.0;
+                double diff = duration_ms - mean;
+                sum_squares += diff * diff;
+            }
+
+            double variance = sum_squares / profile_data.duration_history.size();
+            rub.std_deviation_ms = std::sqrt(variance);
+        } else {
+            rub.std_deviation_ms = 0.0;
+        }
+
+        rub.percentage_of_total = total_time_ns > 0 ?
+                                 (static_cast<double>(profile_data.total_duration_ns) /
+                                  static_cast<double>(total_time_ns)) * 100.0 : 0.0;
+
+        // Calculate percentiles (10th, 25th, 50th, 75th, 90th, 95th, 99th)
+        if (!profile_data.duration_history.empty()) {
+            std::vector<uint64_t> sorted_durations = profile_data.duration_history;
+            std::sort(sorted_durations.begin(), sorted_durations.end());
+
+            auto get_percentile = [&](double percentile) -> double {
+                if (sorted_durations.empty()) return 0.0;
+                size_t index = static_cast<size_t>((percentile / 100.0) * sorted_durations.size());
+                if (index >= sorted_durations.size()) index = sorted_durations.size() - 1;
+                return static_cast<double>(sorted_durations[index]) / 1000000.0;
+            };
+
+            rub.percentiles.push_back(get_percentile(10));  // 10th percentile
+            rub.percentiles.push_back(get_percentile(25));  // 25th percentile
+            rub.percentiles.push_back(get_percentile(50));  // 50th percentile (median)
+            rub.percentiles.push_back(get_percentile(75));  // 75th percentile
+            rub.percentiles.push_back(get_percentile(90));  // 90th percentile
+            rub.percentiles.push_back(get_percentile(95));  // 95th percentile
+            rub.percentiles.push_back(get_percentile(99));  // 99th percentile
+        } else {
+            rub.percentiles = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+
+        rub.thread_id = "aggregated";
+        rub.cpu_utilization = rub.percentage_of_total; // Use percentage as proxy for CPU utilization
+        rub.total_samples = profile_data.duration_history.size();
+
+        // These would be populated by actual resource monitoring in a real implementation
+        rub.memory_allocated_bytes = 0.0; // Placeholder - would require memory tracking
+        rub.cache_misses = 0.0; // Placeholder - would require hardware counters
+        rub.branch_mispredictions = 0.0; // Placeholder - would require hardware counters
+
+        resource_breakdowns.push_back(rub);
+    }
+
+    // Sort by total time (most time-consuming first)
+    std::sort(resource_breakdowns.begin(), resource_breakdowns.end(),
+              [](const ResourceUtilizationBreakdown& a, const ResourceUtilizationBreakdown& b) {
+                  return a.total_time_ms > b.total_time_ms;
+              });
+
+    return resource_breakdowns;
+}
+
+std::vector<CPUProfiler::FunctionCallRelationship>
+CPUProfiler::get_function_call_relationships() const {
+    std::vector<FunctionCallRelationship> relationships;
+
+    std::lock_guard<std::mutex> lock(profiles_mutex_);
+
+    for (const auto& [thread_id, thread_data] : thread_profiles_) {
+        if (thread_data.call_tree_root) {
+            // Extract relationships from the call tree
+            extract_call_relationships(thread_data.call_tree_root.get(), relationships);
+        }
+    }
+
+    return relationships;
+}
+
+void CPUProfiler::extract_call_relationships(const CallTreeNode* node,
+                                            std::vector<FunctionCallRelationship>& relationships) const {
+    if (!node) return;
+
+    // Process all children of the current node (these represent call relationships)
+    for (const auto& child : node->children) {
+        FunctionCallRelationship rel;
+        rel.caller = node->function_name;
+        rel.callee = child->function_name;
+
+        // Calculate relationship metrics based on child's profile data
+        rel.call_count = child->profile_data.call_count;
+        rel.total_time_ms = child->profile_data.get_total_duration_ms();
+        rel.avg_time_ms = child->profile_data.get_average_duration_ms();
+
+        // Calculate percentage of parent's time spent in this child
+        double parent_total_time = node->profile_data.get_total_duration_ms();
+        rel.percentage_of_parent = (parent_total_time > 0.0) ?
+                                  (rel.total_time_ms / parent_total_time) * 100.0 : 0.0;
+
+        relationships.push_back(rel);
+
+        // Recursively process grandchildren
+        extract_call_relationships(child.get(), relationships);
+    }
+}
+
+std::vector<CPUProfiler::PerformanceRegressionIndicator>
+CPUProfiler::get_performance_regression_indicators() const {
+    std::vector<PerformanceRegressionIndicator> regressions;
+
+    // For this implementation, we'll compare current performance with historical data
+    // In a real implementation, you'd store baseline data and compare against it
+    auto all_profiles = get_aggregated_profiles();
+
+    // For demonstration purposes, we'll use a fixed baseline (in a real scenario,
+    // this would come from stored historical data)
+    static std::unordered_map<std::string, double> baseline_times = {};
+
+    for (const auto& [func_name, profile_data] : all_profiles) {
+        if (profile_data.call_count > 0) {
+            double current_avg_time = profile_data.get_average_duration_ms();
+
+            // Initialize baseline if not present (in real implementation, load from storage)
+            if (baseline_times.find(func_name) == baseline_times.end()) {
+                baseline_times[func_name] = current_avg_time;
+            }
+
+            double baseline_avg_time = baseline_times[func_name];
+            double percentage_change = 0.0;
+            bool is_regression = false;
+
+            if (baseline_avg_time > 0.0) {
+                percentage_change = ((current_avg_time - baseline_avg_time) / baseline_avg_time) * 100.0;
+                // Consider it a regression if performance degraded by more than 10%
+                is_regression = percentage_change > 10.0;
+            }
+
+            PerformanceRegressionIndicator pri;
+            pri.function_name = func_name;
+            pri.current_avg_time_ms = current_avg_time;
+            pri.baseline_avg_time_ms = baseline_avg_time;
+            pri.percentage_change = percentage_change;
+            pri.is_regression = is_regression;
+            pri.call_count = profile_data.call_count;
+
+            regressions.push_back(pri);
+        }
+    }
+
+    // Sort by percentage change (regressions first, then improvements)
+    std::sort(regressions.begin(), regressions.end(),
+              [](const PerformanceRegressionIndicator& a, const PerformanceRegressionIndicator& b) {
+                  if (a.is_regression && !b.is_regression) return true;
+                  if (!a.is_regression && b.is_regression) return false;
+                  return std::abs(a.percentage_change) > std::abs(b.percentage_change);
+              });
+
+    return regressions;
+}
+
 // Global instance
 CPUProfiler g_cpu_profiler;
 

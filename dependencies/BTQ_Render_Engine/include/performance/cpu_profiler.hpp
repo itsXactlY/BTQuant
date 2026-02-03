@@ -243,6 +243,53 @@ public:
         double max_time_ms = std::numeric_limits<double>::max()
     ) const;
 
+    // Enhanced detailed breakdown with resource utilization metrics
+    struct ResourceUtilizationBreakdown {
+        std::string function_name;
+        uint64_t call_count;
+        double total_time_ms;
+        double exclusive_time_ms;
+        double inclusive_time_ms;
+        double min_time_ms;
+        double max_time_ms;
+        double avg_time_ms;
+        double std_deviation_ms;
+        double percentage_of_total;
+        std::vector<double> percentiles; // 10th, 25th, 50th, 75th, 90th, 95th, 99th percentiles
+        std::string thread_id;
+        double cpu_utilization;  // Estimated CPU utilization percentage
+        uint64_t total_samples;  // Number of samples collected
+        double memory_allocated_bytes;  // Estimated memory allocated by function
+        double cache_misses;  // Estimated cache misses
+        double branch_mispredictions;  // Estimated branch mispredictions
+    };
+
+    std::vector<ResourceUtilizationBreakdown> get_resource_utilization_breakdown() const;
+
+    // Get detailed function call graph with timing relationships
+    struct FunctionCallRelationship {
+        std::string caller;
+        std::string callee;
+        uint64_t call_count;
+        double total_time_ms;
+        double avg_time_ms;
+        double percentage_of_parent;
+    };
+
+    std::vector<FunctionCallRelationship> get_function_call_relationships() const;
+
+    // Get performance regression indicators
+    struct PerformanceRegressionIndicator {
+        std::string function_name;
+        double current_avg_time_ms;
+        double baseline_avg_time_ms;
+        double percentage_change;
+        bool is_regression;
+        uint64_t call_count;
+    };
+
+    std::vector<PerformanceRegressionIndicator> get_performance_regression_indicators() const;
+
     // RAII wrapper for automatic profiling
     class ProfileScope {
     public:
@@ -305,6 +352,10 @@ private:
                                    std::vector<std::vector<std::string>>& hot_paths,
                                    int depth) const;
     double get_path_total_time(const std::vector<std::string>& path) const;
+
+    // Helper method for extracting call relationships
+    void extract_call_relationships(const CallTreeNode* node,
+                                  std::vector<FunctionCallRelationship>& relationships) const;
 };
 
 // Global CPU profiler instance

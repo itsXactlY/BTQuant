@@ -98,6 +98,25 @@ public:
         const std::vector<double>& prices,
         int period);
 
+    // Advanced multi-threaded calculation methods
+    std::future<std::vector<double>> calculate_macd_async(
+        const std::vector<double>& prices,
+        int fast_period = 12,
+        int slow_period = 26,
+        int signal_period = 9);
+
+    std::future<std::vector<double>> calculate_atr_async(
+        const std::vector<Candle>& candles,
+        int period = 14);
+
+    std::future<std::vector<double>> calculate_stochastic_oscillator_async(
+        const std::vector<Candle>& candles,
+        int k_period = 14,
+        int d_period = 3);
+
+    std::future<std::vector<double>> calculate_on_balance_volume_async(
+        const std::vector<Candle>& candles);
+
 private:
     void worker_loop();
 

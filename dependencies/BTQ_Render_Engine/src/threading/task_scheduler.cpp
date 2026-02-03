@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
-#include <execution>
+#include <atomic>
 
 namespace btq {
 
@@ -82,7 +82,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
             double price_range = max_price - min_price;
             double bin_size = price_range / resolution;
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (trades.size() > 10000) {
                 // For parallel processing, we need to use temporary storage per thread
                 // and then merge results
@@ -91,32 +91,29 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_profile_async(
 
                 std::vector<std::vector<double>> thread_results(num_threads, std::vector<double>(resolution, 0.0));
 
-                // Process data in chunks using std::for_each with execution policy
-                // This leverages the underlying hardware threads without creating additional ones
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = trades.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&trades, min_price, bin_size, resolution, &thread_results, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size; // Calculate correct thread_id
-
+                    processing_threads.emplace_back([&trades, min_price, bin_size, resolution, &thread_results, t, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             const auto& trade = trades[i];
                             int bin_index = static_cast<int>((trade.price - min_price) / bin_size);
                             if (bin_index >= 0 && bin_index < resolution) {
-                                thread_results[thread_id][bin_index] += trade.volume;
+                                thread_results[t][bin_index] += trade.volume;
                             }
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Merge results
                 for (const auto& thread_result : thread_results) {
@@ -156,30 +153,22 @@ std::future<double> TaskScheduler::calculate_volume_weighted_average_price_async
                 return;
             }
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (trades.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
                 if (num_threads < 2) num_threads = 2;
 
                 std::vector<std::pair<double, double>> thread_results(num_threads, {0.0, 0.0}); // {total_value, total_volume}
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = trades.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&trades, &thread_results, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
-
+                    processing_threads.emplace_back([&trades, &thread_results, t, start, end]() {
                         double local_total_value = 0.0;
                         double local_total_volume = 0.0;
 
@@ -189,8 +178,14 @@ std::future<double> TaskScheduler::calculate_volume_weighted_average_price_async
                             local_total_volume += trade.volume;
                         }
 
-                        thread_results[thread_id] = {local_total_value, local_total_volume};
+                        thread_results[t] = {local_total_value, local_total_volume};
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Merge results
                 double total_value = 0.0;
@@ -255,30 +250,22 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_by_time_async(
             std::vector<double> volume_by_time(num_bins, 0.0);
             auto bin_duration = std::chrono::minutes(time_resolution_minutes);
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (trades.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
                 if (num_threads < 2) num_threads = 2;
 
                 std::vector<std::vector<double>> thread_results(num_threads, std::vector<double>(num_bins, 0.0));
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = trades.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&trades, start_time, time_resolution_minutes, num_bins, &thread_results, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
-
+                    processing_threads.emplace_back([&trades, start_time, time_resolution_minutes, num_bins, &thread_results, t, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             const auto& trade = trades[i];
                             auto time_diff = std::chrono::duration_cast<std::chrono::minutes>(
@@ -286,10 +273,16 @@ std::future<std::vector<double>> TaskScheduler::calculate_volume_by_time_async(
                             int bin_index = static_cast<int>(time_diff / time_resolution_minutes);
 
                             if (bin_index >= 0 && bin_index < num_bins) {
-                                thread_results[thread_id][bin_index] += trade.volume;
+                                thread_results[t][bin_index] += trade.volume;
                             }
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Merge results
                 for (int i = 0; i < num_bins; ++i) {
@@ -342,7 +335,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
             double sum = std::accumulate(prices.begin(), prices.begin() + period, 0.0);
             sma_values.push_back(sum / period);
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (prices.size() > 10000) {
                 size_t num_threads = std::thread::hardware_concurrency();
                 if (num_threads < 2) num_threads = 2;
@@ -354,22 +347,15 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
                 if (total_elements >= num_threads) {
                     sma_values.resize(prices.size() - period + 1);
 
-                    // Process data in chunks using std::for_each with execution policy
-                    std::vector<std::pair<size_t, size_t>> ranges;
+                    // Process data in chunks using separate threads
+                    std::vector<std::thread> processing_threads;
                     size_t chunk_size = total_elements / num_threads;
 
                     for (size_t t = 0; t < num_threads; ++t) {
                         size_t chunk_start = start_idx + t * chunk_size;
                         size_t chunk_end = (t == num_threads - 1) ? prices.size() : start_idx + (t + 1) * chunk_size;
-                        ranges.push_back({chunk_start, chunk_end});
-                    }
 
-                    // Process each range in parallel using parallel execution policies
-                    std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                        [&prices, period, &sma_values](const std::pair<size_t, size_t>& range) {
-                            size_t chunk_start = range.first;
-                            size_t chunk_end = range.second;
-
+                        processing_threads.emplace_back([&prices, period, &sma_values, chunk_start, chunk_end]() {
                             double local_sum = 0.0;
 
                             // Calculate the initial sum for this chunk's starting point
@@ -390,6 +376,12 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
                                 sma_values[sma_idx] = local_sum / period;
                             }
                         });
+                    }
+
+                    // Wait for all threads to complete
+                    for (auto& thread : processing_threads) {
+                        thread.join();
+                    }
                 } else {
                     // Sequential processing for smaller datasets
                     for (size_t i = period; i < prices.size(); ++i) {
@@ -491,34 +483,33 @@ std::future<std::vector<double>> TaskScheduler::calculate_rsi_async(
             std::vector<double> changes;
             changes.reserve(prices.size() - 1);
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (prices.size() > 10000) {
                 changes.resize(prices.size() - 1);
 
-                // Parallel computation of price changes
+                // Multi-threaded computation of price changes
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), prices.size());
                 if (num_threads < 2) num_threads = 2;
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = (prices.size() - 1) / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? prices.size() - 1 : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&prices, &changes](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-
+                    processing_threads.emplace_back([&prices, &changes, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             changes[i] = prices[i + 1] - prices[i];
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
             } else {
                 // Sequential processing for smaller datasets
                 for (size_t i = 1; i < prices.size(); ++i) {
@@ -654,7 +645,7 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
             upper_band.reserve(sma_values.size());
             lower_band.reserve(sma_values.size());
 
-            // Use parallel algorithm for large datasets when calculating standard deviation
+            // Use multi-threaded approach for large datasets when calculating standard deviation
             if (sma_values.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), sma_values.size());
                 if (num_threads < 2) num_threads = 2;
@@ -662,22 +653,15 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
                 upper_band.resize(sma_values.size());
                 lower_band.resize(sma_values.size());
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = sma_values.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t chunk_start = t * chunk_size;
                     size_t chunk_end = (t == num_threads - 1) ? sma_values.size() : (t + 1) * chunk_size;
-                    ranges.push_back({chunk_start, chunk_end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&prices, &sma_values, period, num_std_dev, &upper_band, &lower_band](const std::pair<size_t, size_t>& range) {
-                        size_t chunk_start = range.first;
-                        size_t chunk_end = range.second;
-
+                    processing_threads.emplace_back([&prices, &sma_values, period, num_std_dev, &upper_band, &lower_band, chunk_start, chunk_end]() {
                         for (size_t i = chunk_start; i < chunk_end; ++i) {
                             size_t start_idx = i; // sma_values[i] corresponds to window starting at prices[i]
 
@@ -696,6 +680,12 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
                             lower_band[i] = sma_values[i] - num_std_dev * std_dev;
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
             } else {
                 // Sequential processing for smaller datasets
                 for (size_t i = 0; i < sma_values.size(); ++i) {
@@ -740,7 +730,7 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
                 return;
             }
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (trades.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
                 if (num_threads < 2) num_threads = 2;
@@ -748,23 +738,15 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
                 // Partition trades among threads
                 std::vector<std::map<std::chrono::system_clock::time_point, Candle>> thread_maps(num_threads);
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = trades.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&trades, timeframe, &thread_maps, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
-
+                    processing_threads.emplace_back([&trades, timeframe, &thread_maps, t, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             const auto& trade = trades[i];
                             // Calculate the start time of the candle period
@@ -773,9 +755,9 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
                             auto period_start = std::chrono::system_clock::time_point(seconds -
                                 std::chrono::seconds(seconds.count() % timeframe.count()));
 
-                            if (thread_maps[thread_id].find(period_start) == thread_maps[thread_id].end()) {
+                            if (thread_maps[t].find(period_start) == thread_maps[t].end()) {
                                 // Initialize new candle
-                                thread_maps[thread_id][period_start] = {
+                                thread_maps[t][period_start] = {
                                     period_start,
                                     trade.price,  // Open
                                     trade.price,  // High
@@ -785,7 +767,7 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
                                 };
                             } else {
                                 // Update existing candle
-                                auto& candle = thread_maps[thread_id][period_start];
+                                auto& candle = thread_maps[t][period_start];
                                 candle.high = std::max(candle.high, trade.price);
                                 candle.low = std::min(candle.low, trade.price);
                                 candle.close = trade.price;  // Last price becomes close
@@ -793,6 +775,12 @@ std::future<std::vector<Candle>> TaskScheduler::aggregate_candles_async(
                             }
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Merge thread maps into a single map
                 std::map<std::chrono::system_clock::time_point, Candle> candle_map;
@@ -878,7 +866,7 @@ std::future<std::vector<Trade>> TaskScheduler::filter_trades_async(
         try {
             std::vector<Trade> filtered_trades;
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (trades.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), trades.size());
                 if (num_threads < 2) num_threads = 2;
@@ -886,29 +874,27 @@ std::future<std::vector<Trade>> TaskScheduler::filter_trades_async(
                 // Partition the work among threads
                 std::vector<std::vector<Trade>> thread_results(num_threads);
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = trades.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? trades.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&trades, &filter_func, &thread_results, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
-
+                    processing_threads.emplace_back([&trades, &filter_func, &thread_results, t, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             if (filter_func(trades[i])) {
-                                thread_results[thread_id].push_back(trades[i]);
+                                thread_results[t].push_back(trades[i]);
                             }
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Count total elements to reserve space
                 size_t total_filtered = 0;
@@ -974,7 +960,7 @@ std::future<std::vector<std::pair<double, double>>> TaskScheduler::calculate_his
             double bin_width = (max_val - min_val) / num_bins;
             histogram.resize(num_bins, {0.0, 0.0});
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (values.size() > 10000) {
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), values.size());
                 if (num_threads < 2) num_threads = 2;
@@ -982,23 +968,15 @@ std::future<std::vector<std::pair<double, double>>> TaskScheduler::calculate_his
                 // Create temporary histograms for each thread
                 std::vector<std::vector<double>> thread_histograms(num_threads, std::vector<double>(num_bins, 0.0));
 
-                // Process data in chunks using std::for_each with execution policy
-                std::vector<std::pair<size_t, size_t>> ranges;
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = values.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? values.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                // Process each range in parallel using parallel execution policies
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&values, min_val, bin_width, num_bins, &thread_histograms, chunk_size](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-                        size_t thread_id = start / chunk_size;
-
+                    processing_threads.emplace_back([&values, min_val, bin_width, num_bins, &thread_histograms, t, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             double val = values[i];
                             int bin_index = static_cast<int>((val - min_val) / bin_width);
@@ -1007,9 +985,15 @@ std::future<std::vector<std::pair<double, double>>> TaskScheduler::calculate_his
                                 bin_index = num_bins - 1;
                             }
 
-                            thread_histograms[thread_id][bin_index] += 1.0; // Increment count
+                            thread_histograms[t][bin_index] += 1.0; // Increment count
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
 
                 // Merge thread histograms
                 for (int i = 0; i < num_bins; ++i) {
@@ -1059,28 +1043,28 @@ std::future<std::vector<double>> TaskScheduler::transform_data_parallel_async(
             std::vector<double> result(input.size());
 
             if (input.size() > 10000) {
-                // Use parallel execution for large datasets
+                // Use multi-threaded execution for large datasets
                 size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), input.size());
                 if (num_threads < 2) num_threads = 2;
 
-                std::vector<std::pair<size_t, size_t>> ranges;
+                std::vector<std::thread> processing_threads;
                 size_t chunk_size = input.size() / num_threads;
 
                 for (size_t t = 0; t < num_threads; ++t) {
                     size_t start = t * chunk_size;
                     size_t end = (t == num_threads - 1) ? input.size() : (t + 1) * chunk_size;
-                    ranges.push_back({start, end});
-                }
 
-                std::for_each(std::execution::par_unseq, ranges.begin(), ranges.end(),
-                    [&input, &result, &transform_func](const std::pair<size_t, size_t>& range) {
-                        size_t start = range.first;
-                        size_t end = range.second;
-
+                    processing_threads.emplace_back([&input, &result, &transform_func, start, end]() {
                         for (size_t i = start; i < end; ++i) {
                             result[i] = transform_func(input[i]);
                         }
                     });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
             } else {
                 // Sequential processing for smaller datasets
                 for (size_t i = 0; i < input.size(); ++i) {
@@ -1123,7 +1107,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_moving_average_async(
             }
             ma_values.push_back(sum / period);
 
-            // Use parallel algorithm for large datasets
+            // Use multi-threaded approach for large datasets
             if (prices.size() > 10000) {
                 size_t num_threads = std::thread::hardware_concurrency();
                 if (num_threads < 2) num_threads = 2;
@@ -1178,6 +1162,323 @@ std::future<std::vector<double>> TaskScheduler::calculate_moving_average_async(
             }
 
             promise->set_value(std::move(ma_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+// Additional multi-threaded calculation methods
+
+std::future<std::vector<double>> TaskScheduler::calculate_macd_async(
+    const std::vector<double>& prices,
+    int fast_period,
+    int slow_period,
+    int signal_period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([prices, fast_period, slow_period, signal_period, promise]() {
+        try {
+            std::vector<double> macd_line, signal_line, histogram;
+
+            if (prices.size() < static_cast<size_t>(std::max({fast_period, slow_period, signal_period}))) {
+                promise->set_value(std::move(macd_line));
+                return;
+            }
+
+            // Calculate EMAs for fast and slow periods
+            auto fast_ema_future = std::async(std::launch::async, [prices, fast_period]() {
+                std::vector<double> ema_values;
+                if (prices.empty()) return ema_values;
+
+                ema_values.reserve(prices.size());
+                double multiplier = 2.0 / (fast_period + 1);
+
+                // Start with SMA for the first EMA value
+                int sma_period = std::min(fast_period, static_cast<int>(prices.size()));
+                double sma_sum = std::accumulate(prices.begin(), prices.begin() + sma_period, 0.0);
+                double ema = sma_sum / sma_period;
+                ema_values.push_back(ema);
+
+                for (size_t i = sma_period; i < prices.size(); ++i) {
+                    ema = (prices[i] - ema) * multiplier + ema;
+                    ema_values.push_back(ema);
+                }
+
+                return ema_values;
+            });
+
+            auto slow_ema_future = std::async(std::launch::async, [prices, slow_period]() {
+                std::vector<double> ema_values;
+                if (prices.empty()) return ema_values;
+
+                ema_values.reserve(prices.size());
+                double multiplier = 2.0 / (slow_period + 1);
+
+                // Start with SMA for the first EMA value
+                int sma_period = std::min(slow_period, static_cast<int>(prices.size()));
+                double sma_sum = std::accumulate(prices.begin(), prices.begin() + sma_period, 0.0);
+                double ema = sma_sum / sma_period;
+                ema_values.push_back(ema);
+
+                for (size_t i = sma_period; i < prices.size(); ++i) {
+                    ema = (prices[i] - ema) * multiplier + ema;
+                    ema_values.push_back(ema);
+                }
+
+                return ema_values;
+            });
+
+            auto fast_ema = fast_ema_future.get();
+            auto slow_ema = slow_ema_future.get();
+
+            // Calculate MACD line
+            std::vector<double> macd_raw;
+            macd_raw.reserve(std::min(fast_ema.size(), slow_ema.size()));
+
+            for (size_t i = 0; i < std::min(fast_ema.size(), slow_ema.size()); ++i) {
+                macd_raw.push_back(fast_ema[i] - slow_ema[i]);
+            }
+
+            // Calculate signal line (EMA of MACD line)
+            if (macd_raw.size() >= static_cast<size_t>(signal_period)) {
+                signal_line.reserve(macd_raw.size() - signal_period + 1);
+
+                // Calculate initial SMA for signal line
+                double signal_sma_sum = std::accumulate(macd_raw.begin(), macd_raw.begin() + signal_period, 0.0);
+                double signal_ema = signal_sma_sum / signal_period;
+                signal_line.push_back(signal_ema);
+
+                double signal_multiplier = 2.0 / (signal_period + 1);
+
+                for (size_t i = signal_period; i < macd_raw.size(); ++i) {
+                    signal_ema = (macd_raw[i] - signal_ema) * signal_multiplier + signal_ema;
+                    signal_line.push_back(signal_ema);
+                }
+            }
+
+            // Calculate histogram (MACD line - Signal line)
+            histogram.reserve(std::min(macd_raw.size(), signal_line.size()));
+            for (size_t i = 0; i < std::min(macd_raw.size(), signal_line.size()); ++i) {
+                histogram.push_back(macd_raw[i] - signal_line[i]);
+            }
+
+            // The final MACD values would typically be the difference between MACD line and signal line
+            // For simplicity, returning the histogram values
+            promise->set_value(std::move(histogram));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_atr_async(
+    const std::vector<Candle>& candles,
+    int period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([candles, period, promise]() {
+        try {
+            std::vector<double> atr_values;
+            if (candles.size() < 2) {
+                promise->set_value(std::move(atr_values));
+                return;
+            }
+
+            // Calculate True Range for each candle
+            std::vector<double> true_ranges;
+            true_ranges.reserve(candles.size() - 1); // Need at least 2 candles for first TR
+
+            for (size_t i = 1; i < candles.size(); ++i) {
+                double high = candles[i].high;
+                double low = candles[i].low;
+                double prev_close = candles[i-1].close;
+
+                double tr1 = high - low;
+                double tr2 = std::abs(high - prev_close);
+                double tr3 = std::abs(low - prev_close);
+
+                double true_range = std::max({tr1, tr2, tr3});
+                true_ranges.push_back(true_range);
+            }
+
+            if (true_ranges.size() < static_cast<size_t>(period)) {
+                promise->set_value(std::move(atr_values));
+                return;
+            }
+
+            // Calculate ATR using SMA for the first value, then smoothed moving average
+            double initial_atr = std::accumulate(true_ranges.begin(), true_ranges.begin() + period, 0.0) / period;
+            atr_values.push_back(initial_atr);
+
+            // Calculate subsequent ATR values using the smoothing formula
+            for (size_t i = period; i < true_ranges.size(); ++i) {
+                double current_atr = ((atr_values.back() * (period - 1)) + true_ranges[i]) / period;
+                atr_values.push_back(current_atr);
+            }
+
+            promise->set_value(std::move(atr_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_stochastic_oscillator_async(
+    const std::vector<Candle>& candles,
+    int k_period,
+    int d_period) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([candles, k_period, d_period, promise]() {
+        try {
+            std::vector<double> k_values, d_values;
+
+            if (candles.size() < static_cast<size_t>(k_period)) {
+                promise->set_value(std::move(k_values));
+                return;
+            }
+
+            k_values.reserve(candles.size() - k_period + 1);
+
+            // Calculate %K values
+            for (size_t i = k_period - 1; i < candles.size(); ++i) {
+                // Find highest high and lowest low in the k_period
+                double highest_high = candles[i - k_period + 1].high;
+                double lowest_low = candles[i - k_period + 1].low;
+
+                for (int j = 0; j < k_period; ++j) {
+                    size_t idx = i - k_period + 1 + j;
+                    if (idx < candles.size()) {
+                        highest_high = std::max(highest_high, candles[idx].high);
+                        lowest_low = std::min(lowest_low, candles[idx].low);
+                    }
+                }
+
+                if (highest_high != lowest_low) {
+                    double current_close = candles[i].close;
+                    double k_value = ((current_close - lowest_low) / (highest_high - lowest_low)) * 100.0;
+                    k_values.push_back(k_value);
+                } else {
+                    // If highest high equals lowest low, %K is undefined, use 50 as neutral
+                    k_values.push_back(50.0);
+                }
+            }
+
+            // Calculate %D values (moving average of %K)
+            if (k_values.size() >= static_cast<size_t>(d_period)) {
+                d_values.reserve(k_values.size() - d_period + 1);
+
+                for (size_t i = d_period - 1; i < k_values.size(); ++i) {
+                    double sum = 0.0;
+                    for (int j = 0; j < d_period; ++j) {
+                        sum += k_values[i - d_period + 1 + j];
+                    }
+                    double d_value = sum / d_period;
+                    d_values.push_back(d_value);
+                }
+            }
+
+            // Return %K values as the primary result
+            promise->set_value(std::move(k_values));
+        } catch (...) {
+            promise->set_exception(std::current_exception());
+        }
+    });
+
+    return future;
+}
+
+std::future<std::vector<double>> TaskScheduler::calculate_on_balance_volume_async(
+    const std::vector<Candle>& candles) {
+
+    auto promise = std::make_shared<std::promise<std::vector<double>>>();
+    auto future = promise->get_future();
+
+    enqueue_task([candles, promise]() {
+        try {
+            std::vector<double> obv_values;
+            if (candles.size() <= 1) {
+                obv_values.resize(candles.size(), 0.0);
+                promise->set_value(std::move(obv_values));
+                return;
+            }
+
+            obv_values.reserve(candles.size());
+            double current_obv = 0.0; // Starting OBV is typically 0
+            obv_values.push_back(current_obv);
+
+            // Use multi-threaded approach for large datasets
+            if (candles.size() > 10000) {
+                size_t num_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()), candles.size());
+                if (num_threads < 2) num_threads = 2;
+
+                // Since OBV calculation is sequential (each value depends on the previous),
+                // we'll calculate differences in parallel and then compute cumulative sum sequentially
+                std::vector<double> daily_changes(candles.size(), 0.0);
+
+                // Process data in chunks using separate threads
+                std::vector<std::thread> processing_threads;
+                size_t chunk_size = (candles.size() - 1) / num_threads; // Skip first element since it's 0
+
+                for (size_t t = 0; t < num_threads; ++t) {
+                    size_t start = std::max(static_cast<size_t>(1), t * chunk_size); // Start from index 1
+                    size_t end = (t == num_threads - 1) ? candles.size() : (t + 1) * chunk_size;
+
+                    processing_threads.emplace_back([&candles, &daily_changes, start, end]() {
+                        for (size_t i = start; i < end; ++i) {
+                            if (candles[i].close > candles[i-1].close) {
+                                daily_changes[i] = daily_changes[i-1] + candles[i].volume;
+                            } else if (candles[i].close < candles[i-1].close) {
+                                daily_changes[i] = daily_changes[i-1] - candles[i].volume;
+                            } else {
+                                daily_changes[i] = daily_changes[i-1]; // No change if prices are equal
+                            }
+                        }
+                    });
+                }
+
+                // Wait for all threads to complete
+                for (auto& thread : processing_threads) {
+                    thread.join();
+                }
+
+                // Now compute the actual OBV values sequentially
+                for (size_t i = 1; i < candles.size(); ++i) {
+                    if (candles[i].close > candles[i-1].close) {
+                        current_obv += candles[i].volume;
+                    } else if (candles[i].close < candles[i-1].close) {
+                        current_obv -= candles[i].volume;
+                    }
+                    // If equal, OBV remains unchanged
+                    obv_values.push_back(current_obv);
+                }
+            } else {
+                // Sequential processing for smaller datasets
+                for (size_t i = 1; i < candles.size(); ++i) {
+                    if (candles[i].close > candles[i-1].close) {
+                        current_obv += candles[i].volume;
+                    } else if (candles[i].close < candles[i-1].close) {
+                        current_obv -= candles[i].volume;
+                    }
+                    // If equal, OBV remains unchanged
+                    obv_values.push_back(current_obv);
+                }
+            }
+
+            promise->set_value(std::move(obv_values));
         } catch (...) {
             promise->set_exception(std::current_exception());
         }

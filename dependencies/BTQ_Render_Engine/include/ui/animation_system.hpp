@@ -189,11 +189,37 @@ class AnimationPresets {
   // Panel-specific animations
   static int panel_open_close(void* panel, bool is_opening, float duration = 0.3f);
 
+  // Enhanced panel animation with position, scale, and alpha
+  static int panel_slide_and_fade(void* panel, bool is_opening, float duration = 0.3f,
+                                 glm::vec2* position_target = nullptr, glm::vec2* scale_target = nullptr,
+                                 float* alpha_target = nullptr);
+
   // Smooth value change animation
   static int smooth_value_change(float* target_value, float from, float to, float duration = 0.3f);
 
+  // Advanced smooth value change with threshold-based easing
+  static int advanced_smooth_value_change(float* target_value, float from, float to, float duration = 0.3f,
+                                         EasingFunction easing = EasingFunction::EaseOutCubic);
+
+  // Smooth value change with callback for additional effects
+  static int smooth_value_change_with_callback(float* target_value, float from, float to,
+                                             float duration = 0.3f, std::function<void(float)> on_update = nullptr,
+                                             std::function<void()> on_complete = nullptr);
+
   // Animated highlight effect
   static int animated_highlight(float* target_alpha, float highlight_intensity, float duration = 0.3f);
+
+  // Advanced animated highlight with color shift
+  static int advanced_animated_highlight(float* target_alpha, float highlight_intensity,
+                                       float duration = 0.3f, std::function<void(float)> on_color_shift = nullptr);
+
+  // Pulsing highlight effect
+  static int pulsing_highlight(float* target_alpha, float min_intensity, float max_intensity,
+                             float pulse_duration = 0.3f, int num_pulses = 3);
+
+  // Ripple highlight effect
+  static int ripple_highlight(float* target_alpha, float center_x, float center_y,
+                            float max_radius, float duration = 0.3f);
 };
 
 }  // namespace UI

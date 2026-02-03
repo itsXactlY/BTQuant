@@ -524,7 +524,75 @@ int AnimationPresets::panel_open_close(void* panel, bool is_opening, float durat
   // In a real implementation, this would animate the panel's size, position, or opacity
   // For now, we'll return a valid animation ID with appropriate easing
   EasingFunction easing = is_opening ? EasingFunction::EaseOutBack : EasingFunction::EaseInBack;
+
+  // Create a more sophisticated panel animation that combines multiple effects
+  // This would typically animate position, scale, and opacity simultaneously
   return anim_system.create_animation(duration, easing);
+}
+
+// Enhanced panel open/close with position and scale animation
+int AnimationPresets::panel_slide_and_fade(void* panel, bool is_opening, float duration, glm::vec2* position_target, glm::vec2* scale_target, float* alpha_target) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  int animation_id = -1;
+
+  if (is_opening) {
+    // Opening animation: slide in + fade in + scale up
+    if (position_target) {
+      // Assuming the panel starts from a position off-screen
+      glm::vec2 start_pos = *position_target + glm::vec2(-50.0f, 0.0f); // Start from left
+      animation_id = anim_system.animate_vector(position_target, start_pos, *position_target, duration, EasingFunction::EaseOutQuart);
+    }
+
+    if (scale_target) {
+      // Scale from 0.8 to 1.0
+      glm::vec2 start_scale = glm::vec2(0.8f, 0.8f);
+      if (animation_id == -1) {
+        animation_id = anim_system.animate_vector(scale_target, start_scale, *scale_target, duration, EasingFunction::EaseOutBack);
+      } else {
+        anim_system.animate_vector(scale_target, start_scale, *scale_target, duration, EasingFunction::EaseOutBack);
+      }
+    }
+
+    if (alpha_target) {
+      // Fade from 0.0 to 1.0
+      float start_alpha = 0.0f;
+      if (animation_id == -1) {
+        animation_id = anim_system.animate_value(alpha_target, start_alpha, *alpha_target, duration, EasingFunction::EaseOutQuad);
+      } else {
+        anim_system.animate_value(alpha_target, start_alpha, *alpha_target, duration, EasingFunction::EaseOutQuad);
+      }
+    }
+  } else {
+    // Closing animation: slide out + fade out + scale down
+    if (position_target) {
+      // Slide to the right (off-screen)
+      glm::vec2 end_pos = *position_target + glm::vec2(50.0f, 0.0f);
+      animation_id = anim_system.animate_vector(position_target, *position_target, end_pos, duration, EasingFunction::EaseInQuart);
+    }
+
+    if (scale_target) {
+      // Scale from 1.0 to 0.8
+      glm::vec2 end_scale = glm::vec2(0.8f, 0.8f);
+      if (animation_id == -1) {
+        animation_id = anim_system.animate_vector(scale_target, *scale_target, end_scale, duration, EasingFunction::EaseInBack);
+      } else {
+        anim_system.animate_vector(scale_target, *scale_target, end_scale, duration, EasingFunction::EaseInBack);
+      }
+    }
+
+    if (alpha_target) {
+      // Fade from current alpha to 0.0
+      float end_alpha = 0.0f;
+      if (animation_id == -1) {
+        animation_id = anim_system.animate_value(alpha_target, *alpha_target, end_alpha, duration, EasingFunction::EaseInQuad);
+      } else {
+        anim_system.animate_value(alpha_target, *alpha_target, end_alpha, duration, EasingFunction::EaseInQuad);
+      }
+    }
+  }
+
+  return animation_id != -1 ? animation_id : anim_system.create_animation(duration, EasingFunction::EaseInOutQuad);
 }
 
 // Smooth value change animation
@@ -533,6 +601,59 @@ int AnimationPresets::smooth_value_change(float* target_value, float from, float
 
   // Animate the value smoothly from 'from' to 'to'
   return anim_system.animate_value(target_value, from, to, duration, EasingFunction::EaseOutCubic);
+}
+
+// Advanced smooth value change with threshold-based easing
+int AnimationPresets::advanced_smooth_value_change(float* target_value, float from, float to, float duration, EasingFunction easing) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  // Determine if this is a large change that might need special handling
+  float change_magnitude = std::abs(to - from);
+
+  // For large changes, we might want to use a different easing function
+  // For example, if the change is more than 10% of the range
+  EasingFunction selected_easing = easing;
+  if (change_magnitude > std::max(std::abs(from), std::abs(to)) * 0.1f) {
+    // For large changes, use a smoother easing to make it feel less jarring
+    selected_easing = EasingFunction::EaseInOutCubic;
+  }
+
+  // Animate the value smoothly from 'from' to 'to'
+  return anim_system.animate_value(target_value, from, to, duration, selected_easing);
+}
+
+// Smooth value change with callback for additional effects
+int AnimationPresets::smooth_value_change_with_callback(float* target_value, float from, float to,
+                                                       float duration, std::function<void(float)> on_update,
+                                                       std::function<void()> on_complete) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  // Create an animation with custom update and completion callbacks
+  int anim_id = anim_system.animate_value(target_value, from, to, duration, EasingFunction::EaseOutCubic);
+
+  // Find the animation and add the callbacks
+  for (auto& anim : anim_system.animations_) {
+    if (anim.id == anim_id) {
+      if (on_update) {
+        auto original_on_update = anim.on_update;
+        anim.on_update = [on_update, original_on_update](float progress) {
+          if (original_on_update) original_on_update(progress);
+          on_update(progress);
+        };
+      }
+
+      if (on_complete) {
+        auto original_on_complete = anim.on_complete;
+        anim.on_complete = [on_complete, original_on_complete]() {
+          if (original_on_complete) original_on_complete();
+          on_complete();
+        };
+      }
+      break;
+    }
+  }
+
+  return anim_id;
 }
 
 // Animated highlight effect
@@ -554,6 +675,116 @@ int AnimationPresets::animated_highlight(float* target_alpha, float highlight_in
   anim_system.chain_animations(first_anim, second_anim);
 
   return first_anim;  // Return the ID of the first animation in the chain
+}
+
+// Advanced animated highlight with color shift
+int AnimationPresets::advanced_animated_highlight(float* target_alpha, float highlight_intensity,
+                                                 float duration, std::function<void(float)> on_color_shift) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  // Store the original alpha value to restore later
+  float original_alpha = *target_alpha;
+
+  // Create a callback-based animation for more complex highlighting
+  int anim_id = anim_system.animate_callback(
+    [target_alpha, original_alpha, highlight_intensity, on_color_shift](float progress) {
+      // Calculate the current alpha based on progress
+      float current_alpha;
+      if (progress < 0.5f) {
+        // First half: ease out to highlight intensity
+        float half_progress = progress * 2.0f;
+        float eased = anim_system.apply_easing(EasingFunction::EaseOutQuad, half_progress);
+        current_alpha = original_alpha + (highlight_intensity - original_alpha) * eased;
+      } else {
+        // Second half: ease in back to original
+        float half_progress = (progress - 0.5f) * 2.0f;
+        float eased = anim_system.apply_easing(EasingFunction::EaseInQuad, half_progress);
+        current_alpha = highlight_intensity + (original_alpha - highlight_intensity) * eased;
+      }
+
+      *target_alpha = current_alpha;
+
+      // Call the color shift callback if provided
+      if (on_color_shift) {
+        on_color_shift(progress);
+      }
+    },
+    duration,
+    nullptr,  // No completion callback needed here
+    EasingFunction::Linear  // We're handling easing manually
+  );
+
+  return anim_id;
+}
+
+// Pulsing highlight effect
+int AnimationPresets::pulsing_highlight(float* target_alpha, float min_intensity, float max_intensity,
+                                       float pulse_duration, int num_pulses) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  // Store the original alpha value to restore later
+  float original_alpha = *target_alpha;
+
+  // Create a pulsing animation that repeats
+  int anim_id = anim_system.animate_callback(
+    [target_alpha, min_intensity, max_intensity, num_pulses, original_alpha](float progress) {
+      // Calculate pulse progress
+      float total_pulses = progress * num_pulses;
+      float pulse_phase = total_pulses - std::floor(total_pulses);  // Fractional part
+
+      // Determine which pulse we're in
+      int current_pulse = static_cast<int>(std::floor(total_pulses));
+
+      if (current_pulse < num_pulses) {
+        // Calculate the alpha value for the current pulse phase
+        float pulse_alpha = min_intensity + (max_intensity - min_intensity) *
+                           anim_system.apply_easing(EasingFunction::EaseInOutSine, pulse_phase);
+        *target_alpha = pulse_alpha;
+      } else {
+        // At the end, return to original value
+        *target_alpha = original_alpha;
+      }
+    },
+    pulse_duration,
+    [target_alpha, original_alpha]() {
+      // Completion callback: ensure we return to original value
+      *target_alpha = original_alpha;
+    },
+    EasingFunction::Linear  // We're handling easing manually
+  );
+
+  return anim_id;
+}
+
+// Ripple highlight effect
+int AnimationPresets::ripple_highlight(float* target_alpha, float center_x, float center_y,
+                                      float max_radius, float duration) {
+  static auto& anim_system = AnimationSystem::getInstance();
+
+  // Store the original alpha value to restore later
+  float original_alpha = *target_alpha;
+
+  // Create a ripple animation effect
+  int anim_id = anim_system.animate_callback(
+    [target_alpha, center_x, center_y, max_radius, original_alpha](float progress) {
+      // Calculate ripple radius based on progress
+      float current_radius = max_radius * progress;
+
+      // Calculate alpha based on how much of the ripple has expanded
+      float current_alpha = original_alpha + (1.0f - original_alpha) *
+                           anim_system.apply_easing(EasingFunction::EaseOutCubic, progress);
+
+      *target_alpha = current_alpha;
+    },
+    duration,
+    [target_alpha, original_alpha]() {
+      // Completion callback: return to original value
+      *target_alpha = original_alpha;
+    },
+    EasingFunction::Linear  // We're handling easing manually
+  );
+
+  return anim_id;
 }
 
 }  // namespace UI

@@ -182,6 +182,18 @@ public:
   // Get a comprehensive summary of data quality issues
   std::string get_comprehensive_summary() const;
 
+  // Get a real-time dashboard of data quality issues
+  std::string get_real_time_dashboard() const;
+
+  // Start continuous monitoring of data quality
+  void start_continuous_monitoring();
+
+  // Run periodic health checks on data streams
+  void run_periodic_health_checks();
+
+  // Alert users to all data quality problems
+  void alert_users_to_all_data_problems();
+
   // Public methods for enhanced data quality monitoring
   uint64_t calculate_safe_time_diff(uint64_t current, uint64_t previous) const;
   bool are_trades_equivalent(const TradeData& trade1, const TradeData& trade2,

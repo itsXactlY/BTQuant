@@ -16,6 +16,7 @@
 #include <thread>
 #include <future>
 #include <map>
+#include <ctime>
 
 namespace BTQuant {
 namespace Data {
@@ -2243,6 +2244,127 @@ void DataQualityMonitor::notify_users_of_data_problem(const std::string& symbol,
     std::cout << "Severity Level:  " << severity_level << " (" << severity << ")" << std::endl;
     std::cout << "Description:     " << problem_description << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
+
+    // NEW: Enhanced user notification with additional visual indicators for critical issues
+    if (severity >= 0.9) {
+        // Flash or highlight critical issues
+        std::cout << "\033[31m\033[1m"  // Red bold text for critical issues
+                  << "!!! CRITICAL DATA QUALITY ISSUE - IMMEDIATE ACTION REQUIRED !!!"
+                  << "\033[0m" << std::endl;
+    } else if (severity >= 0.7) {
+        std::cout << "\033[33m\033[1m"  // Yellow bold text for high severity issues
+                  << "!! HIGH SEVERITY DATA QUALITY ISSUE - REVIEW NEEDED !!"
+                  << "\033[0m" << std::endl;
+    }
+
+    // NEW: Add timestamp for when the issue was detected
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::cout << "Detection Time:  " << std::put_time(std::localtime(&time_t_now), "%Y-%m-%d %H:%M:%S") << std::endl;
+}
+
+// NEW: Method to provide a real-time dashboard of data quality issues
+std::string DataQualityMonitor::get_real_time_dashboard() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    std::ostringstream dashboard;
+    dashboard << "\n" << std::string(60, '=') << std::endl;
+    dashboard << "REAL-TIME DATA QUALITY DASHBOARD" << std::endl;
+    dashboard << std::string(60, '=') << std::endl;
+
+    // Overall health status
+    double quality_score = 100.0;
+    if (metrics_.total_trades_processed > 0) {
+        double error_rate = static_cast<double>(metrics_.missing_data_issues +
+                                               metrics_.duplicate_trade_issues +
+                                               metrics_.out_of_order_timestamp_issues +
+                                               metrics_.latency_issues +
+                                               metrics_.invalid_price_issues +
+                                               metrics_.invalid_volume_issues +
+                                               metrics_.missing_field_issues) /
+                           static_cast<double>(metrics_.total_trades_processed);
+        quality_score = (1.0 - std::min(error_rate, 1.0)) * 100.0;
+    }
+
+    std::string health_status;
+    if (quality_score >= 95.0) {
+        health_status = "EXCELLENT";
+    } else if (quality_score >= 90.0) {
+        health_status = "GOOD";
+    } else if (quality_score >= 80.0) {
+        health_status = "FAIR";
+    } else if (quality_score >= 70.0) {
+        health_status = "POOR";
+    } else {
+        health_status = "CRITICAL";
+    }
+
+    dashboard << "Health Status: " << health_status << " (" << std::fixed << std::setprecision(1) << quality_score << "%)" << std::endl;
+
+    // Convert high_resolution_clock to system_clock for display
+    auto duration_since_epoch = metrics_.last_update_time.time_since_epoch();
+    auto sys_time_point = std::chrono::system_clock::time_point(
+        std::chrono::duration_cast<std::chrono::system_clock::duration>(duration_since_epoch));
+    auto time_t_val = std::chrono::system_clock::to_time_t(sys_time_point);
+    dashboard << "Last Updated:  " << std::put_time(std::localtime(&time_t_val), "%Y-%m-%d %H:%M:%S") << std::endl;
+
+    // Issue counts by type
+    dashboard << "\nISSUE COUNTS:" << std::endl;
+    dashboard << "  Missing Data:            " << metrics_.missing_data_issues << std::endl;
+    dashboard << "  Duplicate Trades:        " << metrics_.duplicate_trade_issues << std::endl;
+    dashboard << "  Out-of-Order Timestamps: " << metrics_.out_of_order_timestamp_issues << std::endl;
+    dashboard << "  Latency Issues:          " << metrics_.latency_issues << std::endl;
+    dashboard << "  Invalid Prices:          " << metrics_.invalid_price_issues << std::endl;
+    dashboard << "  Invalid Volumes:         " << metrics_.invalid_volume_issues << std::endl;
+    dashboard << "  Missing Fields:          " << metrics_.missing_field_issues << std::endl;
+
+    // Performance metrics
+    dashboard << "\nPERFORMANCE METRICS:" << std::endl;
+    dashboard << "  Total Trades Processed: " << metrics_.total_trades_processed << std::endl;
+    dashboard << "  Average Latency:        " << std::fixed << std::setprecision(2) << metrics_.average_latency_ms << " ms" << std::endl;
+
+    // Top affected symbols
+    if (!recent_issues_.empty()) {
+        std::unordered_map<std::string, size_t> symbol_issue_counts;
+        for (const auto& issue : recent_issues_) {
+            symbol_issue_counts[issue.symbol]++;
+        }
+
+        // Sort symbols by issue count
+        std::vector<std::pair<std::string, size_t>> sorted_symbols(symbol_issue_counts.begin(), symbol_issue_counts.end());
+        std::sort(sorted_symbols.begin(), sorted_symbols.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        if (!sorted_symbols.empty()) {
+            dashboard << "\nTOP AFFECTED SYMBOLS:" << std::endl;
+            for (size_t i = 0; i < std::min(sorted_symbols.size(), static_cast<size_t>(5)); ++i) {
+                dashboard << "  " << (i+1) << ". " << sorted_symbols[i].first << ": " << sorted_symbols[i].second << " issues" << std::endl;
+            }
+        }
+    }
+
+    // Recent high severity issues
+    std::vector<DataQualityIssue> high_severity_issues;
+    for (const auto& issue : recent_issues_) {
+        if (issue.severity >= 0.7) {
+            high_severity_issues.push_back(issue);
+        }
+    }
+
+    if (!high_severity_issues.empty()) {
+        dashboard << "\nRECENT HIGH SEVERITY ISSUES:" << std::endl;
+        size_t count = 0;
+        for (const auto& issue : high_severity_issues) {
+            if (count++ >= 5) break; // Show only top 5 high severity issues
+            dashboard << "  - " << issue.symbol << " [" << issue.severity << "]: " << issue.description.substr(0, 60);
+            if (issue.description.length() > 60) dashboard << "...";
+            dashboard << std::endl;
+        }
+    }
+
+    dashboard << std::string(60, '=') << std::endl;
+
+    return dashboard.str();
 }
 
 // NEW: Enhanced method to specifically alert users to data problems with additional context
@@ -3085,6 +3207,92 @@ std::string DataQualityMonitor::get_comprehensive_summary() const {
     summary << "=========================================\n";
 
     return summary.str();
+}
+
+// NEW: Method to run continuous monitoring and alerting
+void DataQualityMonitor::start_continuous_monitoring() {
+    // This method would typically run in a separate thread to continuously monitor data quality
+    // For now, we'll just document how it would work
+
+    // In a real implementation, this would:
+    // 1. Run in a separate thread
+    // 2. Periodically check data quality metrics
+    // 3. Generate alerts when thresholds are exceeded
+    // 4. Update UI components with current status
+    // 5. Log issues to files if enabled
+
+    // Since this is just documentation of the concept, we'll just log that it would start
+    if (console_alerts_enabled_) {
+        std::cout << "[MONITORING] Continuous data quality monitoring would start now" << std::endl;
+    }
+}
+
+// NEW: Method to run periodic health checks on data streams
+void DataQualityMonitor::run_periodic_health_checks() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Perform health checks on all monitored symbols
+    for (const auto& [symbol, _] : symbol_stats_) {
+        monitor_data_stream_health(symbol);
+    }
+
+    // Generate summary report if needed
+    if (console_alerts_enabled_) {
+        std::cout << "[HEALTH CHECK] Periodic data quality health check completed" << std::endl;
+    }
+}
+
+// NEW: Unified method to alert users about all types of data quality problems
+void DataQualityMonitor::alert_users_to_all_data_problems() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Check for each type of data quality issue and alert if present
+    if (metrics_.missing_data_issues > 0) {
+        std::ostringstream msg;
+        msg << "Missing data detected: " << metrics_.missing_data_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.7);
+    }
+
+    if (metrics_.duplicate_trade_issues > 0) {
+        std::ostringstream msg;
+        msg << "Duplicate trades detected: " << metrics_.duplicate_trade_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.6);
+    }
+
+    if (metrics_.out_of_order_timestamp_issues > 0) {
+        std::ostringstream msg;
+        msg << "Out-of-order timestamps detected: " << metrics_.out_of_order_timestamp_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.65);
+    }
+
+    if (metrics_.latency_issues > 0) {
+        std::ostringstream msg;
+        msg << "Latency issues detected: " << metrics_.latency_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.5);
+    }
+
+    if (metrics_.invalid_price_issues > 0) {
+        std::ostringstream msg;
+        msg << "Invalid prices detected: " << metrics_.invalid_price_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.8);
+    }
+
+    if (metrics_.invalid_volume_issues > 0) {
+        std::ostringstream msg;
+        msg << "Invalid volumes detected: " << metrics_.invalid_volume_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.8);
+    }
+
+    if (metrics_.missing_field_issues > 0) {
+        std::ostringstream msg;
+        msg << "Missing fields detected: " << metrics_.missing_field_issues << " issues identified";
+        alert_user_to_data_problems("SYSTEM", msg.str(), 0.5);
+    }
+
+    // Also provide a summary of the current state
+    if (console_alerts_enabled_) {
+        std::cout << get_user_friendly_summary() << std::endl;
+    }
 }
 
 } // namespace Data

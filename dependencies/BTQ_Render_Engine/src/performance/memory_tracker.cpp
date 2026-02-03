@@ -517,13 +517,179 @@ std::vector<std::pair<double, size_t>> MemoryTracker::getMemoryTimelineForVisual
     auto samples = getTrendData(window_seconds);
     std::vector<std::pair<double, size_t>> timeline;
 
+    if (samples.empty()) {
+        return timeline;
+    }
+
+    // Use the first sample as reference time to keep numbers manageable
+    auto reference_time = samples.front().timestamp;
+
     for (const auto& sample : samples) {
-        auto time_point = std::chrono::duration<double>(
-            sample.timestamp.time_since_epoch()).count();
-        timeline.emplace_back(time_point, sample.memory_usage_bytes);
+        auto time_offset = std::chrono::duration<double>(
+            sample.timestamp - reference_time).count();
+        timeline.emplace_back(time_offset, sample.memory_usage_bytes);
     }
 
     return timeline;
+}
+
+std::vector<MemoryTrendPoint> MemoryTracker::getDetailedTrendAnalysis(double window_seconds) const {
+    std::lock_guard<std::mutex> lock(samples_mutex_);
+
+    if (memory_samples_.empty()) {
+        return {};
+    }
+
+    auto cutoff_time = std::chrono::high_resolution_clock::now() -
+                       std::chrono::duration<double>(window_seconds);
+
+    // Find samples within the time window
+    std::vector<MemorySample> window_samples;
+    for (const auto& sample : memory_samples_) {
+        if (sample.timestamp >= cutoff_time) {
+            window_samples.push_back(sample);
+        }
+    }
+
+    if (window_samples.size() < 2) {
+        return {};
+    }
+
+    std::vector<MemoryTrendPoint> trend_points;
+
+    // Calculate statistics for the time window
+    size_t min_usage = SIZE_MAX;
+    size_t max_usage = 0;
+    size_t total_usage = 0;
+
+    for (const auto& sample : window_samples) {
+        min_usage = std::min(min_usage, sample.memory_usage_bytes);
+        max_usage = std::max(max_usage, sample.memory_usage_bytes);
+        total_usage += sample.memory_usage_bytes;
+    }
+
+    size_t avg_usage = total_usage / window_samples.size();
+
+    // Create trend points with additional metrics
+    for (const auto& sample : window_samples) {
+        MemoryTrendPoint point;
+        point.timestamp = std::chrono::duration<double>(
+            sample.timestamp.time_since_epoch()).count();
+        point.memory_usage_bytes = sample.memory_usage_bytes;
+        point.relative_to_min = static_cast<double>(sample.memory_usage_bytes - min_usage) /
+                               std::max(1.0, static_cast<double>(min_usage));
+        point.relative_to_avg = static_cast<double>(sample.memory_usage_bytes) /
+                               std::max(1.0, static_cast<double>(avg_usage));
+        point.trend_direction = 0; // Will calculate based on neighbors
+
+        trend_points.push_back(point);
+    }
+
+    // Calculate trend direction for each point (compared to previous and next)
+    for (size_t i = 1; i < trend_points.size() - 1; ++i) {
+        double prev_diff = static_cast<double>(trend_points[i].memory_usage_bytes) -
+                          static_cast<double>(trend_points[i-1].memory_usage_bytes);
+        double next_diff = static_cast<double>(trend_points[i+1].memory_usage_bytes) -
+                          static_cast<double>(trend_points[i].memory_usage_bytes);
+
+        trend_points[i].trend_direction = (prev_diff + next_diff) / 2.0;
+    }
+
+    // Handle edge cases for first and last points
+    if (trend_points.size() > 1) {
+        trend_points[0].trend_direction = static_cast<double>(trend_points[1].memory_usage_bytes) -
+                                        static_cast<double>(trend_points[0].memory_usage_bytes);
+        trend_points.back().trend_direction = static_cast<double>(trend_points.back().memory_usage_bytes) -
+                                            static_cast<double>(trend_points[trend_points.size()-2].memory_usage_bytes);
+    }
+
+    return trend_points;
+}
+
+std::string MemoryTracker::getFormattedTrendReport(double window_seconds) const {
+    auto trend_points = getDetailedTrendAnalysis(window_seconds);
+
+    if (trend_points.empty()) {
+        return "No trend data available.";
+    }
+
+    std::ostringstream report;
+    report << "Memory Trend Analysis Report\n";
+    report << "============================\n";
+    report << "Time Window: " << window_seconds << " seconds\n";
+    report << "Sample Count: " << trend_points.size() << "\n\n";
+
+    // Calculate summary statistics
+    size_t min_usage = SIZE_MAX, max_usage = 0;
+    size_t first_usage = trend_points.front().memory_usage_bytes;
+    size_t last_usage = trend_points.back().memory_usage_bytes;
+
+    for (const auto& point : trend_points) {
+        min_usage = std::min(min_usage, point.memory_usage_bytes);
+        max_usage = std::max(max_usage, point.memory_usage_bytes);
+    }
+
+    double growth_rate = ((static_cast<double>(last_usage) - static_cast<double>(first_usage)) /
+                         static_cast<double>(first_usage)) * 100.0;
+
+    report << "Summary Statistics:\n";
+    report << "- Min Usage: " << formatBytes(min_usage) << "\n";
+    report << "- Max Usage: " << formatBytes(max_usage) << "\n";
+    report << "- Current Usage: " << formatBytes(last_usage) << "\n";
+    report << "- Initial Usage: " << formatBytes(first_usage) << "\n";
+    report << "- Growth Rate: " << std::fixed << std::setprecision(2) << growth_rate << "%\n\n";
+
+    // Determine trend classification
+    double avg_trend_dir = 0;
+    for (const auto& point : trend_points) {
+        avg_trend_dir += point.trend_direction;
+    }
+    avg_trend_dir /= trend_points.size();
+
+    report << "Overall Trend: ";
+    if (avg_trend_dir > 10000) {
+        report << "Increasing Rapidly\n";
+    } else if (avg_trend_dir > 1000) {
+        report << "Increasing\n";
+    } else if (avg_trend_dir > 100) {
+        report << "Slightly Increasing\n";
+    } else if (avg_trend_dir < -10000) {
+        report << "Decreasing Rapidly\n";
+    } else if (avg_trend_dir < -1000) {
+        report << "Decreasing\n";
+    } else if (avg_trend_dir < -100) {
+        report << "Slightly Decreasing\n";
+    } else {
+        report << "Stable\n";
+    }
+
+    report << "\nRecent Activity:\n";
+    report << "----------------\n";
+    size_t recent_count = std::min(static_cast<size_t>(10), trend_points.size());
+    for (size_t i = trend_points.size() - recent_count; i < trend_points.size(); ++i) {
+        const auto& point = trend_points[i];
+        report << "[" << getCurrentTimeStringFromTimestamp(point.timestamp) << "] "
+               << formatBytes(point.memory_usage_bytes)
+               << " (Δ" << (point.trend_direction >= 0 ? "+" : "")
+               << formatBytes(static_cast<size_t>(std::abs(point.trend_direction))) << ")\n";
+    }
+
+    return report.str();
+}
+
+std::string MemoryTracker::getCurrentTimeStringFromTimestamp(double timestamp) const {
+    using namespace std::chrono;
+    auto time_point = system_clock::time_point() +
+                     duration_cast<system_clock::duration>(duration<double>(timestamp));
+    auto time_t = system_clock::to_time_t(time_point);
+    auto fractional_seconds = timestamp - std::floor(timestamp);
+    auto ms = static_cast<int>(fractional_seconds * 1000);
+
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
+    ss << '.' << std::setfill('0') << std::setw(3) << ms;
+
+    return ss.str();
 }
 
 std::string MemoryTracker::formatBytes(size_t bytes) const {

@@ -30,6 +30,14 @@ struct LeakCandidate {
     std::string tag;
 };
 
+struct MemoryTrendPoint {
+    double timestamp;                    // Unix timestamp
+    size_t memory_usage_bytes;          // Actual memory usage at this point
+    double relative_to_min;             // Relative to minimum in the window (0.0 = min, 1.0+ = above min)
+    double relative_to_avg;             // Relative to average in the window (1.0 = average)
+    double trend_direction;             // Change rate compared to adjacent points
+};
+
 class MemoryTracker {
 public:
     MemoryTracker();
@@ -70,10 +78,15 @@ public:
     std::string getMemoryTrendAsJSON(double window_seconds = 30.0) const;
     std::vector<std::pair<double, size_t>> getMemoryTimelineForVisualization(double window_seconds = 30.0) const;
 
+    // Detailed trend analysis
+    std::vector<MemoryTrendPoint> getDetailedTrendAnalysis(double window_seconds = 30.0) const;
+    std::string getFormattedTrendReport(double window_seconds = 30.0) const;
+
 private:
     void trackingLoop();
     size_t getSystemMemoryUsage() const;
     std::string getCurrentTimeString() const;
+    std::string getCurrentTimeStringFromTimestamp(double timestamp) const;
     std::string formatBytes(size_t bytes) const;
 
 private:

@@ -246,6 +246,44 @@ public:
                             float zoom_factor, int total_cells_in_view,
                             const PerformanceMetrics& metrics) const;
 
+    // Calculate adaptive temporal LOD based on how recently the cell was updated
+    LODLevel calculateAdaptiveTemporalLOD(float cell_width_px, float cell_height_px,
+                                      float zoom_factor, float time_since_update) const;
+
+    // Get temporal LOD rendering settings based on how recently the cell was updated
+    LODRenderSettings getTemporalLODRenderSettings(LODLevel lod_level, float time_since_update) const;
+
+    // Calculate contextual LOD based on activity in surrounding cells
+    LODLevel calculateContextualLOD(float cell_width_px, float cell_height_px,
+                                float zoom_factor, const std::vector<FootprintCell>& nearby_cells) const;
+
+    // Apply contextual LOD to cell rendering
+    void applyContextualLODToCell(const FootprintCell& cell,
+                                 ImDrawList* draw_list,
+                                 float zoom_factor,
+                                 double max_volume,
+                                 const std::vector<FootprintCell>& diagonal_imbalances,
+                                 const std::vector<FootprintCell>& stacked_imbalances,
+                                 const FootprintPanel* panel,
+                                 const std::vector<FootprintCell>& nearby_cells) const;
+
+    // Calculate foveated LOD (high detail near focus point, decreasing detail further away)
+    LODLevel calculateFoveatedLOD(float cell_width_px, float cell_height_px,
+                              float zoom_factor, ImVec2 cell_center, ImVec2 focus_point,
+                              float focus_radius_inner, float focus_radius_outer) const;
+
+    // Apply foveated LOD to cell rendering
+    void applyFoveatedLODToCell(const FootprintCell& cell,
+                               ImDrawList* draw_list,
+                               float zoom_factor,
+                               double max_volume,
+                               const std::vector<FootprintCell>& diagonal_imbalances,
+                               const std::vector<FootprintCell>& stacked_imbalances,
+                               const FootprintPanel* panel,
+                               ImVec2 focus_point,
+                               float focus_radius_inner,
+                               float focus_radius_outer) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

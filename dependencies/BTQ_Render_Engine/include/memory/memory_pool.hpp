@@ -1574,4 +1574,117 @@ private:
     ThreadLocalObjectPool<std::pair<float, float>> pool_;
 };
 
+// Additional specialized memory pools for other indicator types that might be frequently allocated
+
+// Parabolic SAR Indicator Pool
+class PSARIndicatorPool {
+public:
+    static PSARIndicatorPool& getInstance();
+
+    PSARIndicator* allocate(float acceleration_step = 0.02f, float acceleration_max = 0.2f);
+    void deallocate(PSARIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    PSARIndicatorPool() = default;
+    ObjectPool<PSARIndicator> pool_;
+};
+
+class FastPSARIndicatorPool {
+public:
+    static FastPSARIndicatorPool& getInstance();
+
+    PSARIndicator* allocate(float acceleration_step = 0.02f, float acceleration_max = 0.2f);
+    void deallocate(PSARIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastPSARIndicatorPool() = default;
+    ThreadLocalObjectPool<PSARIndicator> pool_;
+};
+
+// CCI Indicator Pool (Commodity Channel Index)
+class CCIIndicatorPool {
+public:
+    static CCIIndicatorPool& getInstance();
+
+    CCIIndicator* allocate(int period = 20);
+    void deallocate(CCIIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    CCIIndicatorPool() = default;
+    ObjectPool<CCIIndicator> pool_;
+};
+
+class FastCCIIndicatorPool {
+public:
+    static FastCCIIndicatorPool& getInstance();
+
+    CCIIndicator* allocate(int period = 20);
+    void deallocate(CCIIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastCCIIndicatorPool() = default;
+    ThreadLocalObjectPool<CCIIndicator> pool_;
+};
+
+// Williams %R Indicator Pool
+class WilliamsRIndicatorPool {
+public:
+    static WilliamsRIndicatorPool& getInstance();
+
+    WilliamsRIndicator* allocate(int period = 14);
+    void deallocate(WilliamsRIndicator* indicator);
+    void preallocate(size_t count = 256);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    WilliamsRIndicatorPool() = default;
+    ObjectPool<WilliamsRIndicator> pool_;
+};
+
+class FastWilliamsRIndicatorPool {
+public:
+    static FastWilliamsRIndicatorPool& getInstance();
+
+    WilliamsRIndicator* allocate(int period = 14);
+    void deallocate(WilliamsRIndicator* indicator);
+    void preallocate(size_t count = 512); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastWilliamsRIndicatorPool() = default;
+    ThreadLocalObjectPool<WilliamsRIndicator> pool_;
+};
+
 } // namespace BTQuant

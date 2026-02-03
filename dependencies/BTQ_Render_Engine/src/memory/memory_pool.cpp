@@ -1165,4 +1165,112 @@ void FastIndicatorValuePairPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// PSARIndicatorPool implementation
+PSARIndicatorPool& PSARIndicatorPool::getInstance() {
+    static PSARIndicatorPool instance;
+    return instance;
+}
+
+PSARIndicator* PSARIndicatorPool::allocate(float acceleration_step, float acceleration_max) {
+    return pool_.allocate(acceleration_step, acceleration_max);
+}
+
+void PSARIndicatorPool::deallocate(PSARIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void PSARIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastPSARIndicatorPool implementation
+FastPSARIndicatorPool& FastPSARIndicatorPool::getInstance() {
+    static FastPSARIndicatorPool instance;
+    return instance;
+}
+
+PSARIndicator* FastPSARIndicatorPool::allocate(float acceleration_step, float acceleration_max) {
+    return pool_.allocate(acceleration_step, acceleration_max);
+}
+
+void FastPSARIndicatorPool::deallocate(PSARIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastPSARIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// CCIIndicatorPool implementation
+CCIIndicatorPool& CCIIndicatorPool::getInstance() {
+    static CCIIndicatorPool instance;
+    return instance;
+}
+
+CCIIndicator* CCIIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void CCIIndicatorPool::deallocate(CCIIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void CCIIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastCCIIndicatorPool implementation
+FastCCIIndicatorPool& FastCCIIndicatorPool::getInstance() {
+    static FastCCIIndicatorPool instance;
+    return instance;
+}
+
+CCIIndicator* FastCCIIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastCCIIndicatorPool::deallocate(CCIIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastCCIIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// WilliamsRIndicatorPool implementation
+WilliamsRIndicatorPool& WilliamsRIndicatorPool::getInstance() {
+    static WilliamsRIndicatorPool instance;
+    return instance;
+}
+
+WilliamsRIndicator* WilliamsRIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void WilliamsRIndicatorPool::deallocate(WilliamsRIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void WilliamsRIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastWilliamsRIndicatorPool implementation
+FastWilliamsRIndicatorPool& FastWilliamsRIndicatorPool::getInstance() {
+    static FastWilliamsRIndicatorPool instance;
+    return instance;
+}
+
+WilliamsRIndicator* FastWilliamsRIndicatorPool::allocate(int period) {
+    return pool_.allocate(period);
+}
+
+void FastWilliamsRIndicatorPool::deallocate(WilliamsRIndicator* indicator) {
+    pool_.deallocate(indicator);
+}
+
+void FastWilliamsRIndicatorPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

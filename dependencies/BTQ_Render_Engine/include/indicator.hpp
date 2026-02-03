@@ -336,4 +336,125 @@ class ATRIndicator : public TechnicalIndicator {
   mutable float low_price_ = 0.0f;
 };
 
+// Parabolic SAR Indicator
+class PSARIndicator : public TechnicalIndicator {
+ public:
+  PSARIndicator(float acceleration_step = 0.02f, float acceleration_max = 0.2f)
+      : acceleration_step_(acceleration_step), acceleration_max_(acceleration_max) {}
+
+  void update(float value) override {
+    if (values_.size() < 2) {
+      values_.push_back(value);
+      current_sar_ = value;
+      return;
+    }
+
+    values_.push_back(value);
+    if (values_.size() > 3) {
+      values_.pop_front();
+    }
+
+    // Simple implementation of Parabolic SAR
+    float ep = (values_.size() >= 2) ? *std::max_element(values_.begin(), values_.end()) : value;
+    float sar = current_sar_ + acceleration_step_ * (ep - current_sar_);
+
+    current_sar_ = sar;
+    initialized_ = true;
+  }
+
+  float get_value() const override { return current_sar_; }
+  bool is_ready() const override { return initialized_; }
+  void reset() override {
+    values_.clear();
+    current_sar_ = 0.0f;
+    initialized_ = false;
+  }
+
+ private:
+  float acceleration_step_;
+  float acceleration_max_;
+  float current_sar_ = 0.0f;
+  bool initialized_ = false;
+  std::deque<float> values_;
+};
+
+// Commodity Channel Index Indicator
+class CCIIndicator : public TechnicalIndicator {
+ public:
+  CCIIndicator(int period = 20) : period_(period) {}
+
+  void update(float value) override {
+    values_.push_back(value);
+    if (values_.size() > static_cast<size_t>(period_)) {
+      values_.pop_front();
+    }
+  }
+
+  float get_value() const override {
+    if (values_.size() < static_cast<size_t>(period_)) return 0.0f;
+
+    // Calculate typical price (we'll use the value as typical price)
+    float sma = std::accumulate(values_.begin(), values_.end(), 0.0f) / values_.size();
+
+    // Calculate mean deviation
+    float mean_dev = 0.0f;
+    for (float val : values_) {
+      mean_dev += std::abs(val - sma);
+    }
+    mean_dev /= values_.size();
+
+    // Calculate CCI
+    if (mean_dev == 0.0f) return 0.0f;
+
+    float cci = (values_.back() - sma) / (0.015f * mean_dev);
+    return cci;
+  }
+
+  bool is_ready() const override { return values_.size() >= static_cast<size_t>(period_); }
+  void reset() override {
+    values_.clear();
+  }
+
+ private:
+  int period_;
+  std::deque<float> values_;
+};
+
+// Williams %R Indicator
+class WilliamsRIndicator : public TechnicalIndicator {
+ public:
+  WilliamsRIndicator(int period = 14) : period_(period) {}
+
+  void update(float value) override {
+    values_.push_back(value);
+    if (values_.size() > static_cast<size_t>(period_)) {
+      values_.pop_front();
+    }
+  }
+
+  float get_value() const override {
+    if (values_.size() < static_cast<size_t>(period_)) return 0.0f;
+
+    if (values_.size() < 2) return -50.0f; // Neutral value
+
+    auto minmax = std::minmax_element(values_.begin(), values_.end());
+    float highest_high = *minmax.second;
+    float lowest_low = *minmax.first;
+
+    if (highest_high == lowest_low) return -50.0f; // Avoid division by zero
+
+    float wr = -100.0f * (highest_high - values_.back()) / (highest_high - lowest_low);
+    return wr;
+  }
+
+  bool is_ready() const override { return values_.size() >= static_cast<size_t>(period_); }
+  void reset() override {
+    values_.clear();
+  }
+
+ private:
+  int period_;
+  std::deque<float> values_;
+};
+
 }  // namespace BTQuant

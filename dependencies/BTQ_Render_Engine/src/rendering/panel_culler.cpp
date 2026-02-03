@@ -73,6 +73,9 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
+    // Additional check: if the panel is completely covered by other panels or UI elements,
+    // we might want to skip rendering (this would require z-order information which is not available here)
+
     // If we got here, the panel should be rendered
     return true;
 }

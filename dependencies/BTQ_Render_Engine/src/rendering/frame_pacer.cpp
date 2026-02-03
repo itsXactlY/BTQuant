@@ -211,11 +211,13 @@ double FramePacer::calculate_sleep_duration() const {
     if (config_.enable_frame_smoothing && frame_count_ > 2) {
         double error = target_frame_time - predicted_frame_time;
 
-        // Simple proportional control (without state modification to keep method const)
+        // Since we can't modify state in a const method, use a simplified approach
+        // Apply proportional control only to avoid state changes
         double p_correction = 0.1 * error;  // Proportional term only for const method
 
         // Apply correction but limit it to prevent over-correction
-        p_correction = std::clamp(p_correction, -target_frame_time * 0.2, target_frame_time * 0.2);
+        double max_correction = target_frame_time * 0.2; // Limit to 20% of target time
+        p_correction = std::clamp(p_correction, -max_correction, max_correction);
         remaining_time += p_correction;
     }
 
@@ -356,21 +358,45 @@ void FramePacer::detect_spikes(double frame_time_ms) {
     spike_detector_.spike_history[spike_detector_.spike_index] = frame_time_ms;
     spike_detector_.spike_index = (spike_detector_.spike_index + 1) % SPIKE_DETECTION_WINDOW;
 
-    // Check if this frame is a spike (significantly longer than baseline)
-    double threshold = spike_detector_.baseline_frame_time * spike_detector_.spike_threshold_multiplier;
-    if (frame_time_ms > threshold) {
-        spike_detector_.spike_count_recent++;
+    // Calculate dynamic threshold based on recent frame time statistics
+    double avg_frame_time = 0.0;
+    size_t valid_samples = 0;
 
-        // Adjust baseline if we're consistently seeing higher frame times
-        if (frame_time_ms > spike_detector_.baseline_frame_time * 3.0) {
-            spike_detector_.baseline_frame_time = frame_time_ms * 0.8; // Adjust baseline upward
+    // Calculate average of recent frame times for better baseline
+    for (size_t i = 0; i < SPIKE_DETECTION_WINDOW; ++i) {
+        if (spike_detector_.spike_history[i] > 0) {
+            avg_frame_time += spike_detector_.spike_history[i];
+            valid_samples++;
+        }
+    }
+
+    if (valid_samples > 0) {
+        avg_frame_time /= valid_samples;
+        // Set threshold as 2.5x the recent average frame time, with minimum based on target FPS
+        double dynamic_threshold = std::max(avg_frame_time * 2.5, spike_detector_.baseline_frame_time * 2.0);
+
+        // Check if this frame is a spike (significantly longer than dynamic threshold)
+        if (frame_time_ms > dynamic_threshold) {
+            spike_detector_.spike_count_recent++;
+
+            // Trigger frame pacing adjustments when spikes are detected
+            if (config_.enable_frame_smoothing) {
+                // Temporarily reduce target FPS to accommodate the spike
+                adaptive_target_fps_ = static_cast<uint32_t>(std::max(
+                    static_cast<double>(config_.target_fps) * 0.8,  // Don't go below 80% of target
+                    static_cast<double>(adaptive_target_fps_) * 0.95)); // Reduce by 5%
+            }
+        } else if (frame_time_ms < avg_frame_time * 0.7) {
+            // If we're seeing consistently faster frames, gradually increase baseline
+            spike_detector_.baseline_frame_time = avg_frame_time * 0.9; // Adjust baseline downward
         }
     }
 
     // Decrement recent spike count periodically to decay old spikes
     auto now = std::chrono::high_resolution_clock::now();
     if (std::chrono::duration_cast<std::chrono::milliseconds>(now - spike_detector_.last_spike_decay).count() > 1000) {
-        spike_detector_.spike_count_recent = std::max(0, spike_detector_.spike_count_recent - 1);
+        // Decay spike count more gradually to maintain awareness of recent performance
+        spike_detector_.spike_count_recent = static_cast<int>(spike_detector_.spike_count_recent * 0.8);
         spike_detector_.last_spike_decay = now;
     }
 
@@ -385,30 +411,39 @@ void FramePacer::check_dropped_frames(double frame_time_us) {
     // Check if the current frame took significantly longer than expected
     double expected_frame_time_us = 1000000.0 / adaptive_target_fps_;
 
-    // Adaptive threshold based on recent performance
+    // Calculate adaptive threshold based on multiple factors
     double adaptive_threshold = expected_frame_time_us * 1.8; // Base threshold
 
     // Increase threshold if we're seeing high variance to avoid false positives
     if (stats_.frame_time_variance > config_.frame_time_variance_threshold * 1000000.0) { // Convert to microseconds^2
-        adaptive_threshold *= 1.3; // Higher tolerance during high variance
+        adaptive_threshold *= 1.5; // Higher tolerance during high variance
     }
 
-    // Also check against recent frame time history
+    // Also check against recent frame time history for more accurate threshold
     if (frame_count_ > 10) {
         // Calculate average of recent frame times
         size_t sample_count = std::min(static_cast<size_t>(frame_count_),
                                      static_cast<size_t>(FRAME_HISTORY_SIZE / 4));
         double recent_avg = 0.0;
+        size_t valid_samples = 0;
+
         for (size_t i = 0; i < sample_count; ++i) {
             size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
-            recent_avg += frame_time_history_[idx];
+            if (frame_time_history_[idx] > 0) {
+                recent_avg += frame_time_history_[idx];
+                valid_samples++;
+            }
         }
-        recent_avg = (recent_avg / sample_count) * 1000.0; // Convert to microseconds
 
-        // Use the higher of the two thresholds to be more accurate
-        adaptive_threshold = std::max(adaptive_threshold, recent_avg * 1.8);
+        if (valid_samples > 0) {
+            recent_avg = (recent_avg / valid_samples) * 1000.0; // Convert to microseconds
+
+            // Use the higher of the two thresholds to be more accurate
+            adaptive_threshold = std::max(adaptive_threshold, recent_avg * 2.0);
+        }
     }
 
+    // Check if frame time exceeds adaptive threshold
     if (frame_time_us > adaptive_threshold) {
         dropped_frame_counter_++;
 
@@ -416,9 +451,14 @@ void FramePacer::check_dropped_frames(double frame_time_us) {
         if (config_.enable_adaptive_sync) {
             // Reduce the adaptive target FPS to account for performance issues
             adaptive_target_fps_ = static_cast<uint32_t>(std::max(
-                static_cast<double>(config_.target_fps) * 0.7,  // Don't go below 70% of target
-                static_cast<double>(adaptive_target_fps_) * 0.9)); // Reduce by 10%
+                static_cast<double>(config_.target_fps) * 0.6,  // Don't go below 60% of target
+                static_cast<double>(adaptive_target_fps_) * 0.85)); // Reduce by 15% for more aggressive response
         }
+    } else if (frame_time_us < expected_frame_time_us * 0.7 && adaptive_target_fps_ < config_.target_fps) {
+        // If we're consistently under budget, gradually increase target FPS
+        // Only do this if we're not already at the target FPS
+        adaptive_target_fps_ = std::min(config_.target_fps,
+                                      adaptive_target_fps_ + 1); // Conservative increase
     }
 }
 
@@ -493,5 +533,27 @@ double FramePacer::predict_frame_time() const {
     return weighted_sum / weight_sum;
 }
 
+// Note: This method is intentionally not const to allow updating internal state
+double FramePacer::apply_pid_control(double error) {
+    // Update integral term
+    prediction_integral_ += error;
+
+    // Apply anti-windup protection to prevent integral windup
+    const double integral_limit = 100.0; // Limit the integral term to prevent windup
+    prediction_integral_ = std::clamp(prediction_integral_, -integral_limit, integral_limit);
+
+    // Calculate derivative term
+    prediction_derivative_ = error - last_prediction_error_;
+
+    // Apply PID formula
+    double output = (pid_controller_.kp * error) +
+                   (pid_controller_.ki * prediction_integral_) +
+                   (pid_controller_.kd * prediction_derivative_);
+
+    // Store current error for next derivative calculation
+    last_prediction_error_ = error;
+
+    return output;
+}
 
 } // namespace RenderEngine

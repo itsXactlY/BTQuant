@@ -141,7 +141,7 @@ private:
     void check_dropped_frames(double frame_time_us);
     void adapt_target_fps();
     double predict_frame_time() const;
-    double apply_pid_control(double error) const;
+    double apply_pid_control(double error);
 };
 
 } // namespace RenderEngine

@@ -347,4 +347,59 @@ void FibonacciLevelPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// GpuOrderBookLevelPool implementation
+GpuOrderBookLevelPool& GpuOrderBookLevelPool::getInstance() {
+    static GpuOrderBookLevelPool instance;
+    return instance;
+}
+
+RenderEngine::GpuOrderBookLevel* GpuOrderBookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void GpuOrderBookLevelPool::deallocate(RenderEngine::GpuOrderBookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void GpuOrderBookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// DepthLevelPool implementation
+DepthLevelPool& DepthLevelPool::getInstance() {
+    static DepthLevelPool instance;
+    return instance;
+}
+
+BTQuant::MarketDepthAnalyzer::DepthLevel* DepthLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void DepthLevelPool::deallocate(BTQuant::MarketDepthAnalyzer::DepthLevel* level) {
+    pool_.deallocate(level);
+}
+
+void DepthLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+
+// HotOrderbookLevelPool implementation
+HotOrderbookLevelPool& HotOrderbookLevelPool::getInstance() {
+    static HotOrderbookLevelPool instance;
+    return instance;
+}
+
+HotOrderbookLevel* HotOrderbookLevelPool::allocate() {
+    return pool_.allocate();
+}
+
+void HotOrderbookLevelPool::deallocate(HotOrderbookLevel* level) {
+    pool_.deallocate(level);
+}
+
+void HotOrderbookLevelPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

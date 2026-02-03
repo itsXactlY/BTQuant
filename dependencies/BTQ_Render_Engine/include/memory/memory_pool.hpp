@@ -20,6 +20,8 @@
 #include "../include/data/compression.hpp"
 #include "../include/components/chart_panel.hpp"
 #include "../include/vulkan_dashboard_advanced.hpp"
+#include "../include/components/volume_profile_panel.hpp"
+#include "../include/components/orderbook_panel.hpp"
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
@@ -397,6 +399,60 @@ public:
 private:
     FibonacciLevelPool() = default;
     ObjectPool<FibonacciLevel> pool_;
+};
+
+// GpuOrderBookLevelPool for GPU order book levels
+class GpuOrderBookLevelPool {
+public:
+    static GpuOrderBookLevelPool& getInstance();
+
+    RenderEngine::GpuOrderBookLevel* allocate();
+    void deallocate(RenderEngine::GpuOrderBookLevel* level);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    GpuOrderBookLevelPool() = default;
+    ObjectPool<RenderEngine::GpuOrderBookLevel> pool_;
+};
+
+// DepthLevelPool for depth levels in analytics
+class DepthLevelPool {
+public:
+    static DepthLevelPool& getInstance();
+
+    BTQuant::MarketDepthAnalyzer::DepthLevel* allocate();
+    void deallocate(BTQuant::MarketDepthAnalyzer::DepthLevel* level);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    DepthLevelPool() = default;
+    ObjectPool<BTQuant::MarketDepthAnalyzer::DepthLevel> pool_;
+};
+
+// HotOrderbookLevelPool for hot order book levels
+class HotOrderbookLevelPool {
+public:
+    static HotOrderbookLevelPool& getInstance();
+
+    HotOrderbookLevel* allocate();
+    void deallocate(HotOrderbookLevel* level);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    HotOrderbookLevelPool() = default;
+    ObjectPool<HotOrderbookLevel> pool_;
 };
 
 // RAII wrapper for automatic deallocation

@@ -9,6 +9,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <sys/resource.h>
+#include <unistd.h>
+#include <cstdlib>
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <psapi.h>
+#endif
 
 namespace RenderEngine {
 
@@ -1123,22 +1133,119 @@ void AutoQualityController::updateAdvancedMetrics() {
 }
 
 double AutoQualityController::calculateMemoryPressureScore() const {
-    // Placeholder implementation - in a real system, this would interface with
-    // memory monitoring systems to determine how much memory pressure the app is under
-    // For now, return a baseline score indicating no memory pressure
-    return 100.0; // No memory pressure detected
+    // Interface with the memory tracker to get actual memory pressure
+    // Get current memory usage and compare to thresholds
+
+    // Since we have a memory tracker in the performance module, we'll simulate
+    // getting data from it. In a real implementation, we would access the global tracker.
+
+    // For now, we'll implement a realistic simulation based on memory usage patterns
+    size_t current_usage = 0;
+    size_t peak_usage = 0;
+
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        current_usage = static_cast<size_t>(pmc.WorkingSetSize);
+        peak_usage = static_cast<size_t>(pmc.PeakWorkingSetSize);
+    }
+#elif __linux__
+    // Try to get resident set size (RSS) from /proc/self/status
+    std::ifstream status("/proc/self/status");
+    std::string line;
+    while (std::getline(status, line)) {
+        if (line.substr(0, 6) == "VmRSS:") {
+            std::istringstream iss(line);
+            std::string key;
+            size_t value;
+            std::string unit;
+            iss >> key >> value >> unit;
+            current_usage = value * 1024; // Convert from KB to bytes
+            break;
+        }
+    }
+
+    // Also try to get peak usage from limits
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    peak_usage = static_cast<size_t>(usage.ru_maxrss * 1024); // Convert from KB to bytes
+#else
+    // For other platforms, return baseline
+    return 100.0;
+#endif
+
+    // Calculate memory pressure based on usage relative to thresholds
+    // Assume a reasonable threshold for demonstration (e.g., 80% of some reasonable limit)
+    // For a trading application, let's assume 4GB as a reasonable upper limit for memory usage
+    const size_t MEMORY_THRESHOLD_HIGH = 4ULL * 1024 * 1024 * 1024; // 4GB
+    const size_t MEMORY_THRESHOLD_MEDIUM = 3ULL * 1024 * 1024 * 1024; // 3GB
+    const size_t MEMORY_THRESHOLD_LOW = 2ULL * 1024 * 1024 * 1024; // 2GB
+
+    if (current_usage > MEMORY_THRESHOLD_HIGH) {
+        // Severe memory pressure
+        return 10.0;
+    } else if (current_usage > MEMORY_THRESHOLD_MEDIUM) {
+        // High memory pressure
+        double pressure = 10.0 + ((current_usage - MEMORY_THRESHOLD_MEDIUM) /
+                     static_cast<double>(MEMORY_THRESHOLD_HIGH - MEMORY_THRESHOLD_MEDIUM)) * 30.0;
+        return std::max(10.0, 40.0 - pressure);
+    } else if (current_usage > MEMORY_THRESHOLD_LOW) {
+        // Medium memory pressure
+        double pressure = ((current_usage - MEMORY_THRESHOLD_LOW) /
+                     static_cast<double>(MEMORY_THRESHOLD_MEDIUM - MEMORY_THRESHOLD_LOW)) * 30.0;
+        return std::max(40.0, 70.0 - pressure);
+    } else {
+        // Low memory pressure
+        return 100.0 - (current_usage / static_cast<double>(MEMORY_THRESHOLD_LOW)) * 30.0;
+    }
 }
 
 double AutoQualityController::calculateThermalPressureScore() const {
-    // Placeholder implementation - in a real system, this would interface with
-    // thermal monitoring APIs to determine device temperature
-    // For now, return a baseline score indicating no thermal pressure
+    // Interface with system thermal monitoring to get actual thermal pressure
+    // On Linux, we can check thermal zones; on Windows, we might use WMI or other APIs
+
+#ifdef __linux__
+    // Check thermal zones for temperature
+    std::ifstream temp_file("/sys/class/thermal/thermal_zone0/temp");
+    if (temp_file.is_open()) {
+        int temperature;
+        temp_file >> temperature;
+        temp_file.close();
+
+        // Temperature is usually in millidegrees Celsius
+        double temp_celsius = temperature / 1000.0;
+
+        // Define thermal thresholds for a typical system
+        const double THERMAL_THRESHOLD_CRITICAL = 85.0; // degrees C
+        const double THERMAL_THRESHOLD_HIGH = 75.0;     // degrees C
+        const double THERMAL_THRESHOLD_MEDIUM = 65.0;   // degrees C
+
+        if (temp_celsius >= THERMAL_THRESHOLD_CRITICAL) {
+            // Critical thermal pressure
+            return 10.0;
+        } else if (temp_celsius >= THERMAL_THRESHOLD_HIGH) {
+            // High thermal pressure
+            double pressure = 10.0 + ((temp_celsius - THERMAL_THRESHOLD_HIGH) /
+                         (THERMAL_THRESHOLD_CRITICAL - THERMAL_THRESHOLD_HIGH)) * 30.0;
+            return std::max(10.0, 40.0 - pressure);
+        } else if (temp_celsius >= THERMAL_THRESHOLD_MEDIUM) {
+            // Medium thermal pressure
+            double pressure = ((temp_celsius - THERMAL_THRESHOLD_MEDIUM) /
+                         (THERMAL_THRESHOLD_HIGH - THERMAL_THRESHOLD_MEDIUM)) * 30.0;
+            return std::max(40.0, 70.0 - pressure);
+        } else {
+            // Low thermal pressure
+            return 100.0 - ((temp_celsius / THERMAL_THRESHOLD_MEDIUM) * 30.0);
+        }
+    }
+#endif
+
+    // For other platforms or if thermal sensors are unavailable, return baseline
     return 100.0; // No thermal pressure detected
 }
 
 double AutoQualityController::calculateGPUUtilizationScore() const {
-    // Placeholder implementation - in a real system, this would interface with
-    // GPU monitoring APIs to determine GPU utilization
+    // Interface with GPU monitoring APIs to determine actual GPU utilization
     // For now, return a baseline score based on performance metrics
     // Lower score indicates higher GPU load
 
@@ -1159,13 +1266,61 @@ double AutoQualityController::calculateGPUUtilizationScore() const {
 
     // If we're close to target frame time, GPU might be under pressure
     double utilization_factor = std::min(avg_frame_time / target_frame_time, 1.0);
-    return std::max(10.0, 100.0 - (utilization_factor * 90.0));
+    double base_score = std::max(10.0, 100.0 - (utilization_factor * 90.0));
+
+    // Additionally, we could interface with vendor-specific APIs for actual GPU utilization
+    // For example, NVML for NVIDIA GPUs, ADL for AMD, or Metal for Apple Silicon
+    // For now, we'll return the performance-based score but note where real GPU monitoring would go
+#ifdef __linux__
+    // On Linux, we could potentially read from nvidia-smi or similar tools
+    // This is a simplified approach - in reality, we'd want to use NVML or similar
+    static bool nvml_available = checkNvmlAvailability();
+    if (nvml_available) {
+        double gpu_util = getNvidiaGpuUtilization();
+        if (gpu_util >= 0) {
+            // Blend the performance-based score with actual GPU utilization
+            return (base_score * 0.6) + (gpu_util * 0.4);
+        }
+    }
+#endif
+
+    return base_score;
 }
 
+#ifdef __linux__
+bool AutoQualityController::checkNvmlAvailability() const {
+    // Simple check to see if nvidia-smi is available
+    // In a real implementation, we would link with NVML library
+    int result = system("which nvidia-smi > /dev/null 2>&1");
+    return WEXITSTATUS(result) == 0;
+}
+
+double AutoQualityController::getNvidiaGpuUtilization() const {
+    // Execute nvidia-smi to get GPU utilization
+    FILE* pipe = popen("nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null", "r");
+    if (!pipe) return -1.0;
+
+    char buffer[16];
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        pclose(pipe);
+        try {
+            int utilization = std::stoi(buffer);
+            // Convert utilization (0-100) to a score where higher is better (100-utilization)
+            // But since high utilization means high load, we want to return a lower score
+            return 100.0 - static_cast<double>(utilization);
+        } catch (...) {
+            return -1.0;
+        }
+    }
+
+    pclose(pipe);
+    return -1.0;
+}
+#endif
+
 double AutoQualityController::calculateCPUUtilizationScore() const {
-    // Placeholder implementation - in a real system, this would interface with
-    // system monitoring APIs to determine CPU utilization
-    // For now, return a baseline score based on performance metrics
+    // Interface with system monitoring APIs to determine actual CPU utilization
+    // For now, return a score based on both performance metrics and actual system CPU usage
     // Lower score indicates higher CPU load
 
     // Estimate CPU load based on frame time consistency
@@ -1175,7 +1330,77 @@ double AutoQualityController::calculateCPUUtilizationScore() const {
 
     // Higher variance suggests higher CPU pressure
     double cpu_load_factor = std::min(variance / max_expected_variance, 1.0);
-    return std::max(10.0, 100.0 - (cpu_load_factor * 90.0));
+    double base_score = std::max(10.0, 100.0 - (cpu_load_factor * 90.0));
+
+    // Get actual CPU utilization from system
+    double actual_cpu_util = getSystemCpuUtilization();
+    if (actual_cpu_util >= 0) {
+        // Convert CPU utilization (0-100%) to a score where higher is better
+        // Higher CPU utilization means lower score (more pressure)
+        double cpu_score = 100.0 - actual_cpu_util;
+        // Blend the performance-based score with actual CPU utilization
+        return (base_score * 0.5) + (cpu_score * 0.5);
+    }
+
+    return base_score;
+}
+
+double AutoQualityController::getSystemCpuUtilization() const {
+    // Get actual CPU utilization from the system
+#ifdef __linux__
+    // Read from /proc/stat to calculate CPU utilization
+    static unsigned long long last_idle_time = 0;
+    static unsigned long long last_total_time = 0;
+
+    std::ifstream stat_file("/proc/stat");
+    if (!stat_file.is_open()) {
+        return -1.0; // Error reading file
+    }
+
+    std::string line;
+    std::getline(stat_file, line);
+    stat_file.close();
+
+    // Parse the first line which contains overall CPU stats
+    std::istringstream iss(line);
+    std::string cpu_label;
+    unsigned long long user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
+
+    iss >> cpu_label >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal >> guest >> guest_nice;
+
+    unsigned long long idle_time = idle + iowait;
+    unsigned long long total_time = user + nice + system + idle + iowait + irq + softirq + steal;
+
+    if (last_idle_time != 0 && last_total_time != 0) {
+        unsigned long long delta_idle = idle_time - last_idle_time;
+        unsigned long long delta_total = total_time - last_total_time;
+
+        if (delta_total == 0) {
+            return -1.0; // Avoid division by zero
+        }
+
+        double cpu_utilization = 100.0 * (delta_total - delta_idle) / delta_total;
+
+        // Update stored values
+        last_idle_time = idle_time;
+        last_total_time = total_time;
+
+        return cpu_utilization;
+    }
+
+    // Store initial values
+    last_idle_time = idle_time;
+    last_total_time = total_time;
+
+    return -1.0; // Not enough data for first calculation
+
+#elif defined(_WIN32)
+    // On Windows, we would use PDH or WMI to get CPU utilization
+    // For now, return -1 to indicate we're using the fallback
+    return -1.0;
+#else
+    return -1.0; // Unsupported platform
+#endif
 }
 
 double AutoQualityController::calculateFramePacingIrregularity() const {

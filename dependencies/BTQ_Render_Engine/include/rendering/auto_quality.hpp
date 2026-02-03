@@ -192,7 +192,7 @@ private:
     uint64_t frame_count_ = 0;
     double performance_score_;
     double target_performance_threshold_;
-    
+
     std::chrono::high_resolution_clock::time_point last_adjustment_time_;
     std::chrono::milliseconds adjustment_cooldown_;
 
@@ -230,6 +230,13 @@ private:
     double calculateJankPercentage() const;
     double calculatePerformanceConsistency() const;
     void updateAdvancedMetrics();
+
+    // System resource monitoring methods
+    double getSystemCpuUtilization() const;
+#ifdef __linux__
+    bool checkNvmlAvailability() const;
+    double getNvidiaGpuUtilization() const;
+#endif
 
     // Methods moved to public section above
 };

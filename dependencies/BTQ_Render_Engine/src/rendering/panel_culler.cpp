@@ -86,7 +86,7 @@ bool PanelCuller::should_render_panel(const PanelBase& panel) const {
         return false;
     }
 
-    // If we got here, the panel should be rendered
+    // Panel has passed all culling checks, so it should be rendered
     return true;
 }
 

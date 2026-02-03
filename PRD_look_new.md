@@ -268,8 +268,8 @@
 - [x] Add data persistence: save aggregated data to disk periodically, load on startup, support for multiple data sources in `dependencies/BTQ_Render_Engine/src/data/persistence.cpp` [Complexity: M]
 
 ### Phase 12b: Multi-Exchange & Quality [Complexity: M]
-- [ ] Add multi-exchange aggregation: combine data from multiple exchanges into single view, handle time synchronization, account for exchange-specific features in `dependencies/BTQ_Render_Engine/src/data/exchange_aggregator.cpp` [Complexity: M]
-- [ ] Implement data quality monitoring: detect missing data, duplicate trades, out-of-order timestamps, latency issues, alert user to data problems in `dependencies/BTQ_Render_Engine/src/data/quality_monitor.cpp` [Complexity: M]
+- [x] Add multi-exchange aggregation: combine data from multiple exchanges into single view, handle time synchronization, account for exchange-specific features in `dependencies/BTQ_Render_Engine/src/data/exchange_aggregator.cpp` [Complexity: M]
+- [x] Implement data quality monitoring: detect missing data, duplicate trades, out-of-order timestamps, latency issues, alert user to data problems in `dependencies/BTQ_Render_Engine/src/data/quality_monitor.cpp` [Complexity: M]
 
 ---
 
@@ -278,8 +278,8 @@
 **Prerequisites:** Basic implementations of other modules complete  
 
 ### Phase 13a: Rendering Optimization [Complexity: M]
-- [ ] Implement off-screen panel culling: don't render panels that are minimized or off-screen in `dependencies/BTQ_Render_Engine/src/rendering/panel_culler.cpp` [Complexity: M]
-- [ ] Add off-screen chart item culling: don't render chart elements outside visible area, reduce polygon count at lower zoom levels in `dependencies/BTQ_Render_Engine/src/rendering/chart_culler.cpp` [Complexity: M]
+- [x] Implement off-screen panel culling: don't render panels that are minimized or off-screen in `dependencies/BTQ_Render_Engine/src/rendering/panel_culler.cpp` [Complexity: M]
+- [x] Add off-screen chart item culling: don't render chart elements outside visible area, reduce polygon count at lower zoom levels in `dependencies/BTQ_Render_Engine/src/rendering/chart_culler.cpp` [Complexity: M]
 - [ ] Implement footprint Level of Detail (LOD): reduce detail when zoomed out, show simplified representations, increase detail when zoomed in in `dependencies/BTQ_Render_Engine/src/rendering/footprint_lod.cpp` [Complexity: M]
 - [ ] Batch order book geometry: combine multiple similar draw calls into single batched calls, reduce GPU overhead in `dependencies/BTQ_Render_Engine/src/rendering/orderbook_batcher.cpp` [Complexity: M]
 

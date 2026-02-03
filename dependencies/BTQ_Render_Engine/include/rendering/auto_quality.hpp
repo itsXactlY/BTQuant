@@ -144,6 +144,26 @@ public:
      */
     double calculateThermalPressureScore() const;
 
+    /**
+     * @brief Calculate GPU utilization score (0-100, higher is better)
+     */
+    double calculateGPUUtilizationScore() const;
+
+    /**
+     * @brief Calculate CPU utilization score (0-100, higher is better)
+     */
+    double calculateCPUUtilizationScore() const;
+
+    /**
+     * @brief Calculate frame pacing irregularity score (0-100, higher is better)
+     */
+    double calculateFramePacingIrregularity() const;
+
+    /**
+     * @brief Calculate historical performance factor for predictions
+     */
+    double calculateHistoricalPerformanceFactor() const;
+
 private:
     AutoQualityConfig config_;
     std::vector<double> frame_times_;

@@ -674,6 +674,16 @@ int AutoQualityController::determineQualityReduction() {
     // Calculate the rate of performance degradation
     double degradation_rate = calculateDegradationRate();
 
+    // Get additional metrics for more intelligent decision making
+    double gpu_utilization_score = calculateGPUUtilizationScore();
+    double cpu_utilization_score = calculateCPUUtilizationScore();
+    double frame_pacing_score = calculateFramePacingIrregularity();
+    double memory_pressure_score = calculateMemoryPressureScore();
+    double thermal_pressure_score = calculateThermalPressureScore();
+
+    // Calculate composite pressure score
+    double composite_pressure = (gpu_utilization_score + cpu_utilization_score + memory_pressure_score + thermal_pressure_score) / 4.0;
+
     // If performance is extremely poor, reduce quality more aggressively
     if (performance_deficit > 40.0 || jank_percentage > 25.0) {
         // Very poor performance OR heavy jank - jump 2 levels down if possible
@@ -686,6 +696,11 @@ int AutoQualityController::determineQualityReduction() {
 
         // If degradation is happening rapidly, be even more aggressive
         if (degradation_rate > 0.5) { // Performance dropping by more than 50% per second
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If system pressure is high, add additional reduction
+        if (composite_pressure < 50.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -704,13 +719,23 @@ int AutoQualityController::determineQualityReduction() {
             new_level = std::min(current_quality_index_ + 2, QUALITY_LEVEL_COUNT - 1);
         }
 
+        // If system pressure is high, add additional reduction
+        if (composite_pressure < 60.0) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
         return new_level;
-    } else if (consistency_score < 60.0) {
-        // Performance is inconsistent - reduce quality by 1 level to stabilize
+    } else if (consistency_score < 60.0 || frame_pacing_score < 65.0) {
+        // Performance is inconsistent OR frame pacing is irregular - reduce quality by 1 level to stabilize
         int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
 
         // If degradation is rapid, add an extra level
         if (degradation_rate > 0.4) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If system pressure is high, add additional reduction
+        if (composite_pressure < 70.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -721,6 +746,11 @@ int AutoQualityController::determineQualityReduction() {
 
         // If degradation is rapid, add an extra level
         if (degradation_rate > 0.25) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If system pressure is high, add additional reduction
+        if (composite_pressure < 75.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -737,14 +767,27 @@ int AutoQualityController::determineQualityIncrease() {
     double jank_percentage = calculateJankPercentage();
     double consistency_score = calculatePerformanceConsistency();
 
+    // Get additional metrics for more intelligent decision making
+    double gpu_utilization_score = calculateGPUUtilizationScore();
+    double cpu_utilization_score = calculateCPUUtilizationScore();
+    double frame_pacing_score = calculateFramePacingIrregularity();
+    double memory_pressure_score = calculateMemoryPressureScore();
+    double thermal_pressure_score = calculateThermalPressureScore();
+
     double performance_surplus = performance_score_ - target_performance_threshold_;
 
+    // Calculate composite pressure score
+    double composite_pressure = (gpu_utilization_score + cpu_utilization_score + memory_pressure_score + thermal_pressure_score) / 4.0;
+
     // Only increase quality if performance is consistently good AND stable
-    if (performance_surplus > 30.0 && !has_spikes && jank_percentage < 5.0 && consistency_score > 80.0) {
-        // Excellent performance, no spikes, low jank, high consistency - could increase by 2 levels if stable
+    if (performance_surplus > 30.0 && !has_spikes && jank_percentage < 5.0 && consistency_score > 80.0 && composite_pressure > 80.0 && frame_pacing_score > 85.0) {
+        // Excellent performance, no spikes, low jank, high consistency, low system pressure, good frame pacing - could increase by 2 levels if stable
         return std::max(current_quality_index_ - 2, 0);
-    } else if (performance_surplus > 15.0 && !has_spikes && jank_percentage < 10.0 && consistency_score > 70.0) {
-        // Good performance with acceptable stability - increase by 1 level
+    } else if (performance_surplus > 15.0 && !has_spikes && jank_percentage < 10.0 && consistency_score > 70.0 && composite_pressure > 70.0) {
+        // Good performance with acceptable stability and moderate system pressure - increase by 1 level
+        return std::max(current_quality_index_ - 1, 0);
+    } else if (performance_surplus > 20.0 && !has_spikes && jank_percentage < 8.0 && consistency_score > 75.0 && frame_pacing_score > 80.0) {
+        // Good performance with good stability and good frame pacing - increase by 1 level
         return std::max(current_quality_index_ - 1, 0);
     } else {
         // Conditions not met for quality increase, stay at current level
@@ -972,28 +1015,55 @@ void AutoQualityController::updateAdvancedMetrics() {
     // Calculate thermal pressure if available (placeholder for future integration)
     double thermal_pressure_score = calculateThermalPressureScore();
 
+    // Calculate GPU utilization if available (placeholder for future integration)
+    double gpu_utilization_score = calculateGPUUtilizationScore();
+
+    // Calculate CPU utilization if available (placeholder for future integration)
+    double cpu_utilization_score = calculateCPUUtilizationScore();
+
+    // Calculate frame pacing irregularity
+    double frame_pacing_score = calculateFramePacingIrregularity();
+
     // Adjust performance score based on these advanced metrics
     if (has_spikes) {
         // Significant performance spikes detected, reduce performance score
-        performance_score_ *= 0.9; // 10% reduction
+        performance_score_ *= 0.85; // 15% reduction
     }
 
     if (jank_percentage > 15.0) { // More than 15% janky frames
         // Heavy jank detected, reduce performance score
-        double jank_penalty = std::min(jank_percentage * 0.5, 30.0); // Up to 30% penalty
+        double jank_penalty = std::min(jank_percentage * 0.7, 35.0); // Up to 35% penalty
         performance_score_ -= jank_penalty;
     }
 
     // Apply memory pressure penalty if needed
     if (memory_pressure_score < 70.0) {
-        double memory_penalty = (70.0 - memory_pressure_score) * 0.3;
+        double memory_penalty = (70.0 - memory_pressure_score) * 0.4;
         performance_score_ -= memory_penalty;
     }
 
     // Apply thermal pressure penalty if needed
     if (thermal_pressure_score < 75.0) {
-        double thermal_penalty = (75.0 - thermal_pressure_score) * 0.2;
+        double thermal_penalty = (75.0 - thermal_pressure_score) * 0.3;
         performance_score_ -= thermal_penalty;
+    }
+
+    // Apply GPU utilization penalty if GPU is heavily loaded
+    if (gpu_utilization_score < 60.0) { // GPU utilization is high (low score)
+        double gpu_penalty = (60.0 - gpu_utilization_score) * 0.25;
+        performance_score_ -= gpu_penalty;
+    }
+
+    // Apply CPU utilization penalty if CPU is heavily loaded
+    if (cpu_utilization_score < 65.0) { // CPU utilization is high (low score)
+        double cpu_penalty = (65.0 - cpu_utilization_score) * 0.2;
+        performance_score_ -= cpu_penalty;
+    }
+
+    // Apply frame pacing penalty if irregular
+    if (frame_pacing_score < 80.0) {
+        double pacing_penalty = (80.0 - frame_pacing_score) * 0.15;
+        performance_score_ -= pacing_penalty;
     }
 
     // Consistency affects the performance score inversely
@@ -1017,6 +1087,96 @@ double AutoQualityController::calculateThermalPressureScore() const {
     // thermal monitoring APIs to determine device temperature
     // For now, return a baseline score indicating no thermal pressure
     return 100.0; // No thermal pressure detected
+}
+
+double AutoQualityController::calculateGPUUtilizationScore() const {
+    // Placeholder implementation - in a real system, this would interface with
+    // GPU monitoring APIs to determine GPU utilization
+    // For now, return a baseline score based on performance metrics
+    // Lower score indicates higher GPU load
+
+    // Calculate score based on how close we are to target FPS
+    double target_frame_time = 1000.0 / config_.target_fps;
+
+    // Look at recent frame times to estimate GPU load
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count == 0) {
+        return 100.0;
+    }
+
+    double avg_frame_time = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        avg_frame_time += frame_times_[i];
+    }
+    avg_frame_time /= sample_count;
+
+    // If we're close to target frame time, GPU might be under pressure
+    double utilization_factor = std::min(avg_frame_time / target_frame_time, 1.0);
+    return std::max(10.0, 100.0 - (utilization_factor * 90.0));
+}
+
+double AutoQualityController::calculateCPUUtilizationScore() const {
+    // Placeholder implementation - in a real system, this would interface with
+    // system monitoring APIs to determine CPU utilization
+    // For now, return a baseline score based on performance metrics
+    // Lower score indicates higher CPU load
+
+    // Estimate CPU load based on frame time consistency
+    // If frame times vary significantly, CPU might be under pressure
+    double variance = calculateFrameTimeVariance();
+    double max_expected_variance = config_.variance_threshold;
+
+    // Higher variance suggests higher CPU pressure
+    double cpu_load_factor = std::min(variance / max_expected_variance, 1.0);
+    return std::max(10.0, 100.0 - (cpu_load_factor * 90.0));
+}
+
+double AutoQualityController::calculateFramePacingIrregularity() const {
+    // Calculate how irregular the frame timing is
+    // Irregular pacing can indicate performance issues
+
+    if (frame_count_ < 10) {
+        return 100.0; // Not enough data, assume perfect pacing
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+    if (sample_count < 3) {
+        return 100.0; // Need at least 3 samples to calculate pacing
+    }
+
+    // Calculate differences between consecutive frame times
+    std::vector<double> frame_time_deltas;
+    for (size_t i = 1; i < sample_count; ++i) {
+        double delta = std::abs(frame_times_[i] - frame_times_[i-1]);
+        frame_time_deltas.push_back(delta);
+    }
+
+    if (frame_time_deltas.empty()) {
+        return 100.0;
+    }
+
+    // Calculate average delta
+    double sum = 0.0;
+    for (double delta : frame_time_deltas) {
+        sum += delta;
+    }
+    double avg_delta = sum / frame_time_deltas.size();
+
+    // Calculate variance of deltas
+    double variance = 0.0;
+    for (double delta : frame_time_deltas) {
+        double diff = delta - avg_delta;
+        variance += diff * diff;
+    }
+    variance /= frame_time_deltas.size();
+
+    // Calculate coefficient of variation
+    double std_dev = std::sqrt(variance);
+    double coefficient_of_variation = avg_delta > 0.0 ? (std_dev / avg_delta) : 0.0;
+
+    // Convert to a score (higher is better pacing)
+    double pacing_score = std::max(0.0, 100.0 - (coefficient_of_variation * 500.0));
+    return std::min(100.0, pacing_score);
 }
 
 } // namespace RenderEngine

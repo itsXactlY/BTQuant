@@ -159,6 +159,18 @@ private:
 
     // Efficient method to combine similar batches and reduce draw calls
     void combineSimilarBatches();
+
+    // Enhanced method to batch geometry with maximum efficiency for order book rendering
+    void batchGeometry(const std::vector<OrderbookElementData>& elements);
+
+    // Advanced batch optimization that minimizes draw calls by maximizing batch sizes
+    void advancedBatchOptimization();
+
+    // Fast batch consolidation to reduce GPU overhead
+    void fastConsolidateBatches();
+
+    // Super optimization that aggressively combines batches to minimize draw calls even further
+    void superOptimizeBatches();
 };
 
 } // namespace BTQuant

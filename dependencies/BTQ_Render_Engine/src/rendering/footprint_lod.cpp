@@ -4557,5 +4557,403 @@ void FootprintLOD::applyIntelligentZoomLODToCell(const FootprintCell& cell,
     }
 }
 
+// Implementation for edge-based LOD that emphasizes important boundaries
+LODLevel FootprintLOD::calculateEdgeBasedLOD(float cell_width_px, float cell_height_px,
+                                          float zoom_factor, bool is_edge_cell) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate base LOD level
+    LODLevel base_lod = calculateLODLevel(cell_width_px, cell_height_px, zoom_factor);
+
+    // If this is an edge cell, potentially increase detail to highlight boundaries
+    if (is_edge_cell) {
+        switch (base_lod) {
+            case LODLevel::LOW_DETAIL:
+                if (zoom_factor > min_detail_zoom_ * 0.6f) {
+                    return LODLevel::MEDIUM_DETAIL;  // Increase detail for edge cells
+                }
+                break;
+            case LODLevel::MEDIUM_DETAIL:
+                if (zoom_factor > medium_detail_zoom_ * 0.7f) {
+                    return LODLevel::HIGH_DETAIL;  // Increase detail for important edge cells
+                }
+                break;
+            default:
+                return base_lod;  // Keep existing detail for already high-detail cells
+        }
+    }
+
+    return base_lod;
+}
+
+LODRenderSettings FootprintLOD::getEdgeBasedRenderSettings(LODLevel lod_level, bool is_edge_cell) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+
+    // Enhance edge cells with more prominent rendering
+    if (is_edge_cell) {
+        settings.border_thickness = std::max(settings.border_thickness * 1.5f, 2.0f);  // Thicker borders for edges
+        settings.alpha_multiplier = std::min(settings.alpha_multiplier * 1.1f, 1.2f);  // Slightly more opaque
+    }
+
+    return settings;
+}
+
+void FootprintLOD::applyEdgeBasedLODToCell(const FootprintCell& cell,
+                                        ImDrawList* draw_list,
+                                        float zoom_factor,
+                                        double max_volume,
+                                        const std::vector<FootprintCell>& diagonal_imbalances,
+                                        const std::vector<FootprintCell>& stacked_imbalances,
+                                        const FootprintPanel* panel,
+                                        bool is_edge_cell) const {
+    // Calculate cell dimensions in pixels
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+
+    float cell_width_px = std::abs(p2.x - p1.x);
+    float cell_height_px = std::abs(p2.y - p1.y);
+
+    // Determine LOD level using edge-based calculation
+    LODLevel lod_level = calculateEdgeBasedLOD(cell_width_px, cell_height_px, zoom_factor, is_edge_cell);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getEdgeBasedRenderSettings(lod_level, is_edge_cell);
+
+    // Get cell color from panel
+    ImU32 cell_color = panel->getCellColor(cell, max_volume);
+
+    // Get cell label from panel
+    std::string cell_label = panel->getCellLabel(cell);
+
+    // Apply alpha multiplier based on LOD
+    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
+
+    // Apply edge-cell specific alpha adjustment
+    if (is_edge_cell) {
+        alpha_multiplier = std::min(alpha_multiplier * 1.15f, 1.3f);  // Make edge cells more visible
+    }
+
+    // Render heatmap/fill based on edge-based LOD settings
+    if (settings.render_heatmap) {
+        // Modify alpha based on LOD and edge status
+        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
+        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
+
+        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+    }
+
+    // Render borders based on edge-based LOD settings
+    if (settings.render_borders) {
+        // Check for imbalances to determine border color/type
+        bool is_diagonal = false;
+        bool is_stacked = false;
+
+        for (const auto& diag_cell : diagonal_imbalances) {
+            if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
+                is_diagonal = true;
+                break;
+            }
+        }
+
+        for (const auto& stack_cell : stacked_imbalances) {
+            if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
+                is_stacked = true;
+                break;
+            }
+        }
+
+        ImU32 border_color;
+        float thickness = settings.border_thickness;
+
+        if (is_diagonal || is_stacked) {
+            // Highlight imbalanced cells with special colors
+            if (is_diagonal && is_stacked) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                ImVec2 offset_p1(p1.x - (is_edge_cell ? 2.0f : 1.0f), p1.y - (is_edge_cell ? 2.0f : 1.0f));
+                ImVec2 offset_p2(p2.x + (is_edge_cell ? 2.0f : 1.0f), p2.y + (is_edge_cell ? 2.0f : 1.0f));
+                draw_list->AddRect(offset_p1, offset_p2, border_color, 0.0f, 0, thickness * 0.8f);
+            } else if (is_diagonal) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            } else if (is_stacked) {
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            }
+        } else {
+            // Regular border based on LOD, with enhancement for edge cells
+            unsigned char border_alpha = static_cast<unsigned char>(13 * alpha_multiplier);
+            border_color = IM_COL32(255, 255, 255, border_alpha);
+
+            // For edge cells, potentially use a different border style
+            if (is_edge_cell) {
+                // Draw a more prominent border for edge cells
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            } else {
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            }
+        }
+    }
+
+    // Render text/labels based on edge-based LOD settings
+    if (settings.render_text && shouldRenderText(cell_height_px, zoom_factor)) {
+        if (settings.render_labels && shouldRenderLabels(cell_height_px, zoom_factor)) {
+            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
+
+            // Center text in cell
+            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
+                           (p1.y + p2.y - text_size.y) * 0.5f);
+
+            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+        }
+    }
+
+    // Render detailed annotations based on edge-based LOD settings
+    if (settings.render_detailed_annotations &&
+        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
+
+        // Example: render delta indicator if enabled and conditions met
+        if (panel->getShowDeltaIndicator()) {
+            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+            if (max_vol > 0.0) {
+                double normalized_delta = cell.delta / max_vol;
+
+                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
+                    float bar_height = (is_edge_cell) ? 4.0f : 3.0f;  // Taller bars for edge cells
+                    float bar_width = (p2.x - p1.x) * 0.8f;
+                    ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f,
+                                  p2.y - bar_height - (is_edge_cell ? 1.5f : 1.0f));
+
+                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
+                                                           : IM_COL32(255, 0, 0, 200);  // Red
+
+                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
+                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
+                                           bar_color);
+                }
+            }
+        }
+    }
+}
+
+// Implementation for priority-based LOD that renders important cells with higher detail
+LODLevel FootprintLOD::calculatePriorityBasedLOD(float cell_width_px, float cell_height_px,
+                                              float zoom_factor, int priority_level) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate base LOD level
+    LODLevel base_lod = calculateLODLevel(cell_width_px, cell_height_px, zoom_factor);
+
+    // Adjust LOD based on priority level (higher priority = more detail)
+    switch (priority_level) {
+        case 3: // Highest priority
+            // Always render at highest possible detail for important cells
+            if (min_dimension > medium_cell_size_px_) {
+                return LODLevel::MAX_DETAIL;
+            } else if (min_dimension > min_cell_size_px_) {
+                return LODLevel::HIGH_DETAIL;
+            } else {
+                return LODLevel::MEDIUM_DETAIL;
+            }
+        case 2: // High priority
+            switch (base_lod) {
+                case LODLevel::LOW_DETAIL:
+                    return LODLevel::MEDIUM_DETAIL;
+                case LODLevel::MEDIUM_DETAIL:
+                    return LODLevel::HIGH_DETAIL;
+                default:
+                    return base_lod;
+            }
+        case 1: // Medium priority
+            // Only minor boost for medium priority
+            if (base_lod == LODLevel::LOW_DETAIL &&
+                (zoom_factor > min_detail_zoom_ * 0.8f || min_dimension > min_cell_size_px_ * 0.8f)) {
+                return LODLevel::MEDIUM_DETAIL;
+            }
+            return base_lod;
+        case 0: // Low priority
+        default:
+            // No boost for low priority, possibly reduce detail in crowded situations
+            return base_lod;
+    }
+}
+
+LODRenderSettings FootprintLOD::getPriorityBasedRenderSettings(LODLevel lod_level, int priority_level) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+
+    // Adjust settings based on priority level
+    switch (priority_level) {
+        case 3: // Highest priority
+            settings.render_detailed_annotations = true;
+            settings.render_labels = true;
+            settings.render_text = true;
+            settings.alpha_multiplier = std::min(settings.alpha_multiplier * 1.25f, 1.3f);
+            settings.border_thickness = std::max(settings.border_thickness * 1.4f, 2.4f);
+            break;
+        case 2: // High priority
+            settings.render_detailed_annotations = true;
+            settings.render_labels = true;
+            settings.alpha_multiplier = std::min(settings.alpha_multiplier * 1.15f, 1.25f);
+            settings.border_thickness = std::max(settings.border_thickness * 1.2f, 2.0f);
+            break;
+        case 1: // Medium priority
+            settings.alpha_multiplier = std::min(settings.alpha_multiplier * 1.05f, 1.1f);
+            break;
+        case 0: // Low priority
+        default:
+            // No special treatment for low priority
+            break;
+    }
+
+    return settings;
+}
+
+void FootprintLOD::applyPriorityBasedLODToCell(const FootprintCell& cell,
+                                            ImDrawList* draw_list,
+                                            float zoom_factor,
+                                            int priority_level,
+                                            double max_volume,
+                                            const std::vector<FootprintCell>& diagonal_imbalances,
+                                            const std::vector<FootprintCell>& stacked_imbalances,
+                                            const FootprintPanel* panel) const {
+    // Calculate cell dimensions in pixels
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+
+    float cell_width_px = std::abs(p2.x - p1.x);
+    float cell_height_px = std::abs(p2.y - p1.y);
+
+    // Determine LOD level using priority-based calculation
+    LODLevel lod_level = calculatePriorityBasedLOD(cell_width_px, cell_height_px, zoom_factor, priority_level);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getPriorityBasedRenderSettings(lod_level, priority_level);
+
+    // Get cell color from panel
+    ImU32 cell_color = panel->getCellColor(cell, max_volume);
+
+    // Get cell label from panel
+    std::string cell_label = panel->getCellLabel(cell);
+
+    // Apply alpha multiplier based on LOD
+    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
+
+    // Apply priority-based alpha adjustment
+    switch (priority_level) {
+        case 3: // Highest priority
+            alpha_multiplier = std::min(alpha_multiplier * 1.3f, 1.4f);  // Make highest priority cells very visible
+            break;
+        case 2: // High priority
+            alpha_multiplier = std::min(alpha_multiplier * 1.15f, 1.25f);  // Make high priority cells more visible
+            break;
+        case 1: // Medium priority
+            alpha_multiplier = std::min(alpha_multiplier * 1.05f, 1.1f);   // Slight boost for medium priority
+            break;
+        case 0: // Low priority
+        default:
+            // No special adjustment for low priority
+            break;
+    }
+
+    // Render heatmap/fill based on priority-based LOD settings
+    if (settings.render_heatmap) {
+        // Modify alpha based on LOD and priority
+        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
+        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
+
+        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+    }
+
+    // Render borders based on priority-based LOD settings
+    if (settings.render_borders) {
+        // Check for imbalances to determine border color/type
+        bool is_diagonal = false;
+        bool is_stacked = false;
+
+        for (const auto& diag_cell : diagonal_imbalances) {
+            if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
+                is_diagonal = true;
+                break;
+            }
+        }
+
+        for (const auto& stack_cell : stacked_imbalances) {
+            if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
+                is_stacked = true;
+                break;
+            }
+        }
+
+        ImU32 border_color;
+        float thickness = settings.border_thickness;
+
+        if (is_diagonal || is_stacked) {
+            // Highlight imbalanced cells with special colors
+            if (is_diagonal && is_stacked) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                ImVec2 offset_p1(p1.x - 1.5f, p1.y - 1.5f);
+                ImVec2 offset_p2(p2.x + 1.5f, p2.y + 1.5f);
+                draw_list->AddRect(offset_p1, offset_p2, border_color, 0.0f, 0, thickness * 0.8f);
+            } else if (is_diagonal) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            } else if (is_stacked) {
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            }
+        } else {
+            // Regular border based on LOD and priority
+            unsigned char border_alpha = static_cast<unsigned char>(13 * alpha_multiplier);
+            border_color = IM_COL32(255, 255, 255, border_alpha);
+            draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+        }
+    }
+
+    // Render text/labels based on priority-based LOD settings
+    if (settings.render_text && shouldRenderText(cell_height_px, zoom_factor)) {
+        if (settings.render_labels && shouldRenderLabels(cell_height_px, zoom_factor)) {
+            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
+
+            // Center text in cell
+            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
+                           (p1.y + p2.y - text_size.y) * 0.5f);
+
+            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+        }
+    }
+
+    // Render detailed annotations based on priority-based LOD settings
+    if (settings.render_detailed_annotations &&
+        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
+
+        // Example: render delta indicator if enabled and conditions met
+        if (panel->getShowDeltaIndicator()) {
+            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+            if (max_vol > 0.0) {
+                double normalized_delta = cell.delta / max_vol;
+
+                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
+                    float bar_height = (priority_level >= 2) ? 4.0f : 3.0f;  // Taller bars for high priority
+                    float bar_width = (p2.x - p1.x) * 0.8f;
+                    ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f,
+                                  p2.y - bar_height - (priority_level >= 2 ? 1.5f : 1.0f));
+
+                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
+                                                           : IM_COL32(255, 0, 0, 200);  // Red
+
+                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
+                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
+                                           bar_color);
+                }
+            }
+        }
+    }
+}
+
 } // namespace Rendering
 } // namespace BTQuant

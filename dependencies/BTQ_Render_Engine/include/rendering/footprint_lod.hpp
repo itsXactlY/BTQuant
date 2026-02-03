@@ -495,6 +495,40 @@ public:
                                            double max_volume,
                                            const FootprintPanel* panel) const;
 
+    // Calculate edge-based LOD that emphasizes important boundaries
+    LODLevel calculateEdgeBasedLOD(float cell_width_px, float cell_height_px,
+                              float zoom_factor, bool is_edge_cell) const;
+
+    // Get edge-based render settings
+    LODRenderSettings getEdgeBasedRenderSettings(LODLevel lod_level, bool is_edge_cell) const;
+
+    // Apply edge-based LOD to cell rendering
+    void applyEdgeBasedLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel,
+                                bool is_edge_cell) const;
+
+    // Calculate priority-based LOD that renders important cells with higher detail
+    LODLevel calculatePriorityBasedLOD(float cell_width_px, float cell_height_px,
+                                  float zoom_factor, int priority_level) const;
+
+    // Get priority-based render settings
+    LODRenderSettings getPriorityBasedRenderSettings(LODLevel lod_level, int priority_level) const;
+
+    // Apply priority-based LOD to cell rendering
+    void applyPriorityBasedLODToCell(const FootprintCell& cell,
+                                    ImDrawList* draw_list,
+                                    float zoom_factor,
+                                    int priority_level,
+                                    double max_volume,
+                                    const std::vector<FootprintCell>& diagonal_imbalances,
+                                    const std::vector<FootprintCell>& stacked_imbalances,
+                                    const FootprintPanel* panel) const;
+
     // Calculate intelligent zoom LOD that adapts based on user interaction patterns
     LODLevel calculateIntelligentZoomLOD(float cell_width_px, float cell_height_px,
                                     float zoom_factor, float time_spent_at_zoom) const;

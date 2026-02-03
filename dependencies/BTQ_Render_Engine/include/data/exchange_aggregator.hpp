@@ -419,6 +419,20 @@ struct DispersionMetrics {
   double coefficient_of_variation = 0.0;
 };
 
+// Statistical metrics for enhanced aggregation
+struct StatisticalMetrics {
+  double mean_price = 0.0;
+  double median_price = 0.0;
+  double std_deviation = 0.0;
+  double variance = 0.0;
+  double min_price = 0.0;
+  double max_price = 0.0;
+  double price_range = 0.0;
+  double coefficient_of_variation = 0.0;
+  double q1_price = 0.0;        // First quartile price
+  double q3_price = 0.0;        // Third quartile price
+};
+
 // Outlier detection metrics
 struct OutlierDetectionMetrics {
   double q1 = 0.0;              // First quartile
@@ -427,6 +441,122 @@ struct OutlierDetectionMetrics {
   double lower_fence = 0.0;     // Lower bound for outliers (Q1 - 1.5*IQR)
   double upper_fence = 0.0;     // Upper bound for outliers (Q3 + 1.5*IQR)
   int outlier_count = 0;        // Number of detected outliers
+};
+
+// Enhanced aggregated market data with additional analytics
+struct EnhancedAggregatedMarketData {
+  std::string symbol;
+  TimeSyncStrategy sync_strategy = TimeSyncStrategy::EARLIEST_TIMESTAMP;
+
+  // Data from different exchanges
+  std::unordered_map<std::string, RenderEngine::MarketDataUpdate> exchange_data;
+
+  // Aggregated values
+  double aggregated_price = 0.0;
+  double aggregated_volume = 0.0;
+  double weighted_price = 0.0;
+  double aggregated_high = 0.0;          // Highest price among exchanges
+  double aggregated_low = 0.0;           // Lowest price among exchanges
+  double aggregated_bid = 0.0;           // Best bid price among exchanges
+  double aggregated_ask = 0.0;           // Best ask price among exchanges
+  double consensus_price = 0.0;          // Consensus price using weighted median
+  uint64_t synchronized_timestamp = 0;
+
+  // Advanced aggregation metrics
+  double vwap = 0.0;                     // Volume Weighted Average Price
+  double median_price = 0.0;             // Median price across exchanges
+  double trimmed_mean_price = 0.0;       // Trimmed mean to reduce outlier impact
+  double geometric_mean_price = 0.0;     // Geometric mean of prices
+  double harmonic_mean_price = 0.0;      // Harmonic mean of prices
+
+  // Time synchronization info
+  std::map<std::string, uint64_t> exchange_timestamps;
+  uint64_t reference_timestamp = 0;
+
+  // Exchange correlation data
+  std::unordered_map<std::string, double> exchange_correlations;  // Correlation of each exchange to the aggregated price
+  double overall_correlation = 0.0;                              // Overall correlation among exchanges
+
+  // Arbitrage detection
+  bool arbitrage_opportunity = false;
+  double arbitrage_profit = 0.0;
+  std::string bid_exchange = "";
+  std::string ask_exchange = "";
+
+  // Statistical metrics
+  StatisticalMetrics statistical_metrics;
+
+  std::chrono::high_resolution_clock::time_point last_updated;
+};
+
+// Enhanced exchange-specific statistics for detailed analysis
+struct EnhancedExchangeSpecificStats {
+  double price = 0.0;
+  double volume = 0.0;
+  double price_deviation_from_avg = 0.0;  // Difference from overall average price
+  double percent_price_deviation = 0.0;   // Percentage deviation from average
+  double latency_ms = 0.0;                // Latency compared to other exchanges
+  bool is_outlier = false;                // Whether this exchange's data is an outlier
+  double z_score = 0.0;                   // Z-score of the price relative to other exchanges
+};
+
+// Enhanced exchange-specific risk metrics
+struct EnhancedExchangeSpecificRisk {
+  std::string exchange_name;
+  double latency_risk = 0.0;              // Risk due to latency (in milliseconds)
+  double fee_cost = 0.0;                  // Trading fee cost
+  double reliability_score = 0.0;         // Reliability score (0.0-1.0)
+  double price_deviation_risk = 0.0;      // Risk due to price deviation from market average
+};
+
+// Enhanced data for a single exchange
+struct EnhancedExchangeData {
+  RenderEngine::MarketDataUpdate update;
+  ExchangeFeatures features;
+  EnhancedExchangeSpecificStats stats;
+  EnhancedExchangeSpecificRisk risk_metrics;
+};
+
+// Enhanced market metrics across all exchanges
+struct EnhancedMarketMetrics {
+  double average_price = 0.0;
+  double spread = 0.0;                    // Difference between highest and lowest prices
+  double volatility = 0.0;                // Normalized price variation
+  double total_volume = 0.0;              // Total volume across all exchanges
+  double lowest_price = 0.0;              // Lowest price across exchanges
+  double highest_price = 0.0;             // Highest price across exchanges
+  double price_range = 0.0;               // Range between lowest and highest prices
+  double bid_ask_spread = 0.0;            // Spread between best bid and ask
+  std::string best_bid_exchange = "";     // Exchange with best bid
+  std::string best_ask_exchange = "";     // Exchange with best ask
+  double cross_exchange_correlation = 0.0; // Correlation between exchanges
+  double coefficient_of_variation = 0.0;  // Coefficient of variation
+  double skewness = 0.0;                  // Skewness of price distribution
+};
+
+// Enhanced risk metrics for consolidated view
+struct EnhancedRiskMetrics {
+  double price_volatility = 0.0;          // Standard deviation of prices
+  double coefficient_of_variation = 0.0;  // Volatility relative to mean
+};
+
+// Enhanced multi-exchange view with comprehensive analytics
+struct EnhancedMultiExchangeView {
+  std::string symbol;
+  std::unordered_map<std::string, EnhancedExchangeData> exchange_data;  // Detailed data per exchange
+  EnhancedMarketMetrics market_metrics;                                 // Overall market metrics
+  EnhancedRiskMetrics risk_metrics;                                     // Risk metrics
+  ExchangeDataQualityMetrics data_quality;                              // Data quality metrics
+  std::vector<ExchangeRanking> exchange_rankings;                       // Rankings of exchanges by reliability
+  MultiExchangeTimeSyncResult time_sync_result;                         // Time synchronization result
+
+  // Arbitrage detection
+  bool arbitrage_opportunity_exists = false;
+  double arbitrage_profit_potential = 0.0;
+  std::string best_arbitrage_buy_exchange = "";
+  std::string best_arbitrage_sell_exchange = "";
+
+  std::chrono::high_resolution_clock::time_point timestamp;
 };
 
 // Result of advanced aggregation
@@ -472,8 +602,6 @@ struct AdvancedAggregationResult {
       const std::string& symbol, TimeSyncStrategy strategy) const;
   std::optional<ComprehensiveMultiExchangeView> getComprehensiveMultiExchangeView(
       const std::string& symbol) const;
-  std::optional<UnifiedMultiExchangeView> getUnifiedMultiExchangeView(
-      const std::string& symbol) const;
   std::vector<UnifiedMultiExchangeView> getAllSymbolsUnifiedView() const;
   std::optional<MultiExchangeTimeSyncResult> performAdvancedTimeSyncWithPrediction(
       const std::string& symbol, TimeSyncStrategy strategy) const;
@@ -488,6 +616,10 @@ struct AdvancedAggregationResult {
   std::optional<MultiExchangeConsolidatedView> getMultiExchangeConsolidatedView(const std::string& symbol) const;
   std::vector<MultiExchangeConsolidatedView> getAllSymbolsConsolidatedView() const;
   std::optional<SymbolCrossExchangeAnalytics> getCrossExchangeAnalytics(const std::string& symbol) const;
+
+  // Enhanced multi-exchange aggregation with additional analytics
+  std::optional<EnhancedMultiExchangeView> getEnhancedMultiExchangeView(const std::string& symbol) const;
+  std::optional<EnhancedAggregatedMarketData> getEnhancedAggregatedDataWithAnalytics(const std::string& symbol) const;
 
   // Advanced aggregation algorithms
   double calculateGeometricMeanPrice(
@@ -626,7 +758,7 @@ struct AdvancedAggregationResult {
       const std::string& symbol) const;
 
   // New methods for comprehensive multi-exchange aggregation
-  std::optional<ComprehensiveMultiExchangeView> getUnifiedMultiExchangeView(
+  std::optional<UnifiedMultiExchangeView> getUnifiedMultiExchangeView(
       const std::string& symbol) const;
   std::optional<MultiExchangeTimeSyncResult> performComprehensiveTimeSync(
       const std::string& symbol, TimeSyncStrategy strategy) const;

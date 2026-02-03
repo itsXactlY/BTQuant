@@ -6646,5 +6646,340 @@ std::optional<ComprehensiveExchangeView> ExchangeAggregator::getComprehensiveExc
     return comprehensive_view;
 }
 
+// Enhanced method to get a comprehensive multi-exchange view with additional analytics
+std::optional<EnhancedMultiExchangeView> ExchangeAggregator::getEnhancedMultiExchangeView(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    EnhancedMultiExchangeView enhanced_view;
+    enhanced_view.symbol = symbol;
+
+    // Gather data from all exchanges for this symbol
+    std::vector<std::pair<std::string, RenderEngine::MarketDataUpdate>> exchange_updates;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            exchange_updates.emplace_back(exchange, data);
+
+            // Store detailed exchange data
+            EnhancedExchangeData exchange_data_item;
+            exchange_data_item.update = data;
+
+            // Get exchange features
+            auto features_it = exchange_features_.find(exchange);
+            if (features_it != exchange_features_.end()) {
+                exchange_data_item.features = features_it->second;
+            }
+
+            // Calculate exchange-specific statistics
+            exchange_data_item.stats.price = data.price;
+            exchange_data_item.stats.volume = data.size;
+
+            // Calculate price relative to overall average
+            std::vector<double> all_prices;
+            for (const auto& [other_exchange, other_data] : symbol_it->second) {
+                if (isExchangeDataValid(other_exchange, other_data)) {
+                    all_prices.push_back(other_data.price);
+                }
+            }
+
+            if (!all_prices.empty()) {
+                double avg_price = std::accumulate(all_prices.begin(), all_prices.end(), 0.0) / all_prices.size();
+                exchange_data_item.stats.price_deviation_from_avg = data.price - avg_price;
+                exchange_data_item.stats.percent_price_deviation = (avg_price > 0) ?
+                    (exchange_data_item.stats.price_deviation_from_avg / avg_price) * 100.0 : 0.0;
+
+                // Determine if this exchange is an outlier
+                double std_dev = 0.0;
+                for (double price : all_prices) {
+                    std_dev += (price - avg_price) * (price - avg_price);
+                }
+                std_dev = std::sqrt(std_dev / all_prices.size());
+
+                exchange_data_item.stats.is_outlier = (std::abs(exchange_data_item.stats.price_deviation_from_avg) > 2 * std_dev);
+
+                // Calculate z-score for this exchange's price
+                exchange_data_item.stats.z_score = (data.price - avg_price) / std_dev;
+            }
+
+            // Calculate latency relative to other exchanges
+            auto last_update_it = exchange_last_update_.find(exchange);
+            if (last_update_it != exchange_last_update_.end()) {
+                auto now = std::chrono::high_resolution_clock::now();
+                exchange_data_item.stats.latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_update_it->second).count();
+            }
+
+            // Calculate exchange-specific risk metrics
+            auto features_it2 = exchange_features_.find(exchange);
+            if (features_it2 != exchange_features_.end()) {
+                exchange_data_item.risk_metrics.latency_risk = features_it2->second.latency_offset_us / 1000.0;
+                exchange_data_item.risk_metrics.fee_cost = features_it2->second.trading_fee_rate;
+                exchange_data_item.risk_metrics.reliability_score = features_it2->second.reliability_score;
+            }
+
+            enhanced_view.exchange_data[exchange] = exchange_data_item;
+        }
+    }
+
+    if (exchange_updates.empty()) {
+        return std::nullopt;
+    }
+
+    // Calculate consolidated market metrics
+    std::vector<double> prices;
+    std::vector<double> volumes;
+    double total_volume = 0.0;
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        prices.push_back(data.price);
+        volumes.push_back(data.size);
+        total_volume += data.size;
+    }
+
+    if (!prices.empty()) {
+        std::sort(prices.begin(), prices.end());
+        enhanced_view.market_metrics.spread = prices.back() - prices.front();
+        enhanced_view.market_metrics.volatility = enhanced_view.market_metrics.spread / prices.front();
+
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        enhanced_view.market_metrics.average_price = avg_price;
+        enhanced_view.market_metrics.total_volume = total_volume;
+
+        // Calculate price range metrics
+        enhanced_view.market_metrics.lowest_price = prices.front();
+        enhanced_view.market_metrics.highest_price = prices.back();
+        enhanced_view.market_metrics.price_range = prices.back() - prices.front();
+
+        // Calculate additional statistical metrics
+        enhanced_view.market_metrics.median_price = (prices.size() % 2 == 0) ?
+            (prices[prices.size()/2 - 1] + prices[prices.size()/2]) / 2.0 :
+            prices[prices.size()/2];
+
+        // Calculate coefficient of variation
+        double std_dev = 0.0;
+        for (double price : prices) {
+            std_dev += (price - avg_price) * (price - avg_price);
+        }
+        std_dev = std::sqrt(std_dev / prices.size());
+        enhanced_view.market_metrics.coefficient_of_variation = (avg_price > 0) ? std_dev / avg_price : 0.0;
+
+        // Calculate skewness
+        if (prices.size() >= 3) {
+            double skewness_sum = 0.0;
+            for (double price : prices) {
+                double standardized = (price - avg_price) / std_dev;
+                skewness_sum += standardized * standardized * standardized;
+            }
+            enhanced_view.market_metrics.skewness = skewness_sum / prices.size();
+        }
+    }
+
+    // Calculate order book metrics across exchanges
+    double highest_bid = 0.0;
+    double lowest_ask = std::numeric_limits<double>::max();
+    std::string highest_bid_exchange = "";
+    std::string lowest_ask_exchange = "";
+
+    for (const auto& [exchange, data] : exchange_updates) {
+        if (data.side == "BUY" && data.price > highest_bid) {
+            highest_bid = data.price;
+            highest_bid_exchange = exchange;
+        }
+        if (data.side == "SELL" && data.price < lowest_ask) {
+            lowest_ask = data.price;
+            lowest_ask_exchange = exchange;
+        }
+    }
+
+    if (highest_bid > 0.0 && lowest_ask < std::numeric_limits<double>::max()) {
+        enhanced_view.market_metrics.bid_ask_spread = lowest_ask - highest_bid;
+        enhanced_view.market_metrics.best_bid_exchange = highest_bid_exchange;
+        enhanced_view.market_metrics.best_ask_exchange = lowest_ask_exchange;
+    }
+
+    // Calculate risk metrics
+    if (prices.size() > 1) {
+        double avg_price = std::accumulate(prices.begin(), prices.end(), 0.0) / prices.size();
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += (price - avg_price) * (price - avg_price);
+        }
+        variance /= prices.size();
+        enhanced_view.risk_metrics.price_volatility = std::sqrt(variance);
+        enhanced_view.risk_metrics.coefficient_of_variation = (avg_price > 0) ?
+            enhanced_view.risk_metrics.price_volatility / avg_price : 0.0;
+    }
+
+    // Calculate arbitrage opportunities
+    if (highest_bid > lowest_ask) {
+        enhanced_view.arbitrage_opportunity_exists = true;
+        enhanced_view.arbitrage_profit_potential = highest_bid - lowest_ask;
+        enhanced_view.best_arbitrage_buy_exchange = highest_bid_exchange;
+        enhanced_view.best_arbitrage_sell_exchange = lowest_ask_exchange;
+    } else {
+        enhanced_view.arbitrage_opportunity_exists = false;
+        enhanced_view.arbitrage_profit_potential = 0.0;
+    }
+
+    // Calculate correlation metrics
+    if (enhanced_view.exchange_data.size() > 1) {
+        double total_correlation = 0.0;
+        int correlation_count = 0;
+
+        auto it1 = enhanced_view.exchange_data.begin();
+        while (it1 != enhanced_view.exchange_data.end()) {
+            auto it2 = std::next(it1);
+            while (it2 != enhanced_view.exchange_data.end()) {
+                double price_diff = std::abs(it1->second.update.price - it2->second.update.price);
+                double avg_price = (it1->second.update.price + it2->second.update.price) / 2.0;
+                double correlation = 1.0 - std::min(1.0, price_diff / avg_price);
+
+                total_correlation += correlation;
+                correlation_count++;
+
+                ++it2;
+            }
+            ++it1;
+        }
+
+        if (correlation_count > 0) {
+            enhanced_view.market_metrics.cross_exchange_correlation = total_correlation / correlation_count;
+        }
+    }
+
+    // Calculate data quality metrics
+    auto quality_metrics = calculateDataQualityMetrics(symbol);
+    if (quality_metrics.has_value()) {
+        enhanced_view.data_quality = quality_metrics.value();
+    }
+
+    // Calculate exchange rankings
+    auto rankings = rankExchangesByReliability();
+    enhanced_view.exchange_rankings = rankings;
+
+    // Perform comprehensive time synchronization
+    auto time_sync_result = performComprehensiveTimeSync(symbol, sync_strategy_);
+    if (time_sync_result.has_value()) {
+        enhanced_view.time_sync_result = time_sync_result.value();
+    }
+
+    enhanced_view.timestamp = std::chrono::high_resolution_clock::now();
+
+    return enhanced_view;
+}
+
+// Method to get enhanced aggregated data with additional multi-exchange analytics
+std::optional<EnhancedAggregatedMarketData> ExchangeAggregator::getEnhancedAggregatedDataWithAnalytics(
+    const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    auto symbol_it = exchange_data_.find(symbol);
+    if (symbol_it == exchange_data_.end()) {
+        return std::nullopt;
+    }
+
+    EnhancedAggregatedMarketData enhanced_data;
+    enhanced_data.symbol = symbol;
+    enhanced_data.sync_strategy = sync_strategy_;
+
+    // Filter out invalid or stale exchange data
+    std::unordered_map<std::string, RenderEngine::MarketDataUpdate> valid_exchange_data;
+    for (const auto& [exchange, data] : symbol_it->second) {
+        if (isExchangeDataValid(exchange, data)) {
+            valid_exchange_data[exchange] = data;
+            enhanced_data.exchange_data[exchange] = data;
+        }
+    }
+
+    if (valid_exchange_data.empty()) {
+        return std::nullopt;
+    }
+
+    // Collect timestamps from all valid exchanges
+    for (const auto& [exchange, data] : valid_exchange_data) {
+        enhanced_data.exchange_timestamps[exchange] = data.timestamp;
+    }
+
+    // Enhanced time synchronization with multiple strategies
+    synchronizeTimestamps(enhanced_data);
+
+    // Calculate aggregated values using multiple sophisticated methods
+    enhanced_data.aggregated_price = calculateWeightedAveragePriceWithValidation(symbol);
+    enhanced_data.weighted_price = calculateVolumeWeightedPrice(valid_exchange_data);
+    enhanced_data.consensus_price = calculateConsensusPrice(symbol);
+
+    // Calculate additional aggregated metrics
+    enhanced_data.aggregated_high = calculateHighPrice(valid_exchange_data);
+    enhanced_data.aggregated_low = calculateLowPrice(valid_exchange_data);
+    enhanced_data.aggregated_bid = calculateBestBid(valid_exchange_data);
+    enhanced_data.aggregated_ask = calculateBestAsk(valid_exchange_data);
+
+    // Calculate total volume across all valid exchanges
+    double total_volume = 0.0;
+    for (const auto& [exchange, data] : valid_exchange_data) {
+        total_volume += data.size;
+    }
+    enhanced_data.aggregated_volume = total_volume;
+
+    // Calculate advanced metrics using multiple algorithms
+    enhanced_data.vwap = calculateVWAP(valid_exchange_data);
+    enhanced_data.median_price = calculateMedianPrice(valid_exchange_data);
+    enhanced_data.trimmed_mean_price = calculateTrimmedMean(valid_exchange_data, 0.1);
+    enhanced_data.geometric_mean_price = calculateGeometricMeanPrice(valid_exchange_data);
+    enhanced_data.harmonic_mean_price = calculateHarmonicMean(valid_exchange_data);
+
+    // Calculate exchange correlations and detect arbitrage opportunities
+    calculateExchangeCorrelations(symbol, valid_exchange_data, enhanced_data);
+    detectArbitrageOpportunities(valid_exchange_data, enhanced_data);
+
+    // Enhanced risk assessment using multiple metrics
+    calculateEnhancedRiskMetrics(symbol, valid_exchange_data, enhanced_data);
+
+    // Calculate additional statistical measures
+    std::vector<double> prices;
+    for (const auto& [exchange, data] : valid_exchange_data) {
+        prices.push_back(data.price);
+    }
+
+    if (!prices.empty()) {
+        // Calculate statistical dispersion metrics
+        double sum = std::accumulate(prices.begin(), prices.end(), 0.0);
+        double mean = sum / prices.size();
+
+        double variance = 0.0;
+        for (double price : prices) {
+            variance += (price - mean) * (price - mean);
+        }
+        variance /= prices.size();
+
+        enhanced_data.statistical_metrics.mean_price = mean;
+        enhanced_data.statistical_metrics.std_deviation = std::sqrt(variance);
+        enhanced_data.statistical_metrics.variance = variance;
+        enhanced_data.statistical_metrics.min_price = *std::min_element(prices.begin(), prices.end());
+        enhanced_data.statistical_metrics.max_price = *std::max_element(prices.begin(), prices.end());
+        enhanced_data.statistical_metrics.price_range = enhanced_data.statistical_metrics.max_price - enhanced_data.statistical_metrics.min_price;
+        enhanced_data.statistical_metrics.coefficient_of_variation = (mean > 0) ?
+            enhanced_data.statistical_metrics.std_deviation / mean : 0.0;
+
+        // Calculate quartiles
+        std::vector<double> sorted_prices = prices;
+        std::sort(sorted_prices.begin(), sorted_prices.end());
+        size_t n = sorted_prices.size();
+        enhanced_data.statistical_metrics.q1_price = sorted_prices[n/4];
+        enhanced_data.statistical_metrics.q3_price = sorted_prices[3*n/4];
+        enhanced_data.statistical_metrics.median_price = (n % 2 == 0) ?
+            (sorted_prices[n/2 - 1] + sorted_prices[n/2]) / 2.0 : sorted_prices[n/2];
+    }
+
+    enhanced_data.last_updated = std::chrono::high_resolution_clock::now();
+
+    return enhanced_data;
+}
+
 }  // namespace Data
 }  // namespace BTQuant

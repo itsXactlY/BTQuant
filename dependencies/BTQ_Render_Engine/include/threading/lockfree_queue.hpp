@@ -6,6 +6,8 @@
 #include <thread>
 #include <new>
 #include <optional>
+#include <utility>
+#include <vector>
 
 namespace btq {
 namespace threading {
@@ -45,8 +47,10 @@ public:
         // Sequentially clean up all nodes
         // This assumes that no other threads are accessing the queue during destruction
         Node* current = head_.load(std::memory_order_acquire);
+        Node* next = nullptr;
+
         while (current != nullptr) {
-            Node* next = current->next.load(std::memory_order_relaxed);
+            next = current->next.load(std::memory_order_relaxed);
             delete current;
             current = next;
         }
@@ -139,11 +143,9 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Delete the old head (sentinel node), but only if it's not the initial sentinel
-                    // The initial sentinel node will be deleted in the destructor
-                    if (head_snapshot != head_.load(std::memory_order_relaxed)) {
-                        delete head_snapshot;
-                    }
+                    // Delete the old head (the sentinel node that was previously at head)
+                    // We only delete the old head after advancing the head pointer
+                    delete head_snapshot;
 
                     return std::make_shared<T>(std::move(data));
                 }
@@ -180,11 +182,8 @@ public:
                     // Successfully dequeued, extract the data
                     T data = std::move(next->data);
 
-                    // Delete the old head (sentinel node), but only if it's not the initial sentinel
-                    // The initial sentinel node will be deleted in the destructor
-                    if (head_snapshot != head_.load(std::memory_order_relaxed)) {
-                        delete head_snapshot;
-                    }
+                    // Delete the old head (the sentinel node that was previously at head)
+                    delete head_snapshot;
 
                     return std::move(data);
                 }
@@ -268,6 +267,48 @@ public:
                 tail_.compare_exchange_strong(prev_tail, next, std::memory_order_release, std::memory_order_acquire);
             }
         }
+    }
+
+    // Batch push operation for better performance when pushing multiple items
+    template<typename Iterator>
+    void push_batch(Iterator begin, Iterator end) {
+        for (auto it = begin; it != end; ++it) {
+            push(*it);
+        }
+    }
+
+    // Batch pop operation to retrieve multiple items at once
+    std::vector<T> pop_batch(size_t max_items) {
+        std::vector<T> result;
+        result.reserve(max_items);
+
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = try_pop();
+            if (item.has_value()) {
+                result.emplace_back(std::move(item.value()));
+            } else {
+                break; // Queue is empty
+            }
+        }
+
+        return result;
+    }
+
+    // Blocking pop with timeout for use in UI thread
+    template<typename Rep, typename Period>
+    std::shared_ptr<T> pop_for(const std::chrono::duration<Rep, Period>& timeout_duration) {
+        auto start_time = std::chrono::steady_clock::now();
+        auto end_time = start_time + timeout_duration;
+
+        while (std::chrono::steady_clock::now() < end_time) {
+            auto result = pop();
+            if (result) {
+                return result;
+            }
+            std::this_thread::yield(); // Allow other threads to run
+        }
+
+        return nullptr; // Timeout reached
     }
 };
 

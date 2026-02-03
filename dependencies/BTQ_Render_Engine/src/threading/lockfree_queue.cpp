@@ -5,6 +5,7 @@
 #include <chrono>
 #include <tuple>
 #include <optional>
+#include <utility>
 
 // Explicit template instantiations for commonly used types in the BTQ Render Engine
 // This helps reduce compilation times and ensures proper linking of template implementations
@@ -40,6 +41,10 @@ template class LockFreeQueue<std::optional<int>>;
 template class LockFreeQueue<std::optional<double>>;
 template class LockFreeQueue<std::optional<btq::Trade>>;
 template class LockFreeQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality
+template class LockFreeQueue<std::pair<btq::Trade, btq::Candle>>;
+template class LockFreeQueue<std::vector<std::pair<double, double>>>;
 
 } // namespace threading
 } // namespace btq

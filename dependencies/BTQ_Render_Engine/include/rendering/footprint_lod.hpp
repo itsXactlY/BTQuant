@@ -633,6 +633,10 @@ public:
                                const std::vector<FootprintCell>& stacked_imbalances,
                                const FootprintPanel* panel) const;
 
+    // Get enhanced smooth transition render settings for transitioning between LOD levels
+    LODRenderSettings getEnhancedSmoothTransitionRenderSettings(LODLevel from_lod, LODLevel to_lod,
+                                                              float transition_progress, float zoom_factor) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

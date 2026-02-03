@@ -6212,5 +6212,48 @@ void FootprintLOD::applyUltimateZoomLODToCell(const FootprintCell& cell,
     }
 }
 
+LODRenderSettings FootprintLOD::getEnhancedSmoothTransitionRenderSettings(LODLevel from_lod, LODLevel to_lod,
+                                                                       float transition_progress, float zoom_factor) const {
+    // Get render settings for both the 'from' and 'to' LOD levels
+    LODRenderSettings from_settings = getRenderSettings(from_lod);
+    LODRenderSettings to_settings = getRenderSettings(to_lod);
+
+    // Interpolate between the two sets of settings based on transition progress
+    LODRenderSettings result;
+
+    // For boolean flags, use the 'to' settings if we're more than halfway through the transition
+    result.render_heatmap = (transition_progress > 0.5f) ? to_settings.render_heatmap : from_settings.render_heatmap;
+    result.render_borders = (transition_progress > 0.3f) ? to_settings.render_borders : from_settings.render_borders;
+    result.render_text = (transition_progress > 0.7f) ? to_settings.render_text : from_settings.render_text;
+    result.render_labels = (transition_progress > 0.8f) ? to_settings.render_labels : from_settings.render_labels;
+    result.render_detailed_annotations = (transition_progress > 0.9f) ? to_settings.render_detailed_annotations : from_settings.render_detailed_annotations;
+
+    // Interpolate numeric values based on transition progress
+    result.alpha_multiplier = from_settings.alpha_multiplier * (1.0f - transition_progress) +
+                             to_settings.alpha_multiplier * transition_progress;
+
+    result.border_thickness = from_settings.border_thickness * (1.0f - transition_progress) +
+                             to_settings.border_thickness * transition_progress;
+
+    // Apply zoom-based adjustments to ensure smooth transitions at different zoom levels
+    if (zoom_factor < 0.2f) {
+        // When zoomed out significantly, reduce detail during transitions to maintain performance
+        result.render_text = false;
+        result.render_labels = false;
+        result.render_detailed_annotations = false;
+        result.alpha_multiplier *= 0.7f;
+    } else if (zoom_factor > 2.0f) {
+        // When zoomed in, allow more detail during transitions
+        if (transition_progress > 0.5f) {
+            result.render_labels = true;
+        }
+        if (transition_progress > 0.7f) {
+            result.render_detailed_annotations = true;
+        }
+    }
+
+    return result;
+}
+
 } // namespace Rendering
 } // namespace BTQuant

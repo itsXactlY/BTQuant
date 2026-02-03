@@ -1190,51 +1190,50 @@ std::future<std::vector<double>> TaskScheduler::calculate_macd_async(
                 return;
             }
 
-            // Calculate EMAs for fast and slow periods
-            auto fast_ema_future = std::async(std::launch::async, [prices, fast_period]() {
-                std::vector<double> ema_values;
-                if (prices.empty()) return ema_values;
+            // Calculate EMAs for fast and slow periods using the same approach as calculate_ema_async
+            // but inline to avoid spawning additional threads outside the thread pool
 
-                ema_values.reserve(prices.size());
+            // Calculate fast EMA
+            std::vector<double> fast_ema_values;
+            if (!prices.empty()) {
+                fast_ema_values.reserve(prices.size());
                 double multiplier = 2.0 / (fast_period + 1);
 
                 // Start with SMA for the first EMA value
                 int sma_period = std::min(fast_period, static_cast<int>(prices.size()));
                 double sma_sum = std::accumulate(prices.begin(), prices.begin() + sma_period, 0.0);
                 double ema = sma_sum / sma_period;
-                ema_values.push_back(ema);
+                fast_ema_values.push_back(ema);
 
+                // Sequential processing for EMA since each value depends on the previous
                 for (size_t i = sma_period; i < prices.size(); ++i) {
                     ema = (prices[i] - ema) * multiplier + ema;
-                    ema_values.push_back(ema);
+                    fast_ema_values.push_back(ema);
                 }
+            }
 
-                return ema_values;
-            });
-
-            auto slow_ema_future = std::async(std::launch::async, [prices, slow_period]() {
-                std::vector<double> ema_values;
-                if (prices.empty()) return ema_values;
-
-                ema_values.reserve(prices.size());
+            // Calculate slow EMA
+            std::vector<double> slow_ema_values;
+            if (!prices.empty()) {
+                slow_ema_values.reserve(prices.size());
                 double multiplier = 2.0 / (slow_period + 1);
 
                 // Start with SMA for the first EMA value
                 int sma_period = std::min(slow_period, static_cast<int>(prices.size()));
                 double sma_sum = std::accumulate(prices.begin(), prices.begin() + sma_period, 0.0);
                 double ema = sma_sum / sma_period;
-                ema_values.push_back(ema);
+                slow_ema_values.push_back(ema);
 
+                // Sequential processing for EMA since each value depends on the previous
                 for (size_t i = sma_period; i < prices.size(); ++i) {
                     ema = (prices[i] - ema) * multiplier + ema;
-                    ema_values.push_back(ema);
+                    slow_ema_values.push_back(ema);
                 }
+            }
 
-                return ema_values;
-            });
-
-            auto fast_ema = fast_ema_future.get();
-            auto slow_ema = slow_ema_future.get();
+            // Use the calculated EMAs
+            auto& fast_ema = fast_ema_values;
+            auto& slow_ema = slow_ema_values;
 
             // Calculate MACD line
             std::vector<double> macd_raw;

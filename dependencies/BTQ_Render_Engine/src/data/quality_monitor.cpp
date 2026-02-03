@@ -1533,6 +1533,60 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
         metrics_.missing_field_issues++;
         add_issue(issue);
     }
+
+    // NEW: Enhanced validation for missing or invalid fields
+    // Check for potentially invalid trade side values
+    if (static_cast<uint8_t>(trade.side) > 1) {  // Only BUY (0) and SELL (1) are valid
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Invalid trade side value: must be BUY (0) or SELL (1)", 0.8);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for potentially invalid flags value (all bits set might indicate corruption)
+    if (trade.flags == 0xFF) {  // All bits set - likely data corruption
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Potentially corrupted flags field (all bits set)", 0.9);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for extreme values that might indicate data corruption
+    if (trade.price > MAX_VALID_PRICE * 10.0) {  // 10x the maximum valid price
+        std::ostringstream oss;
+        oss << "Extremely high price value detected: " << trade.price << ", possibly indicating data corruption";
+
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             oss.str(), 0.95);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    if (trade.volume > 100000000.0f) {  // Extremely high volume threshold
+        std::ostringstream oss;
+        oss << "Extremely high volume value detected: " << trade.volume << ", possibly indicating data corruption";
+
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             oss.str(), 0.95);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
+
+    // Check for timestamp precision issues (e.g., if timestamp is 0 or extremely old)
+    if (trade.timestamp == 0) {
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             "Timestamp is zero, indicating potential missing data", 0.9);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    } else if (trade.timestamp < 1000000000000ULL) {  // Before year 2001 (timestamp in milliseconds)
+        std::ostringstream oss;
+        oss << "Timestamp is extremely old (year < 2001): " << trade.timestamp;
+
+        DataQualityIssue issue(DataQualityIssueType::MISSING_FIELD, symbol, timestamp,
+                             oss.str(), 0.8);
+        metrics_.missing_field_issues++;
+        add_issue(issue);
+    }
 }
 
 DataQualityMetrics DataQualityMonitor::get_metrics() const {
@@ -2189,6 +2243,77 @@ void DataQualityMonitor::notify_users_of_data_problem(const std::string& symbol,
     std::cout << "Severity Level:  " << severity_level << " (" << severity << ")" << std::endl;
     std::cout << "Description:     " << problem_description << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
+}
+
+// NEW: Enhanced method to specifically alert users to data problems with additional context
+void DataQualityMonitor::alert_user_to_data_problems_with_context(const std::string& symbol,
+                                                                 const std::string& problem_description,
+                                                                 double severity,
+                                                                 const std::string& source_component,
+                                                                 const std::string& additional_context) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    uint64_t current_timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    // Determine the appropriate issue type based on the problem description
+    DataQualityIssueType issue_type = DataQualityIssueType::MISSING_DATA; // Default
+
+    if (problem_description.find("duplicate") != std::string::npos) {
+        issue_type = DataQualityIssueType::DUPLICATE_TRADE;
+    } else if (problem_description.find("out of order") != std::string::npos ||
+               problem_description.find("timestamp") != std::string::npos) {
+        issue_type = DataQualityIssueType::OUT_OF_ORDER_TIMESTAMP;
+    } else if (problem_description.find("latency") != std::string::npos) {
+        issue_type = DataQualityIssueType::LATENCY_ISSUE;
+    } else if (problem_description.find("price") != std::string::npos) {
+        issue_type = DataQualityIssueType::INVALID_PRICE;
+    } else if (problem_description.find("volume") != std::string::npos) {
+        issue_type = DataQualityIssueType::INVALID_VOLUME;
+    } else if (problem_description.find("field") != std::string::npos ||
+               problem_description.find("missing") != std::string::npos) {
+        issue_type = DataQualityIssueType::MISSING_FIELD;
+    }
+
+    // Create a more descriptive problem description with context
+    std::ostringstream contextual_description;
+    contextual_description << problem_description;
+    if (!source_component.empty()) {
+        contextual_description << " [Source: " << source_component << "]";
+    }
+    if (!additional_context.empty()) {
+        contextual_description << " [Context: " << additional_context << "]";
+    }
+
+    DataQualityIssue issue(issue_type, symbol, current_timestamp, contextual_description.str(), severity);
+    add_issue(issue);
+
+    // Enhanced user notification with additional context
+    if (console_alerts_enabled_) {
+        std::cout << "\n" << std::string(80, '*') << std::endl;
+        std::cout << "CRITICAL DATA QUALITY ALERT WITH CONTEXT!" << std::endl;
+        std::cout << std::string(80, '*') << std::endl;
+        std::cout << "Symbol:        " << symbol << std::endl;
+        std::cout << "Component:     " << source_component << std::endl;
+        std::cout << "Problem:       " << problem_description << std::endl;
+        std::cout << "Context:       " << additional_context << std::endl;
+        std::cout << "Severity:      " << severity << std::endl;
+        std::cout << std::string(80, '*') << std::endl << std::endl;
+    }
+
+    // Send to external monitoring if enabled
+    send_external_alert(issue);
+
+    // Send to UI components
+    send_ui_notification(issue);
+
+    // Trigger visual alerts for high severity issues
+    if (severity >= 0.9) {
+        trigger_visual_alert(symbol, contextual_description.str());
+    }
+
+    // Call the standard notification method
+    notify_users_of_data_problem(symbol, contextual_description.str(), severity, issue_type);
 }
 
 void DataQualityMonitor::trigger_visual_alert(const std::string& symbol, const std::string& problem_description) {

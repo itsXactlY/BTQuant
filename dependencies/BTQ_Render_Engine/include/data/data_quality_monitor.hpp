@@ -142,6 +142,13 @@ public:
   void notify_users_of_data_problem(const std::string& symbol, const std::string& problem_description,
                                    double severity, DataQualityIssueType issue_type);
 
+  // NEW: Enhanced method to alert users with additional context
+  void alert_user_to_data_problems_with_context(const std::string& symbol,
+                                              const std::string& problem_description,
+                                              double severity,
+                                              const std::string& source_component = "",
+                                              const std::string& additional_context = "");
+
   // Enhanced alerting methods for specific data quality issues
   void alert_on_missing_data(const std::string& symbol, uint64_t expected_time, uint64_t actual_time);
   void alert_on_duplicate_trade(const TradeData& trade, const std::string& symbol);

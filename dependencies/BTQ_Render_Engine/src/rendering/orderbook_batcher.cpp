@@ -1534,6 +1534,107 @@ void OrderbookBatcher::fastConsolidateBatches() {
     batches_ = std::move(consolidated_batches);
 }
 
+// Ultra-fast batch consolidation that uses a more efficient algorithm to reduce draw calls and GPU overhead
+void OrderbookBatcher::ultraFastConsolidateBatches() {
+    if (batches_.size() <= 1) {
+        return; // Nothing to consolidate
+    }
+
+    // Use a more efficient approach with texture-based grouping to minimize comparisons
+    std::unordered_map<ImTextureID, std::vector<size_t>> texture_to_batch_indices;
+
+    // Group batch indices by texture in a single pass - O(n) complexity
+    for (size_t i = 0; i < batches_.size(); ++i) {
+        if (!batches_[i].vertices.empty() || !batches_[i].indices.empty()) {
+            texture_to_batch_indices[batches_[i].texture].push_back(i);
+        }
+    }
+
+    std::vector<OrderbookBatchElement> consolidated_batches;
+    consolidated_batches.reserve(batches_.size()); // Pre-allocate to reduce reallocations
+
+    // Process each texture group separately to minimize color comparisons
+    for (auto& [texture, indices] : texture_to_batch_indices) {
+        if (indices.size() == 1) {
+            // If only one batch for this texture, just move it
+            size_t idx = indices[0];
+            if (!batches_[idx].vertices.empty() || !batches_[idx].indices.empty()) {
+                consolidated_batches.push_back(std::move(batches_[idx]));
+            }
+            continue;
+        }
+
+        // For multiple batches with the same texture, consolidate them efficiently
+        std::vector<bool> processed(indices.size(), false);
+
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (processed[i]) continue;
+
+            size_t current_idx = indices[i];
+            OrderbookBatchElement& current_batch = batches_[current_idx];
+
+            if (current_batch.vertices.empty() && current_batch.indices.empty()) {
+                processed[i] = true;
+                continue;
+            }
+
+            // Start with the current batch as the base for consolidation
+            OrderbookBatchElement consolidated_batch = std::move(current_batch);
+            processed[i] = true;
+
+            // Look for compatible batches within the same texture group to merge
+            for (size_t j = i + 1; j < indices.size(); ++j) {
+                if (processed[j]) continue;
+
+                size_t candidate_idx = indices[j];
+                OrderbookBatchElement& candidate_batch = batches_[candidate_idx];
+
+                // Check if batches can be combined (size limits and color similarity)
+                if (consolidated_batch.vertices.size() + candidate_batch.vertices.size() < 65535 &&
+                    consolidated_batch.indices.size() + candidate_batch.indices.size() < 65535) {
+
+                    // Check color compatibility with moderate tolerance
+                    if (consolidated_batch.vertices.empty() || candidate_batch.vertices.empty() ||
+                        areColorsSimilar(consolidated_batch.vertices[0].col, candidate_batch.vertices[0].col, 60)) {
+
+                        // Efficiently merge the candidate batch into the consolidated batch
+                        size_t vertex_offset = consolidated_batch.vertices.size();
+
+                        // Pre-reserve space to minimize reallocations during insertion
+                        consolidated_batch.vertices.reserve(
+                            consolidated_batch.vertices.size() + candidate_batch.vertices.size());
+
+                        consolidated_batch.indices.reserve(
+                            consolidated_batch.indices.size() + candidate_batch.indices.size());
+
+                        // Move vertices from candidate to consolidated batch
+                        consolidated_batch.vertices.insert(
+                            consolidated_batch.vertices.end(),
+                            std::make_move_iterator(candidate_batch.vertices.begin()),
+                            std::make_move_iterator(candidate_batch.vertices.end()));
+
+                        // Add indices with proper offset
+                        for (auto index : candidate_batch.indices) {
+                            consolidated_batch.indices.push_back(
+                                static_cast<ImDrawIdx>(index + vertex_offset));
+                        }
+
+                        processed[j] = true;
+                    }
+                }
+            }
+
+            // Add the consolidated batch to the result
+            if (!consolidated_batch.vertices.empty() || !consolidated_batch.indices.empty()) {
+                consolidated_batches.push_back(std::move(consolidated_batch));
+            }
+        }
+    }
+
+    // Replace the old batches with the ultra-fast consolidated ones
+    batches_ = std::move(consolidated_batches);
+}
+
 // Ultra optimization that uses the most aggressive approach to minimize GPU overhead
 void OrderbookBatcher::ultraOptimizeBatches() {
     if (batches_.size() <= 1) {
@@ -1613,6 +1714,99 @@ void OrderbookBatcher::ultraOptimizeBatches() {
     }
 
     // Replace the old batches with the optimized ones
+    batches_ = std::move(optimized_batches);
+}
+
+// Smart batch optimization that uses intelligent grouping to minimize GPU overhead
+void OrderbookBatcher::smartOptimizeBatches() {
+    if (batches_.size() <= 1) {
+        return; // Nothing to optimize
+    }
+
+    // Use smart grouping by texture and color similarity with adaptive tolerance
+    std::vector<OrderbookBatchElement> optimized_batches;
+
+    // Group batches by texture first to minimize texture switches
+    std::unordered_map<ImTextureID, std::vector<size_t>> texture_groups;
+    for (size_t i = 0; i < batches_.size(); ++i) {
+        if (!batches_[i].vertices.empty() || !batches_[i].indices.empty()) {
+            texture_groups[batches_[i].texture].push_back(i);
+        }
+    }
+
+    // Process each texture group with adaptive color tolerance
+    for (const auto& [texture, indices] : texture_groups) {
+        if (indices.size() <= 1) {
+            // If only one batch for this texture, just add it as-is
+            if (!indices.empty() &&
+                (!batches_[indices[0]].vertices.empty() || !batches_[indices[0]].indices.empty())) {
+                optimized_batches.push_back(std::move(batches_[indices[0]]));
+            }
+            continue;
+        }
+
+        // For multiple batches with the same texture, apply smart merging
+        std::vector<bool> processed(batches_.size(), false);
+
+        for (size_t i : indices) {
+            if (processed[i]) continue;
+
+            OrderbookBatchElement combined_batch = std::move(batches_[i]);
+            processed[i] = true;
+
+            // Adaptive tolerance based on the number of batches in this texture group
+            uint8_t adaptive_tolerance = 50;
+            if (indices.size() > 10) {
+                adaptive_tolerance = 75;  // More tolerance for larger groups
+            } else if (indices.size() > 20) {
+                adaptive_tolerance = 100; // Even more tolerance for very large groups
+            }
+
+            // Look for compatible batches to merge with smart efficiency
+            for (size_t j : indices) {
+                if (i == j || processed[j]) continue;
+
+                // Smart compatibility check
+                if (combined_batch.vertices.size() + batches_[j].vertices.size() < 65535 &&
+                    combined_batch.indices.size() + batches_[j].indices.size() < 65535) {
+
+                    // Smart color compatibility check with adaptive tolerance
+                    if (combined_batch.vertices.empty() || batches_[j].vertices.empty() ||
+                        areColorsSimilar(combined_batch.vertices[0].col, batches_[j].vertices[0].col, adaptive_tolerance)) {
+
+                        // Smart efficient merge
+                        size_t vertex_offset = combined_batch.vertices.size();
+
+                        // Pre-allocate for smart efficiency
+                        combined_batch.vertices.reserve(combined_batch.vertices.size() +
+                                                     batches_[j].vertices.size());
+                        combined_batch.indices.reserve(combined_batch.indices.size() +
+                                                    batches_[j].indices.size());
+
+                        // Smart fast copy of vertices
+                        combined_batch.vertices.insert(combined_batch.vertices.end(),
+                                                     std::make_move_iterator(batches_[j].vertices.begin()),
+                                                     std::make_move_iterator(batches_[j].vertices.end()));
+
+                        // Smart fast copy of indices with offset
+                        for (auto index : batches_[j].indices) {
+                            combined_batch.indices.push_back(
+                                static_cast<ImDrawIdx>(index + vertex_offset));
+                        }
+
+                        processed[j] = true;
+                    }
+                }
+            }
+
+            // Add the smartly optimized batch
+            if (!combined_batch.vertices.empty() || !combined_batch.indices.empty()) {
+                optimized_batches.push_back(std::move(combined_batch));
+            }
+        }
+    }
+
+    // Replace the old batches with the smartly optimized ones
     batches_ = std::move(optimized_batches);
 }
 
@@ -2132,10 +2326,10 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
         return;
     }
 
-    // Apply the ultimate optimization pass to minimize draw calls and GPU overhead
+    // Apply the smart optimization pass to minimize draw calls and GPU overhead
     // Rather than applying multiple optimization passes which can be computationally expensive,
-    // we'll use the ultimate optimized pass that combines the most effective techniques
-    ultimateOptimizeBatches();
+    // we'll use the smart optimized pass that adapts to current batch characteristics
+    smartOptimizeBatches();
 
     // Pre-calculate total vertices and indices to reserve space upfront
     size_t total_vertices = 0;
@@ -2821,8 +3015,8 @@ void OrderbookBatcher::submitOptimized(ImDrawList* draw_list) {
         return;
     }
 
-    // Apply maximum optimization to minimize draw calls before submission
-    maximumOptimizeBatches();
+    // Apply ultra-fast consolidation to minimize draw calls before submission
+    ultraFastConsolidateBatches();
 
     // Pre-calculate total vertices and indices to reserve space upfront
     size_t total_vertices = 0;
@@ -3070,6 +3264,94 @@ void OrderbookBatcher::batchGeometryMaximumPerformance(const std::vector<Orderbo
             }
         }
     }
+}
+
+// Advanced batch optimization that uses hierarchical grouping to minimize GPU overhead
+void OrderbookBatcher::hierarchicalOptimizeBatches() {
+    if (batches_.size() <= 1) {
+        return; // Nothing to optimize
+    }
+
+    // Use hierarchical grouping: first by texture, then by color similarity
+    std::unordered_map<ImTextureID, std::vector<OrderbookBatchElement>> texture_groups;
+
+    // Group batches by texture
+    for (auto& batch : batches_) {
+        if (!batch.vertices.empty() || !batch.indices.empty()) {
+            texture_groups[batch.texture].push_back(std::move(batch));
+        }
+    }
+
+    std::vector<OrderbookBatchElement> optimized_batches;
+
+    // Process each texture group with hierarchical color clustering
+    for (auto& [texture, batch_group] : texture_groups) {
+        if (batch_group.size() == 1) {
+            // If only one batch for this texture, just move it
+            optimized_batches.push_back(std::move(batch_group[0]));
+            continue;
+        }
+
+        // Cluster batches by color similarity within the same texture group
+        std::vector<OrderbookBatchElement> clustered_batches;
+
+        for (auto& current_batch : batch_group) {
+            if (current_batch.vertices.empty() && current_batch.indices.empty()) {
+                continue;
+            }
+
+            bool merged = false;
+
+            // Look for a compatible batch to merge with in the clustered batches
+            for (auto& target_batch : clustered_batches) {
+                if (target_batch.vertices.size() + current_batch.vertices.size() < 65535 &&
+                    target_batch.indices.size() + current_batch.indices.size() < 65535) {
+
+                    // Use color similarity to determine compatibility
+                    if (target_batch.vertices.empty() || current_batch.vertices.empty() ||
+                        areColorsSimilar(target_batch.vertices[0].col, current_batch.vertices[0].col, 70)) {
+
+                        // Merge the current batch into the target batch
+                        size_t vertex_offset = target_batch.vertices.size();
+
+                        // Reserve space to minimize reallocations
+                        target_batch.vertices.reserve(target_batch.vertices.size() + current_batch.vertices.size());
+                        target_batch.indices.reserve(target_batch.indices.size() + current_batch.indices.size());
+
+                        // Move vertices from current batch to target batch
+                        target_batch.vertices.insert(
+                            target_batch.vertices.end(),
+                            std::make_move_iterator(current_batch.vertices.begin()),
+                            std::make_move_iterator(current_batch.vertices.end()));
+
+                        // Add indices with proper offset
+                        for (auto index : current_batch.indices) {
+                            target_batch.indices.push_back(
+                                static_cast<ImDrawIdx>(index + vertex_offset));
+                        }
+
+                        merged = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!merged) {
+                // If no compatible batch was found, add as a new cluster
+                clustered_batches.push_back(std::move(current_batch));
+            }
+        }
+
+        // Move all clustered batches to the final result
+        for (auto& batch : clustered_batches) {
+            if (!batch.vertices.empty() || !batch.indices.empty()) {
+                optimized_batches.push_back(std::move(batch));
+            }
+        }
+    }
+
+    // Replace the old batches with the hierarchically optimized ones
+    batches_ = std::move(optimized_batches);
 }
 
 } // namespace BTQuant

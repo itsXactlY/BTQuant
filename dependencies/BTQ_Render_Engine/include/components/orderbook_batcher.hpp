@@ -155,6 +155,15 @@ public:
     // Maximum performance batch method that combines similar elements with ultimate efficiency and minimal GPU overhead
     void batchGeometryMaximumPerformance(const std::vector<OrderbookElementData>& elements);
 
+    // Ultra-fast batch consolidation that uses a more efficient algorithm to reduce draw calls and GPU overhead
+    void ultraFastConsolidateBatches();
+
+    // Smart batch optimization that uses intelligent grouping to minimize GPU overhead
+    void smartOptimizeBatches();
+
+    // Advanced batch optimization that uses hierarchical grouping to minimize GPU overhead
+    void hierarchicalOptimizeBatches();
+
 private:
     std::vector<OrderbookBatchElement> batches_;
 

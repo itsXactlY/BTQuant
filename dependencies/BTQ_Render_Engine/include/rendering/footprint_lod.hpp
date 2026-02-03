@@ -7,6 +7,16 @@
 #include "imgui.h"
 #include "implot.h"
 
+// Custom hash function for std::pair used in grid-based aggregation
+struct PairHash {
+    template<class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2>& p) const {
+        auto h1 = std::hash<T1>{}(p.first);
+        auto h2 = std::hash<T2>{}(p.second);
+        return h1 ^ h2;
+    }
+};
+
 // Forward declaration to avoid circular dependency
 namespace BTQuant {
     struct FootprintCell;  // Defined in footprint_panel.hpp
@@ -363,6 +373,71 @@ public:
                                    const std::vector<FootprintCell>& stacked_imbalances,
                                    const FootprintPanel* panel,
                                    const std::vector<FootprintCell>& gradient_neighbors) const;
+
+    // Calculate zoom-level optimized LOD for better performance across different zoom levels
+    LODLevel calculateZoomLevelLOD(float cell_width_px, float cell_height_px,
+                               float zoom_factor) const;
+
+    // Get zoom-level optimized render settings
+    LODRenderSettings getZoomLevelRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply zoom-level optimized LOD to cell rendering
+    void applyZoomLevelLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel) const;
+
+    // Calculate tile-based LOD for managing very large datasets efficiently
+    LODLevel calculateTileBasedLOD(float cell_width_px, float cell_height_px,
+                               float zoom_factor, int tile_size_px = 256) const;
+
+    // Apply tile-based LOD to cell rendering
+    void applyTileBasedLODToCell(const FootprintCell& cell,
+                                ImDrawList* draw_list,
+                                float zoom_factor,
+                                double max_volume,
+                                const std::vector<FootprintCell>& diagonal_imbalances,
+                                const std::vector<FootprintCell>& stacked_imbalances,
+                                const FootprintPanel* panel,
+                                int tile_size_px = 256) const;
+
+    // Calculate enhanced LOD for when zoomed in significantly
+    LODLevel calculateEnhancedZoomInLOD(float cell_width_px, float cell_height_px,
+                                    float zoom_factor) const;
+
+    // Get enhanced rendering settings for increased detail when zoomed in significantly
+    LODRenderSettings getEnhancedZoomInRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply enhanced LOD rendering to a single cell when zoomed in significantly
+    void applyEnhancedZoomInLODToCell(const FootprintCell& cell,
+                                     ImDrawList* draw_list,
+                                     float zoom_factor,
+                                     double max_volume,
+                                     const std::vector<FootprintCell>& diagonal_imbalances,
+                                     const std::vector<FootprintCell>& stacked_imbalances,
+                                     const FootprintPanel* panel) const;
+
+    // Calculate simplified LOD for when zoomed out significantly
+    LODLevel calculateSimplifiedZoomOutLOD(float cell_width_px, float cell_height_px,
+                                       float zoom_factor) const;
+
+    // Get simplified rendering settings for zoomed-out views
+    LODRenderSettings getSimplifiedZoomOutRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply simplified LOD rendering to a single cell when zoomed out significantly
+    void applySimplifiedZoomOutLODToCell(const FootprintCell& cell,
+                                        ImDrawList* draw_list,
+                                        float zoom_factor,
+                                        double max_volume,
+                                        const FootprintPanel* panel) const;
+
+    // Aggregate cells for zoomed-out views to reduce visual clutter
+    std::vector<FootprintCell> aggregateCellsForZoomOut(const std::vector<FootprintCell>& cells,
+                                                     float zoom_factor,
+                                                     float grid_size = 0.1f) const;
 
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }

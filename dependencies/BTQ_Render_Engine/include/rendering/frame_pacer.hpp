@@ -132,6 +132,13 @@ private:
     mutable double prediction_derivative_;
     mutable double last_prediction_error_;
 
+    // Advanced frame pacing components
+    double frame_budget_tracker_;
+    double frame_jitter_compensator_;
+    double frame_stability_score_;
+    bool frame_phase_lock_;
+    std::chrono::high_resolution_clock::time_point phase_reference_time_;
+
     // Timing helpers
     double calculate_sleep_duration() const;
     void update_statistics(double current_frame_time);
@@ -142,6 +149,10 @@ private:
     void adapt_target_fps();
     double predict_frame_time() const;
     double apply_pid_control(double error);
+    void update_frame_stability();
+    void apply_jitter_compensation();
+    void update_frame_budget();
+    void synchronize_frame_phase();
 };
 
 } // namespace RenderEngine

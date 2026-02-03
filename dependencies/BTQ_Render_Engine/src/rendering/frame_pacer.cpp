@@ -20,6 +20,11 @@ FramePacer::FramePacer(const Config& config)
     , prediction_integral_(0.0)
     , prediction_derivative_(0.0)
     , last_prediction_error_(0.0)
+    , frame_budget_tracker_(1000.0 / config.target_fps)
+    , frame_jitter_compensator_(0.0)
+    , frame_stability_score_(1.0)
+    , frame_phase_lock_(false)
+    , phase_reference_time_(std::chrono::high_resolution_clock::now())
 {
     // Initialize stats
     stats_.avg_frame_time_ms = 1000.0 / config.target_fps;
@@ -41,6 +46,12 @@ FramePacer::FramePacer(const Config& config)
     pid_controller_.kp = 0.1;  // Proportional gain
     pid_controller_.ki = 0.01; // Integral gain
     pid_controller_.kd = 0.001; // Derivative gain
+
+    // Initialize frame budget tracker with target frame time
+    frame_budget_tracker_ = 1000.0 / config.target_fps;
+
+    // Initialize phase reference time for frame synchronization
+    phase_reference_time_ = std::chrono::high_resolution_clock::now();
 }
 
 FramePacer::FramePacer()
@@ -55,6 +66,11 @@ void FramePacer::begin_frame() {
 
     // Check if we need to adapt the target FPS based on recent performance
     adapt_target_fps();
+
+    // Perform frame synchronization if enabled
+    if (config_.enable_frame_smoothing && frame_phase_lock_) {
+        synchronize_frame_phase();
+    }
 }
 
 void FramePacer::end_frame() {
@@ -89,6 +105,14 @@ void FramePacer::end_frame() {
 
     // Check for dropped frames
     check_dropped_frames(frame_time_us);
+
+    // Update advanced frame pacing components
+    if (config_.enable_frame_smoothing) {
+        update_frame_stability();
+        apply_jitter_compensation();
+        update_frame_budget();
+        synchronize_frame_phase();
+    }
 
     // Increment frame counters before updating statistics
     frame_count_++;
@@ -146,6 +170,13 @@ void FramePacer::update_config(const Config& new_config) {
     prediction_integral_ = 0.0;
     prediction_derivative_ = 0.0;
     last_prediction_error_ = 0.0;
+
+    // Reset advanced frame pacing components when config changes
+    frame_budget_tracker_ = 1000.0 / new_config.target_fps;
+    frame_jitter_compensator_ = 0.0;
+    frame_stability_score_ = 1.0;
+    frame_phase_lock_ = false;
+    phase_reference_time_ = std::chrono::high_resolution_clock::now();
 }
 
 void FramePacer::reset_stats() {
@@ -185,6 +216,13 @@ void FramePacer::reset_stats() {
     prediction_integral_ = 0.0;
     prediction_derivative_ = 0.0;
     last_prediction_error_ = 0.0;
+
+    // Reset advanced frame pacing components
+    frame_budget_tracker_ = 1000.0 / config_.target_fps;
+    frame_jitter_compensator_ = 0.0;
+    frame_stability_score_ = 1.0;
+    frame_phase_lock_ = false;
+    phase_reference_time_ = std::chrono::high_resolution_clock::now();
 }
 
 double FramePacer::calculate_sleep_duration() const {
@@ -234,6 +272,18 @@ double FramePacer::calculate_sleep_duration() const {
         if (remaining_time > 0 && remaining_time < 1.0) {  // Less than 1ms remaining
             remaining_time = std::max(0.0, remaining_time - 0.2);  // Add 0.2ms buffer
         }
+    }
+
+    // Apply advanced frame pacing enhancements
+    if (config_.enable_frame_smoothing) {
+        // Apply jitter compensation if available
+        remaining_time += frame_jitter_compensator_;
+
+        // Adjust based on frame stability score
+        remaining_time *= frame_stability_score_;
+
+        // Apply frame budget adjustments
+        remaining_time = (remaining_time * 0.8) + (frame_budget_tracker_ * 0.2);
     }
 
     return std::max(0.0, remaining_time);
@@ -554,6 +604,128 @@ double FramePacer::apply_pid_control(double error) {
     last_prediction_error_ = error;
 
     return output;
+}
+
+void FramePacer::update_frame_stability() {
+    if (frame_count_ < 10) {
+        frame_stability_score_ = 1.0;
+        return;
+    }
+
+    // Calculate stability based on frame time variance and consistency
+    double stability_factor = 1.0 - std::min(stats_.frame_time_variance / 100.0, 0.9); // Normalize variance impact
+
+    // Factor in recent frame spikes
+    double spike_impact = std::min(static_cast<double>(spike_detector_.spike_count_recent) / 10.0, 0.5);
+    stability_factor -= spike_impact;
+
+    // Factor in dropped frames
+    if (stats_.total_frames > 0) {
+        double drop_rate = static_cast<double>(dropped_frame_counter_) / stats_.total_frames;
+        stability_factor -= std::min(drop_rate * 10.0, 0.3); // Weight dropped frames heavily
+    }
+
+    // Clamp stability score between 0.1 and 1.0
+    frame_stability_score_ = std::clamp(stability_factor, 0.1, 1.0);
+}
+
+void FramePacer::apply_jitter_compensation() {
+    if (frame_count_ < 5) {
+        frame_jitter_compensator_ = 0.0;
+        return;
+    }
+
+    // Calculate jitter as deviation from ideal frame timing
+    double target_frame_time = 1000.0 / adaptive_target_fps_;
+    double actual_frame_time = 0.0;
+
+    if (frame_count_ > 0) {
+        actual_frame_time = frame_time_history_[(frame_count_ - 1) % FRAME_HISTORY_SIZE];
+    }
+
+    double jitter = actual_frame_time - target_frame_time;
+
+    // Apply exponential moving average to smooth jitter compensation
+    const double JITTER_SMOOTHING_FACTOR = 0.1;
+    frame_jitter_compensator_ = (frame_jitter_compensator_ * (1.0 - JITTER_SMOOTHING_FACTOR)) +
+                               (jitter * JITTER_SMOOTHING_FACTOR);
+
+    // Limit compensation to prevent overcorrection
+    const double MAX_JITTER_COMPENSATION = target_frame_time * 0.3; // 30% of target time
+    frame_jitter_compensator_ = std::clamp(frame_jitter_compensator_,
+                                         -MAX_JITTER_COMPENSATION,
+                                         MAX_JITTER_COMPENSATION);
+}
+
+void FramePacer::update_frame_budget() {
+    if (!config_.enable_frame_smoothing) {
+        frame_budget_tracker_ = 1000.0 / config_.target_fps;
+        return;
+    }
+
+    // Calculate how much time we have left in our frame budget
+    double target_frame_time = 1000.0 / config_.target_fps;
+    double current_frame_time = 0.0;
+
+    if (frame_count_ > 0) {
+        current_frame_time = frame_time_history_[(frame_count_ - 1) % FRAME_HISTORY_SIZE];
+    }
+
+    // Update budget based on actual vs expected frame time
+    double budget_delta = target_frame_time - current_frame_time;
+
+    // Apply smoothing to prevent sudden budget changes
+    const double BUDGET_SMOOTHING = 0.05;
+    frame_budget_tracker_ = (frame_budget_tracker_ * (1.0 - BUDGET_SMOOTHING)) +
+                           (target_frame_time * BUDGET_SMOOTHING);
+
+    // Adjust budget based on stability and recent performance
+    frame_budget_tracker_ *= frame_stability_score_;
+
+    // If we're consistently under budget, gradually increase budget to maintain target FPS
+    if (current_frame_time < target_frame_time * 0.8 && frame_stability_score_ > 0.8) {
+        frame_budget_tracker_ = std::min(frame_budget_tracker_ * 1.001, target_frame_time);
+    }
+
+    // If we're consistently over budget, reduce budget to maintain stability
+    if (current_frame_time > target_frame_time * 1.2) {
+        frame_budget_tracker_ = std::max(frame_budget_tracker_ * 0.999, target_frame_time * 0.7);
+    }
+}
+
+void FramePacer::synchronize_frame_phase() {
+    if (!config_.enable_frame_smoothing) {
+        frame_phase_lock_ = false;
+        return;
+    }
+
+    // Calculate phase difference between expected and actual frame timing
+    auto now = std::chrono::high_resolution_clock::now();
+    auto expected_frame_interval = std::chrono::duration<double, std::milli>(
+        std::chrono::milliseconds(static_cast<int>(1000 / adaptive_target_fps_)));
+
+    // Calculate how many intervals have passed since reference time
+    auto time_since_ref = now - phase_reference_time_;
+    double time_since_ref_ms = std::chrono::duration<double, std::milli>(time_since_ref).count();
+    double expected_interval_ms = expected_frame_interval.count();
+    double intervals_passed = time_since_ref_ms / expected_interval_ms;
+
+    // Calculate phase error (how far we are from ideal frame boundary)
+    double phase_fraction = intervals_passed - std::floor(intervals_passed);
+    double phase_error = (phase_fraction > 0.5) ? (1.0 - phase_fraction) : phase_fraction;
+
+    // If phase error is small, we're synchronized
+    frame_phase_lock_ = (phase_error < 0.1); // Within 10% of frame interval
+
+    // If we're out of phase, adjust timing to get back in sync
+    if (!frame_phase_lock_ && phase_error > 0.2) { // Significant phase error
+        // Apply gentle correction to get back in phase
+        double phase_correction = (expected_interval_ms * 0.1) *
+                                 ((phase_fraction > 0.5) ? -1.0 : 1.0);
+
+        // Apply correction gradually to avoid jarring transitions
+        frame_jitter_compensator_ += phase_correction * 0.1;
+    }
 }
 
 } // namespace RenderEngine

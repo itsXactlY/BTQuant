@@ -439,6 +439,39 @@ public:
                                                      float zoom_factor,
                                                      float grid_size = 0.1f) const;
 
+    // Calculate advanced zoom-based LOD with smooth transitions
+    LODLevel calculateAdvancedZoomLOD(float cell_width_px, float cell_height_px,
+                                  float zoom_factor) const;
+
+    // Get advanced zoom-based render settings
+    LODRenderSettings getAdvancedZoomRenderSettings(LODLevel lod_level, float zoom_factor) const;
+
+    // Apply advanced zoom-based LOD to cell rendering
+    void applyAdvancedZoomLODToCell(const FootprintCell& cell,
+                                   ImDrawList* draw_list,
+                                   float zoom_factor,
+                                   double max_volume,
+                                   const std::vector<FootprintCell>& diagonal_imbalances,
+                                   const std::vector<FootprintCell>& stacked_imbalances,
+                                   const FootprintPanel* panel) const;
+
+    // Calculate multi-scale LOD that adapts to different viewing scales
+    LODLevel calculateMultiScaleLOD(float cell_width_px, float cell_height_px,
+                                float zoom_factor, float view_scale) const;
+
+    // Get multi-scale render settings
+    LODRenderSettings getMultiScaleRenderSettings(LODLevel lod_level, float view_scale) const;
+
+    // Apply multi-scale LOD to cell rendering
+    void applyMultiScaleLODToCell(const FootprintCell& cell,
+                                 ImDrawList* draw_list,
+                                 float zoom_factor,
+                                 double max_volume,
+                                 const std::vector<FootprintCell>& diagonal_imbalances,
+                                 const std::vector<FootprintCell>& stacked_imbalances,
+                                 const FootprintPanel* panel,
+                                 float view_scale) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

@@ -1057,4 +1057,112 @@ void FastOrderExecutionPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
+// TradePaceDataPool implementation
+TradePaceDataPool& TradePaceDataPool::getInstance() {
+    static TradePaceDataPool instance;
+    return instance;
+}
+
+BTQuant::TapePanel::TradePaceData* TradePaceDataPool::allocate() {
+    return pool_.allocate();
+}
+
+void TradePaceDataPool::deallocate(BTQuant::TapePanel::TradePaceData* data) {
+    pool_.deallocate(data);
+}
+
+void TradePaceDataPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastTradePaceDataPool implementation
+FastTradePaceDataPool& FastTradePaceDataPool::getInstance() {
+    static FastTradePaceDataPool instance;
+    return instance;
+}
+
+BTQuant::TapePanel::TradePaceData* FastTradePaceDataPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastTradePaceDataPool::deallocate(BTQuant::TapePanel::TradePaceData* data) {
+    pool_.deallocate(data);
+}
+
+void FastTradePaceDataPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// TradePairPool implementation
+TradePairPool& TradePairPool::getInstance() {
+    static TradePairPool instance;
+    return instance;
+}
+
+std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* TradePairPool::allocate() {
+    return pool_.allocate();
+}
+
+void TradePairPool::deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair) {
+    pool_.deallocate(pair);
+}
+
+void TradePairPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastTradePairPool implementation
+FastTradePairPool& FastTradePairPool::getInstance() {
+    static FastTradePairPool instance;
+    return instance;
+}
+
+std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* FastTradePairPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastTradePairPool::deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair) {
+    pool_.deallocate(pair);
+}
+
+void FastTradePairPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// IndicatorValuePairPool implementation
+IndicatorValuePairPool& IndicatorValuePairPool::getInstance() {
+    static IndicatorValuePairPool instance;
+    return instance;
+}
+
+std::pair<float, float>* IndicatorValuePairPool::allocate() {
+    return pool_.allocate();
+}
+
+void IndicatorValuePairPool::deallocate(std::pair<float, float>* pair) {
+    pool_.deallocate(pair);
+}
+
+void IndicatorValuePairPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
+// FastIndicatorValuePairPool implementation
+FastIndicatorValuePairPool& FastIndicatorValuePairPool::getInstance() {
+    static FastIndicatorValuePairPool instance;
+    return instance;
+}
+
+std::pair<float, float>* FastIndicatorValuePairPool::allocate() {
+    return pool_.allocate();
+}
+
+void FastIndicatorValuePairPool::deallocate(std::pair<float, float>* pair) {
+    pool_.deallocate(pair);
+}
+
+void FastIndicatorValuePairPool::preallocate(size_t count) {
+    pool_.preallocate(count);
+}
+
 } // namespace BTQuant

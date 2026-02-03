@@ -25,6 +25,11 @@ This module implements a high-performance memory pool system for frequently allo
   - `ATRIndicatorPool` - Average True Range indicators
 - Each pool supports parameterized construction (e.g., period length)
 
+- **Additional Analysis Pools**:
+  - `TradePaceDataPool` - Trade pace analysis data for time-series analysis
+  - `TradePairPool` - Pairs of trade data for correlation analysis
+  - `IndicatorValuePairPool` - Pairs of indicator values for comparison operations
+
 ### 2. Enhanced Fast Memory Pools
 - **Performance-optimized pools** with higher pre-allocation counts
 - **Thread-local storage** for critical performance paths
@@ -35,6 +40,9 @@ This module implements a high-performance memory pool system for frequently allo
   - `FastEMAIndicatorPool` - Enhanced EMA indicator handling
   - `FastFootprintCellPool` - Optimized for footprint charts
   - `FastHotspineTradeTickPool` - High-frequency trade tick processing
+  - `FastTradePaceDataPool` - Optimized for trade pace analysis
+  - `FastTradePairPool` - Optimized for trade pair analysis
+  - `FastIndicatorValuePairPool` - Optimized for indicator value pairs
 
 ### 3. Trading-Specific Pools
 - **Order and Trade Management**:

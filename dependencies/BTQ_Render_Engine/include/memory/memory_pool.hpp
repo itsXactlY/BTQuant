@@ -31,7 +31,18 @@
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {
     namespace TapePanel {
-        struct TradePaceData;
+        struct TradePaceData {
+            uint64_t timestamp{0};
+            int trades_per_minute{0};
+            double volume_per_minute{0.0};
+            int peak_trades_per_minute{0};
+            double peak_volume_per_minute{0.0};
+
+            TradePaceData() = default;
+            TradePaceData(uint64_t ts, int tpm, double vpm, int ptm, double pvpm)
+                : timestamp(ts), trades_per_minute(tpm), volume_per_minute(vpm),
+                  peak_trades_per_minute(ptm), peak_volume_per_minute(pvpm) {}
+        };
     }
 }
 
@@ -1368,5 +1379,199 @@ void ThreadLocalObjectPool<T>::preallocate(size_t count) {
 
     blocks_.push_back(std::move(block_memory));
 }
+
+// Additional memory pools for other frequently allocated objects
+
+// TradePaceDataPool for trade pace analysis data
+class TradePaceDataPool {
+public:
+    static TradePaceDataPool& getInstance();
+
+    BTQuant::TapePanel::TradePaceData* allocate();
+    void deallocate(BTQuant::TapePanel::TradePaceData* data);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradePaceDataPool() = default;
+    ObjectPool<BTQuant::TapePanel::TradePaceData> pool_;
+};
+
+// FastTradePaceDataPool for high-performance trade pace allocation
+class FastTradePaceDataPool {
+public:
+    static FastTradePaceDataPool& getInstance();
+
+    BTQuant::TapePanel::TradePaceData* allocate();
+    void deallocate(BTQuant::TapePanel::TradePaceData* data);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradePaceDataPool() = default;
+    ThreadLocalObjectPool<BTQuant::TapePanel::TradePaceData> pool_;
+};
+
+// TradePairPool for pairs of trades used in analysis
+class TradePairPool {
+public:
+    static TradePairPool& getInstance();
+
+    std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* allocate();
+    void deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradePairPool() = default;
+    ObjectPool<std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>> pool_;
+};
+
+// FastTradePairPool for high-performance trade pair allocation
+class FastTradePairPool {
+public:
+    static FastTradePairPool& getInstance();
+
+    std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* allocate();
+    void deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradePairPool() = default;
+    ThreadLocalObjectPool<std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>> pool_;
+};
+
+// Additional memory pools for other frequently allocated objects
+
+// TradePaceDataPool for trade pace analysis data
+class TradePaceDataPool {
+public:
+    static TradePaceDataPool& getInstance();
+
+    BTQuant::TapePanel::TradePaceData* allocate();
+    void deallocate(BTQuant::TapePanel::TradePaceData* data);
+    void preallocate(size_t count = 512);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradePaceDataPool() = default;
+    ObjectPool<BTQuant::TapePanel::TradePaceData> pool_;
+};
+
+// FastTradePaceDataPool for high-performance trade pace allocation
+class FastTradePaceDataPool {
+public:
+    static FastTradePaceDataPool& getInstance();
+
+    BTQuant::TapePanel::TradePaceData* allocate();
+    void deallocate(BTQuant::TapePanel::TradePaceData* data);
+    void preallocate(size_t count = 1024); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradePaceDataPool() = default;
+    ThreadLocalObjectPool<BTQuant::TapePanel::TradePaceData> pool_;
+};
+
+// TradePairPool for pairs of trades used in analysis
+class TradePairPool {
+public:
+    static TradePairPool& getInstance();
+
+    std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* allocate();
+    void deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair);
+    void preallocate(size_t count = 1024);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    TradePairPool() = default;
+    ObjectPool<std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>> pool_;
+};
+
+// FastTradePairPool for high-performance trade pair allocation
+class FastTradePairPool {
+public:
+    static FastTradePairPool& getInstance();
+
+    std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* allocate();
+    void deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair);
+    void preallocate(size_t count = 2048); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastTradePairPool() = default;
+    ThreadLocalObjectPool<std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>> pool_;
+};
+
+// IndicatorValuePairPool for indicator value pairs
+class IndicatorValuePairPool {
+public:
+    static IndicatorValuePairPool& getInstance();
+
+    std::pair<float, float>* allocate();
+    void deallocate(std::pair<float, float>* pair);
+    void preallocate(size_t count = 2048);
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+
+private:
+    IndicatorValuePairPool() = default;
+    ObjectPool<std::pair<float, float>> pool_;
+};
+
+// FastIndicatorValuePairPool for high-performance indicator value pair allocation
+class FastIndicatorValuePairPool {
+public:
+    static FastIndicatorValuePairPool& getInstance();
+
+    std::pair<float, float>* allocate();
+    void deallocate(std::pair<float, float>* pair);
+    void preallocate(size_t count = 4096); // Higher count for frequent allocation
+
+    size_t getTotalObjects() const { return pool_.get_total_objects(); }
+    size_t getFreeObjects() const { return pool_.get_free_objects(); }
+    size_t getUsedObjects() const { return pool_.get_used_objects(); }
+    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
+    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
+
+private:
+    FastIndicatorValuePairPool() = default;
+    ThreadLocalObjectPool<std::pair<float, float>> pool_;
+};
 
 } // namespace BTQuant

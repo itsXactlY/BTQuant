@@ -547,6 +547,27 @@ public:
                                    const std::vector<FootprintCell>& stacked_imbalances,
                                    const FootprintPanel* panel) const;
 
+    // Calculate smart LOD that balances performance and visual quality based on multiple factors
+    LODLevel calculateSmartLOD(float cell_width_px, float cell_height_px,
+                          float zoom_factor, int total_cells_in_view,
+                          const PerformanceMetrics& metrics) const;
+
+    // Get smart LOD render settings based on multiple factors
+    LODRenderSettings getSmartLODRenderSettings(LODLevel lod_level,
+                                           int total_cells_in_view,
+                                           const PerformanceMetrics& metrics) const;
+
+    // Apply smart LOD to cell rendering balancing performance and visual quality
+    void applySmartLODToCell(const FootprintCell& cell,
+                            ImDrawList* draw_list,
+                            float zoom_factor,
+                            int total_cells_in_view,
+                            const PerformanceMetrics& metrics,
+                            double max_volume,
+                            const std::vector<FootprintCell>& diagonal_imbalances,
+                            const std::vector<FootprintCell>& stacked_imbalances,
+                            const FootprintPanel* panel) const;
+
     // Getter/setter methods for LOD parameters
     void setMinDetailZoom(float zoom) { min_detail_zoom_ = zoom; }
     void setMediumDetailZoom(float zoom) { medium_detail_zoom_ = zoom; }

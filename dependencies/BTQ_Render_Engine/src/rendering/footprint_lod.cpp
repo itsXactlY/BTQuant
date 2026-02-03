@@ -4955,5 +4955,271 @@ void FootprintLOD::applyPriorityBasedLODToCell(const FootprintCell& cell,
     }
 }
 
+// Implementation for smart LOD that balances performance and visual quality based on multiple factors
+LODLevel FootprintLOD::calculateSmartLOD(float cell_width_px, float cell_height_px,
+                                      float zoom_factor, int total_cells_in_view,
+                                      const PerformanceMetrics& metrics) const {
+    float min_dimension = std::min(cell_width_px, cell_height_px);
+
+    // Calculate base LOD level
+    LODLevel base_lod = calculateLODLevel(cell_width_px, cell_height_px, zoom_factor);
+
+    // Factor 1: Cell density (total cells in view)
+    float density_factor = static_cast<float>(total_cells_in_view) / 1000.0f; // Normalize to 1000 cells
+
+    // Factor 2: Performance metrics
+    bool performance_good = !metrics.performance_degraded &&
+                           (metrics.fps <= 0 || metrics.fps >= target_fps_ * 0.9f);
+
+    // Factor 3: Zoom level considerations
+    bool zoomed_out = zoom_factor < medium_detail_zoom_ * 0.7f;
+    bool zoomed_in = zoom_factor > max_detail_zoom_ * 1.2f;
+
+    // Adjust LOD based on all factors
+    LODLevel adjusted_lod = base_lod;
+
+    // Adjust for density
+    if (density_factor > 2.0f) { // Very high density
+        switch (base_lod) {
+            case LODLevel::MAX_DETAIL:
+                adjusted_lod = LODLevel::HIGH_DETAIL;
+                break;
+            case LODLevel::HIGH_DETAIL:
+                adjusted_lod = LODLevel::MEDIUM_DETAIL;
+                break;
+            default:
+                adjusted_lod = base_lod;
+                break;
+        }
+    } else if (density_factor < 0.5f) { // Low density
+        switch (base_lod) {
+            case LODLevel::LOW_DETAIL:
+                adjusted_lod = LODLevel::MEDIUM_DETAIL;
+                break;
+            case LODLevel::MEDIUM_DETAIL:
+                if (zoomed_in) {
+                    adjusted_lod = LODLevel::HIGH_DETAIL;
+                }
+                break;
+            default:
+                adjusted_lod = base_lod;
+                break;
+        }
+    }
+
+    // Adjust for performance
+    if (!performance_good) {
+        switch (adjusted_lod) {
+            case LODLevel::MAX_DETAIL:
+                adjusted_lod = LODLevel::HIGH_DETAIL;
+                break;
+            case LODLevel::HIGH_DETAIL:
+                adjusted_lod = LODLevel::MEDIUM_DETAIL;
+                break;
+            case LODLevel::MEDIUM_DETAIL:
+                if (zoomed_out) {
+                    adjusted_lod = LODLevel::LOW_DETAIL;
+                }
+                break;
+            default:
+                adjusted_lod = adjusted_lod;
+                break;
+        }
+    } else if (performance_good && zoomed_in) {
+        // When performance is good and zoomed in, allow more detail
+        switch (adjusted_lod) {
+            case LODLevel::LOW_DETAIL:
+                adjusted_lod = LODLevel::MEDIUM_DETAIL;
+                break;
+            case LODLevel::MEDIUM_DETAIL:
+                adjusted_lod = LODLevel::HIGH_DETAIL;
+                break;
+            case LODLevel::HIGH_DETAIL:
+                if (min_dimension > max_cell_size_px_) {
+                    adjusted_lod = LODLevel::MAX_DETAIL;
+                }
+                break;
+            default:
+                adjusted_lod = adjusted_lod;
+                break;
+        }
+    }
+
+    return adjusted_lod;
+}
+
+LODRenderSettings FootprintLOD::getSmartLODRenderSettings(LODLevel lod_level,
+                                                       int total_cells_in_view,
+                                                       const PerformanceMetrics& metrics) const {
+    LODRenderSettings settings = getRenderSettings(lod_level);
+
+    // Adjust settings based on cell density and performance
+    float density_factor = static_cast<float>(total_cells_in_view) / 1000.0f;
+
+    if (density_factor > 1.5f) { // High density
+        settings.render_labels = false;
+        settings.render_detailed_annotations = false;
+        settings.alpha_multiplier *= 0.85f;
+    } else if (density_factor < 0.5f) { // Low density
+        settings.render_detailed_annotations = true;
+        settings.render_labels = true;
+        settings.alpha_multiplier = std::min(settings.alpha_multiplier * 1.1f, 1.2f);
+    }
+
+    // Adjust for performance
+    if (metrics.performance_degraded ||
+        (metrics.fps > 0 && metrics.fps < target_fps_ * 0.8f)) {
+        settings.render_detailed_annotations = false;
+        settings.render_labels = false;
+        settings.alpha_multiplier *= 0.9f;
+    }
+
+    return settings;
+}
+
+void FootprintLOD::applySmartLODToCell(const FootprintCell& cell,
+                                    ImDrawList* draw_list,
+                                    float zoom_factor,
+                                    int total_cells_in_view,
+                                    const PerformanceMetrics& metrics,
+                                    double max_volume,
+                                    const std::vector<FootprintCell>& diagonal_imbalances,
+                                    const std::vector<FootprintCell>& stacked_imbalances,
+                                    const FootprintPanel* panel) const {
+    // Calculate cell dimensions in pixels
+    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
+    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
+
+    float cell_width_px = std::abs(p2.x - p1.x);
+    float cell_height_px = std::abs(p2.y - p1.y);
+
+    // Determine LOD level using smart calculation
+    LODLevel lod_level = calculateSmartLOD(cell_width_px, cell_height_px, zoom_factor,
+                                        total_cells_in_view, metrics);
+    float cell_area_px = cell_width_px * cell_height_px;
+    LODRenderSettings settings = getSmartLODRenderSettings(lod_level, total_cells_in_view, metrics);
+
+    // Get cell color from panel
+    ImU32 cell_color = panel->getCellColor(cell, max_volume);
+
+    // Get cell label from panel
+    std::string cell_label = panel->getCellLabel(cell);
+
+    // Apply alpha multiplier based on LOD
+    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
+
+    // Apply additional adjustments based on density and performance
+    float density_factor = static_cast<float>(total_cells_in_view) / 1000.0f;
+    if (density_factor > 1.0f) {
+        alpha_multiplier *= (1.0f - (density_factor - 1.0f) * 0.1f); // Reduce alpha in high density
+    } else if (density_factor < 0.3f) {
+        alpha_multiplier = std::min(alpha_multiplier * 1.1f, 1.2f); // Increase alpha in low density
+    }
+
+    // Apply performance-based alpha adjustment
+    if (metrics.performance_degraded ||
+        (metrics.fps > 0 && metrics.fps < target_fps_ * 0.8f)) {
+        alpha_multiplier *= 0.9f;
+    }
+
+    // Render heatmap/fill based on smart LOD settings
+    if (settings.render_heatmap) {
+        // Modify alpha based on LOD, density and performance
+        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
+        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
+        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
+
+        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
+    }
+
+    // Render borders based on smart LOD settings
+    if (settings.render_borders) {
+        // Check for imbalances to determine border color/type
+        bool is_diagonal = false;
+        bool is_stacked = false;
+
+        for (const auto& diag_cell : diagonal_imbalances) {
+            if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
+                is_diagonal = true;
+                break;
+            }
+        }
+
+        for (const auto& stack_cell : stacked_imbalances) {
+            if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
+                is_stacked = true;
+                break;
+            }
+        }
+
+        ImU32 border_color;
+        float thickness = settings.border_thickness;
+
+        if (is_diagonal || is_stacked) {
+            // Highlight imbalanced cells with special colors
+            if (is_diagonal && is_stacked) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                ImVec2 offset_p1(p1.x - 1.5f, p1.y - 1.5f);
+                ImVec2 offset_p2(p2.x + 1.5f, p2.y + 1.5f);
+                draw_list->AddRect(offset_p1, offset_p2, border_color, 0.0f, 0, thickness * 0.8f);
+            } else if (is_diagonal) {
+                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            } else if (is_stacked) {
+                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
+                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+            }
+        } else {
+            // Regular border based on LOD
+            unsigned char border_alpha = static_cast<unsigned char>(13 * alpha_multiplier);
+            border_color = IM_COL32(255, 255, 255, border_alpha);
+            draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
+        }
+    }
+
+    // Render text/labels based on smart LOD settings
+    if (settings.render_text && shouldRenderText(cell_height_px, zoom_factor)) {
+        if (settings.render_labels && shouldRenderLabels(cell_height_px, zoom_factor)) {
+            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
+
+            // Center text in cell
+            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
+                           (p1.y + p2.y - text_size.y) * 0.5f);
+
+            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
+        }
+    }
+
+    // Render detailed annotations based on smart LOD settings
+    if (settings.render_detailed_annotations &&
+        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
+
+        // Example: render delta indicator if enabled and conditions met
+        if (panel->getShowDeltaIndicator()) {
+            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
+            if (max_vol > 0.0) {
+                double normalized_delta = cell.delta / max_vol;
+
+                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
+                    float bar_height = 3.0f;
+                    float bar_width = (p2.x - p1.x) * 0.8f;
+                    ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f,
+                                  p2.y - bar_height - 1.0f);
+
+                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
+                                                           : IM_COL32(255, 0, 0, 200);  // Red
+
+                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
+                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
+                                           bar_color);
+                }
+            }
+        }
+    }
+}
+
 } // namespace Rendering
 } // namespace BTQuant

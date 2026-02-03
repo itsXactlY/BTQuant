@@ -290,6 +290,20 @@ public:
     ChartInstance apply_aggressive_offscreen_culling_with_polygon_reduction(const ChartInstance& chart, float zoom_factor = 1.0f,
                                                                          float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
 
+    /**
+     * @brief Applies efficient off-screen culling combined with zoom-based polygon reduction
+     *        Specifically optimized for performance: efficient culling of off-screen elements
+     *        and significant polygon count reduction at lower zoom levels with better algorithms
+     *
+     * @param chart The chart instance to process
+     * @param zoom_factor Current zoom factor affecting polygon count and culling behavior
+     * @param viewport_width_pixels Width of the viewport in pixels
+     * @param viewport_height_pixels Height of the viewport in pixels
+     * @return Processed chart data with efficient off-screen culling and zoom-based polygon reduction applied
+     */
+    ChartInstance apply_efficient_offscreen_culling_and_lod(const ChartInstance& chart, float zoom_factor = 1.0f,
+                                                          float viewport_width_pixels = 0.0f, float viewport_height_pixels = 0.0f) const;
+
 private:
     ViewPort viewport_{};
     bool viewport_set_ = false;

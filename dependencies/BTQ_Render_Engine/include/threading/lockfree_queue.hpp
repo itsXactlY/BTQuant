@@ -13,6 +13,8 @@
 #include <mutex>
 #include <condition_variable>
 #include <cstddef>  // For ptrdiff_t
+#include <queue>    // For priority_queue
+#include <string>   // For std::string
 
 namespace btq {
 namespace threading {
@@ -1096,6 +1098,271 @@ public:
     bool emplace(Args&&... args) {
         T item(std::forward<Args>(args)...);
         return underlying_buffer_.push_if_not_full(std::move(item));
+    }
+};
+
+// Specialized queue for calculation-to-UI thread communication
+// Optimized for scenarios where calculation threads generate data
+// that needs to be consumed by the UI thread efficiently
+template<typename T>
+class CalculationToUIQueue {
+private:
+    // Use MPSC queue as the underlying implementation since we typically have
+    // multiple calculation threads producing data and one UI thread consuming it
+    MPSCQueue<T> underlying_queue_;
+
+    // Statistics for monitoring queue health
+    AtomicWrapper<size_t> total_produced_{0};
+    AtomicWrapper<size_t> total_consumed_{0};
+    AtomicWrapper<size_t> overflow_drops_{0}; // Items dropped due to overflow protection
+
+    // Maximum queue size to prevent memory buildup from calculation threads
+    const size_t max_size_;
+
+    // Priority flag for high-priority updates
+    std::atomic<bool> high_priority_mode_{false};
+
+public:
+    explicit CalculationToUIQueue(size_t max_size = 5000) : max_size_(max_size) {}
+
+    // Push an item to the queue with overflow protection
+    bool push(const T& item) {
+        // Check if we're in high priority mode and adjust behavior
+        if (high_priority_mode_ || underlying_queue_.size_approx() < max_size_) {
+            underlying_queue_.push(item);
+            total_produced_.store(total_produced_.load() + 1);
+            return true;
+        } else {
+            // Queue is too full, drop the item to prevent memory buildup
+            overflow_drops_.store(overflow_drops_.load() + 1);
+            return false;
+        }
+    }
+
+    // Push with rvalue reference
+    bool push(T&& item) {
+        if (high_priority_mode_ || underlying_queue_.size_approx() < max_size_) {
+            underlying_queue_.push(std::move(item));
+            total_produced_.store(total_produced_.load() + 1);
+            return true;
+        } else {
+            overflow_drops_.store(overflow_drops_.load() + 1);
+            return false;
+        }
+    }
+
+    // Try to push with priority (will override size limits temporarily)
+    bool push_with_priority(const T& item) {
+        underlying_queue_.push(item);
+        total_produced_.store(total_produced_.load() + 1);
+        return true;
+    }
+
+    // Pop an item from the queue
+    std::optional<T> try_pop() {
+        auto result = underlying_queue_.try_pop();
+        if (result.has_value()) {
+            total_consumed_.store(total_consumed_.load() + 1);
+        }
+        return result;
+    }
+
+    // Pop multiple items at once - useful for UI thread to process batches efficiently
+    std::vector<T> pop_batch(size_t max_items = 100) {
+        std::vector<T> result;
+        result.reserve(std::min(max_items, static_cast<size_t>(100)));
+
+        for (size_t i = 0; i < max_items; ++i) {
+            auto item = try_pop();
+            if (item.has_value()) {
+                result.emplace_back(std::move(item.value()));
+            } else {
+                break; // Queue is empty
+            }
+        }
+
+        return result;
+    }
+
+    // Drain all available items - useful for UI thread to catch up quickly
+    std::vector<T> drain_all() {
+        auto result = underlying_queue_.drain_all();
+        total_consumed_.store(total_consumed_.load() + result.size());
+        return result;
+    }
+
+    // Check if queue is empty
+    bool empty() const {
+        return underlying_queue_.empty();
+    }
+
+    // Get approximate size
+    size_t size_approx() const {
+        return underlying_queue_.size_approx();
+    }
+
+    // Get statistics
+    size_t total_produced() const { return total_produced_.load(); }
+    size_t total_consumed() const { return total_consumed_.load(); }
+    size_t overflow_drops() const { return overflow_drops_.load(); }
+    size_t max_size() const { return max_size_; }
+
+    // Enable/disable high priority mode
+    void set_high_priority_mode(bool enabled) {
+        high_priority_mode_.store(enabled);
+    }
+
+    bool is_high_priority_mode() const {
+        return high_priority_mode_.load();
+    }
+
+    // Reset statistics
+    void reset_stats() {
+        total_produced_.store(0);
+        total_consumed_.store(0);
+        overflow_drops_.store(0);
+    }
+
+    // Emplace construction
+    template<typename... Args>
+    bool emplace(Args&&... args) {
+        T item(std::forward<Args>(args)...);
+        return push(std::move(item));
+    }
+};
+
+// Specialized data structure for UI update notifications
+// Contains metadata about the type of update and priority
+template<typename DataType>
+struct UIUpdateNotification {
+    DataType data;
+    std::chrono::steady_clock::time_point timestamp;
+    int priority;  // Higher number = higher priority
+    std::string source_id;  // Identifier of the calculation source
+
+    // Default constructor (needed for use in lock-free queues)
+    UIUpdateNotification() : data{}, timestamp(std::chrono::steady_clock::now()),
+                             priority(0), source_id("") {}
+
+    UIUpdateNotification(DataType d, int prio = 0, std::string src = "")
+        : data(std::move(d)), timestamp(std::chrono::steady_clock::now()),
+          priority(prio), source_id(std::move(src)) {}
+};
+
+// Specialized queue for UI update notifications with priority handling
+template<typename T>
+class PriorityUIUpdateQueue {
+private:
+    // Use a priority queue for handling different priority levels
+    struct ComparePriority {
+        bool operator()(const UIUpdateNotification<T>& a, const UIUpdateNotification<T>& b) const {
+            return a.priority < b.priority; // Higher priority first
+        }
+    };
+    std::priority_queue<UIUpdateNotification<T>,
+                        std::vector<UIUpdateNotification<T>>,
+                        ComparePriority> priority_queue_;
+
+    // Underlying lock-free queue for thread safety
+    MPSCQueue<UIUpdateNotification<T>> underlying_queue_;
+
+    // Synchronization for the priority queue access
+    mutable std::mutex priority_mutex_;
+
+    // Statistics
+    AtomicWrapper<size_t> total_notifications_{0};
+    AtomicWrapper<size_t> processed_notifications_{0};
+    AtomicWrapper<size_t> dropped_notifications_{0};
+
+    const size_t max_size_;
+
+public:
+    explicit PriorityUIUpdateQueue(size_t max_size = 2000) : max_size_(max_size) {}
+
+    // Push notification with priority
+    bool push_notification(const T& data, int priority = 0, const std::string& source_id = "") {
+        if (underlying_queue_.size_approx() >= max_size_) {
+            dropped_notifications_.store(dropped_notifications_.load() + 1);
+            return false;
+        }
+
+        UIUpdateNotification<T> notification(data, priority, source_id);
+        underlying_queue_.push(std::move(notification));
+        total_notifications_.store(total_notifications_.load() + 1);
+        return true;
+    }
+
+    // Push with rvalue reference
+    bool push_notification(T&& data, int priority = 0, std::string source_id = "") {
+        if (underlying_queue_.size_approx() >= max_size_) {
+            dropped_notifications_.store(dropped_notifications_.load() + 1);
+            return false;
+        }
+
+        UIUpdateNotification<T> notification(std::move(data), priority, std::move(source_id));
+        underlying_queue_.push(std::move(notification));
+        total_notifications_.store(total_notifications_.load() + 1);
+        return true;
+    }
+
+    // Pop the highest priority notification
+    std::optional<UIUpdateNotification<T>> try_pop_highest_priority() {
+        // First, transfer all available items from the lock-free queue to the priority queue
+        auto available_items = underlying_queue_.drain_all();
+        {
+            std::lock_guard<std::mutex> lock(priority_mutex_);
+            for (auto& item : available_items) {
+                priority_queue_.push(std::move(item));
+            }
+        }
+
+        // Then return the highest priority item
+        {
+            std::lock_guard<std::mutex> lock(priority_mutex_);
+            if (!priority_queue_.empty()) {
+                auto result = priority_queue_.top(); // Copy the top element
+                priority_queue_.pop();
+                processed_notifications_.store(processed_notifications_.load() + 1);
+                return result;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    // Pop without priority consideration (faster)
+    std::optional<UIUpdateNotification<T>> try_pop_any() {
+        auto result = underlying_queue_.try_pop();
+        if (result.has_value()) {
+            processed_notifications_.store(processed_notifications_.load() + 1);
+        }
+        return result;
+    }
+
+    // Check if queue is empty
+    bool empty() const {
+        bool underlying_empty = underlying_queue_.empty();
+        {
+            std::lock_guard<std::mutex> lock(priority_mutex_);
+            return underlying_empty && priority_queue_.empty();
+        }
+    }
+
+    // Get approximate size
+    size_t size_approx() const {
+        return underlying_queue_.size_approx();
+    }
+
+    // Get statistics
+    size_t total_notifications() const { return total_notifications_.load(); }
+    size_t processed_notifications() const { return processed_notifications_.load(); }
+    size_t dropped_notifications() const { return dropped_notifications_.load(); }
+
+    // Reset statistics
+    void reset_stats() {
+        total_notifications_.store(0);
+        processed_notifications_.store(0);
+        dropped_notifications_.store(0);
     }
 };
 

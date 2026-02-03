@@ -1,5 +1,5 @@
-#include "threading/lockfree_queue.hpp"
-#include "task_scheduler.hpp"  // For btq::Trade and btq::Candle
+#include "../../include/threading/lockfree_queue.hpp"
+#include "../../include/task_scheduler.hpp"  // For btq::Trade and btq::Candle
 #include <string>
 #include <vector>
 #include <chrono>
@@ -217,6 +217,72 @@ template class HighFrequencyUpdateQueue<std::optional<btq::Candle>>;
 // Additional template instantiations for new functionality for HighFrequencyUpdateQueue
 template class HighFrequencyUpdateQueue<std::pair<btq::Trade, btq::Candle>>;
 template class HighFrequencyUpdateQueue<std::vector<std::pair<double, double>>>;
+
+// Template instantiations for the new CalculationToUIQueue
+template class CalculationToUIQueue<int>;
+template class CalculationToUIQueue<double>;
+template class CalculationToUIQueue<float>;
+template class CalculationToUIQueue<long>;
+template class CalculationToUIQueue<bool>;
+template class CalculationToUIQueue<std::string>;
+template class CalculationToUIQueue<std::vector<double>>;
+template class CalculationToUIQueue<std::vector<float>>;
+template class CalculationToUIQueue<std::vector<int>>;
+template class CalculationToUIQueue<std::vector<long>>;
+template class CalculationToUIQueue<std::vector<bool>>;
+
+// Trading-specific data structures for CalculationToUIQueue
+template class CalculationToUIQueue<btq::Trade>;
+template class CalculationToUIQueue<btq::Candle>;
+template class CalculationToUIQueue<std::vector<btq::Trade>>;
+template class CalculationToUIQueue<std::vector<btq::Candle>>;
+
+// Additional data structures for UI updates and indicator data for CalculationToUIQueue
+template class CalculationToUIQueue<std::pair<double, double>>;  // For histogram data
+template class CalculationToUIQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality for CalculationToUIQueue
+template class CalculationToUIQueue<std::optional<int>>;
+template class CalculationToUIQueue<std::optional<double>>;
+template class CalculationToUIQueue<std::optional<btq::Trade>>;
+template class CalculationToUIQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality for CalculationToUIQueue
+template class CalculationToUIQueue<std::pair<btq::Trade, btq::Candle>>;
+template class CalculationToUIQueue<std::vector<std::pair<double, double>>>;
+
+// Template instantiations for the new PriorityUIUpdateQueue
+template class PriorityUIUpdateQueue<int>;
+template class PriorityUIUpdateQueue<double>;
+template class PriorityUIUpdateQueue<float>;
+template class PriorityUIUpdateQueue<long>;
+template class PriorityUIUpdateQueue<bool>;
+template class PriorityUIUpdateQueue<std::string>;
+template class PriorityUIUpdateQueue<std::vector<double>>;
+template class PriorityUIUpdateQueue<std::vector<float>>;
+template class PriorityUIUpdateQueue<std::vector<int>>;
+template class PriorityUIUpdateQueue<std::vector<long>>;
+template class PriorityUIUpdateQueue<std::vector<bool>>;
+
+// Trading-specific data structures for PriorityUIUpdateQueue
+template class PriorityUIUpdateQueue<btq::Trade>;
+template class PriorityUIUpdateQueue<btq::Candle>;
+template class PriorityUIUpdateQueue<std::vector<btq::Trade>>;
+template class PriorityUIUpdateQueue<std::vector<btq::Candle>>;
+
+// Additional data structures for UI updates and indicator data for PriorityUIUpdateQueue
+template class PriorityUIUpdateQueue<std::pair<double, double>>;  // For histogram data
+template class PriorityUIUpdateQueue<std::tuple<std::vector<double>, std::vector<double>, std::vector<double>>>;  // For Bollinger Bands
+
+// New additions for enhanced functionality for PriorityUIUpdateQueue
+template class PriorityUIUpdateQueue<std::optional<int>>;
+template class PriorityUIUpdateQueue<std::optional<double>>;
+template class PriorityUIUpdateQueue<std::optional<btq::Trade>>;
+template class PriorityUIUpdateQueue<std::optional<btq::Candle>>;
+
+// Additional template instantiations for new functionality for PriorityUIUpdateQueue
+template class PriorityUIUpdateQueue<std::pair<btq::Trade, btq::Candle>>;
+template class PriorityUIUpdateQueue<std::vector<std::pair<double, double>>>;
 
 } // namespace threading
 } // namespace btq

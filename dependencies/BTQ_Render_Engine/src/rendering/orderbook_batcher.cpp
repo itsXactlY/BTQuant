@@ -132,6 +132,37 @@ static bool canCombineBatchesUltra(const OrderbookBatchElement& batch1, const Or
     return true;
 }
 
+// Super-efficient helper function to determine if batches can be combined with maximum performance
+static bool canCombineBatchesSuper(const OrderbookBatchElement& batch1, const OrderbookBatchElement& batch2,
+                                   uint8_t color_tolerance = 75, float max_color_distance = 150.0f) {
+    // Check if textures match - this is the primary criterion for batching
+    if (batch1.texture != batch2.texture) {
+        return false;
+    }
+
+    // Check if combining would exceed vertex/index limits
+    if (batch1.vertices.size() + batch2.vertices.size() >= 65535 ||
+        batch1.indices.size() + batch2.indices.size() >= 65535) {
+        return false;
+    }
+
+    // For order book rendering, we can be extremely lenient with color similarity to maximize batching
+    // This dramatically reduces the number of draw calls at the cost of slight color variations
+    if (batch1.vertices.empty() || batch2.vertices.empty()) {
+        return true;
+    }
+
+    // Use a super-lenient color similarity check to enable maximum batching
+    if (!areColorsSimilar(batch1.vertices[0].col, batch2.vertices[0].col, color_tolerance)) {
+        float distance = getColorDistance(batch1.vertices[0].col, batch2.vertices[0].col);
+        if (distance > max_color_distance) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 OrderbookBatcher::OrderbookBatcher() {
     // Reserve initial capacity to reduce allocations
     batches_.reserve(32);  // Increased initial reservation for better performance
@@ -318,6 +349,70 @@ OrderbookBatchElement* OrderbookBatcher::findOrCreateBestCompatibleBatchUltra(Im
     batches_.emplace_back();
     auto& new_batch = batches_.back();
     initializeBatch(new_batch, texture);
+
+    return &new_batch;
+}
+
+// Super-efficient version that prioritizes maximum batching for order book rendering with super-lenient matching
+OrderbookBatchElement* OrderbookBatcher::findOrCreateBestCompatibleBatchSuper(ImTextureID texture, ImU32 col) {
+    OrderbookBatchElement* best_batch = nullptr;
+    float best_score = -1.0f; // Higher score means better compatibility
+
+    // Look for the best compatible batch among existing ones with super-lenient color matching
+    for (auto& batch : batches_) {
+        if (batch.texture != texture) {
+            continue;
+        }
+
+        if (batch.vertices.size() >= 65535 - 4 || batch.indices.size() >= 65535 - 6) {
+            continue; // Would exceed limits
+        }
+
+        // Calculate compatibility score with super-lenient color similarity for maximum batching
+        float color_similarity = 0.0f;
+        if (!batch.vertices.empty()) {
+            // Create a temporary batch element to test compatibility
+            OrderbookBatchElement temp_batch;
+            temp_batch.texture = texture;
+            temp_batch.vertices.push_back({{}, {}, col}); // Add a dummy vertex with the target color
+
+            // Use the super combination function for super-lenient matching
+            if (canCombineBatchesSuper(batch, temp_batch, 75, 150.0f)) {
+                // If colors are considered compatible by super standards, give highest similarity score
+                color_similarity = 250.0f; // Highest score for super-compatible colors
+            } else {
+                float distance = getColorDistance(batch.vertices[0].col, col);
+                // Convert distance to similarity (lower distance = higher similarity)
+                color_similarity = 255.0f - std::min(distance, 255.0f);
+            }
+
+            // Clean up the temporary batch
+            temp_batch.vertices.clear();
+        } else {
+            color_similarity = 255.0f; // Perfect match for empty batch
+        }
+
+        // Consider batch utilization - heavily prefer fuller batches to reduce draw calls
+        float utilization = static_cast<float>(batch.vertices.size()) / 65535.0f;
+
+        // Calculate overall score (color similarity + very strong utilization factor)
+        float score = color_similarity + (utilization * 300.0f); // Even higher weight for utilization
+
+        if (score > best_score) {
+            best_score = score;
+            best_batch = &batch;
+        }
+    }
+
+    // If we found a compatible batch, return it
+    if (best_batch) {
+        return best_batch;
+    }
+
+    // Otherwise, create a new batch
+    batches_.emplace_back();
+    auto& new_batch = batches_.back();
+    initializeBatchWithExpectedSize(new_batch, texture, 4096, 8192); // Larger initial size for super batching
 
     return &new_batch;
 }
@@ -739,6 +834,141 @@ void OrderbookBatcher::addOrderbookElementsUltra(const std::vector<OrderbookElem
     }
 }
 
+// Super-efficient method for order book specific batching - maximizes batching by using super-compatible grouping
+void OrderbookBatcher::addOrderbookElementsSuper(const std::vector<OrderbookElementData>& elements) {
+    if (elements.empty()) {
+        return;
+    }
+
+    // Group elements by texture and super-compatible colors to maximize batching
+    struct ElementGroup {
+        std::vector<OrderbookElementData> grouped_elements;
+        ImTextureID texture;
+        ImU32 representative_color;
+    };
+
+    std::vector<ElementGroup> groups;
+
+    for (const auto& element : elements) {
+        bool found_group = false;
+
+        // Look for a compatible group using super-compatible color matching
+        for (auto& group : groups) {
+            if (group.texture == element.texture) {
+                // Use super-compatible color matching for maximum batching
+                OrderbookBatchElement temp_batch;
+                temp_batch.texture = group.texture;
+                temp_batch.vertices.push_back({{}, {}, group.representative_color});
+
+                OrderbookBatchElement temp_element_batch;
+                temp_element_batch.texture = element.texture;
+                temp_element_batch.vertices.push_back({{}, {}, element.color});
+
+                if (canCombineBatchesSuper(temp_batch, temp_element_batch, 75, 150.0f)) {
+                    group.grouped_elements.push_back(element);
+                    found_group = true;
+                }
+
+                // Clean up temporary batches
+                temp_batch.vertices.clear();
+                temp_element_batch.vertices.clear();
+
+                if (found_group) break;
+            }
+        }
+
+        // If no compatible group found, create a new one
+        if (!found_group) {
+            ElementGroup new_group;
+            new_group.texture = element.texture;
+            new_group.representative_color = element.color;
+            new_group.grouped_elements.push_back(element);
+            groups.push_back(std::move(new_group));
+        }
+    }
+
+    // Process each group using super-compatible batching
+    for (const auto& group : groups) {
+        // Use super-compatible batch finding for maximum batching
+        auto* batch = findOrCreateBestCompatibleBatchSuper(group.texture, group.representative_color);
+
+        // Check if we need to resize the batch capacity
+        resizeBatchIfNeeded(*batch);
+
+        for (const auto& element : group.grouped_elements) {
+            // Add the element based on its type
+            switch (element.type) {
+                case OrderbookElementType::RECT_FILLED:
+                    // Add rectangle vertices and indices
+                    {
+                        size_t vertex_start = batch->vertices.size();
+
+                        batch->vertices.push_back({element.rect.min, {0, 0}, element.color});
+                        batch->vertices.push_back({ImVec2(element.rect.max.x, element.rect.min.y), {1, 0}, element.color});
+                        batch->vertices.push_back({element.rect.max, {1, 1}, element.color});
+                        batch->vertices.push_back({ImVec2(element.rect.min.x, element.rect.max.y), {0, 1}, element.color});
+
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 1));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 3));
+                    }
+                    break;
+
+                case OrderbookElementType::LINE:
+                    // Add line vertices and indices
+                    {
+                        ImVec2 delta = ImVec2(element.line.p2.x - element.line.p1.x, element.line.p2.y - element.line.p1.y);
+                        float length = sqrtf(delta.x * delta.x + delta.y * delta.y);
+                        if (length == 0.0f) continue;
+
+                        ImVec2 dir = ImVec2(delta.x / length, delta.y / length);
+                        ImVec2 perp = ImVec2(-dir.y, dir.x);
+
+                        float half_thickness = element.thickness * 0.5f;
+                        ImVec2 offset = ImVec2(perp.x * half_thickness, perp.y * half_thickness);
+
+                        size_t vertex_start = batch->vertices.size();
+
+                        batch->vertices.push_back({ImVec2(element.line.p1.x - offset.x, element.line.p1.y - offset.y), {0, 0}, element.color});
+                        batch->vertices.push_back({ImVec2(element.line.p1.x + offset.x, element.line.p1.y + offset.y), {1, 0}, element.color});
+                        batch->vertices.push_back({ImVec2(element.line.p2.x + offset.x, element.line.p2.y + offset.y), {1, 1}, element.color});
+                        batch->vertices.push_back({ImVec2(element.line.p2.x - offset.x, element.line.p2.y - offset.y), {0, 1}, element.color});
+
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 1));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 3));
+                    }
+                    break;
+
+                default:
+                    // For other types, just add as a rectangle
+                    {
+                        size_t vertex_start = batch->vertices.size();
+
+                        batch->vertices.push_back({element.rect.min, {0, 0}, element.color});
+                        batch->vertices.push_back({ImVec2(element.rect.max.x, element.rect.min.y), {1, 0}, element.color});
+                        batch->vertices.push_back({element.rect.max, {1, 1}, element.color});
+                        batch->vertices.push_back({ImVec2(element.rect.min.x, element.rect.max.y), {0, 1}, element.color});
+
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 1));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 0));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 2));
+                        batch->indices.push_back(static_cast<ImDrawIdx>(vertex_start + 3));
+                    }
+                    break;
+            }
+        }
+    }
+}
+
 void OrderbookBatcher::optimizeBatches() {
     // Attempt to merge compatible batches to reduce draw calls
     if (batches_.size() <= 1) {
@@ -903,6 +1133,65 @@ void OrderbookBatcher::ultraOptimizeBatches() {
     batches_ = std::move(optimized_batches);
 }
 
+// Super-optimized batching that uses super-aggressive merging to minimize draw calls even further
+void OrderbookBatcher::superOptimizeBatches() {
+    if (batches_.size() <= 1) {
+        return; // Nothing to optimize
+    }
+
+    // Group batches by texture first to minimize texture switches
+    std::map<ImTextureID, std::vector<size_t>> texture_groups;
+    for (size_t i = 0; i < batches_.size(); ++i) {
+        texture_groups[batches_[i].texture].push_back(i);
+    }
+
+    std::vector<OrderbookBatchElement> optimized_batches;
+
+    // Process each texture group separately with super-aggressive merging
+    for (auto& [texture, indices] : texture_groups) {
+        // Within each texture group, super-aggressively merge batches with similar colors
+        std::vector<bool> processed(indices.size(), false);
+
+        for (size_t i = 0; i < indices.size(); ++i) {
+            if (processed[i]) continue;
+
+            size_t current_idx = indices[i];
+            OrderbookBatchElement combined_batch = std::move(batches_[current_idx]);
+            processed[i] = true;
+
+            // Look for other batches in the same texture group that can be merged
+            // Use super-aggressive merging to maximize batching
+            for (size_t j = i + 1; j < indices.size(); ++j) {
+                if (processed[j]) continue;
+
+                size_t candidate_idx = indices[j];
+
+                if (canCombineBatchesSuper(combined_batch, batches_[candidate_idx])) {
+                    // Merge the candidate batch into the combined batch
+                    size_t vertex_offset = combined_batch.vertices.size();
+
+                    // Add vertices from candidate batch to combined batch
+                    combined_batch.vertices.insert(combined_batch.vertices.end(),
+                                                  batches_[candidate_idx].vertices.begin(),
+                                                  batches_[candidate_idx].vertices.end());
+
+                    // Add indices from candidate batch to combined batch with proper offset
+                    for (auto index : batches_[candidate_idx].indices) {
+                        combined_batch.indices.push_back(static_cast<ImDrawIdx>(index + vertex_offset));
+                    }
+
+                    processed[j] = true;
+                }
+            }
+
+            optimized_batches.emplace_back(std::move(combined_batch));
+        }
+    }
+
+    // Replace the old batches with the optimized ones
+    batches_ = std::move(optimized_batches);
+}
+
 void OrderbookBatcher::addRectFilled(const ImVec2& min, const ImVec2& max, ImU32 col) {
     // Find or create a compatible batch for filled rectangles
     // For order book rendering, we prioritize batching by texture and color
@@ -1034,8 +1323,9 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
         return;
     }
 
-    // Use ultra optimization to minimize draw calls and GPU overhead
-    ultraOptimizeBatches();
+    // Use super optimization to minimize draw calls and GPU overhead
+    // This provides maximum batching efficiency for order book rendering
+    superOptimizeBatches();
 
     // Pre-calculate total vertices and indices to reserve space upfront
     size_t total_vertices = 0;
@@ -1053,7 +1343,7 @@ void OrderbookBatcher::submit(ImDrawList* draw_list) {
         draw_list->PrimReserve(static_cast<int>(total_indices), static_cast<int>(total_vertices));
     }
 
-    // Since we've already optimized by texture in advancedOptimizeBatches,
+    // Since we've already optimized by texture in superOptimizeBatches,
     // the batches are already organized to minimize texture switches
     for (const auto& batch : batches_) {
         if (!batch.vertices.empty() && !batch.indices.empty()) {

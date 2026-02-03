@@ -67,6 +67,10 @@ public:
     double get_percentile(double percentile) const;  // e.g., 95th percentile
     std::pair<size_t, size_t> get_frames_outside_thresholds() const;  // {warning_count, critical_count}
     double get_smoothed_frame_time(int window_size = 5) const;  // Moving average
+    double get_median_frame_time() const;  // Median frame time
+    double get_frame_time_at_percentile(double percentile) const;  // Frame time at specific percentile
+    std::vector<std::pair<size_t, double>> get_spike_frames(double threshold_multiplier = 2.0) const;  // Frames that are spikes
+    size_t get_consecutive_frame_drops(size_t min_drop_count = 3, double threshold_ms = 33.33) const;  // Consecutive slow frames
 
 private:
     std::chrono::high_resolution_clock::time_point frame_start_time_;

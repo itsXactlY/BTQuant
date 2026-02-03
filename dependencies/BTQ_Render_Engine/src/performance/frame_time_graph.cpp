@@ -270,6 +270,87 @@ double FrameTimeGraph::get_smoothed_frame_time(int window_size) const {
     return sum / count;
 }
 
+double FrameTimeGraph::get_median_frame_time() const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.empty()) return 0.0;
+
+    std::vector<double> sorted_times = frame_times_;
+    std::sort(sorted_times.begin(), sorted_times.end());
+
+    size_t size = sorted_times.size();
+    if (size % 2 == 0) {
+        return (sorted_times[size/2 - 1] + sorted_times[size/2]) / 2.0;
+    } else {
+        return sorted_times[size/2];
+    }
+}
+
+double FrameTimeGraph::get_frame_time_at_percentile(double percentile) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.empty()) return 0.0;
+
+    if (percentile < 0.0 || percentile > 100.0) return 0.0;
+
+    std::vector<double> sorted_times = frame_times_;
+    std::sort(sorted_times.begin(), sorted_times.end());
+
+    double index = (percentile / 100.0) * (sorted_times.size() - 1);
+    size_t lower_idx = static_cast<size_t>(std::floor(index));
+    size_t upper_idx = static_cast<size_t>(std::ceil(index));
+
+    if (lower_idx == upper_idx) {
+        return sorted_times[lower_idx];
+    }
+
+    // Linear interpolation between adjacent values
+    double fraction = index - lower_idx;
+    return sorted_times[lower_idx] + fraction * (sorted_times[upper_idx] - sorted_times[lower_idx]);
+}
+
+std::vector<std::pair<size_t, double>> FrameTimeGraph::get_spike_frames(double threshold_multiplier) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    std::vector<std::pair<size_t, double>> spikes;
+
+    if (frame_times_.size() < 3) return spikes; // Need at least 3 frames to detect spikes
+
+    // Calculate moving average to detect outliers
+    for (size_t i = 1; i < frame_times_.size() - 1; ++i) {
+        double prev_frame = frame_times_[i - 1];
+        double curr_frame = frame_times_[i];
+        double next_frame = frame_times_[i + 1];
+
+        // Calculate local average of surrounding frames
+        double local_avg = (prev_frame + next_frame) / 2.0;
+
+        // If current frame is significantly higher than local average, it's a spike
+        if (curr_frame > local_avg * threshold_multiplier) {
+            spikes.push_back({i, curr_frame});
+        }
+    }
+
+    return spikes;
+}
+
+size_t FrameTimeGraph::get_consecutive_frame_drops(size_t min_drop_count, double threshold_ms) const {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    if (frame_times_.size() < min_drop_count) return 0;
+
+    size_t max_consecutive = 0;
+    size_t current_consecutive = 0;
+
+    for (double frame_time : frame_times_) {
+        if (frame_time > threshold_ms) {
+            current_consecutive++;
+            max_consecutive = std::max(max_consecutive, current_consecutive);
+        } else {
+            current_consecutive = 0;
+        }
+    }
+
+    // Only return if we have at least the minimum drop count
+    return max_consecutive >= min_drop_count ? max_consecutive : 0;
+}
+
 void FrameTimeGraph::render(const char* title, float width, float height) {
     if (!enabled_) return;
 
@@ -502,6 +583,64 @@ void FrameTimeGraph::render(const char* title, float width, float height) {
 
         // Show smoothed frame time
         ImGui::Text("Smoothed Frame Time (last 5): %.2f ms", get_smoothed_frame_time(5));
+
+        // Show median frame time
+        ImGui::Text("Median Frame Time: %.2f ms", get_median_frame_time());
+
+        // Add a performance health indicator
+        ImGui::Separator();
+        ImGui::Text("Performance Health:");
+
+        // Calculate performance health score (0-100)
+        double health_score = 100.0;
+        if (!frame_times_.empty()) {
+            // Lower scores for high average frame times
+            double avg_frame_time_penalty = std::min(50.0, (average_frame_time_ms_ / 33.33) * 50.0);
+
+            // Penalty for high variance
+            double variance_penalty = std::min(30.0, (get_variance() / 100.0) * 30.0);
+
+            // Penalty for percentage of frames exceeding thresholds
+            auto [warn_count, crit_count] = get_frames_outside_thresholds();
+            double issue_percentage = ((warn_count + crit_count) * 100.0) / frame_times_.size();
+            double issue_penalty = std::min(20.0, issue_percentage * 0.2);
+
+            health_score = 100.0 - avg_frame_time_penalty - variance_penalty - issue_penalty;
+            health_score = std::max(0.0, health_score);
+        }
+
+        // Color code the health score
+        ImVec4 health_color;
+        if (health_score >= 80) {
+            health_color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // Green
+        } else if (health_score >= 60) {
+            health_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
+        } else {
+            health_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // Red
+        }
+
+        ImGui::TextColored(health_color, "Health Score: %.1f/100", health_score);
+
+        // Show spike analysis
+        ImGui::Separator();
+        ImGui::Text("Spike Analysis:");
+        auto spikes = get_spike_frames(2.0); // Frames that are 2x the local average
+        ImGui::Text("Spikes detected: %zu", spikes.size());
+        if (!spikes.empty() && ImGui::TreeNode("View Spike Details")) {
+            for (const auto& spike : spikes) {
+                ImGui::Text("Frame #%zu: %.2f ms", spike.first, spike.second);
+            }
+            ImGui::TreePop();
+        }
+
+        // Show consecutive frame drops
+        size_t consecutive_drops = get_consecutive_frame_drops(3, 33.33); // 3+ consecutive frames > 33.33ms
+        ImGui::Text("Longest sequence of slow frames: %zu", consecutive_drops);
+    }
+
+    // Add a button to reset statistics
+    if (ImGui::Button("Reset Statistics")) {
+        reset();
     }
 }
 

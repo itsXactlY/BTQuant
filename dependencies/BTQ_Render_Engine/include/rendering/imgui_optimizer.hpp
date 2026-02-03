@@ -249,6 +249,46 @@ namespace ImGuiOptimizer {
      * Optimized progress bar that checks visibility before rendering
      */
     void ProgressBarOptimized(float fraction, const ImVec2& size_arg = ImVec2(-FLT_MIN, 0.0f), const char* overlay = nullptr);
+
+    /**
+     * Optimized SetCursorPos that avoids redundant calls
+     */
+    void SetCursorPosOptimized(const ImVec2& pos, const char* widget_id = nullptr);
+
+    /**
+     * Optimized text rendering with position caching
+     */
+    void TextAtPositionOptimized(const char* text, const ImVec2& pos, const char* widget_id = nullptr);
+
+    /**
+     * Optimized SameLine with caching
+     */
+    void SameLineOptimized(float offset_from_start_x = 0.0f, float spacing = -1.0f, const char* widget_id = nullptr);
+
+    /**
+     * Batch style changes to minimize push/pop operations
+     */
+    void BatchStyleChanges(const std::vector<std::pair<ImGuiStyleVar, float>>& float_vars,
+                          const std::vector<std::pair<ImGuiStyleVar, ImVec2>>& vec2_vars,
+                          std::function<void()> render_func);
+
+    /**
+     * Conditional rendering that skips if item is not visible
+     */
+    template<typename Func>
+    void SkipIfNotVisible(Func func);
+
+    /**
+     * Combined conditional rendering that skips if window is not active, collapsed, or item not visible
+     */
+    template<typename Func>
+    void SkipIfNotActiveOrVisible(Func func);
+
+    /**
+     * Conditional rendering with bounds checking
+     */
+    template<typename Func>
+    bool ConditionalRenderWithBounds(const char* widget_id, const ImVec2& min_bound, const ImVec2& max_bound, Func func);
 }
 
 } // namespace Rendering

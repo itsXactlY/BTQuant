@@ -49,12 +49,14 @@ private:
         ImVec2 size;
         ImFont* font;
         float scale;
+        float timestamp;
         bool valid;
     };
 
     // Cache for cursor positions to avoid redundant SetCursorPos calls
     struct CachedCursorPosition {
         ImVec2 position;
+        float timestamp;
         bool valid;
     };
 
@@ -67,6 +69,14 @@ private:
         bool valid;
     };
 
+    // Cache for widget bounds to avoid repeated calculations
+    struct CachedWidgetBounds {
+        ImVec2 min;
+        ImVec2 max;
+        float timestamp;
+        bool valid;
+    };
+
 private:
     // Use string content as key for reliable caching - handles string literals properly
     std::unordered_map<std::string, CachedTextSize> text_size_cache_;
@@ -75,9 +85,11 @@ private:
     std::unordered_map<uint64_t, CachedFontSize> font_size_cache_;
     std::unordered_map<std::string, CachedCursorPosition> cursor_pos_cache_;
     std::unordered_map<std::string, CachedWindowInfo> window_info_cache_;
+    std::unordered_map<std::string, CachedWidgetBounds> widget_bounds_cache_;
     CachedStyle current_style_cache_;
     float last_update_time_ = 0.0f;
     static constexpr float CACHE_EXPIRY_TIME = 0.1f; // 100ms expiry for dynamic content
+    static constexpr float LONG_CACHE_EXPIRY_TIME = 1.0f; // 1s expiry for static content
 
     // Pre-allocated buffers to reduce allocations
     mutable std::string temp_key_buffer_;
@@ -177,13 +189,20 @@ public:
 
         auto it = font_size_cache_.find(font_key);
         if (it != font_size_cache_.end() && it->second.valid) {
-            return it->second.size;
+            float current_time = ImGui::GetTime();
+            // Check if cache entry is still valid (hasn't expired)
+            if (current_time - it->second.timestamp < LONG_CACHE_EXPIRY_TIME) {
+                return it->second.size;
+            } else {
+                // Entry has expired, remove it
+                font_size_cache_.erase(it);
+            }
         }
 
         // Calculate font size directly without pushing/popping
         ImVec2 size = ImVec2(ImGui::GetFontSize() * scale, ImGui::GetFontSize() * scale);
 
-        font_size_cache_[font_key] = {size, font, scale, true};
+        font_size_cache_[font_key] = {size, font, scale, static_cast<float>(ImGui::GetTime()), true};
         return size;
     }
 
@@ -202,6 +221,7 @@ public:
 
         float current_time = ImGui::GetTime();
         float expiry_threshold = current_time - CACHE_EXPIRY_TIME;
+        float long_expiry_threshold = current_time - LONG_CACHE_EXPIRY_TIME;
 
         // Clean up text size cache - optimized erase-remove idiom equivalent
         for (auto it = text_size_cache_.begin(); it != text_size_cache_.end();) {
@@ -221,11 +241,40 @@ public:
             }
         }
 
-        // Clean up font size cache
+        // Clean up font size cache - now with proper timestamp checking
         for (auto it = font_size_cache_.begin(); it != font_size_cache_.end();) {
-            // Font cache doesn't use timestamps, so we'll clear it differently
-            // For now, we'll keep it simple and not expire font cache based on time
-            ++it;
+            if (it->second.timestamp < long_expiry_threshold) {
+                it = font_size_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Clean up cursor position cache
+        for (auto it = cursor_pos_cache_.begin(); it != cursor_pos_cache_.end();) {
+            if (it->second.timestamp < expiry_threshold) {
+                it = cursor_pos_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Clean up window info cache
+        for (auto it = window_info_cache_.begin(); it != window_info_cache_.end();) {
+            if (it->second.timestamp < expiry_threshold) {
+                it = window_info_cache_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+
+        // Clean up widget bounds cache
+        for (auto it = widget_bounds_cache_.begin(); it != widget_bounds_cache_.end();) {
+            if (it->second.timestamp < expiry_threshold) {
+                it = widget_bounds_cache_.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
 
@@ -355,6 +404,35 @@ public:
     }
 
     /**
+     * Get cached widget bounds or compute them
+     */
+    bool get_cached_widget_bounds(const std::string& widget_id, CachedWidgetBounds& bounds) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+
+        auto it = widget_bounds_cache_.find(widget_id);
+        if (it != widget_bounds_cache_.end() && it->second.valid) {
+            float current_time = ImGui::GetTime();
+            // Check if cache entry is still valid (hasn't expired)
+            if (current_time - it->second.timestamp < CACHE_EXPIRY_TIME) {
+                bounds = it->second;
+                return true;
+            } else {
+                // Entry has expired, remove it
+                widget_bounds_cache_.erase(it);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Set cached widget bounds
+     */
+    void set_cached_widget_bounds(const std::string& widget_id, const ImVec2& min_bound, const ImVec2& max_bound) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        widget_bounds_cache_[widget_id] = {min_bound, max_bound, static_cast<float>(ImGui::GetTime()), true};
+    }
+
+    /**
      * Clear all caches
      */
     void clear_all_cache() {
@@ -364,6 +442,7 @@ public:
         clear_font_cache();
         cursor_pos_cache_.clear();
         window_info_cache_.clear();
+        widget_bounds_cache_.clear();
     }
 };
 
@@ -525,6 +604,7 @@ public:
         // Group by color to minimize push/pop operations
         ImU32 current_color = 0;
         bool color_set = false;
+        int color_push_count = 0; // Track how many colors we've pushed
 
         for (const auto& text_tuple : texts) {
             const char* text = std::get<0>(text_tuple);
@@ -534,18 +614,20 @@ public:
             if (!color_set || current_color != color) {
                 if (color_set) {
                     ImGui::PopStyleColor();
+                    color_push_count--;
                 }
                 ImGui::PushStyleColor(ImGuiCol_Text, color);
                 current_color = color;
                 color_set = true;
+                color_push_count++;
             }
 
             ImGui::SetCursorPos(pos);
             ImGui::TextUnformatted(text);
         }
 
-        if (color_set) {
-            ImGui::PopStyleColor();
+        if (color_push_count > 0) {
+            ImGui::PopStyleColor(color_push_count); // Pop all remaining colors at once
         }
     }
 
@@ -639,9 +721,9 @@ public:
             ImGui::TextUnformatted(text);
         }
 
-        // Clean up remaining color pushes
-        for (int i = 0; i < color_stack_depth; i++) {
-            ImGui::PopStyleColor();
+        // Clean up remaining color pushes - pop all at once for efficiency
+        if (color_stack_depth > 0) {
+            ImGui::PopStyleColor(color_stack_depth);
         }
     }
 
@@ -681,9 +763,9 @@ public:
             ImGui::TextUnformatted(text);
         }
 
-        // Clean up remaining color pushes
-        for (int i = 0; i < color_stack_depth; i++) {
-            ImGui::PopStyleColor();
+        // Clean up remaining color pushes - pop all at once for efficiency
+        if (color_stack_depth > 0) {
+            ImGui::PopStyleColor(color_stack_depth);
         }
     }
 
@@ -741,6 +823,75 @@ public:
     static void SkipIfNotActive(Func func) {
         if (IsWindowActive() && !IsWindowCollapsed()) {
             func();
+        }
+    }
+
+    /**
+     * Conditional rendering that skips if item is not visible
+     */
+    template<typename Func>
+    static void SkipIfNotVisible(Func func) {
+        if (IsItemVisible()) {
+            func();
+        }
+    }
+
+    /**
+     * Combined conditional rendering that skips if window is not active, collapsed, or item not visible
+     */
+    template<typename Func>
+    static void SkipIfNotActiveOrVisible(Func func) {
+        if (IsWindowActive() && !IsWindowCollapsed() && IsItemVisible()) {
+            func();
+        }
+    }
+
+    /**
+     * Conditional rendering with bounds checking
+     */
+    template<typename Func>
+    static bool ConditionalRenderWithBounds(const char* widget_id, const ImVec2& min_bound, const ImVec2& max_bound, Func func) {
+        if (!IsWindowActive() || IsWindowCollapsed()) {
+            return false;
+        }
+
+        // Check if bounds are visible
+        if (!IsRectVisible(min_bound, max_bound)) {
+            return false;
+        }
+
+        // Update cached bounds
+        state_cache_.set_cached_widget_bounds(widget_id, min_bound, max_bound);
+        func();
+        return true;
+    }
+
+    /**
+     * Batch style variable changes to minimize push/pop operations
+     */
+    static void BatchStyleChanges(const std::vector<std::pair<ImGuiStyleVar, float>>& float_vars,
+                                  const std::vector<std::pair<ImGuiStyleVar, ImVec2>>& vec2_vars,
+                                  std::function<void()> render_func) {
+        int push_count = 0;
+
+        // Push float style variables
+        for (const auto& var : float_vars) {
+            ImGui::PushStyleVar(var.first, var.second);
+            push_count++;
+        }
+
+        // Push ImVec2 style variables
+        for (const auto& var : vec2_vars) {
+            ImGui::PushStyleVar(var.first, var.second);
+            push_count++;
+        }
+
+        // Execute rendering function
+        render_func();
+
+        // Pop all style variables at once
+        if (push_count > 0) {
+            ImGui::PopStyleVar(push_count);
         }
     }
 
@@ -1178,6 +1329,15 @@ namespace ImGuiOptimizer {
         optimizer_instance.SameLineOptimized(offset_from_start_x, spacing, widget_id);
     }
 
+    /**
+     * Batch style changes to minimize push/pop operations
+     */
+    void BatchStyleChanges(const std::vector<std::pair<ImGuiStyleVar, float>>& float_vars,
+                          const std::vector<std::pair<ImGuiStyleVar, ImVec2>>& vec2_vars,
+                          std::function<void()> render_func) {
+        optimizer_instance.BatchStyleChanges(float_vars, vec2_vars, render_func);
+    }
+
     // Additional utility functions for performance optimization
 
     /**
@@ -1254,6 +1414,30 @@ namespace ImGuiOptimizer {
     void PopStyleVarConditional(bool condition, int count) {
         if (!condition) return;
         ImGui::PopStyleVar(count);
+    }
+
+    /**
+     * Conditional rendering that skips if item is not visible
+     */
+    template<typename Func>
+    void SkipIfNotVisible(Func func) {
+        optimizer_instance.SkipIfNotVisible(func);
+    }
+
+    /**
+     * Combined conditional rendering that skips if window is not active, collapsed, or item not visible
+     */
+    template<typename Func>
+    void SkipIfNotActiveOrVisible(Func func) {
+        optimizer_instance.SkipIfNotActiveOrVisible(func);
+    }
+
+    /**
+     * Conditional rendering with bounds checking
+     */
+    template<typename Func>
+    bool ConditionalRenderWithBounds(const char* widget_id, const ImVec2& min_bound, const ImVec2& max_bound, Func func) {
+        return optimizer_instance.ConditionalRenderWithBounds(widget_id, min_bound, max_bound, func);
     }
 }
 

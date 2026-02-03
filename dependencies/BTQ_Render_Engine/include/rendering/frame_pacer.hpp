@@ -162,6 +162,9 @@ private:
     void apply_frame_rate_stabilization();
     void enhance_spike_detection_and_suppression();
     void improve_dropped_frame_prevention();
+    void apply_frame_prediction();
+    void improve_frame_timing_accuracy();
+    void enhance_spike_response();
 };
 
 } // namespace RenderEngine

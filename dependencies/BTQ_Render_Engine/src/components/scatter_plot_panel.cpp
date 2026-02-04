@@ -15,7 +15,7 @@ void ScatterPlotPanel::initialize() { PanelBase::initialize(); }
 void ScatterPlotPanel::render() {
   begin_panel_window();
 
-  if (ImPlot::BeginPlot("Scatter Plot", "X", "Y")) {
+  if (ImPlot::BeginPlot("Scatter Plot")) {
     // Generate sample data for demonstration
     static float x_data[100], y_data[100];
     static bool first_run = true;

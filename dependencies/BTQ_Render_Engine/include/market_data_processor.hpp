@@ -29,7 +29,7 @@
 #elif __has_include("concurrentqueue.h")
 #include "concurrentqueue.h"
 #else
-#include <moodycamel/concurrentqueue.h>
+#include "concurrentqueue/concurrentqueue.h"  // Use the version from CMake's _deps directory
 #endif
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
 // ops) #include <folly/AtomicHashMap.h> // Example, or implement custom

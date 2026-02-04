@@ -25,7 +25,7 @@
 #elif __has_include("concurrentqueue.h")
 #include "concurrentqueue.h"
 #else
-#include <moodycamel/concurrentqueue.h>
+#include "moodycamel/concurrentqueue.h"
 #endif
 #endif
 

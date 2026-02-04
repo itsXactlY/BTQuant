@@ -317,6 +317,8 @@ target_include_directories(realtime_dashboard PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 find_package(TBB REQUIRED)
@@ -343,6 +345,8 @@ target_include_directories(dashboard_advanced PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(dashboard_advanced PRIVATE
@@ -369,6 +373,8 @@ target_include_directories(test_extended_memory_pool PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(test_extended_memory_pool PRIVATE
@@ -392,6 +398,8 @@ target_include_directories(test_memory_pool PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(test_memory_pool PRIVATE
@@ -417,6 +425,8 @@ target_include_directories(test_tooltips PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(test_tooltips PRIVATE
@@ -440,6 +450,8 @@ target_include_directories(test_quick_actions PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(test_quick_actions PRIVATE
@@ -464,6 +476,8 @@ target_include_directories(test_structured_logging PRIVATE
     ${glm_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
     ${concurrentqueue_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(test_structured_logging PRIVATE

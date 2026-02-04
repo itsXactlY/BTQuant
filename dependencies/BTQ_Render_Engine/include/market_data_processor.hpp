@@ -24,7 +24,13 @@
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
 // Lock-free queue (header-only, fetched by CMake)
+#if __has_include("moodycamel/concurrentqueue.h")
+#include "moodycamel/concurrentqueue.h"
+#elif __has_include("concurrentqueue.h")
 #include "concurrentqueue.h"
+#else
+#include <moodycamel/concurrentqueue.h>
+#endif
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
 // ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
 // lock-free map

@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find required packages
 find_package(Threads REQUIRED)
 find_package(TBB REQUIRED)
+find_package(Vulkan REQUIRED)
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
@@ -236,6 +237,14 @@ target_link_libraries(visual_regression_tests
     ${CMAKE_DL_LIBS}
     dl
     pthread
+)
+
+# Add mock data generator test
+add_executable(test_mock_data_generator test_mock_data_generator.cpp)
+
+# Link mock data generator test
+target_link_libraries(test_mock_data_generator
+    Threads::Threads
 )
 
 # Add compiler definitions to enable experimental features

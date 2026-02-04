@@ -4,6 +4,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <algorithm>
 
 namespace BTQuant {
 namespace RenderEngine {

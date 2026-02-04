@@ -282,7 +282,7 @@ class VulkanDashboard {
   std::string get_active_symbol() const { return active_symbol_; }
 
   /// @brief Get access to the underlying Vulkan core
-  VulkanCore* get_vulkan_core() { return m_vulkanCore.get(); }
+  VulkanCore* get_vulkan_core() { return vulkan_core_.get(); }
 
   /// @brief Set a callback to render custom ImGui menu items
   void set_custom_menubar_callback(std::function<void()> callback) {
@@ -290,7 +290,7 @@ class VulkanDashboard {
   }
 
   /// @brief Get the workspace component
-  QuantWorkspaceComponent* get_workspace_component() { return m_workspace.get(); }
+  QuantWorkspaceComponent* get_workspace_component() { return workspace_.get(); }
 
   /// @brief Toggle performance overlay
   void set_show_performance_overlay(bool show) { show_performance_overlay_ = show; }
@@ -316,21 +316,21 @@ class VulkanDashboard {
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   std::string active_symbol_ = "BTC-USDT";
-  std::unique_ptr<VulkanCore> m_vulkanCore;
-  std::unique_ptr<QuantWorkspaceComponent> m_workspace;
-  std::unique_ptr<RealtimeDashboardComponent> m_modern_dashboard;
-  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> m_micro_renderer;
-  std::unique_ptr<VulkanSyncContext> m_sync_context;
-  std::unique_ptr<TimelineSemaphore> m_timeline_semaphore;
+  std::unique_ptr<VulkanCore> vulkan_core_;
+  std::unique_ptr<QuantWorkspaceComponent> workspace_;
+  std::unique_ptr<RealtimeDashboardComponent> modern_dashboard_;
+  std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> micro_renderer_;
+  std::unique_ptr<VulkanSyncContext> sync_context_;
+  std::unique_ptr<TimelineSemaphore> timeline_semaphore_;
 
   // Customization
   std::function<void()> custom_menubar_callback_;
   bool show_performance_overlay_ = false;
 
   bool use_modern_dashboard_ = false;
-  uint32_t m_currentImageIndex = 0;
+  uint32_t current_image_index_ = 0;
   bool is_running_ = true;
-  bool m_windowResized = false;
+  bool window_resized_ = false;
 
   /**
    * @brief Callback for when the window framebuffer is resized

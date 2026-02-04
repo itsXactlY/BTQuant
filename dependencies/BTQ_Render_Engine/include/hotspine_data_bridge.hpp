@@ -77,7 +77,7 @@ struct InstrumentStore {
   std::vector<double> volumes;
 
   // Volume Profile (Price -> Cumulative Volume) - Lock-free updates
-  std::map<double, double> m_vol_profile;
+  std::map<double, double> vol_profile_;
 
   // Latest Snapshot for Heatmap/Orderbook - Atomic for thread-safety
   std::atomic<HotOrderbookSnapshot*> latest_snapshot{nullptr};
@@ -100,7 +100,7 @@ struct InstrumentStore {
     lows = other.lows;
     closes = other.closes;
     volumes = other.volumes;
-    m_vol_profile = other.m_vol_profile;
+    vol_profile_ = other.vol_profile_;
     HotOrderbookSnapshot* snap = other.latest_snapshot.load();
     if (snap) {
       latest_snapshot.store(new HotOrderbookSnapshot(*snap));
@@ -123,7 +123,7 @@ class HotSpineDataBridge {
 
   // Direkter Zugriff auf MarketDataProcessor für alle Datenoperationen
   void setMarketDataProcessor(std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
-    m_data_processor = processor;
+    data_processor_ = processor;
   }
 
   // Get active symbols from MarketDataProcessor (direct)
@@ -138,23 +138,23 @@ class HotSpineDataBridge {
   std::string getExchangeName(uint32_t symbol_id) const;
 
  private:
-  std::shared_ptr<RenderEngine::MarketDataProcessor> m_data_processor;
-  std::string m_shm_path;
-  int m_shm_fd = -1;
-  void* m_shm_ptr = nullptr;
-  size_t m_shm_size = 0;
+  std::shared_ptr<RenderEngine::MarketDataProcessor> data_processor_;
+  std::string shm_path_;
+  int shm_fd_ = -1;
+  void* shm_ptr_ = nullptr;
+  size_t shm_size_ = 0;
 
-  std::atomic<bool> m_running{false};
-  std::jthread m_sync_thread;  // Real-time sync thread
+  std::atomic<bool> running_{false};
+  std::jthread sync_thread_;  // Real-time sync thread
 
   // Ring Buffer Pointers
-  SharedMemoryHeader* m_header = nullptr;
-  HotTrade* m_trades = nullptr;
-  HotOrderbookSnapshot* m_books = nullptr;
+  SharedMemoryHeader* header_ = nullptr;
+  HotTrade* trades_ = nullptr;
+  HotOrderbookSnapshot* books_ = nullptr;
 
   // Local tracking of read progress
-  std::atomic<uint64_t> m_last_read_idx{0};
-  std::atomic<uint64_t> m_last_book_read_idx{0};
+  std::atomic<uint64_t> last_read_idx_{0};
+  std::atomic<uint64_t> last_book_read_idx_{0};
 
   void sync_shm();
   void sync_loop();  // Real-time sync loop with high priority

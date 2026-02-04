@@ -50,11 +50,11 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
   init_window();
 
   // Use the established VulkanCore initialization
-  m_vulkanCore = std::make_unique<VulkanCore>(config_);
-  m_vulkanCore->initialize(window_, width_, height_);
+  vulkan_core_ = std::make_unique<VulkanCore>(config_);
+  vulkan_core_->initialize(window_, width_, height_);
   std::println("[VulkanDashboard] Vulkan initialized.");
 
-  m_timeline_semaphore = std::make_unique<TimelineSemaphore>(m_vulkanCore->get_device());
+  timeline_semaphore_ = std::make_unique<TimelineSemaphore>(vulkan_core_->get_device());
 
   // Initialize Glfw ImGui Backend
   std::println("[VulkanDashboard] Initializing ImGui GLFW Backend...");
@@ -67,27 +67,27 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
 
 void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
-  m_micro_renderer = std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
-      m_vulkanCore.get(), hotspine_bridge_, market_data_processor_);
+  micro_renderer_ = std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
+      vulkan_core_.get(), hotspine_bridge_, market_data_processor_);
 
-  if (auto result = m_micro_renderer->initialize(); !result) [[unlikely]] {
+  if (auto result = micro_renderer_->initialize(); !result) [[unlikely]] {
     std::println("[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: {}",
                  RenderEngine::to_string(result.error()));
   }
 
-  m_workspace = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
-                                                          m_micro_renderer.get());
+  workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
+                                                        micro_renderer_.get());
 
-  m_modern_dashboard = std::make_unique<RealtimeDashboardComponent>(
-      hotspine_bridge_, market_data_processor_, m_micro_renderer.get());
-  m_modern_dashboard->initialize_vulkan_resources(m_vulkanCore.get());
+  modern_dashboard_ = std::make_unique<RealtimeDashboardComponent>(
+      hotspine_bridge_, market_data_processor_, micro_renderer_.get());
+  modern_dashboard_->initialize_vulkan_resources(vulkan_core_.get());
 
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
 
   // Ctrl+1 to Ctrl+5 for layout switching or panel focus (Placeholder)
   // Ctrl+1 to Ctrl+5 for layout switching
-  auto* workspace = m_workspace.get();  // Capture for lambda
+  auto* workspace = workspace_.get();  // Capture for lambda
   im.registerHotKey(
       ImGuiKey_1,
       [workspace]() {
@@ -220,16 +220,16 @@ void VulkanDashboard::init_components() {
 }
 
 void VulkanDashboard::render_frame() {
-  if (m_windowResized) {
-    m_vulkanCore->recreate_swapchain(width_, height_);
-    m_windowResized = false;
+  if (window_resized_) {
+    vulkan_core_->recreate_swapchain(width_, height_);
+    window_resized_ = false;
   }
 
   uint32_t imageIndex;
-  VkResult result = m_vulkanCore->PrepareFrame(imageIndex);
+  VkResult result = vulkan_core_->PrepareFrame(imageIndex);
 
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    m_vulkanCore->recreate_swapchain(width_, height_);
+    vulkan_core_->recreate_swapchain(width_, height_);
     return;
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     // Silently ignore or log - swapchain might be rebuilding
@@ -275,28 +275,28 @@ void VulkanDashboard::render_frame() {
   render_layout_indicator();
 
   // Process updates and UI
-  float dt = m_vulkanCore->get_frame_time_ms() / 1000.0f;
-  if (use_modern_dashboard_ && m_modern_dashboard) {
-    m_modern_dashboard->update(dt);
-    m_modern_dashboard->render_gui();
-  } else if (m_workspace) {
-    m_workspace->update(dt);
-    m_workspace->render_gui();
+  float dt = vulkan_core_->get_frame_time_ms() / 1000.0f;
+  if (use_modern_dashboard_ && modern_dashboard_) {
+    modern_dashboard_->update(dt);
+    modern_dashboard_->render_gui();
+  } else if (workspace_) {
+    workspace_->update(dt);
+    workspace_->render_gui();
   }
 
   // Handle high-performance microstructure rendering (Data Ingestion & Compute
   // Phase)
-  if (m_micro_renderer) {
+  if (micro_renderer_) {
     pollDataToRenderer();
-    m_micro_renderer->prepare();
-    m_micro_renderer->executeCompute(m_vulkanCore->get_current_command_buffer());
+    micro_renderer_->prepare();
+    micro_renderer_->executeCompute(vulkan_core_->get_current_command_buffer());
 
     // Add pipeline barrier to ensure compute writes are visible to graphics
     VkMemoryBarrier barrier{
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
         .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT};
-    vkCmdPipelineBarrier(m_vulkanCore->get_current_command_buffer(),
+    vkCmdPipelineBarrier(vulkan_core_->get_current_command_buffer(),
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,
                          0, 1, &barrier, 0, nullptr, 0, nullptr);
   }
@@ -309,12 +309,12 @@ void VulkanDashboard::render_frame() {
   // For now, let's assume we can call executeGraphics inside the render pass.
   // We'll modify RecordCommandBuffer to accept a callback or a renderer.
 
-  m_vulkanCore->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
-    if (m_micro_renderer) {
-      m_micro_renderer->executeGraphics(cmd);
+  vulkan_core_->RecordCommandBuffer(imageIndex, ImGui::GetDrawData(), [this](VkCommandBuffer cmd) {
+    if (micro_renderer_) {
+      micro_renderer_->executeGraphics(cmd);
     }
   });
-  m_vulkanCore->PresentFrame(imageIndex);
+  vulkan_core_->PresentFrame(imageIndex);
 }
 
 void VulkanDashboard::handle_events() { glfwPollEvents(); }
@@ -330,11 +330,11 @@ void VulkanDashboard::shutdown() {
 
   std::cout << "[VulkanDashboard] Shutting down..." << std::endl;
 
-  if (m_vulkanCore) {
-    m_vulkanCore->wait_idle();
+  if (vulkan_core_) {
+    vulkan_core_->wait_idle();
   }
 
-  m_workspace.reset();
+  workspace_.reset();
 
   ImGui_ImplVulkan_Shutdown();
   ImGui_ImplGlfw_Shutdown();
@@ -361,13 +361,13 @@ void VulkanDashboard::init_window() {
 
 void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, int height) {
   auto app = reinterpret_cast<VulkanDashboard*>(glfwGetWindowUserPointer(window));
-  app->m_windowResized = true;
+  app->window_resized_ = true;
   app->width_ = width;
   app->height_ = height;
 }
 
 void VulkanDashboard::pollDataToRenderer() {
-  if (!m_micro_renderer || !hotspine_bridge_ || !market_data_processor_) {
+  if (!micro_renderer_ || !hotspine_bridge_ || !market_data_processor_) {
     return;
   }
 
@@ -406,7 +406,7 @@ void VulkanDashboard::pollDataToRenderer() {
     std::vector<uint8_t> buffer(bufferSize);
     auto* snapshot = reinterpret_cast<RenderEngine::HotspineOrderBookSnapshot*>(buffer.data());
 
-    snapshot->currentTimeIndex = static_cast<uint32_t>(m_vulkanCore->get_current_frame_index());
+    snapshot->currentTimeIndex = static_cast<uint32_t>(vulkan_core_->get_current_frame_index());
     snapshot->priceLevelsCount = totalLevels;
 
     // Calculate dynamic price range for the snapshot
@@ -433,7 +433,7 @@ void VulkanDashboard::pollDataToRenderer() {
       snapshot->levels[idx++] = {static_cast<float>(price), static_cast<uint32_t>(size), 0, 0};
     }
 
-    m_micro_renderer->updateLOBData(*snapshot);
+    micro_renderer_->updateLOBData(*snapshot);
   }
 
   // 4. Update Trade Data
@@ -448,7 +448,7 @@ void VulkanDashboard::pollDataToRenderer() {
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);
     }
-    m_micro_renderer->updateTradeData(ticks);
+    micro_renderer_->updateTradeData(ticks);
   }
 
   // 5. Aggregate Footprint Clusters (Exocharts Style)
@@ -520,7 +520,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      m_micro_renderer->updateFootprintClusters(clusters);
+      micro_renderer_->updateFootprintClusters(clusters);
     }
   }
 }
@@ -562,14 +562,14 @@ void VulkanDashboard::render_performance_overlay() {
   ImGui::End();
 
   // Update debug overlay with active component counts
-  if (m_workspace && m_workspace->getPanelManager()) {
-    size_t active_panels = m_workspace->getPanelManager()->get_panel_count();
+  if (workspace_ && workspace_->getPanelManager()) {
+    size_t active_panels = workspace_->getPanelManager()->get_panel_count();
     g_debug_overlay.set_active_panels_count(active_panels);
   }
 
   // Update renderer stats if available
-  if (m_micro_renderer) {
-    auto stats = m_micro_renderer->getStats();
+  if (micro_renderer_) {
+    auto stats = micro_renderer_->getStats();
     g_debug_overlay.set_renderer_stats(stats.framesRendered, stats.lobUpdates,
                                       stats.tradeUpdates, stats.footprintCellsRendered);
   }

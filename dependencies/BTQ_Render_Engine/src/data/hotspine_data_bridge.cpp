@@ -20,99 +20,99 @@
 
 namespace BTQuant {
 
-HotSpineDataBridge::HotSpineDataBridge(const std::string& shm_path) : m_shm_path(shm_path) {
+HotSpineDataBridge::HotSpineDataBridge(const std::string& shm_path) : shm_path_(shm_path) {
   // Load symbol registry from shared memory file
   SymbolRegistry::instance().load_from_file("/dev/shm/btquant_symbols.json");
 }
 
 HotSpineDataBridge::~HotSpineDataBridge() {
   stop();
-  if (m_shm_ptr && m_shm_ptr != MAP_FAILED) {
-    munmap(m_shm_ptr, m_shm_size);
+  if (shm_ptr_ && shm_ptr_ != MAP_FAILED) {
+    munmap(shm_ptr_, shm_size_);
   }
-  if (m_shm_fd != -1) {
-    close(m_shm_fd);
+  if (shm_fd_ != -1) {
+    close(shm_fd_);
   }
 }
 
 std::expected<void, std::string> HotSpineDataBridge::start() {
   // Open shared memory
-  m_shm_fd = shm_open(m_shm_path.c_str(), O_RDWR, 0666);
-  if (m_shm_fd == -1) [[unlikely]] {
+  shm_fd_ = shm_open(shm_path_.c_str(), O_RDWR, 0666);
+  if (shm_fd_ == -1) [[unlikely]] {
     std::string error_msg =
-        std::format("Failed to open shared memory '{}': {}", m_shm_path, strerror(errno));
+        std::format("Failed to open shared memory '{}': {}", shm_path_, strerror(errno));
     BTQ_LOG_ERROR(error_msg);
     return std::unexpected(error_msg);
   }
 
   // Get the size
   struct stat sb;
-  if (fstat(m_shm_fd, &sb) == -1) [[unlikely]] {
+  if (fstat(shm_fd_, &sb) == -1) [[unlikely]] {
     std::string error_msg = "Failed to fstat shared memory";
     BTQ_LOG_ERROR(error_msg);
-    close(m_shm_fd);
-    m_shm_fd = -1;
+    close(shm_fd_);
+    shm_fd_ = -1;
     return std::unexpected(error_msg);
   }
-  m_shm_size = sb.st_size;
+  shm_size_ = sb.st_size;
 
   // Map it
-  m_shm_ptr = mmap(nullptr, m_shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shm_fd, 0);
-  if (m_shm_ptr == MAP_FAILED) [[unlikely]] {
+  shm_ptr_ = mmap(nullptr, shm_size_, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd_, 0);
+  if (shm_ptr_ == MAP_FAILED) [[unlikely]] {
     std::string error_msg = "Failed to mmap shared memory";
     BTQ_LOG_ERROR(error_msg);
-    close(m_shm_fd);
-    m_shm_fd = -1;
+    close(shm_fd_);
+    shm_fd_ = -1;
     return std::unexpected(error_msg);
   }
 
   // Initialize pointers
-  m_header = reinterpret_cast<SharedMemoryHeader*>(m_shm_ptr);
+  header_ = reinterpret_cast<SharedMemoryHeader*>(shm_ptr_);
 
   // Verify magic number - "UQTB" = 0x42545155
   constexpr uint32_t expected_magic_le = 0x42545155;
-  if (m_header->magic != expected_magic_le) [[unlikely]] {
+  if (header_->magic != expected_magic_le) [[unlikely]] {
     std::string error_msg = "Invalid magic number in shared memory";
     BTQ_LOG_ERROR(error_msg);
-    munmap(m_shm_ptr, m_shm_size);
-    m_shm_ptr = nullptr;
-    m_header = nullptr;
-    close(m_shm_fd);
-    m_shm_fd = -1;
+    munmap(shm_ptr_, shm_size_);
+    shm_ptr_ = nullptr;
+    header_ = nullptr;
+    close(shm_fd_);
+    shm_fd_ = -1;
     return std::unexpected(error_msg);
   }
 
   // Calculate ring buffer positions
   constexpr size_t HOTSPINE_HEADER_SIZE = 4096;
-  m_trades = reinterpret_cast<HotTrade*>(static_cast<char*>(m_shm_ptr) + HOTSPINE_HEADER_SIZE);
+  trades_ = reinterpret_cast<HotTrade*>(static_cast<char*>(shm_ptr_) + HOTSPINE_HEADER_SIZE);
 
-  size_t trades_size = m_header->capacity * sizeof(HotTrade);
-  m_books = reinterpret_cast<HotOrderbookSnapshot*>(static_cast<char*>(m_shm_ptr) +
+  size_t trades_size = header_->capacity * sizeof(HotTrade);
+  books_ = reinterpret_cast<HotOrderbookSnapshot*>(static_cast<char*>(shm_ptr_) +
                                                     HOTSPINE_HEADER_SIZE + trades_size);
 
   std::string success_msg = std::format("[HotSpineDataBridge] Connected to SHM: {} (capacity={})",
-                                        m_shm_path, m_header->capacity);
+                                        shm_path_, header_->capacity);
   BTQ_LOG_INFO(success_msg);
 
-  m_running.store(true, std::memory_order_release);
+  running_.store(true, std::memory_order_release);
 
   // Start real-time sync thread using std::jthread
-  m_sync_thread = std::jthread([this](std::stop_token stoken) { this->sync_loop(); });
+  sync_thread_ = std::jthread([this](std::stop_token stoken) { this->sync_loop(); });
 
   BTQ_LOG_INFO("HotSpineDataBridge started successfully");
   return {};
 }
 
 void HotSpineDataBridge::stop() {
-  m_running = false;
-  if (m_sync_thread.joinable()) {
-    m_sync_thread.request_stop();
-    m_sync_thread.join();
+  running_ = false;
+  if (sync_thread_.joinable()) {
+    sync_thread_.request_stop();
+    sync_thread_.join();
   }
 }
 
 void HotSpineDataBridge::sync() {
-  if (!m_running) {
+  if (!running_) {
     return;
   }
 
@@ -131,17 +131,17 @@ std::string HotSpineDataBridge::getExchangeName(uint32_t symbol_id) const {
 }
 
 std::vector<uint32_t> HotSpineDataBridge::getActiveSymbols() const {
-  return m_data_processor ? m_data_processor->getActiveSymbols() : std::vector<uint32_t>{};
+  return data_processor_ ? data_processor_->getActiveSymbols() : std::vector<uint32_t>{};
 }
 
 std::span<const HotTrade> HotSpineDataBridge::getTradeBuffer() const {
-  if (!m_trades || !m_header) return {};
-  return std::span<const HotTrade>(m_trades, m_header->capacity);
+  if (!trades_ || !header_) return {};
+  return std::span<const HotTrade>(trades_, header_->capacity);
 }
 
 std::span<const HotOrderbookSnapshot> HotSpineDataBridge::getBookBuffer() const {
-  if (!m_books || !m_header) return {};
-  return std::span<const HotOrderbookSnapshot>(m_books, m_header->orderbook_capacity);
+  if (!books_ || !header_) return {};
+  return std::span<const HotOrderbookSnapshot>(books_, header_->orderbook_capacity);
 }
 
 void HotSpineDataBridge::sync_loop() {
@@ -163,7 +163,7 @@ void HotSpineDataBridge::sync_loop() {
 
   BTQ_LOG_INFO("HotSpineDataBridge sync loop started");
 
-  while (!m_sync_thread.get_stop_token().stop_requested() && m_running) {
+  while (!sync_thread_.get_stop_token().stop_requested() && running_) {
     sync_shm();
 
     // Busy-wait with yield for precise timing
@@ -178,22 +178,22 @@ void HotSpineDataBridge::sync_loop() {
 }
 
 void HotSpineDataBridge::sync_shm() {
-  if (!m_header || !m_data_processor) {
+  if (!header_ || !data_processor_) {
     static int warn_count = 0;
     if (warn_count++ % 100 == 0) {
-      BTQ_LOG_WARNING(std::format("m_header={} m_data_processor={}", (void*)m_header,
-                                  (void*)m_data_processor.get()));
+      BTQ_LOG_WARNING(std::format("header_={} data_processor_={}", (void*)header_,
+                                  (void*)data_processor_.get()));
     }
     return;
   }
 
   // --- Process Trades ---
-  uint64_t write_idx = __atomic_load_n(&m_header->write_index, __ATOMIC_ACQUIRE);
-  uint64_t capacity = m_header->capacity;
+  uint64_t write_idx = __atomic_load_n(&header_->write_index, __ATOMIC_ACQUIRE);
+  uint64_t capacity = header_->capacity;
 
   // Initial catch-up: Process ENTIRE ring buffer on first sync
   // This ensures we have all available historical data
-  uint64_t last_read = m_last_read_idx.load(std::memory_order_acquire);
+  uint64_t last_read = last_read_idx_.load(std::memory_order_acquire);
   if (last_read == 0 && write_idx > 0) {
     // For ring buffer: start at oldest valid position
     if (write_idx > capacity) {
@@ -201,7 +201,7 @@ void HotSpineDataBridge::sync_shm() {
     } else {
       last_read = 0;  // Buffer not full, process from beginning
     }
-    m_last_read_idx.store(last_read, std::memory_order_release);
+    last_read_idx_.store(last_read, std::memory_order_release);
     BTQ_LOG_INFO(
         std::format("Processing full ring buffer. Start: {} End: {}", last_read, write_idx));
   }
@@ -212,9 +212,9 @@ void HotSpineDataBridge::sync_shm() {
                      std::chrono::system_clock::now().time_since_epoch())
                      .count();
   if (now - last_debug_time >= 5) {
-    BTQ_LOG_INFO(std::format("Trade W={} R={} Book W={} R={}", write_idx, m_last_read_idx.load(),
-                             __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE),
-                             m_last_book_read_idx.load()));
+    BTQ_LOG_INFO(std::format("Trade W={} R={} Book W={} R={}", write_idx, last_read_idx_.load(),
+                             __atomic_load_n(&header_->orderbook_write_index, __ATOMIC_ACQUIRE),
+                             last_book_read_idx_.load()));
     last_debug_time = now;
   }
 
@@ -228,7 +228,7 @@ void HotSpineDataBridge::sync_shm() {
   const uint64_t MIN_VALID_TS = 1704067200000000ULL;
 
   while (last_read < write_idx) {
-    const HotTrade& trade = m_trades[last_read % capacity];
+    const HotTrade& trade = trades_[last_read % capacity];
 
     // SANITY CHECK: Skip uninitialized or corrupt trades
     if (trade.ts_exchange < MIN_VALID_TS) {
@@ -256,7 +256,7 @@ void HotSpineDataBridge::sync_shm() {
     last_read++;
 
     if (trade_batch.size() >= BATCH_SIZE) {
-      m_data_processor->processTradeUpdates(trade_batch);
+      data_processor_->processTradeUpdates(trade_batch);
       static uint64_t batch_count = 0;
       if (++batch_count % 10 == 0) {
         BTQ_LOG_INFO(std::format("Processed batch of {} trades. Last Read Index: {}",
@@ -268,27 +268,27 @@ void HotSpineDataBridge::sync_shm() {
 
   // Finalize remaining trades in the batch
   if (!trade_batch.empty()) {
-    m_data_processor->processTradeUpdates(trade_batch);
+    data_processor_->processTradeUpdates(trade_batch);
   }
 
   // CRITICAL: Update shared memory read_index so producer knows we've consumed
   // it
-  __atomic_store_n(&m_header->read_index, last_read, __ATOMIC_RELEASE);
-  m_last_read_idx.store(last_read, std::memory_order_release);
+  __atomic_store_n(&header_->read_index, last_read, __ATOMIC_RELEASE);
+  last_read_idx_.store(last_read, std::memory_order_release);
 
   // --- Process Orderbooks ---
-  uint64_t book_write_idx = __atomic_load_n(&m_header->orderbook_write_index, __ATOMIC_ACQUIRE);
-  uint64_t book_capacity = m_header->orderbook_capacity;
+  uint64_t book_write_idx = __atomic_load_n(&header_->orderbook_write_index, __ATOMIC_ACQUIRE);
+  uint64_t book_capacity = header_->orderbook_capacity;
 
   // Catch-up logic for books: Process ALL available history on first run
-  uint64_t last_book_read = m_last_book_read_idx.load(std::memory_order_acquire);
+  uint64_t last_book_read = last_book_read_idx_.load(std::memory_order_acquire);
   if (last_book_read == 0 && book_write_idx > 0) {
     if (book_write_idx > book_capacity) {
       last_book_read = book_write_idx - book_capacity;
     } else {
       last_book_read = 0;
     }
-    m_last_book_read_idx.store(last_book_read, std::memory_order_release);
+    last_book_read_idx_.store(last_book_read, std::memory_order_release);
     BTQ_LOG_INFO(std::format("Orderbook Full Sync from {} to {}", last_book_read, book_write_idx));
   }
 
@@ -301,14 +301,14 @@ void HotSpineDataBridge::sync_shm() {
     } else {
       last_book_read = 0;
     }
-    m_last_book_read_idx.store(last_book_read, std::memory_order_release);
+    last_book_read_idx_.store(last_book_read, std::memory_order_release);
     BTQ_LOG_INFO(std::format("Book buffer wraparound detected. Reset R={} W={}", last_book_read,
                              book_write_idx));
   }
 
   // Process ALL available orderbooks in the buffer
   while (last_book_read < book_write_idx) {
-    const HotOrderbookSnapshot& snap = m_books[last_book_read % book_capacity];
+    const HotOrderbookSnapshot& snap = books_[last_book_read % book_capacity];
 
     // LOG snapshots occasionally to verify data is arriving
     static uint64_t snap_processed = 0;
@@ -362,14 +362,14 @@ void HotSpineDataBridge::sync_shm() {
       update.asks.push_back(level);
     }
 
-    m_data_processor->processOrderbookUpdate(update);
+    data_processor_->processOrderbookUpdate(update);
     last_book_read++;
   }
 
   // Update Reader Index
-  __atomic_store_n(&m_header->read_index, last_read, __ATOMIC_RELEASE);
-  __atomic_store_n(&m_header->orderbook_read_index, last_book_read, __ATOMIC_RELEASE);
-  m_last_book_read_idx.store(last_book_read, std::memory_order_release);
+  __atomic_store_n(&header_->read_index, last_read, __ATOMIC_RELEASE);
+  __atomic_store_n(&header_->orderbook_read_index, last_book_read, __ATOMIC_RELEASE);
+  last_book_read_idx_.store(last_book_read, std::memory_order_release);
 }
 
 }  // namespace BTQuant

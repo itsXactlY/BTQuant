@@ -1,6 +1,7 @@
 #pragma once
 
 #include "error_handling/result.hpp"
+#include "error_handling/crash_reporter.hpp"
 #include <functional>
 #include <memory>
 #include <iostream>
@@ -190,10 +191,10 @@ inline void report_error(const ErrorInfo& error, ErrorSeverity severity = ErrorS
     GlobalErrorReporter::get().report_error(error, severity);
 }
 
-inline void report_error(ErrorCode code, const std::string& message, 
-                         const std::string& details = "", 
-                         const std::string& file = "", 
-                         int line = 0, 
+inline void report_error(ErrorCode code, const std::string& message,
+                         const std::string& details = "",
+                         const std::string& file = "",
+                         int line = 0,
                          const std::string& func = "") {
     ErrorInfo error(code, message, details, file, line, func);
     GlobalErrorReporter::get().report_error(error, ErrorSeverity::kError);

@@ -289,6 +289,56 @@ namespace ImGuiOptimizer {
      */
     template<typename Func>
     bool ConditionalRenderWithBounds(const char* widget_id, const ImVec2& min_bound, const ImVec2& max_bound, Func func);
+
+    /**
+     * Optimized GetCursorScreenPos that avoids redundant calls
+     */
+    ImVec2 GetCursorScreenPosOptimized(const char* widget_id = nullptr);
+
+    /**
+     * Optimized spacing that reduces redundant calls
+     */
+    void SpacingOptimized(int count = 1);
+
+    /**
+     * Optimized separator that checks visibility
+     */
+    void SeparatorOptimized();
+
+    /**
+     * Optimized dummy element that reduces redundant calls
+     */
+    void DummyOptimized(const ImVec2& size);
+
+    /**
+     * Get cached draw list for a window to avoid repeated calls
+     */
+    ImDrawList* GetCachedWindowDrawList(const char* window_name);
+
+    /**
+     * Optimized function to get item rectangle with caching
+     */
+    bool GetItemRectOptimized(ImVec2& min, ImVec2& max, ImVec2& size, const char* widget_id = nullptr);
+
+    /**
+     * Optimized style variable changes that only apply changes when values differ
+     */
+    void ConditionalStyleChange(ImGuiStyleVar var, float new_value);
+
+    /**
+     * Optimized style variable changes that only apply changes when values differ
+     */
+    void ConditionalStyleChange(ImGuiStyleVar var, const ImVec2& new_value);
+
+    /**
+     * Optimized color changes that only apply changes when values differ
+     */
+    void ConditionalColorChange(ImGuiCol col, ImU32 new_color);
+
+    /**
+     * Optimized color changes that only apply changes when values differ
+     */
+    void ConditionalColorChange(ImGuiCol col, const ImVec4& new_color);
 }
 
 } // namespace Rendering

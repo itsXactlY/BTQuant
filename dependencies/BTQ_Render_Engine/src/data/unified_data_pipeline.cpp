@@ -1,4 +1,5 @@
 #include "unified_data_pipeline.hpp"
+#include "ui_data_manager.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -25,18 +26,14 @@ UnifiedDataPipeline::UnifiedDataPipeline(
     ui_data_manager_->set_current_symbol(current_symbol_);
   }
 
-  // Find the symbol ID for the current symbol
-  if (bridge_) {
-    auto exchanges = bridge_->getAvailableExchanges();
-    for (const auto& exchange : exchanges) {
-      auto symbols = bridge_->getSymbolsForExchange(exchange);
-      for (const auto& symbol : symbols) {
-        if (symbol == current_symbol_) {
-          current_symbol_id_ = bridge_->getSymbolId(exchange, symbol);
-          break;
-        }
+  // Find the symbol ID for the current symbol using symbol manager
+  if (symbol_manager_) {
+    auto all_symbols = symbol_manager_->getAllSymbols();
+    for (const auto& symbol_info : all_symbols) {
+      if (symbol_info.symbol == current_symbol_) {
+        current_symbol_id_ = symbol_info.id;
+        break;
       }
-      if (current_symbol_id_ != 0) break;
     }
   }
 }
@@ -91,18 +88,14 @@ void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
   current_symbol_ = symbol_name;
   ui_data_manager_->set_current_symbol(symbol_name);
 
-  // Find the symbol ID for the new symbol
-  if (bridge_) {
-    auto exchanges = bridge_->getAvailableExchanges();
-    for (const auto& exchange : exchanges) {
-      auto symbols = bridge_->getSymbolsForExchange(exchange);
-      for (const auto& symbol : symbols) {
-        if (symbol == symbol_name) {
-          current_symbol_id_ = bridge_->getSymbolId(exchange, symbol);
-          break;
-        }
+  // Find the symbol ID for the new symbol using symbol manager
+  if (symbol_manager_) {
+    auto all_symbols = symbol_manager_->getAllSymbols();
+    for (const auto& symbol_info : all_symbols) {
+      if (symbol_info.symbol == symbol_name) {
+        current_symbol_id_ = symbol_info.id;
+        break;
       }
-      if (current_symbol_id_ != 0) break;
     }
   }
 
@@ -111,7 +104,8 @@ void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
   event.type = DataType::METRICS;  // Using METRICS as a generic notification type
   event.symbol_id = current_symbol_id_;
   event.symbol_name = symbol_name;
-  event.exchange = bridge_ ? bridge_->getExchangeName(current_symbol_id_) : "";
+  event.exchange = symbol_manager_ ? symbol_manager_->getSymbolInfo(current_symbol_id_).has_value() ?
+                   symbol_manager_->getSymbolInfo(current_symbol_id_)->exchange : "" : "";
   event.data = nullptr;
   event.data_size = 0;
   event.timestamp = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -133,12 +127,6 @@ std::vector<std::string> UnifiedDataPipeline::get_available_symbols() const {
     auto all_symbols = symbol_manager_->getAllSymbols();
     for (const auto& symbol_info : all_symbols) {
       symbols.push_back(symbol_info.symbol);
-    }
-  } else if (bridge_) {
-    auto exchanges = bridge_->getAvailableExchanges();
-    for (const auto& exchange : exchanges) {
-      auto exchange_symbols = bridge_->getSymbolsForExchange(exchange);
-      symbols.insert(symbols.end(), exchange_symbols.begin(), exchange_symbols.end());
     }
   }
 
@@ -164,10 +152,12 @@ void UnifiedDataPipeline::dispatch_event(const DataEvent& event) {
   for (const auto& [id, subscription] : subscriptions_) {
     // Check if subscription matches the event
     if (subscription.symbol_id == 0 || subscription.symbol_id == event.symbol_id) {
-      // Check if data type matches
+      // Check if data type matches - compare with string representations of enum values
       bool type_match = false;
       for (const auto& type_str : subscription.data_types) {
-        if (static_cast<int>(event.type) == std::stoi(type_str)) {
+        // Convert enum to string and compare
+        std::string event_type_str = std::to_string(static_cast<int>(event.type));
+        if (type_str == event_type_str) {
           type_match = true;
           break;
         }

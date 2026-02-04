@@ -329,6 +329,12 @@ void AutoQualityController::recordFrameTime(double frame_time_ms) {
     // Additional check for memory constraints
     adjustQualityForMemoryConstraints();
 
+    // Perform immediate responsiveness check for critical performance drops
+    checkCriticalPerformanceDrop();
+
+    // Ensure system remains responsive under load
+    ensureResponsivenessUnderLoad();
+
     // Log performance stats periodically
     if (config_.enable_logging && frame_count_ % 60 == 0) {  // Every 60 frames
         logPerformanceStats();
@@ -734,6 +740,9 @@ int AutoQualityController::determineQualityReduction() {
     // Calculate composite pressure score
     double composite_pressure = (gpu_utilization_score + cpu_utilization_score + memory_pressure_score + thermal_pressure_score) / 4.0;
 
+    // Enhanced responsiveness calculation
+    double responsiveness_factor = calculateResponsivenessFactor();
+
     // If performance is extremely poor, reduce quality more aggressively
     if (performance_deficit > 40.0 || jank_percentage > 25.0) {
         // Very poor performance OR heavy jank - jump 2 levels down if possible
@@ -751,6 +760,11 @@ int AutoQualityController::determineQualityReduction() {
 
         // If system pressure is high, add additional reduction
         if (composite_pressure < 50.0) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If responsiveness is poor, add additional reduction
+        if (responsiveness_factor < 60.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -774,9 +788,14 @@ int AutoQualityController::determineQualityReduction() {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
+        // If responsiveness is poor, add additional reduction
+        if (responsiveness_factor < 70.0) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
         return new_level;
-    } else if (consistency_score < 60.0 || frame_pacing_score < 65.0) {
-        // Performance is inconsistent OR frame pacing is irregular - reduce quality by 1 level to stabilize
+    } else if (consistency_score < 60.0 || frame_pacing_score < 65.0 || responsiveness_factor < 65.0) {
+        // Performance is inconsistent OR frame pacing is irregular OR responsiveness is poor - reduce quality by 1 level to stabilize
         int new_level = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
 
         // If degradation is rapid, add an extra level
@@ -786,6 +805,11 @@ int AutoQualityController::determineQualityReduction() {
 
         // If system pressure is high, add additional reduction
         if (composite_pressure < 70.0) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If responsiveness is very poor, add additional reduction
+        if (responsiveness_factor < 50.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -801,6 +825,11 @@ int AutoQualityController::determineQualityReduction() {
 
         // If system pressure is high, add additional reduction
         if (composite_pressure < 75.0) {
+            new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
+        }
+
+        // If responsiveness is moderately poor, add additional reduction
+        if (responsiveness_factor < 75.0) {
             new_level = std::min(new_level + 1, QUALITY_LEVEL_COUNT - 1);
         }
 
@@ -1483,6 +1512,67 @@ double AutoQualityController::getSystemCpuUtilization() const {
 #endif
 }
 
+double AutoQualityController::calculateResponsivenessFactor() const {
+    // Calculate a factor that represents how responsive the system currently is
+    // This considers both frame time consistency and recent performance trends
+
+    if (frame_count_ < 5) {
+        return 100.0; // Not enough data, assume perfect responsiveness
+    }
+
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+
+    // Calculate average of the most recent frame times
+    size_t recent_count = std::min(sample_count, static_cast<size_t>(10)); // Last 10 frames
+    double recent_sum = 0.0;
+    for (size_t i = 0; i < recent_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        recent_sum += frame_times_[idx];
+    }
+    double recent_avg = recent_sum / recent_count;
+
+    // Calculate overall average
+    double overall_sum = 0.0;
+    for (size_t i = 0; i < sample_count; ++i) {
+        overall_sum += frame_times_[i];
+    }
+    double overall_avg = overall_sum / sample_count;
+
+    // If recent performance is significantly worse than overall performance,
+    // responsiveness is decreasing
+    double responsiveness_score = 100.0;
+    if (overall_avg > 0.0) {
+        double ratio = recent_avg / overall_avg;
+        // If recent frames are taking longer, responsiveness is worse
+        responsiveness_score = std::max(0.0, 100.0 - (ratio * 50.0));
+    }
+
+    // Also consider frame time variance (jitter) which affects perceived responsiveness
+    double variance = calculateFrameTimeVariance();
+    double jitter_penalty = std::min(variance / config_.variance_threshold * 20.0, 40.0); // Up to 40 point penalty
+
+    // Also consider the worst frame time in recent history
+    double target_frame_time = 1000.0 / config_.target_fps;
+    double worst_recent_frame = 0.0;
+    for (size_t i = 0; i < recent_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        if (frame_times_[idx] > worst_recent_frame) {
+            worst_recent_frame = frame_times_[idx];
+        }
+    }
+
+    double worst_frame_penalty = 0.0;
+    if (worst_recent_frame > target_frame_time) {
+        double worst_ratio = worst_recent_frame / target_frame_time;
+        worst_frame_penalty = std::min((worst_ratio - 1.0) * 30.0, 50.0); // Up to 50 point penalty
+    }
+
+    // Combine all factors
+    responsiveness_score = std::max(0.0, responsiveness_score - jitter_penalty - worst_frame_penalty);
+
+    return responsiveness_score;
+}
+
 double AutoQualityController::calculateFramePacingIrregularity() const {
     // Calculate how irregular the frame timing is
     // Irregular pacing can indicate performance issues
@@ -1626,6 +1716,132 @@ void AutoQualityController::updateRealTimePerformanceMetrics() {
 
     if (!trend_buffer_full_ && trend_index_ == 0) {
         trend_buffer_full_ = true;
+    }
+}
+
+void AutoQualityController::checkCriticalPerformanceDrop() {
+    // Check for immediate, critical performance drops that require instant quality reduction
+    // This is designed to maintain responsiveness by detecting sudden performance issues
+
+    if (frame_count_ < 5) {
+        return; // Not enough data yet
+    }
+
+    // Look at the most recent frame times to detect sudden drops
+    size_t sample_count = std::min(static_cast<size_t>(frame_count_), FRAME_HISTORY_SIZE);
+
+    // Get the most recent frame time
+    double latest_frame_time = frame_times_[(frame_count_ - 1) % FRAME_HISTORY_SIZE];
+    double target_frame_time = 1000.0 / config_.target_fps;
+
+    // If the latest frame is significantly worse than target, consider it a critical drop
+    if (latest_frame_time > target_frame_time * 3.0) { // 3x worse than target
+        // Immediate quality reduction regardless of cooldown
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            int new_quality_index = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time to prevent immediate further adjustments
+                last_adjustment_time_ = std::chrono::high_resolution_clock::now();
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Critical performance drop detected, immediate quality reduction to level %d (Latest frame: %.2fms, Target: %.2fms)\n",
+                           current_quality_index_, latest_frame_time, target_frame_time);
+                }
+            }
+        }
+
+        return; // Exit early to avoid multiple checks
+    }
+
+    // Check for sustained poor performance in recent frames
+    size_t recent_frame_count = std::min(sample_count, static_cast<size_t>(10)); // Last 10 frames
+    size_t poor_frame_count = 0;
+
+    for (size_t i = 0; i < recent_frame_count; ++i) {
+        size_t idx = (frame_count_ - 1 - i) % FRAME_HISTORY_SIZE;
+        if (frame_times_[idx] > target_frame_time * 2.0) { // 2x worse than target
+            poor_frame_count++;
+        }
+    }
+
+    // If more than 60% of recent frames are poor, reduce quality immediately
+    if (static_cast<double>(poor_frame_count) / recent_frame_count > 0.6) {
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            int new_quality_index = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time
+                last_adjustment_time_ = std::chrono::high_resolution_clock::now();
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Sustained poor performance detected, immediate quality reduction to level %d (%zu/%zu poor frames)\n",
+                           current_quality_index_, poor_frame_count, recent_frame_count);
+                }
+            }
+        }
+    }
+}
+
+void AutoQualityController::ensureResponsivenessUnderLoad() {
+    // Method to ensure the system remains responsive even under heavy load
+    // This focuses on maintaining minimum acceptable frame rates for user interaction
+
+    if (frame_count_ < 10) {
+        return; // Not enough data yet
+    }
+
+    // Calculate the responsiveness score
+    double responsiveness_score = calculateResponsivenessFactor();
+
+    // If responsiveness is critically low, force immediate quality reduction
+    if (responsiveness_score < 30.0) { // Critically low responsiveness
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            // Jump multiple levels if responsiveness is very poor
+            int levels_to_reduce = 2;
+            if (responsiveness_score < 15.0) {
+                levels_to_reduce = 3; // Extremely poor responsiveness
+            }
+
+            int new_quality_index = std::min(current_quality_index_ + levels_to_reduce, QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time
+                last_adjustment_time_ = std::chrono::high_resolution_clock::now();
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Critical responsiveness issue detected, immediate quality reduction to level %d (Responsiveness Score: %.2f)\n",
+                           current_quality_index_, responsiveness_score);
+                }
+            }
+        }
+    }
+    // If responsiveness is moderately low but performance is still acceptable,
+    // consider more targeted quality reductions
+    else if (responsiveness_score < 60.0 && performance_score_ > adaptive_performance_threshold_) {
+        // Even with good performance, if responsiveness is poor, make targeted adjustments
+        if (current_quality_index_ < QUALITY_LEVEL_COUNT - 1) {
+            // Only reduce by 1 level for moderate responsiveness issues
+            int new_quality_index = std::min(current_quality_index_ + 1, QUALITY_LEVEL_COUNT - 1);
+
+            if (new_quality_index != current_quality_index_) {
+                current_quality_index_ = new_quality_index;
+
+                // Update last adjustment time
+                last_adjustment_time_ = std::chrono::high_resolution_clock::now();
+
+                if (config_.enable_logging) {
+                    printf("AutoQuality: Moderate responsiveness issue detected, quality reduction to level %d (Responsiveness Score: %.2f)\n",
+                           current_quality_index_, responsiveness_score);
+                }
+            }
+        }
     }
 }
 

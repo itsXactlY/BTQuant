@@ -642,38 +642,8 @@ ChartInstance ChartCuller::apply_polygon_reduction(const ChartInstance& chart, f
 }
 
 // Enhanced method to handle off-screen elements that might contribute to rendering (like shadows, highlights, etc.)
-bool ChartCuller::should_render_offscreen_element(double time, double price, double offscreen_threshold) const {
-    if (!viewport_set_) {
-        // If no viewport is set, render everything
-        return true;
-    }
-
-    // Calculate distance from viewport bounds
-    double time_distance = 0.0;
-    double price_distance = 0.0;
-
-    // Determine time distance from viewport
-    if (time < viewport_.minTime) {
-        time_distance = viewport_.minTime - time;
-    } else if (time > viewport_.maxTime) {
-        time_distance = time - viewport_.maxTime;
-    }
-
-    // Determine price distance from viewport
-    if (price < viewport_.minPrice) {
-        price_distance = viewport_.minPrice - price;
-    } else if (price > viewport_.maxPrice) {
-        price_distance = price - viewport_.maxPrice;
-    }
-
-    // Convert threshold to appropriate units for comparison
-    // The threshold represents how far off-screen an element can be and still render
-    double normalized_time_threshold = (viewport_.maxTime - viewport_.minTime) * offscreen_threshold;
-    double normalized_price_threshold = (viewport_.maxPrice - viewport_.minPrice) * offscreen_threshold;
-
-    // Check if the element is within the off-screen threshold
-    return (time_distance <= normalized_time_threshold && price_distance <= normalized_price_threshold);
-}
+// NOTE: This is a duplicate function removed to fix compilation error
+// The original implementation exists earlier in the file at line ~81
 
 // Advanced polygon reduction algorithm that considers visual importance
 ChartInstance ChartCuller::apply_importance_based_polygon_reduction(const ChartInstance& chart, float zoom_factor,
@@ -1400,8 +1370,8 @@ ChartInstance ChartCuller::apply_offscreen_culling_with_zoom_reduction(const Cha
     double base_price_padding = price_range * 0.001; // 0.1% base padding
 
     // Adjust padding based on zoom level
-    double time_padding = (zoom_factor < 1.0) ? base_time_padding * 0.5 : base_time_padding * std::min(2.0, zoom_factor);
-    double price_padding = (zoom_factor < 1.0) ? base_price_padding * 0.5 : base_price_padding * std::min(2.0, zoom_factor);
+    double time_padding = (zoom_factor < 1.0) ? base_time_padding * 0.5 : base_time_padding * std::min(2.0f, zoom_factor);
+    double price_padding = (zoom_factor < 1.0) ? base_price_padding * 0.5 : base_price_padding * std::min(2.0f, zoom_factor);
 
     // Calculate the maximum number of points we want to render based on viewport size and zoom
     size_t max_renderable_points = static_cast<size_t>((viewport_width_pixels > 0) ?
@@ -1557,8 +1527,8 @@ ChartInstance ChartCuller::apply_aggressive_offscreen_culling_with_polygon_reduc
         price_padding = base_price_padding * 0.5;
     } else {
         // Less aggressive at high zoom levels
-        time_padding = base_time_padding * std::min(3.0, zoom_factor);
-        price_padding = base_price_padding * std::min(3.0, zoom_factor);
+        time_padding = base_time_padding * std::min(3.0f, zoom_factor);
+        price_padding = base_price_padding * std::min(3.0f, zoom_factor);
     }
 
     // Calculate the maximum number of points we want to render based on viewport size and zoom

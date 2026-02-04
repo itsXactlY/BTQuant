@@ -88,6 +88,7 @@ set(LIB_SOURCES
     src/data/unified_data_pipeline.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
+    src/error_handling/crash_reporter.cpp
 )
 
 set(DASHBOARD_SOURCES

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.pubbtquant.trading-terminal</string>
+    
+    <key>CFBundleName</key>
+    <string>PubBTQuant Trading Terminal</string>
+    
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    
+    <key>CFBundleExecutable</key>
+    <string>PubBTQuant</string>
+    
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+    
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+    
+    <key>CFBundleIconFile</key>
+    <string>pubbtquant.icns</string>
+    
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>PubBTQuant Layout</string>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>layout</string>
+                <string>json</string>
+            </array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+    </array>
+</dict>
+</plist>

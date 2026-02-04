@@ -96,6 +96,15 @@ private:
         bool valid;
     };
 
+    // Cache for item rectangles to avoid repeated calculations
+    struct CachedItemRect {
+        ImVec2 min;
+        ImVec2 max;
+        ImVec2 size;
+        float timestamp;
+        bool valid;
+    };
+
 private:
     // Use string content as key for reliable caching - handles string literals properly
     std::unordered_map<std::string, CachedTextSize> text_size_cache_;

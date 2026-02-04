@@ -247,7 +247,17 @@ private:
     double detectGpuPressureFromSpikes() const;
     void adjustQualityForMemoryConstraints();
 
+    // Additional helper method for responsiveness calculation
+    double calculateResponsivenessFactor() const;
+
     // Methods moved to public section above
+
+private:
+    // Additional helper methods for critical performance drop detection
+    void checkCriticalPerformanceDrop();
+
+    // Method to ensure responsiveness under load
+    void ensureResponsivenessUnderLoad();
 };
 
 } // namespace RenderEngine

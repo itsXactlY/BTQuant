@@ -78,6 +78,17 @@ public:
         const std::vector<Trade>& trades,
         int time_window_minutes);
 
+    // Additional advanced market profile and VWAP methods
+    std::future<std::vector<std::pair<double, double>>> calculate_market_profile_async(
+        const std::vector<Trade>& trades,
+        double min_price,
+        double max_price,
+        int price_levels);
+
+    std::future<std::vector<double>> calculate_time_based_vwap_async(
+        const std::vector<Trade>& trades,
+        int time_resolution_minutes);
+
     // Indicator Computations
     std::future<std::vector<double>> calculate_sma_async(
         const std::vector<double>& prices, 
@@ -199,6 +210,36 @@ public:
         const std::vector<Trade>& trades,
         double tick_size,
         std::chrono::milliseconds min_time_diff = std::chrono::milliseconds(0));
+
+    // Additional advanced multi-threaded methods for volume analysis
+    std::future<std::vector<double>> calculate_cumulative_volume_delta_async(
+        const std::vector<Trade>& trades,
+        const std::vector<double>& benchmark_prices);
+
+    std::future<std::vector<std::pair<double, double>>> calculate_volume_price_confirmation_indicator_async(
+        const std::vector<Trade>& trades,
+        int trend_period);
+
+    // Additional advanced multi-threaded methods for indicator computations
+    std::future<std::vector<double>> calculate_chandelier_exit_async(
+        const std::vector<Candle>& candles,
+        int period,
+        double multiplier = 3.0);
+
+    std::future<std::vector<double>> calculate_keltner_channels_async(
+        const std::vector<Candle>& candles,
+        int period,
+        double multiplier = 2.0);
+
+    // Additional advanced multi-threaded methods for data processing
+    std::future<std::vector<std::vector<Trade>>> detect_and_classify_market_regimes_async(
+        const std::vector<Trade>& trades,
+        double volatility_threshold,
+        double volume_threshold);
+
+    std::future<std::vector<std::vector<std::vector<double>>>> calculate_rolling_correlation_matrix_async(
+        const std::vector<std::vector<double>>& data_series,
+        int window_size);
 
 private:
     void worker_loop();

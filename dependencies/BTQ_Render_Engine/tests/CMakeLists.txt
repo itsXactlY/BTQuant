@@ -1,15 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
 project(BTQ_Render_Engine_Tests)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(Threads REQUIRED)
+find_package(TBB REQUIRED)
 
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/concurrentqueue-src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/glm-src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/json-src/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/imgui-src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../_deps/implot-src)
 
 # Define test executables
 add_executable(test_lockfree_queue test_lockfree_queue.cpp)
@@ -88,6 +93,35 @@ target_link_libraries(volume_calculation_tests
     GTest::GTest
     GTest::Main
     Threads::Threads
+)
+
+# Add cluster engine tests
+add_executable(cluster_engine_tests cluster_engine_tests.cpp)
+
+# Link cluster engine tests
+target_link_libraries(cluster_engine_tests
+    btq_engine_lib
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+)
+
+# Add VWAP tests
+add_executable(vwap_tests vwap_tests.cpp)
+
+# Add the main project's include directories
+target_include_directories(vwap_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+# Link VWAP tests
+target_link_libraries(vwap_tests
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+    TBB::tbb
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libbtq_engine_lib.a
 )
 
 # Set properties for the tests

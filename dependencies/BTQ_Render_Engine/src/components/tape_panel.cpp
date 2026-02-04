@@ -649,9 +649,7 @@ void TapePanel::render_trade_size_histogram() {
 
   // Create a small plot area
   if (ImGui::BeginChild("TradeSizeHistogramArea", ImVec2(0, 150), true)) {
-    if (ImPlot::BeginPlot(plot_title, nullptr, nullptr, ImVec2(-1, -1),
-                          ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
-
+    if (ImPlot::BeginPlot(plot_title)) {
       ImPlot::SetupAxes(nullptr, "Count", ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
 
       // Set up custom x-axis labels
@@ -1165,10 +1163,8 @@ void BTQuant::TapePanel::renderTradePaceChart() {
 
     // Create a small plot area in the header
     if (ImGui::BeginChild("TradePaceChartArea", ImVec2(0, 80), true)) {
-        if (ImPlot::BeginPlot(plot_title, "Time (s)", "Trades/Min", ImVec2(-1, -1),
-                              ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
-
-            ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
+        if (ImPlot::BeginPlot(plot_title)) {
+            ImPlot::SetupAxes("Time (s)", "Trades/Min", ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
 
             // Plot the three different time windows
             if (!tpm_1min_values.empty()) {

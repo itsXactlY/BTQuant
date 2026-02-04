@@ -76,6 +76,8 @@ set(LIB_SOURCES
     src/threading/lockfree_queue.cpp
     src/performance/frame_time_graph.cpp
     src/performance/regression_detector.cpp
+    src/performance/cpu_profiler.cpp
+    src/performance/memory_tracker.cpp
     src/ui/loading_states.cpp
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
@@ -83,6 +85,8 @@ set(LIB_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
+    src/data/unified_data_pipeline.cpp
+    src/logging/logger.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -266,6 +270,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/analytics/volume_calculator.cpp
     src/indicators/session_vwap.cpp
     src/indicators/rolling_vwap.cpp
+    src/indicators/anchored_vwap.cpp
     src/indicators/vwap_alerts.cpp
     src/indicators/indicator_alerts.cpp
     src/layout/dashboard_layout_manager.cpp
@@ -436,6 +441,30 @@ target_include_directories(test_quick_actions PRIVATE
 )
 
 target_link_libraries(test_quick_actions PRIVATE
+    btq_engine_lib
+    Threads::Threads
+    TBB::tbb
+)
+
+# Test structured logging executable
+add_executable(test_structured_logging
+    src/logging/test_structured_logging.cpp
+    src/logging/logger.cpp
+)
+
+target_include_directories(test_structured_logging PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${IMPLOT_DIR}
+    ${Vulkan_INCLUDE_DIRS}
+    ${glm_SOURCE_DIR}
+    ${json_SOURCE_DIR}/include
+    ${concurrentqueue_SOURCE_DIR}
+)
+
+target_link_libraries(test_structured_logging PRIVATE
     btq_engine_lib
     Threads::Threads
     TBB::tbb

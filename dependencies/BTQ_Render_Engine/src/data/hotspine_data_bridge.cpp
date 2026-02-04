@@ -14,7 +14,7 @@
 #include <iostream>
 #include <print>
 
-#include "../../include/dynamic_logger.hpp"
+#include "../../include/structured_logger.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
 
@@ -41,7 +41,7 @@ std::expected<void, std::string> HotSpineDataBridge::start() {
   if (shm_fd_ == -1) [[unlikely]] {
     std::string error_msg =
         std::format("Failed to open shared memory '{}': {}", shm_path_, strerror(errno));
-    BTQ_LOG_ERROR(error_msg);
+    BTQ_LOG_ERROR_EX(error_msg, "shm_path", shm_path_, "errno", errno);
     return std::unexpected(error_msg);
   }
 
@@ -49,7 +49,7 @@ std::expected<void, std::string> HotSpineDataBridge::start() {
   struct stat sb;
   if (fstat(shm_fd_, &sb) == -1) [[unlikely]] {
     std::string error_msg = "Failed to fstat shared memory";
-    BTQ_LOG_ERROR(error_msg);
+    BTQ_LOG_ERROR_EX(error_msg, "shm_path", shm_path_, "errno", errno);
     close(shm_fd_);
     shm_fd_ = -1;
     return std::unexpected(error_msg);

@@ -7,7 +7,7 @@
 #include <limits>
 #include <map>
 
-#include "../../include/dynamic_logger.hpp"
+#include "../../include/structured_logger.hpp"
 
 namespace BTQuant {
 namespace Data {
@@ -30,7 +30,7 @@ ExchangeAggregator::~ExchangeAggregator() {
 bool ExchangeAggregator::initialize() {
     running_ = true;
     aggregation_thread_ = std::thread(&ExchangeAggregator::aggregationLoop, this);
-    BTQ_LOG_INFO("ExchangeAggregator initialized successfully");
+    BTQ_LOG_INFO_EX("ExchangeAggregator initialized successfully", "thread_id", std::this_thread::get_id());
     return true;
 }
 

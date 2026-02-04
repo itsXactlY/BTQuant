@@ -82,6 +82,7 @@ set(LIB_SOURCES
     src/ui/tooltips.cpp
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
+    src/ui/tutorial.cpp
 )
 
 set(DASHBOARD_SOURCES
@@ -245,6 +246,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/ui/loading_state_integration.cpp
     src/ui/empty_states.cpp
     src/ui/quick_actions.cpp
+    src/ui/tutorial.cpp
     src/data/market_data_processor.cpp
     src/data/symbol_manager.cpp
     src/data/cache_manager.cpp

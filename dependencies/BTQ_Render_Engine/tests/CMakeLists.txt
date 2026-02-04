@@ -151,6 +151,31 @@ target_link_libraries(performance_benchmarks
     Threads::Threads
 )
 
+# Add stress tests
+add_executable(stress_tests stress_tests.cpp)
+
+# Add the main project's include directories
+target_include_directories(stress_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+# Link stress tests
+target_link_libraries(stress_tests
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+    TBB::tbb
+    -Wl,--whole-archive
+    btq_engine_lib
+    -Wl,--no-whole-archive
+    Vulkan::Vulkan
+    glfw
+    ${CMAKE_DL_LIBS}
+    dl
+    pthread
+)
+
 # Set properties for the tests
 set_target_properties(test_lockfree_queue PROPERTIES
     CXX_STANDARD 17
@@ -180,4 +205,40 @@ set_target_properties(test_imgui_optimizer PROPERTIES
 set_target_properties(performance_benchmarks PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
+)
+
+set_target_properties(stress_tests PROPERTIES
+    CXX_STANDARD 26  # Use C++26 to match the main project
+    CXX_STANDARD_REQUIRED ON
+)
+
+# Add compiler flags to enable C++23/C++26 features
+target_compile_options(stress_tests PRIVATE
+    -fcoroutines
+)
+
+# Add visual regression tests
+add_executable(visual_regression_tests visual_regression_tests.cpp)
+
+# Add the main project's include directories
+target_include_directories(visual_regression_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+# Link visual regression tests (minimal dependencies for standalone test)
+target_link_libraries(visual_regression_tests
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+    TBB::tbb
+    ${CMAKE_DL_LIBS}
+    dl
+    pthread
+)
+
+# Add compiler definitions to enable experimental features
+target_compile_definitions(stress_tests PRIVATE
+    _GLIBCXX_USE_CXX11_ABI=1
 )

@@ -434,7 +434,7 @@ public:
      */
     void set_cached_cursor_pos(const std::string& widget_id, const ImVec2& pos) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
-        cursor_pos_cache_[widget_id] = {pos, true};
+        cursor_pos_cache_[widget_id] = {pos, static_cast<float>(ImGui::GetTime()), true};
     }
 
     /**

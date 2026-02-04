@@ -24,9 +24,9 @@ void testBasicFunctionality() {
     size_t current_usage = tracker.getCurrentMemoryUsage();
     std::cout << "Current memory usage after allocation: " << current_usage << " bytes\n";
     
-    // Deallocate memory
-    free(ptr1);
+    // Deallocate memory - track deallocation before freeing
     tracker.trackDeallocation(ptr1);
+    free(ptr1);
     
     // Stop tracking
     tracker.stopTracking();
@@ -59,8 +59,8 @@ void testLeakDetection() {
     
     // Clean up allocations
     for (auto ptr : allocations) {
-        free(ptr);
         tracker.trackDeallocation(ptr);
+        free(ptr);
     }
     
     tracker.stopTracking();
@@ -86,8 +86,8 @@ void testTrendTracking() {
         
         // Deallocate some memory occasionally
         if (i % 3 == 0) {
-            free(ptr);
             tracker.trackDeallocation(ptr);
+            free(ptr);
         }
     }
     

@@ -551,6 +551,7 @@ LODTransitionState FootprintLOD::calculateLODTransition(float prev_zoom, float c
 }
 
 float FootprintLOD::calculateAlphaMultiplier(float zoom_factor, LODLevel lod_level) const {
+    (void)zoom_factor;  // Suppress unused parameter warning
     // Adjust alpha based on zoom level and LOD to maintain visual coherence
     switch (lod_level) {
         case LODLevel::LOW_DETAIL:
@@ -3065,6 +3066,7 @@ void FootprintLOD::applyZoomLevelLODToCell(const FootprintCell& cell,
 // Implementation for tile-based LOD for very large datasets
 LODLevel FootprintLOD::calculateTileBasedLOD(float cell_width_px, float cell_height_px,
                                           float zoom_factor, int tile_size_px) const {
+    (void)zoom_factor;  // Suppress unused parameter warning
     float min_dimension = std::min(cell_width_px, cell_height_px);
 
     // Calculate how many cells fit in a tile at this zoom level
@@ -7427,247 +7429,10 @@ void FootprintLOD::applyHybridZoomDensityLODToCell(const FootprintCell& cell,
     }
 }
 
-// Implementation for the ultimate zoom-based LOD that provides the best balance of performance and visual quality
-            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
-
-            // Center text in cell
-            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
-                           (p1.y + p2.y - text_size.y) * 0.5f);
-
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
-        }
-    }
-
-    // Render detailed annotations based on ultimate zoom LOD settings
-    if (settings.render_detailed_annotations &&
-        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
-
-        // Example: render delta indicator if enabled and conditions met
-        if (panel->getShowDeltaIndicator()) {
-            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-            if (max_vol > 0.0) {
-                double normalized_delta = cell.delta / max_vol;
-
-                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
-                    float bar_height = (zoom_factor > 3.0f) ? 6.0f : (zoom_factor > 1.5f) ? 4.5f : 3.0f;  // Taller bars when zoomed in
-                    float bar_width = (p2.x - p1.x) * 0.8f;
-                    ImVec2 bar_pos(p1.x + (p2.x - p1.x - bar_width) * 0.5f,
-                                  p2.y - bar_height - (zoom_factor > 3.0f ? 2.5f : (zoom_factor > 1.5f ? 1.8f : 1.0f)));  // Position lower when zoomed in
-
-                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
-                                                           : IM_COL32(255, 0, 0, 200);  // Red
-
-                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
-                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
-                                           bar_color);
-                }
-            }
-        }
-    }
-}
-
-// Implementation for the advanced zoom-based LOD that specifically focuses on reducing detail when zoomed out
-// and increasing detail when zoomed in with optimized performance and visual quality
 
 // Implementation for the core zoom-based LOD that specifically focuses on reducing detail when zoomed out
 // and increasing detail when zoomed in with optimized performance and smooth transitions
 
-// Implementation of the new optimized LOD methods for reducing detail when zoomed out
-// and increasing detail when zoomed in with smooth transitions
-
-LODLevel FootprintLOD::calculateZoomBasedLODDetail(float cell_width_px, float cell_height_px,
-                                            float zoom_factor) const {
-    float min_dimension = std::min(cell_width_px, cell_height_px);
-
-    // Calculate LOD based on zoom level with emphasis on zoom-based detail reduction/increase
-    // When zoomed out (zoom_factor < 1.0), reduce detail significantly
-    // When zoomed in (zoom_factor > 1.0), increase detail progressively
-
-    if (zoom_factor <= min_detail_zoom_) {
-        // Significantly zoomed out - use lowest detail level
-        return LODLevel::LOW_DETAIL;
-    } else if (zoom_factor <= medium_detail_zoom_) {
-        // Moderate zoom - use medium detail
-        if (min_dimension <= min_cell_size_px_ * 0.7f) {
-            return LODLevel::LOW_DETAIL;  // Still too small to show detail
-        } else {
-            return LODLevel::MEDIUM_DETAIL;
-        }
-    } else if (zoom_factor <= max_detail_zoom_) {
-        // Close zoom - show high detail
-        if (min_dimension <= medium_cell_size_px_ * 0.5f) {
-            return LODLevel::MEDIUM_DETAIL;  // Small cells still need simpler rendering
-        } else {
-            return LODLevel::HIGH_DETAIL;
-        }
-    } else {
-        // Very close zoom - show maximum detail
-        return LODLevel::MAX_DETAIL;
-    }
-}
-
-LODRenderSettings FootprintLOD::getZoomBasedLODDetailRenderSettings(LODLevel lod_level, float zoom_factor) const {
-    LODRenderSettings settings = getRenderSettings(lod_level);
-
-    // Enhance the settings based on zoom level to better match the requirement
-    // of reducing detail when zoomed out and increasing when zoomed in
-    if (zoom_factor < 0.5f) {
-        // Very zoomed out - aggressively reduce detail
-        settings.render_text = false;
-        settings.render_labels = false;
-        settings.render_detailed_annotations = false;
-        settings.render_borders = false;
-        settings.alpha_multiplier = 0.6f; // Lower alpha to reduce visual clutter
-    } else if (zoom_factor < 1.0f) {
-        // Moderately zoomed out - reduce some detail
-        settings.render_text = false;
-        settings.render_labels = false;
-        settings.render_detailed_annotations = false;
-        settings.alpha_multiplier = 0.7f;
-    } else if (zoom_factor > 2.0f) {
-        // Significantly zoomed in - enhance detail
-        settings.render_detailed_annotations = true;
-        settings.render_labels = true;
-        settings.render_text = true;
-        settings.alpha_multiplier = 1.1f; // Slightly more opaque for better visibility
-        settings.border_thickness = 2.0f; // Thicker borders for better definition
-    } else if (zoom_factor > 3.0f) {
-        // Very zoomed in - maximum detail
-        settings.render_detailed_annotations = true;
-        settings.render_labels = true;
-        settings.render_text = true;
-        settings.alpha_multiplier = 1.2f;
-        settings.border_thickness = 2.5f;
-    }
-
-    return settings;
-}
-
-void FootprintLOD::applyZoomBasedLODDetailToCell(const FootprintCell& cell,
-                                          ImDrawList* draw_list,
-                                          float zoom_factor,
-                                          double max_volume,
-                                          const std::vector<FootprintCell>& diagonal_imbalances,
-                                          const std::vector<FootprintCell>& stacked_imbalances,
-                                          const FootprintPanel* panel) const {
-    // Calculate cell dimensions in pixels
-    ImVec2 p1 = ImPlot::PlotToPixels(cell.x - cell.width * 0.48, cell.y - cell.height * 0.48);
-    ImVec2 p2 = ImPlot::PlotToPixels(cell.x + cell.width * 0.48, cell.y + cell.height * 0.48);
-
-    float cell_width_px = std::abs(p2.x - p1.x);
-    float cell_height_px = std::abs(p2.y - p1.y);
-
-    // Determine LOD level using the zoom-based detail calculation
-    LODLevel lod_level = calculateZoomBasedLODDetail(cell_width_px, cell_height_px, zoom_factor);
-    float cell_area_px = cell_width_px * cell_height_px;
-    LODRenderSettings settings = getZoomBasedLODDetailRenderSettings(lod_level, zoom_factor);
-
-    // Get cell color from panel
-    ImU32 cell_color = panel->getCellColor(cell, max_volume);
-
-    // Get cell label from panel
-    std::string cell_label = panel->getCellLabel(cell);
-
-    // Apply alpha multiplier based on LOD and zoom level
-    float alpha_multiplier = calculateAlphaMultiplier(zoom_factor, lod_level);
-
-    // Render heatmap/fill based on zoom-based LOD settings
-    if (settings.render_heatmap) {
-        // Modify alpha based on LOD and zoom level
-        unsigned char original_alpha = (cell_color >> 24) & 0xFF;
-        unsigned char new_alpha = static_cast<unsigned char>(original_alpha * alpha_multiplier);
-        ImU32 color_with_lod_alpha = (cell_color & 0x00FFFFFF) | (new_alpha << 24);
-
-        draw_list->AddRectFilled(p1, p2, color_with_lod_alpha);
-    }
-
-    // Render borders based on zoom-based LOD settings
-    if (settings.render_borders) {
-        // Check for imbalances to determine border color/type
-        bool is_diagonal = false;
-        bool is_stacked = false;
-
-        for (const auto& diag_cell : diagonal_imbalances) {
-            if (std::abs(cell.x - diag_cell.x) < 0.001 && std::abs(cell.y - diag_cell.y) < 0.001) {
-                is_diagonal = true;
-                break;
-            }
-        }
-
-        for (const auto& stack_cell : stacked_imbalances) {
-            if (std::abs(cell.x - stack_cell.x) < 0.001 && std::abs(cell.y - stack_cell.y) < 0.001) {
-                is_stacked = true;
-                break;
-            }
-        }
-
-        ImU32 border_color;
-        float thickness = settings.border_thickness;
-
-        if (is_diagonal || is_stacked) {
-            // Highlight imbalanced cells even at lower LOD levels
-            if (is_diagonal && is_stacked) {
-                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
-                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
-
-                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
-                ImVec2 offset_p1(p1.x - 1.0f, p1.y - 1.0f);
-                ImVec2 offset_p2(p2.x + 1.0f, p2.y + 1.0f);
-                draw_list->AddRect(offset_p1, offset_p2, border_color, 0.0f, 0, thickness);
-            } else if (is_diagonal) {
-                border_color = IM_COL32(255, 255, 0, 255);  // Yellow for diagonal
-                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
-            } else if (is_stacked) {
-                border_color = IM_COL32(0, 255, 255, 255);  // Cyan for stacked
-                draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
-            }
-        } else {
-            // Regular border based on LOD
-            unsigned char border_alpha = static_cast<unsigned char>(13 * alpha_multiplier);
-            border_color = IM_COL32(255, 255, 255, border_alpha);
-            draw_list->AddRect(p1, p2, border_color, 0.0f, 0, thickness);
-        }
-    }
-
-    // Render text/labels based on zoom-based LOD settings
-    if (settings.render_text && shouldRenderText(cell_height_px, zoom_factor)) {
-        if (settings.render_labels && shouldRenderLabels(cell_height_px, zoom_factor)) {
-            ImVec2 text_size = ImGui::CalcTextSize(cell_label.c_str());
-
-            // Center text in cell
-            ImVec2 text_pos((p1.x + p2.x - text_size.x) * 0.5f,
-                           (p1.y + p2.y - text_size.y) * 0.5f);
-
-            draw_list->AddText(text_pos, IM_COL32_WHITE, cell_label.c_str());
-        }
-    }
-
-    // Render detailed annotations based on zoom-based LOD settings
-    if (settings.render_detailed_annotations &&
-        shouldRenderDetailedAnnotations(cell_width_px, cell_height_px, zoom_factor)) {
-
-        // Example: render delta indicator if enabled and conditions met
-        if (panel->getShowDeltaIndicator()) {
-            double max_vol = std::max(cell.bid_volume, cell.ask_volume);
-            if (max_vol > 0.0) {
-                double normalized_delta = cell.delta / max_vol;
-
-                if (std::abs(normalized_delta) > panel->getDeltaThreshold()) {
-                    float bar_height = (zoom_factor > 2.5f) ? 6.0f : (zoom_factor > 1.5f) ? 4.5f : (zoom_factor > 0.8f) ? 3.5f : 2.5f;  // Taller bars when zoomed in
-                    float bar_width = (p2.x - p1.x) * 0.8f;
-                    ImVec2 bar_pos = ImVec2(p1.x + (p2.x - p1.x - bar_width) * 0.5f, p2.y - bar_height - (zoom_factor > 2.5f ? 2.5f : (zoom_factor > 1.5f ? 1.8f : (zoom_factor > 0.8f ? 1.2f : 0.8f)));  // Position lower when zoomed in
-
-                    ImU32 bar_color = normalized_delta > 0 ? IM_COL32(0, 255, 0, 200)   // Green
-                                                           : IM_COL32(255, 0, 0, 200);  // Red
-
-                    draw_list->AddRectFilled(ImVec2(bar_pos.x, bar_pos.y),
-                                           ImVec2(bar_pos.x + bar_width, bar_pos.y + bar_height),
-                                           bar_color);
-                }
-            }
-        }
-    }
-}
 
 LODLevel FootprintLOD::calculateMainLOD(float cell_width_px, float cell_height_px,
                                     float zoom_factor) const {

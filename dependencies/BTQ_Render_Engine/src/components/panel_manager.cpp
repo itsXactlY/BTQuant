@@ -857,6 +857,8 @@ PanelConfig PanelManager::create_panel_config_with_symbol(PanelType type, const 
                                                           int grid_y, int width, int height) {
   PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
   config.title = title.empty() ? get_default_panel_title(type) : title;
+  // Use the symbol parameter to set the symbol in the config
+  config.symbol = symbol;
   return config;
 }
 

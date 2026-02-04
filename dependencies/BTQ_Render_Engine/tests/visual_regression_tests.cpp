@@ -11,21 +11,25 @@
 extern "C" {
     int stbi_write_png(char const *filename, int w, int h, int comp, const void *data, int stride_in_bytes) {
         // Stub implementation - return success to allow compilation
+        (void)filename; (void)w; (void)h; (void)comp; (void)data; (void)stride_in_bytes;
         return 1;
     }
 
     int stbi_write_jpg(char const *filename, int w, int h, int comp, const void *data, int quality) {
         // Stub implementation - return success to allow compilation
+        (void)filename; (void)w; (void)h; (void)comp; (void)data; (void)quality;
         return 1;
     }
 
     int stbi_write_bmp(char const *filename, int w, int h, int comp, const void *data) {
         // Stub implementation - return success to allow compilation
+        (void)filename; (void)w; (void)h; (void)comp; (void)data;
         return 1;
     }
 
     int stbi_write_tga(char const *filename, int w, int h, int comp, const void *data) {
         // Stub implementation - return success to allow compilation
+        (void)filename; (void)w; (void)h; (void)comp; (void)data;
         return 1;
     }
 }

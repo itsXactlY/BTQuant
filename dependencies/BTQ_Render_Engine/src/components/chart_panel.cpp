@@ -381,6 +381,7 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
   RenderEngine::TimeFrame old_timeframe = timeframe_;
+  (void)old_timeframe;  // Suppress unused variable warning
   timeframe_ = timeframe;
   config_.title = symbol_ + " Chart [" + timeframe_to_string(timeframe_) + "]";
 
@@ -912,6 +913,7 @@ void ChartPanel::calculate_cached_stochastic(const std::vector<float>& highs,
                                           const std::vector<float>& lows,
                                           const std::vector<float>& closes,
                                           int k_period, int d_period) {
+  (void)d_period;  // Suppress unused parameter warning
   // This method calculates and caches both stochastic components
   auto stoch_k = calculate_cached_stochastic_k(highs, lows, closes, k_period);
   calculate_cached_stochastic_d(stoch_k, indicator_config_.stochastic_slow_period);
@@ -2204,6 +2206,7 @@ void ChartPanel::render_fibonacci_levels(const ChartInstance& chart, size_t star
 }
 
 void ChartPanel::render_crosshair_info(const ChartInstance& chart, double mouse_x, double mouse_y) {
+  (void)mouse_y;  // Suppress unused parameter warning
   if (!indicator_config_.show_crosshair_info || chart.closes.empty()) return;
 
   // Find closest candle to mouse position using binary search
@@ -2435,6 +2438,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
 
       // Calculate bar width in plot coordinates based on volume values
       double max_vol_display = vp_max_vol * 4.0;  // Same as used in SetupAxisLimits for X2
+      (void)max_vol_display;  // Suppress unused variable warning
 
       // Draw volume profile bars using direct drawing to avoid axis switching after setup lock
       for (size_t i = 0; i < vp_prices.size(); ++i) {
@@ -2664,6 +2668,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         // Handle right-click context menu for drawing tools
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImPlot::IsPlotHovered()) {
             ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            (void)mouse_pos;  // Suppress unused variable warning
             // In a real implementation, we would show a context menu to select drawing tool type
             // For now, we'll just store the position for potential use
         }
@@ -2671,6 +2676,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
         // Handle left mouse click for creating drawing tools
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImPlot::IsPlotHovered()) {
             ImPlotPoint mouse_pos = ImPlot::GetPlotMousePos();
+            (void)mouse_pos;  // Suppress unused variable warning
             // In a real implementation, we would check if we're in drawing mode
             // and create the appropriate tool based on the selected tool type
         }
@@ -2694,6 +2700,7 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
             // During drag, we could preview the tool being drawn
             // For now, we'll just track the drag state
             ImPlotPoint current_pos = ImPlot::GetPlotMousePos();
+            (void)current_pos;  // Suppress unused variable warning
 
             // When mouse is released, finalize the tool
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
@@ -2905,6 +2912,7 @@ void ChartPanel::handleMouseDragInteraction() {
   // Get the current mouse position in plot coordinates
   ImPlotPoint mouse_plot_pos = ImPlot::GetPlotMousePos();
   ImVec2 mouse_screen_pos = ImGui::GetMousePos();
+  (void)mouse_screen_pos;  // Suppress unused variable warning
 
   // Convert ImPlotPoint to ImVec2 for interaction manager
   ImVec2 converted_plot_pos = ImVec2(static_cast<float>(mouse_plot_pos.x), static_cast<float>(mouse_plot_pos.y));
@@ -2965,6 +2973,7 @@ void ChartPanel::render_context_menu(const ChartInstance& chart) {
 
     // Convert the x-coordinate (time) back to timestamp
     uint64_t clicked_timestamp = static_cast<uint64_t>(mouse_pos.x * 1000000); // Convert from seconds to microseconds
+    (void)clicked_timestamp;  // Suppress unused variable warning
 
     // Find the closest candle to the clicked timestamp to determine the time range for the bar
     // Use binary search (std::lower_bound) to optimize from O(n) to O(log n)
@@ -3370,6 +3379,7 @@ void ChartPanel::remove_multi_timeframe_indicator(int index) {
 }
 
 void ChartPanel::update_multi_timeframe_indicators(const ChartInstance& chart) {
+  (void)chart;  // Suppress unused parameter warning
   // Update multi-timeframe indicators by fetching data from the source timeframe
   for (auto& indicator : multi_tf_indicators_) {
     if (!indicator.isVisible) continue; // Skip invisible indicators

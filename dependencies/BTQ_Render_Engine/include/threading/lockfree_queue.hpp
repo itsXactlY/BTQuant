@@ -124,7 +124,7 @@ public:
     }
 
     std::shared_ptr<T> pop() {
-        Node* prev_head = head_.load(std::memory_order_acquire);
+        // Node* prev_head = head_.load(std::memory_order_acquire); // Removed unused variable
 
         while (true) {
             Node* head_snapshot = head_.load(std::memory_order_acquire);
@@ -163,7 +163,7 @@ public:
 
     // Non-blocking try_pop with std::optional return
     std::optional<T> try_pop() {
-        Node* prev_head = head_.load(std::memory_order_acquire);
+        // Node* prev_head = head_.load(std::memory_order_acquire); // Removed unused variable
 
         while (true) {
             Node* head_snapshot = head_.load(std::memory_order_acquire);
@@ -357,6 +357,7 @@ public:
 
     // Limited push - only push if queue size is below threshold (prevents memory buildup)
     bool push_if_not_full(const T& new_value, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         if (size_approx() >= max_size) {
             return false; // Queue is too full
         }
@@ -366,6 +367,7 @@ public:
 
     // Limited push with rvalue reference
     bool push_if_not_full(T&& new_value, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         if (size_approx() >= max_size) {
             return false; // Queue is too full
         }
@@ -495,7 +497,7 @@ public:
     }
 
     std::optional<T> try_pop() {
-        Node* prev_head = head_.load(std::memory_order_acquire);
+        // Node* prev_head = head_.load(std::memory_order_acquire); // Removed unused variable
 
         while (true) {
             Node* head_snapshot = head_.load(std::memory_order_acquire);
@@ -583,6 +585,7 @@ public:
 
     // Limited push - only push if queue size is below threshold (prevents memory buildup)
     bool push_if_not_full(const T& item, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         if (size_approx() >= max_size) {
             return false; // Queue is too full
         }
@@ -592,6 +595,7 @@ public:
 
     // Limited push with rvalue reference
     bool push_if_not_full(T&& item, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         if (size_approx() >= max_size) {
             return false; // Queue is too full
         }
@@ -705,6 +709,7 @@ public:
 
     // Limited push - only push if queue size is below threshold (prevents memory buildup)
     bool push_if_not_full(const T& item, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         // Since we don't have an efficient size() method for MPSC, we'll use a different approach
         // This is a simplified version - in production, you might track count separately
         push(item);
@@ -713,6 +718,7 @@ public:
 
     // Limited push with rvalue reference
     bool push_if_not_full(T&& item, size_t max_size = 1000) {
+        (void)max_size;  // Suppress unused parameter warning
         push(std::move(item));
         return true; // Always return true since we can't efficiently check size
     }
@@ -735,7 +741,7 @@ private:
 
 public:
     explicit SPSCRingBuffer(size_t capacity)
-        : capacity_(capacity), buffer_(capacity) {}
+        : buffer_(capacity), capacity_(capacity) {}
 
     bool push(const T& item) {
         size_t write_idx = write_pos_.load(std::memory_order_relaxed);

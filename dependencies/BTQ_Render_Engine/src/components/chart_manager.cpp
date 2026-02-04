@@ -231,6 +231,7 @@ void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timef
   for (auto& [chart_id, chart] : charts_) {
     // Store the old timeframe to compare
     RenderEngine::TimeFrame old_timeframe = chart.timeframe;
+    (void)old_timeframe;  // Suppress unused variable warning
 
     // Update the timeframe
     chart.timeframe = new_timeframe;

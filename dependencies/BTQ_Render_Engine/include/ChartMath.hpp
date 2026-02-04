@@ -74,7 +74,7 @@ class ChartMath {
   }
 
   static void ApplyAspectRatio(ViewPort& view, float windowWidth, float windowHeight) {
-    if (windowHeight <= 0) return;
+    (void)view; (void)windowWidth; (void)windowHeight;  // Suppress unused parameter warnings
     // For financial charts, we don't usually force fixed aspect ratio
     // but we can ensure minimum visibility ranges here if needed.
   }

@@ -52,6 +52,7 @@ struct PanelConfig {
   int grid_y = 0;
   int grid_width = 1;
   int grid_height = 1;
+  std::string symbol = "";  // Trading symbol associated with the panel
 
   // Per-panel settings data
   std::string settings_key = "";  // Key for identifying panel-specific settings

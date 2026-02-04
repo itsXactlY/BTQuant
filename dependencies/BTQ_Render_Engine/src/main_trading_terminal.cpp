@@ -203,6 +203,7 @@ int main(int argc, char** argv) {
   while (!dashboard->should_close()) {
     auto frame_begin = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(frame_begin - last_frame_time).count();
+    (void)dt;  // Suppress unused variable warning
     last_frame_time = frame_begin;
 
     // Data Sync

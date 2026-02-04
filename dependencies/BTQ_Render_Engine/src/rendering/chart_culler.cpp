@@ -156,6 +156,7 @@ float ChartCuller::calculate_adaptive_lod_factor(double zoom_factor, size_t data
 // Advanced LOD calculation that considers both zoom and data density
 float ChartCuller::calculate_advanced_lod_factor(double zoom_factor, size_t data_point_count,
                                                float viewport_width_pixels, float viewport_height_pixels) const {
+    (void)viewport_height_pixels;  // Suppress unused parameter warning
     // Start with the basic adaptive LOD calculation
     float adaptive_lod = calculate_adaptive_lod_factor(zoom_factor, data_point_count, viewport_width_pixels);
 
@@ -662,6 +663,7 @@ ChartInstance ChartCuller::apply_importance_based_polygon_reduction(const ChartI
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -896,6 +898,7 @@ ChartInstance ChartCuller::apply_advanced_offscreen_culling(const ChartInstance&
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1010,6 +1013,7 @@ ChartInstance ChartCuller::apply_frustum_culling_and_polygon_reduction(const Cha
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1107,6 +1111,7 @@ ChartInstance ChartCuller::apply_frustum_culling_and_polygon_reduction(const Cha
 // Advanced polygon reduction that reduces polygon count at lower zoom levels using clustering
 ChartInstance ChartCuller::apply_clustering_polygon_reduction(const ChartInstance& chart, float zoom_factor,
                                                            float viewport_width_pixels, float viewport_height_pixels) const {
+    (void)viewport_height_pixels;  // Suppress unused parameter warning
     ChartInstance processed_chart = chart;
 
     if (!viewport_set_ || chart.dates.empty()) {
@@ -1232,6 +1237,7 @@ ChartInstance ChartCuller::apply_aggressive_culling_and_lod(const ChartInstance&
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1351,6 +1357,7 @@ ChartInstance ChartCuller::apply_offscreen_culling_with_zoom_reduction(const Cha
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1497,6 +1504,7 @@ ChartInstance ChartCuller::apply_aggressive_offscreen_culling_with_polygon_reduc
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1652,6 +1660,7 @@ ChartInstance ChartCuller::apply_efficient_offscreen_culling_and_lod(const Chart
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors with reduced data
     std::vector<double> filtered_dates;
@@ -1833,6 +1842,7 @@ ChartInstance ChartCuller::apply_task_specific_culling_and_lod(const ChartInstan
     size_t visible_points_count = end_index - start_index + 1;
     float adaptive_lod = calculate_advanced_lod_factor(zoom_factor, visible_points_count,
                                                      viewport_width_pixels, viewport_height_pixels);
+    (void)adaptive_lod;  // Suppress unused variable warning
 
     // Create new vectors for filtered data
     std::vector<double> filtered_dates;

@@ -356,6 +356,7 @@ bool MemoryTracker::isMemoryLeaking(double threshold_rate_bytes_per_second) cons
 }
 
 std::vector<LeakCandidate> MemoryTracker::getGrowingAllocations(double growth_threshold_percent) const {
+    (void)growth_threshold_percent;  // Suppress unused parameter warning
     std::vector<LeakCandidate> growing_allocs;
     auto now = std::chrono::high_resolution_clock::now();
 

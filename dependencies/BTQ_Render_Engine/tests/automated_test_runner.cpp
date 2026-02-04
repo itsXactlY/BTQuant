@@ -212,6 +212,7 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+    (void)argc; (void)argv;  // Suppress unused parameter warnings
     std::cout << "Starting BTQ Render Engine Automated Test Suite" << std::endl;
     
     AutomatedTestRunner runner;

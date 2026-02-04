@@ -91,8 +91,9 @@ void TimeHistogramPanel::render() {
       first_run = false;
     }
 
-    // Configure the plot axes
-    ImPlot::SetupAxes("Time", "Volume", ImPlotAxisFlags_None, y_axis_flags);
+    // Configure the plot axes using individual axis setup for modern API
+    ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
+    ImPlot::SetupAxis(ImAxis_Y1, "Volume", y_axis_flags);
 
     // Variables to track min/max values for auto-scaling
     double min_y_value = 0.0;
@@ -696,9 +697,6 @@ void TimeHistogramPanel::render() {
       }
     }
 
-    // Add grid for better readability (grid lines are shown by default)
-    ImPlot::SetupAxis(ImAxis_X1, nullptr, ImPlotAxisFlags_None);
-    ImPlot::SetupAxis(ImAxis_Y1, nullptr, ImPlotAxisFlags_None);
 
     // Apply auto-scaling if enabled and we have valid data
     if (auto_scale_y_axis_ && has_valid_data && !lock_y_axis_scale_) {

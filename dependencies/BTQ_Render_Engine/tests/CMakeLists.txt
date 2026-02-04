@@ -124,6 +124,33 @@ target_link_libraries(vwap_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbtq_engine_lib.a
 )
 
+# Add data pipeline tests
+add_executable(data_pipeline_tests data_pipeline_tests.cpp)
+
+# Add the main project's include directories
+target_include_directories(data_pipeline_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+# Link data pipeline tests
+target_link_libraries(data_pipeline_tests
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+    TBB::tbb
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libbtq_engine_lib.a
+)
+
+# Add performance benchmarks test
+add_executable(performance_benchmarks performance_benchmarks.cpp)
+
+# Link performance benchmarks test
+target_link_libraries(performance_benchmarks
+    btq_engine_lib
+    Threads::Threads
+)
+
 # Set properties for the tests
 set_target_properties(test_lockfree_queue PROPERTIES
     CXX_STANDARD 17
@@ -146,6 +173,11 @@ set_target_properties(test_frame_time_graph_advanced PROPERTIES
 )
 
 set_target_properties(test_imgui_optimizer PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+set_target_properties(performance_benchmarks PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
 )

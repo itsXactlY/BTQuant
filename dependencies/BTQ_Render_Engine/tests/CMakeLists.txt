@@ -247,6 +247,15 @@ target_link_libraries(test_mock_data_generator
     Threads::Threads
 )
 
+# Add automated test runner for CI
+add_executable(automated_test_runner automated_test_runner.cpp)
+
+# Link automated test runner
+target_link_libraries(automated_test_runner
+    Threads::Threads
+    TBB::tbb
+)
+
 # Add compiler definitions to enable experimental features
 target_compile_definitions(stress_tests PRIVATE
     _GLIBCXX_USE_CXX11_ABI=1

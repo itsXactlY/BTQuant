@@ -1460,36 +1460,6 @@ private:
 
 // Additional memory pools for other frequently allocated objects
 
-// TradePaceDataPool for trade pace analysis data
-    ThreadLocalObjectPool<BTQuant::TapePanel::TradePaceData> pool_;
-};
-
-    ObjectPool<std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>> pool_;
-};
-
-// FastTradePairPool for high-performance trade pair allocation
-class FastTradePairPool {
-public:
-    static FastTradePairPool& getInstance();
-
-    std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* allocate();
-    void deallocate(std::pair<BTQuant::Data::TradeData, BTQuant::Data::TradeData>* pair);
-    void preallocate(size_t count = 2048); // Higher count for frequent allocation
-
-    size_t getTotalObjects() const { return pool_.get_total_objects(); }
-    size_t getFreeObjects() const { return pool_.get_free_objects(); }
-    size_t getUsedObjects() const { return pool_.get_used_objects(); }
-    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
-
-    size_t getTotalObjects() const { return pool_.get_total_objects(); }
-    size_t getFreeObjects() const { return pool_.get_free_objects(); }
-    size_t getUsedObjects() const { return pool_.get_used_objects(); }
-
-private:
-    IndicatorValuePairPool() = default;
-    ObjectPool<std::pair<float, float>> pool_;
-};
-
 // FastIndicatorValuePairPool for high-performance indicator value pair allocation
 class FastIndicatorValuePairPool {
 public:

@@ -78,6 +78,7 @@ private:
     };
 
     // Cache for window scroll information
+public:
     struct CachedScrollInfo {
         float scroll_x;
         float scroll_y;
@@ -95,6 +96,7 @@ private:
         float timestamp;
         bool valid;
     };
+private:
 
     // Cache for item rectangles to avoid repeated calculations
     struct CachedItemRect {

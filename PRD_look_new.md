@@ -366,3 +366,6 @@
 - [x] Add telemetry: anonymous usage statistics, performance metrics, feature adoption tracking in `dependencies/BTQ_Render_Engine/src/telemetry/telemetry_collector.cpp` [Complexity: M]
 - [x] Run final QA: comprehensive testing of all features, edge cases, integration points in `dependencies/BTQ_Render_Engine/tests/final_qa_checklist.md` [Complexity: M]
 - [x] Create installer: platform-specific installation packages, dependency management, first-run setup in `installers/` [Complexity: M]
+
+### Phase 17: Take care of Build errors [Complexity: Godtier]
+- [ ] Create release dev Build: Run ./build_integration.sh and analyze all errors. Sanitize code, validate existing code, prevent errors and crashes for the executables.

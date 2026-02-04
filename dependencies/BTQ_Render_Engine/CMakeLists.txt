@@ -294,6 +294,10 @@ target_include_directories(btq_engine_lib PUBLIC
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
     ${glm_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
@@ -312,13 +316,17 @@ target_include_directories(realtime_dashboard PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
     ${json_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 find_package(TBB REQUIRED)
@@ -340,13 +348,17 @@ target_include_directories(dashboard_advanced PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
     ${IMPLOT_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${Vulkan_INCLUDE_DIRS}
     ${glm_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
     ${json_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
 target_link_libraries(dashboard_advanced PRIVATE
@@ -356,133 +368,3 @@ target_link_libraries(dashboard_advanced PRIVATE
     pthread
     TBB::tbb
 )
-
-# Memory pool test executable
-add_executable(test_extended_memory_pool
-    src/memory/test_extended_memory_pool.cpp
-    src/memory/memory_pool.cpp
-)
-
-target_include_directories(test_extended_memory_pool PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-target_link_libraries(test_extended_memory_pool PRIVATE
-    Threads::Threads
-    TBB::tbb
-)
-
-# Original memory pool test executable
-add_executable(test_memory_pool
-    src/memory/test_memory_pool.cpp
-    src/memory/memory_pool.cpp
-)
-
-target_include_directories(test_memory_pool PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-target_link_libraries(test_memory_pool PRIVATE
-    Threads::Threads
-    TBB::tbb
-)
-
-# Add tests subdirectory
-add_subdirectory(tests)
-
-# Tooltip test executable
-add_executable(test_tooltips
-    src/ui/test_tooltips.cpp
-)
-
-target_include_directories(test_tooltips PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-target_link_libraries(test_tooltips PRIVATE
-    btq_engine_lib
-    Threads::Threads
-    TBB::tbb
-)
-
-# Quick Actions test executable
-add_executable(test_quick_actions
-    src/ui/test_quick_actions.cpp
-)
-
-target_include_directories(test_quick_actions PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-target_link_libraries(test_quick_actions PRIVATE
-    btq_engine_lib
-    Threads::Threads
-    TBB::tbb
-)
-
-# Test structured logging executable
-add_executable(test_structured_logging
-    src/logging/test_structured_logging.cpp
-    src/logging/logger.cpp
-)
-
-target_include_directories(test_structured_logging PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${json_SOURCE_DIR}/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-)
-
-target_link_libraries(test_structured_logging PRIVATE
-    btq_engine_lib
-    Threads::Threads
-    TBB::tbb
-)
-

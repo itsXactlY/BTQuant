@@ -27,13 +27,13 @@ AutoQualityController::AutoQualityController(const AutoQualityConfig& config)
     , frame_times_(FRAME_HISTORY_SIZE, 1000.0 / config.target_fps)
     , quality_levels_(QUALITY_LEVEL_COUNT)
     , current_quality_index_(0)  // Start at highest quality
-    , last_adjustment_time_(std::chrono::high_resolution_clock::now())
-    , adjustment_cooldown_(std::chrono::milliseconds(static_cast<int>(config.adjustment_cooldown_ms)))
     , performance_score_(100.0)
     , target_performance_threshold_(config.performance_threshold)
     , adaptive_performance_threshold_(config.performance_threshold)
     , peak_performance_score_(100.0)
+    , last_adjustment_time_(std::chrono::high_resolution_clock::now())
     , cumulative_performance_score_(0.0)
+    , adjustment_cooldown_(std::chrono::milliseconds(static_cast<int>(config.adjustment_cooldown_ms)))
     , performance_sample_count_(0)
 {
     initializeQualityLevels();
@@ -1176,7 +1176,7 @@ double AutoQualityController::calculateMemoryPressureScore() const {
 
     // For now, we'll implement a realistic simulation based on memory usage patterns
     size_t current_usage = 0;
-    size_t peak_usage = 0;
+    size_t peak_usage = 0;  // Declare the variable
 
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS pmc;

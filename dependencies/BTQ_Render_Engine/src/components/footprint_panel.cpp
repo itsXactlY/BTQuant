@@ -138,7 +138,7 @@ FootprintPanel::FootprintPanel(const PanelConfig& config,
   lod_system_.setDetailRenderThreshold(8.0f);
 }
 
-void FootprintPanel::update(float dt) {
+void FootprintPanel::update(float /*dt*/) {
   // Update logic if needed
   // Aggregation is handled by MarketMicrostructureRenderer
 }
@@ -549,7 +549,7 @@ void FootprintPanel::renderCell(const FootprintCell& cell, ImDrawList* draw_list
 }
 
 void FootprintPanel::renderFilteredCell(const FootprintCell& cell, ImDrawList* draw_list,
-                                        double max_volume, double zoom_factor) {
+                                        double /*max_volume*/, double zoom_factor) {
   // For filtered cells, we'll create a temporary version with reduced visibility
   // Calculate cell corners in plot coordinates with zoom-based adjustment
   double base_padding = 0.48;

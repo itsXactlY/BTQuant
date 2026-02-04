@@ -312,9 +312,9 @@ class VulkanDashboard {
   void render_layout_indicator();
 
   uint32_t width_, height_;
-  VulkanDashboardConfig config_;
   std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
+  VulkanDashboardConfig config_;
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> vulkan_core_;
   std::unique_ptr<QuantWorkspaceComponent> workspace_;

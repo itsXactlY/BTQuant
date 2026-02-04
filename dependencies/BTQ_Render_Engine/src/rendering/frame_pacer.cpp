@@ -9,7 +9,6 @@ namespace RenderEngine {
 FramePacer::FramePacer(const Config& config)
     : config_(config)
     , frame_time_history_(FRAME_HISTORY_SIZE, 1000.0 / config.target_fps)  // Initialize with target frame time
-    , smoothed_frame_times_(SMOOTHING_WINDOW, 1000.0 / config.target_fps)
     , last_frame_time_(std::chrono::high_resolution_clock::now())
     , frame_timer_()
     , spike_detector_()
@@ -25,6 +24,7 @@ FramePacer::FramePacer(const Config& config)
     , frame_stability_score_(1.0)
     , frame_phase_lock_(false)
     , phase_reference_time_(std::chrono::high_resolution_clock::now())
+    , smoothed_frame_times_(SMOOTHING_WINDOW, 1000.0 / config.target_fps)
 {
     // Initialize stats
     stats_.avg_frame_time_ms = 1000.0 / config.target_fps;
@@ -827,7 +827,7 @@ void FramePacer::update_frame_budget() {
     }
 
     // Update budget based on actual vs expected frame time
-    double budget_delta = target_frame_time - current_frame_time;
+    // double budget_delta = target_frame_time - current_frame_time;  // Unused variable
 
     // Apply smoothing to prevent sudden budget changes
     const double BUDGET_SMOOTHING = 0.05;
@@ -1412,7 +1412,7 @@ void FramePacer::enhance_spike_response() {
 
     // Enhanced spike detection using multiple algorithms for better accuracy
     double current_frame_time = frame_time_history_[(frame_count_ - 1) % FRAME_HISTORY_SIZE];
-    double target_frame_time = 1000.0 / adaptive_target_fps_;
+    // double target_frame_time = 1000.0 / adaptive_target_fps_;  // Unused variable
 
     // Method 1: Standard deviation based detection
     // Calculate recent standard deviation of frame times

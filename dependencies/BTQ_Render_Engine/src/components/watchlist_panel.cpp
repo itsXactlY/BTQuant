@@ -149,7 +149,7 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   double normalized_change = std::min(1.0, capped_change / max_intensity_threshold);
 
   // Apply a more balanced curve for intensity scaling - using a combination of linear and exponential
-  double intensity_factor = normalized_change; // Base linear scaling
+  // double intensity_factor = normalized_change; // Base linear scaling - unused variable
   double saturation_factor = normalized_change; // Use same factor for consistency
 
   // Return appropriate color based on sign and intensity
@@ -1105,7 +1105,7 @@ void WatchlistPanel::render_table_header() {
   ImGuiTableSortSpecs* sorts_specs = ImGui::TableGetSortSpecs();
   if (sorts_specs && sorts_specs->SpecsDirty) {
     if (sorts_specs->SpecsCount > 0) {
-      const auto& spec = sorts_specs->Specs[0];
+      const auto& spec = sorts_specs->Specs[0];  // Used for sorting
 
       // Map the table column index to the original column index
       if (spec.ColumnIndex >= 0 && spec.ColumnIndex < static_cast<int>(table_to_original_index.size())) {
@@ -2894,7 +2894,7 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
   bool is_ascending = true;
 
   if (sorts_specs && sorts_specs->SpecsCount > 0) {
-    const auto& spec = sorts_specs->Specs[0];
+    // const auto& spec = sorts_specs->Specs[0];  // Unused variable
 
     // We need to determine the current table column index to compare with the sort spec
     // Since we set up columns in the same order as our visible columns, we need to map properly

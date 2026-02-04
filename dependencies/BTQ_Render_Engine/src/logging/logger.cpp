@@ -21,7 +21,7 @@ void initializeLoggingSystem() {
     logger.enableConsoleLogging(true);
 }
 
-void configureLoggingFromSettings(const std::string& configFile) {
+void configureLoggingFromSettings(const std::string& /*configFile*/) {
     // Placeholder for loading settings from a configuration file
     // In a real implementation, this would parse a config file
     auto& logger = StructuredLogger::getInstance();

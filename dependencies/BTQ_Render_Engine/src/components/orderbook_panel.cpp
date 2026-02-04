@@ -97,7 +97,7 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_na
   config_.title = symbol_name + " Orderbook";
 }
 
-void OrderbookPanel::update(float dt) {
+void OrderbookPanel::update(float /*dt*/) {
   // Request data update from data bridge
   bridge_->sync();
 
@@ -827,7 +827,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
               ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
 
           // Draw text with increased weight effect by drawing it multiple times slightly offset
-          ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];
+          // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
           ImGui::Text("%.4f", level.size);
           ImGui::PopStyleColor();

@@ -20,7 +20,7 @@ OrderbookHistoryPanel::OrderbookHistoryPanel(const PanelConfig& config,
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 }
 
-void OrderbookHistoryPanel::update(float dt) {
+void OrderbookHistoryPanel::update(float /*dt*/) {
     // Request data update from data bridge
     bridge_->sync();
 

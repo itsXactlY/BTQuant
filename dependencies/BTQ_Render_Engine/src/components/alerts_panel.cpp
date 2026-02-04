@@ -14,14 +14,16 @@ AlertsPanel::AlertsPanel(const PanelConfig& config) : PanelBase(config) {
                     .expression = "price > 98000",
                     .target_symbol = "BTCUSDT",
                     .status = AlertStatus::ACTIVE,
-                    .actions = {"log", "sound"}});
+                    .actions = {"log", "sound"},
+                    .last_triggered = std::chrono::system_clock::now()});
 
   rules_.push_back({.id = "rule_2",
                     .name = "ETH Dip",
                     .expression = "price < 2800",
                     .target_symbol = "ETHUSDT",
                     .status = AlertStatus::DISABLED,
-                    .actions = {"log"}});
+                    .actions = {"log"},
+                    .last_triggered = std::chrono::system_clock::now()});
 
   // Dummy logs
   auto now = std::chrono::system_clock::now();
@@ -31,7 +33,7 @@ AlertsPanel::AlertsPanel(const PanelConfig& config) : PanelBase(config) {
       {now - std::chrono::minutes(12), "High Volume", "SOLUSDT", 145.20, "Volume spike detected"});
 }
 
-void AlertsPanel::update(float dt) {
+void AlertsPanel::update(float /*dt*/) {
   // In a real implementation, we would evaluate rules here against market data
   // For now, it's just a UI shell
 }
@@ -189,7 +191,8 @@ void AlertsPanel::render_create_rule_modal() {
                         .expression = new_rule_expr_,
                         .target_symbol = new_rule_symbol_,
                         .status = AlertStatus::ACTIVE,
-                        .actions = {"log"}});
+                        .actions = {"log"},
+                        .last_triggered = std::chrono::system_clock::now()});
       show_create_modal_ = false;
       ImGui::CloseCurrentPopup();
     }

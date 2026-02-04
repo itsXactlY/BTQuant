@@ -249,8 +249,8 @@ private:
 
     std::mutex queue_mutex_;
     std::condition_variable condition_;
-    bool stop_;
     size_t num_threads_;
+    bool stop_;
 
 public:
     void enqueue_task(std::function<void()> task);

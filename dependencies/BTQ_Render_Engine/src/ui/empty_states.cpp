@@ -226,7 +226,7 @@ void EmptyStateManager::renderActionableEmptyState(
     }
 }
 
-void EmptyStateManager::renderIcon(const std::string& icon, const ImVec4& color, float scale) {
+void EmptyStateManager::renderIcon(const std::string& icon, const ImVec4& color, float /*scale*/) {
     ImGui::PushStyleColor(ImGuiCol_Text, color);
     ImGui::PushFont(nullptr); // Use default font
     ImGui::Text("%s", icon.c_str());

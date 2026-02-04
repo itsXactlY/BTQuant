@@ -112,7 +112,7 @@ static bool canCombineBatchesSuper(const OrderbookBatchElement& batch1, const Or
 
 // Ultra-performance helper function optimized for maximum batching efficiency with reduced overhead
 static bool canCombineBatchesUltraPerformance(const OrderbookBatchElement& batch1, const OrderbookBatchElement& batch2,
-                                             uint8_t color_tolerance = 100, float max_color_distance = 200.0f) {
+                                             uint8_t /*color_tolerance*/, float /*max_color_distance*/) {
     // Quick texture comparison - this is the most important check
     if (batch1.texture != batch2.texture) {
         return false;
@@ -152,7 +152,7 @@ static bool canCombineBatchesUltraPerformance(const OrderbookBatchElement& batch
     int da = abs(static_cast<int>(a1) - static_cast<int>(a2));
 
     // Sum of absolute differences as a fast approximation
-    return (dr + dg + db + da) <= (color_tolerance * 2);
+    return (dr + dg + db + da) <= (100 * 2); // Use a fixed tolerance since parameter is unused
 }
 
 // Optimized helper function to determine if two batches can be combined with configurable parameters
@@ -474,8 +474,8 @@ void OrderbookBatcher::addRectanglesFilled(const std::vector<std::pair<ImVec2, I
         auto* batch = batch_pointers[i];
         const auto& group = groups[i];
 
-        size_t initial_vertex_count = batch->vertices.size();
-        size_t initial_index_count = batch->indices.size();
+        // size_t initial_vertex_count = batch->vertices.size();  // Unused variable
+        // size_t initial_index_count = batch->indices.size();   // Unused variable
 
         // Pre-calculate required space and reserve if needed
         batch->vertices.reserve(batch->vertices.size() + group.rectangles.size() * 4);
@@ -1154,7 +1154,7 @@ void OrderbookBatcher::ultraPerformanceOptimizeBatches() {
 
                 size_t candidate_idx = indices[j];
 
-                if (canCombineBatchesUltraPerformance(combined_batch, batches_[candidate_idx])) {
+                if (canCombineBatchesUltraPerformance(combined_batch, batches_[candidate_idx], 100, 200.0f)) {
                     // Fast merge the candidate batch into the combined batch
                     size_t vertex_offset = combined_batch.vertices.size();
 
@@ -3318,7 +3318,7 @@ void OrderbookBatcher::batchGeometryMaximumPerformance(const std::vector<Orderbo
                         batch->vertices.emplace_back(element.rect.min, ImVec2(0.5f, 0.5f), element.color);
 
                         // Add outer vertices efficiently
-                        size_t initial_vertex_count = batch->vertices.size();
+                        // size_t initial_vertex_count = batch->vertices.size();  // Unused variable
                         batch->vertices.reserve(batch->vertices.size() + segments + 1); // Reserve space for all outer vertices
 
                         for (int i = 0; i <= segments; i++) {
@@ -3837,7 +3837,7 @@ void OrderbookBatcher::batchGeometrySpatiallyCoherent(const std::vector<Orderboo
                         batch->vertices.emplace_back(element.rect.min, ImVec2(0.5f, 0.5f), element.color);
 
                         // Add outer vertices efficiently
-                        size_t initial_vertex_count = batch->vertices.size();
+                        // size_t initial_vertex_count = batch->vertices.size();  // Unused variable
                         batch->vertices.reserve(batch->vertices.size() + segments + 1); // Reserve space for all outer vertices
 
                         for (int i = 0; i <= segments; i++) {
@@ -4028,7 +4028,7 @@ void OrderbookBatcher::maximumThroughputBatching(const std::vector<OrderbookElem
                         batch->vertices.emplace_back(element.rect.min, ImVec2(0.5f, 0.5f), element.color);
 
                         // Add outer vertices efficiently in a single operation
-                        size_t initial_vertex_count = batch->vertices.size();
+                        // size_t initial_vertex_count = batch->vertices.size();  // Unused variable
                         batch->vertices.reserve(batch->vertices.size() + segments + 1); // Reserve space for all outer vertices
 
                         // Pre-calculate all points and add them efficiently

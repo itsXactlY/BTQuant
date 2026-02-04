@@ -333,7 +333,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
     enqueue_task([prices, period, promise]() {
         try {
             std::vector<double> sma_values;
-            if (prices.size() < period) {
+            if (prices.size() < static_cast<size_t>(period)) {
                 sma_values.resize(prices.size());
                 promise->set_value(std::move(sma_values));
                 return;
@@ -369,7 +369,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_sma_async(
                             double local_sum = 0.0;
 
                             // Calculate the initial sum for this chunk's starting point
-                            if (chunk_start > period) {
+                            if (chunk_start > static_cast<size_t>(period)) {
                                 // Need to calculate the sum at chunk_start
                                 local_sum = std::accumulate(prices.begin() + (chunk_start - period), prices.begin() + chunk_start, 0.0);
                             } else {
@@ -590,7 +590,7 @@ std::future<BollingerBandsResult> TaskScheduler::calculate_bollinger_bands_async
         try {
             std::vector<double> upper_band, middle_band, lower_band;
 
-            if (prices.size() < period) {
+            if (prices.size() < static_cast<size_t>(period)) {
                 promise->set_value(std::make_tuple(std::move(upper_band), std::move(middle_band), std::move(lower_band)));
                 return;
             }
@@ -2349,7 +2349,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_adaptive_sma_async(
                             size_t actual_start = (i >= static_cast<size_t>(period - 1)) ? i - (period - 1) : 0;
                             double sum = 0.0;
 
-                            for (int p = 0; p < period && (actual_start + p) <= i; ++p) {
+                            for (size_t p = 0; p < static_cast<size_t>(period) && (actual_start + p) <= static_cast<size_t>(i); ++p) {
                                 sum += prices[actual_start + p];
                             }
 
@@ -2390,7 +2390,7 @@ std::future<std::vector<double>> TaskScheduler::calculate_adaptive_sma_async(
                     size_t actual_start = (i >= static_cast<size_t>(period - 1)) ? i - (period - 1) : 0;
                     double sum = 0.0;
 
-                    for (int p = 0; p < period && (actual_start + p) <= i; ++p) {
+                    for (size_t p = 0; p < static_cast<size_t>(period) && (actual_start + p) <= static_cast<size_t>(i); ++p) {
                         sum += prices[actual_start + p];
                     }
 

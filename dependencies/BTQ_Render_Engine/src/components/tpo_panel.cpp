@@ -14,7 +14,7 @@ namespace BTQuant {
 TpoPanel::TpoPanel(const PanelConfig& config, RenderEngine::MarketMicrostructureRenderer* renderer)
     : PanelBase(config), renderer_(renderer) {}
 
-void TpoPanel::update(float dt) {
+void TpoPanel::update(float /*dt*/) {
   // Update logic if needed
 }
 

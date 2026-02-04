@@ -288,12 +288,18 @@ void VulkanDashboard::render_frame() {
   // Phase)
   if (micro_renderer_) {
     pollDataToRenderer();
-    micro_renderer_->prepare();
+    auto result = micro_renderer_->prepare();
+    if (!result) {
+        // Log error if preparation failed
+        std::cout << "[VulkanDashboard] Micro renderer prepare failed: " <<
+                     RenderEngine::to_string(result.error()) << std::endl;
+    }
     micro_renderer_->executeCompute(vulkan_core_->get_current_command_buffer());
 
     // Add pipeline barrier to ensure compute writes are visible to graphics
     VkMemoryBarrier barrier{
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .pNext = nullptr,
         .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
         .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT};
     vkCmdPipelineBarrier(vulkan_core_->get_current_command_buffer(),

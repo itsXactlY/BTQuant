@@ -97,7 +97,7 @@ std::expected<void, std::string> HotSpineDataBridge::start() {
   running_.store(true, std::memory_order_release);
 
   // Start real-time sync thread using std::jthread
-  sync_thread_ = std::jthread([this](std::stop_token stoken) { this->sync_loop(); });
+  sync_thread_ = std::jthread([this](std::stop_token /*stoken*/) { this->sync_loop(); });
 
   BTQ_LOG_INFO("HotSpineDataBridge started successfully");
   return {};

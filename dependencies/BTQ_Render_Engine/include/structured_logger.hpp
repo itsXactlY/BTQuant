@@ -177,7 +177,7 @@ private:
     }
 
     template<typename... Args>
-    std::string formatAsText(LogLevel level, const std::string& message,
+    std::string formatAsText(LogLevel /*level*/, const std::string& message,
                              const LogMetadata& metadata, Args... args) {
         std::ostringstream oss;
         oss << "[" << metadata.timestamp << "] "
@@ -200,7 +200,7 @@ private:
     }
 
     template<typename... Args>
-    std::string formatAsJSON(LogLevel level, const std::string& message,
+    std::string formatAsJSON(LogLevel /*level*/, const std::string& message,
                              const LogMetadata& metadata, Args... args) {
         std::ostringstream oss;
         oss << "{"

@@ -66,7 +66,7 @@ void TimeHistogramPanel::render() {
     y_axis_flags |= ImPlotAxisFlags_Lock;
   }
 
-  if (ImPlot::BeginPlot("Time Histogram", "Time", "Volume", ImVec2(-1, -1), ImPlotFlags_None, ImPlotAxisFlags_None, y_axis_flags)) {
+  if (ImPlot::BeginPlot("Time Histogram", ImVec2(-1, -1))) {
     // Generate sample time-based histogram data for demonstration
     static double x_data[100], buy_data[100], sell_data[100];
     static bool first_run = true;
@@ -92,7 +92,7 @@ void TimeHistogramPanel::render() {
     }
 
     // Configure the plot axes
-    ImPlot::SetupAxes("Time", "Volume", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+    ImPlot::SetupAxes("Time", "Volume", ImPlotAxisFlags_None, y_axis_flags);
 
     // Variables to track min/max values for auto-scaling
     double min_y_value = 0.0;

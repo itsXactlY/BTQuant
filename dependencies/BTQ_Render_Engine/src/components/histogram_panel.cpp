@@ -15,7 +15,7 @@ void HistogramPanel::initialize() { PanelBase::initialize(); }
 void HistogramPanel::render() {
   begin_panel_window();
 
-  if (ImPlot::BeginPlot("Histogram", "Values", "Frequency")) {
+  if (ImPlot::BeginPlot("Histogram")) {
     // Generate sample data for demonstration
     static float data[1000];
     static bool first_run = true;
@@ -31,7 +31,7 @@ void HistogramPanel::render() {
       first_run = false;
     }
 
-    ImPlot::SetupAxes("X", "Y");
+    ImPlot::SetupAxes("Values", "Frequency");
     ImPlot::PlotHistogram("Distribution", data, 1000, 50);
     ImPlot::EndPlot();
   }

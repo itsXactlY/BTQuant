@@ -37,6 +37,59 @@ target_link_libraries(test_task_scheduler
 
 target_link_libraries(test_memory_tracker Threads::Threads)
 
+# Define test executables for frame time
+add_executable(test_frame_time_basic test_frame_time_basic.cpp)
+add_executable(test_frame_time_graph_advanced test_frame_time_graph_advanced.cpp)
+
+# Link frame time tests
+target_link_libraries(test_frame_time_basic
+    btq_engine_lib
+    Threads::Threads
+)
+
+target_link_libraries(test_frame_time_graph_advanced
+    btq_engine_lib
+    Threads::Threads
+)
+
+# Add imgui optimizer test
+add_executable(test_imgui_optimizer test_imgui_optimizer.cpp)
+
+# Link imgui optimizer test
+target_link_libraries(test_imgui_optimizer
+    btq_engine_lib
+    Threads::Threads
+)
+
+# Add performance regression detector test
+add_executable(test_performance_regression test_performance_regression.cpp)
+
+# Link performance regression test
+target_link_libraries(test_performance_regression
+    btq_engine_lib
+    Threads::Threads
+)
+
+# Add loading states test
+add_executable(test_loading_states test_loading_states.cpp)
+
+# Link loading states test
+target_link_libraries(test_loading_states
+    btq_engine_lib
+    Threads::Threads
+)
+
+# Add volume calculation tests
+add_executable(volume_calculation_tests volume_calculation_tests.cpp)
+
+# Link volume calculation tests
+target_link_libraries(volume_calculation_tests
+    btq_engine_lib
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+)
+
 # Set properties for the tests
 set_target_properties(test_lockfree_queue PROPERTIES
     CXX_STANDARD 17
@@ -44,6 +97,21 @@ set_target_properties(test_lockfree_queue PROPERTIES
 )
 
 set_target_properties(test_memory_tracker PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+set_target_properties(test_frame_time_basic PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+set_target_properties(test_frame_time_graph_advanced PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+)
+
+set_target_properties(test_imgui_optimizer PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
 )

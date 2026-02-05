@@ -25,6 +25,11 @@ struct ClusterCell {
   std::atomic<double> max_single_trade_volume{0.0};
   double sum_of_volumes{0.0};  // for average calculations
 
+  // Fields for statistical calculations
+  std::vector<double> prices;  // Store prices for statistical calculations
+  double sum_of_prices{0.0};   // Sum of all prices for mean calculation
+  double sum_of_squared_prices{0.0};  // Sum of squared prices for variance calculation
+
   // Define copy constructor and assignment operator to handle mutex properly
   ClusterCell() = default;
 
@@ -37,7 +42,10 @@ struct ClusterCell {
         buy_trade_count(other.buy_trade_count.load()),
         sell_trade_count(other.sell_trade_count.load()),
         max_single_trade_volume(other.max_single_trade_volume.load()),
-        sum_of_volumes(other.sum_of_volumes) {}
+        sum_of_volumes(other.sum_of_volumes),
+        prices(other.prices),
+        sum_of_prices(other.sum_of_prices),
+        sum_of_squared_prices(other.sum_of_squared_prices) {}
 
   // Assignment operator
   ClusterCell& operator=(const ClusterCell& other) {
@@ -53,6 +61,9 @@ struct ClusterCell {
       sell_trade_count.store(other.sell_trade_count.load());
       max_single_trade_volume.store(other.max_single_trade_volume.load());
       sum_of_volumes = other.sum_of_volumes;
+      prices = other.prices;
+      sum_of_prices = other.sum_of_prices;
+      sum_of_squared_prices = other.sum_of_squared_prices;
     }
     return *this;
   }
@@ -148,6 +159,12 @@ class ClusterEngine {
 
   // Getter method to access the cluster canvas for visualization
   const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
+
+  // Calculate standard deviation for a specific price level and time bucket
+  double calculateStandardDeviation(int64_t price_level, int time_bucket) const;
+
+  // Calculate median price for a specific price level and time bucket
+  double calculateMedianPrice(int64_t price_level, int time_bucket) const;
 
   void snapshot_to_viewport(HotSpine::V3::ClusterColumn& out, double center_price) {
     int64_t center_idx = static_cast<int64_t>(std::round(center_price / tick_size_));

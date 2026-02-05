@@ -51,7 +51,7 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
   // Get reference to the cluster cell for this price level and time bucket
   auto& cell = cluster_canvas_[relative_index][adjusted_time_bucket];
 
-  // Thread-safely update the volume counters using mutex
+  // Thread-safely update the volume counters and price statistics using mutex
   {
     std::lock_guard<std::mutex> lock(cell.volume_mutex);
     cell.total_volume += trade.quantity;
@@ -62,6 +62,11 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
     } else {
       cell.buy_volume += trade.quantity;
     }
+
+    // Update price statistics for standard deviation and median calculations
+    cell.prices.push_back(trade.price);
+    cell.sum_of_prices += trade.price;
+    cell.sum_of_squared_prices += trade.price * trade.price;
   }
 
   // Atomically update trade count counters
@@ -403,6 +408,75 @@ void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& tra
 
   // Process the trade with the determined time bucket
   processTrade(trade, time_bucket);
+}
+
+// Calculate standard deviation for a specific price level and time bucket
+double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_bucket) const {
+  // Check if the price level and time bucket are valid
+  if (price_level < min_tick_index_ || 
+      static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
+      time_bucket < 0 || time_bucket >= 16) {
+    return 0.0;  // Return 0 if invalid indices
+  }
+
+  int64_t relative_index = price_level - min_tick_index_;
+  const auto& cell = cluster_canvas_[relative_index][time_bucket];
+
+  // Lock the mutex to safely access the price data
+  std::lock_guard<std::mutex> lock(cell.volume_mutex);
+
+  int n = static_cast<int>(cell.prices.size());
+  
+  if (n <= 1) {
+    return 0.0;  // Standard deviation is undefined for 0 or 1 data points
+  }
+
+  // Calculate mean
+  double mean = cell.sum_of_prices / n;
+
+  // Calculate variance using the formula: variance = E[X^2] - (E[X])^2
+  double variance = (cell.sum_of_squared_prices / n) - (mean * mean);
+  
+  // Ensure variance is not negative due to floating-point precision issues
+  if (variance < 0.0) {
+    variance = 0.0;
+  }
+
+  // Standard deviation is the square root of variance
+  return std::sqrt(variance);
+}
+
+// Calculate median price for a specific price level and time bucket
+double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket) const {
+  // Check if the price level and time bucket are valid
+  if (price_level < min_tick_index_ || 
+      static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
+      time_bucket < 0 || time_bucket >= 16) {
+    return 0.0;  // Return 0 if invalid indices
+  }
+
+  int64_t relative_index = price_level - min_tick_index_;
+  const auto& cell = cluster_canvas_[relative_index][time_bucket];
+
+  // Lock the mutex to safely access the price data
+  std::lock_guard<std::mutex> lock(cell.volume_mutex);
+
+  if (cell.prices.empty()) {
+    return 0.0;  // Return 0 if no prices recorded
+  }
+
+  // Create a copy of the prices vector to sort without affecting the original
+  std::vector<double> sorted_prices = cell.prices;
+  std::sort(sorted_prices.begin(), sorted_prices.end());
+
+  size_t n = sorted_prices.size();
+  if (n % 2 == 0) {
+    // Even number of elements: average of the two middle elements
+    return (sorted_prices[n/2 - 1] + sorted_prices[n/2]) / 2.0;
+  } else {
+    // Odd number of elements: return the middle element
+    return sorted_prices[n/2];
+  }
 }
 
 }  // namespace Analytics

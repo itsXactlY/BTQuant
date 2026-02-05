@@ -354,4 +354,130 @@ TEST_F(ClusterEngineTests, CanvasExpansionLow) {
   EXPECT_TRUE(!canvas.empty());  // Should have been initialized
 }
 
+// Test standard deviation calculation
+TEST_F(ClusterEngineTests, StandardDeviationCalculation) {
+  ClusterEngine engine(0.01);
+
+  // Process trades with slightly different prices that all round to the same tick index
+  // This simulates multiple trades happening at approximately the same price level
+  std::vector<MarketData::Trade> trades = {
+    {1000000, "BINANCE", "BTCUSDT", "spot", "T1", 100.001, 10.0, "buy", true},  // Rounds to 10000
+    {1000001, "BINANCE", "BTCUSDT", "spot", "T2", 100.002, 15.0, "sell", false}, // Rounds to 10000
+    {1000002, "BINANCE", "BTCUSDT", "spot", "T3", 100.003, 5.0, "buy", true},   // Rounds to 10000
+    {1000003, "BINANCE", "BTCUSDT", "spot", "T4", 100.004, 20.0, "sell", false}, // Rounds to 10000
+    {1000004, "BINANCE", "BTCUSDT", "spot", "T5", 100.005, 8.0, "buy", true}    // Rounds to 10000
+  };
+
+  // Add all trades to the same time bucket (they will go to same price level due to same rounded price)
+  for (const auto& trade : trades) {
+    engine.processTrade(trade, 0);
+  }
+
+  // Calculate expected standard deviation manually
+  // Prices: 100.001, 100.002, 100.003, 100.004, 100.005
+  // Mean: (100.001 + 100.002 + 100.003 + 100.004 + 100.005) / 5 = 500.015 / 5 = 100.003
+  // Variance: [(100.001-100.003)^2 + (100.002-100.003)^2 + (100.003-100.003)^2 + (100.004-100.003)^2 + (100.005-100.003)^2] / 5
+  //         = [(-0.002)^2 + (-0.001)^2 + (0)^2 + (0.001)^2 + (0.002)^2] / 5
+  //         = [0.000004 + 0.000001 + 0 + 0.000001 + 0.000004] / 5 = 0.00001 / 5 = 0.000002
+  // Std Dev: sqrt(0.000002) ≈ 0.001414
+  double mean = (100.001 + 100.002 + 100.003 + 100.004 + 100.005) / 5.0;
+  double variance = (pow(100.001 - mean, 2) + pow(100.002 - mean, 2) + pow(100.003 - mean, 2) + 
+                     pow(100.004 - mean, 2) + pow(100.005 - mean, 2)) / 5.0;
+  double expected_std_dev = std::sqrt(variance);
+
+  // Calculate standard deviation using the new method
+  // All trades should be at price level corresponding to 100.0 (tick index 10000)
+  int64_t price_level = static_cast<int64_t>(std::round(100.0 / 0.01)); // Tick index 10000
+  double calculated_std_dev = engine.calculateStandardDeviation(price_level, 0);
+
+  // Verify the calculated standard deviation is approximately equal to expected
+  EXPECT_NEAR(calculated_std_dev, expected_std_dev, 0.0003);
+}
+
+// Test median price calculation
+TEST_F(ClusterEngineTests, MedianPriceCalculation) {
+  ClusterEngine engine(0.01);
+
+  // Process trades with known prices to test median calculation
+  std::vector<MarketData::Trade> trades = {
+    {1000000, "BINANCE", "BTCUSDT", "spot", "T1", 100.0, 10.0, "buy", true},
+    {1000001, "BINANCE", "BTCUSDT", "spot", "T2", 102.0, 15.0, "sell", false},
+    {1000002, "BINANCE", "BTCUSDT", "spot", "T3", 98.0, 5.0, "buy", true},
+    {1000003, "BINANCE", "BTCUSDT", "spot", "T4", 104.0, 20.0, "sell", false},
+    {1000004, "BINANCE", "BTCUSDT", "spot", "T5", 96.0, 8.0, "buy", true}
+  };
+
+  // Add all trades to the same price level and time bucket
+  for (const auto& trade : trades) {
+    engine.processTrade(trade, 0);
+  }
+
+  // Expected median: sort prices [96.0, 98.0, 100.0, 102.0, 104.0], median is middle value = 100.0
+  double expected_median = 100.0;
+
+  // Calculate median using the new method
+  int64_t price_level = static_cast<int64_t>(std::round(100.0 / 0.01)); // Convert price to tick index
+  double calculated_median = engine.calculateMedianPrice(price_level, 0);
+
+  // Verify the calculated median is equal to expected
+  EXPECT_DOUBLE_EQ(calculated_median, expected_median);
+}
+
+// Test median price calculation with even number of elements
+TEST_F(ClusterEngineTests, MedianPriceCalculationEvenCount) {
+  ClusterEngine engine(0.01);
+
+  // Process trades with even number of prices that all round to the same tick index
+  std::vector<MarketData::Trade> trades = {
+    {1000000, "BINANCE", "BTCUSDT", "spot", "T1", 100.001, 10.0, "buy", true},  // Rounds to 10000
+    {1000001, "BINANCE", "BTCUSDT", "spot", "T2", 100.002, 15.0, "sell", false}, // Rounds to 10000
+    {1000002, "BINANCE", "BTCUSDT", "spot", "T3", 100.003, 5.0, "buy", true},   // Rounds to 10000
+    {1000003, "BINANCE", "BTCUSDT", "spot", "T4", 100.004, 20.0, "sell", false}  // Rounds to 10000
+  };
+
+  // Add all trades to the same time bucket (they will go to same price level due to same rounded price)
+  for (const auto& trade : trades) {
+    engine.processTrade(trade, 0);
+  }
+
+  // Expected median: sort prices [100.001, 100.002, 100.003, 100.004], median is average of middle values = (100.002 + 100.003) / 2 = 100.0025
+  double expected_median = (100.002 + 100.003) / 2.0;
+
+  // Calculate median using the new method
+  int64_t price_level = static_cast<int64_t>(std::round(100.0 / 0.01)); // Tick index 10000
+  double calculated_median = engine.calculateMedianPrice(price_level, 0);
+
+  // Verify the calculated median is equal to expected
+  EXPECT_DOUBLE_EQ(calculated_median, expected_median);
+}
+
+// Test standard deviation and median with empty data
+TEST_F(ClusterEngineTests, StatisticsWithEmptyData) {
+  ClusterEngine engine(0.01);
+
+  // Test with uninitialized data (no trades processed)
+  int64_t price_level = static_cast<int64_t>(std::round(100.0 / 0.01));
+  double std_dev = engine.calculateStandardDeviation(price_level, 0);
+  double median = engine.calculateMedianPrice(price_level, 0);
+
+  // Both should return 0.0 for empty data
+  EXPECT_DOUBLE_EQ(std_dev, 0.0);
+  EXPECT_DOUBLE_EQ(median, 0.0);
+}
+
+// Test standard deviation with single data point
+TEST_F(ClusterEngineTests, StandardDeviationWithSinglePoint) {
+  ClusterEngine engine(0.01);
+
+  // Process a single trade
+  MarketData::Trade trade = {1000000, "BINANCE", "BTCUSDT", "spot", "T1", 100.0, 10.0, "buy", true};
+  engine.processTrade(trade, 0);
+
+  // Standard deviation of a single point should be 0
+  int64_t price_level = static_cast<int64_t>(std::round(100.0 / 0.01));
+  double std_dev = engine.calculateStandardDeviation(price_level, 0);
+
+  EXPECT_DOUBLE_EQ(std_dev, 0.0);
+}
+
 } // namespace Analytics

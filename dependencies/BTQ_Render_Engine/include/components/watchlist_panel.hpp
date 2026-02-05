@@ -96,6 +96,11 @@ class WatchlistPanel : public PanelBase {
   void remove_alerts_for_symbol(uint32_t symbol_id);
   void ensure_default_groups_order();
 
+  // Public API methods
+  void focus_add_symbol_input();
+  void clear_all_symbols();
+  void set_sorting(int column_id, bool ascending);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -212,6 +217,9 @@ class WatchlistPanel : public PanelBase {
   char new_alert_symbol_buffer_[128] = {0};
   char new_alert_price_buffer_[64] = {0};
   int new_alert_direction_ = 0; // 0 for ABOVE, 1 for BELOW
+
+  // Focus management
+  bool should_focus_symbol_input_ = false;
 };
 
 }  // namespace BTQuant

@@ -1,12 +1,12 @@
 #include "../../include/components/watchlist_panel.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <filesystem>
-#include <cmath>
 
 #include "imgui.h"
 
@@ -50,11 +50,17 @@ const std::vector<uint32_t>& WatchlistPanel::get_current_display_order() const {
 // Helper function to format numbers for financial display
 std::string formatFinancialNumber(double value, int precision = 2) {
   if (value >= 1e9) {
-    return std::to_string(value / 1e9).substr(0, std::to_string(value / 1e9).find('.') + precision + 1) + "B";
+    return std::to_string(value / 1e9)
+               .substr(0, std::to_string(value / 1e9).find('.') + precision + 1) +
+           "B";
   } else if (value >= 1e6) {
-    return std::to_string(value / 1e6).substr(0, std::to_string(value / 1e6).find('.') + precision + 1) + "M";
+    return std::to_string(value / 1e6)
+               .substr(0, std::to_string(value / 1e6).find('.') + precision + 1) +
+           "M";
   } else if (value >= 1e3) {
-    return std::to_string(value / 1e3).substr(0, std::to_string(value / 1e3).find('.') + precision + 1) + "K";
+    return std::to_string(value / 1e3)
+               .substr(0, std::to_string(value / 1e3).find('.') + precision + 1) +
+           "K";
   } else {
     return std::to_string(value).substr(0, std::to_string(value).find('.') + precision + 1);
   }
@@ -81,13 +87,13 @@ double interpolateValue(double start, double end, float progress) {
 float calculateFlashIntensity(float progress) {
   // Use a smoother flash curve with more gradual fade-in and fade-out
   // Using sine-based easing for even smoother transitions
-  float t = progress * 4.0f; // Speed up the flash cycle
-  if (t > 2.0f) t = 4.0f - t; // Create a smooth bounce effect (triangle wave)
+  float t = progress * 4.0f;   // Speed up the flash cycle
+  if (t > 2.0f) t = 4.0f - t;  // Create a smooth bounce effect (triangle wave)
 
   // Apply sine-based easing for even smoother transitions
-  t = (1.0f - cosf(t * M_PI)) * 0.5f; // Smooth easing function
+  t = (1.0f - cosf(t * M_PI)) * 0.5f;  // Smooth easing function
 
-  return t / 2.0f; // Normalize to 0-1 range
+  return t / 2.0f;  // Normalize to 0-1 range
 }
 
 // Enhanced flash animation function specifically for price changes
@@ -139,7 +145,9 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   double abs_change = std::abs(change_value);
 
   // Define thresholds for intensity scaling - make more adaptive based on typical market movements
-  double max_intensity_threshold = is_percentage ? 5.0 : 50.0; // Lower threshold for more sensitivity (5% or $50 as max intensity)
+  double max_intensity_threshold =
+      is_percentage ? 5.0
+                    : 50.0;  // Lower threshold for more sensitivity (5% or $50 as max intensity)
 
   // For extremely large changes, cap the intensity to prevent overly saturated colors
   double capped_change = std::min(abs_change, max_intensity_threshold * 2.0);
@@ -148,24 +156,25 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
   // This provides better visual distinction for smaller changes while preventing oversaturation
   double normalized_change = std::min(1.0, capped_change / max_intensity_threshold);
 
-  // Apply a more balanced curve for intensity scaling - using a combination of linear and exponential
-  // double intensity_factor = normalized_change; // Base linear scaling - unused variable
-  double saturation_factor = normalized_change; // Use same factor for consistency
+  // Apply a more balanced curve for intensity scaling - using a combination of linear and
+  // exponential double intensity_factor = normalized_change; // Base linear scaling - unused
+  // variable
+  double saturation_factor = normalized_change;  // Use same factor for consistency
 
   // Return appropriate color based on sign and intensity
   if (is_positive) {
     // Bright green for positive changes - more intense greens for larger changes
     // Start with a bright green and make it more intense with larger changes
-    float red_comp = 0.1f * (1.0f - saturation_factor); // Reduce red as intensity increases
-    float green_comp = 0.4f + 0.6f * saturation_factor; // Increase green as intensity increases
-    float blue_comp = 0.1f * (1.0f - saturation_factor); // Reduce blue as intensity increases
+    float red_comp = 0.1f * (1.0f - saturation_factor);   // Reduce red as intensity increases
+    float green_comp = 0.4f + 0.6f * saturation_factor;   // Increase green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor);  // Reduce blue as intensity increases
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   } else {
     // Bright red for negative changes - more intense reds for larger changes
     // Start with a bright red and make it more intense with larger changes
-    float red_comp = 0.4f + 0.6f * saturation_factor; // Increase red as intensity increases
-    float green_comp = 0.1f * (1.0f - saturation_factor); // Reduce green as intensity increases
-    float blue_comp = 0.1f * (1.0f - saturation_factor); // Reduce blue as intensity increases
+    float red_comp = 0.4f + 0.6f * saturation_factor;      // Increase red as intensity increases
+    float green_comp = 0.1f * (1.0f - saturation_factor);  // Reduce green as intensity increases
+    float blue_comp = 0.1f * (1.0f - saturation_factor);   // Reduce blue as intensity increases
     return ImVec4(red_comp, green_comp, blue_comp, 1.0f);
   }
 }
@@ -202,7 +211,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
       watchlist_groups_["Stocks"][symbol_id] = entry;
       group_display_orders_["Stocks"].push_back(symbol_id);
     }
-    watchlist_.clear(); // Clear the old watchlist since we're moving to groups
+    watchlist_.clear();  // Clear the old watchlist since we're moving to groups
   }
 
   // Load the saved watchlist order from config file
@@ -223,12 +232,13 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   // Verify all subscriptions are active
   verify_subscriptions();
 
-  std::cout << "[WatchlistPanel] Initialized with " << get_current_watchlist().size() << " symbols in '"
-            << current_group_name_ << "' group and subscriptions" << std::endl;
+  std::cout << "[WatchlistPanel] Initialized with " << get_current_watchlist().size()
+            << " symbols in '" << current_group_name_ << "' group and subscriptions" << std::endl;
 }
 
 void WatchlistPanel::update(float dt) {
-  // Update animation timers for all watchlist entries in the current group to ensure smooth transitions
+  // Update animation timers for all watchlist entries in the current group to ensure smooth
+  // transitions
   for (auto& [symbol_id, entry] : get_current_watchlist()) {
     if (entry.animation_timer > 0.0f) {
       entry.animation_timer -= dt;
@@ -243,8 +253,8 @@ void WatchlistPanel::update(float dt) {
     alert_manager_->update_alerts();
   }
 
-  // Ensure all symbols in the current watchlist group are subscribed to real-time price feed updates
-  // This handles cases where subscriptions might have been lost or need to be refreshed
+  // Ensure all symbols in the current watchlist group are subscribed to real-time price feed
+  // updates This handles cases where subscriptions might have been lost or need to be refreshed
   ensure_all_symbols_subscribed();
 
   // Additionally, periodically verify all subscriptions are active
@@ -256,14 +266,15 @@ void WatchlistPanel::update(float dt) {
   subscription_check_timer += dt;
   if (subscription_check_timer > 10.0f) {
     subscription_check_timer = 0.0f;
-    std::cout << "[WatchlistPanel] Active symbols in '" << current_group_name_ << "': " << get_current_watchlist().size()
+    std::cout << "[WatchlistPanel] Active symbols in '" << current_group_name_
+              << "': " << get_current_watchlist().size()
               << ", Active subscriptions: " << symbol_subscriptions_.size() << std::endl;
 
     // Log any discrepancies between watchlist and subscriptions
     for (const auto& [symbol_id, entry] : get_current_watchlist()) {
       if (symbol_subscriptions_.find(symbol_id) == symbol_subscriptions_.end()) {
-        std::cout << "[WatchlistPanel] Missing subscription for symbol ID: " << symbol_id
-                  << " (" << entry.symbol << ")" << std::endl;
+        std::cout << "[WatchlistPanel] Missing subscription for symbol ID: " << symbol_id << " ("
+                  << entry.symbol << ")" << std::endl;
       }
     }
   }
@@ -292,11 +303,21 @@ void WatchlistPanel::render() {
   ImGui::SameLine();
 
   // Input field for new symbol with improved styling
-  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.15f, 1.0f)); // Darker background for input
+  ImGui::PushStyleColor(ImGuiCol_FrameBg,
+                        ImVec4(0.15f, 0.15f, 0.15f, 1.0f));  // Darker background for input
   ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
   ImGui::SetNextItemWidth(150);
-  bool input_entered = ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_, sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
+
+  // Check if we should focus the symbol input field
+  if (should_focus_symbol_input_) {
+      ImGui::SetKeyboardFocusHere();
+      should_focus_symbol_input_ = false; // Reset the flag after focusing
+  }
+
+  bool input_entered =
+      ImGui::InputTextWithHint("##NewSymbolInput", "e.g., AAPL", new_symbol_buffer_,
+                               sizeof(new_symbol_buffer_), ImGuiInputTextFlags_EnterReturnsTrue);
   ImGui::PopStyleColor(3);
 
   // Add tooltip to explain the input field
@@ -308,10 +329,12 @@ void WatchlistPanel::render() {
   ImGui::SameLine();
 
   // Button to add symbol by name with improved styling
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));      // Green background
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f)); // Lighter green when hovered
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.8f, 0.4f, 1.0f));  // Even lighter when active
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));  // Green background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.3f, 0.7f, 0.3f, 1.0f));  // Lighter green when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(0.4f, 0.8f, 0.4f, 1.0f));                 // Even lighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
   bool add_clicked = ImGui::Button("Add Symbol");
 
@@ -322,18 +345,21 @@ void WatchlistPanel::render() {
     ImGui::EndTooltip();
   }
 
-  ImGui::PopStyleColor(4); // Pop all 4 color styles
+  ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
   // Show current count of symbols in current watchlist group
   ImGui::SameLine();
-  ImGui::TextDisabled("(%zu symbols in %s)", get_current_watchlist().size(), current_group_name_.c_str());
+  ImGui::TextDisabled("(%zu symbols in %s)", get_current_watchlist().size(),
+                      current_group_name_.c_str());
 
   // Add a clear all button
   ImGui::SameLine();
-  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));      // Red background
-  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.1f, 0.1f, 1.0f)); // Darker red when hovered
-  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));   // Even brighter when active
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));  // Red background
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.9f, 0.1f, 0.1f, 1.0f));  // Darker red when hovered
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                        ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Even brighter when active
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
   if (ImGui::Button("Clear All")) {
     if (!get_current_watchlist().empty()) {
@@ -348,7 +374,7 @@ void WatchlistPanel::render() {
     ImGui::EndTooltip();
   }
 
-  ImGui::PopStyleColor(4); // Pop all 4 color styles
+  ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
   // Alternative symbol selector dropdown
   if (bridge_) {
@@ -363,7 +389,8 @@ void WatchlistPanel::render() {
           if (sym_name.empty()) continue;
 
           // Check if already in current watchlist group
-          bool already_added = (get_current_watchlist().find(sym_id) != get_current_watchlist().end());
+          bool already_added =
+              (get_current_watchlist().find(sym_id) != get_current_watchlist().end());
 
           std::string label = exchange + "/" + sym_name;
           if (already_added) {
@@ -379,7 +406,8 @@ void WatchlistPanel::render() {
         ImGui::EndCombo();
       }
       ImGui::SameLine();
-      ImGui::Text("(%zu in %s, %zu available)", get_current_watchlist().size(), current_group_name_.c_str(), active_symbols.size());
+      ImGui::Text("(%zu in %s, %zu available)", get_current_watchlist().size(),
+                  current_group_name_.c_str(), active_symbols.size());
     }
   }
 
@@ -392,7 +420,7 @@ void WatchlistPanel::render() {
 
     if (symbol_to_add.empty()) {
       ImGui::SameLine();
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f)); // Red text for error
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));  // Red text for error
       ImGui::Text("Please enter a valid symbol name!");
       ImGui::PopStyleColor();
     } else {
@@ -406,11 +434,10 @@ void WatchlistPanel::render() {
         std::string exchange = bridge_->getExchangeName(sym_id);
 
         // Compare the symbol name and check if it's already in the current watchlist group
-        if (!sym_name.empty() &&
-            sym_name == symbol_to_add &&
+        if (!sym_name.empty() && sym_name == symbol_to_add &&
             get_current_watchlist().find(sym_id) == get_current_watchlist().end()) {
           add_symbol(sym_id, sym_name, exchange);
-          new_symbol_buffer_[0] = '\0'; // Clear the input buffer
+          new_symbol_buffer_[0] = '\0';  // Clear the input buffer
           symbol_found = true;
           break;
         }
@@ -419,14 +446,17 @@ void WatchlistPanel::render() {
       // Show success message if symbol was added
       if (symbol_found) {
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 0.3f, 1.0f)); // Green text for success
-        ImGui::Text("Added '%s' to %s watchlist!", symbol_to_add.c_str(), current_group_name_.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(0.3f, 0.9f, 0.3f, 1.0f));  // Green text for success
+        ImGui::Text("Added '%s' to %s watchlist!", symbol_to_add.c_str(),
+                    current_group_name_.c_str());
         ImGui::PopStyleColor();
       } else {
         // Show error message if symbol was not found
         ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f)); // Red text for error
-        ImGui::Text("Symbol '%s' not found or already in %s watchlist!", symbol_to_add.c_str(), current_group_name_.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));  // Red text for error
+        ImGui::Text("Symbol '%s' not found or already in %s watchlist!", symbol_to_add.c_str(),
+                    current_group_name_.c_str());
         ImGui::PopStyleColor();
       }
     }
@@ -468,7 +498,8 @@ void WatchlistPanel::render() {
     }
   } else {
     // Show a message when no columns are visible
-    ImGui::Text("No columns are currently visible. Right-click on the header area to show columns.");
+    ImGui::Text(
+        "No columns are currently visible. Right-click on the header area to show columns.");
   }
 
   // Render the column context menu if needed
@@ -481,7 +512,8 @@ void WatchlistPanel::render() {
         for (uint32_t sym_id : bridge_->getActiveSymbols()) {
           std::string sym_name = bridge_->getSymbolName(sym_id);
           std::string exchange = bridge_->getExchangeName(sym_id);
-          if (!sym_name.empty() && (get_current_watchlist().find(sym_id) == get_current_watchlist().end())) {
+          if (!sym_name.empty() &&
+              (get_current_watchlist().find(sym_id) == get_current_watchlist().end())) {
             add_symbol(sym_id, sym_name, exchange);
           }
         }
@@ -504,7 +536,8 @@ void WatchlistPanel::render() {
     // Find the symbol name to display in the confirmation
     auto it = watchlist_.find(symbol_to_delete_);
     if (it != watchlist_.end()) {
-      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Symbol: %s", it->second.symbol.c_str()); // Highlight the symbol name
+      ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Symbol: %s",
+                         it->second.symbol.c_str());  // Highlight the symbol name
     }
 
     ImGui::Separator();
@@ -534,7 +567,8 @@ void WatchlistPanel::render() {
     ImGui::Text("Are you sure you want to remove ALL symbols from the watchlist?");
 
     // Show how many symbols will be removed
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Number of symbols to remove: %zu", watchlist_.size());
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "Number of symbols to remove: %zu",
+                       watchlist_.size());
 
     ImGui::Separator();
 
@@ -581,11 +615,12 @@ void WatchlistPanel::add_symbol(uint32_t symbol_id, const std::string& symbol,
   // Save the updated order to config file
   save_watchlist_order_to_config(config_file_path_);
 
-  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id
-            << ") to group '" << current_group_name_ << "' and subscribed to real-time updates" << std::endl;
+  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id << ") to group '"
+            << current_group_name_ << "' and subscribed to real-time updates" << std::endl;
 }
 
-void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::NotificationType type) {
+void WatchlistPanel::on_market_data_update(uint32_t symbol_id,
+                                           RenderEngine::NotificationType type) {
   // Only process trade updates for real-time price feed
   if (type != RenderEngine::NotificationType::TRADE) {
     return;
@@ -652,24 +687,29 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
       bool significant_change = false;
 
       // Check if price changed significantly (more than 0.01% or minimum tick)
-      double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
-      if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) { // 0.01% or $0.001 threshold
+      double price_change_pct =
+          (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+      if (price_change_pct > 0.01 ||
+          std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
         significant_change = true;
       }
 
       // Check if VWAP changed significantly
-      double vwap_change_pct = (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
-      if (vwap_change_pct > 0.01 || std::abs(it->second.vwap - prev_vwap) > 0.001) { // 0.01% or $0.001 threshold
+      double vwap_change_pct =
+          (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
+      if (vwap_change_pct > 0.01 ||
+          std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
         significant_change = true;
       }
 
       // Check if change percentages changed significantly
-      if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) { // At least 0.01% difference
+      if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) {  // At least 0.01% difference
         significant_change = true;
       }
 
       // Check if change dollars changed significantly
-      if (std::abs(it->second.change_dollar - prev_change_dollar) > 0.001) { // At least $0.001 difference
+      if (std::abs(it->second.change_dollar - prev_change_dollar) >
+          0.001) {  // At least $0.001 difference
         significant_change = true;
       }
 
@@ -690,8 +730,8 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
 
         // Log the animation trigger for debugging
         std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                  << " (ID: " << symbol_id << "). Price: " << prev_price << " -> " << it->second.price
-                  << ", Change: " << price_change_pct << "%" << std::endl;
+                  << " (ID: " << symbol_id << "). Price: " << prev_price << " -> "
+                  << it->second.price << ", Change: " << price_change_pct << "%" << std::endl;
       }
 
       // Log every market data update for monitoring
@@ -763,24 +803,30 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
         bool significant_change = false;
 
         // Check if price changed significantly (more than 0.01% or minimum tick)
-        double price_change_pct = (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
-        if (price_change_pct > 0.01 || std::abs(it->second.price - prev_price) > 0.001) { // 0.01% or $0.001 threshold
+        double price_change_pct =
+            (prev_price != 0) ? std::abs((it->second.price - prev_price) / prev_price) * 100.0 : 0;
+        if (price_change_pct > 0.01 ||
+            std::abs(it->second.price - prev_price) > 0.001) {  // 0.01% or $0.001 threshold
           significant_change = true;
         }
 
         // Check if VWAP changed significantly
-        double vwap_change_pct = (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
-        if (vwap_change_pct > 0.01 || std::abs(it->second.vwap - prev_vwap) > 0.001) { // 0.01% or $0.001 threshold
+        double vwap_change_pct =
+            (prev_vwap != 0) ? std::abs((it->second.vwap - prev_vwap) / prev_vwap) * 100.0 : 0;
+        if (vwap_change_pct > 0.01 ||
+            std::abs(it->second.vwap - prev_vwap) > 0.001) {  // 0.01% or $0.001 threshold
           significant_change = true;
         }
 
         // Check if change percentages changed significantly
-        if (std::abs(it->second.change_pct - prev_change_pct) > 0.01) { // At least 0.01% difference
+        if (std::abs(it->second.change_pct - prev_change_pct) >
+            0.01) {  // At least 0.01% difference
           significant_change = true;
         }
 
         // Check if change dollars changed significantly
-        if (std::abs(it->second.change_dollar - prev_change_dollar) > 0.001) { // At least $0.001 difference
+        if (std::abs(it->second.change_dollar - prev_change_dollar) >
+            0.001) {  // At least $0.001 difference
           significant_change = true;
         }
 
@@ -801,13 +847,15 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
 
           // Log the animation trigger for debugging
           std::cout << "[WatchlistPanel] Animation triggered for " << it->second.symbol
-                    << " (ID: " << symbol_id << ") in group '" << group_name << "'. Price: " << prev_price << " -> " << it->second.price
+                    << " (ID: " << symbol_id << ") in group '" << group_name
+                    << "'. Price: " << prev_price << " -> " << it->second.price
                     << ", Change: " << price_change_pct << "%" << std::endl;
         }
 
         // Log every market data update for monitoring
         std::cout << "[WatchlistPanel] Market data update received for " << it->second.symbol
-                  << " (ID: " << symbol_id << ") in group '" << group_name << "'. New price: " << it->second.price
+                  << " (ID: " << symbol_id << ") in group '" << group_name
+                  << "'. New price: " << it->second.price
                   << ", Timestamp: " << it->second.last_update_ts << std::endl;
       }
     }
@@ -816,8 +864,9 @@ void WatchlistPanel::on_market_data_update(uint32_t symbol_id, RenderEngine::Not
 
 void WatchlistPanel::remove_symbol(uint32_t symbol_id) {
   get_current_watchlist().erase(symbol_id);
-  get_current_display_order().erase(std::remove(get_current_display_order().begin(), get_current_display_order().end(), symbol_id),
-                                   get_current_display_order().end());
+  get_current_display_order().erase(std::remove(get_current_display_order().begin(),
+                                                get_current_display_order().end(), symbol_id),
+                                    get_current_display_order().end());
 
   // Unsubscribe from real-time updates for this symbol
   unsubscribe_from_symbol(symbol_id);
@@ -862,16 +911,21 @@ void WatchlistPanel::update_watchlist_data() {
 
 void WatchlistPanel::render_group_tabs() {
   // Create tabs for different watchlist groups with enhanced styling
-  ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);  // Round the tab corners more
-  ImGui::PushStyleVar(ImGuiStyleVar_TabBorderSize, 1.5f); // Add thicker border to tabs
-  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f)); // Add more padding to tabs
+  ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);    // Round the tab corners more
+  ImGui::PushStyleVar(ImGuiStyleVar_TabBorderSize, 1.5f);  // Add thicker border to tabs
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 8.0f));  // Add more padding to tabs
 
   // Customize tab colors for better visual hierarchy
-  ImGui::PushStyleColor(ImGuiCol_Tab, ImVec4(0.18f, 0.18f, 0.18f, 0.86f));           // Inactive tab background
-  ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.8f));       // Hovered tab background
-  ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));     // Active tab background
-  ImGui::PushStyleColor(ImGuiCol_TabUnfocused, ImVec4(0.15f, 0.15f, 0.15f, 0.97f)); // Inactive tab when window unfocused
-  ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive, ImVec4(0.2f, 0.2f, 0.2f, 1.0f)); // Active tab when window unfocused
+  ImGui::PushStyleColor(ImGuiCol_Tab,
+                        ImVec4(0.18f, 0.18f, 0.18f, 0.86f));  // Inactive tab background
+  ImGui::PushStyleColor(ImGuiCol_TabHovered,
+                        ImVec4(0.3f, 0.3f, 0.3f, 0.8f));  // Hovered tab background
+  ImGui::PushStyleColor(ImGuiCol_TabActive,
+                        ImVec4(0.25f, 0.25f, 0.25f, 1.0f));  // Active tab background
+  ImGui::PushStyleColor(ImGuiCol_TabUnfocused,
+                        ImVec4(0.15f, 0.15f, 0.15f, 0.97f));  // Inactive tab when window unfocused
+  ImGui::PushStyleColor(ImGuiCol_TabUnfocusedActive,
+                        ImVec4(0.2f, 0.2f, 0.2f, 1.0f));  // Active tab when window unfocused
 
   if (ImGui::BeginTabBar("WatchlistGroups", ImGuiTabBarFlags_Reorderable)) {
     // First, render the default groups (Stocks, Crypto, Futures) in a specific order
@@ -889,14 +943,14 @@ void WatchlistPanel::render_group_tabs() {
         // Format the tab label with symbol count and visual indicator for default groups
         std::string tab_label = group_name;
         if (group_name == "Stocks") {
-            // Stock market icon
-            tab_label = "\uf016 " + group_name; // Briefcase icon for stocks
+          // Stock market icon
+          tab_label = "\uf016 " + group_name;  // Briefcase icon for stocks
         } else if (group_name == "Crypto") {
-            // Cryptocurrency icon
-            tab_label = "\uf379 " + group_name; // Bitcoin icon for crypto
+          // Cryptocurrency icon
+          tab_label = "\uf379 " + group_name;  // Bitcoin icon for crypto
         } else if (group_name == "Futures") {
-            // Futures contract icon
-            tab_label = "\uf5af " + group_name; // Chart line icon for futures
+          // Futures contract icon
+          tab_label = "\uf5af " + group_name;  // Chart line icon for futures
         }
         tab_label += " (" + std::to_string(symbol_count) + ")";
 
@@ -975,7 +1029,8 @@ void WatchlistPanel::render_group_tabs() {
           if (ImGui::BeginPopupContextItem("GroupContextMenu")) {
             if (ImGui::MenuItem("Rename Group")) {
               // Future enhancement: implement group renaming with input dialog
-              std::cout << "[WatchlistPanel] Rename functionality would be implemented here for: " << group_name << std::endl;
+              std::cout << "[WatchlistPanel] Rename functionality would be implemented here for: "
+                        << group_name << std::endl;
             }
 
             if (group_name != "Futures" && group_name != "Crypto" && group_name != "Stocks") {
@@ -993,10 +1048,13 @@ void WatchlistPanel::render_group_tabs() {
     }
 
     // Add a '+' button to create new groups with better styling
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.35f, 0.25f, 1.0f));      // Greenish background
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.45f, 0.35f, 1.0f)); // Lighter green when hovered
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.45f, 0.55f, 0.45f, 1.0f));  // Even lighter when active
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+    ImGui::PushStyleColor(ImGuiCol_Button,
+                          ImVec4(0.25f, 0.35f, 0.25f, 1.0f));  // Greenish background
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(0.35f, 0.45f, 0.35f, 1.0f));  // Lighter green when hovered
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(0.45f, 0.55f, 0.45f, 1.0f));  // Even lighter when active
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
     if (ImGui::Button("+##AddGroup")) {
       // Create a new group with a default name
@@ -1013,14 +1071,14 @@ void WatchlistPanel::render_group_tabs() {
       ImGui::EndTooltip();
     }
 
-    ImGui::PopStyleColor(4); // Pop all 4 color styles
+    ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
     ImGui::EndTabBar();
   }
 
   // Restore original styles
-  ImGui::PopStyleColor(5); // Pop the 5 color styles
-  ImGui::PopStyleVar(3); // Pop the 3 style variables
+  ImGui::PopStyleColor(5);  // Pop the 5 color styles
+  ImGui::PopStyleVar(3);    // Pop the 3 style variables
 }
 
 void WatchlistPanel::render_filter_input() {
@@ -1032,7 +1090,7 @@ void WatchlistPanel::render_filter_input() {
 
 void WatchlistPanel::render_table_header() {
   // Sort visible columns by their order value to determine the display sequence
-  std::vector<std::pair<int, int>> ordered_columns; // (original_index, order_value)
+  std::vector<std::pair<int, int>> ordered_columns;  // (original_index, order_value)
   for (int i = 0; i < static_cast<int>(column_info_.size()); ++i) {
     if (column_info_[i].visible) {
       ordered_columns.emplace_back(i, column_info_[i].order);
@@ -1041,9 +1099,9 @@ void WatchlistPanel::render_table_header() {
 
   // Sort by order value to determine display sequence
   std::sort(ordered_columns.begin(), ordered_columns.end(),
-           [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
-             return a.second < b.second;
-           });
+            [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+              return a.second < b.second;
+            });
 
   // Create a mapping from table column index to original column index
   std::vector<int> table_to_original_index(ordered_columns.size());
@@ -1051,22 +1109,23 @@ void WatchlistPanel::render_table_header() {
     table_to_original_index[i] = ordered_columns[i].first;
   }
 
-  // Setup table columns with appropriate widths for better readability, respecting visibility settings
+  // Setup table columns with appropriate widths for better readability, respecting visibility
+  // settings
   for (const auto& [orig_idx, order_val] : ordered_columns) {
     ImGuiTableColumnFlags flags = ImGuiTableColumnFlags_None;
 
     // Set appropriate flags based on original column index
     switch (orig_idx) {
-      case 0: // Symbol
+      case 0:  // Symbol
         flags = ImGuiTableColumnFlags_WidthStretch;
         break;
-      case 2: // Last Price
-      case 3: // Change%
-      case 4: // Change$
-      case 5: // Volume
+      case 2:  // Last Price
+      case 3:  // Change%
+      case 4:  // Change$
+      case 5:  // Volume
         flags = ImGuiTableColumnFlags_WidthFixed;
         break;
-      case 10: // Action
+      case 10:  // Action
         flags = ImGuiTableColumnFlags_NoSort | ImGuiTableColumnFlags_WidthFixed;
         break;
       default:
@@ -1075,17 +1134,19 @@ void WatchlistPanel::render_table_header() {
     }
 
     // Enable sorting for all sortable columns except the Action column
-    if (orig_idx != 10) { // Not the Action column
-        // Set default sort for certain columns
-        if (orig_idx == 0) { // Symbol
-            flags |= ImGuiTableColumnFlags_DefaultSort;
-        } else if (orig_idx == 2 || orig_idx == 3 || orig_idx == 4 || orig_idx == 5) { // Price, Change%, Change$, Volume
-            flags |= ImGuiTableColumnFlags_PreferSortDescending;
-        }
+    if (orig_idx != 10) {  // Not the Action column
+      // Set default sort for certain columns
+      if (orig_idx == 0) {  // Symbol
+        flags |= ImGuiTableColumnFlags_DefaultSort;
+      } else if (orig_idx == 2 || orig_idx == 3 || orig_idx == 4 ||
+                 orig_idx == 5) {  // Price, Change%, Change$, Volume
+        flags |= ImGuiTableColumnFlags_PreferSortDescending;
+      }
     }
 
     // Set up the column with the appropriate width
-    float width = (flags & ImGuiTableColumnFlags_WidthStretch) ? 0.0f : column_info_[orig_idx].width;
+    float width =
+        (flags & ImGuiTableColumnFlags_WidthStretch) ? 0.0f : column_info_[orig_idx].width;
     ImGui::TableSetupColumn(column_info_[orig_idx].name.c_str(), flags, width);
   }
 
@@ -1108,10 +1169,11 @@ void WatchlistPanel::render_table_header() {
       const auto& spec = sorts_specs->Specs[0];  // Used for sorting
 
       // Map the table column index to the original column index
-      if (spec.ColumnIndex >= 0 && spec.ColumnIndex < static_cast<int>(table_to_original_index.size())) {
+      if (spec.ColumnIndex >= 0 &&
+          spec.ColumnIndex < static_cast<int>(table_to_original_index.size())) {
         sort_column_ = table_to_original_index[spec.ColumnIndex];
       } else {
-        sort_column_ = spec.ColumnIndex; // Fallback
+        sort_column_ = spec.ColumnIndex;  // Fallback
       }
 
       sort_ascending_ = (spec.SortDirection == ImGuiSortDirection_Ascending);
@@ -1145,13 +1207,15 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
     // Visually highlight the selected row
     if (is_selected) {
-      ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImVec4(0.2f, 0.3f, 0.6f, 0.5f))); // Blueish highlight for selected row
+      ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                             ImGui::GetColorU32(ImVec4(
+                                 0.2f, 0.3f, 0.6f, 0.5f)));  // Blueish highlight for selected row
     }
 
     // Use Selectable spanning all columns with drag and drop support
-    if (ImGui::Selectable(
-            entry.symbol.c_str(), is_selected,
-            ImGuiSelectableFlags_SpanAllColumns)) {  // Removed AllowDoubleClick to ensure single click triggers
+    if (ImGui::Selectable(entry.symbol.c_str(), is_selected,
+                          ImGuiSelectableFlags_SpanAllColumns)) {  // Removed AllowDoubleClick to
+                                                                   // ensure single click triggers
       selected_symbol_id_ = entry.symbol_id;
 
       // Trigger symbol selection callback to switch all panels to this symbol
@@ -1164,12 +1228,14 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     // Each row acts as both a drag source and drop target to enable reordering
 
     // Drag and drop source - make the entire row draggable with enhanced visual feedback
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID | ImGuiDragDropFlags_SourceNoDisableHover)) {
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID |
+                                   ImGuiDragDropFlags_SourceNoDisableHover)) {
       // Set payload to carry the symbol_id
       ImGui::SetDragDropPayload("WATCHLIST_ROW", &entry.symbol_id, sizeof(uint32_t));
 
       // Enhanced visual preview of what is being dragged
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Dragging: %s (%s)", entry.symbol.c_str(), entry.exchange.c_str());
+      ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Dragging: %s (%s)", entry.symbol.c_str(),
+                         entry.exchange.c_str());
 
       // Add additional visual elements to the drag preview
       ImGui::Separator();
@@ -1179,10 +1245,12 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Add a visual border around the preview
       ImVec2 pos = ImGui::GetCursorScreenPos();
-      ImVec2 size = ImVec2(300, ImGui::GetTextLineHeightWithSpacing() * 5); // Fixed size for cleaner preview
+      ImVec2 size =
+          ImVec2(300, ImGui::GetTextLineHeightWithSpacing() * 5);  // Fixed size for cleaner preview
       ImDrawList* draw_list = ImGui::GetWindowDrawList();
       draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
+                         ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0,
+                         2.0f);  // Rounded corners
 
       ImGui::EndDragDropSource();
     }
@@ -1199,7 +1267,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         auto target_it = std::find(current_order.begin(), current_order.end(), entry.symbol_id);
 
         // Prevent dropping on the same item (self-drag)
-        if (source_it != current_order.end() && target_it != current_order.end() && source_symbol_id != entry.symbol_id) {
+        if (source_it != current_order.end() && target_it != current_order.end() &&
+            source_symbol_id != entry.symbol_id) {
           // Calculate new position for the dragged item based on mouse position
           int source_idx = std::distance(current_order.begin(), source_it);
           int target_idx = std::distance(current_order.begin(), target_it);
@@ -1227,7 +1296,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
           // Adjust target index if source was before target (since we removed an element)
           if (source_idx < target_idx) {
-            target_idx--;  // If we removed an item before the target position, adjust the target index
+            target_idx--;  // If we removed an item before the target position, adjust the target
+                           // index
           }
 
           // Insert the moved item at the new position
@@ -1239,7 +1309,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
           // Log the reordering action
           std::cout << "[WatchlistPanel] Reordered symbol " << entry.symbol
                     << " (ID: " << source_symbol_id << ") to position " << target_idx
-                    << " (dropped " << (drop_above ? "above" : "below") << " " << entry.symbol << ")" << std::endl;
+                    << " (dropped " << (drop_above ? "above" : "below") << " " << entry.symbol
+                    << ")" << std::endl;
 
           // Trigger a refresh of subscriptions to maintain proper ordering
           refresh_all_subscriptions();
@@ -1261,41 +1332,34 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
 
       // Draw a more prominent visual indicator for the drop target
       draw_list->AddLine(
-          ImVec2(cell_rect_min.x, line_y),
-          ImVec2(cell_rect_max.x, line_y),
-          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
-          4.0f // Increased line thickness for better visibility
+          ImVec2(cell_rect_min.x, line_y), ImVec2(cell_rect_max.x, line_y),
+          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)),  // Green color for better visibility
+          4.0f  // Increased line thickness for better visibility
       );
 
       // Add a more distinctive triangle indicator to show insertion direction
       if (drop_above) {
         // Triangle pointing up for "insert above"
-        ImVec2 triangle_points[3] = {
-            ImVec2(cell_rect_max.x - 25, line_y + 8),
-            ImVec2(cell_rect_max.x - 15, line_y - 8),
-            ImVec2(cell_rect_max.x - 5, line_y + 8)
-        };
+        ImVec2 triangle_points[3] = {ImVec2(cell_rect_max.x - 25, line_y + 8),
+                                     ImVec2(cell_rect_max.x - 15, line_y - 8),
+                                     ImVec2(cell_rect_max.x - 5, line_y + 8)};
         draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
-                                    ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
+                                     ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
 
         // Add text indicator
         draw_list->AddText(ImVec2(cell_rect_min.x + 5, line_y - 12),
-                          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)),
-                          "INSERT ABOVE");
+                           ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), "INSERT ABOVE");
       } else {
         // Triangle pointing down for "insert below"
-        ImVec2 triangle_points[3] = {
-            ImVec2(cell_rect_max.x - 25, line_y - 8),
-            ImVec2(cell_rect_max.x - 15, line_y + 8),
-            ImVec2(cell_rect_max.x - 5, line_y - 8)
-        };
+        ImVec2 triangle_points[3] = {ImVec2(cell_rect_max.x - 25, line_y - 8),
+                                     ImVec2(cell_rect_max.x - 15, line_y + 8),
+                                     ImVec2(cell_rect_max.x - 5, line_y - 8)};
         draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
-                                    ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
+                                     ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
 
         // Add text indicator
         draw_list->AddText(ImVec2(cell_rect_min.x + 5, line_y + 2),
-                          ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)),
-                          "INSERT BELOW");
+                           ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), "INSERT BELOW");
       }
 
       ImGui::EndDragDropTarget();
@@ -1313,7 +1377,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       ImGui::BeginTooltip();
       ImGui::Text("Click to switch all panels to %s", entry.symbol.c_str());
       ImGui::Text("Exchange: %s", entry.exchange.c_str());
-      ImGui::Text("24h Open/High/Low: %.4f / %.4f / %.4f", entry.open_24h, entry.high_24h, entry.low_24h);
+      ImGui::Text("24h Open/High/Low: %.4f / %.4f / %.4f", entry.open_24h, entry.high_24h,
+                  entry.low_24h);
       ImGui::EndTooltip();
     }
     current_column++;
@@ -1359,20 +1424,24 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation with more pronounced flash
       if (price_change_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        flash_color.x = flash_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        flash_color.y = std::min(1.0f, flash_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        flash_color.x =
+            flash_color.x *
+            (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        flash_color.y =
+            std::min(1.0f, flash_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity);      // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        flash_color.x = std::min(1.0f, flash_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        flash_color.y = flash_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        flash_color.x =
+            std::min(1.0f, flash_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        flash_color.y = flash_color.y * (0.3f + 0.7f * flash_intensity);      // Green - reduced
+        flash_color.z = flash_color.z * (0.3f + 0.7f * flash_intensity);      // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.3f) { // Adjust flash timing for better visibility
+      if (progress > 0.3f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 4.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 4.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1381,22 +1450,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (price_change_pct >= 0.0) ?
-          ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f) :  // More green for positive
-          ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);   // More red for negative
+        ImVec4 highlight_color =
+            (price_change_pct >= 0.0) ? ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f)
+                                      :                     // More green for positive
+                ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.9f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.9f)));
       }
 
       ImGui::TextColored(flash_color, "%s", formatPrice(animated_price).c_str());
@@ -1433,44 +1500,51 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (entry.change_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        change_pct_color.x = change_pct_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        change_pct_color.y = std::min(1.0f, change_pct_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        change_pct_color.x =
+            change_pct_color.x *
+            (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        change_pct_color.y = std::min(
+            1.0f, change_pct_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        change_pct_color.z =
+            change_pct_color.z * (0.3f + 0.7f * flash_intensity);  // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        change_pct_color.x = std::min(1.0f, change_pct_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        change_pct_color.y = change_pct_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        change_pct_color.z = change_pct_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        change_pct_color.x =
+            std::min(1.0f, change_pct_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        change_pct_color.y =
+            change_pct_color.y * (0.3f + 0.7f * flash_intensity);  // Green - reduced
+        change_pct_color.z =
+            change_pct_color.z * (0.3f + 0.7f * flash_intensity);  // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        ImVec2 textSize = ImGui::CalcTextSize((std::string(entry.change_pct >= 0 ? "+" : "") + std::to_string(entry.change_pct) + "%").c_str());
+        ImVec2 textSize = ImGui::CalcTextSize(
+            (std::string(entry.change_pct >= 0 ? "+" : "") + std::to_string(entry.change_pct) + "%")
+                .c_str());
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (entry.change_pct >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (entry.change_pct >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                      :                     // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1502,44 +1576,51 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (entry.change_dollar >= 0.0) {
         // Positive change - enhance green component during animation
-        change_dollar_color.x = change_dollar_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        change_dollar_color.y = std::min(1.0f, change_dollar_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        change_dollar_color.x =
+            change_dollar_color.x *
+            (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        change_dollar_color.y = std::min(
+            1.0f, change_dollar_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        change_dollar_color.z =
+            change_dollar_color.z * (0.3f + 0.7f * flash_intensity);  // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        change_dollar_color.x = std::min(1.0f, change_dollar_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        change_dollar_color.y = change_dollar_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        change_dollar_color.z = change_dollar_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        change_dollar_color.x = std::min(
+            1.0f, change_dollar_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        change_dollar_color.y =
+            change_dollar_color.y * (0.3f + 0.7f * flash_intensity);  // Green - reduced
+        change_dollar_color.z =
+            change_dollar_color.z * (0.3f + 0.7f * flash_intensity);  // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        ImVec2 textSize = ImGui::CalcTextSize((std::string(entry.change_dollar >= 0 ? "+" : "") + std::to_string(entry.change_dollar)).c_str());
+        ImVec2 textSize = ImGui::CalcTextSize(
+            (std::string(entry.change_dollar >= 0 ? "+" : "") + std::to_string(entry.change_dollar))
+                .c_str());
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (entry.change_dollar >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (entry.change_dollar >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                         :                  // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1561,7 +1642,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     double volume_change_pct = 0.0;
     if (entry.previous_volume != 0.0) {
       double volume_change = entry.volume_24h - entry.previous_volume;
-      volume_change_pct = (entry.previous_volume != 0.0) ? ((volume_change / entry.previous_volume) * 100.0) : 0.0;
+      volume_change_pct =
+          (entry.previous_volume != 0.0) ? ((volume_change / entry.previous_volume) * 100.0) : 0.0;
     }
 
     ImVec4 volume_color = calculateChangeColor(volume_change_pct, false);
@@ -1577,20 +1659,24 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (volume_change_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        volume_color.x = volume_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        volume_color.y = std::min(1.0f, volume_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        volume_color.x =
+            volume_color.x *
+            (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        volume_color.y =
+            std::min(1.0f, volume_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity);     // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        volume_color.x = std::min(1.0f, volume_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        volume_color.y = volume_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        volume_color.x =
+            std::min(1.0f, volume_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        volume_color.y = volume_color.y * (0.3f + 0.7f * flash_intensity);     // Green - reduced
+        volume_color.z = volume_color.z * (0.3f + 0.7f * flash_intensity);     // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1599,22 +1685,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (volume_change_pct >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (volume_change_pct >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                       :                    // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1635,7 +1719,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   if (column_info_[6].visible) {
     ImGui::TableSetColumnIndex(current_column);
     // Apply color coding to High based on comparison with current price
-    double high_diff_pct = 0.0; // Initialize here to avoid scope issues
+    double high_diff_pct = 0.0;  // Initialize here to avoid scope issues
     if (entry.price != 0.0) {
       high_diff_pct = ((entry.high_24h - entry.price) / entry.price) * 100.0;
     }
@@ -1653,20 +1737,23 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (high_diff_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        high_color.x = high_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        high_color.y = std::min(1.0f, high_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        high_color.x = high_color.x *
+                       (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        high_color.y =
+            std::min(1.0f, high_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        high_color.x = std::min(1.0f, high_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        high_color.y = high_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        high_color.x =
+            std::min(1.0f, high_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        high_color.y = high_color.y * (0.3f + 0.7f * flash_intensity);       // Green - reduced
+        high_color.z = high_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1675,22 +1762,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (high_diff_pct >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (high_diff_pct >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                   :                        // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1709,7 +1794,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   if (column_info_[7].visible) {
     ImGui::TableSetColumnIndex(current_column);
     // Apply color coding to Low based on comparison with current price
-    double low_diff_pct = 0.0; // Initialize here to avoid scope issues
+    double low_diff_pct = 0.0;  // Initialize here to avoid scope issues
     if (entry.price != 0.0) {
       low_diff_pct = ((entry.low_24h - entry.price) / entry.price) * 100.0;
     }
@@ -1727,20 +1812,23 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (low_diff_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        low_color.x = low_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        low_color.y = std::min(1.0f, low_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        low_color.x = low_color.x *
+                      (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        low_color.y =
+            std::min(1.0f, low_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity);        // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        low_color.x = std::min(1.0f, low_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        low_color.y = low_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        low_color.x =
+            std::min(1.0f, low_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        low_color.y = low_color.y * (0.3f + 0.7f * flash_intensity);        // Green - reduced
+        low_color.z = low_color.z * (0.3f + 0.7f * flash_intensity);        // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1749,22 +1837,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (low_diff_pct >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (low_diff_pct >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                  :                         // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1783,7 +1869,7 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   if (column_info_[8].visible) {
     ImGui::TableSetColumnIndex(current_column);
     // Apply color coding to Open based on comparison with current price
-    double open_diff_pct = 0.0; // Initialize here to avoid scope issues
+    double open_diff_pct = 0.0;  // Initialize here to avoid scope issues
     if (entry.price != 0.0) {
       open_diff_pct = ((entry.open_24h - entry.price) / entry.price) * 100.0;
     }
@@ -1801,20 +1887,23 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (open_diff_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        open_color.x = open_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        open_color.y = std::min(1.0f, open_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        open_color.x = open_color.x *
+                       (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        open_color.y =
+            std::min(1.0f, open_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        open_color.x = std::min(1.0f, open_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        open_color.y = open_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        open_color.x =
+            std::min(1.0f, open_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        open_color.y = open_color.y * (0.3f + 0.7f * flash_intensity);       // Green - reduced
+        open_color.z = open_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.4f) { // Adjust flash timing for better visibility
+      if (progress > 0.4f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 3.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 3.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1823,22 +1912,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (open_diff_pct >= 0.0) ?
-          ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f) :  // More green for positive
-          ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);   // More red for negative
+        ImVec4 highlight_color =
+            (open_diff_pct >= 0.0) ? ImVec4(0.0f, 0.4f, 0.0f, bg_alpha * 0.7f)
+                                   :                        // More green for positive
+                ImVec4(0.4f, 0.0f, 0.0f, bg_alpha * 0.7f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.8f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.8f)));
       }
     }
 
@@ -1856,11 +1943,13 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
   // Column 9: VWAP
   if (column_info_[9].visible) {
     ImGui::TableSetColumnIndex(current_column);
-    // Apply color coding to VWAP based on change from previous value (green for increase, red for decrease)
+    // Apply color coding to VWAP based on change from previous value (green for increase, red for
+    // decrease)
     double vwap_change_pct = 0.0;
     if (entry.previous_vwap != 0.0) {
       double vwap_change = entry.vwap - entry.previous_vwap;
-      vwap_change_pct = (entry.previous_vwap != 0.0) ? ((vwap_change / entry.previous_vwap) * 100.0) : 0.0;
+      vwap_change_pct =
+          (entry.previous_vwap != 0.0) ? ((vwap_change / entry.previous_vwap) * 100.0) : 0.0;
     }
 
     ImVec4 vwap_color = calculateChangeColor(vwap_change_pct, true);
@@ -1879,20 +1968,23 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       // Enhance the color intensity during animation
       if (vwap_change_pct >= 0.0) {
         // Positive change - enhance green component during animation
-        vwap_color.x = vwap_color.x * (0.3f + 0.7f * flash_intensity); // Red - reduced to allow green to dominate
-        vwap_color.y = std::min(1.0f, vwap_color.y * (0.3f + 0.7f * flash_intensity)); // Green - enhanced
-        vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        vwap_color.x = vwap_color.x *
+                       (0.3f + 0.7f * flash_intensity);  // Red - reduced to allow green to dominate
+        vwap_color.y =
+            std::min(1.0f, vwap_color.y * (0.3f + 0.7f * flash_intensity));  // Green - enhanced
+        vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       } else {
         // Negative change - enhance red component during animation
-        vwap_color.x = std::min(1.0f, vwap_color.x * (0.3f + 0.7f * flash_intensity)); // Red - enhanced
-        vwap_color.y = vwap_color.y * (0.3f + 0.7f * flash_intensity); // Green - reduced
-        vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity); // Blue - reduced
+        vwap_color.x =
+            std::min(1.0f, vwap_color.x * (0.3f + 0.7f * flash_intensity));  // Red - enhanced
+        vwap_color.y = vwap_color.y * (0.3f + 0.7f * flash_intensity);       // Green - reduced
+        vwap_color.z = vwap_color.z * (0.3f + 0.7f * flash_intensity);       // Blue - reduced
       }
 
       // Add brief flash animation effect by temporarily highlighting the background
-      if (progress > 0.3f) { // Adjust flash timing for better visibility
+      if (progress > 0.3f) {  // Adjust flash timing for better visibility
         // Calculate alpha for background highlight based on animation progress
-        float bg_alpha = (1.0f - progress) * 4.0f; // Increase intensity
+        float bg_alpha = (1.0f - progress) * 4.0f;  // Increase intensity
         if (bg_alpha > 1.0f) bg_alpha = 1.0f;
 
         // Create a temporary background highlight for the cell
@@ -1901,22 +1993,20 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
         // Draw a more prominent background highlight
-        ImVec4 highlight_color = (vwap_change_pct >= 0.0) ?
-          ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f) :  // More green for positive
-          ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);   // More red for negative
+        ImVec4 highlight_color =
+            (vwap_change_pct >= 0.0) ? ImVec4(0.0f, 0.5f, 0.0f, bg_alpha * 0.8f)
+                                     :                      // More green for positive
+                ImVec4(0.5f, 0.0f, 0.0f, bg_alpha * 0.8f);  // More red for negative
 
-        draw_list->AddRectFilled(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(highlight_color)
-        );
+        draw_list->AddRectFilled(ImVec2(pos.x - 8, pos.y - 3),
+                                 ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+                                 ImGui::GetColorU32(highlight_color));
 
         // Add a subtle border to make the highlight more defined
         draw_list->AddRect(
-          ImVec2(pos.x - 8, pos.y - 3),
-          ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
-          ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f, highlight_color.z * 0.7f, bg_alpha * 0.9f))
-        );
+            ImVec2(pos.x - 8, pos.y - 3), ImVec2(pos.x + textSize.x + 8, pos.y + textSize.y + 3),
+            ImGui::GetColorU32(ImVec4(highlight_color.x * 0.7f, highlight_color.y * 0.7f,
+                                      highlight_color.z * 0.7f, bg_alpha * 0.9f)));
       }
 
       ImGui::TextColored(vwap_color, "%s", formatVWAP(animated_vwap).c_str());
@@ -1940,13 +2030,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
     ImGui::PushID(static_cast<int>(entry.symbol_id));  // Use symbol_id as unique identifier
 
     // Style the delete button to be more visually distinct
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));      // Red background
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.1f, 0.1f, 1.0f)); // Darker red when hovered
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));   // Even brighter when active
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));         // White text
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));  // Red background
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(0.95f, 0.1f, 0.1f, 1.0f));  // Darker red when hovered
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Even brighter when active
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
     // Make the delete button smaller and more compact
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f)); // Small padding but slightly larger for better click area
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_FramePadding,
+        ImVec2(8.0f, 4.0f));  // Small padding but slightly larger for better click area
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
 
     if (ImGui::Button("✕##DeleteBtn")) {  // Use ✕ symbol for better visual representation
@@ -1962,8 +2056,8 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
       ImGui::EndTooltip();
     }
 
-    ImGui::PopStyleVar(2); // Pop the style variables
-    ImGui::PopStyleColor(4); // Pop all 4 color styles
+    ImGui::PopStyleVar(2);    // Pop the style variables
+    ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
     // Add context menu for additional actions including alerts
     if (ImGui::BeginPopupContextItem("WatchlistItemContextMenu")) {
@@ -1971,19 +2065,19 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         // Store the symbol for which to add an alert
         // This would typically open a modal dialog to set the alert parameters
         // For now, we'll just add a simple alert above current price + 5%
-        double target_price = entry.price * 1.05; // 5% above current price
+        double target_price = entry.price * 1.05;  // 5% above current price
         if (alert_manager_) {
           alert_manager_->add_price_alert(entry.symbol_id, entry.symbol, target_price,
-                                         WatchlistPriceAlert::Direction::ABOVE);
+                                          WatchlistPriceAlert::Direction::ABOVE);
         }
       }
 
       if (ImGui::MenuItem("Add Below Alert")) {
         // Add an alert for when price goes below current price - 5%
-        double target_price = entry.price * 0.95; // 5% below current price
+        double target_price = entry.price * 0.95;  // 5% below current price
         if (alert_manager_) {
           alert_manager_->add_price_alert(entry.symbol_id, entry.symbol, target_price,
-                                         WatchlistPriceAlert::Direction::BELOW);
+                                          WatchlistPriceAlert::Direction::BELOW);
         }
       }
 
@@ -1994,12 +2088,17 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
           if (alerts.empty()) {
             std::cout << "[WatchlistPanel] No alerts for symbol: " << entry.symbol << std::endl;
           } else {
-            std::cout << "[WatchlistPanel] Found " << alerts.size() << " alerts for symbol: " << entry.symbol << std::endl;
+            std::cout << "[WatchlistPanel] Found " << alerts.size()
+                      << " alerts for symbol: " << entry.symbol << std::endl;
             for (const auto& alert : alerts) {
-              std::cout << "  Alert: " << (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "Above" : "Below")
-                        << " " << alert.target_price << " Status: " <<
-                           (alert.status == AlertStatus::ACTIVE ? "Active" :
-                            alert.status == AlertStatus::TRIGGERED ? "Triggered" : "Disabled") << std::endl;
+              std::cout << "  Alert: "
+                        << (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "Above"
+                                                                                     : "Below")
+                        << " " << alert.target_price << " Status: "
+                        << (alert.status == AlertStatus::ACTIVE      ? "Active"
+                            : alert.status == AlertStatus::TRIGGERED ? "Triggered"
+                                                                     : "Disabled")
+                        << std::endl;
             }
           }
         }
@@ -2078,107 +2177,111 @@ void WatchlistPanel::sort_watchlist() {
     return;
   }
 
-  std::sort(get_current_display_order().begin(), get_current_display_order().end(), [this](uint32_t a_id, uint32_t b_id) {
-    const auto& a_it = get_current_watchlist().find(a_id);
-    const auto& b_it = get_current_watchlist().find(b_id);
+  std::sort(get_current_display_order().begin(), get_current_display_order().end(),
+            [this](uint32_t a_id, uint32_t b_id) {
+              const auto& a_it = get_current_watchlist().find(a_id);
+              const auto& b_it = get_current_watchlist().find(b_id);
 
-    // If either symbol is not found, return false to maintain order
-    if (a_it == get_current_watchlist().end() || b_it == get_current_watchlist().end()) {
-        return a_id < b_id; // Maintain original order based on ID
-    }
+              // If either symbol is not found, return false to maintain order
+              if (a_it == get_current_watchlist().end() || b_it == get_current_watchlist().end()) {
+                return a_id < b_id;  // Maintain original order based on ID
+              }
 
-    const auto& a = a_it->second;
-    const auto& b = b_it->second;
+              const auto& a = a_it->second;
+              const auto& b = b_it->second;
 
-    bool result = false;
-    switch (sort_column_) {
-      case 0:  // Symbol
-        result = a.symbol < b.symbol;
-        break;
-      case 1:  // Exchange
-        result = a.exchange < b.exchange;
-        break;
-      case 2:  // Last Price
-        result = a.price < b.price;
-        break;
-      case 3:  // Change %
-        result = a.change_pct < b.change_pct;
-        break;
-      case 4:  // Change $
-        result = a.change_dollar < b.change_dollar;
-        break;
-      case 5:  // Volume
-        result = a.volume_24h < b.volume_24h;
-        break;
-      case 6:  // High
-        result = a.high_24h < b.high_24h;
-        break;
-      case 7:  // Low
-        result = a.low_24h < b.low_24h;
-        break;
-      case 8:  // Open
-        result = a.open_24h < b.open_24h;
-        break;
-      case 9:  // VWAP
-        result = a.vwap < b.vwap;
-        break;
-      default:
-        result = a.symbol < b.symbol;
-    }
+              bool result = false;
+              switch (sort_column_) {
+                case 0:  // Symbol
+                  result = a.symbol < b.symbol;
+                  break;
+                case 1:  // Exchange
+                  result = a.exchange < b.exchange;
+                  break;
+                case 2:  // Last Price
+                  result = a.price < b.price;
+                  break;
+                case 3:  // Change %
+                  result = a.change_pct < b.change_pct;
+                  break;
+                case 4:  // Change $
+                  result = a.change_dollar < b.change_dollar;
+                  break;
+                case 5:  // Volume
+                  result = a.volume_24h < b.volume_24h;
+                  break;
+                case 6:  // High
+                  result = a.high_24h < b.high_24h;
+                  break;
+                case 7:  // Low
+                  result = a.low_24h < b.low_24h;
+                  break;
+                case 8:  // Open
+                  result = a.open_24h < b.open_24h;
+                  break;
+                case 9:  // VWAP
+                  result = a.vwap < b.vwap;
+                  break;
+                default:
+                  result = a.symbol < b.symbol;
+              }
 
-    // Handle equal values to ensure consistent sorting
-    bool values_equal = false;
-    switch (sort_column_) {
-      case 0:  // Symbol
-        values_equal = (a.symbol == b.symbol);
-        break;
-      case 1:  // Exchange
-        values_equal = (a.exchange == b.exchange);
-        break;
-      case 2:  // Last Price
-        values_equal = (std::abs(a.price - b.price) < 1e-9); // Use epsilon for floating point comparison
-        break;
-      case 3:  // Change %
-        values_equal = (std::abs(a.change_pct - b.change_pct) < 1e-9);
-        break;
-      case 4:  // Change $
-        values_equal = (std::abs(a.change_dollar - b.change_dollar) < 1e-9);
-        break;
-      case 5:  // Volume
-        values_equal = (std::abs(a.volume_24h - b.volume_24h) < 1e-9);
-        break;
-      case 6:  // High
-        values_equal = (std::abs(a.high_24h - b.high_24h) < 1e-9);
-        break;
-      case 7:  // Low
-        values_equal = (std::abs(a.low_24h - b.low_24h) < 1e-9);
-        break;
-      case 8:  // Open
-        values_equal = (std::abs(a.open_24h - b.open_24h) < 1e-9);
-        break;
-      case 9:  // VWAP
-        values_equal = (std::abs(a.vwap - b.vwap) < 1e-9);
-        break;
-      default:
-        values_equal = (a.symbol == b.symbol);
-    }
+              // Handle equal values to ensure consistent sorting
+              bool values_equal = false;
+              switch (sort_column_) {
+                case 0:  // Symbol
+                  values_equal = (a.symbol == b.symbol);
+                  break;
+                case 1:  // Exchange
+                  values_equal = (a.exchange == b.exchange);
+                  break;
+                case 2:  // Last Price
+                  values_equal = (std::abs(a.price - b.price) <
+                                  1e-9);  // Use epsilon for floating point comparison
+                  break;
+                case 3:  // Change %
+                  values_equal = (std::abs(a.change_pct - b.change_pct) < 1e-9);
+                  break;
+                case 4:  // Change $
+                  values_equal = (std::abs(a.change_dollar - b.change_dollar) < 1e-9);
+                  break;
+                case 5:  // Volume
+                  values_equal = (std::abs(a.volume_24h - b.volume_24h) < 1e-9);
+                  break;
+                case 6:  // High
+                  values_equal = (std::abs(a.high_24h - b.high_24h) < 1e-9);
+                  break;
+                case 7:  // Low
+                  values_equal = (std::abs(a.low_24h - b.low_24h) < 1e-9);
+                  break;
+                case 8:  // Open
+                  values_equal = (std::abs(a.open_24h - b.open_24h) < 1e-9);
+                  break;
+                case 9:  // VWAP
+                  values_equal = (std::abs(a.vwap - b.vwap) < 1e-9);
+                  break;
+                default:
+                  values_equal = (a.symbol == b.symbol);
+              }
 
-    // If values are equal, sort by symbol as secondary criteria to ensure consistent ordering
-    if (values_equal) {
-      result = a.symbol < b.symbol;
-    }
+              // If values are equal, sort by symbol as secondary criteria to ensure consistent
+              // ordering
+              if (values_equal) {
+                result = a.symbol < b.symbol;
+              }
 
-    return sort_ascending_ ? result : !result;
-  });
+              return sort_ascending_ ? result : !result;
+            });
 
   // Save the updated order to config file after sorting
   save_watchlist_order_to_config(config_file_path_);
 }
 
 void WatchlistPanel::handle_drag_drop_reordering() {
-  // This method is now deprecated as drag and drop reordering is handled directly in render_table_row
-  // when drag and drop occurs. This ensures immediate visual feedback and proper state management.
-  // The drag-and-drop functionality is now fully implemented and working with config saving.
+  // This method is now deprecated as drag and drop reordering is handled directly in
+  // render_table_row when drag and drop occurs. This ensures immediate visual feedback and proper
+  // state management. The drag-and-drop functionality is now fully implemented and working with
+  // config saving.
 
   // NOTE: The actual drag-and-drop reordering happens in render_table_row() method
   // where each row acts as both a drag source and drop target.
@@ -2189,7 +2292,9 @@ void WatchlistPanel::handle_drag_drop_reordering() {
 void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_file) const {
   // Create directory if it doesn't exist
   std::filesystem::path config_path(config_file);
-  std::filesystem::create_directories(config_path.parent_path());
+  if (!config_path.parent_path().empty()) {
+    std::filesystem::create_directories(config_path.parent_path());
+  }
 
   // First, read the existing config file to preserve other sections
   std::vector<std::string> existing_lines;
@@ -2236,8 +2341,7 @@ void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_fi
         // Found next section, so we're out of the watchlist section
         in_watchlist_section = false;
         existing_lines.push_back(line);
-      }
-      else if (!in_watchlist_section) {
+      } else if (!in_watchlist_section) {
         existing_lines.push_back(line);
       }
       // If in watchlist section and not a new section header, skip the line
@@ -2248,7 +2352,7 @@ void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_fi
   // If the watchlist_order section wasn't found, add it at the end
   if (!replaced_section) {
     if (!existing_lines.empty() && !existing_lines.back().empty()) {
-      existing_lines.push_back(""); // Add blank line before new section
+      existing_lines.push_back("");  // Add blank line before new section
     }
     existing_lines.push_back("# Watchlist order configuration");
     existing_lines.push_back("[watchlist_order]");
@@ -2279,7 +2383,8 @@ void WatchlistPanel::save_watchlist_order_to_config(const std::string& config_fi
   // Write the updated content back to the file
   std::ofstream write_file(config_file);
   if (!write_file.is_open()) {
-    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file << std::endl;
+    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file
+              << std::endl;
     return;
   }
 
@@ -2305,7 +2410,8 @@ void WatchlistPanel::cleanup_drag_resources() {
 void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_file) {
   std::ifstream file(config_file);
   if (!file.is_open()) {
-    std::cout << "[WatchlistPanel] Config file not found, using current order: " << config_file << std::endl;
+    std::cout << "[WatchlistPanel] Config file not found, using current order: " << config_file
+              << std::endl;
     return;
   }
 
@@ -2323,7 +2429,7 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
 
       // Trim whitespace
       size_t start = line.find_first_not_of(" \t\r\n");
-      if (start == std::string::npos) continue; // Skip empty lines
+      if (start == std::string::npos) continue;  // Skip empty lines
       size_t end = line.find_last_not_of(" \t\r\n");
       line = line.substr(start, end - start + 1);
 
@@ -2362,10 +2468,13 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
                   if (get_current_watchlist().find(symbol_id) != get_current_watchlist().end()) {
                     new_display_order.push_back(symbol_id);
                   } else {
-                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id << " from config not found in current watchlist, skipping." << std::endl;
+                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id
+                              << " from config not found in current watchlist, skipping."
+                              << std::endl;
                   }
                 } catch (const std::invalid_argument&) {
-                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config: " << item << std::endl;
+                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config: " << item
+                            << std::endl;
                 }
               }
             }
@@ -2373,17 +2482,19 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
             // Add any remaining symbols that weren't in the config to the end
             for (const auto& pair : get_current_watchlist()) {
               uint32_t symbol_id = pair.first;
-              if (std::find(new_display_order.begin(), new_display_order.end(), symbol_id) == new_display_order.end()) {
+              if (std::find(new_display_order.begin(), new_display_order.end(), symbol_id) ==
+                  new_display_order.end()) {
                 new_display_order.push_back(symbol_id);
               }
             }
 
             get_current_display_order() = new_display_order;
             std::cout << "[WatchlistPanel] Loaded watchlist order from config for group '"
-                      << current_group_name_ << "', entries: " << new_display_order.size() << std::endl;
+                      << current_group_name_ << "', entries: " << new_display_order.size()
+                      << std::endl;
           } else if (key.substr(0, 6) == "order_") {
             // This is a group-specific order
-            std::string group_name = key.substr(6); // Remove "order_" prefix
+            std::string group_name = key.substr(6);  // Remove "order_" prefix
             std::vector<uint32_t> new_group_order;
             std::stringstream ss(value);
             std::string item;
@@ -2398,14 +2509,17 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
                 try {
                   uint32_t symbol_id = std::stoi(item);
                   // Only add to new order if the symbol exists in the group
-                  if (watchlist_groups_[group_name].find(symbol_id) != watchlist_groups_[group_name].end()) {
+                  if (watchlist_groups_[group_name].find(symbol_id) !=
+                      watchlist_groups_[group_name].end()) {
                     new_group_order.push_back(symbol_id);
                   } else {
-                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id << " from config not found in group '"
-                              << group_name << "', skipping." << std::endl;
+                    std::cout << "[WatchlistPanel] Symbol ID " << symbol_id
+                              << " from config not found in group '" << group_name << "', skipping."
+                              << std::endl;
                   }
                 } catch (const std::invalid_argument&) {
-                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config for group '" << group_name << "': " << item << std::endl;
+                  std::cerr << "[WatchlistPanel] Invalid symbol ID in config for group '"
+                            << group_name << "': " << item << std::endl;
                 }
               }
             }
@@ -2413,16 +2527,19 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
             // Add any remaining symbols that weren't in the config to the end
             for (const auto& pair : watchlist_groups_[group_name]) {
               uint32_t symbol_id = pair.first;
-              if (std::find(new_group_order.begin(), new_group_order.end(), symbol_id) == new_group_order.end()) {
+              if (std::find(new_group_order.begin(), new_group_order.end(), symbol_id) ==
+                  new_group_order.end()) {
                 new_group_order.push_back(symbol_id);
               }
             }
 
             group_display_orders_[group_name] = new_group_order;
-            std::cout << "[WatchlistPanel] Loaded order for group '" << group_name << "', entries: " << new_group_order.size() << std::endl;
+            std::cout << "[WatchlistPanel] Loaded order for group '" << group_name
+                      << "', entries: " << new_group_order.size() << std::endl;
 
             // Add to group names if not already present
-            if (std::find(group_names_.begin(), group_names_.end(), group_name) == group_names_.end()) {
+            if (std::find(group_names_.begin(), group_names_.end(), group_name) ==
+                group_names_.end()) {
               group_names_.push_back(group_name);
             }
           }
@@ -2433,9 +2550,11 @@ void WatchlistPanel::load_watchlist_order_from_config(const std::string& config_
     file.close();
 
     if (found_watchlist_order) {
-      std::cout << "[WatchlistPanel] Successfully loaded watchlist order from: " << config_file << std::endl;
+      std::cout << "[WatchlistPanel] Successfully loaded watchlist order from: " << config_file
+                << std::endl;
     } else {
-      std::cout << "[WatchlistPanel] No watchlist order found in config, keeping current order: " << config_file << std::endl;
+      std::cout << "[WatchlistPanel] No watchlist order found in config, keeping current order: "
+                << config_file << std::endl;
     }
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error loading watchlist order: " << e.what() << std::endl;
@@ -2451,10 +2570,11 @@ void WatchlistPanel::subscribe_to_symbol(uint32_t symbol_id) {
     }
 
     // Create a subscription for this specific symbol to receive real-time price updates
-    uint64_t sub_id = processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
-                                          [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
-                                            this->on_market_data_update(symbol_id, type);
-                                          });
+    uint64_t sub_id =
+        processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
+                              [this](uint32_t symbol_id, RenderEngine::NotificationType type) {
+                                this->on_market_data_update(symbol_id, type);
+                              });
 
     // Store the subscription ID for this symbol
     symbol_subscriptions_[symbol_id] = sub_id;
@@ -2473,7 +2593,8 @@ void WatchlistPanel::unsubscribe_from_symbol(uint32_t symbol_id) {
                 << " with subscription ID: " << it->second << std::endl;
       symbol_subscriptions_.erase(it);
     } else {
-      std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id << std::endl;
+      std::cout << "[WatchlistPanel] No active subscription found for symbol ID: " << symbol_id
+                << std::endl;
     }
   }
 }
@@ -2539,14 +2660,15 @@ void WatchlistPanel::subscribe_to_all_watchlist_symbols() {
 
   if (!symbols_to_subscribe.empty()) {
     std::cout << "[WatchlistPanel] Subscribing to " << symbols_to_subscribe.size()
-              << " symbols in group '" << current_group_name_ << "' for real-time updates..." << std::endl;
+              << " symbols in group '" << current_group_name_ << "' for real-time updates..."
+              << std::endl;
 
     for (uint32_t symbol_id : symbols_to_subscribe) {
       subscribe_to_symbol(symbol_id);
     }
 
-    std::cout << "[WatchlistPanel] Successfully subscribed to all "
-              << symbols_to_subscribe.size() << " symbols in group '" << current_group_name_ << "'" << std::endl;
+    std::cout << "[WatchlistPanel] Successfully subscribed to all " << symbols_to_subscribe.size()
+              << " symbols in group '" << current_group_name_ << "'" << std::endl;
   }
 }
 
@@ -2609,18 +2731,18 @@ void WatchlistPanel::render_column_context_menu() {
     }
 
     if (any_changes) {
-        // Save the updated settings to config
-        save_column_settings_to_config(config_file_path_);
+      // Save the updated settings to config
+      save_column_settings_to_config(config_file_path_);
 
-        // Validate column settings after changes
-        validate_column_settings();
+      // Validate column settings after changes
+      validate_column_settings();
     }
 
     ImGui::Separator();
 
     // Option to reset to default column layout
     if (ImGui::MenuItem("Reset to Default Layout")) {
-      initialize_column_settings(); // Reset to default settings
+      initialize_column_settings();  // Reset to default settings
 
       // Save the updated settings to config
       save_column_settings_to_config(config_file_path_);
@@ -2675,7 +2797,8 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
           std::string width_key = "col_" + std::to_string(i) + "_width";
           std::string order_key = "col_" + std::to_string(i) + "_order";
 
-          existing_lines.push_back(visible_key + "=" + std::to_string(column_info_[i].visible ? 1 : 0));
+          existing_lines.push_back(visible_key + "=" +
+                                   std::to_string(column_info_[i].visible ? 1 : 0));
           existing_lines.push_back(width_key + "=" + std::to_string(column_info_[i].width));
           existing_lines.push_back(order_key + "=" + std::to_string(column_info_[i].order));
         }
@@ -2683,12 +2806,12 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
         replaced_section = true;
       }
       // Skip lines inside the column_settings section (we'll replace them)
-      else if (in_column_settings_section && line.find('[') == 0 && line.find(']') != std::string::npos) {
+      else if (in_column_settings_section && line.find('[') == 0 &&
+               line.find(']') != std::string::npos) {
         // Found next section, so we're out of the column_settings section
         in_column_settings_section = false;
         existing_lines.push_back(line);
-      }
-      else if (!in_column_settings_section) {
+      } else if (!in_column_settings_section) {
         existing_lines.push_back(line);
       }
       // If in column_settings section and not a new section header, skip the line
@@ -2699,7 +2822,7 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
   // If the column_settings section wasn't found, add it at the end
   if (!replaced_section) {
     if (!existing_lines.empty() && !existing_lines.back().empty()) {
-      existing_lines.push_back(""); // Add blank line before new section
+      existing_lines.push_back("");  // Add blank line before new section
     }
     existing_lines.push_back("# Column settings configuration");
     existing_lines.push_back("[column_settings]");
@@ -2718,7 +2841,8 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
   // Write the updated content back to the file
   std::ofstream write_file(config_file);
   if (!write_file.is_open()) {
-    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file << std::endl;
+    std::cerr << "[WatchlistPanel] Failed to open config file for writing: " << config_file
+              << std::endl;
     return;
   }
 
@@ -2728,7 +2852,8 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
     }
 
     write_file.close();
-    std::cout << "[WatchlistPanel] Saved column settings to: " << config_file << ", columns: " << column_info_.size() << std::endl;
+    std::cout << "[WatchlistPanel] Saved column settings to: " << config_file
+              << ", columns: " << column_info_.size() << std::endl;
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error saving column settings: " << e.what() << std::endl;
   }
@@ -2737,7 +2862,8 @@ void WatchlistPanel::save_column_settings_to_config(const std::string& config_fi
 void WatchlistPanel::load_column_settings_from_config(const std::string& config_file) {
   std::ifstream file(config_file);
   if (!file.is_open()) {
-    std::cout << "[WatchlistPanel] Config file not found, using default column settings: " << config_file << std::endl;
+    std::cout << "[WatchlistPanel] Config file not found, using default column settings: "
+              << config_file << std::endl;
     return;
   }
 
@@ -2755,7 +2881,7 @@ void WatchlistPanel::load_column_settings_from_config(const std::string& config_
 
       // Trim whitespace
       size_t start = line.find_first_not_of(" \t\r\n");
-      if (start == std::string::npos) continue; // Skip empty lines
+      if (start == std::string::npos) continue;  // Skip empty lines
       size_t end = line.find_last_not_of(" \t\r\n");
       line = line.substr(start, end - start + 1);
 
@@ -2781,7 +2907,8 @@ void WatchlistPanel::load_column_settings_from_config(const std::string& config_
             size_t underscore2 = key.find('_', underscore1 + 1);
 
             if (underscore1 != std::string::npos && underscore2 != std::string::npos) {
-              std::string col_index_str = key.substr(underscore1 + 1, underscore2 - underscore1 - 1);
+              std::string col_index_str =
+                  key.substr(underscore1 + 1, underscore2 - underscore1 - 1);
               std::string property = key.substr(underscore2 + 1);
 
               try {
@@ -2797,7 +2924,8 @@ void WatchlistPanel::load_column_settings_from_config(const std::string& config_
                   }
                 }
               } catch (const std::exception& e) {
-                std::cerr << "[WatchlistPanel] Error parsing column setting: " << key << "=" << value << std::endl;
+                std::cerr << "[WatchlistPanel] Error parsing column setting: " << key << "="
+                          << value << std::endl;
               }
             }
           }
@@ -2808,9 +2936,11 @@ void WatchlistPanel::load_column_settings_from_config(const std::string& config_
     file.close();
 
     if (found_column_settings) {
-      std::cout << "[WatchlistPanel] Successfully loaded column settings from: " << config_file << std::endl;
+      std::cout << "[WatchlistPanel] Successfully loaded column settings from: " << config_file
+                << std::endl;
     } else {
-      std::cout << "[WatchlistPanel] No column settings found in config, keeping defaults: " << config_file << std::endl;
+      std::cout << "[WatchlistPanel] No column settings found in config, keeping defaults: "
+                << config_file << std::endl;
     }
   } catch (const std::exception& e) {
     std::cerr << "[WatchlistPanel] Error loading column settings: " << e.what() << std::endl;
@@ -2825,10 +2955,8 @@ const char* WatchlistPanel::get_column_name_by_index(int column_index) {
 }
 
 void WatchlistPanel::swap_column_positions(int index1, int index2) {
-  if (index1 >= 0 && index1 < static_cast<int>(column_info_.size()) &&
-      index2 >= 0 && index2 < static_cast<int>(column_info_.size()) &&
-      index1 != index2) {
-
+  if (index1 >= 0 && index1 < static_cast<int>(column_info_.size()) && index2 >= 0 &&
+      index2 < static_cast<int>(column_info_.size()) && index1 != index2) {
     // Get the current order values
     int order1 = column_info_[index1].order;
     int order2 = column_info_[index2].order;
@@ -2909,14 +3037,17 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
   std::string header_text = std::string(label);
   if (is_sorted) {
     // Add sort direction indicator
-    header_text += is_ascending ? " \u2191" : " \u2193"; // Up arrow for ascending, Down arrow for descending
+    header_text +=
+        is_ascending ? " \u2191" : " \u2193";  // Up arrow for ascending, Down arrow for descending
   }
 
   // Render the header text with sort indicator
   // Highlight the header if it's the current sort column
   if (is_sorted) {
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.3f, 0.5f, 1.0f)); // Purple highlight for sorted column
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 1.0f, 1.0f)); // Lighter text for sorted column
+    ImGui::PushStyleColor(ImGuiCol_Header,
+                          ImVec4(0.3f, 0.3f, 0.5f, 1.0f));  // Purple highlight for sorted column
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImVec4(0.9f, 0.9f, 1.0f, 1.0f));  // Lighter text for sorted column
   }
 
   // Render the header with TableHeader to enable ImGui's built-in sorting
@@ -2952,13 +3083,13 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
   }
 
   // Check if the current column header is being clicked for sorting (left click)
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && column_index != 10) { // Exclude Action column
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && column_index != 10) {  // Exclude Action column
     // Toggle sort direction if clicking the same column, otherwise sort by new column
     if (column_index == sort_column_) {
       sort_ascending_ = !sort_ascending_;
     } else {
       sort_column_ = column_index;
-      sort_ascending_ = true; // Default to ascending when switching columns
+      sort_ascending_ = true;  // Default to ascending when switching columns
     }
 
     // Perform the actual sorting
@@ -2981,14 +3112,17 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
     ImGui::SetDragDropPayload("COLUMN_REORDER", &column_index, sizeof(int));
 
     // Enhanced visual preview of what is being dragged
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moving: %s", column_info_[column_index].name.c_str());
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Moving: %s",
+                       column_info_[column_index].name.c_str());
 
     // Add a visual border around the preview
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 size = ImVec2(200, ImGui::GetTextLineHeightWithSpacing() * 2); // Fixed size for cleaner preview
+    ImVec2 size =
+        ImVec2(200, ImGui::GetTextLineHeightWithSpacing() * 2);  // Fixed size for cleaner preview
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     draw_list->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
-                      ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0, 2.0f); // Rounded corners
+                       ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.8f)), 4.0f, 0,
+                       2.0f);  // Rounded corners
 
     ImGui::EndDragDropSource();
   }
@@ -3013,20 +3147,17 @@ void WatchlistPanel::render_draggable_header(int column_index, const char* label
 
     // Draw a more prominent visual indicator for the drop target
     draw_list->AddLine(
-        ImVec2(cell_rect_min.x, cell_rect_max.y - 1),
-        ImVec2(cell_rect_max.x, cell_rect_max.y - 1),
-        ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)), // Green color for better visibility
-        4.0f // Increased line thickness for better visibility
+        ImVec2(cell_rect_min.x, cell_rect_max.y - 1), ImVec2(cell_rect_max.x, cell_rect_max.y - 1),
+        ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)),  // Green color for better visibility
+        4.0f  // Increased line thickness for better visibility
     );
 
     // Add a more distinctive triangle indicator to show insertion direction
-    ImVec2 triangle_points[3] = {
-        ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 12),
-        ImVec2(cell_rect_max.x - 10, cell_rect_max.y - 2),
-        ImVec2(cell_rect_max.x, cell_rect_max.y - 12)
-    };
+    ImVec2 triangle_points[3] = {ImVec2(cell_rect_max.x - 20, cell_rect_max.y - 12),
+                                 ImVec2(cell_rect_max.x - 10, cell_rect_max.y - 2),
+                                 ImVec2(cell_rect_max.x, cell_rect_max.y - 12)};
     draw_list->AddTriangleFilled(triangle_points[0], triangle_points[1], triangle_points[2],
-                                ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
+                                 ImGui::GetColorU32(ImVec4(0.2f, 0.8f, 0.2f, 1.0f)));
 
     ImGui::EndDragDropTarget();
   }
@@ -3042,7 +3173,7 @@ void WatchlistPanel::process_pending_updates() {
 void WatchlistPanel::create_group(const std::string& group_name) {
   // Check if group already exists
   if (watchlist_groups_.find(group_name) != watchlist_groups_.end()) {
-    return; // Group already exists
+    return;  // Group already exists
   }
 
   // Create new empty watchlist for this group
@@ -3099,7 +3230,8 @@ void WatchlistPanel::rename_group(const std::string& old_name, const std::string
     current_group_name_ = new_name;
   }
 
-  std::cout << "[WatchlistPanel] Renamed watchlist group: " << old_name << " -> " << new_name << std::endl;
+  std::cout << "[WatchlistPanel] Renamed watchlist group: " << old_name << " -> " << new_name
+            << std::endl;
 }
 
 void WatchlistPanel::delete_group(const std::string& group_name) {
@@ -3116,7 +3248,8 @@ void WatchlistPanel::delete_group(const std::string& group_name) {
   group_display_orders_.erase(group_name);
 
   // Remove from group names
-  group_names_.erase(std::remove(group_names_.begin(), group_names_.end(), group_name), group_names_.end());
+  group_names_.erase(std::remove(group_names_.begin(), group_names_.end(), group_name),
+                     group_names_.end());
 
   // If we're deleting the current group, switch to the first available group
   if (current_group_name_ == group_name) {
@@ -3140,11 +3273,13 @@ void WatchlistPanel::switch_to_group(const std::string& group_name) {
 
     std::cout << "[WatchlistPanel] Switched to watchlist group: " << group_name << std::endl;
   } else {
-    std::cout << "[WatchlistPanel] Attempted to switch to non-existent group: " << group_name << std::endl;
+    std::cout << "[WatchlistPanel] Attempted to switch to non-existent group: " << group_name
+              << std::endl;
   }
 }
 
-void WatchlistPanel::add_symbol_to_group(const std::string& group_name, uint32_t symbol_id, const std::string& symbol, const std::string& exchange) {
+void WatchlistPanel::add_symbol_to_group(const std::string& group_name, uint32_t symbol_id,
+                                         const std::string& symbol, const std::string& exchange) {
   auto& group = watchlist_groups_[group_name];
   if (group.find(symbol_id) != group.end()) {
     return;  // Already exists in this group
@@ -3167,14 +3302,14 @@ void WatchlistPanel::add_symbol_to_group(const std::string& group_name, uint32_t
     subscribe_to_symbol(symbol_id);
   }
 
-  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id
-            << ") to group " << group_name << " and subscribed to real-time updates" << std::endl;
+  std::cout << "[WatchlistPanel] Added symbol " << symbol << " (ID: " << symbol_id << ") to group "
+            << group_name << " and subscribed to real-time updates" << std::endl;
 }
 
 void WatchlistPanel::remove_symbol_from_group(const std::string& group_name, uint32_t symbol_id) {
   auto group_it = watchlist_groups_.find(group_name);
   if (group_it == watchlist_groups_.end()) {
-    return; // Group doesn't exist
+    return;  // Group doesn't exist
   }
 
   auto& group = group_it->second;
@@ -3182,7 +3317,8 @@ void WatchlistPanel::remove_symbol_from_group(const std::string& group_name, uin
 
   // Remove from display order for this group
   auto& display_order = group_display_orders_[group_name];
-  display_order.erase(std::remove(display_order.begin(), display_order.end(), symbol_id), display_order.end());
+  display_order.erase(std::remove(display_order.begin(), display_order.end(), symbol_id),
+                      display_order.end());
 
   // Unsubscribe from real-time updates for this symbol if this is the current group
   if (group_name == current_group_name_) {
@@ -3193,7 +3329,7 @@ void WatchlistPanel::remove_symbol_from_group(const std::string& group_name, uin
 void WatchlistPanel::clear_group(const std::string& group_name) {
   auto group_it = watchlist_groups_.find(group_name);
   if (group_it == watchlist_groups_.end()) {
-    return; // Group doesn't exist
+    return;  // Group doesn't exist
   }
 
   auto& group = group_it->second;
@@ -3222,28 +3358,30 @@ void WatchlistPanel::set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel)
     alert_manager_->set_alerts_panel(alerts_panel);
 
     // Also set up the callback for additional processing if needed
-    alert_manager_->set_alert_triggered_callback([alerts_panel](const WatchlistPriceAlert& alert, double current_price) {
-      if (alerts_panel) {
-        auto now = std::chrono::system_clock::now();
-        std::string message = std::string("Price ") +
-                             (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
-                             std::string(" target: ") + std::to_string(alert.target_price);
+    alert_manager_->set_alert_triggered_callback(
+        [alerts_panel](const WatchlistPriceAlert& alert, double current_price) {
+          if (alerts_panel) {
+            auto now = std::chrono::system_clock::now();
+            std::string message =
+                std::string("Price ") +
+                (alert.direction == WatchlistPriceAlert::Direction::ABOVE ? "above" : "below") +
+                std::string(" target: ") + std::to_string(alert.target_price);
 
-        // Create a new alert log entry
-        AlertLog log_entry;
-        log_entry.time = now;
-        log_entry.rule_name = alert.symbol_name + " Price Alert";
-        log_entry.symbol = alert.symbol_name;
-        log_entry.price = current_price;
-        log_entry.message = message;
+            // Create a new alert log entry
+            AlertLog log_entry;
+            log_entry.time = now;
+            log_entry.rule_name = alert.symbol_name + " Price Alert";
+            log_entry.symbol = alert.symbol_name;
+            log_entry.price = current_price;
+            log_entry.message = message;
 
-        // Add the log entry to the alerts panel
-        alerts_panel->add_alert_log(log_entry);
+            // Add the log entry to the alerts panel
+            alerts_panel->add_alert_log(log_entry);
 
-        std::cout << "[WatchlistAlert] Triggered: " << alert.symbol_name
-                  << " price alert at " << current_price << " (target: " << alert.target_price << ")" << std::endl;
-      }
-    });
+            std::cout << "[WatchlistAlert] Triggered: " << alert.symbol_name << " price alert at "
+                      << current_price << " (target: " << alert.target_price << ")" << std::endl;
+          }
+        });
   }
 }
 
@@ -3257,7 +3395,8 @@ void WatchlistPanel::set_alerts_panel_raw(AlertsPanel* alerts_panel) {
 }
 
 void WatchlistPanel::add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
-                                    double target_price, WatchlistPriceAlert::Direction direction) {
+                                     double target_price,
+                                     WatchlistPriceAlert::Direction direction) {
   if (alert_manager_) {
     alert_manager_->add_price_alert(symbol_id, symbol_name, target_price, direction);
   }
@@ -3284,7 +3423,8 @@ void WatchlistPanel::ensure_default_groups_order() {
 
   // Add any other groups after the default ones
   for (const auto& group_name : group_names_) {
-    if (std::find(default_groups.begin(), default_groups.end(), group_name) == default_groups.end()) {
+    if (std::find(default_groups.begin(), default_groups.end(), group_name) ==
+        default_groups.end()) {
       reordered_groups.push_back(group_name);
     }
   }
@@ -3312,7 +3452,7 @@ void WatchlistPanel::validate_column_settings() {
         for (size_t k = 0; k < column_info_.size(); ++k) {
           column_info_[k].order = static_cast<int>(k);
         }
-        return; // Exit after fixing duplicates
+        return;  // Exit after fixing duplicates
       }
     }
   }
@@ -3325,7 +3465,7 @@ void WatchlistPanel::validate_column_settings() {
       for (size_t j = 0; j < column_info_.size(); ++j) {
         column_info_[j].order = static_cast<int>(j);
       }
-      return; // Exit after reassignment
+      return;  // Exit after reassignment
     }
   }
 
@@ -3337,10 +3477,11 @@ void WatchlistPanel::validate_column_settings() {
     }
   }
 
-  // If we have visible columns but the highest order value is greater than the number of visible columns - 1,
-  // we might have gaps in the ordering. Let's reassign to ensure continuity for visible columns.
+  // If we have visible columns but the highest order value is greater than the number of visible
+  // columns - 1, we might have gaps in the ordering. Let's reassign to ensure continuity for
+  // visible columns.
   if (visible_count > 0) {
-    std::vector<std::pair<int, int>> visible_orders; // (original_index, order)
+    std::vector<std::pair<int, int>> visible_orders;  // (original_index, order)
     for (size_t i = 0; i < column_info_.size(); ++i) {
       if (column_info_[i].visible) {
         visible_orders.emplace_back(i, column_info_[i].order);
@@ -3375,18 +3516,20 @@ void WatchlistPanel::render_alerts_management() {
 
   // Symbol input
   ImGui::SetNextItemWidth(120);
-  ImGui::InputTextWithHint("##AlertSymbol", "Symbol", new_alert_symbol_buffer_, sizeof(new_alert_symbol_buffer_));
+  ImGui::InputTextWithHint("##AlertSymbol", "Symbol", new_alert_symbol_buffer_,
+                           sizeof(new_alert_symbol_buffer_));
 
   ImGui::SameLine();
 
   // Target price input
   ImGui::SetNextItemWidth(100);
-  ImGui::InputTextWithHint("##AlertPrice", "Target Price", new_alert_price_buffer_, sizeof(new_alert_price_buffer_));
+  ImGui::InputTextWithHint("##AlertPrice", "Target Price", new_alert_price_buffer_,
+                           sizeof(new_alert_price_buffer_));
 
   ImGui::SameLine();
 
   // Direction selection
-  const char* directions[] = { "Above", "Below" };
+  const char* directions[] = {"Above", "Below"};
   ImGui::SetNextItemWidth(80);
   ImGui::Combo("##AlertDirection", &new_alert_direction_, directions, 2);
 
@@ -3416,10 +3559,9 @@ void WatchlistPanel::render_alerts_management() {
 
         if (symbol_id != 0) {
           // Add the alert
-          WatchlistPriceAlert::Direction direction =
-            (new_alert_direction_ == 0) ?
-            WatchlistPriceAlert::Direction::ABOVE :
-            WatchlistPriceAlert::Direction::BELOW;
+          WatchlistPriceAlert::Direction direction = (new_alert_direction_ == 0)
+                                                         ? WatchlistPriceAlert::Direction::ABOVE
+                                                         : WatchlistPriceAlert::Direction::BELOW;
 
           alert_manager_->add_price_alert(symbol_id, found_symbol_name, target_price, direction);
 
@@ -3427,10 +3569,11 @@ void WatchlistPanel::render_alerts_management() {
           memset(new_alert_symbol_buffer_, 0, sizeof(new_alert_symbol_buffer_));
           memset(new_alert_price_buffer_, 0, sizeof(new_alert_price_buffer_));
 
-          std::cout << "[WatchlistPanel] Added alert for " << found_symbol_name
-                    << " " << directions[new_alert_direction_] << " " << target_price << std::endl;
+          std::cout << "[WatchlistPanel] Added alert for " << found_symbol_name << " "
+                    << directions[new_alert_direction_] << " " << target_price << std::endl;
         } else {
-          std::cout << "[WatchlistPanel] Symbol '" << symbol << "' not found in current watchlist" << std::endl;
+          std::cout << "[WatchlistPanel] Symbol '" << symbol << "' not found in current watchlist"
+                    << std::endl;
         }
       } catch (const std::exception& e) {
         std::cout << "[WatchlistPanel] Invalid price format: " << price_str << std::endl;
@@ -3446,8 +3589,9 @@ void WatchlistPanel::render_alerts_management() {
     ImGui::Text("Active Alerts (%zu):", all_alerts.size());
     ImGui::BeginChild("AlertsList", ImVec2(0, 150), true);
 
-    if (ImGui::BeginTable("AlertsTable", 5,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
+    if (ImGui::BeginTable(
+            "AlertsTable", 5,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
       ImGui::TableSetupColumn("Symbol");
       ImGui::TableSetupColumn("Direction");
       ImGui::TableSetupColumn("Target Price");
@@ -3464,8 +3608,8 @@ void WatchlistPanel::render_alerts_management() {
           ImGui::Text("%s", alert.symbol_name.c_str());
 
           ImGui::TableSetColumnIndex(1);
-          ImGui::Text("%s",
-                     (alert.direction == WatchlistPriceAlert::Direction::ABOVE) ? "Above" : "Below");
+          ImGui::Text(
+              "%s", (alert.direction == WatchlistPriceAlert::Direction::ABOVE) ? "Above" : "Below");
 
           ImGui::TableSetColumnIndex(2);
           ImGui::Text("%.5f", alert.target_price);
@@ -3512,6 +3656,27 @@ void WatchlistPanel::render_alerts_management() {
       ImGui::EndTable();
     }
     ImGui::EndChild();
+  }
+}
+
+// Public API method implementations
+void WatchlistPanel::focus_add_symbol_input() {
+  // Set a flag that will be checked during the next render cycle to focus the input field
+  should_focus_symbol_input_ = true;
+}
+
+void WatchlistPanel::clear_all_symbols() {
+  // Clear the current watchlist
+  get_current_watchlist().clear();
+  get_current_display_order().clear();
+}
+
+void WatchlistPanel::set_sorting(int column_id, bool ascending) {
+  // Validate column_id is within bounds
+  if (column_id >= 0 && column_id < static_cast<int>(column_info_.size())) {
+    sort_column_ = column_id;
+    sort_ascending_ = ascending;
+    sort_watchlist(); // Trigger sorting with the new parameters
   }
 }
 

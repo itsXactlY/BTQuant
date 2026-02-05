@@ -8,6 +8,7 @@
 #include "components/panel_manager.hpp"
 #include "components/watchlist_panel.hpp"
 #include "components/orderbook_panel.hpp"
+#include "components/chart_panel.hpp"
 
 namespace BTQuant {
 
@@ -143,11 +144,61 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                         // For now, we'll just log that the action was triggered
                     }
                 }
-                if (ImGui::MenuItem("Set Timeframe")) {
-                    // Open timeframe selection dialog
-                    if (panel_manager_) {
-                        // This would typically send an event to change the chart's timeframe
+                if (ImGui::BeginMenu("Set Timeframe")) {
+                    // Show available timeframes as submenu items
+                    if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel)) {
+                        // Find the panel ID by comparing with all panels in the manager
+                        uint32_t panel_id = 0;
+                        if (panel_manager_) {
+                            auto all_panel_ids = panel_manager_->get_all_panel_ids();
+                            for (uint32_t id : all_panel_ids) {
+                                PanelBase* manager_panel = panel_manager_->get_panel_by_id(id);
+                                if (manager_panel == panel) {
+                                    panel_id = id;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Define timeframe options with their display names
+                        const char* timeframe_names[] = {
+                            "1ms", "10ms", "100ms", "500ms",
+                            "1s", "3s", "5s", "15s", "30s",
+                            "1m", "2m", "5m", "15m", "30m",
+                            "1h", "2h", "4h", "6h", "12h", "1d", "1w"
+                        };
+
+                        RenderEngine::TimeFrame timeframes[] = {
+                            RenderEngine::TimeFrame::TF_1MS, RenderEngine::TimeFrame::TF_10MS,
+                            RenderEngine::TimeFrame::TF_100MS, RenderEngine::TimeFrame::TF_500MS,
+                            RenderEngine::TimeFrame::TF_1SEC, RenderEngine::TimeFrame::TF_3SEC,
+                            RenderEngine::TimeFrame::TF_5SEC, RenderEngine::TimeFrame::TF_15SEC,
+                            RenderEngine::TimeFrame::TF_30SEC,
+                            RenderEngine::TimeFrame::TF_1MIN, RenderEngine::TimeFrame::TF_2MIN,
+                            RenderEngine::TimeFrame::TF_5MIN, RenderEngine::TimeFrame::TF_15MIN,
+                            RenderEngine::TimeFrame::TF_30MIN,
+                            RenderEngine::TimeFrame::TF_1HOUR, RenderEngine::TimeFrame::TF_2HOUR,
+                            RenderEngine::TimeFrame::TF_4HOUR, RenderEngine::TimeFrame::TF_6HOUR,
+                            RenderEngine::TimeFrame::TF_12HOUR, RenderEngine::TimeFrame::TF_1DAY,
+                            RenderEngine::TimeFrame::TF_1WEEK
+                        };
+
+                        // Create menu items for each timeframe
+                        for (int i = 0; i < 21; ++i) {
+                            if (ImGui::MenuItem(timeframe_names[i])) {
+                                // Set the new timeframe on the chart panel
+                                chart_panel->set_timeframe(timeframes[i]);
+
+                                // Update the panel configuration in the panel manager to persist the change
+                                if (panel_manager_ && panel_id != 0) {
+                                    PanelConfig updated_config = panel_manager_->get_panel_config(panel_id);
+                                    updated_config.title = chart_panel->get_config().title; // Update title which includes timeframe
+                                    panel_manager_->update_panel_config(panel_id, updated_config);
+                                }
+                            }
+                        }
                     }
+                    ImGui::EndMenu();
                 }
                 if (ImGui::MenuItem("Export Data")) {
                     // Export chart data to CSV or other format

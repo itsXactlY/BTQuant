@@ -13,6 +13,28 @@
 
 namespace BTQuant {
 
+// Trade Bubble Structure
+struct TradeBubble {
+  double x;            // Time position (X-axis)
+  double y;            // Price position (Y-axis)
+  double volume;       // Trade volume
+  double price;        // Exact price
+  bool is_buy;         // true = Buy, false = Sell
+  uint64_t timestamp;  // Timestamp for positioning
+  float radius;        // Calculated radius for rendering
+
+  // Constructor
+  TradeBubble(double x_pos, double y_pos, double vol, double trade_price, bool buy,
+              uint64_t ts)
+      : x(x_pos),
+        y(y_pos),
+        volume(vol),
+        price(trade_price),
+        is_buy(buy),
+        timestamp(ts),
+        radius(5.0f) {}  // Default radius
+};
+
 // Large Order Marker Structure
 struct LargeOrderMarker {
   double x;            // Time position (X-axis)
@@ -85,6 +107,11 @@ class DomSurfacePanel : public PanelBase {
   // Auto-scaling configuration
   bool auto_scale_price_ = true;  // Automatically determine min/max price from history
 
+  // Trade Bubbles System
+  std::vector<TradeBubble> trade_bubbles_;
+  double max_trade_volume_ = 1.0;  // For scaling bubble sizes
+  static constexpr size_t TRADE_HISTORY_SIZE = 10000;  // Number of recent trades to track
+
   // Large Order Marker System
   std::vector<LargeOrderMarker> large_order_markers_;
   double median_order_size_ = 0.0;
@@ -123,6 +150,13 @@ class DomSurfacePanel : public PanelBase {
 
   // Helper to refresh data buffer
   void updateHeatmapData();
+
+  // Trade Bubbles Methods
+  void updateTradeBubbles();
+  void processRecentTrades();
+  void renderTradeBubbles();
+  float calculateBubbleRadius(double volume) const;
+  ImU32 getBubbleColor(const TradeBubble& bubble) const;
 
   // Large Order Marker Methods
   void updateLargeOrderMarkers();

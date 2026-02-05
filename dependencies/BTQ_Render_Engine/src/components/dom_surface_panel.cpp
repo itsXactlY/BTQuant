@@ -51,6 +51,109 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::Notificatio
   }
 }
 
+void DomSurfacePanel::updateTradeBubbles() {
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get recent trades for the current symbol
+  auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+  
+  // Process recent trades to create trade bubbles
+  processRecentTrades();
+}
+
+void DomSurfacePanel::processRecentTrades() {
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get symbol analytics which contains recent trades
+  auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+  
+  // Clear current trade bubbles
+  trade_bubbles_.clear();
+  
+  // Find max volume for scaling purposes
+  max_trade_volume_ = 1.0;
+  for (const auto& trade : analytics.recent_trades) {
+    if (trade.size > max_trade_volume_) {
+      max_trade_volume_ = trade.size;
+    }
+  }
+  
+  // Create trade bubbles for each recent trade
+  for (const auto& trade : analytics.recent_trades) {
+    // Calculate X position based on timestamp relative to history range
+    double relative_time = 0.0;
+    if (history_end_timestamp_ > history_start_timestamp_) {
+      relative_time = static_cast<double>(trade.timestamp - history_start_timestamp_) /
+                      static_cast<double>(history_end_timestamp_ - history_start_timestamp_);
+    }
+    
+    // Map bounds_min[0] (0) to bounds_max[0] (time_steps)
+    double x_pos = bounds_min_[0] + relative_time * (bounds_max_[0] - bounds_min_[0]);
+    
+    // Only add bubble if within view
+    if (x_pos >= bounds_min_[0] && x_pos <= bounds_max_[0]) {
+      TradeBubble bubble(x_pos, trade.price, trade.size, trade.price, trade.is_buy, trade.timestamp);
+      bubble.radius = calculateBubbleRadius(trade.size);
+      trade_bubbles_.push_back(bubble);
+    }
+  }
+}
+
+float DomSurfacePanel::calculateBubbleRadius(double volume) const {
+  if (max_trade_volume_ <= 0.0) return 5.0f;  // Default radius
+  
+  // Calculate radius: base_radius * sqrt(volume / max_volume) to make differences more visible
+  float base_radius = 8.0f;  // Base radius for smallest trades
+  float calculated_radius = base_radius * std::sqrt(volume / max_trade_volume_) * 3.0f;  // Amplify effect
+  
+  // Clamp to reasonable range
+  return std::clamp(calculated_radius, 3.0f, 20.0f);
+}
+
+ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
+  // Color: Green for Buys, Red for Sells
+  if (bubble.is_buy) {
+    return IM_COL32(0, 255, 0, 180);  // Green with transparency
+  } else {
+    return IM_COL32(255, 0, 0, 180);  // Red with transparency
+  }
+}
+
+void DomSurfacePanel::renderTradeBubbles() {
+  if (trade_bubbles_.empty()) return;
+
+  // Get plot area for manual circle rendering
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+
+  // Render each trade bubble as a circle
+  for (const auto& bubble : trade_bubbles_) {
+    ImU32 color = getBubbleColor(bubble);
+    ImU32 border_color = IM_COL32(255, 255, 255, 200);  // White semi-transparent border
+
+    // Convert plot coordinates to pixel coordinates
+    ImVec2 pixel_pos = ImPlot::PlotToPixels(bubble.x, bubble.y);
+
+    // Draw filled circle
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    if (draw_list) {
+      draw_list->AddCircleFilled(pixel_pos, bubble.radius, color, 32);
+      draw_list->AddCircle(pixel_pos, bubble.radius, border_color, 32, 1.5f);
+
+      // Check for hover and show tooltip
+      ImVec2 mouse_pos = ImGui::GetMousePos();
+      float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
+                                 std::pow(mouse_pos.y - pixel_pos.y, 2));
+
+      if (distance < bubble.radius) {
+        std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}", 
+                                         bubble.is_buy ? "Buy" : "Sell", 
+                                         bubble.volume, bubble.price);
+        ImGui::SetTooltip("%s", tooltip.c_str());
+      }
+    }
+  }
+}
+
 void DomSurfacePanel::updateHeatmapData() {
   if (current_symbol_id_ == 0 || !processor_) return;
 
@@ -402,7 +505,8 @@ void DomSurfacePanel::render() {
   if (consumeDirty()) {
     updateHeatmapData();
     updateLargeOrderMarkers();
-    
+    updateTradeBubbles();  // Update trade bubbles
+
     // Update persistent levels if we have current orderbook data
     auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
     if (orderbook_opt) {
@@ -425,8 +529,8 @@ void DomSurfacePanel::render() {
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
-  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu", current_symbol_id_, price_bins_,
-              large_order_markers_.size());
+  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
+              large_order_markers_.size(), trade_bubbles_.size());
 
   // Enable Pan/Zoom for DOM Surface
   std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
@@ -463,6 +567,9 @@ void DomSurfacePanel::render() {
     // Render Large Order Markers OVER the heatmap and persistent lines
     renderLargeOrderMarkers();
 
+    // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
+    renderTradeBubbles();
+
     ImPlot::EndPlot();
   }
 
@@ -474,6 +581,7 @@ void DomSurfacePanel::render() {
     ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
     ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(),
                 median_order_size_);
+    ImGui::Text("Trade Bubbles: %zu (MaxVol: %.2f)", trade_bubbles_.size(), max_trade_volume_);
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
   }
 

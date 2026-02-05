@@ -135,26 +135,71 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                 ImGui::Text("Chart Actions:");
                 ImGui::Separator();
                 if (ImGui::MenuItem("Add Technical Indicator")) {
-                    // Generic action - could trigger event system
+                    // Trigger event to add a technical indicator to the chart
+                    if (panel_manager_) {
+                        // This would typically send an event to the chart to open indicator selection
+                        // For now, we'll just log that the action was triggered
+                    }
                 }
                 if (ImGui::MenuItem("Set Timeframe")) {
-                    // Generic action
+                    // Open timeframe selection dialog
+                    if (panel_manager_) {
+                        // This would typically send an event to change the chart's timeframe
+                    }
                 }
                 if (ImGui::MenuItem("Export Data")) {
-                    // Generic action
+                    // Export chart data to CSV or other format
+                    if (panel_manager_) {
+                        // This would typically trigger data export functionality
+                    }
                 }
                 if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                    // Capture and save chart screenshot
+                    if (panel_manager_) {
+                        // This would typically trigger screenshot functionality
+                    }
                 }
                 if (ImGui::MenuItem("Reset Zoom")) {
-                    // Generic action
+                    // Reset chart zoom level to default
+                    if (panel_manager_) {
+                        // This would typically reset the chart's view transformation
+                    }
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Duplicate Chart")) {
-                    // Generic action
+                    // Duplicate the current chart panel
+                    if (panel_manager_) {
+                        // Get the panel's type and title to create a duplicate
+                        PanelType type = panel->get_config().type;
+                        std::string title = panel->get_config().title + " Copy";
+
+                        // Calculate new position for the duplicated panel
+                        int new_grid_x = panel->get_config().grid_x + 1;
+                        int new_grid_y = panel->get_config().grid_y;
+
+                        // Add the new panel with the same properties
+                        panel_manager_->add_panel(type, title, new_grid_x, new_grid_y,
+                                                 panel->get_config().grid_width,
+                                                 panel->get_config().grid_height);
+                    }
                 }
                 if (ImGui::MenuItem("Close Chart")) {
-                    // Generic action
+                    // Close the current chart panel
+                    if (panel_manager_) {
+                        // Find the panel ID by comparing with all panels in the manager
+                        uint32_t panel_id = 0;
+                        auto all_panel_ids = panel_manager_->get_all_panel_ids();
+                        for (uint32_t id : all_panel_ids) {
+                            PanelBase* manager_panel = panel_manager_->get_panel_by_id(id);
+                            if (manager_panel == panel) {
+                                panel_id = id;
+                                break;
+                            }
+                        }
+                        if (panel_id != 0) {
+                            panel_manager_->remove_panel(panel_id);
+                        }
+                    }
                 }
                 break;
                 

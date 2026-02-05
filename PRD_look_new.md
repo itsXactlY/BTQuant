@@ -370,3 +370,31 @@
 ### Phase 17: Take care of Build errors [Complexity: Godtier]
 - [x] Create release dev Build: Run /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/./build_integration.sh and analyze all errors. Sanitize code, validate existing code, prevent errors and crashes for the executables. Repeat till no build errors exist. [Complexity: S]
 - [x] Run /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/./build_integration.sh and fix last remaining build errors.
+
+### Phase 18: UI Action Wiring & Context Menu Integration [Complexity: L]
+Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Objective: Complete interconnection of the UI logic. The ContextMenuManager must be instantiated by the PanelManager, integrated into the render loop, and connected to actual methods of the panels. No more "Generic Actions".
+
+### Phase 18a: Infrastructure & Ownership [Complexity: S]
+- [x] Dependency Injection: Extend the PanelManager constructor (src/components/panel_manager.cpp) to create and own an instance of ContextMenuManager.
+- [x] Circular Dependency Resolution: Pass the PanelManager pointer to the ContextMenuManager constructor so it can execute global actions (e.g., "Close Panel") on the manager itself.
+- [x] PanelBase Integration: Add a virtual method handle_context_menu(ContextMenuManager& manager) to PanelBase (include/components/panel_base.hpp), which does nothing by default but is overridden by derived classes.
+- [x] Render Loop Wiring: Call the handle_context_menu method for every visible panel in PanelManager::render() so right-clicks can be intercepted globally.
+
+### Phase 18b: Chart Panel Action Wiring [Complexity: M]
+- [x] Public API Exposure: Ensure ChartPanel (include/components/chart_panel.hpp) has public methods for all menu actions: open_indicator_dialog(), set_timeframe(TimeFrame tf), reset_view(), export_data().
+- [x] Context Menu Implementation: Implement the PanelType::CHART case in src/ui/context_menus.cpp. Replace placeholders:
+"Add Technical Indicator" -> calls chart_panel->open_indicator_dialog()
+"Set Timeframe" -> Iterates over timeframes and calls chart_panel->set_timeframe()
+"Reset Zoom" -> calls chart_panel->reset_view()
+"Close Panel" -> calls panel_manager_->remove_panel(panel_id)
+
+### Phase 18c: Watchlist & Data Panel Wiring [Complexity: M]
+- [x] Watchlist API: Extend WatchlistPanel with public methods: focus_add_symbol_input(), clear_all_symbols(), set_sorting(column_id, direction).
+- [x] Watchlist Wiring: Connect actions "Add Symbol", "Clear List", and "Sort by..." in ContextMenuManager to the new methods.
+- [x] Orderbook Wiring: Connect "Center View" to orderbook_panel->center_price() and "Reset Depth" to orderbook_panel->reset_depth().
+- [ ] Global Panel Actions: Implement logic for "Close Panel", "Duplicate Panel", and "Settings" (opens panel->open_settings()) in ContextMenuManager by accessing the panel ID.
+
+### Phase 18d: Event & Focus Handling [Complexity: S]
+- [ ] Focus Management: Ensure the panel receives focus (ImGui::SetWindowFocus()) upon right-click so hotkeys (e.g., Delete to remove) apply to the correct panel.
+- [ ] State Persistence: If settings are changed via context menu (e.g., Timeframe), immediately save this to PanelConfig so it persists during layout save.
+- [ ] Safety Checks: Implement dynamic_cast checks in render_generic_context_menu to prevent crashes if a panel type does not match at runtime.

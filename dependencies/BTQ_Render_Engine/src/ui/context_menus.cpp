@@ -786,7 +786,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                                          panel->get_config().grid_height);
             }
         }
-        if (ImGui::MenuItem("Panel Settings")) {
+        if (ImGui::MenuItem("Settings")) {
             // Call the panel's settings method if available
             panel->open_settings();
         }

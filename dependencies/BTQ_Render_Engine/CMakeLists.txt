@@ -172,6 +172,30 @@ set(DASHBOARD_SOURCES
     src/ui/quick_actions.cpp
     src/layout/dashboard_layout_manager.cpp
     src/system/system_optimizer.cpp
+    src/components/chart_panel_settings.cpp
+    src/data/market_data_processor.cpp
+    src/data/symbol_manager.cpp
+    src/data/cache_manager.cpp
+    src/data/persistence.cpp
+    src/data/incremental_updater.cpp
+    src/data/exchange_aggregator.cpp
+    src/data/quality_monitor.cpp
+    src/monitoring/performance_monitor.cpp
+    src/performance/debug_overlay.cpp
+    src/analytics/technical_analysis.cpp
+    src/analytics/trading_analytics.cpp
+    src/analytics/cluster_engine.cpp
+    src/analytics/volume_calculator.cpp
+    src/indicators/session_vwap.cpp
+    src/indicators/rolling_vwap.cpp
+    src/indicators/anchored_vwap.cpp
+    src/indicators/vwap_alerts.cpp
+    src/indicators/indicator_alerts.cpp
+    src/data/ui_data_manager.cpp
+    src/performance/panel_profiler.cpp
+    src/layout/layout_presets.cpp
+    src/ui/performance_settings.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 
 # Real-time dashboard executable
@@ -183,6 +207,7 @@ set(REALTIME_DASHBOARD_SOURCES
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
+    src/components/chart_panel_settings.cpp
     src/components/metrics_panel.cpp
     src/components/panel_manager.cpp
     src/components/chart_manager.cpp
@@ -260,7 +285,6 @@ set(REALTIME_DASHBOARD_SOURCES
     src/data/incremental_updater.cpp
     src/data/exchange_aggregator.cpp
     src/data/quality_monitor.cpp
-    src/data/test_quality_monitor.cpp
     src/monitoring/performance_monitor.cpp
     src/performance/frame_time_graph.cpp
     src/performance/debug_overlay.cpp
@@ -278,6 +302,11 @@ set(REALTIME_DASHBOARD_SOURCES
     src/layout/dashboard_layout_manager.cpp
     src/data/ui_data_manager.cpp
     src/system/system_optimizer.cpp
+    src/components/watchlist_alerts.cpp
+    src/performance/panel_profiler.cpp
+    src/layout/layout_presets.cpp
+    src/ui/performance_settings.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
 
 # Create a library target for shared components

@@ -1,27 +1,27 @@
 #pragma once
 
 #include <functional>
+#include <list>
 #include <memory>
 #include <unordered_map>
 #include <vector>
-#include <list>
 
 #include "../hotspine_data_bridge.hpp"
-#include "../market_data_processor.hpp"
-#include "chart_manager.hpp"
-#include "indicator_renderer.hpp"
-#include "panel_base.hpp"
-#include "panel_settings_interface.hpp"
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
-#include "panel_manager.hpp"
-#include "historical_time_sales.hpp"
-#include "drawing_tools.hpp"  // Include drawing tools header
+#include "../market_data_processor.hpp"
+#include "chart_manager.hpp"
 #include "chart_panel_settings.hpp"
+#include "drawing_tools.hpp"  // Include drawing tools header
+#include "historical_time_sales.hpp"
+#include "indicator_renderer.hpp"
+#include "panel_base.hpp"
+#include "panel_manager.hpp"
+#include "panel_settings_interface.hpp"
 
 namespace BTQuant {
 
-class TimeStatisticsPanel; // Forward declaration
+class TimeStatisticsPanel;  // Forward declaration
 
 // Indicator configuration for chart panel
 struct IndicatorConfig {
@@ -100,10 +100,10 @@ struct IndicatorItem {
   bool isVisible;
   ImVec4 color;
   std::map<std::string, float> parameters;  // Generic parameter storage
-  int id;  // Unique identifier for the indicator
+  int id;                                   // Unique identifier for the indicator
 
   IndicatorItem(const std::string& n, bool vis, ImVec4 c, int indicator_id)
-    : name(n), isVisible(vis), color(c), id(indicator_id) {}
+      : name(n), isVisible(vis), color(c), id(indicator_id) {}
 };
 
 class ChartPanel : public PanelBase {
@@ -112,8 +112,7 @@ class ChartPanel : public PanelBase {
 
   ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-             ChartManager* chart_manager,
-             PanelManager* panel_manager = nullptr);
+             ChartManager* chart_manager, PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
   void render() override;
@@ -124,17 +123,22 @@ class ChartPanel : public PanelBase {
   void set_timeframe(RenderEngine::TimeFrame timeframe);
   uint32_t get_chart_id() const { return chart_id_; }
 
+  // Menu action methods
+  void open_indicator_dialog();
+  void reset_view();
+  void export_data();
+
   // Method to center the chart on a specific timestamp
   void center_on_timestamp(uint64_t timestamp);
 
   // Set callback for scroll synchronization
   void set_scroll_sync_callback(ScrollSyncCallback callback) {
-      on_scroll_sync_ = std::move(callback);
+    on_scroll_sync_ = std::move(callback);
   }
 
   // Set associated time statistics panel for synchronization
   void set_associated_time_stats_panel(TimeStatisticsPanel* time_stats_panel) {
-      associated_time_stats_panel_ = time_stats_panel;
+    associated_time_stats_panel_ = time_stats_panel;
   }
 
   // Get visible time range
@@ -171,8 +175,19 @@ class ChartPanel : public PanelBase {
 
   // Cached indicator data to prevent recalculation on every render
   enum class IndicatorType {
-    SMA, EMA, RSI, STOCH_K, STOCH_D, ATR, TRUE_RANGE, BB_UPPER, BB_MIDDLE, BB_LOWER,
-    MACD_LINE, MACD_SIGNAL, MACD_HISTOGRAM
+    SMA,
+    EMA,
+    RSI,
+    STOCH_K,
+    STOCH_D,
+    ATR,
+    TRUE_RANGE,
+    BB_UPPER,
+    BB_MIDDLE,
+    BB_LOWER,
+    MACD_LINE,
+    MACD_SIGNAL,
+    MACD_HISTOGRAM
   };
 
   struct IndicatorCacheKey {
@@ -183,11 +198,8 @@ class ChartPanel : public PanelBase {
     double param1;  // For additional parameters like standard deviation
 
     bool operator==(const IndicatorCacheKey& other) const {
-      return type == other.type &&
-             data_size == other.data_size &&
-             period1 == other.period1 &&
-             period2 == other.period2 &&
-             param1 == other.param1;
+      return type == other.type && data_size == other.data_size && period1 == other.period1 &&
+             period2 == other.period2 && param1 == other.param1;
     }
   };
 
@@ -203,7 +215,8 @@ class ChartPanel : public PanelBase {
   };
 
   // Unified cached indicators map
-  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_indicators_;
+  std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash>
+      cached_indicators_;
 
   // Legacy cached indicators (to be deprecated gradually)
   std::unordered_map<IndicatorCacheKey, std::vector<double>, IndicatorCacheKeyHash> cached_sma_;
@@ -261,18 +274,21 @@ class ChartPanel : public PanelBase {
     ImVec4 color;
     int period;
     RenderEngine::TimeFrame source_timeframe;  // Timeframe from which to source the indicator
-    std::vector<double> values;  // Cached values from the source timeframe
-    std::vector<double> timestamps;  // Timestamps for the values
+    std::vector<double> values;                // Cached values from the source timeframe
+    std::vector<double> timestamps;            // Timestamps for the values
 
-    MultiTimeframeIndicator(const std::string& n, bool vis, ImVec4 c, int p, RenderEngine::TimeFrame tf)
-      : name(n), isVisible(vis), color(c), period(p), source_timeframe(tf) {}
+    MultiTimeframeIndicator(const std::string& n, bool vis, ImVec4 c, int p,
+                            RenderEngine::TimeFrame tf)
+        : name(n), isVisible(vis), color(c), period(p), source_timeframe(tf) {}
   };
 
   std::vector<MultiTimeframeIndicator> multi_tf_indicators_;
-  int next_multitf_indicator_id_ = 1000;  // Counter for multi-timeframe indicators (separate ID space)
+  int next_multitf_indicator_id_ =
+      1000;  // Counter for multi-timeframe indicators (separate ID space)
 
   // Accessors for view range (needed for synchronization)
-  friend class PanelManager; // Allow PanelManager to access private members for synchronization
+  friend class PanelManager;  // Allow PanelManager to access private members for synchronization
+  friend class ChartPanelSettings;  // Allow ChartPanelSettings to access indicator_config_
 
   void render_chart_controls();
   void render_indicator_selector();
@@ -294,22 +310,16 @@ class ChartPanel : public PanelBase {
   void render_atr_indicator(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_fibonacci_levels(const ChartInstance& chart, size_t start_idx, size_t end_idx);
   void render_crosshair_info(const ChartInstance& chart, double mouse_x, double mouse_y);
-  void render_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
-                                                   const std::vector<RenderEngine::OHLCVCandle>& candles,
-                                                   const std::vector<double>& x_coords,
-                                                   const std::vector<double>& y_coords_high,
-                                                   const std::vector<double>& y_coords_low,
-                                                   bool show_poc_line = true,
-                                                   int num_buckets_per_candle = 8);
-  void render_enhanced_step_profile_histograms_on_candle_bars(ImDrawList* draw_list,
-                                                           const std::vector<RenderEngine::OHLCVCandle>& candles,
-                                                           const std::vector<double>& x_coords,
-                                                           const std::vector<double>& y_coords_high,
-                                                           const std::vector<double>& y_coords_low,
-                                                           bool show_poc_line = true,
-                                                           int num_buckets_per_candle = 8,
-                                                           float opacity = 1.0f,
-                                                           bool show_labels = false);
+  void render_step_profile_histograms_on_candle_bars(
+      ImDrawList* draw_list, const std::vector<RenderEngine::OHLCVCandle>& candles,
+      const std::vector<double>& x_coords, const std::vector<double>& y_coords_high,
+      const std::vector<double>& y_coords_low, bool show_poc_line = true,
+      int num_buckets_per_candle = 8);
+  void render_enhanced_step_profile_histograms_on_candle_bars(
+      ImDrawList* draw_list, const std::vector<RenderEngine::OHLCVCandle>& candles,
+      const std::vector<double>& x_coords, const std::vector<double>& y_coords_high,
+      const std::vector<double>& y_coords_low, bool show_poc_line = true,
+      int num_buckets_per_candle = 8, float opacity = 1.0f, bool show_labels = false);
 
   // Indicator calculation helpers
   std::vector<double> calculate_sma(const std::vector<float>& prices, int period);
@@ -327,16 +337,13 @@ class ChartPanel : public PanelBase {
                                                const std::vector<double>& signal);
   std::vector<double> calculate_stochastic_k(const std::vector<float>& highs,
                                              const std::vector<float>& lows,
-                                             const std::vector<float>& closes,
-                                             int k_period);
+                                             const std::vector<float>& closes, int k_period);
   std::vector<double> calculate_stochastic_d(const std::vector<double>& stoch_k, int slow_period);
   std::vector<double> calculate_true_range(const std::vector<float>& highs,
                                            const std::vector<float>& lows,
                                            const std::vector<float>& closes);
-  std::vector<double> calculate_atr(const std::vector<float>& highs,
-                                    const std::vector<float>& lows,
-                                    const std::vector<float>& closes,
-                                    int period);
+  std::vector<double> calculate_atr(const std::vector<float>& highs, const std::vector<float>& lows,
+                                    const std::vector<float>& closes, int period);
 
   // Fibonacci calculation
   std::vector<FibonacciLevel> calculate_fibonacci_levels(double start_price, double end_price);
@@ -357,41 +364,47 @@ class ChartPanel : public PanelBase {
   void sync_active_indicators_with_config();
 
   // Multi-timeframe indicator methods
-  void add_multi_timeframe_indicator(const std::string& name, bool visible, ImVec4 color, int period, RenderEngine::TimeFrame source_timeframe);
+  void add_multi_timeframe_indicator(const std::string& name, bool visible, ImVec4 color,
+                                     int period, RenderEngine::TimeFrame source_timeframe);
   void remove_multi_timeframe_indicator(int index);
   void update_multi_timeframe_indicators(const ChartInstance& chart);
-  void render_multi_timeframe_indicators(const ChartInstance& chart, size_t start_idx, size_t end_idx);
-  std::vector<double> get_indicator_values_from_timeframe(const std::string& indicator_name, int period, RenderEngine::TimeFrame timeframe, uint32_t symbol_id);
+  void render_multi_timeframe_indicators(const ChartInstance& chart, size_t start_idx,
+                                         size_t end_idx);
+  std::vector<double> get_indicator_values_from_timeframe(const std::string& indicator_name,
+                                                          int period,
+                                                          RenderEngine::TimeFrame timeframe,
+                                                          uint32_t symbol_id);
   std::vector<double> calculate_cached_sma(const std::vector<float>& prices, int period);
   std::vector<double> calculate_cached_ema(const std::vector<float>& prices, int period);
   std::vector<double> calculate_cached_rsi(const std::vector<float>& prices, int period);
   std::vector<double> calculate_cached_bollinger_upper(const std::vector<float>& prices, int period,
-                                                double std_dev);
-  std::vector<double> calculate_cached_bollinger_middle(const std::vector<float>& prices, int period);
+                                                       double std_dev);
+  std::vector<double> calculate_cached_bollinger_middle(const std::vector<float>& prices,
+                                                        int period);
   std::vector<double> calculate_cached_bollinger_lower(const std::vector<float>& prices, int period,
-                                                double std_dev);
-  std::vector<double> calculate_cached_macd_line(const std::vector<float>& prices, int fast, int slow);
-  std::vector<double> calculate_cached_macd_signal(const std::vector<double>& macd_line, int signal);
+                                                       double std_dev);
+  std::vector<double> calculate_cached_macd_line(const std::vector<float>& prices, int fast,
+                                                 int slow);
+  std::vector<double> calculate_cached_macd_signal(const std::vector<double>& macd_line,
+                                                   int signal);
   std::vector<double> calculate_cached_macd_histogram(const std::vector<double>& macd_line,
-                                               const std::vector<double>& signal);
+                                                      const std::vector<double>& signal);
   std::vector<double> calculate_cached_stochastic_k(const std::vector<float>& highs,
-                                             const std::vector<float>& lows,
-                                             const std::vector<float>& closes,
-                                             int k_period);
-  std::vector<double> calculate_cached_stochastic_d(const std::vector<double>& stoch_k, int d_period);
+                                                    const std::vector<float>& lows,
+                                                    const std::vector<float>& closes, int k_period);
+  std::vector<double> calculate_cached_stochastic_d(const std::vector<double>& stoch_k,
+                                                    int d_period);
   std::vector<double> calculate_cached_true_range(const std::vector<float>& highs,
-                                           const std::vector<float>& lows,
-                                           const std::vector<float>& closes);
+                                                  const std::vector<float>& lows,
+                                                  const std::vector<float>& closes);
   std::vector<double> calculate_cached_atr(const std::vector<float>& highs,
-                                    const std::vector<float>& lows,
-                                    const std::vector<float>& closes,
-                                    int period);
-  void calculate_cached_bollinger_bands(const std::vector<float>& prices, int period, double std_dev);
+                                           const std::vector<float>& lows,
+                                           const std::vector<float>& closes, int period);
+  void calculate_cached_bollinger_bands(const std::vector<float>& prices, int period,
+                                        double std_dev);
   void calculate_cached_macd(const std::vector<float>& prices, int fast, int slow, int signal);
-  void calculate_cached_stochastic(const std::vector<float>& highs,
-                              const std::vector<float>& lows,
-                              const std::vector<float>& closes,
-                              int k_period, int d_period);
+  void calculate_cached_stochastic(const std::vector<float>& highs, const std::vector<float>& lows,
+                                   const std::vector<float>& closes, int k_period, int d_period);
 };
 
 }  // namespace BTQuant

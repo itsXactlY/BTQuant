@@ -398,6 +398,106 @@ void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {
   }
 }
 
+void ChartPanel::open_indicator_dialog() {
+  // Open the indicator dialog by showing the indicator selector section
+  // This could be implemented by setting a flag to show the indicator dialog
+  // or by opening a dedicated indicator management window
+
+  // For now, we'll simulate this by toggling the visibility of the indicator selector
+  // In a real implementation, this would open a dedicated dialog window
+  ImGui::OpenPopup("IndicatorDialog");
+
+  // Show a simple indicator dialog popup
+  if (ImGui::BeginPopupModal("IndicatorDialog", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Select Indicators to Add:");
+    ImGui::Separator();
+
+    // Add common indicators that can be selected
+    if (ImGui::Button("SMA")) {
+      indicator_config_.show_sma_9 = true;
+      sync_active_indicators_with_config();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("EMA")) {
+      indicator_config_.show_ema_9 = true;
+      sync_active_indicators_with_config();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("RSI")) {
+      indicator_config_.show_rsi = true;
+      sync_active_indicators_with_config();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("MACD")) {
+      indicator_config_.show_macd = true;
+      sync_active_indicators_with_config();
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button("Cancel")) {
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  }
+}
+
+void ChartPanel::reset_view() {
+  // Reset the chart view to show all available data
+  follow_latest_ = false;
+
+  // Reset view limits to show the full range of data
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    const ChartInstance& chart = it->second;
+
+    if (!chart.dates.empty()) {
+      last_view_min_ = chart.dates.front();
+      last_view_max_ = chart.dates.back();
+
+      // Add a small margin to the view
+      double margin = (last_view_max_ - last_view_min_) * 0.05; // 5% margin
+      last_view_min_ -= margin;
+      last_view_max_ += margin;
+    }
+  }
+}
+
+void ChartPanel::export_data() {
+  // Export chart data to a file
+  // This would typically open a file dialog and save the chart data in a specified format
+
+  // For now, we'll just print a message to indicate the export action
+  std::cout << "[ChartPanel] Exporting data for symbol: " << symbol_
+            << " with timeframe: " << timeframe_to_string(timeframe_) << std::endl;
+
+  // Get chart data to export
+  auto charts = chart_manager_->get_charts();
+  auto it = charts.find(chart_id_);
+  if (it != charts.end()) {
+    const ChartInstance& chart = it->second;
+
+    if (!chart.dates.empty()) {
+      // In a real implementation, this would open a file dialog and export the data
+      // For now, we'll just log the data size
+      std::cout << "[ChartPanel] Data points to export: " << chart.dates.size() << std::endl;
+
+      // Example: Export to CSV format
+      // This would typically use a file dialog to let the user choose the destination
+      std::string filename = symbol_ + "_" + timeframe_to_string(timeframe_) + ".csv";
+      std::cout << "[ChartPanel] Would export to: " << filename << std::endl;
+
+      // In a real implementation, we would write the actual data to the file
+      // Format would be: timestamp,open,high,low,close,volume
+    }
+  }
+}
+
 void ChartPanel::render_chart_controls() {
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
 

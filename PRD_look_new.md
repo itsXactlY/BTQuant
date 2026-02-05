@@ -392,9 +392,9 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Watchlist API: Extend WatchlistPanel with public methods: focus_add_symbol_input(), clear_all_symbols(), set_sorting(column_id, direction).
 - [x] Watchlist Wiring: Connect actions "Add Symbol", "Clear List", and "Sort by..." in ContextMenuManager to the new methods.
 - [x] Orderbook Wiring: Connect "Center View" to orderbook_panel->center_price() and "Reset Depth" to orderbook_panel->reset_depth().
-- [ ] Global Panel Actions: Implement logic for "Close Panel", "Duplicate Panel", and "Settings" (opens panel->open_settings()) in ContextMenuManager by accessing the panel ID.
+- [x] Global Panel Actions: Implement logic for "Close Panel", "Duplicate Panel", and "Settings" (opens panel->open_settings()) in ContextMenuManager by accessing the panel ID.
 
 ### Phase 18d: Event & Focus Handling [Complexity: S]
-- [ ] Focus Management: Ensure the panel receives focus (ImGui::SetWindowFocus()) upon right-click so hotkeys (e.g., Delete to remove) apply to the correct panel.
-- [ ] State Persistence: If settings are changed via context menu (e.g., Timeframe), immediately save this to PanelConfig so it persists during layout save.
-- [ ] Safety Checks: Implement dynamic_cast checks in render_generic_context_menu to prevent crashes if a panel type does not match at runtime.
+- [x] Focus Management: Ensure the panel receives focus (ImGui::SetWindowFocus()) upon right-click so hotkeys (e.g., Delete to remove) apply to the correct panel.
+- [x] State Persistence: If settings are changed via context menu (e.g., Timeframe), immediately save this to PanelConfig so it persists during layout save.
+- [x] Safety Checks: Implement dynamic_cast checks in render_generic_context_menu to prevent crashes if a panel type does not match at runtime.

@@ -5,27 +5,18 @@
     },
     "panels": [
         {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": -1,
-            "grid_y": -1,
-            "title": "Footprint Chart",
-            "type": 18,
-            "visible": true
-        },
-        {
-            "grid_height": 1,
-            "grid_width": 1,
-            "grid_x": -1,
-            "grid_y": -1,
-            "title": "BTC-USDT Chart [1s]",
-            "type": 0,
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 0,
+            "title": "Alerts",
+            "type": 9,
             "visible": true
         },
         {
             "grid_height": 2,
             "grid_width": 6,
-            "grid_x": 0,
+            "grid_x": 1,
             "grid_y": 0,
             "title": "Performance Monitor",
             "type": 20,
@@ -34,7 +25,7 @@
         {
             "grid_height": 2,
             "grid_width": 3,
-            "grid_x": 1,
+            "grid_x": 2,
             "grid_y": 0,
             "title": "TPO Profile",
             "type": 19,
@@ -43,16 +34,16 @@
         {
             "grid_height": 2,
             "grid_width": 3,
-            "grid_x": 2,
+            "grid_x": 3,
             "grid_y": 0,
             "title": "Footprint Chart",
             "type": 18,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
             "grid_width": 2,
-            "grid_x": 3,
+            "grid_x": 4,
             "grid_y": 0,
             "title": "Watchlist",
             "type": 11,
@@ -61,7 +52,7 @@
         {
             "grid_height": 1,
             "grid_width": 2,
-            "grid_x": 4,
+            "grid_x": 5,
             "grid_y": 0,
             "title": "Volume Profile",
             "type": 14,
@@ -70,8 +61,8 @@
         {
             "grid_height": 1,
             "grid_width": 2,
-            "grid_x": 5,
-            "grid_y": 0,
+            "grid_x": 0,
+            "grid_y": 1,
             "title": "Positions",
             "type": 7,
             "visible": true
@@ -79,7 +70,7 @@
         {
             "grid_height": 1,
             "grid_width": 2,
-            "grid_x": 0,
+            "grid_x": 1,
             "grid_y": 1,
             "title": "Active Orders",
             "type": 6,
@@ -88,25 +79,25 @@
         {
             "grid_height": 1,
             "grid_width": 2,
-            "grid_x": 1,
+            "grid_x": 2,
             "grid_y": 1,
             "title": "Time & Sales",
             "type": 13,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
             "grid_width": 2,
-            "grid_x": 2,
+            "grid_x": 3,
             "grid_y": 1,
-            "title": "BNB-USDT Orderbook",
+            "title": "ADAUSDT Orderbook",
             "type": 10,
             "visible": true
         },
         {
             "grid_height": 1,
             "grid_width": 1,
-            "grid_x": 3,
+            "grid_x": 4,
             "grid_y": 1,
             "title": "DOM Surface",
             "type": 2,
@@ -115,9 +106,9 @@
         {
             "grid_height": 3,
             "grid_width": 4,
-            "grid_x": 4,
+            "grid_x": 5,
             "grid_y": 1,
-            "title": "BNB-USDT Chart [1s]",
+            "title": "BTC/USDT Chart",
             "type": 0,
             "visible": true
         }

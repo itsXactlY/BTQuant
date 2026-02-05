@@ -70,7 +70,6 @@ set(LIB_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMPLOT_DIR}/implot.cpp
     ${IMPLOT_DIR}/implot_items.cpp
-    ${IMPLOT_DIR}/implot_demo.cpp
     # Threading module - this is the main focus of our task
     src/threading/task_scheduler.cpp
     src/threading/lockfree_queue.cpp
@@ -123,6 +122,7 @@ set(DASHBOARD_SOURCES
     src/components/footprint_panel.cpp
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
+    src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     src/components/realtime_dashboard_component.cpp
@@ -156,6 +156,8 @@ set(DASHBOARD_SOURCES
     src/components/chart_replay_panel.cpp
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
+    src/components/strategy_builder.cpp
+    src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp
@@ -212,7 +214,6 @@ set(BTQUANT_TERMINAL_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMPLOT_DIR}/implot.cpp
     ${IMPLOT_DIR}/implot_items.cpp
-    ${IMPLOT_DIR}/implot_demo.cpp
     # Threading module - this is the main focus of our task
     src/threading/task_scheduler.cpp
     src/threading/lockfree_queue.cpp
@@ -263,6 +264,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/footprint_panel.cpp
     src/components/tpo_panel.cpp
     src/components/dom_surface_panel.cpp
+    src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
     src/components/realtime_dashboard_component.cpp
@@ -296,6 +298,8 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/chart_replay_panel.cpp
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
+    src/components/strategy_builder.cpp
+    src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp
     src/ui/unified_theme_system.cpp
     src/ui/layout_manager.cpp

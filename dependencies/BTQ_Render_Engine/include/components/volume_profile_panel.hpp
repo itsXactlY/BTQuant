@@ -188,6 +188,12 @@ class VolumeProfilePanel : public PanelBase {
     double buy_volume;
     double sell_volume;
     double total_volume;
+    int buy_trades;      // Count of buy trades at this price level
+    int sell_trades;     // Count of sell trades at this price level
+    int total_trades;    // Total count of trades at this price level
+    
+    VolumeLevel() : price(0.0), buy_volume(0.0), sell_volume(0.0), total_volume(0.0), 
+                    buy_trades(0), sell_trades(0), total_trades(0) {}
   };
 
   // Session profile data

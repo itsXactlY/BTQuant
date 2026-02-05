@@ -218,6 +218,9 @@ void VolumeProfilePanel::detect_and_handle_session_boundaries() {
           current_session.volume_profile[i].buy_volume = 0;
           current_session.volume_profile[i].sell_volume = 0;
           current_session.volume_profile[i].total_volume = 0;
+          current_session.volume_profile[i].buy_trades = 0;
+          current_session.volume_profile[i].sell_trades = 0;
+          current_session.volume_profile[i].total_trades = 0;
         }
       }
 
@@ -228,10 +231,13 @@ void VolumeProfilePanel::detect_and_handle_session_boundaries() {
       if (bucket_idx < current_session.volume_profile.size()) {
         if (trade.is_buy) {
           current_session.volume_profile[bucket_idx].buy_volume += trade.size;
+          current_session.volume_profile[bucket_idx].buy_trades++;
         } else {
           current_session.volume_profile[bucket_idx].sell_volume += trade.size;
+          current_session.volume_profile[bucket_idx].sell_trades++;
         }
         current_session.volume_profile[bucket_idx].total_volume += trade.size;
+        current_session.volume_profile[bucket_idx].total_trades++;
 
         // Update max volume if needed
         double max_vol_in_bucket = std::max(current_session.volume_profile[bucket_idx].buy_volume,
@@ -411,10 +417,13 @@ void VolumeProfilePanel::build_volume_profile() {
         if (bucket_index < volume_profile_.size()) {
           if (trade.is_buy) {
             volume_profile_[bucket_index].buy_volume += trade.size;
+            volume_profile_[bucket_index].buy_trades++;
           } else {
             volume_profile_[bucket_index].sell_volume += trade.size;
+            volume_profile_[bucket_index].sell_trades++;
           }
           volume_profile_[bucket_index].total_volume += trade.size;
+          volume_profile_[bucket_index].total_trades++;
 
           // Update max volume if needed
           double max_vol_in_bucket = std::max(volume_profile_[bucket_index].buy_volume,
@@ -474,6 +483,9 @@ void VolumeProfilePanel::build_volume_profile() {
       volume_profile_[i].buy_volume = 0;
       volume_profile_[i].sell_volume = 0;
       volume_profile_[i].total_volume = 0;
+      volume_profile_[i].buy_trades = 0;
+      volume_profile_[i].sell_trades = 0;
+      volume_profile_[i].total_trades = 0;
     }
 
     // Aggregate trades into buckets
@@ -483,10 +495,13 @@ void VolumeProfilePanel::build_volume_profile() {
 
       if (trade.is_buy) {
         volume_profile_[bucket].buy_volume += trade.size;
+        volume_profile_[bucket].buy_trades++;
       } else {
         volume_profile_[bucket].sell_volume += trade.size;
+        volume_profile_[bucket].sell_trades++;
       }
       volume_profile_[bucket].total_volume += trade.size;
+      volume_profile_[bucket].total_trades++;
     }
 
     // Find POC and max volume
@@ -764,6 +779,104 @@ void VolumeProfilePanel::render_controls() {
     }
 
     ImGui::Unindent();
+  }
+
+  // Add detailed volume profile table
+  if (ImGui::CollapsingHeader("Volume Profile Detail Table")) {
+    if (ImGui::BeginTable("##VolumeProfileDetailTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg)) {
+      ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+      ImGui::TableSetupColumn("% of Volume at POC", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+      ImGui::TableSetupColumn("Total Trades", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+      ImGui::TableSetupColumn("Buy/Sell Ratio", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+      ImGui::TableSetupColumn("Relative Volume", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+      ImGui::TableSetupColumn("Total Volume", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+      ImGui::TableHeadersRow();
+
+      // Determine which profile to use based on the current mode
+      const auto& current_volume_profile = (profile_mode_ == ProfileMode::Composite) ? composite_volume_profile_ : volume_profile_;
+      double current_poc_price = (profile_mode_ == ProfileMode::Composite) ? composite_poc_price_ : poc_price_;
+      double current_price_bucket_size = price_bucket_size_;
+
+      // Calculate average volume across all levels for relative volume calculation
+      double total_volume_all_levels = 0.0;
+      int valid_levels_count = 0;
+      for (const auto& level : current_volume_profile) {
+        if (level.total_volume > 0) {
+          total_volume_all_levels += level.total_volume;
+          valid_levels_count++;
+        }
+      }
+      double avg_volume = (valid_levels_count > 0) ? total_volume_all_levels / valid_levels_count : 0.0;
+
+      // Calculate total volume at POC for percentage calculation
+      double total_volume_at_poc = 0.0;
+      for (const auto& level : current_volume_profile) {
+        if (std::abs(level.price - current_poc_price) < current_price_bucket_size/2.0) { // Check if this level is near POC
+          total_volume_at_poc = level.total_volume;
+          break;
+        }
+      }
+      
+      // If we didn't find the exact POC level, find the level with the highest volume
+      if (total_volume_at_poc == 0.0 && !current_volume_profile.empty()) {
+        double max_volume = 0.0;
+        for (const auto& level : current_volume_profile) {
+          double total = level.buy_volume + level.sell_volume;
+          if (total > max_volume) {
+            max_volume = total;
+            total_volume_at_poc = level.total_volume;
+          }
+        }
+      }
+
+      // Add rows for each volume level
+      for (const auto& level : current_volume_profile) {
+        ImGui::TableNextRow();
+
+        // Price column
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("%.4f", level.price);
+
+        // % of Volume at POC column
+        ImGui::TableSetColumnIndex(1);
+        if (total_volume_at_poc > 0) {
+          double percentage_of_poc = (level.total_volume / total_volume_at_poc) * 100.0;
+          ImGui::Text("%.2f%%", percentage_of_poc);
+        } else {
+          ImGui::Text("N/A");
+        }
+
+        // Total Trades column
+        ImGui::TableSetColumnIndex(2);
+        ImGui::Text("%d", level.total_trades);
+
+        // Buy/Sell Ratio column
+        ImGui::TableSetColumnIndex(3);
+        if (level.sell_volume > 0) {
+          double buy_sell_ratio = level.buy_volume / level.sell_volume;
+          ImGui::Text("%.2f", buy_sell_ratio);
+        } else if (level.buy_volume > 0) {
+          ImGui::Text("Inf"); // Infinite ratio if no sells
+        } else {
+          ImGui::Text("N/A"); // No trades at this level
+        }
+
+        // Relative Volume column (Volume / Avg Volume)
+        ImGui::TableSetColumnIndex(4);
+        if (avg_volume > 0) {
+          double relative_volume = level.total_volume / avg_volume;
+          ImGui::Text("%.2f", relative_volume);
+        } else {
+          ImGui::Text("N/A");
+        }
+
+        // Total Volume column
+        ImGui::TableSetColumnIndex(5);
+        ImGui::Text("%.2f", level.total_volume);
+      }
+
+      ImGui::EndTable();
+    }
   }
 }
 
@@ -4276,6 +4389,9 @@ void VolumeProfilePanel::build_composite_profile() {
         daily_profile[i].buy_volume = 0;
         daily_profile[i].sell_volume = 0;
         daily_profile[i].total_volume = 0;
+        daily_profile[i].buy_trades = 0;
+        daily_profile[i].sell_trades = 0;
+        daily_profile[i].total_trades = 0;
       }
 
       // Aggregate trades into buckets
@@ -4285,10 +4401,13 @@ void VolumeProfilePanel::build_composite_profile() {
 
         if (trade.is_buy) {
           daily_profile[bucket].buy_volume += trade.size;
+          daily_profile[bucket].buy_trades++;
         } else {
           daily_profile[bucket].sell_volume += trade.size;
+          daily_profile[bucket].sell_trades++;
         }
         daily_profile[bucket].total_volume += trade.size;
+        daily_profile[bucket].total_trades++;
       }
 
       // Add this daily profile to our collection
@@ -4336,6 +4455,9 @@ void VolumeProfilePanel::build_composite_profile() {
     composite_volume_profile_[i].buy_volume = 0;
     composite_volume_profile_[i].sell_volume = 0;
     composite_volume_profile_[i].total_volume = 0;
+    composite_volume_profile_[i].buy_trades = 0;
+    composite_volume_profile_[i].sell_trades = 0;
+    composite_volume_profile_[i].total_trades = 0;
   }
 
   // Aggregate volume from all daily profiles
@@ -4347,6 +4469,9 @@ void VolumeProfilePanel::build_composite_profile() {
         composite_volume_profile_[composite_idx].buy_volume += daily_level.buy_volume;
         composite_volume_profile_[composite_idx].sell_volume += daily_level.sell_volume;
         composite_volume_profile_[composite_idx].total_volume += daily_level.total_volume;
+        composite_volume_profile_[composite_idx].buy_trades += daily_level.buy_trades;
+        composite_volume_profile_[composite_idx].sell_trades += daily_level.sell_trades;
+        composite_volume_profile_[composite_idx].total_trades += daily_level.total_trades;
       }
     }
   }

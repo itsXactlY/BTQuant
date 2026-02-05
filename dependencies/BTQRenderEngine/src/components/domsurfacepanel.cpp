@@ -818,12 +818,15 @@ void DomSurfacePanel::updateVulkanTexture() {
     for (int x = 0; x < time_steps; ++x) {
       // heatmap_data_ is organized as [price_bin * time_steps + time_step]
       // So for position (x=time, y=price), we access [y * time_steps + x]
-      double value = heatmap_data_[y * time_steps + x];
+      double value = 0.0;
+      if (y * time_steps + x < heatmap_data_.size()) {
+        value = heatmap_data_[y * time_steps + x];
+      }
       float normalized = static_cast<float>(value / scale_max_);
 
       // Apply heatmap intensity adjustment to sensitivity
       normalized = std::pow(normalized, 1.0f / heatmap_intensity_);
-      
+
       // Clamp normalized value to [0, 1] range
       normalized = std::clamp(normalized, 0.0f, 1.0f);
 
@@ -839,7 +842,7 @@ void DomSurfacePanel::updateVulkanTexture() {
         g = static_cast<uint8_t>(1 + (t * (71 - 1)));
         b = static_cast<uint8_t>(84 + (t * (194 - 84)));
       } else if (normalized <= 0.25f) {
-        float t = (normalized - 0.125f) / 0.125f;
+        float t = (normalized - 0.125f) / 0.25f;
         r = static_cast<uint8_t>(253 + (t * (244 - 253))); // Blue to light blue
         g = static_cast<uint8_t>(71 + (t * (172 - 71)));
         b = static_cast<uint8_t>(194 + (t * (248 - 194)));
@@ -870,7 +873,7 @@ void DomSurfacePanel::updateVulkanTexture() {
   auto device = vulkan_core_->get_device();
 
   // Allocate staging buffer
-  VkDeviceSize imageSize = time_steps * height * sizeof(uint32_t);
+  VkDeviceSize imageSize = static_cast<VkDeviceSize>(time_steps * height * sizeof(uint32_t));
   auto staging_buffer = vulkan_core_->get_memory_manager().allocate_staging_buffer(imageSize);
 
   // Copy image data to staging buffer
@@ -939,8 +942,8 @@ void DomSurfacePanel::updateVulkanTexture() {
   shader_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   shader_barrier.subresourceRange.baseMipLevel = 0;
   shader_barrier.subresourceRange.levelCount = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
+  shader_barrier.subresourceRange.baseArrayLayer = 0;
+  shader_barrier.subresourceRange.layerCount = 1;
   shader_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
   shader_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 

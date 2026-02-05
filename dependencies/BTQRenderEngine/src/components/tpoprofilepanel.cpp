@@ -23,7 +23,7 @@
 
 /**
  * @brief TPO Profile Panel widget implementing Quantower TPO layout
- * 
+ *
  * This panel displays Time Price Opportunities (TPO) in a traditional format:
  * - Vertical price scale on the left side
  * - Horizontal letter blocks representing time periods
@@ -64,7 +64,7 @@ private:
     double m_priceStep;
     QStringList m_timeLabels;
     QMap<QChar, QColor> m_letterColors;
-    
+
     // Layout dimensions
     int m_priceScaleWidth;
     int m_topMargin;
@@ -73,7 +73,7 @@ private:
     int m_rightMargin;
     int m_blockWidth;
     int m_blockHeight;
-    
+
     // Display properties
     bool m_needsUpdate;
 };
@@ -95,7 +95,7 @@ TPOProfilePanel::TPOProfilePanel(QWidget *parent)
 {
     setMinimumSize(400, 300);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    
+
     // Initialize default letter colors
     m_letterColors['A'] = QColor(255, 100, 100);  // Red
     m_letterColors['B'] = QColor(100, 255, 100);  // Green
@@ -123,9 +123,9 @@ TPOProfilePanel::TPOProfilePanel(QWidget *parent)
     m_letterColors['X'] = QColor(255, 100, 150);  // Rose
     m_letterColors['Y'] = QColor(150, 255, 100);  // Lime
     m_letterColors['Z'] = QColor(100, 150, 100);  // Olive
-    
-    // Note: updateDisplay is a private slot that triggers a repaint when data changes
-    // The connection would normally be made elsewhere when needed
+
+    // Connect timer for periodic updates if needed
+    connect(new QTimer(this), &QTimer::timeout, this, &TPOProfilePanel::updateDisplay);
 }
 
 // Destructor implementation
@@ -167,19 +167,19 @@ void TPOProfilePanel::paintEvent(QPaintEvent *event)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    
+
     // Draw background
     painter.fillRect(rect(), palette().color(QPalette::Base));
-    
+
     // Draw grid lines
     drawGridLines(painter);
-    
+
     // Draw price scale on the left
     drawPriceScale(painter);
-    
+
     // Draw TPO letter blocks
     drawLetterBlocks(painter);
-    
+
     // Reset update flag
     m_needsUpdate = false;
 }
@@ -200,99 +200,105 @@ void TPOProfilePanel::drawPriceScale(QPainter &painter)
     // Calculate available height for price scale
     int totalHeight = height() - m_topMargin - m_bottomMargin;
     int priceLevels = static_cast<int>((m_maxPrice - m_minPrice) / m_priceStep) + 1;
-    
+
     if (priceLevels <= 0) return;
-    
+
     m_blockHeight = totalHeight / priceLevels;
-    
+
     // Draw the price scale background
-    QRect scaleRect(m_leftMargin - m_priceScaleWidth, m_topMargin, 
+    QRect scaleRect(m_leftMargin - m_priceScaleWidth, m_topMargin,
                     m_priceScaleWidth, totalHeight);
     painter.fillRect(scaleRect, QColor(245, 245, 245));
     painter.drawRect(scaleRect);
-    
+
     // Draw price labels
     QFont font = painter.font();
     font.setPointSize(8);
     painter.setFont(font);
-    
+
+    // Draw price labels from top (highest price) to bottom (lowest price)
     for (int i = 0; i < priceLevels; ++i) {
         double price = m_maxPrice - (i * m_priceStep);
-        
+
         // Calculate position for this price level
         int y = m_topMargin + (i * m_blockHeight);
-        
+
         // Draw price label
         QString priceStr = QString::number(price, 'f', 2);
-        QRect labelRect(m_leftMargin - m_priceScaleWidth + 5, y, 
+        QRect labelRect(m_leftMargin - m_priceScaleWidth + 5, y,
                         m_priceScaleWidth - 10, m_blockHeight);
-        
-        painter.drawText(labelRect, Qt::AlignLeft | Qt::AlignVCenter, priceStr);
-        
+
+        painter.drawText(labelRect, Qt::AlignRight | Qt::AlignVCenter, priceStr);
+
         // Draw horizontal grid line
         painter.setPen(QPen(QColor(220, 220, 220), 1));
         painter.drawLine(m_leftMargin, y, width() - m_rightMargin, y);
     }
-    
+
     // Draw bottom line
     painter.setPen(QPen(QColor(220, 220, 220), 1));
-    painter.drawLine(m_leftMargin, m_topMargin + totalHeight, 
+    painter.drawLine(m_leftMargin, m_topMargin + totalHeight,
                      width() - m_rightMargin, m_topMargin + totalHeight);
 }
 
 void TPOProfilePanel::drawLetterBlocks(QPainter &painter)
 {
     if (m_tpoData.isEmpty()) return;
-    
+
     int totalHeight = height() - m_topMargin - m_bottomMargin;
     int priceLevels = static_cast<int>((m_maxPrice - m_minPrice) / m_priceStep) + 1;
-    
+
     if (priceLevels <= 0 || m_timeLabels.isEmpty()) return;
-    
+
     // Calculate block dimensions based on available space
     int availableWidth = width() - m_leftMargin - m_rightMargin;
     m_blockWidth = availableWidth / m_timeLabels.size();
-    
+
     if (m_blockWidth < 10) m_blockWidth = 10;  // Minimum width
-    
+
     // Iterate through TPO data and draw letter blocks
     for (int i = 0; i < m_tpoData.size(); ++i) {
         const auto &dataPoint = m_tpoData[i];
-        
-        if (!dataPoint.contains("price") || !dataPoint.contains("letter") || 
+
+        if (!dataPoint.contains("price") || !dataPoint.contains("letter") ||
             !dataPoint.contains("time_index")) {
             continue;
         }
-        
+
         double price = dataPoint["price"].toDouble();
         QChar letter = dataPoint["letter"].toString()[0];
         int timeIndex = dataPoint["time_index"].toInt();
-        
+
+        // Validate time index
+        if (timeIndex < 0 || timeIndex >= m_timeLabels.size()) {
+            continue;
+        }
+
         // Get the price index
         int priceIndex = getPriceIndex(price);
         if (priceIndex < 0 || priceIndex >= priceLevels) continue;
-        
+
         // Calculate block position
         int x = m_leftMargin + (timeIndex * m_blockWidth);
         int y = m_topMargin + (priceIndex * m_blockHeight);
-        
+
         // Get color for this letter
         QColor color = m_letterColors.value(letter, QColor(200, 200, 200));
-        
+
         // Draw the block
         QRect blockRect(x, y, m_blockWidth - 2, m_blockHeight - 2);
         painter.fillRect(blockRect, color);
-        
+
         // Draw border
         painter.setPen(QPen(color.darker(), 1));
         painter.drawRect(blockRect);
-        
+
         // Draw the letter
         painter.setPen(QPen(Qt::black, 1));
         QFont font = painter.font();
         font.setPointSize(8);
         painter.setFont(font);
-        
+
         painter.drawText(blockRect, Qt::AlignCenter, QString(letter));
     }
 }
@@ -305,14 +311,14 @@ void TPOProfilePanel::drawGridLines(QPainter &painter)
                      width() - m_leftMargin - m_rightMargin,
                      height() - m_topMargin - m_bottomMargin);
     painter.drawRect(borderRect);
-    
+
     // Draw vertical grid lines for time periods if we have them
     if (!m_timeLabels.isEmpty()) {
         int availableWidth = width() - m_leftMargin - m_rightMargin;
         int segmentWidth = availableWidth / m_timeLabels.size();
-        
+
         painter.setPen(QPen(QColor(220, 220, 220), 1));
-        
+
         for (int i = 1; i < m_timeLabels.size(); ++i) {
             int x = m_leftMargin + (i * segmentWidth);
             painter.drawLine(x, m_topMargin, x, height() - m_bottomMargin);
@@ -330,10 +336,10 @@ QRect TPOProfilePanel::getBlockRect(int priceIndex, int timeIndex) const
 int TPOProfilePanel::getPriceIndex(double price) const
 {
     if (price < m_minPrice || price > m_maxPrice) return -1;
-    
+
     int index = static_cast<int>((m_maxPrice - price) / m_priceStep);
     int maxIndex = static_cast<int>((m_maxPrice - m_minPrice) / m_priceStep);
-    
+
     return qBound(0, index, maxIndex);
 }
 

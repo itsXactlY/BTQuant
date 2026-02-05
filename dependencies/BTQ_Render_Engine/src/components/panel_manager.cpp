@@ -53,7 +53,7 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
       risk_assessment_(risk_assessment),
       micro_renderer_(micro_renderer) {
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
-  context_menu_manager_ = std::make_unique<ContextMenuManager>();
+  context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
 }
 
 PanelManager::~PanelManager() {
@@ -147,6 +147,12 @@ void PanelManager::render() {
   panel_to_id.reserve(panels_with_ids.size());
   for (const auto& [id, panel] : panels_with_ids) {
     panel_to_id[panel] = id;
+  }
+
+  // Process context menu for only the visible panels
+  for (const auto* panel : visible_panels) {
+    // Cast back to non-const pointer to call handle_context_menu (since handle_context_menu is non-const)
+    const_cast<BTQuant::PanelBase*>(panel)->handle_context_menu(*context_menu_manager_);
   }
 
   // Render only the visible panels

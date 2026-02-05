@@ -4,10 +4,13 @@
 #include <string>
 #include <functional>
 
+// Need to include panel_manager.hpp to use its methods
+#include "components/panel_manager.hpp"
+
 namespace BTQuant {
 
 // Context menu manager implementation
-ContextMenuManager::ContextMenuManager() {
+ContextMenuManager::ContextMenuManager(PanelManager* panel_manager) : panel_manager_(panel_manager) {
     // Initialize context menu handlers for different panel types
     initialize_context_menus();
 }
@@ -623,6 +626,50 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                     // Generic action
                 }
                 break;
+        }
+
+        // Add global panel actions at the bottom of each context menu
+        ImGui::Separator();
+
+        // Find the panel ID by comparing with all panels in the manager
+        uint32_t panel_id = 0;
+        if (panel_manager_) {
+            auto all_panel_ids = panel_manager_->get_all_panel_ids();
+            for (uint32_t id : all_panel_ids) {
+                PanelBase* manager_panel = panel_manager_->get_panel_by_id(id);
+                if (manager_panel == panel) {
+                    panel_id = id;
+                    break;
+                }
+            }
+        }
+
+        if (ImGui::MenuItem("Close Panel")) {
+            // Call the panel manager to remove this panel
+            if (panel_manager_ && panel_id != 0) {
+                panel_manager_->remove_panel(panel_id);
+            }
+        }
+        if (ImGui::MenuItem("Duplicate Panel")) {
+            // Call the panel manager to duplicate this panel
+            if (panel_manager_ && panel_id != 0) {
+                // Get the panel's type and title to create a duplicate
+                PanelType type = panel->get_config().type;
+                std::string title = panel->get_config().title + " Copy";
+
+                // Calculate new position for the duplicated panel
+                int new_grid_x = panel->get_config().grid_x + 1;
+                int new_grid_y = panel->get_config().grid_y;
+
+                // Add the new panel with the same properties
+                panel_manager_->add_panel(type, title, new_grid_x, new_grid_y,
+                                         panel->get_config().grid_width,
+                                         panel->get_config().grid_height);
+            }
+        }
+        if (ImGui::MenuItem("Panel Settings")) {
+            // Call the panel's settings method if available
+            panel->open_settings();
         }
 
         ImGui::EndPopup();

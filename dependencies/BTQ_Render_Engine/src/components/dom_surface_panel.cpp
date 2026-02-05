@@ -402,6 +402,12 @@ void DomSurfacePanel::render() {
   if (consumeDirty()) {
     updateHeatmapData();
     updateLargeOrderMarkers();
+    
+    // Update persistent levels if we have current orderbook data
+    auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
+    if (orderbook_opt) {
+      updatePersistentLevels(*orderbook_opt);
+    }
   }
 
   begin_panel_window();
@@ -416,6 +422,8 @@ void DomSurfacePanel::render() {
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
+  ImGui::SameLine();
+  ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
   ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu", current_symbol_id_, price_bins_,
               large_order_markers_.size());
@@ -447,7 +455,12 @@ void DomSurfacePanel::render() {
       ImPlot::PopColormap();
     }
 
-    // Render Large Order Markers OVER the heatmap
+    // Render Persistent Level Lines OVER the heatmap
+    if (show_persistent_lines_) {
+      renderPersistentLevels();
+    }
+
+    // Render Large Order Markers OVER the heatmap and persistent lines
     renderLargeOrderMarkers();
 
     ImPlot::EndPlot();
@@ -461,9 +474,134 @@ void DomSurfacePanel::render() {
     ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
     ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(),
                 median_order_size_);
+    ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
   }
 
   end_panel_window();
+}
+
+void DomSurfacePanel::updatePersistentLevels(const RenderEngine::OrderbookData& orderbook) {
+  // Get current time
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Process bids
+  for (const auto& level : orderbook.bids) {
+    // Check if this level has a large order (using the same threshold as markers)
+    double threshold = large_order_threshold_ * median_order_size_;
+    if (level.size > threshold) {
+      addOrUpdatePersistentLevel(level.price, true, level.size);
+    }
+  }
+
+  // Process asks
+  for (const auto& level : orderbook.asks) {
+    // Check if this level has a large order (using the same threshold as markers)
+    double threshold = large_order_threshold_ * median_order_size_;
+    if (level.size > threshold) {
+      addOrUpdatePersistentLevel(level.price, false, level.size);
+    }
+  }
+
+  // Clean up inactive levels
+  cleanupInactivePersistentLevels();
+}
+
+void DomSurfacePanel::addOrUpdatePersistentLevel(double price, bool is_bid, double size) {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Check if this price level already exists
+  for (auto& level : persistent_levels_) {
+    // Use a small epsilon for price comparison
+    if (std::abs(level.price - price) < 0.0001) {
+      // Update existing level
+      level.last_updated_time = current_time;
+      level.size = std::max(level.size, size); // Keep the largest size seen
+      level.is_active = true;
+      return;
+    }
+  }
+
+  // Add new persistent level
+  persistent_levels_.emplace_back(price, is_bid, size, current_time);
+}
+
+void DomSurfacePanel::cleanupInactivePersistentLevels() {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Remove levels that haven't been updated within the timeout period
+  persistent_levels_.erase(
+      std::remove_if(persistent_levels_.begin(), persistent_levels_.end(),
+                     [current_time, this](const PersistentLevel& level) {
+                       return (current_time - level.last_updated_time) > persistence_timeout_ms_;
+                     }),
+      persistent_levels_.end());
+}
+
+void DomSurfacePanel::renderPersistentLevels() {
+  if (persistent_levels_.empty()) return;
+
+  // Get plot area bounds
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+
+  // Render each persistent level as a horizontal line or rectangle
+  for (const auto& level : persistent_levels_) {
+    // Only render if the level is considered "persistent" (has been present for threshold time)
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+    
+    if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+      ImU32 color = getPersistentLevelColor(level);
+      
+      // Draw horizontal line across the entire time axis
+      ImPlot::PushStyleColor(ImPlotCol_Line, color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
+      
+      // Draw horizontal line at the price level from left to right of the plot
+      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double ys[2] = {level.price, level.price};
+      ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
+      
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+      
+      // Optionally draw a faint rectangle to highlight the level more prominently
+      // This creates a thin horizontal band at the price level
+      // Extract the RGB components and set alpha to 10% transparency
+      ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      color_vec.w = 0.1f; // Set alpha to 10% transparency
+      ImU32 transparent_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, transparent_color);
+      
+      // Calculate a small vertical range around the price level for the rectangle
+      double price_range = (bounds_max_[1] - bounds_min_[1]) * 0.001; // 0.1% of the visible price range
+      double y_min = level.price - price_range/2.0;
+      double y_max = level.price + price_range/2.0;
+      
+      // Draw a horizontal rectangle spanning the full time axis
+      ImPlot::PlotRect("##PersistentLevelRect", 
+                      plot_rect.X.Min, y_min, 
+                      plot_rect.X.Max, y_max);
+      
+      ImPlot::PopStyleColor();
+    }
+  }
+}
+
+ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) const {
+  // Color: Bright Green for Bids, Bright Red for Asks
+  // Use brighter colors than the markers to distinguish persistent levels
+  if (level.is_bid) {
+    return IM_COL32(0, 255, 100, 200);  // Bright green with transparency
+  } else {
+    return IM_COL32(255, 100, 100, 200);  // Bright red with transparency
+  }
 }
 
 }  // namespace BTQuant

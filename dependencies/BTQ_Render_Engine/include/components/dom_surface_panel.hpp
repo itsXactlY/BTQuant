@@ -52,6 +52,14 @@ class DomSurfacePanel : public PanelBase {
   void setMaxLargeOrderMarkers(int max) { max_large_order_markers_ = max; }
   void setLargeOrderFadeOut(bool enable) { enable_fade_out_ = enable; }
 
+  // Persistent Level Configuration
+  void setPersistenceThresholdMs(uint64_t ms) { persistence_threshold_ms_ = ms; }
+  void setPersistenceTimeoutMs(double ms) { persistence_timeout_ms_ = ms; }
+  void setShowPersistentLines(bool show) { show_persistent_lines_ = show; }
+  uint64_t getPersistenceThresholdMs() const { return persistence_threshold_ms_; }
+  double getPersistenceTimeoutMs() const { return persistence_timeout_ms_; }
+  bool getShowPersistentLines() const { return show_persistent_lines_; }
+
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   uint32_t current_symbol_id_ = 0;
@@ -94,6 +102,25 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float MIN_RADIUS = 6.0f;   // Minimum radius
   static constexpr float MAX_RADIUS = 40.0f;  // Maximum radius
 
+  // Persistent Large Order Tracker (Horizontal Lines/Rectangles)
+  struct PersistentLevel {
+    double price;                    // Price level where large order persists
+    bool is_bid;                     // true = Bid, false = Ask
+    double size;                     // Size of the large order
+    uint64_t first_detected_time;    // When first detected at this level
+    uint64_t last_updated_time;      // Last time order was seen at this level
+    bool is_active;                  // Whether the level is currently active
+
+    PersistentLevel(double p, bool b, double s, uint64_t time)
+        : price(p), is_bid(b), size(s), first_detected_time(time),
+          last_updated_time(time), is_active(true) {}
+  };
+
+  std::vector<PersistentLevel> persistent_levels_;
+  uint64_t persistence_threshold_ms_ = 5000;  // 5 seconds persistence threshold
+  double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
+  bool show_persistent_lines_ = true;          // Toggle for persistent line display
+
   // Helper to refresh data buffer
   void updateHeatmapData();
 
@@ -106,6 +133,13 @@ class DomSurfacePanel : public PanelBase {
   float calculateMarkerRadius(double order_size) const;
   ImU32 getMarkerColor(const LargeOrderMarker& marker) const;
   std::string getMarkerTooltip(const LargeOrderMarker& marker) const;
+
+  // Persistent Level Tracking Methods
+  void updatePersistentLevels(const RenderEngine::OrderbookData& orderbook);
+  void addOrUpdatePersistentLevel(double price, bool is_bid, double size);
+  void cleanupInactivePersistentLevels();
+  void renderPersistentLevels();
+  ImU32 getPersistentLevelColor(const PersistentLevel& level) const;
 
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type);

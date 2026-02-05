@@ -464,6 +464,17 @@ std::pair<double, double> TPOProfile::get_value_area(double percent) const {
     return std::make_pair(min_price, max_price);
 }
 
+// Get price levels with only one TPO letter (single prints)
+std::vector<double> TPOProfile::get_single_print_levels() const {
+    std::vector<double> single_prints;
+    for (const auto& [price, letters] : price_to_letters) {
+        if (letters.length() == 1) {
+            single_prints.push_back(price);
+        }
+    }
+    return single_prints;
+}
+
 // Get total TPO count across all price levels
 int TPOProfile::get_total_tpo_count() const {
     int total = 0;

@@ -96,6 +96,9 @@ struct TPOProfile {
     // Get total TPO count across all price levels
     int get_total_tpo_count() const;
 
+    // Get price levels with only one TPO letter (single prints)
+    std::vector<double> get_single_print_levels() const;
+
     // Print the profile for debugging
     void print_profile() const;
 };

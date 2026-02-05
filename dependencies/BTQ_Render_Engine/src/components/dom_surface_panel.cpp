@@ -553,7 +553,9 @@ void DomSurfacePanel::render() {
 
     if (cols > 0 && rows > 0) {
       ImPlot::PushColormap(ImPlotColormap_Viridis);
-      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, scale_max_, nullptr,
+      // Apply heatmap intensity to adjust color mapping sensitivity
+      double adjusted_scale_max = scale_max_ / heatmap_intensity_;
+      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
                           ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                           ImPlotPoint(bounds_max_[0], bounds_max_[1]));
       ImPlot::PopColormap();
@@ -710,6 +712,24 @@ ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) con
   } else {
     return IM_COL32(255, 100, 100, 200);  // Bright red with transparency
   }
+}
+
+void DomSurfacePanel::render_panel_header() {
+  // Call parent implementation to render the default header
+  PanelBase::render_panel_header();
+
+  // Add heatmap intensity slider to the panel header
+  ImGui::Separator();
+  ImGui::Text("Heatmap Intensity:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(200);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  if (ImGui::Button("Reset##HeatmapIntensity")) {
+    heatmap_intensity_ = 1.0f;
+  }
+  ImGui::Separator();
 }
 
 }  // namespace BTQuant

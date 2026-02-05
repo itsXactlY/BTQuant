@@ -64,6 +64,9 @@ class DomSurfacePanel : public PanelBase {
 
   void render() override;
   void setSymbol(uint32_t symbol_id);
+  
+  // Override panel header to add heatmap intensity control
+  void render_panel_header() override;
 
   // Configuration
   void setHistoryDepth(int depth) { history_depth_ = depth; }
@@ -90,6 +93,7 @@ class DomSurfacePanel : public PanelBase {
   int history_depth_ = 300;    // Number of snapshots to show (X-axis time)
   int price_bins_ = 100;       // Number of vertical price buckets (Y-axis price)
   double price_range_ = 0.02;  // +/- 2% from mid price
+  float heatmap_intensity_ = 1.0f;  // Intensity/sensitivity of heatmap color mapping
 
   // Data storage for heatmap
   // ImPlot PlotHeatmap data size = rows * cols

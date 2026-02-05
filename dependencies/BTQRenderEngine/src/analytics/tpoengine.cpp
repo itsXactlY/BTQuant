@@ -23,8 +23,8 @@ std::chrono::system_clock::time_point TPOEngine::get_time_bucket_start(
     // Convert to seconds since epoch
     auto timestamp_seconds = std::chrono::time_point_cast<std::chrono::seconds>(timestamp).time_since_epoch().count();
 
-    // Calculate the start of the 30-minute bucket
-    auto bucket_start_seconds = (timestamp_seconds / 1800) * 1800; // 1800 = 30*60 seconds
+    // Calculate the start of the 30-minute bucket (1800 seconds = 30 minutes)
+    auto bucket_start_seconds = (timestamp_seconds / 1800) * 1800;
 
     return std::chrono::system_clock::time_point{std::chrono::seconds(bucket_start_seconds)};
 }
@@ -68,7 +68,7 @@ std::map<std::chrono::system_clock::time_point,
              std::map<double, TPONode>> result;
 
     for (auto it = tpo_data.lower_bound(start_time);
-         it != tpo_data.upper_bound(end_time); ++it) {
+         it != tpo_data.lower_bound(end_time); ++it) {
         result[it->first] = it->second;
     }
 
@@ -105,28 +105,4 @@ void TPOEngine::print_tpo_data() const {
 // Print TPO profile for debugging purposes
 void TPOEngine::print_tpo_profile() const {
     tpo_profile.print_profile();
-}
-
-// Example usage and testing function
-void example_usage() {
-    TPOEngine engine(0.25); // Using 0.25 as price bucket size
-
-    // Sample price ticks
-    std::vector<PriceTick> sample_ticks = {
-        {std::chrono::system_clock::now(), 100.50, 100.0},
-        {std::chrono::system_clock::now() + std::chrono::minutes(5), 100.75, 150.0},
-        {std::chrono::system_clock::now() + std::chrono::minutes(10), 100.50, 200.0},
-        {std::chrono::system_clock::now() + std::chrono::minutes(35), 101.25, 75.0}, // This should go to next 30-min bucket
-        {std::chrono::system_clock::now() + std::chrono::minutes(40), 101.50, 125.0}, // This should go to next 30-min bucket
-    };
-
-    // Process the ticks
-    engine.process_ticks(sample_ticks);
-
-    // Print the results
-    std::cout << "TPO Data:\n";
-    engine.print_tpo_data();
-
-    std::cout << "\nTPO Profile:\n";
-    engine.print_tpo_profile();
 }

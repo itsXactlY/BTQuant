@@ -36,12 +36,17 @@ add_executable(tpotest
     test/tpotest.cpp
 )
 
+add_executable(tpoenginetest
+    test/tpoengine_test.cpp
+)
+
 add_executable(tpoprofilepaneltest
     test/tpoprofilepanel_test.cpp
 )
 
-# Link the TPO engine library to the test executable
+# Link the TPO engine library to the test executables
 target_link_libraries(tpotest tpoengine)
+target_link_libraries(tpoenginetest tpoengine)
 
 # Link the components library to the TPO profile panel test
 target_link_libraries(tpoprofilepaneltest components tpoengine Qt5::Core Qt5::Widgets Qt5::Gui)

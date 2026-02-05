@@ -814,6 +814,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
             }
         }
 
+        // Global Panel Actions - Available for all panel types
         if (ImGui::MenuItem("Close Panel")) {
             // Call the panel manager to remove this panel
             if (panel_manager_ && panel_id != 0) {
@@ -827,7 +828,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                 PanelType type = panel->get_config().type;
                 std::string title = panel->get_config().title + " Copy";
 
-                // Calculate new position for the duplicated panel
+                // Calculate new position for the duplicated panel to avoid overlap
                 int new_grid_x = panel->get_config().grid_x + 1;
                 int new_grid_y = panel->get_config().grid_y;
 
@@ -838,8 +839,10 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
             }
         }
         if (ImGui::MenuItem("Settings")) {
-            // Call the panel's settings method if available
-            panel->open_settings();
+            // Call the panel's open_settings() method to open the settings dialog
+            if (panel) {
+                panel->open_settings();
+            }
         }
 
         ImGui::EndPopup();

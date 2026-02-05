@@ -61,7 +61,17 @@ private:
     double m_priceStep;
     QStringList m_timeLabels;
     QMap<QChar, QColor> m_letterColors;
-    
+
+    // TPO engine for advanced calculations
+    TPOEngine m_tpoEngine;
+
+    // Cached POC and Value Area values
+    double m_cached_poc;
+    double m_cached_va_low;
+    double m_cached_va_high;
+    std::vector<double> m_cached_single_prints;  // Cache for single print levels
+    bool m_values_cached;
+
     // Layout dimensions
     int m_priceScaleWidth;
     int m_topMargin;
@@ -70,7 +80,7 @@ private:
     int m_rightMargin;
     int m_blockWidth;
     int m_blockHeight;
-    
+
     // Display properties
     bool m_needsUpdate;
 
@@ -78,7 +88,7 @@ private:
     int m_selectedPriceIndex;
     int m_selectedTimeIndex;
     bool m_hasSelection;
-    
+
     // Context menu
     QMenu* m_contextMenu;
     QAction* m_splitProfileAction;

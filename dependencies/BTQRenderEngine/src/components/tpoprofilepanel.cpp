@@ -21,6 +21,7 @@
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QAction>
+#include <QPolygon>
 
 // Forward declarations or includes for TPO engine
 #include "analytics/tpoengine.h"
@@ -88,6 +89,7 @@ private:
     double m_cached_poc;
     double m_cached_va_low;
     double m_cached_va_high;
+    std::vector<double> m_cached_single_prints;  // Cache for single print levels
     bool m_values_cached;
 };
 
@@ -108,6 +110,7 @@ TPOProfilePanel::TPOProfilePanel(QWidget *parent)
     , m_cached_poc(0.0)
     , m_cached_va_low(0.0)
     , m_cached_va_high(0.0)
+    , m_cached_single_prints()
     , m_values_cached(false)
     , m_selectedPriceIndex(-1)
     , m_selectedTimeIndex(-1)
@@ -163,36 +166,37 @@ TPOProfilePanel::~TPOProfilePanel()
 void TPOProfilePanel::setData(const QVector<QMap<QString, QVariant>> &tpoData)
 {
     m_tpoData = tpoData;
-    
+
     // Process the TPO data to populate the TPO engine
     m_tpoEngine.clear();
-    
+
     for (const auto &dataPoint : m_tpoData) {
         if (dataPoint.contains("price") && dataPoint.contains("time_index")) {
             double price = dataPoint["price"].toDouble();
             int timeIndex = dataPoint["time_index"].toInt();
-            
+
             // Create a mock timestamp based on time index (in a real implementation, you'd have actual timestamps)
             auto timestamp = std::chrono::system_clock::now() + std::chrono::minutes(timeIndex * 30);
-            
+
             // Create a PriceTick and process it
             PriceTick tick;
             tick.timestamp = timestamp;
             tick.price = price;
             tick.volume = 1.0; // Default volume for TPO counting
-            
+
             m_tpoEngine.process_tick(tick);
         }
     }
-    
-    // Calculate POC and Value Area
+
+    // Calculate POC, Value Area, and Single Prints
     const TPOProfile& profile = m_tpoEngine.get_tpo_profile();
     m_cached_poc = profile.get_poc();
     auto va = profile.get_value_area(70.0); // 70% of TPOs
     m_cached_va_low = va.first;
     m_cached_va_high = va.second;
+    m_cached_single_prints = profile.get_single_print_levels(); // Cache single print levels
     m_values_cached = true;
-    
+
     m_needsUpdate = true;
     update();
 }
@@ -357,16 +361,40 @@ void TPOProfilePanel::drawLetterBlocks(QPainter &painter)
         painter.setFont(font);
 
         painter.drawText(blockRect, Qt::AlignCenter, QString(letter));
+        
+        // Check if this price level is a single print level and draw a marker
+        bool isSinglePrint = false;
+        double tolerance = m_priceStep / 2.0; // Half the price step for accurate matching
+        for (double singlePrintPrice : m_cached_single_prints) {
+            if (std::abs(singlePrintPrice - price) <= tolerance) { // Within the price bucket tolerance
+                isSinglePrint = true;
+                break;
+            }
+        }
+        
+        if (isSinglePrint) {
+            // Draw a distinct marker for single print levels (e.g., a small triangle at the top)
+            QPolygon triangle;
+            int centerX = x + (m_blockWidth - 2) / 2;
+            int centerY = y + 3; // Near the top of the block
+            triangle << QPoint(centerX, centerY) 
+                     << QPoint(centerX - 4, centerY + 6) 
+                     << QPoint(centerX + 4, centerY + 6);
+            
+            painter.setPen(QPen(QColor(255, 0, 0), 2)); // Red color for single print marker
+            painter.setBrush(QBrush(QColor(255, 0, 0))); // Fill the triangle
+            painter.drawPolygon(triangle);
+        }
     }
 
     // Highlight selected TPO bar if there's a selection
     if (m_hasSelection && m_selectedTimeIndex >= 0 && m_selectedTimeIndex < m_timeLabels.size() &&
         m_selectedPriceIndex >= 0 && m_selectedPriceIndex < priceLevels) {
-        
+
         int x = m_leftMargin + (m_selectedTimeIndex * m_blockWidth);
         int y = m_topMargin + (m_selectedPriceIndex * m_blockHeight);
         QRect selectionRect(x, y, m_blockWidth - 2, m_blockHeight - 2);
-        
+
         // Draw a highlight around the selected block
         QPen highlightPen(QColor(255, 0, 0), 3); // Thick red border
         painter.setPen(highlightPen);
@@ -504,10 +532,10 @@ void TPOProfilePanel::splitProfileAction()
 {
     // This function will split the selected TPO bar into individual sub-period bars
     if (!m_hasSelection) return;
-    
+
     // Get the selected time period
     int timeIndex = m_selectedTimeIndex;
-    
+
     // Get the corresponding time label for the selected time index
     if (timeIndex < 0 || timeIndex >= m_timeLabels.size()) {
         m_hasSelection = false;
@@ -515,23 +543,23 @@ void TPOProfilePanel::splitProfileAction()
         m_selectedTimeIndex = -1;
         return;
     }
-    
+
     // Get the original time label
     QString originalTimeLabel = m_timeLabels[timeIndex];
-    
+
     // Create new sub-period labels (for example, split one 30-min period into two 15-min periods)
     QString subPeriod1Label = originalTimeLabel + "_A";
     QString subPeriod2Label = originalTimeLabel + "_B";
-    
+
     // Create new TPO data by duplicating the data for the selected time period
     // and assigning it to the new sub-periods
     QVector<QMap<QString, QVariant>> newTpoData;
-    
+
     // First, copy all data points, adjusting time indices for those that come after the split point
     for (const auto &dataPoint : m_tpoData) {
         int current_time_index = dataPoint["time_index"].toInt();
         QMap<QString, QVariant> newDataPoint = dataPoint;
-        
+
         if (current_time_index == timeIndex) {
             // This data point belongs to the time period being split
             // Create two copies for the new sub-periods
@@ -539,7 +567,7 @@ void TPOProfilePanel::splitProfileAction()
             subPeriod1Data["time_index"] = timeIndex; // First sub-period takes the original index
             subPeriod1Data["subperiod_label"] = subPeriod1Label;
             newTpoData.append(subPeriod1Data);
-            
+
             QMap<QString, QVariant> subPeriod2Data = dataPoint;
             subPeriod2Data["time_index"] = timeIndex + 1; // Second sub-period gets the next index
             subPeriod2Data["subperiod_label"] = subPeriod2Label;
@@ -553,17 +581,17 @@ void TPOProfilePanel::splitProfileAction()
             newTpoData.append(newDataPoint);
         }
     }
-    
+
     // Update the time labels to include the new sub-periods
     QStringList newTimeLabels = m_timeLabels;
     newTimeLabels.insert(timeIndex, subPeriod1Label);  // Insert first sub-period at original position
     newTimeLabels.insert(timeIndex + 1, subPeriod2Label);  // Insert second sub-period after first
     newTimeLabels.removeAt(timeIndex + 2);  // Remove the original time label that was shifted right
-    
+
     // Update the internal data
     m_tpoData = newTpoData;
     m_timeLabels = newTimeLabels;
-    
+
     // Update the TPO engine with the new data
     m_tpoEngine.clear();
     for (const auto &dataPoint : m_tpoData) {
@@ -584,19 +612,20 @@ void TPOProfilePanel::splitProfileAction()
         }
     }
 
-    // Recalculate POC and Value Area
+    // Recalculate POC, Value Area, and Single Prints
     const TPOProfile& profile = m_tpoEngine.get_tpo_profile();
     m_cached_poc = profile.get_poc();
     auto va = profile.get_value_area(70.0); // 70% of TPOs
     m_cached_va_low = va.first;
     m_cached_va_high = va.second;
+    m_cached_single_prints = profile.get_single_print_levels(); // Update cached single prints
     m_values_cached = true;
 
     // Clear selection
     m_hasSelection = false;
     m_selectedPriceIndex = -1;
     m_selectedTimeIndex = -1;
-    
+
     // Trigger a repaint
     update();
 }

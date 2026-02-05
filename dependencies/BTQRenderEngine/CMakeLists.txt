@@ -55,6 +55,7 @@ qt5_wrap_cpp(tpoprofilepanel_moc_srcs include/components/tpoprofilepanel.h)
 add_library(components
     src/components/tpoprofilepanel.cpp
     src/components/domsurfacepanel.cpp
+    src/components/pricestatisticpanel.cpp
     ${tpoprofilepanel_moc_srcs}
 )
 

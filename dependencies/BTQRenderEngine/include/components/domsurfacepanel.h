@@ -119,6 +119,10 @@ class DomSurfacePanel : public PanelBase {
   VkSampler heatmap_sampler_ = nullptr;
   VkDeviceMemory heatmap_image_memory_ = nullptr;
   void* vulkan_texture_id_ = nullptr;
+  
+  // Track texture dimensions
+  int current_texture_width_ = 0;
+  int current_texture_height_ = 0;
 
   // Helper to refresh data buffer
   void updateHeatmapData();
@@ -138,6 +142,7 @@ class DomSurfacePanel : public PanelBase {
 
   // Vulkan texture management
   void createVulkanTexture();
+  void recreateVulkanTexture(int new_width, int new_height);
   void updateVulkanTexture();
   void cleanupVulkanResources();
 };

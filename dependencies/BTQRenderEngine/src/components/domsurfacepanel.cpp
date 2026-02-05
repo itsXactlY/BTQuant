@@ -468,16 +468,21 @@ void DomSurfacePanel::initializeVulkanResources(VulkanCore* core) {
 
 void DomSurfacePanel::createVulkanTexture() {
   if (!vulkan_core_) return;
-  
+
+  // Initialize texture dimensions
+  int width = price_bins_;
+  int height = static_cast<int>(heatmap_data_.size() / price_bins_);
+  if (height <= 0) height = 1; // Default to 1 if no data yet
+
   auto device = vulkan_core_->get_device();
   auto physicalDevice = vulkan_core_->get_physical_device();
-  
+
   // Create the heatmap texture with appropriate dimensions
   VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
                               .imageType = VK_IMAGE_TYPE_2D,
                               .format = VK_FORMAT_R8G8B8A8_UNORM,
-                              .extent = {.width = static_cast<uint32_t>(price_bins_),
-                                         .height = static_cast<uint32_t>(heatmap_data_.size() / price_bins_),
+                              .extent = {.width = static_cast<uint32_t>(width),
+                                         .height = static_cast<uint32_t>(height),
                                          .depth = 1},
                               .mipLevels = 1,
                               .arrayLayers = 1,
@@ -541,28 +546,140 @@ void DomSurfacePanel::createVulkanTexture() {
   VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(heatmap_sampler_, heatmap_image_view_,
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   vulkan_texture_id_ = (void*)descriptor_set;
+  
+  // Store current dimensions
+  current_texture_width_ = width;
+  current_texture_height_ = height;
+}
+
+void DomSurfacePanel::recreateVulkanTexture(int new_width, int new_height) {
+  if (!vulkan_core_) return;
+
+  // Clean up existing resources
+  auto device = vulkan_core_->get_device();
+
+  if (heatmap_sampler_ != VK_NULL_HANDLE) {
+    vkDestroySampler(device, heatmap_sampler_, nullptr);
+    heatmap_sampler_ = VK_NULL_HANDLE;
+  }
+
+  if (heatmap_image_view_ != VK_NULL_HANDLE) {
+    vkDestroyImageView(device, heatmap_image_view_, nullptr);
+    heatmap_image_view_ = VK_NULL_HANDLE;
+  }
+
+  if (heatmap_image_ != VK_NULL_HANDLE) {
+    vkDestroyImage(device, heatmap_image_, nullptr);
+    heatmap_image_ = VK_NULL_HANDLE;
+  }
+
+  if (heatmap_image_memory_ != VK_NULL_HANDLE) {
+    vkFreeMemory(device, heatmap_image_memory_, nullptr);
+    heatmap_image_memory_ = VK_NULL_HANDLE;
+  }
+
+  // Create new texture with updated dimensions
+  VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                              .imageType = VK_IMAGE_TYPE_2D,
+                              .format = VK_FORMAT_R8G8B8A8_UNORM,
+                              .extent = {.width = static_cast<uint32_t>(new_width),
+                                         .height = static_cast<uint32_t>(new_height),
+                                         .depth = 1},
+                              .mipLevels = 1,
+                              .arrayLayers = 1,
+                              .samples = VK_SAMPLE_COUNT_1_BIT,
+                              .tiling = VK_IMAGE_TILING_OPTIMAL,
+                              .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                              .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+
+  if (vkCreateImage(device, &imageInfo, nullptr, &heatmap_image_) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to recreate heatmap image");
+  }
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(device, heatmap_image_, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo{
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .allocationSize = memRequirements.size,
+      .memoryTypeIndex = vulkan_core_->find_memory_type(memRequirements.memoryTypeBits,
+                                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)};
+
+  if (vkAllocateMemory(device, &allocInfo, nullptr, &heatmap_image_memory_) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate heatmap image memory");
+  }
+
+  vkBindImageMemory(device, heatmap_image_, heatmap_image_memory_, 0);
+
+  // Create Image View
+  VkImageViewCreateInfo viewInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                                 .image = heatmap_image_,
+                                 .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                                 .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                 .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                      .baseMipLevel = 0,
+                                                      .levelCount = 1,
+                                                      .baseArrayLayer = 0,
+                                                      .layerCount = 1}};
+
+  if (vkCreateImageView(device, &viewInfo, nullptr, &heatmap_image_view_) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create heatmap image view");
+  }
+
+  // Create Sampler
+  VkSamplerCreateInfo samplerInfo{.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                                  .magFilter = VK_FILTER_LINEAR,
+                                  .minFilter = VK_FILTER_LINEAR,
+                                  .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                                  .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                  .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                  .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                  .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+                                  .unnormalizedCoordinates = VK_FALSE};
+
+  if (vkCreateSampler(device, &samplerInfo, nullptr, &heatmap_sampler_) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create heatmap sampler");
+  }
+
+  // Register the texture with ImGui
+  VkDescriptorSet descriptor_set = ImGui_ImplVulkan_AddTexture(heatmap_sampler_, heatmap_image_view_,
+                                                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  vulkan_texture_id_ = (void*)descriptor_set;
+  
+  // Update stored dimensions
+  current_texture_width_ = new_width;
+  current_texture_height_ = new_height;
 }
 
 void DomSurfacePanel::updateVulkanTexture() {
   if (!vulkan_core_ || heatmap_data_.empty()) return;
-  
+
   // Convert heatmap data to RGBA format for the texture
   int width = static_cast<int>(heatmap_data_.size() / price_bins_);
   int height = price_bins_;
-  
+
   if (width <= 0 || height <= 0) return;
-  
+
+  // Check if texture needs to be recreated due to size change
+  if (width != current_texture_width_ || height != current_texture_height_) {
+    recreateVulkanTexture(width, height);
+  }
+
   // Create temporary RGBA data
   std::vector<uint32_t> rgba_data(width * height);
-  
+
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
+      // heatmap_data_ is organized as [price_bin * time_steps + time_step]
+      // So for position (x=time, y=price), we access [y * width + x]
       double value = heatmap_data_[y * width + x];
       float normalized = static_cast<float>(value / scale_max_);
-      
+
       // Apply colormap (Viridis-like gradient)
       uint8_t r, g, b, a = 255;
-      
+
       // Simple Viridis-like mapping
       if (normalized < 0.25) {
         r = 0;
@@ -581,14 +698,104 @@ void DomSurfacePanel::updateVulkanTexture() {
         g = static_cast<uint8_t>(255 * (1 - 4 * (normalized - 0.75)));
         b = 0;
       }
-      
+
+      // Store in row-major order for texture (x = column, y = row)
       rgba_data[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
     }
   }
+
+  // Upload the texture data to the GPU using staging buffer
+  auto device = vulkan_core_->get_device();
   
-  // Upload the texture data to the GPU
-  // This would typically involve creating a staging buffer and copying the data
-  // For now, we'll just update the texture ID to trigger a redraw
+  // Allocate staging buffer
+  VkDeviceSize imageSize = width * height * sizeof(uint32_t);
+  auto staging_buffer = vulkan_core_->get_memory_manager().allocate_staging_buffer(imageSize);
+  
+  // Copy image data to staging buffer
+  memcpy(staging_buffer.mapped_ptr, rgba_data.data(), static_cast<size_t>(imageSize));
+
+  // Create command buffer for transfer
+  VkCommandBuffer commandBuffer = vulkan_core_->begin_single_time_commands();
+
+  // Transition image layout to TRANSFER_DST_OPTIMAL
+  VkImageMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Previous layout
+  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = heatmap_image_;
+  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+  vkCmdPipelineBarrier(
+      commandBuffer,
+      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &barrier
+  );
+
+  // Copy buffer to image
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {0, 0, 0};
+  region.imageExtent = {
+      static_cast<uint32_t>(width),
+      static_cast<uint32_t>(height),
+      1
+  };
+
+  vkCmdCopyBufferToImage(
+      commandBuffer,
+      staging_buffer.buffer,
+      heatmap_image_,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      1, &region
+  );
+
+  // Transition image layout to SHADER_READ_ONLY_OPTIMAL
+  VkImageMemoryBarrier shader_barrier = {};
+  shader_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  shader_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  shader_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  shader_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  shader_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  shader_barrier.image = heatmap_image_;
+  shader_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  shader_barrier.subresourceRange.baseMipLevel = 0;
+  shader_barrier.subresourceRange.levelCount = 1;
+  shader_barrier.subresourceRange.baseArrayLayer = 0;
+  shader_barrier.subresourceRange.layerCount = 1;
+  shader_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  shader_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+  vkCmdPipelineBarrier(
+      commandBuffer,
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &shader_barrier
+  );
+
+  // Submit command buffer
+  vulkan_core_->end_single_time_commands(commandBuffer);
+
+  // Clean up staging buffer
+  vulkan_core_->get_memory_manager().deallocate_buffer(staging_buffer);
 }
 
 void DomSurfacePanel::cleanupVulkanResources() {

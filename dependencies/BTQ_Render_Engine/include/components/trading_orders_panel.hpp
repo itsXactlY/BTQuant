@@ -19,6 +19,9 @@ class TradingOrdersPanel : public PanelBase {
  private:
   std::shared_ptr<OrderManager> order_manager_;
   std::shared_ptr<PositionManager> position_manager_;
+  
+  // Heatmap intensity configuration for resting limit orders
+  float heatmap_intensity_ = 1.0f;  // Sensitivity of color mapping for resting limit orders (default 1.0)
 };
 
 }  // namespace BTQuant

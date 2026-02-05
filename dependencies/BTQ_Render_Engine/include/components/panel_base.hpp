@@ -8,6 +8,11 @@
 #include "theme_manager.hpp"
 #include "panel_settings_interface.hpp"
 
+// Forward declaration to avoid circular dependency
+namespace BTQuant {
+    class ContextMenuManager;
+}
+
 namespace BTQuant {
 
 enum class PanelType {
@@ -96,7 +101,7 @@ class PanelBase {
 
   // Context menu functionality
   virtual void render_context_menu() {}  // Virtual method for context menu
-  virtual void handle_context_menu(class ContextMenuManager& manager) {}  // Virtual method for context menu handling
+  virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
 
  protected:
   PanelConfig config_;

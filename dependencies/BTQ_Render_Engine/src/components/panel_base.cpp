@@ -1,6 +1,7 @@
 #include "../../include/components/panel_base.hpp"
 
 #include "imgui.h"
+#include "ui/context_menus.hpp"
 
 namespace BTQuant {
 
@@ -81,6 +82,8 @@ void PanelBase::render_panel_header() {
 
   // Right-click context menu
   if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+    // Set focus to this panel so that hotkeys (e.g., Delete) apply to the correct panel
+    ImGui::SetWindowFocus();
     ImGui::OpenPopup("PanelContextMenu");
   }
 
@@ -88,6 +91,17 @@ void PanelBase::render_panel_header() {
   render_context_menu();
 
   ImGui::Separator();
+}
+
+void PanelBase::handle_context_menu(ContextMenuManager& manager) {
+  // Check if the window is hovered and right mouse button was clicked
+  if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    // Set focus to this panel so that hotkeys (e.g., Delete) apply to the correct panel
+    ImGui::SetWindowFocus();
+  }
+
+  // Show the context menu for this panel
+  manager.show_context_menu(this);
 }
 
 const char* PanelBase::get_panel_type_name(PanelType type) {

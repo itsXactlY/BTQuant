@@ -135,10 +135,10 @@ void OptionAnalyticsPanel::renderDeskTab() {
         ImGui::TableSetupColumn("Strike", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         
         // Right side - Puts
-        ImGui::TableSetupColumn("Put Delta", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("Put Gamma", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableSetupColumn("Put Bid", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         ImGui::TableSetupColumn("Put Ask", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Put Delta", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Put Gamma", ImGuiTableColumnFlags_WidthFixed, 70.0f);
         
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
         ImGui::TableHeadersRow();
@@ -214,16 +214,8 @@ void OptionAnalyticsPanel::renderDeskTab() {
             }
 
             // Right side - Puts
-            // Put Delta
-            ImGui::TableSetColumnIndex(5);
-            ImGui::Text("%.4f", opt.put_delta);
-
-            // Put Gamma
-            ImGui::TableSetColumnIndex(6);
-            ImGui::Text("%.4f", opt.put_gamma);
-
             // Put Bid - clickable to add to strategy
-            ImGui::TableSetColumnIndex(7);
+            ImGui::TableSetColumnIndex(5);
             std::string put_bid_button_id = "PB##" + std::to_string(static_cast<int>(opt.strike * 100));
             if (ImGui::Button(put_bid_button_id.c_str())) {
                 // Callback to add put to strategy with buy order at bid
@@ -233,7 +225,7 @@ void OptionAnalyticsPanel::renderDeskTab() {
             ImGui::Text("%.2f", opt.put_bid);
 
             // Put Ask - clickable to add to strategy
-            ImGui::TableSetColumnIndex(8);
+            ImGui::TableSetColumnIndex(6);
             std::string put_ask_button_id = "PA##" + std::to_string(static_cast<int>(opt.strike * 100));
             if (ImGui::Button(put_ask_button_id.c_str())) {
                 // Callback to add put to strategy with sell order at ask
@@ -241,6 +233,14 @@ void OptionAnalyticsPanel::renderDeskTab() {
             }
             ImGui::SameLine();
             ImGui::Text("%.2f", opt.put_ask);
+
+            // Put Delta
+            ImGui::TableSetColumnIndex(7);
+            ImGui::Text("%.4f", opt.put_delta);
+
+            // Put Gamma
+            ImGui::TableSetColumnIndex(8);
+            ImGui::Text("%.4f", opt.put_gamma);
         }
 
         ImGui::EndTable();

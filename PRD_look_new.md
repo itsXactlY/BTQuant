@@ -413,10 +413,10 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Implement a "Heatmap Intensity" slider in the panel header to adjust the color-mapping sensitivity for resting limit orders.
 - [x] Add vertical "Liquidity Bars" on the right-hand price axis that show the current real-time depth levels (DOM) overlapping the historical heatmap.
 - [x] Implement a "Large Order Tracker" that draws a persistent horizontal line or rectangle on the heatmap when an order above a certain threshold is detected and stays at a level.
-- [ ] Add "Trade Bubbles" overlay: render circles on top of the heatmap representing executed trades, where radius = volume and color = side.
+- [x] Add "Trade Bubbles" overlay: render circles on top of the heatmap representing executed trades, where radius = volume and color = side.
 
 ### TASK 21: OPTIONS ANALYTICS & RISK MANAGER
-- [ ] Create `dependencies/BTQRenderEngine/src/components/optionanalyticspanel.cpp` with a three-tab navigation header: [Desk], [Analyzer], [Smile].
+- [x] Create `dependencies/BTQRenderEngine/src/components/optionanalyticspanel.cpp` with a three-tab navigation header: [Desk], [Analyzer], [Smile].
 - [ ] Implement the "Options Desk" grid: central column for Strikes, left side for Calls (Bid/Ask/Delta/Gamma), right side for Puts.
 - [ ] Create a "Strategy Builder" footer: when a user clicks a strike, add it to a "Current Strategy" list for multi-leg analysis.
 - [ ] Implement the "Risk Analyzer" chart: a 2D coordinate system plotting P/L (Y-axis) vs Underlying Price (X-axis).

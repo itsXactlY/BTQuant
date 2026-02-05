@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QSortFilterProxyModel>
 
 // Structure to hold price statistics data
 struct PriceStatData {
@@ -36,6 +37,14 @@ struct PriceStatData {
           volume(vol), high(h), low(l), open(o), close(c) {}
 };
 
+// Enum for column types to enable specialized formatting
+enum ColumnType {
+    TextColumn,
+    NumericColumn,
+    PercentageColumn,
+    CurrencyColumn
+};
+
 class PriceStatisticPanel : public QWidget
 {
     Q_OBJECT
@@ -51,6 +60,15 @@ public:
     QVector<PriceStatData> getData() const;
     int getTotalRowCount() const;
     int getSelectedRow() const;
+
+    // Analytical features
+    void enableGridLines(bool enable);
+    void enableAlternateRowColors(bool enable);
+    void setSortIndicator(int column, Qt::SortOrder order);
+    Qt::SortOrder getSortOrder() const;
+    int getSortColumn() const;
+    void applyFilter(const QString &filterText);
+    void calculateStatistics(double &avgPrice, double &volatility, double &priceRange) const;
 
 signals:
     void rowSelected(int rowIndex);
@@ -77,21 +95,29 @@ private:
     void paintDataRows(QPainter &painter);
     void paintCell(QPainter &painter, const PriceStatData &stat, int row, int yPos);
     void paintSelectionHighlight(QPainter &painter, int visualRow);
+    void paintGridLines(QPainter &painter);
     QRect getColumnRect(int column, int row) const;
     int getColumnAtPosition(int x) const;
     void ensureRowVisible(int row);
+    void sortData();
 
 private:
     QVector<PriceStatData> m_data;
     QScrollBar *m_virtualScrollBar;
     QStringList m_headers;
     QList<int> m_columnWidths;
+    QVector<ColumnType> m_columnTypes;
     int m_columnCount;
     int m_rowHeight;
     int m_visibleRows;
     int m_totalRows;
     int m_firstVisibleRow;
     int m_selectedRow;
+    int m_sortColumn;
+    Qt::SortOrder m_sortOrder;
+    bool m_showGridLines;
+    bool m_alternateRowColors;
+    int m_headerHeight;
 };
 
 #endif // PRICESTATISTICPANEL_H

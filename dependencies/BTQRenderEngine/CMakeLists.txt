@@ -37,6 +37,7 @@ set(IMPLOT_DIR ${implot_SOURCE_DIR})
 
 # Include directories
 include_directories(include)
+include_directories(../BTQ_Render_Engine/include)
 include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${IMGUI_DIR})
 include_directories(${IMGUI_DIR}/backends)
@@ -57,10 +58,13 @@ set_source_files_properties(src/components/tpoprofilepanel.cpp PROPERTIES SKIP_A
 qt5_wrap_cpp(tpoprofilepanel_moc_srcs include/components/tpoprofilepanel.h)
 
 # Add the DOM surface panel component
+# Add the option analytics panel component
 add_library(components
     src/components/tpoprofilepanel.cpp
     src/components/domsurfacepanel.cpp
     src/components/pricestatisticpanel.cpp
+    src/components/optionanalyticspanel.cpp
+    src/components/option_analytics_panel.cpp
     ${tpoprofilepanel_moc_srcs}
 )
 

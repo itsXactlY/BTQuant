@@ -131,6 +131,11 @@ void TPOProfile::print_profile() const {
         auto time_t = std::chrono::system_clock::to_time_t(time_bracket);
         std::cout << "Time: " << std::put_time(std::localtime(&time_t), "%F %T") << " -> Letter: " << letter << "\n";
     }
+    
+    // Print POC and Value Area info
+    std::cout << "\nPOC: " << get_poc() << "\n";
+    auto va = get_value_area();
+    std::cout << "Value Area: " << va.first << " - " << va.second << "\n";
 }
 
 // Implementation of TPOEngine methods
@@ -310,4 +315,160 @@ TPOStatistics TPOEngine::get_statistics_for_period(
     stats.unique_price_levels = all_price_levels.size();
 
     return stats;
+}
+
+// Calculate Point of Control (POC) - price level with highest TPO count
+double TPOProfile::get_poc() const {
+    if (price_to_letters.empty()) {
+        return 0.0;
+    }
+
+    double poc_price = 0.0;
+    int max_count = 0;
+
+    for (const auto& [price, letters] : price_to_letters) {
+        int count = static_cast<int>(letters.length());
+        if (count > max_count) {
+            max_count = count;
+            poc_price = price;
+        }
+    }
+
+    return poc_price;
+}
+
+// Calculate Value Area (70% of TPOs) centered around POC
+std::pair<double, double> TPOProfile::get_value_area(double percent) const {
+    if (price_to_letters.empty()) {
+        return std::make_pair(0.0, 0.0);
+    }
+
+    // Get total TPO count
+    int total_count = get_total_tpo_count();
+    if (total_count == 0) {
+        return std::make_pair(0.0, 0.0);
+    }
+
+    // Calculate target count for value area (percent of total)
+    int target_count = static_cast<int>(total_count * (percent / 100.0));
+
+    // Get POC as starting point
+    double poc_price = get_poc();
+
+    // Create a sorted vector of price levels with their TPO counts
+    std::vector<std::pair<double, int>> price_counts;
+    for (const auto& [price, letters] : price_to_letters) {
+        price_counts.emplace_back(price, static_cast<int>(letters.length()));
+    }
+
+    // Sort by distance from POC
+    std::sort(price_counts.begin(), price_counts.end(), [poc_price](const auto& a, const auto& b) {
+        return std::abs(a.first - poc_price) < std::abs(b.first - poc_price);
+    });
+
+    // Start with POC and expand outward until reaching the target count
+    int accumulated_count = 0;
+    double min_price = poc_price;
+    double max_price = poc_price;
+
+    for (const auto& [price, count] : price_counts) {
+        if (accumulated_count >= target_count) {
+            break;
+        }
+
+        accumulated_count += count;
+        min_price = std::min(min_price, price);
+        max_price = std::max(max_price, price);
+    }
+
+    // If we didn't reach the target count, expand further
+    if (accumulated_count < target_count) {
+        // Get all prices sorted by value
+        std::vector<double> all_prices;
+        for (const auto& [price, letters] : price_to_letters) {
+            all_prices.push_back(price);
+        }
+        std::sort(all_prices.begin(), all_prices.end());
+
+        // Find the POC index
+        auto poc_iter = std::lower_bound(all_prices.begin(), all_prices.end(), poc_price);
+        if (poc_iter != all_prices.end()) {
+            int poc_idx = std::distance(all_prices.begin(), poc_iter);
+            
+            // Expand outward from POC
+            int left_idx = poc_idx;
+            int right_idx = poc_idx;
+            accumulated_count = 0;
+            
+            // Reset accumulated count with POC value
+            auto poc_entry = price_to_letters.find(poc_price);
+            if (poc_entry != price_to_letters.end()) {
+                accumulated_count = static_cast<int>(poc_entry->second.length());
+            }
+            
+            min_price = poc_price;
+            max_price = poc_price;
+
+            // Alternate expanding left and right from POC
+            while (accumulated_count < target_count) {
+                bool expand_left = false;
+                
+                // Decide which direction to expand based on which has more remaining TPOs
+                int left_remaining = 0, right_remaining = 0;
+                
+                if (left_idx > 0) {
+                    auto left_it = price_to_letters.find(all_prices[left_idx - 1]);
+                    if (left_it != price_to_letters.end()) {
+                        left_remaining = static_cast<int>(left_it->second.length());
+                    }
+                }
+                
+                if (right_idx < static_cast<int>(all_prices.size()) - 1) {
+                    auto right_it = price_to_letters.find(all_prices[right_idx + 1]);
+                    if (right_it != price_to_letters.end()) {
+                        right_remaining = static_cast<int>(right_it->second.length());
+                    }
+                }
+                
+                if (left_idx > 0 && (right_idx >= static_cast<int>(all_prices.size()) - 1 || left_remaining >= right_remaining)) {
+                    expand_left = true;
+                } else if (right_idx < static_cast<int>(all_prices.size()) - 1) {
+                    expand_left = false;
+                } else {
+                    break; // Can't expand further
+                }
+                
+                if (expand_left) {
+                    left_idx--;
+                    auto it = price_to_letters.find(all_prices[left_idx]);
+                    if (it != price_to_letters.end()) {
+                        accumulated_count += static_cast<int>(it->second.length());
+                        min_price = std::min(min_price, it->first);
+                    }
+                } else {
+                    right_idx++;
+                    auto it = price_to_letters.find(all_prices[right_idx]);
+                    if (it != price_to_letters.end()) {
+                        accumulated_count += static_cast<int>(it->second.length());
+                        max_price = std::max(max_price, it->first);
+                    }
+                }
+                
+                if (left_idx <= 0 && right_idx >= static_cast<int>(all_prices.size()) - 1) {
+                    break; // Reached both ends
+                }
+            }
+        }
+    }
+
+    return std::make_pair(min_price, max_price);
+}
+
+// Get total TPO count across all price levels
+int TPOProfile::get_total_tpo_count() const {
+    int total = 0;
+    for (const auto& [price, letters] : price_to_letters) {
+        total += static_cast<int>(letters.length());
+    }
+    return total;
 }

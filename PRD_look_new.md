@@ -400,9 +400,9 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Safety Checks: Implement dynamic_cast checks in render_generic_context_menu to prevent crashes if a panel type does not match at runtime.
 
 ### TASK 19: TPO PROFILE ENGINE & RENDERING
-- [ ] Create `dependencies/BTQRenderEngine/src/analytics/tpoengine.cpp` to handle the aggregation of price data into 30-minute time buckets (Time-Price Opportunity).
-- [ ] Implement a `TPOProfile` struct that maps price levels to "Letters" (A-Z, a-z) based on the time bracket they were touched.
-- [ ] Create `dependencies/BTQRenderEngine/src/components/tpoprofilepanel.cpp` implementing the "Quantower TPO" layout: a vertical price scale on the left and horizontal letter blocks.
+- [x] Create `dependencies/BTQRenderEngine/src/analytics/tpoengine.cpp` to handle the aggregation of price data into 30-minute time buckets (Time-Price Opportunity).
+- [x] Implement a `TPOProfile` struct that maps price levels to "Letters" (A-Z, a-z) based on the time bracket they were touched.
+- [x] Create `dependencies/BTQRenderEngine/src/components/tpoprofilepanel.cpp` implementing the "Quantower TPO" layout: a vertical price scale on the left and horizontal letter blocks.
 - [ ] Add logic for "Value Area" calculation (70% of TPOs) and "Point of Control" (POC) highlighting with 1px horizontal lines.
 - [ ] Implement "Profile Splitting": add a UI handle to right-click a TPO bar and split it into individual sub-period bars.
 - [ ] Add "Single Print" detection: visually flag price levels where only one TPO letter exists with a distinct colored marker.

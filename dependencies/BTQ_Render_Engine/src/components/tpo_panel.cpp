@@ -54,11 +54,16 @@ void TpoPanel::render() {
   double local_poc_price = 0.0;
   double max_volume = 0.0;
   std::unordered_map<double, double> price_volumes;
+  std::unordered_map<double, int> tpo_counts; // Track TPO counts per price level
 
-  // Pre-calculate POC data
+  // Pre-calculate POC data and TPO counts
   for (const auto& cluster : clusters) {
     // Accumulate volume by price level for POC calculation
     price_volumes[cluster.centerY] += cluster.askVolume + cluster.bidVolume;
+    
+    // Count TPO occurrences per price level (simulating TPO counts)
+    // In a real implementation, this would come from the TPO engine
+    tpo_counts[cluster.centerY]++;
   }
 
   // Find Point of Control (POC) - price level with highest volume
@@ -66,6 +71,49 @@ void TpoPanel::render() {
     if (volume > max_volume) {
       max_volume = volume;
       local_poc_price = price;
+    }
+  }
+  
+  // Calculate Value Area (70% of TPOs) - simplified implementation
+  // In a real implementation, this would use the TPO engine's get_value_area method
+  double value_area_low = local_poc_price - 5.0;  // Placeholder calculation
+  double value_area_high = local_poc_price + 5.0; // Placeholder calculation
+  
+  // More accurate calculation based on TPO counts
+  if (!tpo_counts.empty()) {
+    // Calculate total TPO count
+    int total_tpo_count = 0;
+    for (const auto& [price, count] : tpo_counts) {
+        total_tpo_count += count;
+    }
+    
+    if (total_tpo_count > 0) {
+        // Target 70% of total TPOs for value area
+        int target_count = static_cast<int>(total_tpo_count * 0.70);
+        
+        // Sort price levels by distance from POC
+        std::vector<std::pair<double, int>> sorted_by_distance;
+        for (const auto& [price, count] : tpo_counts) {
+            sorted_by_distance.emplace_back(price, count);
+        }
+        
+        std::sort(sorted_by_distance.begin(), sorted_by_distance.end(),
+                  [local_poc_price](const auto& a, const auto& b) {
+                      return std::abs(a.first - local_poc_price) < std::abs(b.first - local_poc_price);
+                  });
+        
+        // Expand from POC until we reach 70% of TPOs
+        int accumulated_count = 0;
+        value_area_low = local_poc_price;
+        value_area_high = local_poc_price;
+        
+        for (const auto& [price, count] : sorted_by_distance) {
+            if (accumulated_count >= target_count) break;
+            
+            accumulated_count += count;
+            value_area_low = std::min(value_area_low, price);
+            value_area_high = std::max(value_area_high, price);
+        }
     }
   }
 
@@ -158,12 +206,39 @@ void TpoPanel::render() {
       }
     }
 
+    // Draw Value Area (shaded region between VAH and VAL)
+    if (value_area_low < value_area_high && value_area_low > 0) {
+      // Draw shaded area for Value Area
+      double va_x[] = {0.0, time_window, time_window, 0.0};
+      double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
+      
+      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
+      ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
+      ImPlot::PopStyleColor();
+      
+      // Draw Value Area High (VAH) line
+      double vah_line_x[2] = {0, time_window};
+      double vah_line_y[2] = {value_area_high, value_area_high};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
+      ImPlot::PopStyleColor();
+      
+      // Draw Value Area Low (VAL) line
+      double val_line_x[2] = {0, time_window};
+      double val_line_y[2] = {value_area_low, value_area_low};
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
+      ImPlot::PopStyleColor();
+    }
+
     // Draw POC line if found (using pre-calculated value)
     if (local_poc_price > 0) {
       double poc_line_x[2] = {0, time_window};
       double poc_line_y[2] = {local_poc_price, local_poc_price};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.8f, 0.0f, 1.0f));
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
       ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
+      ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
     }
 
@@ -172,8 +247,11 @@ void TpoPanel::render() {
 
   // Enhanced Overlay Info
   ImGui::SetCursorPos(ImVec2(10, 45));
-  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f",
-                     clusters.size(), local_poc_price > 0 ? local_poc_price : 0.0);
+  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f",
+                     clusters.size(), 
+                     local_poc_price > 0 ? local_poc_price : 0.0,
+                     value_area_low > 0 ? value_area_low : 0.0,
+                     value_area_high > 0 ? value_area_high : 0.0);
 
   end_panel_window();
 }

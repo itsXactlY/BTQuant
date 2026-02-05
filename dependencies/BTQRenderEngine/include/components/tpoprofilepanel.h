@@ -8,6 +8,9 @@
 #include <QColor>
 #include <QVariant>
 
+// Include TPO engine for Value Area and POC calculations
+#include "analytics/tpoengine.h"
+
 /**
  * @brief TPO Profile Panel implementing Quantower TPO layout
  *

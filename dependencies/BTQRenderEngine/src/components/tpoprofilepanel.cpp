@@ -65,6 +65,9 @@ private:
     QStringList m_timeLabels;
     QMap<QChar, QColor> m_letterColors;
 
+    // TPO engine for advanced calculations
+    TPOEngine m_tpoEngine;
+
     // Layout dimensions
     int m_priceScaleWidth;
     int m_topMargin;
@@ -76,6 +79,12 @@ private:
 
     // Display properties
     bool m_needsUpdate;
+    
+    // Cached POC and Value Area values
+    double m_cached_poc;
+    double m_cached_va_low;
+    double m_cached_va_high;
+    bool m_values_cached;
 };
 
 // Constructor implementation
@@ -92,6 +101,10 @@ TPOProfilePanel::TPOProfilePanel(QWidget *parent)
     , m_blockWidth(30)
     , m_blockHeight(20)
     , m_needsUpdate(true)
+    , m_cached_poc(0.0)
+    , m_cached_va_low(0.0)
+    , m_cached_va_high(0.0)
+    , m_values_cached(false)
 {
     setMinimumSize(400, 300);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -136,6 +149,36 @@ TPOProfilePanel::~TPOProfilePanel()
 void TPOProfilePanel::setData(const QVector<QMap<QString, QVariant>> &tpoData)
 {
     m_tpoData = tpoData;
+    
+    // Process the TPO data to populate the TPO engine
+    m_tpoEngine.clear();
+    
+    for (const auto &dataPoint : m_tpoData) {
+        if (dataPoint.contains("price") && dataPoint.contains("time_index")) {
+            double price = dataPoint["price"].toDouble();
+            int timeIndex = dataPoint["time_index"].toInt();
+            
+            // Create a mock timestamp based on time index (in a real implementation, you'd have actual timestamps)
+            auto timestamp = std::chrono::system_clock::now() + std::chrono::minutes(timeIndex * 30);
+            
+            // Create a PriceTick and process it
+            PriceTick tick;
+            tick.timestamp = timestamp;
+            tick.price = price;
+            tick.volume = 1.0; // Default volume for TPO counting
+            
+            m_tpoEngine.process_tick(tick);
+        }
+    }
+    
+    // Calculate POC and Value Area
+    const TPOProfile& profile = m_tpoEngine.get_tpo_profile();
+    m_cached_poc = profile.get_poc();
+    auto va = profile.get_value_area(70.0); // 70% of TPOs
+    m_cached_va_low = va.first;
+    m_cached_va_high = va.second;
+    m_values_cached = true;
+    
     m_needsUpdate = true;
     update();
 }
@@ -300,6 +343,35 @@ void TPOProfilePanel::drawLetterBlocks(QPainter &painter)
         painter.setFont(font);
 
         painter.drawText(blockRect, Qt::AlignCenter, QString(letter));
+    }
+    
+    // Draw Value Area if calculated
+    if (m_values_cached && m_cached_va_low > 0 && m_cached_va_high > 0) {
+        // Calculate Y positions for Value Area boundaries
+        int va_low_y = m_topMargin + (getPriceIndex(m_cached_va_low) * m_blockHeight);
+        int va_high_y = m_topMargin + (getPriceIndex(m_cached_va_high) * m_blockHeight);
+        
+        // Draw shaded area for Value Area
+        QRect va_rect(m_leftMargin, va_high_y, 
+                      width() - m_leftMargin - m_rightMargin, 
+                      va_low_y - va_high_y);
+        
+        QColor va_color(255, 215, 0, 50); // Semi-transparent gold
+        painter.fillRect(va_rect, va_color);
+        
+        // Draw Value Area boundaries
+        QPen va_pen(QColor(255, 165, 0), 1); // Orange line
+        painter.setPen(va_pen);
+        painter.drawLine(m_leftMargin, va_low_y, width() - m_rightMargin, va_low_y);  // VAL
+        painter.drawLine(m_leftMargin, va_high_y, width() - m_rightMargin, va_high_y); // VAH
+        
+        // Draw POC line if available
+        if (m_cached_poc > 0) {
+            int poc_y = m_topMargin + (getPriceIndex(m_cached_poc) * m_blockHeight);
+            QPen poc_pen(QColor(255, 255, 0), 1); // Yellow line, 1px as requested
+            painter.setPen(poc_pen);
+            painter.drawLine(m_leftMargin, poc_y, width() - m_rightMargin, poc_y);  // POC
+        }
     }
 }
 

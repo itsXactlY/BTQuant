@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <algorithm>
+#include <cmath>
 
 // Structure to represent a single price tick
 struct PriceTick {
@@ -84,6 +86,15 @@ struct TPOProfile {
 
     // Get the total number of unique time brackets in the profile
     size_t get_unique_time_bracket_count() const;
+
+    // Calculate Point of Control (POC) - price level with highest TPO count
+    double get_poc() const;
+
+    // Calculate Value Area (70% of TPOs) centered around POC
+    std::pair<double, double> get_value_area(double percent = 70.0) const;
+
+    // Get total TPO count across all price levels
+    int get_total_tpo_count() const;
 
     // Print the profile for debugging
     void print_profile() const;

@@ -15,6 +15,14 @@ struct PriceTick {
     double volume;
 };
 
+// Structure to represent TPO statistics
+struct TPOStatistics {
+    int total_ticks_processed;
+    double total_volume;
+    int unique_time_buckets;
+    int unique_price_levels;
+};
+
 // Structure to represent a TPO (Time-Price Opportunity) bucket
 struct TPONode {
     std::chrono::system_clock::time_point time_start;
@@ -22,9 +30,12 @@ struct TPONode {
     double price_level;
     int count; // Number of times this price level was hit in the time bucket
     double total_volume;
+    double high_price; // Highest price in this time-price bucket
+    double low_price;  // Lowest price in this time-price bucket
 
     // Default constructor
-    TPONode() : time_start(), time_end(), price_level(0.0), count(0), total_volume(0.0) {}
+    TPONode() : time_start(), time_end(), price_level(0.0), count(0), total_volume(0.0),
+                high_price(0.0), low_price(0.0) {}
 
     TPONode(std::chrono::system_clock::time_point start,
             std::chrono::system_clock::time_point end,
@@ -208,6 +219,23 @@ public:
 
     // Print TPO data for debugging purposes
     void print_tpo_data() const;
+
+    // Get TPO data for a specific time bucket
+    const std::map<double, TPONode>* get_tpo_data_for_time_bucket(
+        const std::chrono::system_clock::time_point& time_bucket) const;
+
+    // Get the highest price in a specific time-price bucket
+    double get_high_price(const std::chrono::system_clock::time_point& time_bucket,
+                         double price_bucket) const;
+
+    // Get the lowest price in a specific time-price bucket
+    double get_low_price(const std::chrono::system_clock::time_point& time_bucket,
+                        double price_bucket) const;
+
+    // Get statistics for a specific time period
+    TPOStatistics get_statistics_for_period(
+        const std::chrono::system_clock::time_point& start_time,
+        const std::chrono::system_clock::time_point& end_time) const;
 
     // Print TPO profile for debugging purposes
     void print_tpo_profile() const;

@@ -337,9 +337,118 @@ target_link_libraries(btq_engine_lib PUBLIC
     Threads::Threads
 )
 
-add_executable(realtime_dashboard ${REALTIME_DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
+# Main BTQuantTerminal executable combining both dashboard functionalities
+set(BTQUANT_TERMINAL_SOURCES
+    src/main_trading_terminal.cpp
+    src/vulkan_dashboard_advanced.cpp
+    src/system/VulkanCore.cpp
+    src/data/hotspine_data_bridge.cpp
+    src/components/quant_workspace_component.cpp
+    src/components/panel_base.cpp
+    src/components/chart_panel.cpp
+    src/components/metrics_panel.cpp
+    src/components/panel_manager.cpp
+    src/components/chart_manager.cpp
+    src/rendering/panel_culler.cpp
+    src/rendering/chart_culler.cpp
+    src/rendering/footprint_lod.cpp
+    src/rendering/imgui_optimizer.cpp
+    src/rendering/frame_pacer.cpp
+    src/rendering/auto_quality.cpp
+    src/rendering/orderbook_batcher.cpp
+    src/components/indicator_renderer.cpp
+    src/components/hierarchical_selector.cpp
+    src/components/orderbook_panel.cpp
+    src/components/orderbook_history.cpp
+    src/components/alerts_panel.cpp
+    src/components/status_bar_panel.cpp
+    src/components/watchlist_panel.cpp
+    src/components/watchlist_alerts.cpp
+    src/components/tape_panel.cpp
+    src/components/volume_profile_panel.cpp
+    src/components/depth_chart_panel.cpp
+    src/components/footprint_panel.cpp
+    src/components/tpo_panel.cpp
+    src/components/dom_surface_panel.cpp
+    src/components/MarketMicrostructureRenderer.cpp
+    src/components/VulkanSynchronization.cpp
+    src/components/realtime_dashboard_component.cpp
+    src/components/correlation_heatmap_component.cpp
+    src/components/symbol_selector.cpp
+    src/components/trading_orders_panel.cpp
+    src/components/trading_positions_panel.cpp
+    src/components/risk_metrics_panel.cpp
+    src/components/histogram_panel.cpp
+    src/components/scatter_plot_panel.cpp
+    src/components/time_series_panel.cpp
+    src/components/time_statistics_panel.cpp
+    src/components/time_histogram_panel.cpp
+    src/components/screener_panel.cpp
+    src/components/log_panel.cpp
+    src/components/multi_vwap_panel.cpp
+    src/components/performance_monitor_panel.cpp
+    src/components/time_and_sales.cpp
+    src/components/historical_time_sales.cpp
+    src/trading/trading_interface.cpp
+    src/trading/order_manager.cpp
+    src/trading/position_manager.cpp
+    src/trading/risk_assessment.cpp
+    src/trading/advanced_trading_features.cpp
+    src/data/symbol_registry.cpp
+    src/optimization/performance_optimizer.cpp
+    src/system/GPUMemoryManager.cpp
+    src/components/theme_manager.cpp
+    src/components/interaction_manager.cpp
+    src/components/chart_replay.cpp
+    src/components/chart_replay_panel.cpp
+    src/components/drawing_tools.cpp
+    src/components/dashboard_controls.cpp
+    src/config/dashboard_config.cpp
+    src/ui/unified_theme_system.cpp
+    src/ui/layout_manager.cpp
+    src/ui/workspace_manager.cpp
+    src/ui/settings_manager.cpp
+    src/ui/appearance_settings.cpp
+    src/ui/data_settings.cpp
+    src/ui/alert_settings.cpp
+    src/ui/keyboard_shortcuts.cpp
+    src/ui/haptic_feedback.cpp
+    src/ui/loading_states.cpp
+    src/ui/loading_state_integration.cpp
+    src/ui/empty_states.cpp
+    src/ui/quick_actions.cpp
+    src/ui/tutorial.cpp
+    src/layout/dashboard_layout_manager.cpp
+    src/system/system_optimizer.cpp
+    src/components/chart_panel_settings.cpp
+    src/data/market_data_processor.cpp
+    src/data/symbol_manager.cpp
+    src/data/cache_manager.cpp
+    src/data/persistence.cpp
+    src/data/incremental_updater.cpp
+    src/data/exchange_aggregator.cpp
+    src/data/quality_monitor.cpp
+    src/monitoring/performance_monitor.cpp
+    src/performance/debug_overlay.cpp
+    src/analytics/technical_analysis.cpp
+    src/analytics/trading_analytics.cpp
+    src/analytics/cluster_engine.cpp
+    src/analytics/volume_calculator.cpp
+    src/indicators/session_vwap.cpp
+    src/indicators/rolling_vwap.cpp
+    src/indicators/anchored_vwap.cpp
+    src/indicators/vwap_alerts.cpp
+    src/indicators/indicator_alerts.cpp
+    src/data/ui_data_manager.cpp
+    src/performance/panel_profiler.cpp
+    src/layout/layout_presets.cpp
+    src/ui/performance_settings.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
+)
 
-target_include_directories(realtime_dashboard PRIVATE
+add_executable(BTQuantTerminal ${BTQUANT_TERMINAL_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
+
+target_include_directories(BTQuantTerminal PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
     ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
@@ -362,38 +471,7 @@ target_include_directories(realtime_dashboard PRIVATE
 
 find_package(TBB REQUIRED)
 
-target_link_libraries(realtime_dashboard PRIVATE
-    Vulkan::Vulkan
-    glfw
-    dl
-    pthread
-    TBB::tbb
-)
-
-add_executable(dashboard_advanced ${DASHBOARD_SOURCES} ${LIB_SOURCES} ${COMPILED_SHADERS})
-
-target_include_directories(dashboard_advanced PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/threading
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/performance
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-    ${IMPLOT_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/imgui-src/backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${Vulkan_INCLUDE_DIRS}
-    ${glm_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
-    ${json_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
-    ${concurrentqueue_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
-    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
-)
-
-target_link_libraries(dashboard_advanced PRIVATE
+target_link_libraries(BTQuantTerminal PRIVATE
     Vulkan::Vulkan
     glfw
     dl

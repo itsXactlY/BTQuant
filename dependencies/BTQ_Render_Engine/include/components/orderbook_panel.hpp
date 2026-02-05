@@ -72,6 +72,10 @@ class OrderbookPanel : public PanelBase {
   std::vector<PriceLevel> aggregateOrderbookLevels(
       const std::vector<PriceLevel>& levels) const;
 
+  // View control functions
+  void center_price();
+  void reset_depth();
+
   // Helper method to detect order flow events by comparing snapshots
   void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
 

@@ -1300,4 +1300,33 @@ void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData
   }
 }
 
+void OrderbookPanel::center_price() {
+  // This method would center the view on the current mid-price
+  // For now, we'll just log that the action was triggered
+  auto orderbook_opt = processor_->getOrderbookData(symbol_id_);
+
+  if (orderbook_opt.has_value()) {
+    const auto& orderbook = orderbook_opt.value();
+
+    // Calculate mid price (average of best bid and best ask)
+    if (!orderbook.bids.empty() && !orderbook.asks.empty()) {
+      double mid_price = (orderbook.bids[0].price + orderbook.asks[0].price) / 2.0;
+
+      // In a real implementation, this would adjust the viewport to center on mid_price
+      // For now, we'll just log the action
+      std::cout << "[OrderbookPanel] Centering view on mid-price: " << mid_price << std::endl;
+    }
+  }
+}
+
+void OrderbookPanel::reset_depth() {
+  // This method would reset the depth chart view to default zoom/position
+  // For now, we'll just log that the action was triggered
+
+  std::cout << "[OrderbookPanel] Resetting depth chart view" << std::endl;
+
+  // In a real implementation, this would reset any zoom/pan state of the depth chart
+  // For now, we'll just log the action
+}
+
 }  // namespace BTQuant

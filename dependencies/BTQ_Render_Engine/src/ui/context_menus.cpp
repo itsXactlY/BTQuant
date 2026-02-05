@@ -7,6 +7,7 @@
 // Need to include panel_manager.hpp to use its methods
 #include "components/panel_manager.hpp"
 #include "components/watchlist_panel.hpp"
+#include "components/orderbook_panel.hpp"
 
 namespace BTQuant {
 
@@ -300,10 +301,16 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                 ImGui::Text("Orderbook Actions:");
                 ImGui::Separator();
                 if (ImGui::MenuItem("Center View")) {
-                    // Generic action
+                    // Call center_price method on the orderbook panel
+                    if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
+                        orderbook_panel->center_price();
+                    }
                 }
                 if (ImGui::MenuItem("Reset Depth")) {
-                    // Generic action
+                    // Call reset_depth method on the orderbook panel
+                    if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
+                        orderbook_panel->reset_depth();
+                    }
                 }
                 if (ImGui::MenuItem("Toggle Aggregation")) {
                     // Generic action

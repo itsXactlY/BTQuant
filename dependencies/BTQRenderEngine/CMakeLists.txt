@@ -42,6 +42,9 @@ include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${IMGUI_DIR})
 include_directories(${IMGUI_DIR}/backends)
 include_directories(${IMPLOT_DIR})
+include_directories(${concurrentqueue_SOURCE_DIR})
+include_directories(../BTQ_Render_Engine/include/components)
+include_directories(${glm_SOURCE_DIR})
 
 # Add the data management library
 add_library(btqdata
@@ -57,19 +60,20 @@ add_library(tpoengine
 set_source_files_properties(src/components/tpoprofilepanel.cpp PROPERTIES SKIP_AUTOMOC ON)
 qt5_wrap_cpp(tpoprofilepanel_moc_srcs include/components/tpoprofilepanel.h)
 
-# Add the DOM surface panel component
-# Add the option analytics panel component
+# Add the price statistic panel component
+set_source_files_properties(src/components/pricestatisticpanel.cpp PROPERTIES SKIP_AUTOMOC ON)
+qt5_wrap_cpp(pricestatisticpanel_moc_srcs include/components/pricestatisticpanel.h)
+
+# Add the price statistic panel component
 add_library(components
     src/components/tpoprofilepanel.cpp
-    src/components/domsurfacepanel.cpp
     src/components/pricestatisticpanel.cpp
-    src/components/optionanalyticspanel.cpp
-    src/components/option_analytics_panel.cpp
     ${tpoprofilepanel_moc_srcs}
+    ${pricestatisticpanel_moc_srcs}
 )
 
-# Link Qt5, Vulkan, and ImGui libraries to the components library
-target_link_libraries(components Qt5::Core Qt5::Widgets Qt5::Gui ${Vulkan_LIBRARIES} imgui implot)
+# Link Qt5 libraries to the components library
+target_link_libraries(components Qt5::Core Qt5::Widgets Qt5::Gui)
 
 # Create executables for testing
 add_executable(tpotest

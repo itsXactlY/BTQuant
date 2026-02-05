@@ -351,426 +351,828 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
             case PanelType::ORDERBOOK:
                 ImGui::Text("Orderbook Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle Aggregation")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Log Scale")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Orderbook Data")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Place Market Order")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Place Limit Order")) {
-                    // Generic action
+                if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
+                    if (ImGui::MenuItem("Toggle Aggregation")) {
+                        // Call specific orderbook panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Log Scale")) {
+                        // Call specific orderbook panel method
+                    }
+                    if (ImGui::MenuItem("Export Orderbook Data")) {
+                        // Call specific orderbook panel method
+                    }
+                    if (ImGui::MenuItem("Place Market Order")) {
+                        // Call specific orderbook panel method
+                    }
+                    if (ImGui::MenuItem("Place Limit Order")) {
+                        // Call specific orderbook panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle Aggregation")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Log Scale")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Orderbook Data")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Place Market Order")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Place Limit Order")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::FOOTPRINT_CHART:
                 ImGui::Text("Footprint Chart Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle Delta Bars")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Volume Bars")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Color Scheme")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* footprint_panel = dynamic_cast<FootprintPanel*>(panel)) {
+                    if (ImGui::MenuItem("Toggle Delta Bars")) {
+                        // Call specific footprint panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Volume Bars")) {
+                        // Call specific footprint panel method
+                    }
+                    if (ImGui::MenuItem("Change Color Scheme")) {
+                        // Call specific footprint panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific footprint panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific footprint panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle Delta Bars")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Volume Bars")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Color Scheme")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::VOLUME_PROFILE:
                 ImGui::Text("Volume Profile Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle POC Line")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Value Area")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Time Period")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Adjust Bin Size")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* volume_profile_panel = dynamic_cast<VolumeProfilePanel*>(panel)) {
+                    if (ImGui::MenuItem("Toggle POC Line")) {
+                        // Call specific volume profile panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Value Area")) {
+                        // Call specific volume profile panel method
+                    }
+                    if (ImGui::MenuItem("Change Time Period")) {
+                        // Call specific volume profile panel method
+                    }
+                    if (ImGui::MenuItem("Adjust Bin Size")) {
+                        // Call specific volume profile panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific volume profile panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific volume profile panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle POC Line")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Value Area")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Time Period")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Adjust Bin Size")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TPO_PROFILE:
                 ImGui::Text("TPO Profile Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle Session Blocks")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Session Type")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle VWAP")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* tpo_panel = dynamic_cast<TPOPanel*>(panel)) {
+                    if (ImGui::MenuItem("Toggle Session Blocks")) {
+                        // Call specific TPO panel method
+                    }
+                    if (ImGui::MenuItem("Change Session Type")) {
+                        // Call specific TPO panel method
+                    }
+                    if (ImGui::MenuItem("Toggle VWAP")) {
+                        // Call specific TPO panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific TPO panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific TPO panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle Session Blocks")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Session Type")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle VWAP")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::HEATMAP:
                 ImGui::Text("Heatmap Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Change Color Map")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Interpolation")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Adjust Brightness")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* heatmap_panel = dynamic_cast<DOMSurfacePanel*>(panel)) {
+                    if (ImGui::MenuItem("Change Color Map")) {
+                        // Call specific heatmap panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Interpolation")) {
+                        // Call specific heatmap panel method
+                    }
+                    if (ImGui::MenuItem("Adjust Brightness")) {
+                        // Call specific heatmap panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific heatmap panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific heatmap panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Change Color Map")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Interpolation")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Adjust Brightness")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::ALERTS:
                 ImGui::Text("Alerts Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Create New Alert")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Enable All Alerts")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Disable All Alerts")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Clear Completed Alerts")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Delete Selected")) {
-                    // Generic action
+                if (auto* alerts_panel = dynamic_cast<AlertsPanel*>(panel)) {
+                    if (ImGui::MenuItem("Create New Alert")) {
+                        // Call specific alerts panel method
+                    }
+                    if (ImGui::MenuItem("Enable All Alerts")) {
+                        // Call specific alerts panel method
+                    }
+                    if (ImGui::MenuItem("Disable All Alerts")) {
+                        // Call specific alerts panel method
+                    }
+                    if (ImGui::MenuItem("Clear Completed Alerts")) {
+                        // Call specific alerts panel method
+                    }
+                    if (ImGui::MenuItem("Delete Selected")) {
+                        // Call specific alerts panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Create New Alert")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Enable All Alerts")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Disable All Alerts")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Clear Completed Alerts")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Delete Selected")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TIME_AND_SALES:
                 ImGui::Text("Time & Sales Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle Auto Scroll")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Clear Trades")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Filter Buys/Sells")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Highlight Large Trades")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Trade Data")) {
-                    // Generic action
+                if (auto* time_sales_panel = dynamic_cast<TimeAndSales*>(panel)) {
+                    if (ImGui::MenuItem("Toggle Auto Scroll")) {
+                        // Call specific time and sales panel method
+                    }
+                    if (ImGui::MenuItem("Clear Trades")) {
+                        // Call specific time and sales panel method
+                    }
+                    if (ImGui::MenuItem("Filter Buys/Sells")) {
+                        // Call specific time and sales panel method
+                    }
+                    if (ImGui::MenuItem("Highlight Large Trades")) {
+                        // Call specific time and sales panel method
+                    }
+                    if (ImGui::MenuItem("Export Trade Data")) {
+                        // Call specific time and sales panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle Auto Scroll")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Clear Trades")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Filter Buys/Sells")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Highlight Large Trades")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Trade Data")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::DEPTH_CHART:
                 ImGui::Text("Depth Chart Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Toggle Log Scale")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Cumulative")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* depth_chart_panel = dynamic_cast<DepthChartPanel*>(panel)) {
+                    if (ImGui::MenuItem("Toggle Log Scale")) {
+                        // Call specific depth chart panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Call specific depth chart panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific depth chart panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific depth chart panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Toggle Log Scale")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::PERFORMANCE_MONITOR:
                 ImGui::Text("Performance Monitor Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Refresh Data")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Metrics")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset Counters")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* perf_monitor_panel = dynamic_cast<PerformanceMonitorPanel*>(panel)) {
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Call specific performance monitor panel method
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Call specific performance monitor panel method
+                    }
+                    if (ImGui::MenuItem("Reset Counters")) {
+                        // Call specific performance monitor panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific performance monitor panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset Counters")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TRADING_ORDERS:
                 ImGui::Text("Trading Orders Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Place New Order")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Cancel Selected")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Cancel All")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Modify Selected")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Orders")) {
-                    // Generic action
+                if (auto* trading_orders_panel = dynamic_cast<TradingOrdersPanel*>(panel)) {
+                    if (ImGui::MenuItem("Place New Order")) {
+                        // Call specific trading orders panel method
+                    }
+                    if (ImGui::MenuItem("Cancel Selected")) {
+                        // Call specific trading orders panel method
+                    }
+                    if (ImGui::MenuItem("Cancel All")) {
+                        // Call specific trading orders panel method
+                    }
+                    if (ImGui::MenuItem("Modify Selected")) {
+                        // Call specific trading orders panel method
+                    }
+                    if (ImGui::MenuItem("Export Orders")) {
+                        // Call specific trading orders panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Place New Order")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Cancel Selected")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Cancel All")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Modify Selected")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Orders")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TRADING_POSITIONS:
                 ImGui::Text("Trading Positions Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Close Selected Position")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Close All Positions")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reverse Position")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Calculate PnL")) {
-                    // Generic action
+                if (auto* trading_positions_panel = dynamic_cast<TradingPositionsPanel*>(panel)) {
+                    if (ImGui::MenuItem("Close Selected Position")) {
+                        // Call specific trading positions panel method
+                    }
+                    if (ImGui::MenuItem("Close All Positions")) {
+                        // Call specific trading positions panel method
+                    }
+                    if (ImGui::MenuItem("Reverse Position")) {
+                        // Call specific trading positions panel method
+                    }
+                    if (ImGui::MenuItem("Calculate PnL")) {
+                        // Call specific trading positions panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Close Selected Position")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Close All Positions")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reverse Position")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Calculate PnL")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::RISK_METRICS:
                 ImGui::Text("Risk Metrics Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Refresh Metrics")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Metrics")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* risk_metrics_panel = dynamic_cast<RiskMetricsPanel*>(panel)) {
+                    if (ImGui::MenuItem("Refresh Metrics")) {
+                        // Call specific risk metrics panel method
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Call specific risk metrics panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific risk metrics panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Refresh Metrics")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::METRICS:
                 ImGui::Text("Metrics Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Refresh Data")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Metrics")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Time Range")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* metrics_panel = dynamic_cast<MetricsPanel*>(panel)) {
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Call specific metrics panel method
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Call specific metrics panel method
+                    }
+                    if (ImGui::MenuItem("Change Time Range")) {
+                        // Call specific metrics panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific metrics panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Metrics")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Time Range")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::SCATTER_PLOT:
                 ImGui::Text("Scatter Plot Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Change Point Style")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Grid")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Legend")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Fit to View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* scatter_plot_panel = dynamic_cast<ScatterPlotPanel*>(panel)) {
+                    if (ImGui::MenuItem("Change Point Style")) {
+                        // Call specific scatter plot panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Grid")) {
+                        // Call specific scatter plot panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Legend")) {
+                        // Call specific scatter plot panel method
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Call specific scatter plot panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific scatter plot panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific scatter plot panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Change Point Style")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Grid")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Legend")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::HISTOGRAM:
                 ImGui::Text("Histogram Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Change Bin Count")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Normalization")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Cumulative")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Fit to View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* histogram_panel = dynamic_cast<HistogramPanel*>(panel)) {
+                    if (ImGui::MenuItem("Change Bin Count")) {
+                        // Call specific histogram panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Normalization")) {
+                        // Call specific histogram panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Call specific histogram panel method
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Call specific histogram panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific histogram panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific histogram panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Change Bin Count")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Normalization")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TIME_SERIES:
                 ImGui::Text("Time Series Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Add Overlay")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Grid")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Legend")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Fit to View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* time_series_panel = dynamic_cast<TimeSeriesPanel*>(panel)) {
+                    if (ImGui::MenuItem("Add Overlay")) {
+                        // Call specific time series panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Grid")) {
+                        // Call specific time series panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Legend")) {
+                        // Call specific time series panel method
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Call specific time series panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific time series panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific time series panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Add Overlay")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Grid")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Legend")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TIME_STATISTICS:
                 ImGui::Text("Time Statistics Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Refresh Data")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Statistics")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Time Range")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel)) {
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Call specific time statistics panel method
+                    }
+                    if (ImGui::MenuItem("Export Statistics")) {
+                        // Call specific time statistics panel method
+                    }
+                    if (ImGui::MenuItem("Change Time Range")) {
+                        // Call specific time statistics panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific time statistics panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Statistics")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Time Range")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::TIME_HISTOGRAM:
                 ImGui::Text("Time Histogram Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Change Time Interval")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Normalization")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Cumulative")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Fit to View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Reset View")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* time_histogram_panel = dynamic_cast<TimeHistogramPanel*>(panel)) {
+                    if (ImGui::MenuItem("Change Time Interval")) {
+                        // Call specific time histogram panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Normalization")) {
+                        // Call specific time histogram panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Call specific time histogram panel method
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Call specific time histogram panel method
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Call specific time histogram panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific time histogram panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Change Time Interval")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Normalization")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Cumulative")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Fit to View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Reset View")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::SCREENER:
                 ImGui::Text("Screener Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Add Filter")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Edit Filters")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Clear Filters")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Sort by Column")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Results")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Refresh Data")) {
-                    // Generic action
+                if (auto* screener_panel = dynamic_cast<ScreenerPanel*>(panel)) {
+                    if (ImGui::MenuItem("Add Filter")) {
+                        // Call specific screener panel method
+                    }
+                    if (ImGui::MenuItem("Edit Filters")) {
+                        // Call specific screener panel method
+                    }
+                    if (ImGui::MenuItem("Clear Filters")) {
+                        // Call specific screener panel method
+                    }
+                    if (ImGui::MenuItem("Sort by Column")) {
+                        // Call specific screener panel method
+                    }
+                    if (ImGui::MenuItem("Export Results")) {
+                        // Call specific screener panel method
+                    }
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Call specific screener panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Add Filter")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Edit Filters")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Clear Filters")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Sort by Column")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Results")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Refresh Data")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::LOG_PANEL:
                 ImGui::Text("Log Panel Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Clear Logs")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Export Logs")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Filter by Level")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Timestamps")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Toggle Auto Scroll")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Find in Logs")) {
-                    // Generic action
+                if (auto* log_panel = dynamic_cast<LogPanel*>(panel)) {
+                    if (ImGui::MenuItem("Clear Logs")) {
+                        // Call specific log panel method
+                    }
+                    if (ImGui::MenuItem("Export Logs")) {
+                        // Call specific log panel method
+                    }
+                    if (ImGui::MenuItem("Filter by Level")) {
+                        // Call specific log panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Timestamps")) {
+                        // Call specific log panel method
+                    }
+                    if (ImGui::MenuItem("Toggle Auto Scroll")) {
+                        // Call specific log panel method
+                    }
+                    if (ImGui::MenuItem("Find in Logs")) {
+                        // Call specific log panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Clear Logs")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Export Logs")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Filter by Level")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Timestamps")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Toggle Auto Scroll")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Find in Logs")) {
+                        // Generic action
+                    }
                 }
                 break;
                 
             case PanelType::CHART_REPLAY:
                 ImGui::Text("Chart Replay Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Start Replay")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Pause Replay")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Stop Replay")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Change Speed")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Jump to Time")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Take Screenshot")) {
-                    // Generic action
+                if (auto* chart_replay_panel = dynamic_cast<ChartReplayPanel*>(panel)) {
+                    if (ImGui::MenuItem("Start Replay")) {
+                        // Call specific chart replay panel method
+                    }
+                    if (ImGui::MenuItem("Pause Replay")) {
+                        // Call specific chart replay panel method
+                    }
+                    if (ImGui::MenuItem("Stop Replay")) {
+                        // Call specific chart replay panel method
+                    }
+                    if (ImGui::MenuItem("Change Speed")) {
+                        // Call specific chart replay panel method
+                    }
+                    if (ImGui::MenuItem("Jump to Time")) {
+                        // Call specific chart replay panel method
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Call specific chart replay panel method
+                    }
+                } else {
+                    // Fallback for when cast fails - still allow generic actions
+                    if (ImGui::MenuItem("Start Replay")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Pause Replay")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Stop Replay")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Change Speed")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Jump to Time")) {
+                        // Generic action
+                    }
+                    if (ImGui::MenuItem("Take Screenshot")) {
+                        // Generic action
+                    }
                 }
                 break;
-                
+
             default:
                 ImGui::Text("Generic Actions:");
                 ImGui::Separator();

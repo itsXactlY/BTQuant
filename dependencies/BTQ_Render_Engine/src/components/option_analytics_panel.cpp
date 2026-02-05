@@ -90,11 +90,11 @@ std::string OptionAnalyticsPanel::getActiveTabName() const {
 
 void OptionAnalyticsPanel::render() {
     begin_panel_window();
-    
+
     // Render tab navigation
     if (ImGui::BeginTabBar("OptionTabs")) {
         for (size_t i = 0; i < tabs.size(); ++i) {
-            std::string tabName = tabs[i];
+            std::string tabName = "[" + tabs[i] + "]";  // Add brackets as requested
             if (ImGui::BeginTabItem(tabName.c_str())) {
                 if (static_cast<int>(i) == activeTab) {
                     renderContent();
@@ -104,7 +104,7 @@ void OptionAnalyticsPanel::render() {
         }
         ImGui::EndTabBar();
     }
-    
+
     end_panel_window();
 }
 
@@ -123,51 +123,76 @@ void OptionAnalyticsPanel::renderDeskTab() {
     ImGui::Text("OPTIONS DESK");
     ImGui::Separator();
 
-    // Create a table for the options grid
-    if (ImGui::BeginTable("OptionsGrid", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
-        ImGui::TableSetupColumn("Call Bid/Ask", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableSetupColumn("Call Delta", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Call Gamma", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+    // Create a table for the options grid: Left(Calls) - Center(Strike) - Right(Puts)
+    if (ImGui::BeginTable("OptionsGrid", 9, ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg)) {
+        // Left side - Calls
+        ImGui::TableSetupColumn("Call Bid", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Call Ask", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Call Delta", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Call Gamma", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        
+        // Center - Strike (highlighted)
         ImGui::TableSetupColumn("Strike", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Put Delta", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Put Bid/Ask", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        
+        // Right side - Puts
+        ImGui::TableSetupColumn("Put Delta", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Put Gamma", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Put Bid", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Put Ask", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        
         ImGui::TableSetupScrollFreeze(0, 1); // Make top row always visible
         ImGui::TableHeadersRow();
 
         for (const auto& opt : optionsGrid) {
             ImGui::TableNextRow();
-            
-            // Call Bid/Ask - clickable to add to strategy
+
+            // Left side - Calls
+            // Call Bid - clickable to add to strategy
             ImGui::TableSetColumnIndex(0);
-            std::string call_button_id = "C##" + std::to_string(static_cast<int>(opt.strike));
-            if (ImGui::Button(call_button_id.c_str())) {
-                // Callback to add call to strategy
+            std::string call_bid_button_id = "CB##" + std::to_string(static_cast<int>(opt.strike * 100));
+            if (ImGui::Button(call_bid_button_id.c_str())) {
+                // Callback to add call to strategy with buy order at bid
                 onStrikeClick(opt.strike, "Call", "Buy");
             }
             ImGui::SameLine();
-            ImGui::Text("%.2f/%.2f", opt.call_bid, opt.call_ask);
-            
-            // Call Delta
+            ImGui::Text("%.2f", opt.call_bid);
+
+            // Call Ask - clickable to add to strategy
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%.4f", opt.call_delta);
-            
-            // Call Gamma
+            std::string call_ask_button_id = "CA##" + std::to_string(static_cast<int>(opt.strike * 100));
+            if (ImGui::Button(call_ask_button_id.c_str())) {
+                // Callback to add call to strategy with sell order at ask
+                onStrikeClick(opt.strike, "Call", "Sell");
+            }
+            ImGui::SameLine();
+            ImGui::Text("%.2f", opt.call_ask);
+
+            // Call Delta
             ImGui::TableSetColumnIndex(2);
-            ImGui::Text("%.4f", opt.call_gamma);
-            
-            // Strike - center column, clickable for both call and put
+            ImGui::Text("%.4f", opt.call_delta);
+
+            // Call Gamma
             ImGui::TableSetColumnIndex(3);
-            std::string strike_button_id = "S##" + std::to_string(static_cast<int>(opt.strike));
+            ImGui::Text("%.4f", opt.call_gamma);
+
+            // Center - Strike (highlighted column)
+            ImGui::TableSetColumnIndex(4);
+            // Highlight the strike column
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.5f, 1.0f)); // Light yellow
+            std::string strike_button_id = "S##" + std::to_string(static_cast<int>(opt.strike * 100));
             if (ImGui::Button(strike_button_id.c_str())) {
                 // Show context menu for call/put selection
                 ImGui::OpenPopup(strike_button_id.c_str());
             }
-            
+            ImGui::SameLine();
+            ImGui::Text("%.2f", opt.strike);
+            ImGui::PopStyleColor(); // Reset text color
+
             // Popup menu for strike selection
             if (ImGui::BeginPopup(strike_button_id.c_str())) {
                 ImGui::Text("Add Strike: %.2f", opt.strike);
                 ImGui::Separator();
-                
+
                 if (ImGui::MenuItem("Add Call")) {
                     onStrikeClick(opt.strike, "Call", "Buy");
                 }
@@ -184,25 +209,40 @@ void OptionAnalyticsPanel::renderDeskTab() {
                 if (ImGui::MenuItem("Add Short Put")) {
                     onStrikeClick(opt.strike, "Put", "Sell");
                 }
-                
+
                 ImGui::EndPopup();
             }
-            
+
+            // Right side - Puts
             // Put Delta
-            ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%.4f", opt.put_delta);
-            
-            // Put Bid/Ask - clickable to add to strategy
             ImGui::TableSetColumnIndex(5);
-            std::string put_button_id = "P##" + std::to_string(static_cast<int>(opt.strike));
-            if (ImGui::Button(put_button_id.c_str())) {
-                // Callback to add put to strategy
+            ImGui::Text("%.4f", opt.put_delta);
+
+            // Put Gamma
+            ImGui::TableSetColumnIndex(6);
+            ImGui::Text("%.4f", opt.put_gamma);
+
+            // Put Bid - clickable to add to strategy
+            ImGui::TableSetColumnIndex(7);
+            std::string put_bid_button_id = "PB##" + std::to_string(static_cast<int>(opt.strike * 100));
+            if (ImGui::Button(put_bid_button_id.c_str())) {
+                // Callback to add put to strategy with buy order at bid
                 onStrikeClick(opt.strike, "Put", "Buy");
             }
             ImGui::SameLine();
-            ImGui::Text("%.2f/%.2f", opt.put_bid, opt.put_ask);
+            ImGui::Text("%.2f", opt.put_bid);
+
+            // Put Ask - clickable to add to strategy
+            ImGui::TableSetColumnIndex(8);
+            std::string put_ask_button_id = "PA##" + std::to_string(static_cast<int>(opt.strike * 100));
+            if (ImGui::Button(put_ask_button_id.c_str())) {
+                // Callback to add put to strategy with sell order at ask
+                onStrikeClick(opt.strike, "Put", "Sell");
+            }
+            ImGui::SameLine();
+            ImGui::Text("%.2f", opt.put_ask);
         }
-        
+
         ImGui::EndTable();
     }
 }

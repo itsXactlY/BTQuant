@@ -113,62 +113,51 @@ void RiskAnalyzerPanel::compute_risk_data() {
   const int num_points = 200; // Higher resolution for smoother curves
   double step = (max_underlying_price_ - min_underlying_price_) / (num_points - 1);
 
-  // Calculate time decay factor based on days to expiration
-  // Shorter time to expiration means steeper P/L curve near the money
-  double time_decay_factor = std::max(0.01, static_cast<double>(days_to_expiration_) / 365.0);
-  
-  // Calculate volatility factor - higher volatility flattens the curve
-  double vol_factor = volatility_ / 0.30; // Normalize to 30% baseline
+  // Calculate time fraction (years to expiration)
+  double time_to_expiry = static_cast<double>(days_to_expiration_) / 365.0;
 
   for (int i = 0; i < num_points; i++) {
     double price = min_underlying_price_ + i * step;
     underlying_prices_.push_back(price);
 
-    // Realistic risk profile calculation
-    // This simulates a basic options strategy (e.g., a short straddle)
-    // In a real implementation, this would calculate based on actual positions
-    double pl = 0.0;
-
-    // Example: Simulate a short straddle position (short call + short put at current price)
-    // This creates a profit if price stays near current price, loss if it moves significantly
-    double strike = current_price_; // For simplicity, assume ATM options
+    // More realistic options risk calculation
+    // Simulate a simple strategy: short ATM straddle (short 1 call + short 1 put)
+    double strike = current_price_; // At-the-money strike
     
-    // Adjust max profit based on volatility and time to expiration
-    // Higher volatility = higher premiums, shorter time = lower premiums
-    double max_profit = 100.0 * vol_factor * time_decay_factor;
-    double max_loss = 1000.0; // Maximum theoretical loss
-
-    // Calculate profit/loss based on options payoff
-    if (price < strike) {
-      // Put option payoff: profit decreases as price goes down
-      double put_payoff = std::max(0.0, strike - price) - max_profit;
+    // Calculate option values at expiration (intrinsic value only)
+    double call_value_at_expiry = std::max(0.0, price - strike);  // Value of short call at expiry
+    double put_value_at_expiry = std::max(0.0, strike - price);   // Value of short put at expiry
+    
+    // Calculate approximate premium received (using simplified Black-Scholes approximation)
+    // Premium ~ S * σ * sqrt(T) * 0.4 for ATM options
+    double approx_premium = current_price_ * volatility_ * std::sqrt(time_to_expiry) * 0.4;
+    
+    // Total premium collected for straddle
+    double total_premium = 2.0 * approx_premium;
+    
+    // Calculate P/L at expiration
+    // For short straddle: P/L = Premium received - (Call payoff + Put payoff)
+    double pl = total_premium - (call_value_at_expiry + put_value_at_expiry);
+    
+    // Apply time decay effect (theta) - as time passes, the curve becomes more like expiry
+    // At t=0 (now), we're further from expiry, so less extreme P/L
+    // As time approaches expiry, the curve approaches the expiry payoff
+    if (time_to_expiry > 0) {
+      // Interpolate between current theoretical value and expiry value based on time remaining
+      // As time_to_expiry approaches 0, we get closer to expiry payoff
+      double time_weight = std::min(1.0, 0.1 / time_to_expiry); // Weight towards expiry as time decreases
       
-      // Apply time decay effect - closer to expiration has sharper curve
-      if (time_decay_factor < 0.5) {
-        // Near expiration - steeper curve
-        put_payoff = std::pow(std::abs(put_payoff), 1.2) * (put_payoff < 0 ? -1 : 1);
-      }
+      // For current theoretical value (before expiry), adjust based on time value
+      double current_theoretical_pl = total_premium * (1.0 - std::exp(-time_to_expiry * 2.0));
       
-      pl = std::max(-max_loss, put_payoff); // Cap the loss
-    } else {
-      // Call option payoff: profit decreases as price goes up
-      double call_payoff = std::max(0.0, price - strike) - max_profit;
-      
-      // Apply time decay effect - closer to expiration has sharper curve
-      if (time_decay_factor < 0.5) {
-        // Near expiration - steeper curve
-        call_payoff = std::pow(std::abs(call_payoff), 1.2) * (call_payoff < 0 ? -1 : 1);
-      }
-      
-      pl = std::max(-max_loss, -call_payoff); // Negative because we're short
+      // Blend current theoretical value with expiry value
+      pl = current_theoretical_pl * (1.0 - time_weight) + pl * time_weight;
     }
-
-    // Apply volatility effect - higher volatility flattens the curve
-    pl = pl / vol_factor;
-
-    // Add some realistic scaling based on the underlying asset
-    pl = pl * (price / current_price_); // Adjust for price scaling
-
+    
+    // Apply volatility adjustment
+    // Higher volatility increases premium received but also affects the shape
+    pl *= (1.0 + (volatility_ - 0.30)); // Baseline at 30% volatility
+    
     profit_losses_.push_back(pl);
   }
 }
@@ -189,38 +178,39 @@ void RiskAnalyzerPanel::render_risk_chart() {
   // Styling: Use theme colors
   const auto& colors = ThemeManager::getInstance().getColors();
   ImVec4 col_profit = colors.accent_green;
-  ImVec4 col_loss = colors.accent_red;
   ImVec4 col_current = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow for current price line
 
-  // Setup Plot
+  // Setup Plot with enhanced styling
   if (ImPlot::BeginPlot(plot_id, region,
-                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText |
-                            ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMenus)) {
-    
-    // Set axis labels
-    ImPlot::SetupAxes("Underlying Price", "Profit/Loss", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
-    
+                        ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_CanvasOnly)) {
+
+    // Set axis labels (grid lines are enabled by default)
+    ImPlot::SetupAxes("Underlying Price", "Profit/Loss", 
+                      ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+
     // Set axis limits
     if (!underlying_prices_.empty()) {
       double x_min = underlying_prices_.front();
       double x_max = underlying_prices_.back();
       double y_min = *std::min_element(profit_losses_.begin(), profit_losses_.end());
       double y_max = *std::max_element(profit_losses_.begin(), profit_losses_.end());
-      
+
       // Add some padding
       double y_range = y_max - y_min;
       if (y_range == 0) y_range = 1.0;
       y_min -= y_range * 0.1;
       y_max += y_range * 0.1;
-      
+
       ImPlot::SetupAxisLimits(ImAxis_X1, x_min, x_max, ImPlotCond_Always);
       ImPlot::SetupAxisLimits(ImAxis_Y1, y_min, y_max, ImPlotCond_Always);
     }
 
-    // Plot the P/L curve
+    // Plot the P/L curve with enhanced styling
     ImPlot::PushStyleColor(ImPlotCol_Line, col_profit);
+    ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f); // Thicker line for better visibility
     ImPlot::PlotLine("P/L Curve", underlying_prices_.data(), profit_losses_.data(),
                      static_cast<int>(underlying_prices_.size()));
+    ImPlot::PopStyleVar();
     ImPlot::PopStyleColor();
 
     // Draw current price line
@@ -229,17 +219,28 @@ void RiskAnalyzerPanel::render_risk_chart() {
       double y_min = ImPlot::GetPlotLimits().Y.Min;
       double y_max = ImPlot::GetPlotLimits().Y.Max;
       double current_line_y[2] = {y_min, y_max};
-      
+
       ImPlot::PushStyleColor(ImPlotCol_Line, col_current);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.5f);
       ImPlot::PlotLine("Current Price", current_line_x, current_line_y, 2);
+      ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
-      
+
       // Add annotation for current price
       char current_label[64];
       snprintf(current_label, sizeof(current_label), "Current: %.2f", current_price_);
       ImPlot::Annotation(current_price_, y_max * 0.9, ImVec4(1, 1, 0, 1), ImVec2(5, -5), true,
                          "%s", current_label);
     }
+
+    // Add zero P/L reference line
+    double zero_line_x[2] = {underlying_prices_.front(), underlying_prices_.back()};
+    double zero_line_y[2] = {0.0, 0.0};
+    ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(0.5f, 0.5f, 0.5f, 0.5f)); // Gray for zero line
+    ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);
+    ImPlot::PlotLine("Zero P/L", zero_line_x, zero_line_y, 2);
+    ImPlot::PopStyleVar();
+    ImPlot::PopStyleColor();
 
     ImPlot::EndPlot();
   }
@@ -255,8 +256,9 @@ void RiskAnalyzerPanel::render_controls() {
 
   // What-if simulation controls section
   ImGui::Separator();
-  ImGui::Text("What-if Simulation Parameters:");
-  
+  ImGui::Text("Risk Analysis Parameters:");
+  ImGui::TextDisabled("(Simulating short ATM straddle strategy)");
+
   // Days to expiration slider
   ImGui::Text("Days to Expiration:");
   ImGui::SameLine();
@@ -267,7 +269,7 @@ void RiskAnalyzerPanel::render_controls() {
   }
 
   // Volatility slider
-  ImGui::Text("Volatility (%):");
+  ImGui::Text("Volatility (%%):");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(150);
   float vol_pct = static_cast<float>(volatility_ * 100.0); // Convert to percentage for display
@@ -287,9 +289,11 @@ void RiskAnalyzerPanel::render_controls() {
   if (ImGui::SliderFloat("##RangeMult", &temp_multiplier, 0.05f, 0.5f, "%.2f")) {
     price_range_multiplier_ = static_cast<double>(temp_multiplier);
     // Range changed, recompute data
-    min_underlying_price_ = current_price_ * (1.0 - price_range_multiplier_);
-    max_underlying_price_ = current_price_ * (1.0 + price_range_multiplier_);
-    compute_risk_data();
+    if (current_price_ > 0) {
+      min_underlying_price_ = current_price_ * (1.0 - price_range_multiplier_);
+      max_underlying_price_ = current_price_ * (1.0 + price_range_multiplier_);
+      compute_risk_data();
+    }
   }
 
   // Button to refresh data
@@ -308,6 +312,15 @@ void RiskAnalyzerPanel::render_controls() {
       max_underlying_price_ = current_price_ * (1.0 + price_range_multiplier_);
       compute_risk_data();
     }
+  }
+  
+  // Show strategy summary
+  ImGui::Separator();
+  ImGui::Text("Strategy Summary:");
+  if (!profit_losses_.empty()) {
+    double max_pl = *std::max_element(profit_losses_.begin(), profit_losses_.end());
+    double min_pl = *std::min_element(profit_losses_.begin(), profit_losses_.end());
+    ImGui::Text("Max Profit: %.2f | Max Loss: %.2f", max_pl, min_pl);
   }
 }
 

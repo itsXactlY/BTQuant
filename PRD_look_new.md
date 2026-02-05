@@ -417,10 +417,10 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 
 ### TASK 21: OPTIONS ANALYTICS & RISK MANAGER
 - [x] Create `dependencies/BTQRenderEngine/src/components/optionanalyticspanel.cpp` with a three-tab navigation header: [Desk], [Analyzer], [Smile].
-- [ ] Implement the "Options Desk" grid: central column for Strikes, left side for Calls (Bid/Ask/Delta/Gamma), right side for Puts.
-- [ ] Create a "Strategy Builder" footer: when a user clicks a strike, add it to a "Current Strategy" list for multi-leg analysis.
-- [ ] Implement the "Risk Analyzer" chart: a 2D coordinate system plotting P/L (Y-axis) vs Underlying Price (X-axis).
-- [ ] Add "What-if" simulation sliders to the UI for adjusting "Days to Expiration" and "Volatility (%)" to see the P/L curve shift in real-time.
+- [x] Implement the "Options Desk" grid: central column for Strikes, left side for Calls (Bid/Ask/Delta/Gamma), right side for Puts.
+- [x] Create a "Strategy Builder" footer: when a user clicks a strike, add it to a "Current Strategy" list for multi-leg analysis.
+- [x] Implement the "Risk Analyzer" chart: a 2D coordinate system plotting P/L (Y-axis) vs Underlying Price (X-axis).
+- [x] Add "What-if" simulation sliders to the UI for adjusting "Days to Expiration" and "Volatility (%)" to see the P/L curve shift in real-time.
 - [ ] Implement "Volatility Smile" rendering: plot Implied Volatility (IV) per strike for all expirations in a single overlaid line chart.
 
 ### TASK 22: PRICE STATISTICS & PANEL INTEGRATION

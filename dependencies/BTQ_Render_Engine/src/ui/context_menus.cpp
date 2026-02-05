@@ -351,18 +351,6 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
             case PanelType::ORDERBOOK:
                 ImGui::Text("Orderbook Actions:");
                 ImGui::Separator();
-                if (ImGui::MenuItem("Center View")) {
-                    // Call center_price method on the orderbook panel
-                    if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
-                        orderbook_panel->center_price();
-                    }
-                }
-                if (ImGui::MenuItem("Reset Depth")) {
-                    // Call reset_depth method on the orderbook panel
-                    if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
-                        orderbook_panel->reset_depth();
-                    }
-                }
                 if (ImGui::MenuItem("Toggle Aggregation")) {
                     // Generic action
                 }

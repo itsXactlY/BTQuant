@@ -11,6 +11,7 @@
 #include "components/realtime_dashboard_component.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "implot.h"
 #include "performance_monitor.hpp"
 #include "performance/debug_overlay.hpp"
@@ -217,6 +218,38 @@ void VulkanDashboard::init_components() {
     std::cout << "[Debug Overlay] Toggled visibility: "
               << (g_debug_overlay.is_visible() ? "ON" : "OFF") << std::endl;
   }, "Toggle Debug Overlay", false, false, false); // F12
+
+  // Delete key - Remove currently focused panel
+  im.registerHotKey(ImGuiKey_Delete, [this]() {
+    // Find the currently focused panel and remove it
+    // We need to iterate through all panels to find which one currently has focus
+    auto panel_manager = workspace_->getPanelManager();
+    if (panel_manager) {
+      auto all_panel_ids = panel_manager->get_all_panel_ids();
+
+      // Find the currently focused window by checking ImGui's focused window
+      ImGuiWindow* focused_window = GImGui->NavWindow;
+      const char* focused_window_name = focused_window ? focused_window->Name : nullptr;
+
+      for (uint32_t panel_id : all_panel_ids) {
+        auto panel = panel_manager->get_panel_by_id(panel_id);
+        if (panel) {
+          // Check if this panel's window is currently focused
+          std::string expected_window_name =
+              panel->get_config().title + "###panel_" +
+              std::to_string(reinterpret_cast<uintptr_t>(panel));
+
+          if (focused_window_name &&
+              std::string(focused_window_name) == expected_window_name) {
+            // Found the focused panel, remove it
+            panel_manager->remove_panel(panel_id);
+            std::cout << "[Hotkey] Removed focused panel: " << panel->get_config().title << std::endl;
+            break;
+          }
+        }
+      }
+    }
+  }, "Remove Focused Panel", false, false, false); // Delete
 }
 
 void VulkanDashboard::render_frame() {

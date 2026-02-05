@@ -66,7 +66,7 @@ class DomSurfacePanel : public PanelBase {
   void setSymbol(uint32_t symbol_id);
   
   // Override panel header to add heatmap intensity control
-  void render_panel_header() override;
+  void render_panel_header();
 
   // Configuration
   void setHistoryDepth(int depth) { history_depth_ = depth; }
@@ -123,7 +123,7 @@ class DomSurfacePanel : public PanelBase {
   static constexpr size_t MEDIAN_WINDOW_SIZE = 1000;
 
   // Large Order Marker Configuration
-  double large_order_threshold_ = 10.0;  // Threshold: order_size > threshold * median_size
+  float large_order_threshold_ = 10.0f;  // Threshold: order_size > threshold * median_size
   int max_large_order_markers_ = 100;    // Max active markers
   bool enable_fade_out_ = false;         // Enable fade-out after 60 seconds
   static constexpr uint64_t FADE_OUT_DURATION_US = 60'000'000;  // 60 seconds in microseconds
@@ -159,6 +159,7 @@ class DomSurfacePanel : public PanelBase {
   void updateTradeBubbles();
   void processRecentTrades();
   void renderTradeBubbles();
+  void cleanupOldTradeBubbles();
   float calculateBubbleRadius(double volume) const;
   ImU32 getBubbleColor(const TradeBubble& bubble) const;
 

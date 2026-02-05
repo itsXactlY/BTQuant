@@ -28,18 +28,25 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
   current_symbol_id_ = symbol_id;
 
-  // Subscribe to ORDERBOOK updates
+  // Subscribe to both ORDERBOOK and TRADE updates
   if (processor_) {
     subscription_id_ =
         processor_->subscribe(symbol_id, RenderEngine::NotificationType::ORDERBOOK,
                               [this](uint32_t sym, RenderEngine::NotificationType type) {
                                 this->onDataUpdate(sym, type);
                               });
+    
+    // Also subscribe to trade updates for trade bubbles
+    processor_->subscribe(symbol_id, RenderEngine::NotificationType::TRADE,
+                          [this](uint32_t sym, RenderEngine::NotificationType type) {
+                            this->onDataUpdate(sym, type);
+                          });
   }
 
   // Clear existing data to prevent mixing symbols
   heatmap_data_.clear();
   large_order_markers_.clear();
+  trade_bubbles_.clear();  // Clear trade bubbles when changing symbols
   recent_order_sizes_.clear();
   median_order_size_ = 0.0;
   markDirty();
@@ -47,6 +54,10 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
 void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type) {
   if (symbol_id == current_symbol_id_) {
+    if (type == RenderEngine::NotificationType::TRADE) {
+      // For trade updates, we'll update trade bubbles specifically
+      updateTradeBubbles();
+    }
     markDirty();
   }
 }
@@ -66,19 +77,17 @@ void DomSurfacePanel::processRecentTrades() {
 
   // Get symbol analytics which contains recent trades
   auto analytics = processor_->getSymbolAnalytics(current_symbol_id_);
-  
-  // Clear current trade bubbles
-  trade_bubbles_.clear();
-  
-  // Find max volume for scaling purposes
-  max_trade_volume_ = 1.0;
+
+  // Find max volume for scaling purposes across all recent trades
+  double current_max_volume = max_trade_volume_;
   for (const auto& trade : analytics.recent_trades) {
-    if (trade.size > max_trade_volume_) {
-      max_trade_volume_ = trade.size;
+    if (trade.size > current_max_volume) {
+      current_max_volume = trade.size;
     }
   }
-  
-  // Create trade bubbles for each recent trade
+  max_trade_volume_ = current_max_volume;
+
+  // Create trade bubbles for each recent trade that's not already in our list
   for (const auto& trade : analytics.recent_trades) {
     // Calculate X position based on timestamp relative to history range
     double relative_time = 0.0;
@@ -86,17 +95,47 @@ void DomSurfacePanel::processRecentTrades() {
       relative_time = static_cast<double>(trade.timestamp - history_start_timestamp_) /
                       static_cast<double>(history_end_timestamp_ - history_start_timestamp_);
     }
-    
+
     // Map bounds_min[0] (0) to bounds_max[0] (time_steps)
     double x_pos = bounds_min_[0] + relative_time * (bounds_max_[0] - bounds_min_[0]);
-    
+
     // Only add bubble if within view
     if (x_pos >= bounds_min_[0] && x_pos <= bounds_max_[0]) {
-      TradeBubble bubble(x_pos, trade.price, trade.size, trade.price, trade.is_buy, trade.timestamp);
-      bubble.radius = calculateBubbleRadius(trade.size);
-      trade_bubbles_.push_back(bubble);
+      // Check if we already have this trade in our bubbles to avoid duplicates
+      bool exists = false;
+      for (const auto& bubble : trade_bubbles_) {
+        if (bubble.timestamp == trade.timestamp && 
+            std::abs(bubble.y - trade.price) < 0.0001 && 
+            std::abs(bubble.volume - trade.size) < 0.0001) {
+          exists = true;
+          break;
+        }
+      }
+
+      if (!exists) {
+        TradeBubble bubble(x_pos, trade.price, trade.size, trade.price, trade.is_buy, trade.timestamp);
+        bubble.radius = calculateBubbleRadius(trade.size);
+        trade_bubbles_.push_back(bubble);
+      }
     }
   }
+
+  // Clean up bubbles that are outside the current view range to prevent accumulation
+  cleanupOldTradeBubbles();
+}
+
+void DomSurfacePanel::cleanupOldTradeBubbles() {
+  // Remove bubbles that are outside the current view range
+  // This helps keep the vector size manageable
+  
+  trade_bubbles_.erase(
+      std::remove_if(trade_bubbles_.begin(), trade_bubbles_.end(),
+                     [this](const TradeBubble& bubble) {
+                       // Remove if outside the current view bounds by a margin
+                       double margin = (bounds_max_[0] - bounds_min_[0]) * 0.1; // 10% margin
+                       return (bubble.x < bounds_min_[0] - margin || bubble.x > bounds_max_[0] + margin);
+                     }),
+      trade_bubbles_.end());
 }
 
 float DomSurfacePanel::calculateBubbleRadius(double volume) const {
@@ -697,26 +736,29 @@ void DomSurfacePanel::renderPersistentLevels() {
       double y_min = level.price - price_range/2.0;
       double y_max = level.price + price_range/2.0;
 
-      // Draw a horizontal rectangle spanning the full time axis
-      ImPlot::PlotRect("##PersistentLevelRect",
-                      plot_rect.X.Min, y_min,
-                      plot_rect.X.Max, y_max);
+      // Draw a horizontal shaded area spanning the full time axis
+      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double shade_y1[2] = {y_min, y_min};
+      double shade_y2[2] = {y_max, y_max};
+      ImPlot::PlotShaded("##PersistentLevelRect", shade_x, shade_y1, shade_y2, 2);
 
       ImPlot::PopStyleColor();
-      
+
       // Add a subtle highlight effect above the main line
       ImVec4 highlight_color_vec = ImGui::ColorConvertU32ToFloat4(color);
       highlight_color_vec.w = 0.08f; // Even more transparent for highlight
       ImU32 highlight_color = ImGui::ColorConvertFloat4ToU32(highlight_color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, highlight_color);
-      
+      ImPlot::PushStyleColor(ImPlotCol_Line, highlight_color);
+
       // Draw highlight slightly above the main line
       double highlight_y_min = level.price + price_range/2.0;
       double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
       
-      ImPlot::PlotRect("##PersistentLevelHighlight",
-                      plot_rect.X.Min, highlight_y_min,
-                      plot_rect.X.Max, highlight_y_max);
+      // Draw highlight shaded area
+      double highlight_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
+      double highlight_shade_y2[2] = {highlight_y_max, highlight_y_max};
+      ImPlot::PlotShaded("##PersistentLevelHighlight", highlight_shade_x, highlight_shade_y1, highlight_shade_y2, 2);
 
       ImPlot::PopStyleColor();
     }

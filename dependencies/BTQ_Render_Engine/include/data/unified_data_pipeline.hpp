@@ -20,13 +20,7 @@
 // The include is conditionally added to ensure both files can handle path variations independently
 // NOTE: Only include if not already available through market_data_processor.hpp
 #ifndef MOODYCAMEL_CONCURRENTQUEUE_H
-#if __has_include("moodycamel/concurrentqueue.h")
-#include "moodycamel/concurrentqueue.h"
-#elif __has_include("concurrentqueue.h")
 #include "concurrentqueue.h"
-#else
-#include "moodycamel/concurrentqueue.h"
-#endif
 #endif
 
 namespace BTQuant {

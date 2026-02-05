@@ -32,6 +32,8 @@ class QuantWorkspaceComponent : public UIComponent {
   void initialize_vulkan_resources(VulkanCore* core) override;
   void clear_data() override;
 
+  void refresh_hierarchical_selector();  // Made public for workspace manager
+
  private:
   // Core systems
   std::shared_ptr<HotSpineDataBridge> bridge_;
@@ -66,8 +68,6 @@ class QuantWorkspaceComponent : public UIComponent {
   void render_orders_panel();
   void render_positions_panel();
 
-  // Workspace management methods
-  void refresh_hierarchical_selector();
 };
 
 }  // namespace BTQuant

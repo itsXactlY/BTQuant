@@ -16,6 +16,15 @@ struct SymbolInfo {
   std::string exchange;
   std::string symbol;
   std::string key;  // exchange:symbol
+  std::string name;  // Added for workspace manager compatibility
+  std::string base_currency;
+  std::string quote_currency;
+  double min_notional = 0.0;
+  double min_qty = 0.0;
+  double max_qty = 0.0;
+  double step_size = 0.0;
+  double tick_size = 0.0;
+  std::string status = "active";
 
   SymbolInfo() = default;
   SymbolInfo(uint32_t i, uint32_t sid, const std::string& ex, const std::string& sym,
@@ -40,8 +49,11 @@ class SymbolRegistry {
   bool has_symbol(uint32_t id) const;
   bool has_symbol(const std::string& exchange, const std::string& symbol) const;
   bool save_to_file(const std::string& filepath) const;
+  void clear();
+  bool add_symbol(const SymbolInfo& symbol_info);
 
  private:
+  std::string make_key(const std::string& exchange, const std::string& symbol) const;
   SymbolRegistry() = default;
   mutable std::mutex mutex_;
   std::unordered_map<uint32_t, SymbolInfo> id_to_info_;

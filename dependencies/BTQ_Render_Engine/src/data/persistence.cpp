@@ -1,4 +1,4 @@
-#include "persistence.hpp"
+#include "../include/data/persistence.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -389,7 +389,7 @@ bool DataPersistence::loadMarketAnalytics(
         file.read(reinterpret_cast<char*>(&vp_count), sizeof(vp_count));
         
         for (size_t j = 0; j < vp_count; ++j) {
-            RenderEngine::VolumeProfileLevel level;
+            VolumeProfileLevel level;
             file.read(reinterpret_cast<char*>(&level.price), sizeof(level.price));
             file.read(reinterpret_cast<char*>(&level.total_volume), sizeof(level.total_volume));
             file.read(reinterpret_cast<char*>(&level.buy_volume), sizeof(level.buy_volume));

@@ -251,4 +251,32 @@ std::optional<SymbolInfo> SymbolRegistry::get_symbol_by_name(const std::string& 
   return std::nullopt;
 }
 
+void SymbolRegistry::clear() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  id_to_info_.clear();
+  key_to_id_.clear();
+  next_auto_id_ = 1;
+}
+
+bool SymbolRegistry::add_symbol(const SymbolInfo& symbol_info) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  // Check if symbol already exists
+  auto key = make_key(symbol_info.exchange, symbol_info.symbol);
+  if (key_to_id_.find(key) != key_to_id_.end()) {
+    return false; // Symbol already exists
+  }
+
+  // Add the symbol
+  id_to_info_[symbol_info.id] = symbol_info;
+  key_to_id_[key] = symbol_info.id;
+
+  // Update next_auto_id if necessary
+  if (symbol_info.id >= next_auto_id_) {
+    next_auto_id_ = symbol_info.id + 1;
+  }
+
+  return true;
+}
+
 }  // namespace BTQuant

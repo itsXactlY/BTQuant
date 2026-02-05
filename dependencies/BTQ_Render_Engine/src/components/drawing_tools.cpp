@@ -97,7 +97,12 @@ void DrawingToolsManager::render_ui_controls() {
         ImGui::SliderFloat("Thickness", &current_thickness, 0.5f, 5.0f, "%.1f");
 
         if (selected_tool_type == 4) { // Text Annotation
-            ImGui::InputText("Text", &current_text);
+            char text_buffer[256];
+            strncpy(text_buffer, current_text.c_str(), sizeof(text_buffer) - 1);
+            text_buffer[sizeof(text_buffer) - 1] = '\0';
+            if (ImGui::InputText("Text", text_buffer, sizeof(text_buffer))) {
+                current_text = std::string(text_buffer);
+            }
             ImGui::SliderFloat("Font Size", &current_font_size, 8.0f, 24.0f, "%.0f");
         }
 
@@ -211,9 +216,11 @@ void DrawingToolsManager::render_ui_controls() {
 
                 // Additional controls for text annotations
                 if (auto* text_tool = dynamic_cast<TextAnnotation*>(tool.get())) {
-                    std::string current_text_val = text_tool->text;
-                    if (ImGui::InputText(("Text##" + std::to_string(i)).c_str(), &current_text_val)) {
-                        text_tool->text = current_text_val;
+                    char text_buffer[256];
+                    strncpy(text_buffer, text_tool->text.c_str(), sizeof(text_buffer) - 1);
+                    text_buffer[sizeof(text_buffer) - 1] = '\0';
+                    if (ImGui::InputText(("Text##" + std::to_string(i)).c_str(), text_buffer, sizeof(text_buffer))) {
+                        text_tool->text = std::string(text_buffer);
                     }
 
                     float font_size = text_tool->font_size;
@@ -386,7 +393,8 @@ void DrawingToolsManager::handle_mouse_events() {
     if (ImPlot::IsPlotHovered()) {
         // Check for left mouse button press to start creating a new tool
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+            ImPlotPoint plot_pos = ImPlot::GetPlotMousePos();
+            ImVec2 mouse_pos = ImVec2((float)plot_pos.x, (float)plot_pos.y);
 
             // If we're not currently creating a tool, start creating one
             if (!creating_tool_ && current_tool_type_ >= 0) {
@@ -396,13 +404,15 @@ void DrawingToolsManager::handle_mouse_events() {
 
         // If we're currently creating a tool, update it as the mouse moves
         if (creating_tool_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+            ImPlotPoint plot_pos = ImPlot::GetPlotMousePos();
+            ImVec2 mouse_pos = ImVec2((float)plot_pos.x, (float)plot_pos.y);
             update_current_tool(mouse_pos);
         }
 
         // Check for mouse release to finalize the tool
         if (creating_tool_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-            ImVec2 mouse_pos = ImPlot::GetPlotMousePos();
+            ImPlotPoint plot_pos = ImPlot::GetPlotMousePos();
+            ImVec2 mouse_pos = ImVec2((float)plot_pos.x, (float)plot_pos.y);
             update_current_tool(mouse_pos);  // Update one final time
             finalize_current_tool();
         }

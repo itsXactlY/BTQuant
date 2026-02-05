@@ -27,6 +27,10 @@ class KeyboardShortcutsComponent : public UIComponent {
   void remove_shortcut(const std::string& name);
   void enable_shortcut(const std::string& name, bool enabled);
   bool is_shortcut_active(const std::string& name) const;
+  void import_shortcut_profile();
+  void export_shortcut_profile();
+  void reset_to_defaults();
+  void reset_shortcut_to_default(const std::string& name);
 
  private:
   void initialize_default_shortcuts();

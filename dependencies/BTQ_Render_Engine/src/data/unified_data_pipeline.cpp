@@ -1,5 +1,5 @@
-#include "unified_data_pipeline.hpp"
-#include "ui_data_manager.hpp"
+#include "../include/data/unified_data_pipeline.hpp"
+#include "../include/data/ui_data_manager.hpp"
 
 #include <chrono>
 #include <iostream>

@@ -52,6 +52,27 @@ struct CacheKeyHash {
     }
 };
 
+// Specialization of std::hash for CacheKey
+} // namespace RenderEngine
+} // namespace BTQuant
+
+namespace std {
+    template<>
+    struct hash<BTQuant::RenderEngine::CacheKey> {
+        std::size_t operator()(const BTQuant::RenderEngine::CacheKey& k) const {
+            std::size_t h1 = std::hash<int>{}(static_cast<int>(k.type));
+            std::size_t h2 = std::hash<uint32_t>{}(k.symbol_id);
+            std::size_t h3 = std::hash<int>{}(static_cast<int>(k.timeframe));
+            std::size_t h4 = std::hash<uint64_t>{}(k.bar_timestamp);
+            std::size_t h5 = std::hash<std::string>{}(k.extra_param);
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
+        }
+    };
+}
+
+namespace BTQuant {
+namespace RenderEngine {
+
 // Cache entry structure
 struct CacheEntry {
     std::shared_ptr<void> data;  // Generic pointer to cached data

@@ -4,7 +4,7 @@ Automatically generated documentation from code comments using Doxygen.
 
 ## Overview
 
-This directory contains the automatically generated API documentation for the PubBTQuant Trading Engine. The documentation is generated from source code comments using Doxygen and includes:
+This directory contains the automatically generated API documentation for the BTQuant Trading Engine. The documentation is generated from source code comments using Doxygen and includes:
 
 - Class hierarchies
 - Detailed member documentation

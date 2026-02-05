@@ -214,23 +214,8 @@ struct MultiExchangeTimeSyncResult {
   std::chrono::high_resolution_clock::time_point timestamp;
 };
 
-// Comprehensive view of all exchanges for a symbol with all analytics
-struct ComprehensiveMultiExchangeView {
-  std::string symbol;
-  std::unordered_map<std::string, ExchangeConsolidatedData> exchange_data;  // Detailed data per exchange
-  ConsolidatedMarketMetrics market_metrics;                                 // Overall market metrics
-  ConsolidatedRiskMetrics risk_metrics;                                     // Risk metrics
-  ExchangeDataQualityMetrics data_quality;                                  // Data quality metrics
-  std::vector<ExchangeRanking> exchange_rankings;                           // Rankings of exchanges by reliability
-
-  // Arbitrage detection
-  bool arbitrage_opportunity_exists = false;
-  double arbitrage_profit_potential = 0.0;
-  std::string best_arbitrage_buy_exchange = "";
-  std::string best_arbitrage_sell_exchange = "";
-
-  std::chrono::high_resolution_clock::time_point timestamp;
-};
+// Forward declaration for ComprehensiveMultiExchangeView (will be defined later after dependent types)
+struct ComprehensiveMultiExchangeView;
 
 // Exchange Aggregator for combining data from multiple exchanges
 class ExchangeAggregator {
@@ -356,6 +341,24 @@ struct MultiExchangeConsolidatedView {
   double arbitrage_profit_potential = 0.0;                                 // Potential profit from arbitrage
   std::string best_arbitrage_buy_exchange = "";                           // Best exchange to buy from for arbitrage
   std::string best_arbitrage_sell_exchange = "";                          // Best exchange to sell to for arbitrage
+  std::chrono::high_resolution_clock::time_point timestamp;
+};
+
+// Comprehensive view of all exchanges for a symbol with all analytics
+struct ComprehensiveMultiExchangeView {
+  std::string symbol;
+  std::unordered_map<std::string, ExchangeConsolidatedData> exchange_data;  // Detailed data per exchange
+  ConsolidatedMarketMetrics market_metrics;                                 // Overall market metrics
+  ConsolidatedRiskMetrics risk_metrics;                                     // Risk metrics
+  ExchangeDataQualityMetrics data_quality;                                  // Data quality metrics
+  std::vector<ExchangeRanking> exchange_rankings;                           // Rankings of exchanges by reliability
+
+  // Arbitrage detection
+  bool arbitrage_opportunity_exists = false;
+  double arbitrage_profit_potential = 0.0;
+  std::string best_arbitrage_buy_exchange = "";
+  std::string best_arbitrage_sell_exchange = "";
+
   std::chrono::high_resolution_clock::time_point timestamp;
 };
 

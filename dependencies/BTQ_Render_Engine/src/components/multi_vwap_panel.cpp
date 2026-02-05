@@ -84,7 +84,12 @@ void MultiVWAPPanel::render_vwap_controls() {
 void MultiVWAPPanel::render_add_vwap_section() {
     ImGui::Text("Add New VWAP Instance");
 
-    ImGui::InputText("Name", &new_vwap_name_, ImGuiInputTextFlags_EnterReturnsTrue);
+    char name_buffer[256];
+    strncpy(name_buffer, new_vwap_name_.c_str(), sizeof(name_buffer) - 1);
+    name_buffer[sizeof(name_buffer) - 1] = '\0';
+    if (ImGui::InputText("Name", name_buffer, sizeof(name_buffer), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        new_vwap_name_ = std::string(name_buffer);
+    }
     ImGui::ColorEdit4("Color", &new_vwap_color_.x);
 
     if (ImGui::Button("Add Daily VWAP")) {
@@ -178,8 +183,9 @@ void MultiVWAPPanel::add_daily_vwap() {
     local_time->tm_sec = 0;
 
     auto today_start_time_t = std::mktime(local_time);
+    auto today_start_tp = std::chrono::system_clock::from_time_t(today_start_time_t);
     auto today_start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(today_start_time_t)).count();
+        today_start_tp.time_since_epoch()).count();
 
     std::string id = generate_unique_id();
     VWAPInstance instance(id, "Daily VWAP", today_start_ms,
@@ -212,8 +218,9 @@ void MultiVWAPPanel::add_weekly_vwap() {
     monday_local_time->tm_sec = 0;
 
     auto week_start_time_t = std::mktime(monday_local_time);
+    auto week_start_tp = std::chrono::system_clock::from_time_t(week_start_time_t);
     auto week_start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(week_start_time_t)).count();
+        week_start_tp.time_since_epoch()).count();
 
     std::string id = generate_unique_id();
     VWAPInstance instance(id, "Weekly VWAP", week_start_ms,
@@ -235,8 +242,9 @@ void MultiVWAPPanel::add_monthly_vwap() {
     local_time->tm_sec = 0;
 
     auto month_start_time_t = std::mktime(local_time);
+    auto month_start_tp = std::chrono::system_clock::from_time_t(month_start_time_t);
     auto month_start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(month_start_time_t)).count();
+        month_start_tp.time_since_epoch()).count();
 
     std::string id = generate_unique_id();
     VWAPInstance instance(id, "Monthly VWAP", month_start_ms,
@@ -284,8 +292,9 @@ uint64_t MultiVWAPPanel::get_start_of_day(uint64_t timestamp) {
     local_time->tm_sec = 0;
 
     auto start_of_day = std::mktime(local_time);
+    auto start_of_day_tp = std::chrono::system_clock::from_time_t(start_of_day);
     return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(start_of_day)).count();
+        start_of_day_tp.time_since_epoch()).count();
 }
 
 uint64_t MultiVWAPPanel::get_start_of_week(uint64_t timestamp) {
@@ -312,8 +321,9 @@ uint64_t MultiVWAPPanel::get_start_of_week(uint64_t timestamp) {
     monday_local_time->tm_sec = 0;
 
     auto start_of_week = std::mktime(monday_local_time);
+    auto start_of_week_tp = std::chrono::system_clock::from_time_t(start_of_week);
     return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(start_of_week)).count();
+        start_of_week_tp.time_since_epoch()).count();
 }
 
 uint64_t MultiVWAPPanel::get_start_of_month(uint64_t timestamp) {
@@ -331,8 +341,9 @@ uint64_t MultiVWAPPanel::get_start_of_month(uint64_t timestamp) {
     local_time->tm_sec = 0;
 
     auto start_of_month = std::mktime(local_time);
+    auto start_of_month_tp = std::chrono::system_clock::from_time_t(start_of_month);
     return std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::from_time_t(start_of_month)).count();
+        start_of_month_tp.time_since_epoch()).count();
 }
 
 }  // namespace BTQuant

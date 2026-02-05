@@ -1,7 +1,7 @@
 #include "../../include/components/keyboard_shortcuts_component.hpp"
 #include "../../include/ui/settings_manager.hpp"
 #include <imgui.h>
-#include <imgui_stdlib.h>
+#include <misc/cpp/imgui_stdlib.h>
 #include <algorithm>
 #include <fstream>
 #include <sstream>

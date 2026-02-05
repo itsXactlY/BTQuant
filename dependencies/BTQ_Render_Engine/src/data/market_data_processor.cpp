@@ -848,5 +848,55 @@ void MarketDataProcessor::processUpdate(const MarketDataUpdate& update) {
   notifySubscribers(notify_symbol_id, notify_type);
 }
 
+void MarketDataProcessor::processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade) {
+  // Update basic trade analytics
+  symbol_data.last_trade_price = trade.price;
+  symbol_data.last_trade_size = trade.size;
+  symbol_data.last_trade_time = trade.timestamp;
+  symbol_data.trade_count++;
+
+  // Update volume analytics
+  if (trade.is_buy) {
+    symbol_data.buy_volume += trade.size;
+    symbol_data.buy_count++;
+  } else {
+    symbol_data.sell_volume += trade.size;
+    symbol_data.sell_count++;
+  }
+
+  // Update price range
+  if (symbol_data.price_min == 0.0 || trade.price < symbol_data.price_min) {
+    symbol_data.price_min = trade.price;
+  }
+  if (symbol_data.price_max == 0.0 || trade.price > symbol_data.price_max) {
+    symbol_data.price_max = trade.price;
+  }
+
+  // Update VWAP
+  updateVWAP(symbol_data);
+
+  // Update momentum
+  updateMomentum(symbol_data);
+
+  // Update volatility
+  updateVolatility(symbol_data);
+
+  // Update trading metrics
+  updateTradingMetrics(symbol_data, trade);
+
+  // Update spread analysis
+  updateSpreadAnalysis(symbol_data);
+
+  // Update OHLCV candles
+  updateCandles(symbol_data, trade);
+
+  // Update performance metrics
+  auto now = std::chrono::high_resolution_clock::now();
+  auto time_since_last = std::chrono::duration_cast<std::chrono::microseconds>(
+      now - std::chrono::high_resolution_clock::time_point(
+               std::chrono::high_resolution_clock::duration(symbol_data.last_update_time)));
+  symbol_data.last_update_time = now.time_since_epoch().count();
+}
+
 }  // namespace RenderEngine
 }  // namespace BTQuant

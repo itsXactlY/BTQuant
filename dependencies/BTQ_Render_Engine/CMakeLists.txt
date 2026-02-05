@@ -299,6 +299,7 @@ target_include_directories(btq_engine_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/implot-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/glm-src
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
 )
 
@@ -327,6 +328,7 @@ target_include_directories(realtime_dashboard PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
 )
 
 find_package(TBB REQUIRED)
@@ -359,6 +361,7 @@ target_include_directories(dashboard_advanced PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/json-src/include
     ${concurrentqueue_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/_deps/concurrentqueue-src/c_api
 )
 
 target_link_libraries(dashboard_advanced PRIVATE

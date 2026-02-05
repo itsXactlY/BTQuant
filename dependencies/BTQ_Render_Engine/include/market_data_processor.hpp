@@ -23,14 +23,9 @@
 
 #include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
+#include "cache_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)
-#if __has_include("moodycamel/concurrentqueue.h")
-#include "moodycamel/concurrentqueue.h"
-#elif __has_include("concurrentqueue.h")
 #include "concurrentqueue.h"
-#else
-#include "concurrentqueue/concurrentqueue.h"  // Use the version from CMake's _deps directory
-#endif
 // Lock-free hash map (assuming available or use std::unordered_map with atomic
 // ops) #include <folly/AtomicHashMap.h> // Example, or implement custom
 // lock-free map
@@ -150,6 +145,18 @@ struct SymbolAnalytics {
   double current_imbalance = 0.0;
   double avg_imbalance = 0.0;
   double market_depth = 0.0;
+
+  // VWAP incremental calculation fields
+  double running_total_price_volume = 0.0;
+  double running_total_volume = 0.0;
+
+  // Momentum calculation fields
+  std::deque<double> momentum_prices;
+  size_t momentum_window_size = 20;  // Default window size
+
+  // Volatility calculation fields
+  std::deque<double> log_returns;
+  size_t volatility_window_size = 30;  // Default window size
 
   // Volume Profile (Session)
   std::map<double, VolumeProfileLevel> session_volume_profile;
@@ -308,6 +315,22 @@ class MarketDataProcessor {
   std::vector<OrderbookData> getHistoricalOrderbooks(uint32_t symbol_id, size_t count) const;
   std::vector<VolumeProfileLevel> getVolumeProfile(uint32_t symbol_id, TimeFrame timeframe) const;
 
+  // Methods required by multi_vwap_panel
+  bool hasData() const {
+    // Check if we have any active symbols with data
+    return !getActiveSymbols().empty();
+  }
+
+  std::vector<OHLCVCandle> getChartData() const {
+    // Return chart data for the first active symbol, or empty vector if none
+    auto active_symbols = getActiveSymbols();
+    if (!active_symbols.empty()) {
+      // Return candles for the first symbol using the smallest timeframe
+      return getCandles(active_symbols[0], TimeFrame::TF_1MIN);
+    }
+    return std::vector<OHLCVCandle>();
+  }
+
   /**
    * Get market summary statistics (thread-safe)
    * @return Market-wide summary data
@@ -402,6 +425,9 @@ class MarketDataProcessor {
   // ingestion
   moodycamel::ConcurrentQueue<MarketDataUpdate> update_queue_;
 
+  // Cache manager for storing processed data
+  std::shared_ptr<RenderEngine::CacheManager> cache_manager_;
+
   // Worker threads (C++20 jthread automatically joins on destruction)
   std::vector<std::jthread> workers_;
   std::atomic<bool> running_{true};
@@ -453,6 +479,7 @@ class MarketDataProcessor {
   void updateVolatility(SymbolAnalytics& symbol_data);
   void updateTradingMetrics(SymbolAnalytics& symbol_data, const TradeData& trade);
   void updateSpreadAnalysis(SymbolAnalytics& symbol_data);
+  void processTradeIncrementally(SymbolAnalytics& symbol_data, const TradeData& trade);
 
   // OHLCV aggregation methods
   void updateCandles(SymbolAnalytics& symbol_data, const TradeData& trade);

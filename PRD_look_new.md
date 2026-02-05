@@ -368,4 +368,5 @@
 - [x] Create installer: platform-specific installation packages, dependency management, first-run setup in `installers/` [Complexity: M]
 
 ### Phase 17: Take care of Build errors [Complexity: Godtier]
-- [ ] Create release dev Build: Run ./build_integration.sh and analyze all errors. Sanitize code, validate existing code, prevent errors and crashes for the executables.
+- [x] Create release dev Build: Run /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/./build_integration.sh and analyze all errors. Sanitize code, validate existing code, prevent errors and crashes for the executables. Repeat till no build errors exist. [Complexity: S]
+- [x] Run /home/alca/projects/PubBTQuant/dependencies/BTQ_Render_Engine/./build_integration.sh and fix last remaining build errors.

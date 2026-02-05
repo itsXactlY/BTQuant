@@ -398,3 +398,35 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Focus Management: Ensure the panel receives focus (ImGui::SetWindowFocus()) upon right-click so hotkeys (e.g., Delete to remove) apply to the correct panel.
 - [x] State Persistence: If settings are changed via context menu (e.g., Timeframe), immediately save this to PanelConfig so it persists during layout save.
 - [x] Safety Checks: Implement dynamic_cast checks in render_generic_context_menu to prevent crashes if a panel type does not match at runtime.
+
+### TASK 19: TPO PROFILE ENGINE & RENDERING
+- [ ] Create `dependencies/BTQRenderEngine/src/analytics/tpoengine.cpp` to handle the aggregation of price data into 30-minute time buckets (Time-Price Opportunity).
+- [ ] Implement a `TPOProfile` struct that maps price levels to "Letters" (A-Z, a-z) based on the time bracket they were touched.
+- [ ] Create `dependencies/BTQRenderEngine/src/components/tpoprofilepanel.cpp` implementing the "Quantower TPO" layout: a vertical price scale on the left and horizontal letter blocks.
+- [ ] Add logic for "Value Area" calculation (70% of TPOs) and "Point of Control" (POC) highlighting with 1px horizontal lines.
+- [ ] Implement "Profile Splitting": add a UI handle to right-click a TPO bar and split it into individual sub-period bars.
+- [ ] Add "Single Print" detection: visually flag price levels where only one TPO letter exists with a distinct colored marker.
+
+### TASK 20: DOM SURFACE HEATMAP & HISTORY
+- [ ] Create `dependencies/BTQRenderEngine/src/data/orderbookhistory.cpp` to maintain a circular buffer of L2 snapshots (top 100 levels) for historical heatmap playback.
+- [ ] Implement `dependencies/BTQRenderEngine/src/components/domsurfacepanel.cpp` using a Vulkan-accelerated texture to render the time-price liquidity heatmap.
+- [ ] Implement a "Heatmap Intensity" slider in the panel header to adjust the color-mapping sensitivity for resting limit orders.
+- [ ] Add vertical "Liquidity Bars" on the right-hand price axis that show the current real-time depth levels (DOM) overlapping the historical heatmap.
+- [ ] Implement a "Large Order Tracker" that draws a persistent horizontal line or rectangle on the heatmap when an order above a certain threshold is detected and stays at a level.
+- [ ] Add "Trade Bubbles" overlay: render circles on top of the heatmap representing executed trades, where radius = volume and color = side.
+
+### TASK 21: OPTIONS ANALYTICS & RISK MANAGER
+- [ ] Create `dependencies/BTQRenderEngine/src/components/optionanalyticspanel.cpp` with a three-tab navigation header: [Desk], [Analyzer], [Smile].
+- [ ] Implement the "Options Desk" grid: central column for Strikes, left side for Calls (Bid/Ask/Delta/Gamma), right side for Puts.
+- [ ] Create a "Strategy Builder" footer: when a user clicks a strike, add it to a "Current Strategy" list for multi-leg analysis.
+- [ ] Implement the "Risk Analyzer" chart: a 2D coordinate system plotting P/L (Y-axis) vs Underlying Price (X-axis).
+- [ ] Add "What-if" simulation sliders to the UI for adjusting "Days to Expiration" and "Volatility (%)" to see the P/L curve shift in real-time.
+- [ ] Implement "Volatility Smile" rendering: plot Implied Volatility (IV) per strike for all expirations in a single overlaid line chart.
+
+### TASK 22: PRICE STATISTICS & PANEL INTEGRATION
+- [ ] Create `dependencies/BTQRenderEngine/src/components/pricestatisticpanel.cpp` as a specialized analytical table with virtualized scrolling.
+- [ ] Implement calculation for "Standard Deviation" and "Median Price" per bar within the existing `ClusterEngine`.
+- [ ] Add columns for: % of Volume at POC, Total Trades, Buy/Sell Ratio, and "Relative Volume" (Volume / Avg Volume).
+- [ ] Implement a "Global Alert Manager" inside `dependencies/BTQRenderEngine/src/components/dashboardcontrols.cpp` to centralize all price and volume alerts.
+- [ ] Add the "Quantower Context Menu" to all new panels: right-click should offer "Duplicate Panel", "Apply Symbol to All", and "Screenshot".
+- [ ] Finalize "Layout Persistence": ensure the position and settings of TPO, DOM Surface, and Options panels are saved/loaded correctly from the JSON workspace config.

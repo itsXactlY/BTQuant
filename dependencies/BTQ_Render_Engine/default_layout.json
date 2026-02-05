@@ -90,7 +90,7 @@
             "grid_width": 2,
             "grid_x": 3,
             "grid_y": 1,
-            "title": "ADAUSDT Orderbook",
+            "title": "Orderbook",
             "type": 10,
             "visible": true
         },

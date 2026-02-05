@@ -8,6 +8,7 @@
 
 #include "vulkan_base_types.hpp"
 #include "backends/imgui_impl_vulkan.h"
+#include "data/TradeData.h"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -18,10 +19,13 @@ DomSurfacePanel::DomSurfacePanel(std::shared_ptr<MarketDataProcessor> processor)
 
 DomSurfacePanel::~DomSurfacePanel() {
   cleanupVulkanResources();
-  
+
   if (subscription_id_ > 0 && processor_) {
     processor_->unsubscribe(subscription_id_);
   }
+  
+  // Clear trade bubbles to ensure proper cleanup
+  trade_bubbles_.clear();
 }
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
@@ -34,18 +38,25 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
   current_symbol_id_ = symbol_id;
 
-  // Subscribe to ORDERBOOK updates
+  // Subscribe to both ORDERBOOK and TRADE updates
   if (processor_) {
     subscription_id_ =
         processor_->subscribe(symbol_id, NotificationType::ORDERBOOK,
                               [this](uint32_t sym, NotificationType type) {
                                 this->onDataUpdate(sym, type);
                               });
+    
+    // Also subscribe to trade updates for trade bubbles
+    processor_->subscribe(symbol_id, NotificationType::TRADE,
+                          [this](uint32_t sym, NotificationType type) {
+                            this->onDataUpdate(sym, type);
+                          });
   }
 
   // Clear existing data to prevent mixing symbols
   heatmap_data_.clear();
   large_order_markers_.clear();
+  trade_bubbles_.clear();  // Clear trade bubbles when changing symbols
   recent_order_sizes_.clear();
   median_order_size_ = 0.0;
   markDirty();
@@ -53,6 +64,10 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
 
 void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, NotificationType type) {
   if (symbol_id == current_symbol_id_) {
+    if (type == NotificationType::TRADE) {
+      // For trade updates, we'll update trade bubbles specifically
+      updateTradeBubbles();
+    }
     markDirty();
   }
 }
@@ -499,6 +514,7 @@ void DomSurfacePanel::render() {
   if (consumeDirty()) {
     updateHeatmapData();
     updateLargeOrderMarkers();
+    updateTradeBubbles();
   }
 
   begin_panel_window();
@@ -525,7 +541,7 @@ void DomSurfacePanel::render() {
     // Allow user to pan and zoom
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
     ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
-    
+
     // Add right-side Y-axis for liquidity bars
     ImPlot::SetupAxis(ImAxis_Y2, "Liquidity", ImPlotAxisFlags_AuxDefault | ImPlotAxisFlags_Opposite);
 
@@ -564,6 +580,9 @@ void DomSurfacePanel::render() {
     // Render Large Order Markers OVER the heatmap
     renderLargeOrderMarkers();
 
+    // Render Trade Bubbles OVER the heatmap and large order markers
+    renderTradeBubbles();
+
     // Render Liquidity Bars on the right-hand price axis
     renderLiquidityBars();
 
@@ -576,8 +595,8 @@ void DomSurfacePanel::render() {
     ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
     ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(),
-                median_order_size_);
+    ImGui::Text("Large Orders: %zu (Median: %.2f), Trades: %zu", large_order_markers_.size(),
+                median_order_size_, trade_bubbles_.size());
   }
 
   end_panel_window();
@@ -987,8 +1006,123 @@ void DomSurfacePanel::cleanupVulkanResources() {
     vkFreeMemory(device, heatmap_image_memory_, nullptr);
     heatmap_image_memory_ = VK_NULL_HANDLE;
   }
-  
+
   vulkan_texture_id_ = nullptr;
+}
+
+void DomSurfacePanel::updateTradeBubbles() {
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get recent trades for the current symbol from the analytics
+  auto symbol_analytics = processor_->getSymbolAnalytics(current_symbol_id_);
+
+  // Process recent trades from the analytics
+  for (const auto& trade : symbol_analytics.recent_trades) {
+    // Only add trades that are newer than our last processed timestamp
+    if (trade.timestamp > last_trade_timestamp_) {
+      // Convert from the internal TradeData to the external TradeData format
+      BTQuant::Data::TradeData external_trade;
+      external_trade.timestamp = trade.timestamp;
+      external_trade.price = trade.price;
+      external_trade.volume = static_cast<float>(trade.size);
+      external_trade.side = trade.is_buy ? BTQuant::Data::TradeSide::BUY : BTQuant::Data::TradeSide::SELL;
+      external_trade.exchange_id = 0; // Default exchange ID
+      external_trade.flags = 0; // Default flags
+
+      trade_bubbles_.push_back(external_trade);
+
+      // Keep only recent trades to prevent unlimited growth
+      if (trade_bubbles_.size() > TRADE_HISTORY_SIZE) {
+        trade_bubbles_.erase(trade_bubbles_.begin());
+      }
+
+      last_trade_timestamp_ = trade.timestamp;
+    }
+  }
+}
+
+void DomSurfacePanel::renderTradeBubbles() {
+  if (trade_bubbles_.empty()) return;
+
+  ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 1.0f);
+
+  // Get plot area for manual circle rendering
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+
+  // Calculate time range for mapping timestamps to X coordinates
+  double time_range = bounds_max_[0] - bounds_min_[0];
+  uint64_t min_timestamp = history_start_timestamp_;
+  uint64_t max_timestamp = history_end_timestamp_;
+  double timestamp_range = static_cast<double>(max_timestamp - min_timestamp);
+
+  // Render each trade bubble as a circle
+  for (const auto& trade : trade_bubbles_) {
+    ImU32 color = getTradeBubbleColor(trade);
+    ImU32 border_color = IM_COL32(255, 255, 255, 200);  // White semi-transparent border
+
+    // Calculate X position based on timestamp relative to history range
+    double relative_time = 0.0;
+    if (timestamp_range > 0) {
+      relative_time = static_cast<double>(trade.timestamp - min_timestamp) / timestamp_range;
+    }
+    
+    // Map to plot coordinates: X = time, Y = price
+    double x_pos = bounds_min_[0] + relative_time * time_range;
+    double y_pos = trade.price;
+
+    // Only render if within view bounds
+    if (x_pos < bounds_min_[0] || x_pos > bounds_max_[0] || 
+        y_pos < bounds_min_[1] || y_pos > bounds_max_[1]) {
+      continue;
+    }
+
+    // Convert plot coordinates to pixel coordinates
+    ImVec2 pixel_pos = ImPlot::PlotToPixels(x_pos, y_pos);
+
+    // Calculate bubble radius based on volume
+    float radius = calculateTradeBubbleRadius(trade.volume);
+
+    // Draw filled circle
+    ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+    if (draw_list) {
+      draw_list->AddCircleFilled(pixel_pos, radius, color, 32);
+      draw_list->AddCircle(pixel_pos, radius, border_color, 32, 1.5f);
+
+      // Check for hover and show tooltip
+      ImVec2 mouse_pos = ImGui::GetMousePos();
+      float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
+                                 std::pow(mouse_pos.y - pixel_pos.y, 2));
+
+      if (distance < radius) {
+        ImGui::SetTooltip("%s", getTradeBubbleTooltip(trade).c_str());
+      }
+    }
+  }
+
+  ImPlot::PopStyleVar();
+}
+
+float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
+  // Normalize volume to a 0-1 range based on min/max volume thresholds
+  float normalized_volume = std::clamp((volume - TRADE_BUBBLE_MIN_VOLUME) / 
+                                     (TRADE_BUBBLE_MAX_VOLUME - TRADE_BUBBLE_MIN_VOLUME), 0.0f, 1.0f);
+  
+  // Scale radius from base to max based on normalized volume
+  return TRADE_BUBBLE_BASE_RADIUS + (TRADE_BUBBLE_MAX_RADIUS - TRADE_BUBBLE_BASE_RADIUS) * normalized_volume;
+}
+
+ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade) const {
+  // Color based on trade side: Green for BUY, Red for SELL
+  if (trade.side == BTQuant::Data::TradeSide::BUY) {
+    return IM_COL32(0, 255, 0, 180);  // Green with transparency
+  } else {
+    return IM_COL32(255, 0, 0, 180);  // Red with transparency
+  }
+}
+
+std::string DomSurfacePanel::getTradeBubbleTooltip(const BTQuant::Data::TradeData& trade) const {
+  std::string side = (trade.side == BTQuant::Data::TradeSide::BUY) ? "Buy" : "Sell";
+  return std::format("Trade {}: {} @ ${:.2f}", side, trade.volume, trade.price);
 }
 
 }  // namespace RenderEngine

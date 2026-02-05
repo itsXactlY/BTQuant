@@ -10,6 +10,7 @@
 
 #include "market_data_processor.hpp"
 #include "panel_base.hpp"
+#include "data/TradeData.h"
 
 // Forward declaration for Vulkan
 struct VkImage_T;
@@ -116,6 +117,15 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float MIN_RADIUS = 6.0f;   // Minimum radius
   static constexpr float MAX_RADIUS = 40.0f;  // Maximum radius
 
+  // Trade Bubble System
+  std::vector<BTQuant::Data::TradeData> trade_bubbles_;
+  uint64_t last_trade_timestamp_ = 0;  // Track the most recent trade timestamp
+  static constexpr size_t TRADE_HISTORY_SIZE = 1000;  // Number of recent trades to keep
+  static constexpr float TRADE_BUBBLE_BASE_RADIUS = 5.0f;  // Base radius for trade bubbles
+  static constexpr float TRADE_BUBBLE_MAX_RADIUS = 50.0f;  // Maximum radius for trade bubbles
+  static constexpr float TRADE_BUBBLE_MIN_VOLUME = 0.01f;  // Minimum volume for visible bubble
+  static constexpr float TRADE_BUBBLE_MAX_VOLUME = 1000.0f; // Maximum volume for scaling
+
   // Vulkan resources for accelerated rendering
   VulkanCore* vulkan_core_ = nullptr;
   VkImage heatmap_image_ = nullptr;
@@ -144,6 +154,13 @@ class DomSurfacePanel : public PanelBase {
   // Liquidity Bars Methods
   void renderLiquidityBars();
   double getMaxVolumeAtPrice(const OrderbookData& orderbook, double price) const;
+
+  // Trade Bubble Methods
+  void updateTradeBubbles();
+  void renderTradeBubbles();
+  float calculateTradeBubbleRadius(float volume) const;
+  ImU32 getTradeBubbleColor(const BTQuant::Data::TradeData& trade) const;
+  std::string getTradeBubbleTooltip(const BTQuant::Data::TradeData& trade) const;
 
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, NotificationType type);

@@ -47,6 +47,9 @@ void TPOEngine::process_tick(const PriceTick& tick) {
 
     tpo_data[time_bucket_start][price_bucket].count++;
     tpo_data[time_bucket_start][price_bucket].total_volume += tick.volume;
+
+    // Add the price level to the TPO profile with the corresponding time bracket
+    tpo_profile.add_price_to_time_bracket(price_bucket, time_bucket_start);
 }
 
 // Process a vector of ticks
@@ -81,6 +84,7 @@ const std::map<std::chrono::system_clock::time_point,
 // Clear all stored data
 void TPOEngine::clear() {
     tpo_data.clear();
+    tpo_profile.clear();
 }
 
 // Print TPO data for debugging purposes
@@ -96,6 +100,11 @@ void TPOEngine::print_tpo_data() const {
         }
         std::cout << "\n";
     }
+}
+
+// Print TPO profile for debugging purposes
+void TPOEngine::print_tpo_profile() const {
+    tpo_profile.print_profile();
 }
 
 // Example usage and testing function
@@ -117,4 +126,7 @@ void example_usage() {
     // Print the results
     std::cout << "TPO Data:\n";
     engine.print_tpo_data();
+
+    std::cout << "\nTPO Profile:\n";
+    engine.print_tpo_profile();
 }

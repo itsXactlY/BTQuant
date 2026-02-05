@@ -55,6 +55,9 @@ class OrderbookPanel : public PanelBase {
   OrderbookAggregationMode aggregation_mode_ = OrderbookAggregationMode::NONE;
   double custom_aggregation_value_ = 1.0;  // Custom aggregation value when mode is CUSTOM_VALUE
 
+  // Heatmap intensity configuration
+  float heatmap_intensity_ = 1.0f;  // Sensitivity of color mapping for resting limit orders (default 1.0)
+  
   int get_level_option_index();  // Helper to find the index of the current selection
   void render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook);
   void render_market_depth_chart(const RenderEngine::OrderbookData& orderbook);

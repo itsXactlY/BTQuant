@@ -415,6 +415,17 @@ void OrderbookPanel::render() {
     ImGui::TextColored(colors.accent_red, "No active symbols detected in SHM!");
   }
 
+  // Add heatmap intensity slider to the panel header
+  ImGui::Separator();
+  ImGui::Text("Heatmap Intensity:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(200);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  if (ImGui::Button("Reset##HeatmapIntensity")) {
+    heatmap_intensity_ = 1.0f;
+  }
   ImGui::Separator();
 
   // Get orderbook data
@@ -583,9 +594,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       const auto& level = aggregated_asks[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level
-      float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      if (intensity > 0.05f) {
+      // Calculate heatmap intensity for this level with adjustable sensitivity
+      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
+      if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
         float row_height = ImGui::GetTextLineHeightWithSpacing();
@@ -598,7 +610,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
 
         // Red heatmap for asks
-        ImU32 bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, intensity * 0.3f));
+        ImU32 bg_color = ImGui::GetColorU32(ImVec4(1.0f, 0.5f, 0.0f, adjusted_intensity * 0.3f));
 
         // Draw the rectangle in the background channel
         draw_list->AddRectFilled(pos_min, pos_max, bg_color);
@@ -614,9 +626,10 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       const auto& level = aggregated_bids[i];
       ImGui::TableNextRow();
 
-      // Calculate heatmap intensity for this level
-      float intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      if (intensity > 0.05f) {
+      // Calculate heatmap intensity for this level with adjustable sensitivity
+      float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
+      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
+      if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
         float row_height = ImGui::GetTextLineHeightWithSpacing();
@@ -629,7 +642,7 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImVec2 pos_max = ImVec2(row_pos.x + table_width, row_pos.y + row_height);
 
         // Blue heatmap for bids
-        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, intensity * 0.3f));
+        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.0f, 0.6f, 1.0f, adjusted_intensity * 0.3f));
 
         // Draw the rectangle in the background channel
         draw_list->AddRectFilled(pos_min, pos_max, bg_color);

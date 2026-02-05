@@ -6,6 +6,7 @@
 
 // Need to include panel_manager.hpp to use its methods
 #include "components/panel_manager.hpp"
+#include "components/watchlist_panel.hpp"
 
 namespace BTQuant {
 
@@ -207,7 +208,10 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                 ImGui::Text("Watchlist Actions:");
                 ImGui::Separator();
                 if (ImGui::MenuItem("Add Symbol")) {
-                    // Generic action
+                    // Cast the panel to WatchlistPanel to access specific methods
+                    if (auto* watchlist_panel = dynamic_cast<WatchlistPanel*>(panel)) {
+                        watchlist_panel->focus_add_symbol_input();
+                    }
                 }
                 if (ImGui::MenuItem("Import Symbols")) {
                     // Generic action
@@ -215,17 +219,80 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                 if (ImGui::MenuItem("Export Symbols")) {
                     // Generic action
                 }
-                if (ImGui::MenuItem("Sort by Change %")) {
-                    // Generic action
-                }
-                if (ImGui::MenuItem("Sort by Volume")) {
-                    // Generic action
+                if (ImGui::BeginMenu("Sort by...")) {
+                    // Cast the panel to WatchlistPanel to access specific methods
+                    if (auto* watchlist_panel = dynamic_cast<WatchlistPanel*>(panel)) {
+                        if (ImGui::MenuItem("Symbol (Asc)")) {
+                            watchlist_panel->set_sorting(0, true); // Sort by Symbol (column 0) ascending
+                        }
+                        if (ImGui::MenuItem("Symbol (Desc)")) {
+                            watchlist_panel->set_sorting(0, false); // Sort by Symbol (column 0) descending
+                        }
+                        if (ImGui::MenuItem("Exchange (Asc)")) {
+                            watchlist_panel->set_sorting(1, true); // Sort by Exchange (column 1) ascending
+                        }
+                        if (ImGui::MenuItem("Exchange (Desc)")) {
+                            watchlist_panel->set_sorting(1, false); // Sort by Exchange (column 1) descending
+                        }
+                        if (ImGui::MenuItem("Last Price (Asc)")) {
+                            watchlist_panel->set_sorting(2, true); // Sort by Last Price (column 2) ascending
+                        }
+                        if (ImGui::MenuItem("Last Price (Desc)")) {
+                            watchlist_panel->set_sorting(2, false); // Sort by Last Price (column 2) descending
+                        }
+                        if (ImGui::MenuItem("Change % (Asc)")) {
+                            watchlist_panel->set_sorting(3, true); // Sort by Change % (column 3) ascending
+                        }
+                        if (ImGui::MenuItem("Change % (Desc)")) {
+                            watchlist_panel->set_sorting(3, false); // Sort by Change % (column 3) descending
+                        }
+                        if (ImGui::MenuItem("Change $ (Asc)")) {
+                            watchlist_panel->set_sorting(4, true); // Sort by Change $ (column 4) ascending
+                        }
+                        if (ImGui::MenuItem("Change $ (Desc)")) {
+                            watchlist_panel->set_sorting(4, false); // Sort by Change $ (column 4) descending
+                        }
+                        if (ImGui::MenuItem("Volume (Asc)")) {
+                            watchlist_panel->set_sorting(5, true); // Sort by Volume (column 5) ascending
+                        }
+                        if (ImGui::MenuItem("Volume (Desc)")) {
+                            watchlist_panel->set_sorting(5, false); // Sort by Volume (column 5) descending
+                        }
+                        if (ImGui::MenuItem("High (Asc)")) {
+                            watchlist_panel->set_sorting(6, true); // Sort by High (column 6) ascending
+                        }
+                        if (ImGui::MenuItem("High (Desc)")) {
+                            watchlist_panel->set_sorting(6, false); // Sort by High (column 6) descending
+                        }
+                        if (ImGui::MenuItem("Low (Asc)")) {
+                            watchlist_panel->set_sorting(7, true); // Sort by Low (column 7) ascending
+                        }
+                        if (ImGui::MenuItem("Low (Desc)")) {
+                            watchlist_panel->set_sorting(7, false); // Sort by Low (column 7) descending
+                        }
+                        if (ImGui::MenuItem("Open (Asc)")) {
+                            watchlist_panel->set_sorting(8, true); // Sort by Open (column 8) ascending
+                        }
+                        if (ImGui::MenuItem("Open (Desc)")) {
+                            watchlist_panel->set_sorting(8, false); // Sort by Open (column 8) descending
+                        }
+                        if (ImGui::MenuItem("VWAP (Asc)")) {
+                            watchlist_panel->set_sorting(9, true); // Sort by VWAP (column 9) ascending
+                        }
+                        if (ImGui::MenuItem("VWAP (Desc)")) {
+                            watchlist_panel->set_sorting(9, false); // Sort by VWAP (column 9) descending
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 if (ImGui::MenuItem("Configure Columns")) {
                     // Generic action
                 }
                 if (ImGui::MenuItem("Clear Watchlist")) {
-                    // Generic action
+                    // Cast the panel to WatchlistPanel to access specific methods
+                    if (auto* watchlist_panel = dynamic_cast<WatchlistPanel*>(panel)) {
+                        watchlist_panel->clear_all_symbols();
+                    }
                 }
                 break;
                 

@@ -42,6 +42,11 @@ include_directories(${IMGUI_DIR})
 include_directories(${IMGUI_DIR}/backends)
 include_directories(${IMPLOT_DIR})
 
+# Add the data management library
+add_library(btqdata
+    src/data/orderbookhistory.cpp
+)
+
 # Add the TPO engine library
 add_library(tpoengine
     src/analytics/tpoengine.cpp
@@ -71,6 +76,10 @@ add_executable(tpoenginetest
     test/tpoengine_test.cpp
 )
 
+add_executable(orderbookhistorytest
+    test/orderbookhistory_test.cpp
+)
+
 add_executable(tpoprofilepaneltest
     test/tpoprofilepanel_test.cpp
 )
@@ -82,6 +91,9 @@ add_executable(domsurfacepaneltest
 # Link the TPO engine library to the test executables
 target_link_libraries(tpotest tpoengine ${Vulkan_LIBRARIES} imgui implot)
 target_link_libraries(tpoenginetest tpoengine ${Vulkan_LIBRARIES} imgui implot)
+
+# Link the data library to the orderbook history test
+target_link_libraries(orderbookhistorytest btqdata Threads::Threads)
 
 # Link the components library to the TPO profile panel test
 target_link_libraries(tpoprofilepaneltest components tpoengine Qt5::Core Qt5::Widgets Qt5::Gui ${Vulkan_LIBRARIES} imgui implot)

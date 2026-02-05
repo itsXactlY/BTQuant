@@ -42,6 +42,9 @@ class TimeHistogramPanel;
 class ScreenerPanel;
 class LogPanel;
 class ChartReplayPanel;
+class HistoricalTimeSalesPanel;
+class TapePanel;
+class StatusBarPanel;
 
 /**
  * @brief ContextMenuManager - Manages context menus for different UI elements

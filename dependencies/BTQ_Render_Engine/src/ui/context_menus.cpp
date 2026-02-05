@@ -34,6 +34,9 @@
 #include "components/trading_positions_panel.hpp"
 #include "components/volume_profile_panel.hpp"
 #include "components/risk_analyzer_panel.hpp"
+#include "components/historical_time_sales.hpp"
+#include "components/tape_panel.hpp"
+#include "components/status_bar_panel.hpp"
 namespace BTQuant {
 
 // Context menu manager implementation
@@ -141,6 +144,22 @@ void ContextMenuManager::initialize_context_menus() {
   context_menu_handlers_[PanelType::RISK_ANALYZER] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "RiskAnalyzerContextMenu");
   };
+
+  context_menu_handlers_[PanelType::HISTORICAL_TIME_SALES] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "HistoricalTimeSalesContextMenu");
+  };
+
+  context_menu_handlers_[PanelType::TAPE] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "TapeContextMenu");
+  };
+
+  context_menu_handlers_[PanelType::STATUS_BAR] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "StatusBarContextMenu");
+  };
+
+  context_menu_handlers_[PanelType::STRATEGY_BUILDER] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "StrategyBuilderContextMenu");
+  };
 }
 
 void ContextMenuManager::show_context_menu(PanelBase* panel) {
@@ -241,6 +260,28 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
           // Reset chart zoom level to default
           if (panel_manager_) {
             // This would typically reset the chart's view transformation
+          }
+        }
+        if (ImGui::MenuItem("Apply Symbol to All")) {
+          // Apply the current chart's symbol to all other panels
+          if (panel_manager_ && !panel->get_config().symbol.empty()) {
+            // Get the current symbol from this chart
+            std::string current_symbol = panel->get_config().symbol;
+            
+            // Iterate through all panels and update their symbols
+            auto all_panel_ids = panel_manager_->get_all_panel_ids();
+            for (uint32_t id : all_panel_ids) {
+              PanelBase* other_panel = panel_manager_->get_panel_by_id(id);
+              if (other_panel && other_panel != panel) {  // Don't update the current panel
+                // Update the panel's config
+                PanelConfig updated_config = other_panel->get_config();
+                updated_config.symbol = current_symbol;
+                panel_manager_->update_panel_config(id, updated_config);
+                
+                // If the panel has a specific method to set symbol, call it
+                // This would require casting to specific panel types, but for now we'll update the config
+              }
+            }
           }
         }
         ImGui::Separator();
@@ -1198,6 +1239,137 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
         break;
 
+      case PanelType::HISTORICAL_TIME_SALES:
+        ImGui::Text("Historical Time & Sales Actions:");
+        ImGui::Separator();
+        if (dynamic_cast<HistoricalTimeSalesPanel*>(panel)) {
+          if (ImGui::MenuItem("Toggle Auto Scroll")) {
+            // Call specific historical time and sales panel method
+          }
+          if (ImGui::MenuItem("Clear Trades")) {
+            // Call specific historical time and sales panel method
+          }
+          if (ImGui::MenuItem("Filter Buys/Sells")) {
+            // Call specific historical time and sales panel method
+          }
+          if (ImGui::MenuItem("Highlight Large Trades")) {
+            // Call specific historical time and sales panel method
+          }
+          if (ImGui::MenuItem("Export Trade Data")) {
+            // Call specific historical time and sales panel method
+          }
+        } else {
+          // Fallback for when cast fails - still allow generic actions
+          if (ImGui::MenuItem("Toggle Auto Scroll")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Clear Trades")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Filter Buys/Sells")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Highlight Large Trades")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Export Trade Data")) {
+            // Generic action
+          }
+        }
+        break;
+
+      case PanelType::TAPE:
+        ImGui::Text("Tape Actions:");
+        ImGui::Separator();
+        if (dynamic_cast<TapePanel*>(panel)) {
+          if (ImGui::MenuItem("Toggle Auto Scroll")) {
+            // Call specific tape panel method
+          }
+          if (ImGui::MenuItem("Clear Trades")) {
+            // Call specific tape panel method
+          }
+          if (ImGui::MenuItem("Filter Buys/Sells")) {
+            // Call specific tape panel method
+          }
+          if (ImGui::MenuItem("Highlight Large Trades")) {
+            // Call specific tape panel method
+          }
+          if (ImGui::MenuItem("Export Trade Data")) {
+            // Call specific tape panel method
+          }
+        } else {
+          // Fallback for when cast fails - still allow generic actions
+          if (ImGui::MenuItem("Toggle Auto Scroll")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Clear Trades")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Filter Buys/Sells")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Highlight Large Trades")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Export Trade Data")) {
+            // Generic action
+          }
+        }
+        break;
+
+      case PanelType::STATUS_BAR:
+        ImGui::Text("Status Bar Actions:");
+        ImGui::Separator();
+        if (dynamic_cast<StatusBarPanel*>(panel)) {
+          if (ImGui::MenuItem("Toggle Connection Status")) {
+            // Call specific status bar panel method
+          }
+          if (ImGui::MenuItem("Toggle Performance Metrics")) {
+            // Call specific status bar panel method
+          }
+          if (ImGui::MenuItem("Toggle Time Display")) {
+            // Call specific status bar panel method
+          }
+          if (ImGui::MenuItem("Configure Display Format")) {
+            // Call specific status bar panel method
+          }
+        } else {
+          // Fallback for when cast fails - still allow generic actions
+          if (ImGui::MenuItem("Toggle Connection Status")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Toggle Performance Metrics")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Toggle Time Display")) {
+            // Generic action
+          }
+          if (ImGui::MenuItem("Configure Display Format")) {
+            // Generic action
+          }
+        }
+        break;
+
+      case PanelType::STRATEGY_BUILDER:
+        ImGui::Text("Strategy Builder Actions:");
+        ImGui::Separator();
+        if (ImGui::MenuItem("New Strategy")) {
+          // Generic action for strategy builder
+        }
+        if (ImGui::MenuItem("Load Strategy")) {
+          // Generic action for strategy builder
+        }
+        if (ImGui::MenuItem("Save Strategy")) {
+          // Generic action for strategy builder
+        }
+        if (ImGui::MenuItem("Run Backtest")) {
+          // Generic action for strategy builder
+        }
+        if (ImGui::MenuItem("Export Strategy")) {
+          // Generic action for strategy builder
+        }
+        break;
+
       default:
         ImGui::Text("Generic Actions:");
         ImGui::Separator();
@@ -1230,12 +1402,6 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
     }
 
     // Global Panel Actions - Available for all panel types
-    if (ImGui::MenuItem("Close Panel")) {
-      // Call the panel manager to remove this panel
-      if (panel_manager_ && panel_id != 0) {
-        panel_manager_->remove_panel(panel_id);
-      }
-    }
     if (ImGui::MenuItem("Duplicate Panel")) {
       // Call the panel manager to duplicate this panel
       if (panel_manager_ && panel_id != 0) {
@@ -1250,6 +1416,44 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         // Add the new panel with the same properties
         panel_manager_->add_panel(type, title, new_grid_x, new_grid_y,
                                   panel->get_config().grid_width, panel->get_config().grid_height);
+      }
+    }
+    if (ImGui::MenuItem("Apply Symbol to All")) {
+      // Apply the current panel's symbol to all other panels
+      if (panel_manager_ && !panel->get_config().symbol.empty()) {
+        // Get the current symbol from this panel
+        std::string current_symbol = panel->get_config().symbol;
+        
+        // Iterate through all panels and update their symbols
+        auto all_panel_ids = panel_manager_->get_all_panel_ids();
+        for (uint32_t id : all_panel_ids) {
+          if (id != panel_id) {  // Don't update the current panel
+            PanelBase* other_panel = panel_manager_->get_panel_by_id(id);
+            if (other_panel) {
+              // Update the panel's config
+              PanelConfig updated_config = other_panel->get_config();
+              updated_config.symbol = current_symbol;
+              panel_manager_->update_panel_config(id, updated_config);
+              
+              // If the panel has a specific method to set symbol, call it
+              // This would require casting to specific panel types, but for now we'll update the config
+            }
+          }
+        }
+      }
+    }
+    if (ImGui::MenuItem("Screenshot")) {
+      // Take a screenshot of the current panel
+      // This would typically trigger screenshot functionality
+      if (panel_manager_) {
+        // This would typically trigger screenshot functionality
+        // For now, we'll just log that the action was triggered
+      }
+    }
+    if (ImGui::MenuItem("Close Panel")) {
+      // Call the panel manager to remove this panel
+      if (panel_manager_ && panel_id != 0) {
+        panel_manager_->remove_panel(panel_id);
       }
     }
     if (ImGui::MenuItem("Settings")) {

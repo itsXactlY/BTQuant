@@ -422,12 +422,13 @@ void DomSurfacePanel::render() {
 
     if (cols > 0 && rows > 0) {
       ImPlot::PushColormap(ImPlotColormap_Viridis);
-      
+
       // Use the Vulkan-accelerated texture if available
       if (vulkan_texture_id_ != nullptr) {
         // Render using the Vulkan texture
-        ImPlot::PlotImage("Liquidity", vulkan_texture_id_, 
-                         ImPlotPoint(bounds_min_[0], bounds_min_[1]), 
+        // The texture represents the liquidity heatmap where X=Time, Y=Price
+        ImPlot::PlotImage("Liquidity", vulkan_texture_id_,
+                         ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                          ImPlotPoint(bounds_max_[0], bounds_max_[1]));
       } else {
         // Fallback to CPU rendering
@@ -657,60 +658,72 @@ void DomSurfacePanel::updateVulkanTexture() {
   if (!vulkan_core_ || heatmap_data_.empty()) return;
 
   // Convert heatmap data to RGBA format for the texture
-  int width = static_cast<int>(heatmap_data_.size() / price_bins_);
+  int time_steps = static_cast<int>(heatmap_data_.size()) / price_bins_;
   int height = price_bins_;
 
-  if (width <= 0 || height <= 0) return;
+  if (time_steps <= 0 || height <= 0) return;
 
   // Check if texture needs to be recreated due to size change
-  if (width != current_texture_width_ || height != current_texture_height_) {
-    recreateVulkanTexture(width, height);
+  if (time_steps != current_texture_width_ || height != current_texture_height_) {
+    recreateVulkanTexture(time_steps, height);
   }
 
   // Create temporary RGBA data
-  std::vector<uint32_t> rgba_data(width * height);
+  std::vector<uint32_t> rgba_data(time_steps * height);
 
   for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
+    for (int x = 0; x < time_steps; ++x) {
       // heatmap_data_ is organized as [price_bin * time_steps + time_step]
-      // So for position (x=time, y=price), we access [y * width + x]
-      double value = heatmap_data_[y * width + x];
+      // So for position (x=time, y=price), we access [y * time_steps + x]
+      double value = heatmap_data_[y * time_steps + x];
       float normalized = static_cast<float>(value / scale_max_);
 
       // Apply colormap (Viridis-like gradient)
       uint8_t r, g, b, a = 255;
 
-      // Simple Viridis-like mapping
-      if (normalized < 0.25) {
-        r = 0;
-        g = static_cast<uint8_t>(255 * 4 * normalized);
-        b = static_cast<uint8_t>(255 * (0.5 + 2 * normalized));
-      } else if (normalized < 0.5) {
-        r = 0;
-        g = static_cast<uint8_t>(255);
-        b = static_cast<uint8_t>(255 * (1 - 2 * (normalized - 0.25)));
-      } else if (normalized < 0.75) {
-        r = static_cast<uint8_t>(255 * 4 * (normalized - 0.5));
-        g = static_cast<uint8_t>(255);
-        b = 0;
+      // Improved Viridis-like mapping for better visualization
+      if (normalized <= 0.0f) {
+        r = 68; g = 1; b = 84; // Dark purple
+      } else if (normalized <= 0.125f) {
+        float t = normalized / 0.125f;
+        r = static_cast<uint8_t>(68 + (t * (253 - 68))); // Purple to blue transition
+        g = static_cast<uint8_t>(1 + (t * (71 - 1)));
+        b = static_cast<uint8_t>(84 + (t * (194 - 84)));
+      } else if (normalized <= 0.25f) {
+        float t = (normalized - 0.125f) / 0.125f;
+        r = static_cast<uint8_t>(253 + (t * (244 - 253))); // Blue to light blue
+        g = static_cast<uint8_t>(71 + (t * (172 - 71)));
+        b = static_cast<uint8_t>(194 + (t * (248 - 194)));
+      } else if (normalized <= 0.5f) {
+        float t = (normalized - 0.25f) / 0.25f;
+        r = static_cast<uint8_t>(244 + (t * (58 - 244))); // Light blue to green
+        g = static_cast<uint8_t>(172 + (t * (204 - 172)));
+        b = static_cast<uint8_t>(248 + (t * (22 - 248)));
+      } else if (normalized <= 0.75f) {
+        float t = (normalized - 0.5f) / 0.25f;
+        r = static_cast<uint8_t>(58 + (t * (128 - 58))); // Green to yellow
+        g = static_cast<uint8_t>(204 + (t * (253 - 204)));
+        b = static_cast<uint8_t>(22 + (t * (220 - 22)));
       } else {
-        r = static_cast<uint8_t>(255);
-        g = static_cast<uint8_t>(255 * (1 - 4 * (normalized - 0.75)));
-        b = 0;
+        float t = (normalized - 0.75f) / 0.25f;
+        r = static_cast<uint8_t>(128 + (t * (244 - 128))); // Yellow to red
+        g = static_cast<uint8_t>(253 + (t * (255 - 253)));
+        b = static_cast<uint8_t>(220 + (t * (29 - 220)));
       }
 
       // Store in row-major order for texture (x = column, y = row)
-      rgba_data[y * width + x] = (a << 24) | (b << 16) | (g << 8) | r;
+      // Flip vertically to match OpenGL/Vulkan coordinate system
+      rgba_data[(height - 1 - y) * time_steps + x] = (a << 24) | (b << 16) | (g << 8) | r;
     }
   }
 
   // Upload the texture data to the GPU using staging buffer
   auto device = vulkan_core_->get_device();
-  
+
   // Allocate staging buffer
-  VkDeviceSize imageSize = width * height * sizeof(uint32_t);
+  VkDeviceSize imageSize = time_steps * height * sizeof(uint32_t);
   auto staging_buffer = vulkan_core_->get_memory_manager().allocate_staging_buffer(imageSize);
-  
+
   // Copy image data to staging buffer
   memcpy(staging_buffer.mapped_ptr, rgba_data.data(), static_cast<size_t>(imageSize));
 
@@ -720,7 +733,7 @@ void DomSurfacePanel::updateVulkanTexture() {
   // Transition image layout to TRANSFER_DST_OPTIMAL
   VkImageMemoryBarrier barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // Previous layout
+  barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Start with undefined layout
   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -730,12 +743,12 @@ void DomSurfacePanel::updateVulkanTexture() {
   barrier.subresourceRange.levelCount = 1;
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
-  barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+  barrier.srcAccessMask = 0;
   barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
   vkCmdPipelineBarrier(
       commandBuffer,
-      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
       0,
       0, nullptr,
       0, nullptr,
@@ -753,7 +766,7 @@ void DomSurfacePanel::updateVulkanTexture() {
   region.imageSubresource.layerCount = 1;
   region.imageOffset = {0, 0, 0};
   region.imageExtent = {
-      static_cast<uint32_t>(width),
+      static_cast<uint32_t>(time_steps),
       static_cast<uint32_t>(height),
       1
   };
@@ -777,8 +790,8 @@ void DomSurfacePanel::updateVulkanTexture() {
   shader_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   shader_barrier.subresourceRange.baseMipLevel = 0;
   shader_barrier.subresourceRange.levelCount = 1;
-  shader_barrier.subresourceRange.baseArrayLayer = 0;
-  shader_barrier.subresourceRange.layerCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
   shader_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
   shader_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 

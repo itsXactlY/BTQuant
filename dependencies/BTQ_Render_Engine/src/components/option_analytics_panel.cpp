@@ -11,7 +11,7 @@ namespace BTQuant {
 namespace RenderEngine {
 
 OptionAnalyticsPanel::OptionAnalyticsPanel(StrategyBuilder* strategy_builder)
-    : PanelBase(PanelConfig{.title = "Option Analytics", .type = PanelType::SCREENER})
+    : PanelBase(PanelConfig{.title = "Option Analytics", .type = PanelType::OPTION_ANALYTICS})
     , activeTab(0)
     , strategy_builder_(strategy_builder)
 {
@@ -87,6 +87,16 @@ std::string OptionAnalyticsPanel::getActiveTabName() const {
         return tabs[activeTab];
     }
     return "";
+}
+
+int OptionAnalyticsPanel::get_active_tab() const {
+    return activeTab;
+}
+
+void OptionAnalyticsPanel::set_active_tab(int tab_index) {
+    if (tab_index >= 0 && tab_index < static_cast<int>(tabs.size())) {
+        activeTab = tab_index;
+    }
 }
 
 void OptionAnalyticsPanel::render() {

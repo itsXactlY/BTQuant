@@ -35,6 +35,7 @@
 #include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/components/risk_analyzer_panel.hpp"
 #include "../../include/components/strategy_builder.hpp"
+#include "../../include/components/optionanalyticspanel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
 
@@ -56,10 +57,12 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
       micro_renderer_(micro_renderer) {
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
+  strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
 }
 
 PanelManager::~PanelManager() {
   context_menu_manager_.reset(); // Explicitly reset context menu manager before other members
+  strategy_builder_.reset(); // Explicitly reset strategy builder before other members
   panels_.clear();
 }
 
@@ -285,6 +288,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
       break;
+    case PanelType::OPTION_ANALYTICS:
+      panel = std::make_unique<OptionAnalyticsPanel>(strategy_builder_.get());
+      break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
       break;
@@ -442,6 +448,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::TPO_PROFILE:
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
+      break;
+    case PanelType::OPTION_ANALYTICS:
+      panel = std::make_unique<OptionAnalyticsPanel>(strategy_builder_.get());
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -946,6 +955,8 @@ std::string PanelManager::get_default_panel_title(PanelType type) {
       return "Risk Analyzer";
     case PanelType::STRATEGY_BUILDER:
       return "Strategy Builder";
+    case PanelType::OPTION_ANALYTICS:
+      return "Option Analytics";
     default:
       return "Panel";
   }
@@ -1024,10 +1035,36 @@ std::string PanelManager::serialize_layout() const {
     panel_json["grid_y"] = config.grid_y;
     panel_json["grid_width"] = config.grid_width;
     panel_json["grid_height"] = config.grid_height;
+    panel_json["position"] = {config.position.x, config.position.y};
+    panel_json["size"] = {config.size.x, config.size.y};
+    panel_json["symbol"] = config.symbol;
 
-    // Optional: save exact position/size if manually moved (overriding
-    // grid) panel_json["pos_x"] = config.position.x;
-    // ...
+    // Serialize panel-specific settings
+    json settings_json;
+    
+    // TPO Panel specific settings
+    if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel.get())) {
+        settings_json["symbol_id"] = tpo_panel->get_symbol_id();
+    }
+    // DOM Surface Panel specific settings
+    else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel.get())) {
+        settings_json["symbol_id"] = dom_panel->get_symbol_id();
+        settings_json["price_range"] = dom_panel->get_price_range();
+        settings_json["price_bins"] = dom_panel->get_price_bins();
+        settings_json["auto_scale_price"] = dom_panel->get_auto_scale_price();
+        settings_json["large_order_threshold"] = dom_panel->get_large_order_threshold();
+        settings_json["enable_fade_out"] = dom_panel->get_enable_fade_out();
+        settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
+    }
+    // Option Analytics Panel specific settings
+    else if (auto* option_panel = dynamic_cast<OptionAnalyticsPanel*>(panel.get())) {
+        settings_json["active_tab"] = option_panel->get_active_tab();
+    }
+    
+    // Add settings if any were captured
+    if (!settings_json.empty()) {
+        panel_json["settings"] = settings_json;
+    }
 
     panels_json.push_back(panel_json);
   }
@@ -1061,7 +1098,75 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
         int height = p["grid_height"].get<int>();
         bool visible = p["visible"].get<bool>();
 
+        // Create panel config with position and size
+        PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
+        
+        // Restore position and size if available
+        if (p.contains("position")) {
+            auto pos_array = p["position"];
+            config.position = ImVec2(pos_array[0].get<float>(), pos_array[1].get<float>());
+        }
+        if (p.contains("size")) {
+            auto size_array = p["size"];
+            config.size = ImVec2(size_array[0].get<float>(), size_array[1].get<float>());
+        }
+        if (p.contains("symbol")) {
+            config.symbol = p["symbol"].get<std::string>();
+        }
+
         uint32_t id = add_panel(type, title, grid_x, grid_y, width, height);
+        
+        // Get the newly created panel to apply specific settings
+        auto* panel = get_panel_by_id(id);
+        if (panel) {
+            // Update the panel's config with restored position and size
+            auto& panel_config = panel->get_config();
+            panel_config.position = config.position;
+            panel_config.size = config.size;
+            
+            // Apply panel-specific settings if available
+            if (p.contains("settings")) {
+                auto settings = p["settings"];
+                
+                // TPO Panel specific settings
+                if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel)) {
+                    if (settings.contains("symbol_id")) {
+                        tpo_panel->set_symbol_id(settings["symbol_id"].get<uint32_t>());
+                    }
+                }
+                // DOM Surface Panel specific settings
+                else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel)) {
+                    if (settings.contains("symbol_id")) {
+                        dom_panel->setSymbol(settings["symbol_id"].get<uint32_t>());
+                    }
+                    if (settings.contains("price_range")) {
+                        dom_panel->set_price_range(settings["price_range"].get<double>());
+                    }
+                    if (settings.contains("price_bins")) {
+                        dom_panel->set_price_bins(settings["price_bins"].get<int>());
+                    }
+                    if (settings.contains("auto_scale_price")) {
+                        dom_panel->set_auto_scale_price(settings["auto_scale_price"].get<bool>());
+                    }
+                    if (settings.contains("large_order_threshold")) {
+                        dom_panel->set_large_order_threshold(settings["large_order_threshold"].get<double>());
+                    }
+                    if (settings.contains("enable_fade_out")) {
+                        dom_panel->set_enable_fade_out(settings["enable_fade_out"].get<bool>());
+                    }
+                    if (settings.contains("heatmap_intensity")) {
+                        dom_panel->set_heatmap_intensity(settings["heatmap_intensity"].get<float>());
+                    }
+                }
+                // Option Analytics Panel specific settings
+                else if (auto* option_panel = dynamic_cast<OptionAnalyticsPanel*>(panel)) {
+                    if (settings.contains("active_tab")) {
+                        option_panel->set_active_tab(settings["active_tab"].get<int>());
+                    }
+                }
+            }
+        }
+        
         set_panel_visible(id, visible);
       }
     }
@@ -1130,6 +1235,10 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
         if (auto* tpo = dynamic_cast<TpoPanel*>(panel.get())) {
           tpo->set_symbol_id(symbol_id);
         }
+        break;
+      }
+      case PanelType::OPTION_ANALYTICS: {
+        // OptionAnalyticsPanel doesn't typically require symbol-specific data
         break;
       }
       case PanelType::HEATMAP: {

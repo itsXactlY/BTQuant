@@ -65,6 +65,25 @@ class DomSurfacePanel : public PanelBase {
   // Configuration
   void setHistoryDepth(int depth) { history_depth_ = depth; }
   void setPriceRange(double range) { price_range_ = range; }
+  double get_price_range() const { return price_range_; }
+  void set_price_range(double range) { price_range_ = range; }
+  
+  void set_price_bins(int bins) { price_bins_ = bins; }
+  int get_price_bins() const { return price_bins_; }
+  
+  void set_auto_scale_price(bool auto_scale) { auto_scale_price_ = auto_scale; }
+  bool get_auto_scale_price() const { return auto_scale_price_; }
+  
+  void set_large_order_threshold(double threshold) { large_order_threshold_ = threshold; }
+  double get_large_order_threshold() const { return large_order_threshold_; }
+  
+  void set_enable_fade_out(bool enable) { enable_fade_out_ = enable; }
+  bool get_enable_fade_out() const { return enable_fade_out_; }
+  
+  void set_heatmap_intensity(float intensity) { heatmap_intensity_ = intensity; }
+  float get_heatmap_intensity() const { return heatmap_intensity_; }
+  
+  uint32_t get_symbol_id() const { return current_symbol_id_; }
 
   // Large Order Marker Configuration
   void setLargeOrderThreshold(double threshold) { large_order_threshold_ = threshold; }

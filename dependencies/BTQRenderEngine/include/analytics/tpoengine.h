@@ -98,6 +98,53 @@ struct TPOProfile {
         letter_counter = 0;
     }
 
+    // Get all price levels that were touched in a specific time bracket
+    std::vector<double> get_prices_for_time_bracket(const std::chrono::system_clock::time_point& time_bracket) const {
+        std::vector<double> result;
+
+        auto it = time_bracket_to_letter.find(time_bracket);
+        if (it != time_bracket_to_letter.end()) {
+            std::string letter = it->second;
+
+            for (const auto& [price, letters] : price_to_letters) {
+                if (letters.find(letter) != std::string::npos) {
+                    result.push_back(price);
+                }
+            }
+        }
+        return result;
+    }
+
+    // Get the time bracket for a specific letter
+    std::chrono::system_clock::time_point get_time_bracket_for_letter(const std::string& letter) const {
+        for (const auto& [time_bracket, time_letter] : time_bracket_to_letter) {
+            if (time_letter == letter) {
+                return time_bracket;
+            }
+        }
+        // Return null time point if not found
+        return std::chrono::system_clock::time_point();
+    }
+
+    // Get the count of how many times each price level was touched
+    std::map<double, int> get_touch_counts() const {
+        std::map<double, int> counts;
+        for (const auto& [price, letters] : price_to_letters) {
+            counts[price] = letters.length();
+        }
+        return counts;
+    }
+
+    // Get the total number of unique price levels in the profile
+    size_t get_unique_price_count() const {
+        return price_to_letters.size();
+    }
+
+    // Get the total number of unique time brackets in the profile
+    size_t get_unique_time_bracket_count() const {
+        return time_bracket_to_letter.size();
+    }
+
     // Print the profile for debugging
     void print_profile() const {
         std::cout << "TPO Profile:\n";

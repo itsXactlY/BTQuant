@@ -379,6 +379,122 @@ void DomSurfacePanel::renderLargeOrderMarkers() {
   ImPlot::PopStyleVar();
 }
 
+void DomSurfacePanel::renderLiquidityBars() {
+  if (current_symbol_id_ == 0 || !processor_) return;
+
+  // Get latest orderbook for liquidity bars
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt) return;
+
+  const auto& orderbook = *orderbook_opt;
+
+  // Calculate max volume across all levels for normalization
+  double max_total_volume = 0.0;
+  for (const auto& level : orderbook.bids) {
+    max_total_volume = std::max(max_total_volume, level.size);
+  }
+  for (const auto& level : orderbook.asks) {
+    max_total_volume = std::max(max_total_volume, level.size);
+  }
+
+  if (max_total_volume <= 0) return;
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  if (!draw_list) return;
+
+  // Get plot limits to determine where to draw the bars
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+  
+  // Calculate bar width based on plot dimensions (10% of plot width as max)
+  float max_bar_width = ImPlot::GetPlotSize().x * 0.1f;
+  if (max_bar_width < 5.0f) max_bar_width = 5.0f;
+
+  // Calculate the pixel height that corresponds to a small price range
+  float bar_height_px = 3.0f; // Fixed height in pixels for each bar
+  
+  // Calculate price range per pixel to convert bar height
+  double price_per_px = (plot_rect.Y.Max - plot_rect.Y.Min) / ImPlot::GetPlotSize().y;
+
+  // Render bid liquidity bars (green) on the right side
+  for (const auto& level : orderbook.bids) {
+    // Calculate bar width based on volume
+    float volume_ratio = static_cast<float>(level.size / max_total_volume);
+    float bar_width = volume_ratio * max_bar_width;
+    
+    // Calculate the price range that corresponds to the bar height in pixels
+    double price_range = price_per_px * bar_height_px;
+    
+    // Calculate the price range for the bar (centered at the price level)
+    double top_price = level.price + price_range / 2.0;
+    double bottom_price = level.price - price_range / 2.0;
+    
+    // Convert to pixel coordinates - note: ImPlot Y-axis is inverted (higher values are lower on screen)
+    ImVec2 top_right = ImPlot::PlotToPixels(plot_rect.X.Max, top_price);
+    ImVec2 bottom_right = ImPlot::PlotToPixels(plot_rect.X.Max, bottom_price);
+    
+    // Calculate left edge of the bar (extending left from the right edge)
+    ImVec2 top_left = ImVec2(top_right.x - bar_width, top_right.y);
+    ImVec2 bottom_left = ImVec2(bottom_right.x - bar_width, bottom_right.y);
+    
+    // Draw the bar - need to ensure correct rectangle orientation
+    // In ImDrawList, the rectangle is drawn from top-left to bottom-right
+    ImVec2 rect_min = ImVec2(top_left.x, std::min(top_right.y, bottom_right.y));
+    ImVec2 rect_max = ImVec2(top_right.x, std::max(top_right.y, bottom_right.y));
+    
+    // Draw the bar
+    ImU32 bid_color = IM_COL32(0, 255, 0, 180); // Green with transparency
+    draw_list->AddRectFilled(rect_min, rect_max, bid_color);
+  }
+
+  // Render ask liquidity bars (red) on the right side
+  for (const auto& level : orderbook.asks) {
+    // Calculate bar width based on volume
+    float volume_ratio = static_cast<float>(level.size / max_total_volume);
+    float bar_width = volume_ratio * max_bar_width;
+    
+    // Calculate the price range that corresponds to the bar height in pixels
+    double price_range = price_per_px * bar_height_px;
+    
+    // Calculate the price range for the bar (centered at the price level)
+    double top_price = level.price + price_range / 2.0;
+    double bottom_price = level.price - price_range / 2.0;
+    
+    // Convert to pixel coordinates - note: ImPlot Y-axis is inverted (higher values are lower on screen)
+    ImVec2 top_right = ImPlot::PlotToPixels(plot_rect.X.Max, top_price);
+    ImVec2 bottom_right = ImPlot::PlotToPixels(plot_rect.X.Max, bottom_price);
+    
+    // Calculate left edge of the bar (extending left from the right edge)
+    ImVec2 top_left = ImVec2(top_right.x - bar_width, top_right.y);
+    ImVec2 bottom_left = ImVec2(bottom_right.x - bar_width, bottom_right.y);
+    
+    // Draw the bar - need to ensure correct rectangle orientation
+    // In ImDrawList, the rectangle is drawn from top-left to bottom-right
+    ImVec2 rect_min = ImVec2(top_left.x, std::min(top_right.y, bottom_right.y));
+    ImVec2 rect_max = ImVec2(top_right.x, std::max(top_right.y, bottom_right.y));
+    
+    // Draw the bar
+    ImU32 ask_color = IM_COL32(255, 0, 0, 180); // Red with transparency
+    draw_list->AddRectFilled(rect_min, rect_max, ask_color);
+  }
+}
+
+double DomSurfacePanel::getMaxVolumeAtPrice(const OrderbookData& orderbook, double price) const {
+  // Find the volume at the specified price level
+  for (const auto& level : orderbook.bids) {
+    if (std::abs(level.price - price) < 0.0001) { // Using small epsilon for floating point comparison
+      return level.size;
+    }
+  }
+  
+  for (const auto& level : orderbook.asks) {
+    if (std::abs(level.price - price) < 0.0001) { // Using small epsilon for floating point comparison
+      return level.size;
+    }
+  }
+  
+  return 0.0; // Return 0 if price level not found
+}
+
 void DomSurfacePanel::render() {
   if (consumeDirty()) {
     updateHeatmapData();
@@ -409,11 +525,17 @@ void DomSurfacePanel::render() {
     // Allow user to pan and zoom
     ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_RangeFit);
     ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_RangeFit);
+    
+    // Add right-side Y-axis for liquidity bars
+    ImPlot::SetupAxis(ImAxis_Y2, "Liquidity", ImPlotAxisFlags_AuxDefault | ImPlotAxisFlags_Opposite);
 
     // Set axis limits with option for user interaction
     ImPlot::SetupAxisLimits(ImAxis_X1, bounds_min_[0], bounds_max_[0],
                             heatmap_data_.empty() ? ImPlotCond_Always : ImPlotCond_Once);
     ImPlot::SetupAxisLimits(ImAxis_Y1, bounds_min_[1], bounds_max_[1],
+                            heatmap_data_.empty() ? ImPlotCond_Always : ImPlotCond_Once);
+    // Y2 axis should match Y1 limits
+    ImPlot::SetupAxisLimits(ImAxis_Y2, bounds_min_[1], bounds_max_[1],
                             heatmap_data_.empty() ? ImPlotCond_Always : ImPlotCond_Once);
 
     // Use time history size for Cols and price_bins for Rows
@@ -442,6 +564,9 @@ void DomSurfacePanel::render() {
     // Render Large Order Markers OVER the heatmap
     renderLargeOrderMarkers();
 
+    // Render Liquidity Bars on the right-hand price axis
+    renderLiquidityBars();
+
     ImPlot::EndPlot();
   }
 
@@ -456,6 +581,24 @@ void DomSurfacePanel::render() {
   }
 
   end_panel_window();
+}
+
+void DomSurfacePanel::render_panel_header() {
+  // Call parent implementation to render the default header
+  PanelBase::render_panel_header();
+
+  // Add heatmap intensity slider to the panel header
+  ImGui::Separator();
+  ImGui::Text("Heatmap Intensity:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(200);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  if (ImGui::Button("Reset##HeatmapIntensity")) {
+    heatmap_intensity_ = 1.0f;
+  }
+  ImGui::Separator();
 }
 
 void DomSurfacePanel::initializeVulkanResources(VulkanCore* core) {
@@ -677,6 +820,12 @@ void DomSurfacePanel::updateVulkanTexture() {
       // So for position (x=time, y=price), we access [y * time_steps + x]
       double value = heatmap_data_[y * time_steps + x];
       float normalized = static_cast<float>(value / scale_max_);
+
+      // Apply heatmap intensity adjustment to sensitivity
+      normalized = std::pow(normalized, 1.0f / heatmap_intensity_);
+      
+      // Clamp normalized value to [0, 1] range
+      normalized = std::clamp(normalized, 0.0f, 1.0f);
 
       // Apply colormap (Viridis-like gradient)
       uint8_t r, g, b, a = 255;

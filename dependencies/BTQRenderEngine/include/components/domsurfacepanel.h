@@ -57,6 +57,9 @@ class DomSurfacePanel : public PanelBase {
 
   void render() override;
   void setSymbol(uint32_t symbol_id);
+  
+  // Override panel header to add heatmap intensity control
+  void render_panel_header() override;
 
   // Configuration
   void setHistoryDepth(int depth) { history_depth_ = depth; }
@@ -78,6 +81,7 @@ class DomSurfacePanel : public PanelBase {
   int history_depth_ = 300;    // Number of snapshots to show (X-axis time)
   int price_bins_ = 100;       // Number of vertical price buckets (Y-axis price)
   double price_range_ = 0.02;  // +/- 2% from mid price
+  float heatmap_intensity_ = 1.0f;  // Intensity/sensitivity of heatmap color mapping
 
   // Data storage for heatmap
   // ImPlot PlotHeatmap data size = rows * cols
@@ -119,7 +123,7 @@ class DomSurfacePanel : public PanelBase {
   VkSampler heatmap_sampler_ = nullptr;
   VkDeviceMemory heatmap_image_memory_ = nullptr;
   void* vulkan_texture_id_ = nullptr;
-  
+
   // Track texture dimensions
   int current_texture_width_ = 0;
   int current_texture_height_ = 0;
@@ -136,6 +140,10 @@ class DomSurfacePanel : public PanelBase {
   float calculateMarkerRadius(double order_size) const;
   ImU32 getMarkerColor(const LargeOrderMarker& marker) const;
   std::string getMarkerTooltip(const LargeOrderMarker& marker) const;
+
+  // Liquidity Bars Methods
+  void renderLiquidityBars();
+  double getMaxVolumeAtPrice(const OrderbookData& orderbook, double price) const;
 
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, NotificationType type);

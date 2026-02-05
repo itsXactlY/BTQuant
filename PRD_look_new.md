@@ -405,14 +405,14 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Create `dependencies/BTQRenderEngine/src/components/tpoprofilepanel.cpp` implementing the "Quantower TPO" layout: a vertical price scale on the left and horizontal letter blocks.
 - [x] Add logic for "Value Area" calculation (70% of TPOs) and "Point of Control" (POC) highlighting with 1px horizontal lines.
 - [x] Implement "Profile Splitting": add a UI handle to right-click a TPO bar and split it into individual sub-period bars.
-- [ ] Add "Single Print" detection: visually flag price levels where only one TPO letter exists with a distinct colored marker.
+- [x] Add "Single Print" detection: visually flag price levels where only one TPO letter exists with a distinct colored marker.
 
 ### TASK 20: DOM SURFACE HEATMAP & HISTORY
-- [ ] Create `dependencies/BTQRenderEngine/src/data/orderbookhistory.cpp` to maintain a circular buffer of L2 snapshots (top 100 levels) for historical heatmap playback.
-- [ ] Implement `dependencies/BTQRenderEngine/src/components/domsurfacepanel.cpp` using a Vulkan-accelerated texture to render the time-price liquidity heatmap.
-- [ ] Implement a "Heatmap Intensity" slider in the panel header to adjust the color-mapping sensitivity for resting limit orders.
-- [ ] Add vertical "Liquidity Bars" on the right-hand price axis that show the current real-time depth levels (DOM) overlapping the historical heatmap.
-- [ ] Implement a "Large Order Tracker" that draws a persistent horizontal line or rectangle on the heatmap when an order above a certain threshold is detected and stays at a level.
+- [x] Create `dependencies/BTQRenderEngine/src/data/orderbookhistory.cpp` to maintain a circular buffer of L2 snapshots (top 100 levels) for historical heatmap playback.
+- [x] Implement `dependencies/BTQRenderEngine/src/components/domsurfacepanel.cpp` using a Vulkan-accelerated texture to render the time-price liquidity heatmap.
+- [x] Implement a "Heatmap Intensity" slider in the panel header to adjust the color-mapping sensitivity for resting limit orders.
+- [x] Add vertical "Liquidity Bars" on the right-hand price axis that show the current real-time depth levels (DOM) overlapping the historical heatmap.
+- [x] Implement a "Large Order Tracker" that draws a persistent horizontal line or rectangle on the heatmap when an order above a certain threshold is detected and stays at a level.
 - [ ] Add "Trade Bubbles" overlay: render circles on top of the heatmap representing executed trades, where radius = volume and color = side.
 
 ### TASK 21: OPTIONS ANALYTICS & RISK MANAGER

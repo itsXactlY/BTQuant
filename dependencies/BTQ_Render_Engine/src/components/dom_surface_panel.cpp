@@ -665,40 +665,59 @@ void DomSurfacePanel::renderPersistentLevels() {
     uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::steady_clock::now().time_since_epoch())
                                 .count();
-    
+
     if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
       ImU32 color = getPersistentLevelColor(level);
-      
+
       // Draw horizontal line across the entire time axis
       ImPlot::PushStyleColor(ImPlotCol_Line, color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 2.0f);
-      
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 3.0f); // Thicker line for better visibility
+
       // Draw horizontal line at the price level from left to right of the plot
       double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double ys[2] = {level.price, level.price};
       ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
-      
+
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
-      
-      // Optionally draw a faint rectangle to highlight the level more prominently
-      // This creates a thin horizontal band at the price level
-      // Extract the RGB components and set alpha to 10% transparency
+
+      // Draw a more prominent rectangle to highlight the level
+      // Extract the RGB components and set alpha to 15% transparency for better visibility
       ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      color_vec.w = 0.1f; // Set alpha to 10% transparency
+      color_vec.w = 0.15f; // Set alpha to 15% transparency
       ImU32 transparent_color = ImGui::ColorConvertFloat4ToU32(color_vec);
       ImPlot::PushStyleColor(ImPlotCol_Fill, transparent_color);
+
+      // Calculate a vertical range around the price level for the rectangle
+      // Make it proportional to the zoom level for better visibility
+      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+      double price_range = visible_price_range * 0.005; // 0.5% of the visible price range (adjustable)
+      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
       
-      // Calculate a small vertical range around the price level for the rectangle
-      double price_range = (bounds_max_[1] - bounds_min_[1]) * 0.001; // 0.1% of the visible price range
       double y_min = level.price - price_range/2.0;
       double y_max = level.price + price_range/2.0;
-      
+
       // Draw a horizontal rectangle spanning the full time axis
-      ImPlot::PlotRect("##PersistentLevelRect", 
-                      plot_rect.X.Min, y_min, 
+      ImPlot::PlotRect("##PersistentLevelRect",
+                      plot_rect.X.Min, y_min,
                       plot_rect.X.Max, y_max);
+
+      ImPlot::PopStyleColor();
       
+      // Add a subtle highlight effect above the main line
+      ImVec4 highlight_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      highlight_color_vec.w = 0.08f; // Even more transparent for highlight
+      ImU32 highlight_color = ImGui::ColorConvertFloat4ToU32(highlight_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, highlight_color);
+      
+      // Draw highlight slightly above the main line
+      double highlight_y_min = level.price + price_range/2.0;
+      double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
+      
+      ImPlot::PlotRect("##PersistentLevelHighlight",
+                      plot_rect.X.Min, highlight_y_min,
+                      plot_rect.X.Max, highlight_y_max);
+
       ImPlot::PopStyleColor();
     }
   }
@@ -708,9 +727,9 @@ ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) con
   // Color: Bright Green for Bids, Bright Red for Asks
   // Use brighter colors than the markers to distinguish persistent levels
   if (level.is_bid) {
-    return IM_COL32(0, 255, 100, 200);  // Bright green with transparency
+    return IM_COL32(0, 255, 150, 220);  // Brighter green with higher transparency
   } else {
-    return IM_COL32(255, 100, 100, 200);  // Bright red with transparency
+    return IM_COL32(255, 100, 150, 220);  // Brighter red with higher transparency
   }
 }
 
@@ -729,6 +748,32 @@ void DomSurfacePanel::render_panel_header() {
   if (ImGui::Button("Reset##HeatmapIntensity")) {
     heatmap_intensity_ = 1.0f;
   }
+  ImGui::Separator();
+  
+  // Add Large Order Tracker controls
+  ImGui::Text("Large Order Tracker:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderFloat("##Threshold", &large_order_threshold_, 1.0f, 50.0f, "Threshold: %.1fx", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Max Markers", &max_large_order_markers_, 10, 500);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::Checkbox("Fade Out", &enable_fade_out_);
+  ImGui::Separator();
+  
+  // Add Persistent Level controls
+  ImGui::Text("Persistent Levels:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 1000, 30000, "%d ms");
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 10000, 120000, "%d ms");
+  ImGui::PopItemWidth();
   ImGui::Separator();
 }
 

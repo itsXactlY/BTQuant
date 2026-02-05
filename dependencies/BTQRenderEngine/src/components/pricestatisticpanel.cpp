@@ -47,7 +47,8 @@ void PriceStatisticPanel::initializeUI()
 
 void PriceStatisticPanel::setupHeaders()
 {
-    m_headers << "Symbol" << "Last Price" << "Change" << "Change %" << "Volume" << "High" << "Low" << "Open" << "Close";
+    m_headers << "Symbol" << "Last Price" << "Change" << "Change %" << "Volume" << "High" << "Low" << "Open" << "Close" 
+              << "% Vol at POC" << "Total Trades" << "Buy/Sell Ratio" << "Rel. Volume";
     m_columnCount = m_headers.size();
 
     // Define column types for specialized formatting
@@ -61,6 +62,10 @@ void PriceStatisticPanel::setupHeaders()
     m_columnTypes[6] = NumericColumn;    // Low
     m_columnTypes[7] = NumericColumn;    // Open
     m_columnTypes[8] = NumericColumn;    // Close
+    m_columnTypes[9] = PercentageColumn; // % Vol at POC
+    m_columnTypes[10] = NumericColumn;   // Total Trades
+    m_columnTypes[11] = NumericColumn;   // Buy/Sell Ratio
+    m_columnTypes[12] = NumericColumn;   // Rel. Volume
 
     // Calculate column widths based on widget width
     updateColumnWidths();
@@ -73,14 +78,14 @@ void PriceStatisticPanel::updateColumnWidths()
     int availableWidth = totalWidth - scrollbarWidth;
 
     m_columnWidths.clear();
-    
+
     // Define proportional widths for different columns
-    QVector<double> proportions = {0.12, 0.12, 0.10, 0.10, 0.12, 0.10, 0.10, 0.12, 0.12};
-    
+    QVector<double> proportions = {0.10, 0.09, 0.08, 0.08, 0.09, 0.08, 0.08, 0.08, 0.08, 0.09, 0.09, 0.08, 0.08};
+
     for (int i = 0; i < m_columnCount; ++i) {
         m_columnWidths.append(static_cast<int>(availableWidth * proportions[i]));
     }
-    
+
     // Adjust for rounding errors by adding remainder to the last column
     int totalAllocated = 0;
     for (int width : m_columnWidths) {
@@ -323,6 +328,30 @@ void PriceStatisticPanel::paintCell(QPainter &painter, const PriceStatData &stat
     closeRect.adjust(5, 0, -5, 0); // Add padding
     painter.setPen(QPen(Qt::black, 1));
     painter.drawText(closeRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(stat.close, 'f', 2));
+
+    // Column 9: % of Volume at POC
+    QRect pocVolumePercentRect = getColumnRect(9, row + 1);
+    pocVolumePercentRect.adjust(5, 0, -5, 0); // Add padding
+    painter.setPen(QPen(Qt::black, 1));
+    painter.drawText(pocVolumePercentRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(stat.pocVolumePercent, 'f', 2) + "%");
+
+    // Column 10: Total Trades
+    QRect totalTradesRect = getColumnRect(10, row + 1);
+    totalTradesRect.adjust(5, 0, -5, 0); // Add padding
+    painter.setPen(QPen(Qt::black, 1));
+    painter.drawText(totalTradesRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(stat.totalTrades));
+
+    // Column 11: Buy/Sell Ratio
+    QRect buySellRatioRect = getColumnRect(11, row + 1);
+    buySellRatioRect.adjust(5, 0, -5, 0); // Add padding
+    painter.setPen(QPen(Qt::black, 1));
+    painter.drawText(buySellRatioRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(stat.buySellRatio, 'f', 2));
+
+    // Column 12: Relative Volume
+    QRect relativeVolumeRect = getColumnRect(12, row + 1);
+    relativeVolumeRect.adjust(5, 0, -5, 0); // Add padding
+    painter.setPen(QPen(Qt::black, 1));
+    painter.drawText(relativeVolumeRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(stat.relativeVolume, 'f', 2));
 }
 
 void PriceStatisticPanel::paintSelectionHighlight(QPainter &painter, int visualRow)
@@ -444,11 +473,19 @@ void PriceStatisticPanel::sortData()
                 return ascending ? (a.open < b.open) : (a.open > b.open);
             case 8: // Close
                 return ascending ? (a.close < b.close) : (a.close > b.close);
+            case 9: // % of Volume at POC
+                return ascending ? (a.pocVolumePercent < b.pocVolumePercent) : (a.pocVolumePercent > b.pocVolumePercent);
+            case 10: // Total Trades
+                return ascending ? (a.totalTrades < b.totalTrades) : (a.totalTrades > b.totalTrades);
+            case 11: // Buy/Sell Ratio
+                return ascending ? (a.buySellRatio < b.buySellRatio) : (a.buySellRatio > b.buySellRatio);
+            case 12: // Relative Volume
+                return ascending ? (a.relativeVolume < b.relativeVolume) : (a.relativeVolume > b.relativeVolume);
             default:
                 return false;
         }
     });
-    
+
     update();
 }
 

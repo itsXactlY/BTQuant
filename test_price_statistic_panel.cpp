@@ -39,6 +39,12 @@ int main(int argc, char *argv[])
         data.open = data.lastPrice + (QRandomGenerator::global()->bounded(100) - 50) / 100.0;
         data.close = data.lastPrice;
         
+        // Add sample data for new columns
+        data.pocVolumePercent = QRandomGenerator::global()->bounded(10000) / 100.0; // 0.00% to 99.99%
+        data.totalTrades = QRandomGenerator::global()->bounded(10000) + 100; // 100 to 10,099 trades
+        data.buySellRatio = (QRandomGenerator::global()->bounded(200) + 50) / 100.0; // 0.50 to 2.49 ratio
+        data.relativeVolume = (QRandomGenerator::global()->bounded(200) + 50) / 100.0; // 0.50 to 2.49 relative volume
+
         sampleData.append(data);
     }
     
@@ -61,6 +67,12 @@ int main(int argc, char *argv[])
         newData.open = newData.lastPrice + (QRandomGenerator::global()->bounded(100) - 50) / 100.0;
         newData.close = newData.lastPrice;
         
+        // Add sample data for new columns
+        newData.pocVolumePercent = QRandomGenerator::global()->bounded(10000) / 100.0; // 0.00% to 99.99%
+        newData.totalTrades = QRandomGenerator::global()->bounded(10000) + 100; // 100 to 10,099 trades
+        newData.buySellRatio = (QRandomGenerator::global()->bounded(200) + 50) / 100.0; // 0.50 to 2.49 ratio
+        newData.relativeVolume = (QRandomGenerator::global()->bounded(200) + 50) / 100.0; // 0.50 to 2.49 relative volume
+
         panel->addData(newData);
         
         // Calculate and print statistics

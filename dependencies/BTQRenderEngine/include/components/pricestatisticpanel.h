@@ -22,6 +22,12 @@ struct PriceStatData {
     double low;
     double open;
     double close;
+    
+    // Additional fields for requested columns
+    double pocVolumePercent;  // % of Volume at POC
+    qint64 totalTrades;       // Total Trades
+    double buySellRatio;      // Buy/Sell Ratio
+    double relativeVolume;    // Volume / Avg Volume
 
     // Constructor
     PriceStatData(const QString &sym = "",
@@ -32,9 +38,15 @@ struct PriceStatData {
                   double h = 0.0,
                   double l = 0.0,
                   double o = 0.0,
-                  double c = 0.0)
+                  double c = 0.0,
+                  double pocVolPct = 0.0,
+                  qint64 totTrades = 0,
+                  double buySellRat = 1.0,
+                  double relVol = 1.0)
         : symbol(sym), lastPrice(last), change(chg), changePercent(chgPct),
-          volume(vol), high(h), low(l), open(o), close(c) {}
+          volume(vol), high(h), low(l), open(o), close(c),
+          pocVolumePercent(pocVolPct), totalTrades(totTrades),
+          buySellRatio(buySellRat), relativeVolume(relVol) {}
 };
 
 // Enum for column types to enable specialized formatting

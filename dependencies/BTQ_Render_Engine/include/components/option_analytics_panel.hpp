@@ -39,10 +39,12 @@ public:
     OptionAnalyticsPanel(StrategyBuilder* strategy_builder);
 
     void render() override;
-    void update(float dt) override {}
+    void update(float dt) override;
 
     void switchTab(int tabIndex);
     std::string getActiveTabName() const;
+    int get_active_tab() const;
+    void set_active_tab(int tab_index);
 
 private:
     void initializeSampleData();

@@ -35,7 +35,7 @@
 #include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/components/risk_analyzer_panel.hpp"
 #include "../../include/components/strategy_builder.hpp"
-#include "../../include/components/optionanalyticspanel.hpp"
+#include "../../include/components/option_analytics_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
 
@@ -289,7 +289,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<OptionAnalyticsPanel>(strategy_builder_.get());
+      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -450,7 +450,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<TpoPanel>(config, micro_renderer_);
       break;
     case PanelType::OPTION_ANALYTICS:
-      panel = std::make_unique<OptionAnalyticsPanel>(strategy_builder_.get());
+      panel = std::make_unique<BTQuant::RenderEngine::OptionAnalyticsPanel>(strategy_builder_.get());
       break;
     case PanelType::ALERTS:
       panel = std::make_unique<AlertsPanel>(config);
@@ -1057,7 +1057,7 @@ std::string PanelManager::serialize_layout() const {
         settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
     }
     // Option Analytics Panel specific settings
-    else if (auto* option_panel = dynamic_cast<OptionAnalyticsPanel*>(panel.get())) {
+    else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
         settings_json["active_tab"] = option_panel->get_active_tab();
     }
     
@@ -1159,7 +1159,7 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                     }
                 }
                 // Option Analytics Panel specific settings
-                else if (auto* option_panel = dynamic_cast<OptionAnalyticsPanel*>(panel)) {
+                else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel)) {
                     if (settings.contains("active_tab")) {
                         option_panel->set_active_tab(settings["active_tab"].get<int>());
                     }

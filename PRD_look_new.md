@@ -421,7 +421,7 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Create a "Strategy Builder" footer: when a user clicks a strike, add it to a "Current Strategy" list for multi-leg analysis.
 - [x] Implement the "Risk Analyzer" chart: a 2D coordinate system plotting P/L (Y-axis) vs Underlying Price (X-axis).
 - [x] Add "What-if" simulation sliders to the UI for adjusting "Days to Expiration" and "Volatility (%)" to see the P/L curve shift in real-time.
-- [ ] Implement "Volatility Smile" rendering: plot Implied Volatility (IV) per strike for all expirations in a single overlaid line chart.
+- [x] Implement "Volatility Smile" rendering: plot Implied Volatility (IV) per strike for all expirations in a single overlaid line chart.
 
 ### TASK 22: PRICE STATISTICS & PANEL INTEGRATION
 - [ ] Create `dependencies/BTQRenderEngine/src/components/pricestatisticpanel.cpp` as a specialized analytical table with virtualized scrolling.
@@ -429,4 +429,4 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [ ] Add columns for: % of Volume at POC, Total Trades, Buy/Sell Ratio, and "Relative Volume" (Volume / Avg Volume).
 - [ ] Implement a "Global Alert Manager" inside `dependencies/BTQRenderEngine/src/components/dashboardcontrols.cpp` to centralize all price and volume alerts.
 - [ ] Add the "Quantower Context Menu" to all new panels: right-click should offer "Duplicate Panel", "Apply Symbol to All", and "Screenshot".
-- [ ] Finalize "Layout Persistence": ensure the position and settings of TPO, DOM Surface, and Options panels are saved/loaded correctly from the JSON workspace config.
+- [x] Finalize "Layout Persistence": ensure the position and settings of TPO, DOM Surface, and Options panels are saved/loaded correctly from the JSON workspace config.

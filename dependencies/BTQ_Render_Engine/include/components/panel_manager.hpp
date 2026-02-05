@@ -15,6 +15,7 @@
 #include "MarketMicrostructureRenderer.h"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
+#include "strategy_builder.hpp"
 #include "../ui/context_menus.hpp"
 
 // Forward declaration for AlertsPanel

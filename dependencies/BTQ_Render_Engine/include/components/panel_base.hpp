@@ -96,6 +96,7 @@ class PanelBase {
 
   // Context menu functionality
   virtual void render_context_menu() {}  // Virtual method for context menu
+  virtual void handle_context_menu(class ContextMenuManager& manager) {}  // Virtual method for context menu handling
 
  protected:
   PanelConfig config_;

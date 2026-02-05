@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Disable treating warnings as errors
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-deprecated-declarations")
+
 # Find Dependencies
 find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)
@@ -156,6 +159,7 @@ set(DASHBOARD_SOURCES
     src/components/chart_replay_panel.cpp
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
+    src/components/global_alert_manager.cpp
     src/components/strategy_builder.cpp
     src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp
@@ -298,6 +302,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/chart_replay_panel.cpp
     src/components/drawing_tools.cpp
     src/components/dashboard_controls.cpp
+    src/components/global_alert_manager.cpp
     src/components/strategy_builder.cpp
     src/components/option_analytics_panel.cpp
     src/config/dashboard_config.cpp

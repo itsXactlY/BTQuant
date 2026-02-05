@@ -120,7 +120,8 @@ struct CandlestickVertex {
 
 enum class AlertCondition { PRICE_ABOVE, PRICE_BELOW, VOLUME_ABOVE };
 
-struct AlertRule {
+// Different AlertRule structure for this specific context
+struct DashboardAlertRule {
   std::string symbol;
   AlertCondition condition;
   double target_value;
@@ -130,9 +131,9 @@ struct AlertRule {
 class AlertManager {
  public:
   void update(float dt);
-  void add_alert(const AlertRule& rule);
+  void add_alert(const DashboardAlertRule& rule);
   void check_alerts(const std::string& symbol, double price);
-  std::vector<AlertRule> get_alerts();
+  std::vector<DashboardAlertRule> get_alerts();
   void remove_alert(size_t index);
 };
 

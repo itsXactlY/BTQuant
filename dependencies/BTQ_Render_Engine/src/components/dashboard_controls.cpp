@@ -16,6 +16,7 @@
 #include "../../include/symbol_registry.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/ui/tooltips.hpp"
+#include "../../include/components/alerts_panel.hpp"
 
 namespace BTQuant {
 
@@ -51,6 +52,42 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
     : UIComponent({0, 0}, {0, 0}), panel_manager_(panel_manager) {
   if (!panel_manager_) {
     std::cerr << "[DashboardControls] Error: PanelManager is null" << std::endl;
+  }
+  
+  // Initialize the Global Alert Manager
+  if (panel_manager_) {
+    auto chart_manager = panel_manager_->get_chart_manager();
+    if (chart_manager) {
+      auto bridge = chart_manager->get_bridge();
+      if (bridge) {
+        // Find the alerts panel to connect to it
+        auto panel_ids = panel_manager_->get_all_panel_ids();
+        std::shared_ptr<AlertsPanel> alerts_panel = nullptr;
+        
+        for (uint32_t panel_id : panel_ids) {
+          auto panel = panel_manager_->get_panel_by_id(panel_id);
+          if (panel && panel->get_config().type == PanelType::ALERTS) {
+            alerts_panel = std::dynamic_pointer_cast<AlertsPanel>(panel);
+            break;
+          }
+        }
+        
+        // Create the Global Alert Manager
+        global_alert_manager_ = std::make_shared<GlobalAlertManager>(
+            bridge, 
+            chart_manager->get_market_data_processor(), 
+            alerts_panel
+        );
+        
+        std::cout << "[DashboardControls] Initialized Global Alert Manager" << std::endl;
+      } else {
+        std::cerr << "[DashboardControls] Warning: Could not get bridge for Global Alert Manager" << std::endl;
+      }
+    } else {
+      std::cerr << "[DashboardControls] Warning: Could not get chart manager for Global Alert Manager" << std::endl;
+    }
+  } else {
+    std::cerr << "[DashboardControls] Warning: PanelManager is null, cannot initialize Global Alert Manager" << std::endl;
   }
 }
 
@@ -584,6 +621,19 @@ void DashboardControls::render_dashboard_controls() {
       BTQuant::UI::show_control_tooltip("add_news_panel");
       ImGui::NextColumn();
 
+      if (ImGui::Button("Add Risk Analyzer", ImVec2(-1, 30))) {
+        if (panel_manager_) {
+          panel_manager_->add_panel(PanelType::RISK_ANALYZER);
+        }
+      }
+      // Add tooltip for Risk Analyzer
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text("Add a Risk Analyzer panel to visualize P/L vs Underlying Price");
+        ImGui::EndTooltip();
+      }
+      ImGui::NextColumn();
+
       ImGui::Columns(1); // Reset to single column
 
       ImGui::Spacing();
@@ -680,6 +730,9 @@ void DashboardControls::render_dashboard_controls() {
       }
     }
 
+    // Global Alerts Section
+    render_global_alerts_section();
+    
     // Status information
     ImGui::Separator();
     if (panel_manager_) {
@@ -688,11 +741,18 @@ void DashboardControls::render_dashboard_controls() {
     }
     ImGui::Text("Ready to add panels");
   }
+  
+  // Render the create alert modal if needed
+  render_create_alert_modal();
+  
   ImGui::End();
 }
 
 void DashboardControls::update(float dt) {
-  // No update logic needed for controls panel
+  // Update the global alert manager to check for triggered alerts
+  if (global_alert_manager_) {
+    global_alert_manager_->update_alerts();
+  }
   (void)dt;
 }
 
@@ -1008,6 +1068,237 @@ void DashboardControls::sync_symbol_to_all_panels(uint32_t symbol_id, const std:
 
   std::cout << "[DashboardControls] Successfully synced symbol " << symbol
             << " (ID: " << symbol_id << ") to all " << panel_ids.size() << " panels" << std::endl;
+}
+
+void DashboardControls::render_global_alerts_section() {
+  if (ImGui::CollapsingHeader("Global Alerts", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (global_alert_manager_) {
+      // Show alert statistics
+      ImGui::Text("Alert Statistics:");
+      ImGui::Indent();
+      ImGui::Text("- Total Alerts: %zu", global_alert_manager_->get_total_alerts_count());
+      ImGui::Text("- Active Alerts: %zu", global_alert_manager_->get_active_alerts_count());
+      ImGui::Text("- Triggered Alerts: %zu", global_alert_manager_->get_triggered_alerts_count());
+      ImGui::Unindent();
+      
+      ImGui::Spacing();
+      
+      // Buttons for managing alerts
+      if (ImGui::Button("Create New Alert")) {
+        show_create_alert_modal_ = true;
+      }
+      
+      ImGui::SameLine();
+      if (ImGui::Button("View All Alerts")) {
+        // This could open a detailed view of all alerts
+        // For now, we'll just show a simple list in the same window
+      }
+      
+      ImGui::Spacing();
+      
+      // Show active alerts table
+      auto all_alerts = global_alert_manager_->get_all_alerts();
+      if (!all_alerts.empty()) {
+        ImGui::Text("Active Alerts:");
+        ImGui::BeginTable("AlertsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg);
+        ImGui::TableSetupColumn("Name");
+        ImGui::TableSetupColumn("Symbol");
+        ImGui::TableSetupColumn("Type");
+        ImGui::TableSetupColumn("Threshold");
+        ImGui::TableSetupColumn("Status");
+        ImGui::TableHeadersRow();
+        
+        for (const auto& [id, alert] : all_alerts) {
+          ImGui::TableNextRow();
+          
+          ImGui::TableSetColumnIndex(0);
+          ImGui::Text("%s", alert.name.c_str());
+          
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("%s", alert.symbol_name.c_str());
+          
+          ImGui::TableSetColumnIndex(2);
+          switch (alert.type) {
+            case GlobalAlertType::PRICE_ABOVE:
+              ImGui::Text("Price >");
+              break;
+            case GlobalAlertType::PRICE_BELOW:
+              ImGui::Text("Price <");
+              break;
+            case GlobalAlertType::VOLUME_ABOVE:
+              ImGui::Text("Volume >");
+              break;
+            case GlobalAlertType::VOLUME_BELOW:
+              ImGui::Text("Volume <");
+              break;
+            default:
+              ImGui::Text("Custom");
+              break;
+          }
+          
+          ImGui::TableSetColumnIndex(3);
+          ImGui::Text("%.2f", alert.threshold_value);
+          
+          ImGui::TableSetColumnIndex(4);
+          switch (alert.status) {
+            case AlertStatus::ACTIVE:
+              ImGui::Text("Active");
+              break;
+            case AlertStatus::TRIGGERED:
+              ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Triggered");
+              break;
+            case AlertStatus::DISABLED:
+              ImGui::Text("Disabled");
+              break;
+            case AlertStatus::COOLDOWN:
+              ImGui::Text("Cooldown");
+              break;
+            default:
+              ImGui::Text("Unknown");
+              break;
+          }
+        }
+        ImGui::EndTable();
+      } else {
+        ImGui::Text("No alerts configured. Click 'Create New Alert' to add one.");
+      }
+    } else {
+      ImGui::Text("Global Alert Manager not initialized.");
+    }
+  }
+}
+
+void DashboardControls::render_create_alert_modal() {
+  if (show_create_alert_modal_) {
+    ImGui::OpenPopup("Create New Alert");
+  }
+  
+  if (ImGui::BeginPopupModal("Create New Alert", &show_create_alert_modal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Create a new price or volume alert");
+    ImGui::Separator();
+    
+    // Alert name
+    ImGui::InputTextWithHint("Alert Name", "Enter alert name...", new_alert_name_, sizeof(new_alert_name_));
+    
+    // Symbol selection
+    if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+      strncpy(new_alert_symbol_, all_symbols_[selected_symbol_idx_].c_str(), sizeof(new_alert_symbol_) - 1);
+      new_alert_symbol_[sizeof(new_alert_symbol_) - 1] = '\0';
+    }
+    ImGui::InputTextWithHint("Symbol", "Enter symbol...", new_alert_symbol_, sizeof(new_alert_symbol_));
+    
+    // Alert type selection
+    const char* alert_types[] = { "Price Above", "Price Below", "Volume Above", "Volume Below" };
+    ImGui::Combo("Alert Type", &new_alert_type_, alert_types, IM_ARRAYSIZE(alert_types));
+    
+    // Threshold value
+    ImGui::InputTextWithHint("Threshold Value", "Enter threshold...", new_alert_threshold_, sizeof(new_alert_threshold_));
+    
+    ImGui::Spacing();
+    
+    // Buttons
+    if (ImGui::Button("Create Alert", ImVec2(120, 0))) {
+      create_alert_from_modal();
+      show_create_alert_modal_ = false;
+      // Clear the input fields
+      memset(new_alert_name_, 0, sizeof(new_alert_name_));
+      memset(new_alert_symbol_, 0, sizeof(new_alert_symbol_));
+      memset(new_alert_threshold_, 0, sizeof(new_alert_threshold_));
+      new_alert_type_ = 0;
+    }
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+      show_create_alert_modal_ = false;
+      // Clear the input fields
+      memset(new_alert_name_, 0, sizeof(new_alert_name_));
+      memset(new_alert_symbol_, 0, sizeof(new_alert_symbol_));
+      memset(new_alert_threshold_, 0, sizeof(new_alert_threshold_));
+      new_alert_type_ = 0;
+    }
+    
+    ImGui::EndPopup();
+  }
+}
+
+void DashboardControls::create_alert_from_modal() {
+  if (!global_alert_manager_) {
+    std::cerr << "[DashboardControls] Error: Global Alert Manager not initialized" << std::endl;
+    return;
+  }
+  
+  // Validate inputs
+  if (strlen(new_alert_symbol_) == 0) {
+    std::cerr << "[DashboardControls] Error: Symbol is required" << std::endl;
+    return;
+  }
+  
+  if (strlen(new_alert_threshold_) == 0) {
+    std::cerr << "[DashboardControls] Error: Threshold is required" << std::endl;
+    return;
+  }
+  
+  // Convert threshold to double
+  double threshold_value = 0.0;
+  try {
+    threshold_value = std::stod(new_alert_threshold_);
+  } catch (const std::exception& e) {
+    std::cerr << "[DashboardControls] Error parsing threshold value: " << e.what() << std::endl;
+    return;
+  }
+  
+  // Get symbol ID from registry
+  uint32_t symbol_id = 0;
+  auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(std::string(new_alert_symbol_));
+  if (symbol_info_opt) {
+    symbol_id = symbol_info_opt->id;
+  } else {
+    // If not found, try to register it
+    symbol_id = SymbolRegistry::instance().register_symbol("Default", std::string(new_alert_symbol_));
+  }
+  
+  if (symbol_id == 0) {
+    std::cerr << "[DashboardControls] Error: Could not get or register symbol ID" << std::endl;
+    return;
+  }
+  
+  // Determine alert type and create the alert
+  std::string alert_name = strlen(new_alert_name_) > 0 ? std::string(new_alert_name_) : 
+                          std::string("Alert: ") + std::string(new_alert_symbol_);
+  
+  GlobalAlertType alert_type;
+  switch (new_alert_type_) {
+    case 0: // Price Above
+      alert_type = GlobalAlertType::PRICE_ABOVE;
+      break;
+    case 1: // Price Below
+      alert_type = GlobalAlertType::PRICE_BELOW;
+      break;
+    case 2: // Volume Above
+      alert_type = GlobalAlertType::VOLUME_ABOVE;
+      break;
+    case 3: // Volume Below
+      alert_type = GlobalAlertType::VOLUME_BELOW;
+      break;
+    default:
+      alert_type = GlobalAlertType::PRICE_ABOVE;
+      break;
+  }
+  
+  std::string alert_id;
+  if (alert_type == GlobalAlertType::PRICE_ABOVE || alert_type == GlobalAlertType::PRICE_BELOW) {
+    alert_id = global_alert_manager_->add_price_alert(symbol_id, std::string(new_alert_symbol_), 
+                                                     threshold_value, alert_type, alert_name);
+  } else {
+    alert_id = global_alert_manager_->add_volume_alert(symbol_id, std::string(new_alert_symbol_), 
+                                                      threshold_value, alert_type, alert_name);
+  }
+  
+  if (!alert_id.empty()) {
+    std::cout << "[DashboardControls] Created new alert: " << alert_id << " - " << alert_name << std::endl;
+  } else {
+    std::cerr << "[DashboardControls] Failed to create alert" << std::endl;
+  }
 }
 
 }  // namespace BTQuant

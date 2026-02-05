@@ -5,10 +5,9 @@
 #include <vector>
 
 #include "panel_base.hpp"
+#include "alert_common.hpp"
 
 namespace BTQuant {
-
-enum class AlertStatus { ACTIVE, TRIGGERED, DISABLED, COOLDOWN };
 
 struct AlertRule {
   std::string id;
@@ -21,14 +20,6 @@ struct AlertRule {
   // Runtime state
   std::chrono::system_clock::time_point last_triggered;
   double last_value = 0.0;
-};
-
-struct AlertLog {
-  std::chrono::system_clock::time_point time;
-  std::string rule_name;
-  std::string symbol;
-  double price;
-  std::string message;
 };
 
 class AlertsPanel : public PanelBase {

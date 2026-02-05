@@ -3,6 +3,7 @@
 #include "../ui/ui_base.hpp"
 #include "../vulkan_base_types.hpp"
 #include "../market_data_processor.hpp"  // For TimeFrame enum
+#include "global_alert_manager.hpp"      // For GlobalAlertManager
 
 #include <array>
 #include <memory>
@@ -27,8 +28,14 @@ class DashboardControls : public UIComponent {
   // Specific method to render dashboard controls
   void render_dashboard_controls();
 
+  // Access to global alert manager
+  std::shared_ptr<GlobalAlertManager> get_global_alert_manager() { return global_alert_manager_; }
+
  private:
   PanelManager* panel_manager_;
+  
+  // Global Alert Manager
+  std::shared_ptr<GlobalAlertManager> global_alert_manager_;
 
   // Exchange selection state
   std::vector<std::string> all_exchanges_;         // All available exchanges
@@ -61,6 +68,18 @@ class DashboardControls : public UIComponent {
 
   // Method to sync symbol to all panels
   void sync_symbol_to_all_panels(uint32_t symbol_id, const std::string& symbol);
+  
+  // Methods for managing global alerts
+  void render_global_alerts_section();
+  void render_create_alert_modal();
+  void create_alert_from_modal();
+  
+  // UI state for alert creation modal
+  bool show_create_alert_modal_ = false;
+  char new_alert_name_[64] = "";
+  char new_alert_symbol_[32] = "";
+  char new_alert_threshold_[32] = "";
+  int new_alert_type_ = 0;  // 0: Price Above, 1: Price Below, 2: Volume Above, 3: Volume Below
 };
 
 }  // namespace BTQuant

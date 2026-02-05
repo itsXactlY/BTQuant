@@ -7,6 +7,10 @@
 #include <QStringList>
 #include <QColor>
 #include <QVariant>
+#include <QMouseEvent>
+#include <QContextMenuEvent>
+#include <QMenu>
+#include <QAction>
 
 // Include TPO engine for Value Area and POC calculations
 #include "analytics/tpoengine.h"
@@ -35,9 +39,12 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private slots:
     void updateDisplay();
+    void splitProfileAction();
 
 private:
     void drawPriceScale(QPainter &painter);
@@ -66,6 +73,15 @@ private:
     
     // Display properties
     bool m_needsUpdate;
+
+    // Selected TPO bar information for context menu
+    int m_selectedPriceIndex;
+    int m_selectedTimeIndex;
+    bool m_hasSelection;
+    
+    // Context menu
+    QMenu* m_contextMenu;
+    QAction* m_splitProfileAction;
 };
 
 // Factory function to create the TPO profile panel

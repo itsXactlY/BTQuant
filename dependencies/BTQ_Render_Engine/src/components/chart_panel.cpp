@@ -300,6 +300,11 @@ void ChartPanel::update(float dt) {
   // Update multi-timeframe indicators when new data arrives
   // This ensures that multi-timeframe indicators remain synchronized with the chart data
   update_multi_timeframe_indicators(chart);
+
+  // Update liquidity data periodically (every frame for real-time updates)
+  if (show_liquidity_bars_) {
+    update_liquidity_data();
+  }
 }
 
 void ChartPanel::render() {
@@ -325,6 +330,11 @@ void ChartPanel::render() {
   // Render chart controls in a collapsible header
   if (ImGui::CollapsingHeader("Chart Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
     render_chart_controls();
+  }
+
+  // Render liquidity bars controls in a collapsible header
+  if (ImGui::CollapsingHeader("Liquidity Bars", ImGuiTreeNodeFlags_DefaultOpen)) {
+    render_liquidity_bars_controls();
   }
 
   // Render indicator selector
@@ -527,6 +537,27 @@ void ChartPanel::render_chart_controls() {
   ImGui::SameLine();
   ImGui::Checkbox("Auto-follow", &follow_latest_);
 
+
+  ImGui::PopStyleVar();
+}
+
+void ChartPanel::render_liquidity_bars_controls() {
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
+
+  // Toggle for showing liquidity bars
+  ImGui::Checkbox("Show Liquidity Bars", &show_liquidity_bars_);
+
+  // Slider for adjusting bar width
+  ImGui::SliderFloat("Bar Width", &liquidity_bar_width_, 5.0f, 30.0f, "%.1f px");
+
+  // Slider for adjusting opacity
+  ImGui::SliderFloat("Opacity", &liquidity_bar_opacity_, 0.1f, 1.0f, "%.2f");
+
+  // Color pickers for bid and ask colors
+  ImGui::Text("Bid Color (Green):");
+  ImGui::ColorEdit4("##BidColor", &liquidity_bids_color_.x, ImGuiColorEditFlags_NoInputs);
+  ImGui::Text("Ask Color (Red):");
+  ImGui::ColorEdit4("##AskColor", &liquidity_asks_color_.x, ImGuiColorEditFlags_NoInputs);
 
   ImGui::PopStyleVar();
 }
@@ -2821,6 +2852,11 @@ void ChartPanel::render_instrument_chart(const ChartInstance& chart) {
     // Render session VWAP overlays
     render_session_vwap_overlay(chart);
 
+    // Render liquidity bars on the right-hand price axis
+    if (show_liquidity_bars_) {
+      render_liquidity_bars(chart);
+    }
+
     ImPlot::EndPlot();
   }
 
@@ -3682,5 +3718,91 @@ void ChartPanel::set_show_historical_trades_callback(std::function<void(uint64_t
       ImGui::EndPopup();
     }
   }
+
+// Method to update liquidity data from the market data processor
+void ChartPanel::update_liquidity_data() {
+  if (!processor_ || symbol_.empty()) return;
+
+  // Get the current symbol ID from the chart manager
+  auto symbol_id_opt = chart_manager_->getSymbolId(symbol_);
+  if (!symbol_id_opt) return;
+
+  uint32_t current_symbol_id = *symbol_id_opt;
+
+  // Get the current orderbook data for the symbol
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id);
+  if (!orderbook_opt) return;
+
+  const auto& orderbook = *orderbook_opt;
+
+  // Clear existing liquidity levels
+  liquidity_levels_.clear();
+
+  // Add bid levels (green bars)
+  for (const auto& bid : orderbook.bids) {
+    liquidity_levels_.emplace_back(bid.price, bid.size, true);
+  }
+
+  // Add ask levels (red bars)
+  for (const auto& ask : orderbook.asks) {
+    liquidity_levels_.emplace_back(ask.price, ask.size, false);
+  }
+
+  // Find max volume for scaling
+  max_liquidity_volume_ = 1.0;
+  for (const auto& level : liquidity_levels_) {
+    if (level.volume > max_liquidity_volume_) {
+      max_liquidity_volume_ = level.volume;
+    }
+  }
+}
+
+// Method to render liquidity bars on the right-hand price axis
+void ChartPanel::render_liquidity_bars(const ChartInstance& chart) {
+  if (liquidity_levels_.empty()) {
+    update_liquidity_data();
+    if (liquidity_levels_.empty()) return;
+  }
+
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  if (!draw_list) return;
+
+  // Get the plot limits to determine the coordinate system
+  ImPlotRect limits = ImPlot::GetPlotLimits();
+
+  // Get the plot position and size to calculate the right edge
+  ImVec2 plot_pos = ImPlot::GetPlotPos();
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+  ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+
+  // Calculate the right edge of the plot area in screen coordinates
+  float right_edge_x = canvas_pos.x + plot_pos.x + plot_size.x;
+
+  // Draw liquidity bars for each level
+  for (const auto& level : liquidity_levels_) {
+    // Convert the price to Y coordinate
+    ImVec2 level_pos = ImPlot::PlotToPixels(limits.X.Max, level.price); // Use rightmost X for liquidity bars
+    
+    // Calculate bar width based on volume (relative to max volume)
+    float bar_width = (static_cast<float>(level.volume) / static_cast<float>(max_liquidity_volume_)) * liquidity_bar_width_;
+    
+    // Determine color based on bid/ask
+    ImVec4 color = level.is_bid ? liquidity_bids_color_ : liquidity_asks_color_;
+    color.w *= liquidity_bar_opacity_; // Apply opacity
+    ImU32 im_color = ImGui::ColorConvertFloat4ToU32(color);
+    
+    // Calculate the top and bottom Y positions for the bar (small height to make it look like a line)
+    float bar_height = 2.0f; // Small height to make it appear as a horizontal line
+    
+    // Calculate the left edge of the bar (extending from the right axis inward)
+    float bar_left_x = right_edge_x - bar_width;
+    
+    // Draw the liquidity bar as a horizontal line extending from the right axis
+    ImVec2 bar_start = ImVec2(bar_left_x, level_pos.y - bar_height/2);
+    ImVec2 bar_end = ImVec2(right_edge_x, level_pos.y + bar_height/2);
+    
+    draw_list->AddRectFilled(bar_start, bar_end, im_color);
+  }
+}
 
 }  // namespace BTQuant

@@ -286,11 +286,24 @@ class ChartPanel : public PanelBase {
   int next_multitf_indicator_id_ =
       1000;  // Counter for multi-timeframe indicators (separate ID space)
 
+  // Liquidity bars data
+  struct LiquidityLevel {
+    double price;
+    double volume;
+    bool is_bid;  // true for bid, false for ask
+    
+    LiquidityLevel(double p, double v, bool bid) : price(p), volume(v), is_bid(bid) {}
+  };
+  
+  std::vector<LiquidityLevel> liquidity_levels_;
+  double max_liquidity_volume_ = 1.0;  // Track max volume for scaling
+
   // Accessors for view range (needed for synchronization)
   friend class PanelManager;  // Allow PanelManager to access private members for synchronization
   friend class ChartPanelSettings;  // Allow ChartPanelSettings to access indicator_config_
 
   void render_chart_controls();
+  void render_liquidity_bars_controls();
   void render_indicator_selector();
   void render_instrument_chart(const ChartInstance& chart);
   void render_candlestick(const ChartInstance& chart);
@@ -405,6 +418,17 @@ class ChartPanel : public PanelBase {
   void calculate_cached_macd(const std::vector<float>& prices, int fast, int slow, int signal);
   void calculate_cached_stochastic(const std::vector<float>& highs, const std::vector<float>& lows,
                                    const std::vector<float>& closes, int k_period, int d_period);
+
+  // Liquidity bars functionality
+  void render_liquidity_bars(const ChartInstance& chart);
+  void update_liquidity_data();
+  
+  // Configuration for liquidity bars
+  bool show_liquidity_bars_ = true;
+  float liquidity_bar_width_ = 10.0f;  // Width of liquidity bars in pixels
+  float liquidity_bar_opacity_ = 0.7f; // Opacity of liquidity bars
+  ImVec4 liquidity_bids_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.7f);  // Green for bids
+  ImVec4 liquidity_asks_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.7f);  // Red for asks
 };
 
 }  // namespace BTQuant

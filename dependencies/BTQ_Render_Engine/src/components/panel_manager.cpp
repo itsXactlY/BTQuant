@@ -53,9 +53,13 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
       risk_assessment_(risk_assessment),
       micro_renderer_(micro_renderer) {
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
+  context_menu_manager_ = std::make_unique<ContextMenuManager>();
 }
 
-PanelManager::~PanelManager() { panels_.clear(); }
+PanelManager::~PanelManager() {
+  context_menu_manager_.reset(); // Explicitly reset context menu manager before other members
+  panels_.clear();
+}
 
 void PanelManager::initialize() {
   // Set grid layout (3 columns, 5 rows to fit 2x2 chart properly)

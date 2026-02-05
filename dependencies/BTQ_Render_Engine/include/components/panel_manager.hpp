@@ -15,6 +15,7 @@
 #include "MarketMicrostructureRenderer.h"
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
+#include "../ui/context_menus.hpp"
 
 // Forward declaration for AlertsPanel
 namespace BTQuant {
@@ -113,6 +114,7 @@ class PanelManager {
   RenderEngine::MarketMicrostructureRenderer* micro_renderer_;
 
   std::unique_ptr<ChartManager> chart_manager_;
+  std::unique_ptr<ContextMenuManager> context_menu_manager_;
   GridLayout grid_layout_;
   std::unordered_map<uint32_t, std::unique_ptr<PanelBase>> panels_;
   uint32_t next_panel_id_ = 1;

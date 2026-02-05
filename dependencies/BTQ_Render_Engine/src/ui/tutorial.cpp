@@ -208,7 +208,7 @@ void TutorialManager::render_tutorial_window() {
             ImGui::Spacing();
 
             // Progress indicator
-            ImGui::Text("Step %d of %zu", current_step_ + 1, steps_.size());
+            ImGui::Text("Step %zu of %zu", current_step_ + 1, steps_.size());
             ImGui::ProgressBar(static_cast<float>(current_step_ + 1) / static_cast<float>(steps_.size()), 
                               ImVec2(-1.0f, 0.0f), "");
             
@@ -289,7 +289,7 @@ void TutorialManager::set_show_on_startup(bool show) {
     show_tutorial_on_startup_ = show;
 }
 
-void TutorialManager::update(float dt) {
+void TutorialManager::update(float /*dt*/) {
     // Handle any tutorial-specific updates
     // For now, this is mainly for animation effects if needed in the future
 }

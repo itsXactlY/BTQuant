@@ -3758,7 +3758,7 @@ void ChartPanel::update_liquidity_data() {
 }
 
 // Method to render liquidity bars on the right-hand price axis
-void ChartPanel::render_liquidity_bars(const ChartInstance& chart) {
+void ChartPanel::render_liquidity_bars(const ChartInstance& /*chart*/) {
   if (liquidity_levels_.empty()) {
     update_liquidity_data();
     if (liquidity_levels_.empty()) return;

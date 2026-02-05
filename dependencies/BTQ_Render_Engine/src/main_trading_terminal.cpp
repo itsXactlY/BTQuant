@@ -82,8 +82,8 @@ int main(int argc, char** argv) {
       panel_mgr->clear_panels();
 
       // Construct the PRO Trading Layout
-      // Grid: 6x9 (Wider Aspect Ratio, extra rows for all components)
-      panel_mgr->set_grid_layout(6, 9);
+      // Grid: 6x10 (Wider Aspect Ratio, extra rows for all components including footer)
+      panel_mgr->set_grid_layout(6, 10);
 
       // 1. Main Chart (Top Left, large)
       panel_mgr->add_panel(BTQuant::PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
@@ -120,6 +120,9 @@ int main(int argc, char** argv) {
 
       // Add Alerts panel
       panel_mgr->add_panel(BTQuant::PanelType::ALERTS, "Alerts", 4, 5, 2, 2);
+
+      // Add Strategy Builder as footer panel
+      panel_mgr->add_panel(BTQuant::PanelType::STRATEGY_BUILDER, "Strategy Builder Footer", 0, 8, 6, 1);
 
       panel_mgr->auto_arrange_panels();
 

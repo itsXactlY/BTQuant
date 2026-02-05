@@ -33,6 +33,7 @@
 #include "components/trading_orders_panel.hpp"
 #include "components/trading_positions_panel.hpp"
 #include "components/volume_profile_panel.hpp"
+#include "components/risk_analyzer_panel.hpp"
 namespace BTQuant {
 
 // Context menu manager implementation
@@ -135,6 +136,10 @@ void ContextMenuManager::initialize_context_menus() {
 
   context_menu_handlers_[PanelType::CHART_REPLAY] = [this](PanelBase* panel) {
     render_generic_context_menu(panel, "ChartReplayContextMenu");
+  };
+
+  context_menu_handlers_[PanelType::RISK_ANALYZER] = [this](PanelBase* panel) {
+    render_generic_context_menu(panel, "RiskAnalyzerContextMenu");
   };
 }
 
@@ -371,7 +376,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::ORDERBOOK:
         ImGui::Text("Orderbook Actions:");
         ImGui::Separator();
-        if (auto* orderbook_panel = dynamic_cast<OrderbookPanel*>(panel)) {
+        if (dynamic_cast<OrderbookPanel*>(panel)) {
           if (ImGui::MenuItem("Toggle Aggregation")) {
             // Call specific orderbook panel method
           }
@@ -410,7 +415,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::FOOTPRINT_CHART:
         ImGui::Text("Footprint Chart Actions:");
         ImGui::Separator();
-        if (auto* footprint_panel = dynamic_cast<FootprintPanel*>(panel)) {
+        if (dynamic_cast<FootprintPanel*>(panel)) {
           if (ImGui::MenuItem("Toggle Delta Bars")) {
             // Call specific footprint panel method
           }
@@ -449,7 +454,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::VOLUME_PROFILE:
         ImGui::Text("Volume Profile Actions:");
         ImGui::Separator();
-        if (auto* volume_profile_panel = dynamic_cast<VolumeProfilePanel*>(panel)) {
+        if (dynamic_cast<VolumeProfilePanel*>(panel)) {
           if (ImGui::MenuItem("Toggle POC Line")) {
             // Call specific volume profile panel method
           }
@@ -494,7 +499,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TPO_PROFILE:
         ImGui::Text("TPO Profile Actions:");
         ImGui::Separator();
-        if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel)) {
+        if (dynamic_cast<TpoPanel*>(panel)) {
           if (ImGui::MenuItem("Toggle Session Blocks")) {
             // Call specific TPO panel method
           }
@@ -533,7 +538,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::HEATMAP:
         ImGui::Text("Heatmap Actions:");
         ImGui::Separator();
-        if (auto* heatmap_panel = dynamic_cast<DomSurfacePanel*>(panel)) {
+        if (dynamic_cast<DomSurfacePanel*>(panel)) {
           if (ImGui::MenuItem("Change Color Map")) {
             // Call specific heatmap panel method
           }
@@ -572,7 +577,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::ALERTS:
         ImGui::Text("Alerts Actions:");
         ImGui::Separator();
-        if (auto* alerts_panel = dynamic_cast<AlertsPanel*>(panel)) {
+        if (dynamic_cast<AlertsPanel*>(panel)) {
           if (ImGui::MenuItem("Create New Alert")) {
             // Call specific alerts panel method
           }
@@ -611,7 +616,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TIME_AND_SALES:
         ImGui::Text("Time & Sales Actions:");
         ImGui::Separator();
-        if (auto* time_sales_panel = dynamic_cast<TimeAndSalesPanel*>(panel)) {
+        if (dynamic_cast<TimeAndSalesPanel*>(panel)) {
           if (ImGui::MenuItem("Toggle Auto Scroll")) {
             // Call specific time and sales panel method
           }
@@ -650,7 +655,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::DEPTH_CHART:
         ImGui::Text("Depth Chart Actions:");
         ImGui::Separator();
-        if (auto* depth_chart_panel = dynamic_cast<DepthChartPanel*>(panel)) {
+        if (dynamic_cast<DepthChartPanel*>(panel)) {
           if (ImGui::MenuItem("Toggle Log Scale")) {
             // Call specific depth chart panel method
           }
@@ -683,7 +688,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::PERFORMANCE_MONITOR:
         ImGui::Text("Performance Monitor Actions:");
         ImGui::Separator();
-        if (auto* perf_monitor_panel = dynamic_cast<PerformanceMonitorPanel*>(panel)) {
+        if (dynamic_cast<PerformanceMonitorPanel*>(panel)) {
           if (ImGui::MenuItem("Refresh Data")) {
             // Call specific performance monitor panel method
           }
@@ -716,7 +721,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TRADING_ORDERS:
         ImGui::Text("Trading Orders Actions:");
         ImGui::Separator();
-        if (auto* trading_orders_panel = dynamic_cast<TradingOrdersPanel*>(panel)) {
+        if (dynamic_cast<TradingOrdersPanel*>(panel)) {
           if (ImGui::MenuItem("Place New Order")) {
             // Call specific trading orders panel method
           }
@@ -755,7 +760,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TRADING_POSITIONS:
         ImGui::Text("Trading Positions Actions:");
         ImGui::Separator();
-        if (auto* trading_positions_panel = dynamic_cast<TradingPositionsPanel*>(panel)) {
+        if (dynamic_cast<TradingPositionsPanel*>(panel)) {
           if (ImGui::MenuItem("Close Selected Position")) {
             // Call specific trading positions panel method
           }
@@ -788,7 +793,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::RISK_METRICS:
         ImGui::Text("Risk Metrics Actions:");
         ImGui::Separator();
-        if (auto* risk_metrics_panel = dynamic_cast<RiskMetricsPanel*>(panel)) {
+        if (dynamic_cast<RiskMetricsPanel*>(panel)) {
           if (ImGui::MenuItem("Refresh Metrics")) {
             // Call specific risk metrics panel method
           }
@@ -815,7 +820,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::METRICS:
         ImGui::Text("Metrics Actions:");
         ImGui::Separator();
-        if (auto* metrics_panel = dynamic_cast<MetricsPanel*>(panel)) {
+        if (dynamic_cast<MetricsPanel*>(panel)) {
           if (ImGui::MenuItem("Refresh Data")) {
             // Call specific metrics panel method
           }
@@ -848,7 +853,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::SCATTER_PLOT:
         ImGui::Text("Scatter Plot Actions:");
         ImGui::Separator();
-        if (auto* scatter_plot_panel = dynamic_cast<ScatterPlotPanel*>(panel)) {
+        if (dynamic_cast<ScatterPlotPanel*>(panel)) {
           if (ImGui::MenuItem("Change Point Style")) {
             // Call specific scatter plot panel method
           }
@@ -893,7 +898,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::HISTOGRAM:
         ImGui::Text("Histogram Actions:");
         ImGui::Separator();
-        if (auto* histogram_panel = dynamic_cast<HistogramPanel*>(panel)) {
+        if (dynamic_cast<HistogramPanel*>(panel)) {
           if (ImGui::MenuItem("Change Bin Count")) {
             // Call specific histogram panel method
           }
@@ -938,7 +943,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TIME_SERIES:
         ImGui::Text("Time Series Actions:");
         ImGui::Separator();
-        if (auto* time_series_panel = dynamic_cast<TimeSeriesPanel*>(panel)) {
+        if (dynamic_cast<TimeSeriesPanel*>(panel)) {
           if (ImGui::MenuItem("Add Overlay")) {
             // Call specific time series panel method
           }
@@ -983,7 +988,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TIME_STATISTICS:
         ImGui::Text("Time Statistics Actions:");
         ImGui::Separator();
-        if (auto* time_stats_panel = dynamic_cast<TimeStatisticsPanel*>(panel)) {
+        if (dynamic_cast<TimeStatisticsPanel*>(panel)) {
           if (ImGui::MenuItem("Refresh Data")) {
             // Call specific time statistics panel method
           }
@@ -1016,7 +1021,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::TIME_HISTOGRAM:
         ImGui::Text("Time Histogram Actions:");
         ImGui::Separator();
-        if (auto* time_histogram_panel = dynamic_cast<TimeHistogramPanel*>(panel)) {
+        if (dynamic_cast<TimeHistogramPanel*>(panel)) {
           if (ImGui::MenuItem("Change Time Interval")) {
             // Call specific time histogram panel method
           }
@@ -1061,7 +1066,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::SCREENER:
         ImGui::Text("Screener Actions:");
         ImGui::Separator();
-        if (auto* screener_panel = dynamic_cast<ScreenerPanel*>(panel)) {
+        if (dynamic_cast<ScreenerPanel*>(panel)) {
           if (ImGui::MenuItem("Add Filter")) {
             // Call specific screener panel method
           }
@@ -1106,7 +1111,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::LOG_PANEL:
         ImGui::Text("Log Panel Actions:");
         ImGui::Separator();
-        if (auto* log_panel = dynamic_cast<LogPanel*>(panel)) {
+        if (dynamic_cast<LogPanel*>(panel)) {
           if (ImGui::MenuItem("Clear Logs")) {
             // Call specific log panel method
           }
@@ -1151,7 +1156,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       case PanelType::CHART_REPLAY:
         ImGui::Text("Chart Replay Actions:");
         ImGui::Separator();
-        if (auto* chart_replay_panel = dynamic_cast<ChartReplayPanel*>(panel)) {
+        if (dynamic_cast<ChartReplayPanel*>(panel)) {
           if (ImGui::MenuItem("Start Replay")) {
             // Call specific chart replay panel method
           }

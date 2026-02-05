@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <limits>
 #include "imgui.h"
 #include "implot.h"
 
@@ -263,69 +264,129 @@ void OptionAnalyticsPanel::renderAnalyzerTab() {
 void OptionAnalyticsPanel::renderSmileTab() {
     ImGui::Text("VOLATILITY SMILE");
     ImGui::Separator();
-    
+
     // Check if ImPlot is available and initialized
     if (!ImPlot::GetCurrentContext()) {
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "ImPlot context not initialized!");
         return;
     }
-    
+
     // Create the plot for volatility smile
-    if (ImPlot::BeginPlot("Implied Volatility Smile")) {
-        ImPlot::SetupAxis(ImAxis_X1, "Strike Price");
+    if (ImPlot::BeginPlot("Implied Volatility Smile", ImVec2(-1, 400))) {
+        ImPlot::SetupAxis(ImAxis_X1, "Strike Price ($)");
         ImPlot::SetupAxis(ImAxis_Y1, "Implied Volatility (%)");
-        ImPlot::SetupAxisLimits(ImAxis_X1, 90, 210);
-        ImPlot::SetupAxisLimits(ImAxis_Y1, 15, 50);
-        ImPlot::SetupLegend(ImPlotLocation_NorthEast);
         
+        // Find min/max values to set appropriate axis limits
+        double min_strike = std::numeric_limits<double>::max();
+        double max_strike = std::numeric_limits<double>::lowest();
+        double min_iv = std::numeric_limits<double>::max();
+        double max_iv = std::numeric_limits<double>::lowest();
+        
+        for (const auto& exp_data : expirationData) {
+            for (const auto& opt : exp_data.options) {
+                min_strike = std::min(min_strike, opt.strike);
+                max_strike = std::max(max_strike, opt.strike);
+                min_iv = std::min(min_iv, std::min(opt.implied_volatility_call, opt.implied_volatility_put) * 100);
+                max_iv = std::max(max_iv, std::max(opt.implied_volatility_call, opt.implied_volatility_put) * 100);
+            }
+        }
+        
+        // Add some padding to the axes
+        if (min_strike != std::numeric_limits<double>::max() && max_strike != std::numeric_limits<double>::lowest()) {
+            double strike_range = max_strike - min_strike;
+            ImPlot::SetupAxisLimits(ImAxis_X1, min_strike - strike_range * 0.05, max_strike + strike_range * 0.05);
+        }
+        
+        if (min_iv != std::numeric_limits<double>::max() && max_iv != std::numeric_limits<double>::lowest()) {
+            double iv_range = max_iv - min_iv;
+            ImPlot::SetupAxisLimits(ImAxis_Y1, min_iv - iv_range * 0.05, max_iv + iv_range * 0.05);
+        }
+        
+        ImPlot::SetupLegend(ImPlotLocation_NorthEast, ImPlotLegendFlags_Outside);
+
         // Define colors for different expiration dates
         ImVec4 colors[] = {
             ImVec4(1.0f, 0.0f, 0.0f, 1.0f),  // Red
             ImVec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green
             ImVec4(0.0f, 0.0f, 1.0f, 1.0f),  // Blue
-            ImVec4(1.0f, 1.0f, 0.0f, 1.0f)   // Yellow
+            ImVec4(1.0f, 1.0f, 0.0f, 1.0f),  // Yellow
+            ImVec4(1.0f, 0.0f, 1.0f, 1.0f),  // Magenta
+            ImVec4(0.0f, 1.0f, 1.0f, 1.0f)   // Cyan
         };
-        
+
         int color_idx = 0;
-        
+
         // Plot IV vs strike for each expiration
         for (const auto& exp_data : expirationData) {
             std::vector<double> strikes;
             std::vector<double> iv_calls;
             std::vector<double> iv_puts;
-            
+
             for (const auto& opt : exp_data.options) {
                 strikes.push_back(opt.strike);
                 iv_calls.push_back(opt.implied_volatility_call * 100); // Convert to percentage
                 iv_puts.push_back(opt.implied_volatility_put * 100);   // Convert to percentage
             }
-            
-            // Plot calls
-            if (!strikes.empty()) {
-                ImPlot::SetNextLineStyle(colors[color_idx % 4], 2.0f);
-                ImPlot::PlotLine(("Calls " + exp_data.date).c_str(), 
-                                strikes.data(), iv_calls.data(), static_cast<int>(strikes.size()));
-                
-                // Plot puts
-                ImPlot::SetNextLineStyle(ImColor(colors[color_idx % 4].x * 0.7f, 
-                                                colors[color_idx % 4].y * 0.7f, 
-                                                colors[color_idx % 4].z * 0.7f, 
-                                                colors[color_idx % 4].w), 1.0f);
-                ImPlot::PlotLine(("Puts " + exp_data.date).c_str(), 
-                                strikes.data(), iv_puts.data(), static_cast<int>(strikes.size()));
+
+            // Sort the data by strike price to ensure smooth curves
+            std::vector<std::pair<double, double>> call_pairs, put_pairs;
+            for (size_t i = 0; i < strikes.size(); ++i) {
+                call_pairs.push_back({strikes[i], iv_calls[i]});
+                put_pairs.push_back({strikes[i], iv_puts[i]});
             }
             
+            std::sort(call_pairs.begin(), call_pairs.end());
+            std::sort(put_pairs.begin(), put_pairs.end());
+            
+            // Extract sorted data
+            std::vector<double> sorted_strikes, sorted_iv_calls, sorted_iv_puts;
+            for (const auto& pair : call_pairs) {
+                sorted_strikes.push_back(pair.first);
+                sorted_iv_calls.push_back(pair.second);
+            }
+            for (const auto& pair : put_pairs) {
+                sorted_iv_puts.push_back(pair.second);
+            }
+
+            // Plot calls
+            if (!sorted_strikes.empty()) {
+                ImPlot::SetNextLineStyle(colors[color_idx % 6], 2.0f);
+                ImPlot::PlotLine(("Calls " + exp_data.date).c_str(),
+                                sorted_strikes.data(), sorted_iv_calls.data(), static_cast<int>(sorted_strikes.size()));
+
+                // Plot puts with different line style to distinguish from calls
+                ImPlot::SetNextLineStyle(ImColor(colors[color_idx % 6].x * 0.7f,
+                                                colors[color_idx % 6].y * 0.7f,
+                                                colors[color_idx % 6].z * 0.7f,
+                                                colors[color_idx % 6].w), 1.5f);
+                ImPlot::PlotLine(("Puts " + exp_data.date).c_str(),
+                                sorted_strikes.data(), sorted_iv_puts.data(), static_cast<int>(sorted_strikes.size()));
+            }
+
             color_idx++;
         }
-        
+
         ImPlot::PushStyleVar(ImPlotStyleVar_FillAlpha, 0.25f);
         ImPlot::EndPlot();
+        ImPlot::PopStyleVar();
     }
-    
+
     // Add some explanatory text
     ImGui::Spacing();
     ImGui::TextWrapped("The Volatility Smile shows how implied volatility varies with strike price for different expiration dates.");
     ImGui::TextWrapped("Typically, out-of-the-money and in-the-money options have higher implied volatility than at-the-money options.");
+    
+    // Add information about the current data
+    ImGui::Spacing();
+    ImGui::Text("Current Data:");
+    ImGui::BulletText("Number of expirations: %zu", expirationData.size());
+    if (!expirationData.empty()) {
+        ImGui::Indent();
+        for (const auto& exp_data : expirationData) {
+            ImGui::BulletText("%s: %zu options", exp_data.date.c_str(), exp_data.options.size());
+        }
+        ImGui::Unindent();
+    }
 }
 
 void OptionAnalyticsPanel::onStrikeClick(double strike, const std::string& optionType, const std::string& action) {

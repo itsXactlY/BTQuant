@@ -36,6 +36,7 @@
 #include "../../include/components/risk_analyzer_panel.hpp"
 #include "../../include/components/strategy_builder.hpp"
 #include "../../include/components/option_analytics_panel.hpp"
+#include "../../include/components/tabbed_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
 
@@ -1888,7 +1889,7 @@ void PanelManager::process_panel_drag_and_drop(
     const std::vector<std::pair<uint32_t, const BTQuant::PanelBase*>>& panels_with_ids,
     const std::unordered_map<const BTQuant::PanelBase*, uint32_t>& panel_to_id) {
   (void)panel_to_id; // Suppress unused parameter warning
-  
+
   // Process drag-and-drop for all panels
   for (const auto& [source_id, source_panel] : panels_with_ids) {
     // Only process drag if the panel can be a drag source
@@ -1901,33 +1902,28 @@ void PanelManager::process_panel_drag_and_drop(
     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
       // Set the payload to the panel ID
       ImGui::SetDragDropPayload("PANEL_ID", &source_id, sizeof(uint32_t));
-      
+
       // Show a preview of what's being dragged
       ImGui::Text("Moving panel: %s", source_panel->get_title().c_str());
-      
+
       ImGui::EndDragDropSource();
     }
   }
 
   // Process drop targets - check if any panel can accept a dropped panel
   for (const auto& [target_id, target_panel] : panels_with_ids) {
-    // Only process drop if the panel can accept drops
-    if (!target_panel->can_accept_drop()) {
-      continue;
-    }
-
-    // Make the panel a drop target
+    // Make the panel a drop target regardless of can_accept_drop() to enable tabbed group creation
     std::string drop_target_id = "PANEL_DROP_TARGET_" + std::to_string(target_id);
     ImGui::PushID(drop_target_id.c_str());
-    
+
     if (ImGui::BeginDragDropTarget()) {
       if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PANEL_ID")) {
         if (payload->DataSize == sizeof(uint32_t)) {
           uint32_t source_panel_id = *(static_cast<const uint32_t*>(payload->Data));
-          
+
           // Don't allow dropping a panel onto itself
           if (source_panel_id != target_id) {
-            // Handle the drop by calling the target panel's drop handler
+            // Check if the target panel can accept drops directly
             PanelBase* target_panel_ptr = get_panel_by_id(target_id);
             if (target_panel_ptr && target_panel_ptr->can_accept_drop()) {
               if (target_panel_ptr->handle_drop(source_panel_id)) {
@@ -1938,11 +1934,52 @@ void PanelManager::process_panel_drag_and_drop(
                   // For now, we'll just hide the source panel. In a real implementation,
                   // we might want to remove it from the main panel list entirely or manage it differently.
                   source_it->second->set_visible(false);
-                  
+
                   // Also remove it from any existing groups
                   auto group_ids = get_panel_groups_for_panel(source_panel_id);
                   for (uint32_t group_id : group_ids) {
                     remove_panel_from_group(group_id, source_panel_id);
+                  }
+                }
+              }
+            } else {
+              // Target panel cannot accept drops directly, so create a tabbed panel to group them
+              // First, check if either panel is already part of a tabbed panel
+              bool source_is_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id)) != nullptr;
+              bool target_is_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id)) != nullptr;
+              
+              // If neither is a tabbed panel, create a new tabbed panel to group them
+              if (!source_is_tabbed && !target_is_tabbed) {
+                // Create a new tabbed panel at the same position as the target panel
+                auto target_config = get_panel_config(target_id);
+                
+                // Create the tabbed panel with the same position and size as the target
+                uint32_t tabbed_panel_id = add_panel(PanelType::TABBED_PANEL, "Tabbed Group", 
+                                                     target_config.grid_x, target_config.grid_y, 
+                                                     target_config.grid_width, target_config.grid_height);
+                
+                if (tabbed_panel_id != 0) {
+                  // Get the new tabbed panel
+                  TabbedPanel* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_panel_id));
+                  if (tabbed_panel) {
+                    // Add both panels to the tabbed panel
+                    tabbed_panel->add_panel(target_id);  // Add the target panel first
+                    tabbed_panel->add_panel(source_panel_id);  // Then add the source panel
+                    
+                    // Hide the original panels since they're now managed by the tabbed panel
+                    set_panel_visible(target_id, false);
+                    set_panel_visible(source_panel_id, false);
+                    
+                    // Remove both panels from any existing groups
+                    auto target_group_ids = get_panel_groups_for_panel(target_id);
+                    for (uint32_t group_id : target_group_ids) {
+                      remove_panel_from_group(group_id, target_id);
+                    }
+                    
+                    auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
+                    for (uint32_t group_id : source_group_ids) {
+                      remove_panel_from_group(group_id, source_panel_id);
+                    }
                   }
                 }
               }

@@ -27,6 +27,9 @@ void TabbedPanel::render() {
     render_active_tab_content();
 
     end_panel_window();
+    
+    // If the tabbed panel is empty and was created dynamically, consider removing it
+    // For now, we'll just leave it visible so users can drag panels into it
 }
 
 void TabbedPanel::render_tab_bar() {
@@ -143,7 +146,7 @@ void TabbedPanel::remove_panel(uint32_t panel_id) {
         if (*it == panel_id) {
             int index = std::distance(tabbed_panels_.begin(), it);
             tabbed_panels_.erase(it);
-            
+
             // Adjust active tab index if needed
             if (active_tab_index_ >= static_cast<int>(tabbed_panels_.size()) && !tabbed_panels_.empty()) {
                 active_tab_index_ = static_cast<int>(tabbed_panels_.size()) - 1;
@@ -152,15 +155,26 @@ void TabbedPanel::remove_panel(uint32_t panel_id) {
             } else if (index < active_tab_index_) {
                 active_tab_index_--;
             }
-            
+
             // Show the panel again since it's no longer in the tabbed panel
             if (panel_manager_) {
                 PanelBase* panel = panel_manager_->get_panel_by_id(panel_id);
                 if (panel) {
                     panel->set_visible(true);
+                    
+                    // Update the panel's position to match the tabbed panel's position
+                    // so it appears in the same location as the tabbed panel
+                    const auto& tabbed_config = get_config();
+                    auto& panel_config = panel->get_config();
+                    panel_config.grid_x = tabbed_config.grid_x;
+                    panel_config.grid_y = tabbed_config.grid_y;
+                    panel_config.grid_width = tabbed_config.grid_width;
+                    panel_config.grid_height = tabbed_config.grid_height;
+                    panel_config.position = tabbed_config.position;
+                    panel_config.size = tabbed_config.size;
                 }
             }
-            
+
             break;
         }
     }
@@ -230,10 +244,10 @@ bool TabbedPanel::handle_drop(uint32_t source_panel_id) {
             return false; // Already exists in this tabbed panel
         }
     }
-    
+
     // Add the source panel to this tabbed panel
     add_panel(source_panel_id);
-    
+
     // If the panel manager exists, we need to properly manage the panel
     if (panel_manager_) {
         // Check if the source panel is part of another group and remove it
@@ -241,7 +255,7 @@ bool TabbedPanel::handle_drop(uint32_t source_panel_id) {
         for (uint32_t group_id : group_ids) {
             panel_manager_->remove_panel_from_group(group_id, source_panel_id);
         }
-        
+
         // We don't remove the panel from the main panel manager, but we hide it
         // since it's now managed by this tabbed panel
         PanelBase* source_panel = panel_manager_->get_panel_by_id(source_panel_id);
@@ -250,7 +264,7 @@ bool TabbedPanel::handle_drop(uint32_t source_panel_id) {
             source_panel->set_visible(false);
         }
     }
-    
+
     return true;
 }
 

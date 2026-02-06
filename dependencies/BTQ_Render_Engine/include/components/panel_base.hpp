@@ -108,7 +108,7 @@ class PanelBase {
   virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
 
   // Drag and drop functionality
-  virtual bool can_accept_drop() const { return false; }  // Whether this panel can accept dropped panels
+  virtual bool can_accept_drop() const { return true; }  // Whether this panel can accept dropped panels (now true to enable tabbed grouping)
   virtual bool handle_drop(uint32_t source_panel_id);    // Handle a dropped panel
   virtual bool is_drag_source() const { return true; }  // Whether this panel can be dragged
 

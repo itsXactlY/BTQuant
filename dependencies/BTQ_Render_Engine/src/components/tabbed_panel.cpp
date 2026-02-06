@@ -161,7 +161,7 @@ void TabbedPanel::remove_panel(uint32_t panel_id) {
                 PanelBase* panel = panel_manager_->get_panel_by_id(panel_id);
                 if (panel) {
                     panel->set_visible(true);
-                    
+
                     // Update the panel's position to match the tabbed panel's position
                     // so it appears in the same location as the tabbed panel
                     const auto& tabbed_config = get_config();
@@ -177,6 +177,14 @@ void TabbedPanel::remove_panel(uint32_t panel_id) {
 
             break;
         }
+    }
+    
+    // If the tabbed panel becomes empty, consider removing it
+    if (tabbed_panels_.empty() && panel_manager_) {
+        // Find the tabbed panel ID by looking for this object in the panel manager
+        // Since we can't easily find our own ID from the panel manager, we'll just hide it
+        // The panel manager will handle cleanup of empty tabbed panels elsewhere if needed
+        this->set_visible(false);
     }
 }
 

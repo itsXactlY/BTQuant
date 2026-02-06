@@ -108,6 +108,9 @@ class PanelManager {
   // Get panel by ID
   PanelBase* get_panel_by_id(uint32_t panel_id) const;
 
+  // Get all panels (for internal use)
+  const std::unordered_map<uint32_t, std::unique_ptr<PanelBase>>& get_all_panels() const { return panels_; }
+
 
   // Serialization
   std::string serialize_layout() const;

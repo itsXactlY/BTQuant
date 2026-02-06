@@ -1947,17 +1947,95 @@ void PanelManager::process_panel_drag_and_drop(
               // First, check if either panel is already part of a tabbed panel
               bool source_is_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id)) != nullptr;
               bool target_is_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id)) != nullptr;
-              
+
+              // If both panels are already in tabbed panels, merge the tabbed panels
+              if (source_is_tabbed && target_is_tabbed) {
+                // Merge the source tabbed panel into the target tabbed panel
+                TabbedPanel* source_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id));
+                TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
+                
+                if (source_tabbed && target_tabbed) {
+                  // Transfer all panels from source tabbed panel to target tabbed panel
+                  auto source_panels = source_tabbed->get_tabbed_panels();
+                  for (uint32_t panel_id : source_panels) {
+                    target_tabbed->add_panel(panel_id);
+                    
+                    // Hide the transferred panel
+                    PanelBase* panel = get_panel_by_id(panel_id);
+                    if (panel) {
+                      panel->set_visible(false);
+                    }
+                  }
+                  
+                  // Hide the source tabbed panel since it's now merged
+                  set_panel_visible(source_panel_id, false);
+                  
+                  // Remove the source tabbed panel from any groups
+                  auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
+                  for (uint32_t group_id : source_group_ids) {
+                    remove_panel_from_group(group_id, source_panel_id);
+                  }
+                }
+              }
+              // If only the source panel is a tabbed panel, add it to the target tabbed panel
+              else if (source_is_tabbed && !target_is_tabbed) {
+                // Add the source tabbed panel to the target tabbed panel
+                TabbedPanel* source_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id));
+                TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
+                
+                if (source_tabbed && target_tabbed) {
+                  // Transfer all panels from source tabbed panel to target tabbed panel
+                  auto source_panels = source_tabbed->get_tabbed_panels();
+                  for (uint32_t panel_id : source_panels) {
+                    target_tabbed->add_panel(panel_id);
+                    
+                    // Hide the transferred panel
+                    PanelBase* panel = get_panel_by_id(panel_id);
+                    if (panel) {
+                      panel->set_visible(false);
+                    }
+                  }
+                  
+                  // Hide the source tabbed panel since it's now merged
+                  set_panel_visible(source_panel_id, false);
+                  
+                  // Remove the source tabbed panel from any groups
+                  auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
+                  for (uint32_t group_id : source_group_ids) {
+                    remove_panel_from_group(group_id, source_panel_id);
+                  }
+                }
+              }
+              // If only the target panel is a tabbed panel, add the source panel to it
+              else if (!source_is_tabbed && target_is_tabbed) {
+                // Add the source panel to the existing target tabbed panel
+                TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
+                if (target_tabbed) {
+                  target_tabbed->add_panel(source_panel_id);
+                  
+                  // Hide the source panel since it's now managed by the tabbed panel
+                  PanelBase* source_panel = get_panel_by_id(source_panel_id);
+                  if (source_panel) {
+                    source_panel->set_visible(false);
+                  }
+                  
+                  // Remove the source panel from any existing groups
+                  auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
+                  for (uint32_t group_id : source_group_ids) {
+                    remove_panel_from_group(group_id, source_panel_id);
+                  }
+                }
+              }
               // If neither is a tabbed panel, create a new tabbed panel to group them
-              if (!source_is_tabbed && !target_is_tabbed) {
+              else {
                 // Create a new tabbed panel at the same position as the target panel
                 auto target_config = get_panel_config(target_id);
-                
+
                 // Create the tabbed panel with the same position and size as the target
-                uint32_t tabbed_panel_id = add_panel(PanelType::TABBED_PANEL, "Tabbed Group", 
-                                                     target_config.grid_x, target_config.grid_y, 
+                uint32_t tabbed_panel_id = add_panel(PanelType::TABBED_PANEL, "Tabbed Group",
+                                                     target_config.grid_x, target_config.grid_y,
                                                      target_config.grid_width, target_config.grid_height);
-                
+
                 if (tabbed_panel_id != 0) {
                   // Get the new tabbed panel
                   TabbedPanel* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_panel_id));
@@ -1965,17 +2043,17 @@ void PanelManager::process_panel_drag_and_drop(
                     // Add both panels to the tabbed panel
                     tabbed_panel->add_panel(target_id);  // Add the target panel first
                     tabbed_panel->add_panel(source_panel_id);  // Then add the source panel
-                    
+
                     // Hide the original panels since they're now managed by the tabbed panel
                     set_panel_visible(target_id, false);
                     set_panel_visible(source_panel_id, false);
-                    
+
                     // Remove both panels from any existing groups
                     auto target_group_ids = get_panel_groups_for_panel(target_id);
                     for (uint32_t group_id : target_group_ids) {
                       remove_panel_from_group(group_id, target_id);
                     }
-                    
+
                     auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
                     for (uint32_t group_id : source_group_ids) {
                       remove_panel_from_group(group_id, source_panel_id);

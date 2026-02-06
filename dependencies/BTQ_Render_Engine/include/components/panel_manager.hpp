@@ -18,12 +18,14 @@
 #include "strategy_builder.hpp"
 #include "../ui/context_menus.hpp"
 
-// Forward declaration for AlertsPanel
+// Forward declarations
 namespace BTQuant {
     class AlertsPanel;
 }
 
 namespace BTQuant {
+
+enum class LayoutPreset { DEFAULT, MODERN_TRADING, PRO_QUANT, SCALPER_DOM, ANALYTICS_FOCUS };
 
 struct GridLayout {
   int columns = 3;

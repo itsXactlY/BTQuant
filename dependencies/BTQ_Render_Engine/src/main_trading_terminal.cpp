@@ -127,8 +127,9 @@ int main(int argc, char** argv) {
 
       panel_mgr->auto_arrange_panels();
 
-      // Load saved layout if available to override
-      // panel_mgr->load_layout("default_layout.json");
+      // Load default layout if available to override
+      auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+      layoutManager.load_default_layout();
     }
   }
 
@@ -143,6 +144,16 @@ int main(int argc, char** argv) {
       }
       if (ImGui::MenuItem("Load Layout")) {
         if (panel_mgr) panel_mgr->load_layout("default_layout.json");
+      }
+      if (ImGui::MenuItem("Save as Default")) {
+        // Use the LayoutManager to save the current layout as default
+        auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+        layoutManager.save_current_layout_as_default();
+      }
+      if (ImGui::MenuItem("Load Default")) {
+        // Use the LayoutManager to load the default layout
+        auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+        layoutManager.load_default_layout();
       }
       ImGui::Separator();
       if (ImGui::MenuItem("Exit")) {
@@ -230,10 +241,12 @@ int main(int argc, char** argv) {
   // 8. Cleanup
   std::cout << "\nCleaning up..." << std::endl;
 
-  // Save layout on exit
+  // Save layout on exit as default
   if (auto* ws = dashboard->get_workspace_component()) {
     if (auto* pm = ws->getPanelManager()) {
-      pm->save_layout("default_layout.json");
+      // Use the LayoutManager to save the current layout as default
+      auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+      layoutManager.save_current_layout_as_default();
     }
   }
 

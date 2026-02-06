@@ -73,10 +73,15 @@ public:
     void set_active_quick_slot(int slot_num);
     int get_active_quick_slot() const;
 
+    // Save current layout as the default startup layout
+    bool save_current_layout_as_default();
+    bool load_default_layout();
+
 private:
     std::unique_ptr<Layout::LayoutPresetManager> preset_manager_;
     std::unique_ptr<Layout::DashboardLayoutManager> dashboard_layout_manager_;
     std::string presets_directory_;
+    std::string default_layout_path_ = "default_layout.json";  // Path to default layout file
     int active_quick_slot_ = 0;  // 0 means no quick save slot is active, 1-4 for slots
 
     void initialize_presets_directory();

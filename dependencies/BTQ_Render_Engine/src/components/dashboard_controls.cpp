@@ -16,6 +16,7 @@
 #include "../../include/symbol_registry.hpp"
 #include "../../include/ui/tooltips.hpp"
 #include "../../include/ui/ui_base.hpp"
+#include "../../include/ui/layout_manager.hpp"
 
 namespace BTQuant {
 
@@ -123,17 +124,27 @@ void DashboardControls::render_dashboard_controls() {
   // Floating Dashboard Controls Panel - positioned in top-right corner and stays on top
   ImGuiIO& io = ImGui::GetIO();
   // Calculate position to ensure it stays in the top-right corner with consistent padding
-  float window_width = 350.0f;  // Width of the window
-  float padding_x = 20.0f;      // Padding from the right edge
-  float padding_y = 20.0f;      // Padding from the top edge
+  float window_width = 350.0f;      // Width of the window
+  float padding_x = 20.0f;          // Padding from the right edge
+  float padding_y = 20.0f;          // Padding from the top edge
+  
+  // Set position and size with Always condition to ensure it stays in top-right corner
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(window_width, 500), ImGuiCond_FirstUseEver);
 
   // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
-  // Add AlwaysAutoResize to ensure proper sizing, and remove NoBringToFrontOnFocus which might interfere
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking)) {
+  // Add ImGuiWindowFlags_TopMost to ensure it stays on top, and remove conflicting flags
+  if (ImGui::Begin("Dashboard Controls", nullptr,
+                   ImGuiWindowFlags_NoFocusOnAppearing |
+                   ImGuiWindowFlags_NoCollapse |
+                   ImGuiWindowFlags_NoResize |
+                   ImGuiWindowFlags_AlwaysAutoResize |
+                   ImGuiWindowFlags_NoNavFocus |
+                   ImGuiWindowFlags_NoDocking |
+                   ImGuiWindowFlags_NoBringToFrontOnFocus)) {  // Prevent other windows from stealing focus
+                   
     // Ensure the window stays on top by bringing it to front every frame
-    ImGui::SetWindowFocus();
+    // Do NOT call SetWindowFocus() here as it can cause conflicts with other panels
     ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y));
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
     
@@ -771,6 +782,26 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::Spacing();
 
+      if (ImGui::Button("Save as Default")) {
+        if (panel_manager_) {
+          // Use the LayoutManager to save the current layout as default
+          auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+          layoutManager.save_current_layout_as_default();
+        }
+      }
+
+      ImGui::Spacing();
+
+      if (ImGui::Button("Load Default")) {
+        if (panel_manager_) {
+          // Use the LayoutManager to load the default layout
+          auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+          layoutManager.load_default_layout();
+        }
+      }
+
+      ImGui::Spacing();
+
       if (ImGui::Button("Clear All Panels")) {
         if (panel_manager_) {
           panel_manager_->clear_panels();
@@ -792,9 +823,6 @@ void DashboardControls::render_dashboard_controls() {
 
   // Render the create alert modal if needed
   render_create_alert_modal();
-
-  // Ensure the window stays on top by bringing it to front after all content is rendered
-  ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
   ImGui::End();
 

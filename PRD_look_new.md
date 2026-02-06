@@ -441,16 +441,16 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Implement "Panel Binds": add logic in `src/components/panel_manager.cpp` to lock panels together into a single "Super-panel" grid, preventing them from overlapping or floating independently.
 - [x] Create "Panel Groups": allow dragging one panel into another to create a "Tabbed Group" (e.g., merging Chart and Time & Sales into one window with tabs at the bottom).
 - [x] Implement "Auto-Docking": update the panel spawn logic so new panels automatically snap to empty edges of existing panels rather than spawning at `(0,0)`.
-- [ ] Fix Z-index and focus: ensure `Dashboard Controls` always stays in the top-right corner and cannot be covered by other panels.
+- [x] Fix Z-index and focus: ensure `Dashboard Controls` always stays in the top-right corner and cannot be covered by other panels.
 
 ### TASK 25: VISUAL REFINEMENT & DATA PLUG-INS
-- [ ] Fix "Dirty State" updates: ensure the `ClusterEngine` calls `set_dirty()` on all active panels whenever a new trade arrives to guarantee the visuals update properly.
-- [ ] Redesign DOM Surface visuals: replace the purple placeholders and raw debug text with a proper intensity-based liquidity heatmap (Dark Blue to Bright Yellow).
-- [ ] Calibrate "Trade Bubbles": scale bubble radius using `log(volume)` so massive trades don't cover the entire price axis, and ensure they fade out smoothly over time.
-- [ ] Implement "Persistent Level Tracking": in the DOM Surface, draw a distinct border or "glow" around liquidity levels that have remained static for more than 30 seconds.
+- [x] Fix "Dirty State" updates: ensure the `ClusterEngine` calls `set_dirty()` on all active panels whenever a new trade arrives to guarantee the visuals update properly.
+- [x] Redesign DOM Surface visuals: replace the purple placeholders and raw debug text with a proper intensity-based liquidity heatmap (Dark Blue to Bright Yellow).
+- [x] Calibrate "Trade Bubbles": scale bubble radius using `log(volume)` so massive trades don't cover the entire price axis, and ensure they fade out smoothly over time.
+- [x] Implement "Persistent Level Tracking": in the DOM Surface, draw a distinct border or "glow" around liquidity levels that have remained static for more than 30 seconds.
 
 ### TASK 26: TEMPLATES & WORKSPACE SYNC
-- [ ] Implement "Symbol Link Groups": add color-coded link icons (Red, Green, Blue) to all panel headers. Panels in the same color group must update their symbol simultaneously when one is changed.
-- [ ] Create "Layout Templates": define and export JSON presets for "Scalper" (DOM + Tape), "Analyst" (Charts), and "Options" (Desk + Risk) layouts.
-- [ ] Add "Save as Default": allow users to save their current panel arrangement as the default startup workspace.
+- [x] Implement "Symbol Link Groups": add color-coded link icons (Red, Green, Blue) to all panel headers. Panels in the same color group must update their symbol simultaneously when one is changed.
+- [x] Create "Layout Templates": define and export JSON presets for "Scalper" (DOM + Tape), "Analyst" (Charts), and "Options" (Desk + Risk) layouts.
+- [x] Add "Save as Default": allow users to save their current panel arrangement as the default startup workspace.
 - [ ] Implement "Global Reset": add a "Reset to Factory Layout" button in Dashboard Controls to clear all panel overlaps and return to a clean, grid-aligned state.

@@ -396,6 +396,90 @@ std::string LayoutManager::get_active_layout_name() const {
     return dashboard_layout_manager_->get_current_layout_name();
 }
 
+// Save current layout as the default startup layout
+bool LayoutManager::save_current_layout_as_default() {
+    if (!dashboard_layout_manager_) {
+        std::cerr << "Error: Dashboard layout manager not initialized" << std::endl;
+        return false;
+    }
+
+    // Get the current layout JSON
+    std::string json_data = get_current_layout_json();
+    
+    if (json_data.empty()) {
+        std::cerr << "Error: Could not retrieve current layout data" << std::endl;
+        return false;
+    }
+
+    // Write the layout data to the default layout file
+    std::ofstream file(default_layout_path_);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file for writing: " << default_layout_path_ << std::endl;
+        return false;
+    }
+
+    file << json_data;
+    file.close();
+
+    std::cout << "Saved current layout as default: " << default_layout_path_ << std::endl;
+    return true;
+}
+
+// Load the default layout
+bool LayoutManager::load_default_layout() {
+    if (!dashboard_layout_manager_) {
+        std::cerr << "Error: Dashboard layout manager not initialized" << std::endl;
+        return false;
+    }
+
+    // Check if the default layout file exists
+    std::ifstream file(default_layout_path_);
+    if (!file.is_open()) {
+        std::cerr << "Error: Default layout file not found: " << default_layout_path_ << std::endl;
+        return false;
+    }
+
+    // Read the layout data from the file
+    std::string json_data((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+    file.close();
+
+    // Parse the JSON data
+    try {
+#ifdef HAS_NLOHMANN_JSON
+        auto layout_json = nlohmann::json::parse(json_data);
+
+        // Extract layout information
+        std::string layout_name = layout_json.value("layout_name", "default_layout");
+        
+        // Create a temporary preset to use the existing apply_layout_from_preset method
+        Layout::LayoutPreset temp_preset;
+        temp_preset.name = layout_name;
+        temp_preset.description = "Default startup layout";
+        temp_preset.category = "Default";
+        temp_preset.json_data = json_data;
+        temp_preset.is_builtin = true;
+
+        // Apply the layout using the existing method
+        bool success = apply_layout_from_preset(temp_preset);
+        
+        if (success) {
+            std::cout << "Loaded default layout: " << default_layout_path_ << std::endl;
+        } else {
+            std::cerr << "Error: Failed to apply default layout from: " << default_layout_path_ << std::endl;
+        }
+        
+        return success;
+#else
+        std::cerr << "Error: JSON support not available" << std::endl;
+        return false;
+#endif
+    } catch (const std::exception& e) {
+        std::cerr << "Error parsing default layout JSON: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 void LayoutManager::set_active_quick_slot(int slot_num) {
     if (slot_num >= 0 && slot_num <= 4) {
         active_quick_slot_ = slot_num;

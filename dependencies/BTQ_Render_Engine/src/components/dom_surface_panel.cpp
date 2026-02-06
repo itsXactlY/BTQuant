@@ -783,13 +783,30 @@ void DomSurfacePanel::renderPersistentLevels() {
     if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
       ImU32 color = getPersistentLevelColor(level);
 
-      // Draw horizontal line across the entire time axis
+      // Draw a "glow" effect around the persistent level
+      // First, draw a wider, more transparent line as the glow
+      ImU32 glow_color = IM_COL32(
+          (color >> 16) & 0xFF,  // R component
+          (color >> 8) & 0xFF,   // G component  
+          color & 0xFF,          // B component
+          80                     // Reduced alpha for glow effect
+      );
+      
+      ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Wider line for glow effect
+      
+      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double ys[2] = {level.price, level.price};
+      ImPlot::PlotLine("##PersistentLevelGlow", xs, ys, 2);
+      
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Draw the main line with a distinct border
       ImPlot::PushStyleColor(ImPlotCol_Line, color);
       ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 3.0f); // Thicker line for better visibility
 
       // Draw horizontal line at the price level from left to right of the plot
-      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double ys[2] = {level.price, level.price};
       ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
 
       ImPlot::PopStyleVar();
@@ -807,7 +824,7 @@ void DomSurfacePanel::renderPersistentLevels() {
       double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
       double price_range = visible_price_range * 0.005; // 0.5% of the visible price range (adjustable)
       if (price_range < 0.001) price_range = 0.001; // Minimum thickness
-      
+
       double y_min = level.price - price_range/2.0;
       double y_max = level.price + price_range/2.0;
 
@@ -828,7 +845,7 @@ void DomSurfacePanel::renderPersistentLevels() {
       // Draw highlight slightly above the main line
       double highlight_y_min = level.price + price_range/2.0;
       double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
-      
+
       // Draw highlight shaded area
       double highlight_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
@@ -841,12 +858,12 @@ void DomSurfacePanel::renderPersistentLevels() {
 }
 
 ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) const {
-  // Color: Bright Green for Bids, Bright Red for Asks
-  // Use brighter colors than the markers to distinguish persistent levels
+  // Color: Bright Cyan for Bids (with glow effect), Bright Orange for Asks (with glow effect)
+  // Use more vibrant colors to make persistent levels stand out with the glow effect
   if (level.is_bid) {
-    return IM_COL32(0, 255, 150, 220);  // Brighter green with higher transparency
+    return IM_COL32(0, 255, 255, 255);  // Bright cyan for bid levels
   } else {
-    return IM_COL32(255, 100, 150, 220);  // Brighter red with higher transparency
+    return IM_COL32(255, 165, 0, 255);  // Bright orange for ask levels
   }
 }
 

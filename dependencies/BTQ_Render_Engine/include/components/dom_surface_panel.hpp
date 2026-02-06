@@ -169,7 +169,7 @@ class DomSurfacePanel : public PanelBase {
   };
 
   std::vector<PersistentLevel> persistent_levels_;
-  uint64_t persistence_threshold_ms_ = 5000;  // 5 seconds persistence threshold
+  uint64_t persistence_threshold_ms_ = 30000;  // 30 seconds persistence threshold
   double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
   bool show_persistent_lines_ = true;         // Toggle for persistent line display
 

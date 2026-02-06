@@ -434,11 +434,11 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 ### TASK 23: COMPILE FIXES & BUILD OPTIMIZATION
 - [x] Implement missing `get_active_tab()` and `set_active_tab(int)` in `dependencies/BTQRenderEngine/include/components/optionanalyticspanel.hpp` to resolve the current `panel_manager.cpp` build errors.
 - [x] Update `build_integration.sh` to use the Ninja generator for faster iteration: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
-- [ ] Clean up dead code: delete all deprecated references to `HotspineDataBridge` and ensure the engine exclusively uses the Vulkan/ImGui pipeline.
+- [x] Clean up dead code: delete all deprecated references to `HotspineDataBridge` and ensure the engine exclusively uses the Vulkan/ImGui pipeline.
 - [x] Address C++23 deprecation warnings: fix the `deprecated-literal-operator` warnings in `nlohmann/json.hpp` by updating the header or adding `-Wno-deprecated-literal-operator` to `CMakeLists.txt`.
 
 ### TASK 24: STRUCTURAL LAYOUT (BINDS & GROUPS)
-- [ ] Implement "Panel Binds": add logic in `src/components/panel_manager.cpp` to lock panels together into a single "Super-panel" grid, preventing them from overlapping or floating independently.
+- [x] Implement "Panel Binds": add logic in `src/components/panel_manager.cpp` to lock panels together into a single "Super-panel" grid, preventing them from overlapping or floating independently.
 - [ ] Create "Panel Groups": allow dragging one panel into another to create a "Tabbed Group" (e.g., merging Chart and Time & Sales into one window with tabs at the bottom).
 - [ ] Implement "Auto-Docking": update the panel spawn logic so new panels automatically snap to empty edges of existing panels rather than spawning at `(0,0)`.
 - [ ] Fix Z-index and focus: ensure `Dashboard Controls` always stays in the top-right corner and cannot be covered by other panels.

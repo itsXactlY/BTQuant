@@ -142,6 +142,9 @@ void PanelManager::render() {
     const_cast<BTQuant::PanelBase*>(panel)->handle_context_menu(*context_menu_manager_);
   }
 
+  // Process drag-and-drop for visible panels
+  process_panel_drag_and_drop(panels_with_ids, panel_to_id);
+
   // Render only the visible panels
   for (const auto* panel : visible_panels) {
     uint32_t panel_id = panel_to_id.at(panel);  // Safe lookup with at()
@@ -309,6 +312,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
+    case PanelType::TABBED_PANEL:
+      panel = std::make_unique<TabbedPanel>(config, this);
+      break;
     default:
       return 0;
   }
@@ -469,6 +475,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
+      break;
+    case PanelType::TABBED_PANEL:
+      panel = std::make_unique<TabbedPanel>(config, this);
       break;
     default:
       return 0;
@@ -1113,6 +1122,17 @@ std::string PanelManager::serialize_layout() const {
     else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
         settings_json["active_tab"] = option_panel->get_active_tab();
     }
+    // Tabbed Panel specific settings
+    else if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel.get())) {
+        settings_json["active_tab"] = tabbed_panel->get_active_tab();
+        
+        // Serialize the panel IDs in the tabbed panel
+        json tabbed_panels_json = json::array();
+        for (uint32_t panel_id : tabbed_panel->get_tabbed_panels()) {
+            tabbed_panels_json.push_back(panel_id);
+        }
+        settings_json["tabbed_panels"] = tabbed_panels_json;
+    }
 
     // Add settings if any were captured
     if (!settings_json.empty()) {
@@ -1269,6 +1289,22 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                 else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel)) {
                     if (settings.contains("active_tab")) {
                         option_panel->set_active_tab(settings["active_tab"].get<int>());
+                    }
+                }
+                // Tabbed Panel specific settings
+                else if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel)) {
+                    if (settings.contains("active_tab")) {
+                        tabbed_panel->set_active_tab(settings["active_tab"].get<int>());
+                    }
+                    if (settings.contains("tabbed_panels")) {
+                        auto tabbed_panels_array = settings["tabbed_panels"];
+                        for (const auto& panel_id_val : tabbed_panels_array) {
+                            uint32_t panel_id = panel_id_val.get<uint32_t>();
+                            // Add panel to tabbed panel if it exists
+                            if (panels_.find(panel_id) != panels_.end()) {
+                                tabbed_panel->add_panel(panel_id);
+                            }
+                        }
                     }
                 }
             }
@@ -1836,6 +1872,78 @@ bool PanelManager::are_panels_bound_together(const std::vector<uint32_t>& panel_
   }
   
   return false;
+}
+
+void PanelManager::process_panel_drag_and_drop(
+    const std::vector<std::pair<uint32_t, const BTQuant::PanelBase*>>& panels_with_ids,
+    const std::unordered_map<const BTQuant::PanelBase*, uint32_t>& panel_to_id) {
+  (void)panel_to_id; // Suppress unused parameter warning
+  
+  // Process drag-and-drop for all panels
+  for (const auto& [source_id, source_panel] : panels_with_ids) {
+    // Only process drag if the panel can be a drag source
+    if (!source_panel->is_drag_source()) {
+      continue;
+    }
+
+    // Make the panel a drag source
+    std::string drag_source_id = "PANEL_DRAG_SOURCE_" + std::to_string(source_id);
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+      // Set the payload to the panel ID
+      ImGui::SetDragDropPayload("PANEL_ID", &source_id, sizeof(uint32_t));
+      
+      // Show a preview of what's being dragged
+      ImGui::Text("Moving panel: %s", source_panel->get_title().c_str());
+      
+      ImGui::EndDragDropSource();
+    }
+  }
+
+  // Process drop targets - check if any panel can accept a dropped panel
+  for (const auto& [target_id, target_panel] : panels_with_ids) {
+    // Only process drop if the panel can accept drops
+    if (!target_panel->can_accept_drop()) {
+      continue;
+    }
+
+    // Make the panel a drop target
+    std::string drop_target_id = "PANEL_DROP_TARGET_" + std::to_string(target_id);
+    ImGui::PushID(drop_target_id.c_str());
+    
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PANEL_ID")) {
+        if (payload->DataSize == sizeof(uint32_t)) {
+          uint32_t source_panel_id = *(static_cast<const uint32_t*>(payload->Data));
+          
+          // Don't allow dropping a panel onto itself
+          if (source_panel_id != target_id) {
+            // Handle the drop by calling the target panel's drop handler
+            PanelBase* target_panel_ptr = get_panel_by_id(target_id);
+            if (target_panel_ptr && target_panel_ptr->can_accept_drop()) {
+              if (target_panel_ptr->handle_drop(source_panel_id)) {
+                // Successfully handled the drop - remove the source panel from the main panel list
+                // since it's now managed by the target panel
+                auto source_it = panels_.find(source_panel_id);
+                if (source_it != panels_.end()) {
+                  // For now, we'll just hide the source panel. In a real implementation,
+                  // we might want to remove it from the main panel list entirely or manage it differently.
+                  source_it->second->set_visible(false);
+                  
+                  // Also remove it from any existing groups
+                  auto group_ids = get_panel_groups_for_panel(source_panel_id);
+                  for (uint32_t group_id : group_ids) {
+                    remove_panel_from_group(group_id, source_panel_id);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      ImGui::EndDragDropTarget();
+    }
+    ImGui::PopID();
+  }
 }
 
 }  // namespace BTQuant

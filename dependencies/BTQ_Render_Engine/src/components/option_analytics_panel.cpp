@@ -89,6 +89,10 @@ std::string OptionAnalyticsPanel::getActiveTabName() const {
     return "";
 }
 
+void OptionAnalyticsPanel::update(float dt) {
+    (void)dt; // Suppress unused parameter warning
+}
+
 void OptionAnalyticsPanel::render() {
     begin_panel_window();
 

@@ -16,6 +16,7 @@
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 #include "strategy_builder.hpp"
+#include "tabbed_panel.hpp"
 #include "../ui/context_menus.hpp"
 
 // Forward declaration for AlertsPanel
@@ -182,6 +183,11 @@ class PanelManager {
 
   // Helper method for deserialization
   uint32_t find_panel_by_type_and_position(PanelType type, int grid_x, int grid_y) const;
+
+  // Drag and drop functionality
+  void process_panel_drag_and_drop(
+      const std::vector<std::pair<uint32_t, const BTQuant::PanelBase*>>& panels_with_ids,
+      const std::unordered_map<const BTQuant::PanelBase*, uint32_t>& panel_to_id);
 };
 
 }  // namespace BTQuant

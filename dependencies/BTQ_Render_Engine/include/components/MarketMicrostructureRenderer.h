@@ -12,6 +12,64 @@
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
 
+// Forward declarations and missing type definitions
+struct LOBHeatmapConfig {
+    uint32_t width = 1024;
+    uint32_t height = 512;
+    float maxLiquidity = 100000.0f;
+    bool invertYAxis = false;
+};
+
+struct FootprintChartConfig {
+    uint32_t maxClusters = 4096;
+    float cellMinSize = 2.0f;
+    float cellMaxSize = 20.0f;
+    bool showLabels = true;
+};
+
+struct TPOProfileConfig {
+    uint32_t bucketCount = 256;
+    float priceResolution = 0.25f;
+    uint32_t timeWindowMs = 30000; // 30 seconds
+    bool resetOnUpdate = false;
+};
+
+struct RendererConfig {
+    LOBHeatmapConfig lobHeatmap;
+    FootprintChartConfig footprintChart;
+    TPOProfileConfig tpoProfile;
+};
+
+struct CandleCluster {
+    float centerX;           // Center X coordinate (time)
+    float centerY;           // Center Y coordinate (price)
+    float width;             // Cluster width (time duration)
+    float height;            // Cluster height (price range)
+    uint32_t bidVolume;      // Total bid volume
+    uint32_t askVolume;      // Total ask volume
+    uint32_t tradeCount;     // Number of trades
+    float vwap;              // Volume-weighted average price
+    bool hasTrades;          // Trade activity indicator
+
+    // Constructor
+    CandleCluster(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+                 uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t count = 0, float v = 0.0f,
+                 bool has = true)
+        : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol), askVolume(askVol),
+          tradeCount(count), vwap(v), hasTrades(has) {}
+};
+
+struct RendererStats {
+    uint32_t framesRendered = 0;
+    uint32_t lobUpdates = 0;
+    uint32_t tradeUpdates = 0;
+    uint32_t footprintCellsRendered = 0;
+    double averageFrameTimeMs = 0.0;
+    uint64_t lastUpdateTimeNs = 0;
+    uint32_t totalClusters = 0;
+    uint32_t activeClusters = 0;
+};
+
 namespace BTQuant {
 namespace RenderEngine {
 

@@ -104,6 +104,11 @@ void PanelBase::handle_context_menu(ContextMenuManager& manager) {
   manager.show_context_menu(this);
 }
 
+bool PanelBase::handle_drop(uint32_t source_panel_id) {
+  (void)source_panel_id; // Suppress unused parameter warning
+  return false; // Default implementation returns false
+}
+
 const char* PanelBase::get_panel_type_name(PanelType type) {
   switch (type) {
     case PanelType::CHART:
@@ -152,6 +157,8 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Time Statistics";
     case PanelType::TIME_AND_SALES:
       return "Time & Sales";
+    case PanelType::TABBED_PANEL:
+      return "Tabbed Panel";
     default:
       return "Unknown";
   }

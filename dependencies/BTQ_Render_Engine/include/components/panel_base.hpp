@@ -44,7 +44,8 @@ enum class PanelType {
   CHART_REPLAY,
   RISK_ANALYZER,
   STRATEGY_BUILDER,
-  OPTION_ANALYTICS
+  OPTION_ANALYTICS,
+  TABBED_PANEL
 };
 
 struct PanelConfig {
@@ -105,6 +106,11 @@ class PanelBase {
   // Context menu functionality
   virtual void render_context_menu() {}  // Virtual method for context menu
   virtual void handle_context_menu(class ContextMenuManager& manager);  // Virtual method for context menu handling
+
+  // Drag and drop functionality
+  virtual bool can_accept_drop() const { return false; }  // Whether this panel can accept dropped panels
+  virtual bool handle_drop(uint32_t source_panel_id);    // Handle a dropped panel
+  virtual bool is_drag_source() const { return true; }  // Whether this panel can be dragged
 
  protected:
   PanelConfig config_;

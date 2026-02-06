@@ -184,6 +184,9 @@ class PanelManager {
   // Helper method for deserialization
   uint32_t find_panel_by_type_and_position(PanelType type, int grid_x, int grid_y) const;
 
+  // Auto-docking functionality
+  std::pair<int, int> find_best_docking_position(int width, int height) const;
+
   // Drag and drop functionality
   void process_panel_drag_and_drop(
       const std::vector<std::pair<uint32_t, const BTQuant::PanelBase*>>& panels_with_ids,

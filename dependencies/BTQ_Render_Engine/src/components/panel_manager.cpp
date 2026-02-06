@@ -164,6 +164,11 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
                                  int width, int height) {
   uint32_t panel_id = next_panel_id_++;
 
+  // If default positions are used (-1, -1), find the best docking position
+  if (grid_x == -1 && grid_y == -1) {
+    std::tie(grid_x, grid_y) = find_best_docking_position(width, height);
+  }
+
   PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
 
   std::unique_ptr<PanelBase> panel;
@@ -363,6 +368,11 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
                                              const std::string& symbol, int grid_x, int grid_y,
                                              int width, int height) {
   uint32_t panel_id = next_panel_id_++;
+
+  // If default positions are used (-1, -1), find the best docking position
+  if (grid_x == -1 && grid_y == -1) {
+    std::tie(grid_x, grid_y) = find_best_docking_position(width, height);
+  }
 
   PanelConfig config =
       create_panel_config_with_symbol(type, title, symbol, grid_x, grid_y, width, height);
@@ -1944,6 +1954,201 @@ void PanelManager::process_panel_drag_and_drop(
     }
     ImGui::PopID();
   }
+}
+
+std::pair<int, int> PanelManager::find_best_docking_position(int width, int height) const {
+  // If no panels exist, return (0,0) as the starting position
+  if (panels_.empty()) {
+    return std::make_pair(0, 0);
+  }
+
+  // Define the grid boundaries
+  int max_cols = grid_layout_.columns;
+  int max_rows = grid_layout_.rows;
+
+  // Create a 2D grid to track occupied cells
+  std::vector<std::vector<bool>> occupied(max_rows, std::vector<bool>(max_cols, false));
+
+  // Mark occupied cells based on existing panels
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    
+    // Only consider visible panels that are not part of locked groups
+    if (config.visible) {
+      bool is_locked = false;
+      
+      // Check if panel is part of a locked group
+      auto group_it = panel_to_group_map_.find(id);
+      if (group_it != panel_to_group_map_.end()) {
+        uint32_t group_id = group_it->second;
+        auto panel_group_it = panel_groups_.find(group_id);
+        if (panel_group_it != panel_groups_.end() && panel_group_it->second.locked) {
+          is_locked = true;
+        }
+      }
+      
+      if (!is_locked) {
+        // Mark the grid cells occupied by this panel
+        for (int y = config.grid_y; y < config.grid_y + config.grid_height && y < max_rows; ++y) {
+          for (int x = config.grid_x; x < config.grid_x + config.grid_width && x < max_cols; ++x) {
+            if (x >= 0 && y >= 0) {  // Ensure we don't access negative indices
+              occupied[y][x] = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Look for the first available spot that fits the new panel
+  for (int y = 0; y < max_rows; ++y) {
+    for (int x = 0; x < max_cols; ++x) {
+      // Check if the space starting at (x,y) is available for the panel size
+      bool can_place = true;
+      if (x + width > max_cols || y + height > max_rows) {
+        can_place = false; // Panel would extend beyond grid boundaries
+      } else {
+        for (int dy = 0; dy < height && can_place; ++dy) {
+          for (int dx = 0; dx < width && can_place; ++dx) {
+            if (occupied[y + dy][x + dx]) {
+              can_place = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (can_place) {
+        return std::make_pair(x, y);
+      }
+    }
+  }
+
+  // If no space is found in the current grid, try to find adjacent positions
+  // to existing panels (docking behavior)
+  
+  // Check for potential docking positions around existing panels
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    
+    // Only consider visible panels that are not part of locked groups
+    if (!config.visible) continue;
+    
+    bool is_locked = false;
+    auto group_it = panel_to_group_map_.find(id);
+    if (group_it != panel_to_group_map_.end()) {
+      uint32_t group_id = group_it->second;
+      auto panel_group_it = panel_groups_.find(group_id);
+      if (panel_group_it != panel_groups_.end() && panel_group_it->second.locked) {
+        is_locked = true;
+      }
+    }
+    
+    if (is_locked) continue;
+
+    // Try placing to the right of the current panel
+    int right_x = config.grid_x + config.grid_width;
+    int right_y = config.grid_y;
+    if (right_x + width <= max_cols) {  // Check if it fits horizontally
+      bool can_place_right = true;
+      for (int dy = 0; dy < height && can_place_right; ++dy) {
+        for (int dx = 0; dx < width && can_place_right; ++dx) {
+          int check_x = right_x + dx;
+          int check_y = right_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows && check_x < max_cols) {
+            if (occupied[check_y][check_x]) {
+              can_place_right = false;
+              break;
+            }
+          } else {
+            can_place_right = false;  // Out of bounds
+            break;
+          }
+        }
+      }
+      if (can_place_right) {
+        return std::make_pair(right_x, right_y);
+      }
+    }
+
+    // Try placing below the current panel
+    int below_x = config.grid_x;
+    int below_y = config.grid_y + config.grid_height;
+    if (below_y + height <= max_rows) {  // Check if it fits vertically
+      bool can_place_below = true;
+      for (int dy = 0; dy < height && can_place_below; ++dy) {
+        for (int dx = 0; dx < width && can_place_below; ++dx) {
+          int check_x = below_x + dx;
+          int check_y = below_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows && check_x < max_cols) {
+            if (occupied[check_y][check_x]) {
+              can_place_below = false;
+              break;
+            }
+          } else {
+            can_place_below = false;  // Out of bounds
+            break;
+          }
+        }
+      }
+      if (can_place_below) {
+        return std::make_pair(below_x, below_y);
+      }
+    }
+
+    // Try placing to the left of the current panel
+    int left_x = config.grid_x - width;
+    int left_y = config.grid_y;
+    if (left_x >= 0) {  // Check if it fits horizontally
+      bool can_place_left = true;
+      for (int dy = 0; dy < height && can_place_left; ++dy) {
+        for (int dx = 0; dx < width && can_place_left; ++dx) {
+          int check_x = left_x + dx;
+          int check_y = left_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows && check_x < max_cols) {
+            if (occupied[check_y][check_x]) {
+              can_place_left = false;
+              break;
+            }
+          } else {
+            can_place_left = false;  // Out of bounds
+            break;
+          }
+        }
+      }
+      if (can_place_left) {
+        return std::make_pair(left_x, left_y);
+      }
+    }
+
+    // Try placing above the current panel
+    int above_x = config.grid_x;
+    int above_y = config.grid_y - height;
+    if (above_y >= 0) {  // Check if it fits vertically
+      bool can_place_above = true;
+      for (int dy = 0; dy < height && can_place_above; ++dy) {
+        for (int dx = 0; dx < width && can_place_above; ++dx) {
+          int check_x = above_x + dx;
+          int check_y = above_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows && check_x < max_cols) {
+            if (occupied[check_y][check_x]) {
+              can_place_above = false;
+              break;
+            }
+          } else {
+            can_place_above = false;  // Out of bounds
+            break;
+          }
+        }
+      }
+      if (can_place_above) {
+        return std::make_pair(above_x, above_y);
+      }
+    }
+  }
+
+  // If still no space found, return (0,0) as fallback
+  return std::make_pair(0, 0);
 }
 
 }  // namespace BTQuant

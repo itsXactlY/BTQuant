@@ -29,6 +29,25 @@ class QuantWorkspaceComponent : public UIComponent {
 
   PanelManager* getPanelManager() { return panel_manager_.get(); }
 
+  // Pass-through methods to expose state to the Dashboard
+  OrderManager* getOrderManager() const { return order_manager_.get(); }
+  PositionManager* getPositionManager() const { return position_manager_.get(); }
+  RiskAssessment* getRiskAssessment() const { return risk_assessment_.get(); }
+  HotSpineDataBridge* getDataBridge() const { return bridge_.get(); }
+  RenderEngine::MarketDataProcessor* getMarketDataProcessor() const { return processor_.get(); }
+  
+  // UI state getters
+  const std::string& getSelectedSymbol() const { return selected_symbol_; }
+  double getOrderQuantity() const { return order_quantity_; }
+  double getOrderPrice() const { return order_price_; }
+  int getSelectedOrderSide() const { return selected_order_side_; }  // 0 = Buy, 1 = Sell
+  int getSelectedOrderType() const { return selected_order_type_; }  // 0 = Market, 1 = Limit
+  bool getShowDashboardControls() const { return show_dashboard_controls_; }
+  
+  // Selector state getters
+  const HierarchicalSelectorState& getSelectorState() const { return selector_state_; }
+  const HierarchicalSelector& getHierarchicalSelector() const { return hierarchical_selector_; }
+
   void initialize_vulkan_resources(VulkanCore* core) override;
   void clear_data() override;
 

@@ -140,7 +140,6 @@ class AlertManager {
 // Forward declarations
 class VulkanDashboard;
 class QuantWorkspaceComponent;
-class RealtimeDashboardComponent;
 
 class ResizablePanel : public UIComponent {
  public:
@@ -320,7 +319,6 @@ class VulkanDashboard {
   std::string active_symbol_ = "BTC-USDT";
   std::unique_ptr<VulkanCore> vulkan_core_;
   std::unique_ptr<QuantWorkspaceComponent> workspace_;
-  std::unique_ptr<RealtimeDashboardComponent> modern_dashboard_;
   std::unique_ptr<RenderEngine::MarketMicrostructureRenderer> micro_renderer_;
   std::unique_ptr<VulkanSyncContext> sync_context_;
   std::unique_ptr<TimelineSemaphore> timeline_semaphore_;
@@ -330,7 +328,6 @@ class VulkanDashboard {
   bool show_performance_overlay_ = false;
   bool always_on_top_ = false;
 
-  bool use_modern_dashboard_ = false;
   uint32_t current_image_index_ = 0;
   bool is_running_ = true;
   bool window_resized_ = false;

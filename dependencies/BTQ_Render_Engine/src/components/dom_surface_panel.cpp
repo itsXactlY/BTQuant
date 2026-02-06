@@ -616,20 +616,31 @@ void DomSurfacePanel::render() {
   begin_panel_window();
 
   if (current_symbol_id_ == 0 || heatmap_data_.empty()) {
-    ImGui::Text("No Data / Select Symbol");
+    // Enhanced "No Data" display with better styling
+    ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), " ");
+    ImGui::TextColored(ImVec4(0.5f, 0.7f, 1.0f, 1.0f), "           DOM SURFACE");
+    ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), " ");
+    ImGui::TextColored(ImVec4(0.9f, 0.9f, 1.0f, 1.0f), "     LIQUIDITY HEATMAP");
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 1.0f, 1.0f), " ");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.8f, 1.0f), "  No Data / Select Symbol");
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.7f, 1.0f), " ");
+    ImGui::TextColored(ImVec4(0.4f, 0.6f, 0.8f, 1.0f), "  Dark Blue → Bright Yellow");
+    ImGui::TextColored(ImVec4(0.3f, 0.5f, 0.7f, 1.0f), "  Intensity-Based Heatmap");
     end_panel_window();
     return;
   }
 
-  // DOM Surface controls
+  // DOM Surface controls with enhanced styling
   if (ImGui::Button("Reset View")) {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
   ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
   ImGui::SameLine();
-  ImGui::Text(" | Symbols: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
-              large_order_markers_.size(), trade_bubbles_.size());
+  ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "| Symbol: %u | Bins: %d | Orders: %zu | Trades: %zu", 
+                     current_symbol_id_, price_bins_, large_order_markers_.size(), trade_bubbles_.size());
 
   // Enable Pan/Zoom for DOM Surface
   std::string plot_id = "##DomHeatmap_" + std::to_string(current_symbol_id_);
@@ -653,18 +664,23 @@ void DomSurfacePanel::render() {
     if (cols > 0 && rows > 0) {
       // Define custom colormap data for Dark Blue to Bright Yellow with enhanced intensity mapping
       static const ImU32 custom_colors[] = {
-          IM_COL32(0, 0, 50, 255),    // Deep Navy Blue (enhanced dark start)
-          IM_COL32(0, 0, 139, 255),   // Dark Blue
-          IM_COL32(0, 0, 255, 255),   // Blue
-          IM_COL32(0, 200, 255, 255), // Light Blue
-          IM_COL32(0, 255, 255, 255), // Cyan
-          IM_COL32(0, 200, 0, 255),   // Dark Green
-          IM_COL32(0, 255, 0, 255),   // Green
-          IM_COL32(180, 255, 0, 255), // Lime Green
-          IM_COL32(255, 255, 0, 255), // Bright Yellow
-          IM_COL32(255, 200, 0, 255)  // Amber
+          IM_COL32(0, 0, 64, 255),     // Very Dark Blue (enhanced dark start for low liquidity)
+          IM_COL32(0, 0, 128, 255),    // Dark Blue
+          IM_COL32(0, 0, 200, 255),    // Medium Blue
+          IM_COL32(0, 100, 255, 255),  // Light Blue
+          IM_COL32(0, 200, 255, 255),  // Cyan
+          IM_COL32(0, 255, 200, 255),  // Aquamarine
+          IM_COL32(0, 255, 100, 255),  // Spring Green
+          IM_COL32(0, 255, 0, 255),    // Bright Green
+          IM_COL32(180, 255, 0, 255),  // Lime Green
+          IM_COL32(255, 255, 0, 255),  // Bright Yellow (high liquidity)
+          IM_COL32(255, 200, 0, 255),  // Amber
+          IM_COL32(255, 150, 0, 255),  // Orange
+          IM_COL32(255, 100, 0, 255),  // Red-Orange
+          IM_COL32(255, 50, 0, 255),   // Bright Red
+          IM_COL32(255, 0, 0, 255)     // Pure Red (maximum liquidity)
       };
-      static ImPlotColormap custom_colormap = ImPlot::AddColormap("EnhancedBlueYellow", custom_colors, 10);
+      static ImPlotColormap custom_colormap = ImPlot::AddColormap("EnhancedBlueYellow", custom_colors, 15);
 
       ImPlot::PushColormap(custom_colormap);
       // Apply heatmap intensity to adjust color mapping sensitivity
@@ -689,16 +705,29 @@ void DomSurfacePanel::render() {
     ImPlot::EndPlot();
   }
 
-  // Status Information Overlay
+  // Status Information Overlay - Clean and organized display
   if (heatmap_data_.size() > 0) {
     ImGui::SetCursorPos(ImVec2(10, 30));
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Liquidity: Max=%.2f, Samples: %zu, Bins: %d", scale_max_,
-                       heatmap_data_.size() / price_bins_, price_bins_);
-    ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Markers: %zu (Avg: %.2f)", large_order_markers_.size(),
-                median_order_size_);
-    ImGui::Text("Trade Bubbles: %zu (MaxVol: %.2f)", trade_bubbles_.size(), max_trade_volume_);
-    ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
+    
+    // Liquidity information with enhanced color coding
+    ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "LIQUIDITY: Max=%.2f | Samples: %zu | Bins: %d", 
+                       scale_max_, heatmap_data_.size() / price_bins_, price_bins_);
+    
+    // Price range information
+    ImGui::TextColored(ImVec4(0.7f, 1.0f, 0.7f, 1.0f), "PRICE: %.4f - %.4f", 
+                       bounds_min_[1], bounds_max_[1]);
+    
+    // Large order markers information
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "MARKERS: %zu | Avg: %.2f", 
+                       large_order_markers_.size(), median_order_size_);
+    
+    // Trade bubbles information
+    ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.9f, 1.0f), "TRADES: %zu | MaxVol: %.2f", 
+                       trade_bubbles_.size(), max_trade_volume_);
+    
+    // Persistent levels information
+    ImGui::TextColored(ImVec4(0.5f, 0.9f, 1.0f, 1.0f), "PERSISTENT: %zu", 
+                       persistent_levels_.size());
   }
 
   end_panel_window();
@@ -873,7 +902,7 @@ void DomSurfacePanel::render_panel_header() {
 
   // Add heatmap intensity slider to the panel header
   ImGui::Separator();
-  ImGui::Text("Heatmap Intensity:");
+  ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "HEATMAP INTENSITY:");
   ImGui::SameLine();
   ImGui::PushItemWidth(200);
   ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
@@ -883,9 +912,9 @@ void DomSurfacePanel::render_panel_header() {
     heatmap_intensity_ = 1.0f;
   }
   ImGui::Separator();
-  
+
   // Add Large Order Tracker controls
-  ImGui::Text("Large Order Tracker:");
+  ImGui::TextColored(ImVec4(0.8f, 0.9f, 0.5f, 1.0f), "LARGE ORDER TRACKER:");
   ImGui::SameLine();
   ImGui::PushItemWidth(150);
   ImGui::SliderFloat("##Threshold", &large_order_threshold_, 1.0f, 50.0f, "Threshold: %.1fx", ImGuiSliderFlags_Logarithmic);
@@ -897,9 +926,9 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::SameLine();
   ImGui::Checkbox("Fade Out", &enable_fade_out_);
   ImGui::Separator();
-  
+
   // Add Persistent Level controls
-  ImGui::Text("Persistent Levels:");
+  ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.8f, 1.0f), "PERSISTENT LEVELS:");
   ImGui::SameLine();
   ImGui::PushItemWidth(150);
   ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 1000, 30000, "%d ms");

@@ -40,23 +40,34 @@ struct RendererConfig {
     TPOProfileConfig tpoProfile;
 };
 
+namespace BTQuant {
+namespace RenderEngine {
+
 struct CandleCluster {
-    float centerX;           // Center X coordinate (time)
-    float centerY;           // Center Y coordinate (price)
-    float width;             // Cluster width (time duration)
-    float height;            // Cluster height (price range)
-    uint32_t bidVolume;      // Total bid volume
-    uint32_t askVolume;      // Total ask volume
-    uint32_t tradeCount;     // Number of trades
-    float vwap;              // Volume-weighted average price
-    bool hasTrades;          // Trade activity indicator
+    float centerX;                    // Center X coordinate (time)
+    float centerY;                    // Center Y coordinate (price)
+    float width;                      // Cluster width (time duration)
+    float height;                     // Cluster height (price range)
+    uint32_t bidVolume;               // Total bid volume
+    uint32_t askVolume;               // Total ask volume
+    uint32_t tradeCount;              // Number of trades
+    float vwap;                       // Volume-weighted average price
+    bool hasTrades;                   // Trade activity indicator
+    uint32_t buyTradeCount;           // Number of buy trades
+    uint32_t sellTradeCount;          // Number of sell trades
+    float maxSingleTradeVolume;       // Maximum single trade volume in cluster
+    uint64_t startTimeNs;             // Start time in nanoseconds
+    uint64_t endTimeNs;               // End time in nanoseconds
 
     // Constructor
     CandleCluster(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
                  uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t count = 0, float v = 0.0f,
-                 bool has = true)
+                 bool has = true, uint32_t buyCount = 0, uint32_t sellCount = 0, 
+                 float maxVol = 0.0f, uint64_t startNs = 0, uint64_t endNs = 0)
         : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol), askVolume(askVol),
-          tradeCount(count), vwap(v), hasTrades(has) {}
+          tradeCount(count), vwap(v), hasTrades(has), buyTradeCount(buyCount), 
+          sellTradeCount(sellCount), maxSingleTradeVolume(maxVol), 
+          startTimeNs(startNs), endTimeNs(endNs) {}
 };
 
 struct RendererStats {
@@ -69,9 +80,6 @@ struct RendererStats {
     uint32_t totalClusters = 0;
     uint32_t activeClusters = 0;
 };
-
-namespace BTQuant {
-namespace RenderEngine {
 
 // Forward declaration removed as we iterate include
 // class MarketDataProcessor; // Included now

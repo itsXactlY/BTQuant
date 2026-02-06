@@ -2,6 +2,9 @@
 
 #include <mutex>
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 // TradeDataPool implementation

@@ -60,6 +60,51 @@ void PanelBase::render_panel_header() {
   ImGui::TextColored(ImVec4(0.5f, 0.8f, 1.0f, 1.0f), "[%s]", type_name);
 
   ImGui::SameLine();
+  
+  // Symbol link group indicator (color-coded link icon)
+  if (config_.symbol_link_group > 0) {
+    ImVec4 link_color;
+    const char* link_icon = "🔗";
+    
+    switch (config_.symbol_link_group) {
+      case 1: // Red group
+        link_color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+        break;
+      case 2: // Green group
+        link_color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+        break;
+      case 3: // Blue group
+        link_color = ImVec4(0.0f, 0.0f, 1.0f, 1.0f);
+        break;
+      default:
+        link_color = ImVec4(0.5f, 0.5f, 0.5f, 1.0f); // Gray for other groups
+        break;
+    }
+    
+    // Make the link icon clickable to remove the panel from the group
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent button
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f)); // Slightly highlighted on hover
+    if (ImGui::Button(link_icon, ImVec2(ImGui::GetFontSize(), ImGui::GetFontSize()))) {
+      // Clicking the link icon removes the panel from the symbol link group
+      // This would be handled by the parent PanelManager
+    }
+    ImGui::PopStyleColor(2);
+    ImGui::SameLine();
+  } else {
+    // Show an unlinked icon that can be clicked to add to a group
+    const char* unlink_icon = "🔗";
+    ImVec4 unlink_color = ImVec4(0.5f, 0.5f, 0.5f, 0.5f); // Gray for unlinked
+    
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0)); // Transparent button
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.3f)); // Slightly highlighted on hover
+    if (ImGui::Button(unlink_icon, ImVec2(ImGui::GetFontSize(), ImGui::GetFontSize()))) {
+      // Clicking the unlinked icon could open a context menu to assign to a group
+      // This would be handled by the parent PanelManager
+    }
+    ImGui::PopStyleColor(2);
+    ImGui::SameLine();
+  }
+  
   ImGui::Text("%s", config_.title.c_str());
 
   // Settings button (left of close button)

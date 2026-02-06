@@ -138,6 +138,11 @@ class PanelManager {
   bool delete_panel_group(uint32_t group_id);
   std::vector<uint32_t> get_panel_groups_for_panel(uint32_t panel_id) const;
   bool is_panel_bound(uint32_t panel_id) const;
+  
+  // Symbol link group functionality
+  void set_panel_symbol_link_group(uint32_t panel_id, int group);
+  void update_linked_symbols(uint32_t source_panel_id, const std::string& new_symbol);
+  std::vector<uint32_t> get_panels_in_symbol_link_group(int group) const;
 
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

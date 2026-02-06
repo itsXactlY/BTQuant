@@ -1420,12 +1420,73 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
                                   panel->get_config().grid_width, panel->get_config().grid_height);
       }
     }
+    
+    // Symbol Link Group Options
+    if (ImGui::BeginMenu("Symbol Link Group")) {
+      // Show current group status
+      int current_group = panel->get_config().symbol_link_group;
+      if (current_group == 0) {
+        ImGui::Text("Not linked to any group");
+      } else {
+        const char* group_name = (current_group == 1) ? "Red Group" : 
+                                (current_group == 2) ? "Green Group" : "Blue Group";
+        ImGui::Text("Linked to: %s", group_name);
+      }
+      
+      ImGui::Separator();
+      
+      // Red Group
+      bool is_red_group = (current_group == 1);
+      if (ImGui::MenuItem("Red Group", nullptr, &is_red_group)) {
+        if (panel_manager_ && panel_id != 0) {
+          if (is_red_group) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 1);
+          } else if (current_group == 1) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 0);
+          }
+        }
+      }
+      
+      // Green Group
+      bool is_green_group = (current_group == 2);
+      if (ImGui::MenuItem("Green Group", nullptr, &is_green_group)) {
+        if (panel_manager_ && panel_id != 0) {
+          if (is_green_group) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 2);
+          } else if (current_group == 2) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 0);
+          }
+        }
+      }
+      
+      // Blue Group
+      bool is_blue_group = (current_group == 3);
+      if (ImGui::MenuItem("Blue Group", nullptr, &is_blue_group)) {
+        if (panel_manager_ && panel_id != 0) {
+          if (is_blue_group) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 3);
+          } else if (current_group == 3) {
+            panel_manager_->set_panel_symbol_link_group(panel_id, 0);
+          }
+        }
+      }
+      
+      // Unlink from group
+      if (current_group > 0 && ImGui::MenuItem("Remove from Group")) {
+        if (panel_manager_ && panel_id != 0) {
+          panel_manager_->set_panel_symbol_link_group(panel_id, 0);
+        }
+      }
+      
+      ImGui::EndMenu();
+    }
+    
     if (ImGui::MenuItem("Apply Symbol to All")) {
       // Apply the current panel's symbol to all other panels
       if (panel_manager_ && !panel->get_config().symbol.empty()) {
         // Get the current symbol from this panel
         std::string current_symbol = panel->get_config().symbol;
-        
+
         // Iterate through all panels and update their symbols
         auto all_panel_ids = panel_manager_->get_all_panel_ids();
         for (uint32_t id : all_panel_ids) {
@@ -1436,7 +1497,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
               PanelConfig updated_config = other_panel->get_config();
               updated_config.symbol = current_symbol;
               panel_manager_->update_panel_config(id, updated_config);
-              
+
               // If the panel has a specific method to set symbol, call it
               // This would require casting to specific panel types, but for now we'll update the config
             }

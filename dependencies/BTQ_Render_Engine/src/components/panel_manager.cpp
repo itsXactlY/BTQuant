@@ -888,6 +888,12 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
       default:
         break;
     }
+    
+    // Update the panel's config symbol
+    it->second->get_config().symbol = symbol;
+    
+    // Update linked symbols in the same symbol link group
+    update_linked_symbols(panel_id, symbol);
   }
 }
 
@@ -2678,6 +2684,48 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
   }
 
   return std::make_pair(max_x, 0);
+}
+
+void PanelManager::set_panel_symbol_link_group(uint32_t panel_id, int group) {
+  auto it = panels_.find(panel_id);
+  if (it != panels_.end()) {
+    it->second->set_symbol_link_group(group);
+  }
+}
+
+void PanelManager::update_linked_symbols(uint32_t source_panel_id, const std::string& new_symbol) {
+  auto source_it = panels_.find(source_panel_id);
+  if (source_it == panels_.end()) {
+    return; // Source panel not found
+  }
+  
+  int source_group = source_it->second->get_symbol_link_group();
+  if (source_group <= 0) {
+    return; // Source panel is not in a symbol link group
+  }
+  
+  // Update all panels in the same symbol link group
+  for (auto& [id, panel] : panels_) {
+    if (id != source_panel_id && panel->get_symbol_link_group() == source_group) {
+      // Update the panel's symbol if it has symbol-dependent functionality
+      set_panel_symbol(id, new_symbol);
+      
+      // Update the panel's config symbol
+      panel->get_config().symbol = new_symbol;
+    }
+  }
+}
+
+std::vector<uint32_t> PanelManager::get_panels_in_symbol_link_group(int group) const {
+  std::vector<uint32_t> panel_ids;
+  
+  for (const auto& [id, panel] : panels_) {
+    if (panel->get_symbol_link_group() == group) {
+      panel_ids.push_back(id);
+    }
+  }
+  
+  return panel_ids;
 }
 
 void PanelManager::mark_visualization_panels_dirty() {

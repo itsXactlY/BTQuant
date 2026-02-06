@@ -63,6 +63,9 @@ struct PanelConfig {
   int grid_height = 1;
   std::string symbol = "";  // Trading symbol associated with the panel
 
+  // Symbol link group functionality
+  int symbol_link_group = 0;  // 0 = no group, 1 = red group, 2 = green group, 3 = blue group
+
   // Per-panel settings data
   std::string settings_key = "";  // Key for identifying panel-specific settings
 };
@@ -98,6 +101,10 @@ class PanelBase {
   bool is_visible() const { return config_.visible; }
   bool is_minimized() const { return config_.minimized; }
   const std::string& get_title() const { return config_.title; }
+  
+  // Symbol link group functionality
+  int get_symbol_link_group() const { return config_.symbol_link_group; }
+  void set_symbol_link_group(int group) { config_.symbol_link_group = group; }
 
   // Per-panel settings functionality
   virtual PanelSettingsInterface* get_settings_interface() { return nullptr; }

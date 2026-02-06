@@ -11,6 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Vulkan REQUIRED)
 find_package(Threads REQUIRED)
 
+# Disable treating warnings as errors and suppress deprecated literal operator warnings
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-deprecated-declarations -Wno-deprecated-literal-operator")
+
 # Find GLSL compiler
 find_program(GLSLC glslc)
 if(NOT GLSLC)

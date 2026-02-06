@@ -8,6 +8,7 @@
 #include "components/footprint_panel.hpp"
 #include "components/interaction_manager.hpp"
 #include "components/MarketMicrostructureRenderer.h"
+#include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
@@ -86,29 +87,39 @@ void VulkanDashboard::init_components() {
   // Register Hotkeys
   auto& im = InteractionManager::getInstance();
 
-  // Ctrl+1 to Ctrl+5 for layout switching or panel focus (Placeholder)
-  // Ctrl+1 to Ctrl+5 for layout switching
+  // Keys 1-4 for layout switching
   auto* workspace = workspace_.get();  // Capture for lambda
   im.registerHotKey(
       ImGuiKey_1,
       [workspace]() {
-        if (workspace->getPanelManager()) {
-          // workspace->getPanelManager()->load_layout("layout_desktop_3x5.json");
-          std::cout << "[Layout] Switched to Desktop 3x5" << std::endl;
-          workspace->getPanelManager()->auto_arrange_panels();  // Simple verification action
-        }
+        workspace->set_layout(LayoutPreset::DEFAULT);
+        std::cout << "[Layout] Switched to Default Layout" << std::endl;
       },
-      "Layout 1 (3x5 Grid)", true);
+      "Layout 1 (Default Layout)");
 
   im.registerHotKey(
       ImGuiKey_2,
       [workspace]() {
-        if (workspace->getPanelManager()) {
-          // workspace->getPanelManager()->load_layout("layout_focus_chart.json");
-          std::cout << "[Layout] Switched to Chart Focus" << std::endl;
-        }
+        workspace->set_layout(LayoutPreset::MODERN_TRADING);
+        std::cout << "[Layout] Switched to Modern Trading Layout" << std::endl;
       },
-      "Layout 2 (Chart Focus)", true);
+      "Layout 2 (Modern Trading Layout)");
+
+  im.registerHotKey(
+      ImGuiKey_3,
+      [workspace]() {
+        workspace->set_layout(LayoutPreset::PRO_QUANT);
+        std::cout << "[Layout] Switched to Pro Quant Layout" << std::endl;
+      },
+      "Layout 3 (Pro Quant Layout)");
+
+  im.registerHotKey(
+      ImGuiKey_4,
+      [workspace]() {
+        workspace->set_layout(LayoutPreset::SCALPER_DOM);
+        std::cout << "[Layout] Switched to Scalper DOM Layout" << std::endl;
+      },
+      "Layout 4 (Scalper DOM Layout)");
 
   // Space to Toggle Theme
   im.registerHotKey(

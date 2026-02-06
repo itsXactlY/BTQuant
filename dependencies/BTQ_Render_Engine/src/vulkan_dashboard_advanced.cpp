@@ -22,7 +22,6 @@
 
 using BTQuant::RenderEngine::OrderbookData;
 using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::CandleCluster;
 
 
 namespace BTQuant {
@@ -559,7 +558,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(std::span<const CandleCluster>(clusters));
+      micro_renderer_->updateFootprintClusters(std::span<const BTQuant::RenderEngine::CandleCluster>(clusters));
     }
   }
 }

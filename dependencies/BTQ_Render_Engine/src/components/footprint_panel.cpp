@@ -15,6 +15,11 @@
 #include "imgui.h"
 #include "implot.h"
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 // Helper function to format numbers according to the selected format

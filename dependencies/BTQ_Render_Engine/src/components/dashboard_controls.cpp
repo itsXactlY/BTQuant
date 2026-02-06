@@ -130,8 +130,8 @@ void DashboardControls::render_dashboard_controls() {
   ImGui::SetNextWindowSize(ImVec2(window_width, 500), ImGuiCond_FirstUseEver);
 
   // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
-  // Remove NoBringToFrontOnFocus flag to allow it to stay on top when needed
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize)) {
+  // Add AlwaysTopMost flag to ensure the window stays on top regardless of other interactions
+  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_AlwaysTopMost)) {
     // Ensure the window stays on top by bringing it to front every frame
     ImGui::SetWindowFocus();
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());

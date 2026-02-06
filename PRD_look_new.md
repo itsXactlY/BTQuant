@@ -485,19 +485,19 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 30: ADD MISSING INCLUDES & CLEAN BUILD
-- [ ] Verify all three failing files include the correct headers:
+- [x] Verify all three failing files include the correct headers:
       - `main_trading_terminal.cpp` must include `"ui/layout_manager.hpp"` (or the header where `LayoutManager` is declared).
       - `vulkan_dashboard_advanced.cpp` must include `"market_data_processor.hpp"` and `"components/MarketMicrostructureRenderer.h"`.
       - `quant_workspace_component.cpp` must include `"imgui.h"` and `"imgui_internal.h"` for window flags and focus helpers.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 31: HARMONIZE CANDLECLUSTER DEFINITION
-- [ ] Update `include/components/MarketMicrostructureRenderer.h` to ensure `struct CandleCluster` is inside the `BTQuant::RenderEngine` namespace.
-- [ ] Add missing fields to `CandleCluster` struct:
+- [x] Update `include/components/MarketMicrostructureRenderer.h` to ensure `struct CandleCluster` is inside the `BTQuant::RenderEngine` namespace.
+- [x] Add missing fields to `CandleCluster` struct:
     - `float maxSingleTradeVolume;`
     - `double centerX;`
     - `double centerY;`
-- [ ] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
+- [x] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
 - [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 

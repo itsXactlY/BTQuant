@@ -9,8 +9,8 @@
 // ========================================
 
 struct CandleCluster {
-    float centerX;           // Center X coordinate (time)
-    float centerY;           // Center Y coordinate (price)
+    double centerX;          // Center X coordinate (time)
+    double centerY;          // Center Y coordinate (price)
     float width;             // Cluster width (time duration)
     float height;            // Cluster height (price range)
     uint bidVolume;          // Total bid volume
@@ -68,8 +68,8 @@ void main() {
     
     // Calculate quad corner position
     vec2 cornerPosition = vec2(
-        cluster.centerX + position.x * cluster.width,
-        cluster.centerY + position.y * cluster.height
+        float(cluster.centerX) + position.x * cluster.width,
+        float(cluster.centerY) + position.y * cluster.height
     );
     
     // Transform to clip space

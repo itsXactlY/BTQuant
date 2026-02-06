@@ -44,8 +44,8 @@ namespace BTQuant {
 namespace RenderEngine {
 
 struct CandleCluster {
-    float centerX;                    // Center X coordinate (time)
-    float centerY;                    // Center Y coordinate (price)
+    double centerX;                   // Center X coordinate (time)
+    double centerY;                   // Center Y coordinate (price)
     float width;                      // Cluster width (time duration)
     float height;                     // Cluster height (price range)
     uint32_t bidVolume;               // Total bid volume
@@ -62,16 +62,16 @@ struct CandleCluster {
     uint32_t endTimeHigh;             // End time upper 32 bits (was uint64_t)
 
     // Constructor
-    CandleCluster(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+    CandleCluster(double x = 0.0, double y = 0.0, float w = 0.0f, float h = 0.0f,
                  uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t count = 0, float v = 0.0f,
                  bool has = true, uint32_t buyCount = 0, uint32_t sellCount = 0,
                  float maxVol = 0.0f, uint64_t startNs = 0, uint64_t endNs = 0)
         : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol), askVolume(askVol),
           tradeCount(count), vwap(v), hasTrades(has ? 1u : 0u), buyTradeCount(buyCount),
           sellTradeCount(sellCount), maxSingleTradeVolume(maxVol),
-          startTimeLow(static_cast<uint32_t>(startNs)), 
+          startTimeLow(static_cast<uint32_t>(startNs)),
           startTimeHigh(static_cast<uint32_t>(startNs >> 32)),
-          endTimeLow(static_cast<uint32_t>(endNs)), 
+          endTimeLow(static_cast<uint32_t>(endNs)),
           endTimeHigh(static_cast<uint32_t>(endNs >> 32)) {}
 
     // Helper methods to get/set the full 64-bit timestamps

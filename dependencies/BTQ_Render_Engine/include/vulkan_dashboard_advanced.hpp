@@ -161,11 +161,6 @@ class ResizablePanel : public UIComponent {
   float grid_size_ = 10.0f;
 };
 
-class LayoutManager {
- public:
-  void create_default_layouts();
-  void save_layout(const std::string& name, const std::string& desc);
-};
 
 class SearchEngine {
  public:

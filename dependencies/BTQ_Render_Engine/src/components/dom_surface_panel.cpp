@@ -104,8 +104,8 @@ void DomSurfacePanel::processRecentTrades() {
       // Check if we already have this trade in our bubbles to avoid duplicates
       bool exists = false;
       for (const auto& bubble : trade_bubbles_) {
-        if (bubble.timestamp == trade.timestamp && 
-            std::abs(bubble.y - trade.price) < 0.0001 && 
+        if (bubble.timestamp == trade.timestamp &&
+            std::abs(bubble.y - trade.price) < 0.0001 &&
             std::abs(bubble.volume - trade.size) < 0.0001) {
           exists = true;
           break;
@@ -120,13 +120,20 @@ void DomSurfacePanel::processRecentTrades() {
     }
   }
 
+  // Limit the number of trade bubbles to prevent performance degradation
+  if (trade_bubbles_.size() > TRADE_HISTORY_SIZE) {
+    trade_bubbles_.erase(trade_bubbles_.begin(), 
+                         trade_bubbles_.begin() + (trade_bubbles_.size() - TRADE_HISTORY_SIZE));
+  }
+
   // Clean up bubbles that are outside the current view range to prevent accumulation
   cleanupOldTradeBubbles();
 }
 
 void DomSurfacePanel::cleanupOldTradeBubbles() {
-  // Remove bubbles that are outside the current view range
-  // This helps keep the vector size manageable
+  // This function is kept for compatibility but the main cleanup now happens in renderTradeBubbles()
+  // where bubbles are removed when they are fully faded out.
+  // We can still remove bubbles that are outside the current view range to keep vector size manageable
   
   trade_bubbles_.erase(
       std::remove_if(trade_bubbles_.begin(), trade_bubbles_.end(),
@@ -140,13 +147,13 @@ void DomSurfacePanel::cleanupOldTradeBubbles() {
 
 float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   // Use logarithmic scaling to prevent massive trades from covering the entire price axis
-  // Add 1 to volume to handle volume = 0 case, then apply log scaling
-  float log_volume = std::log10(std::max(static_cast<float>(volume), 1.0f));
-  
+  // Using natural log for better scaling properties, with minimum volume of 1 to avoid log(0)
+  float log_volume = std::log(std::max(static_cast<float>(volume), 1.0f));
+
   // Define log range based on min/max volumes (using 1 as minimum and current max as maximum)
-  float min_log_volume = std::log10(1.0f);  // log10(1) = 0
-  float max_log_volume = std::log10(std::max(static_cast<float>(max_trade_volume_), 1.0f));
-  
+  float min_log_volume = std::log(1.0f);  // log(1) = 0
+  float max_log_volume = std::log(std::max(static_cast<float>(max_trade_volume_), 1.0f));
+
   // Normalize the log volume to 0-1 range
   float normalized_log_volume = 0.0f;
   if (max_log_volume > min_log_volume) {
@@ -157,11 +164,11 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
 
   // Calculate radius: base_radius scaled by normalized log volume
   float base_radius = 3.0f;  // Base radius for smallest trades
-  float max_radius = 20.0f;  // Maximum radius
+  float max_radius = 25.0f;  // Increased maximum radius for better visibility
   float calculated_radius = base_radius + (max_radius - base_radius) * normalized_log_volume;
 
   // Clamp to reasonable range
-  return std::clamp(calculated_radius, 3.0f, 20.0f);
+  return std::clamp(calculated_radius, 3.0f, max_radius);
 }
 
 ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
@@ -185,30 +192,38 @@ void DomSurfacePanel::renderTradeBubbles() {
                               .count();
 
   // Render each trade bubble as a circle
-  for (const auto& bubble : trade_bubbles_) {
+  for (auto it = trade_bubbles_.begin(); it != trade_bubbles_.end();) {
+    const auto& bubble = *it;
     ImU32 color = getBubbleColor(bubble);
-    
+
     // Calculate fade-out factor based on time elapsed since trade
     uint64_t time_elapsed = current_time - (bubble.timestamp / 1000); // Convert timestamp from microseconds to milliseconds
     float fade_factor = 1.0f; // Full opacity initially
-    
-    // Fade out over time (e.g., fade out completely after 30 seconds)
-    const uint64_t FADE_DURATION_MS = 30000; // 30 seconds fade-out duration
-    if (time_elapsed > 0 && time_elapsed < FADE_DURATION_MS) {
-        fade_factor = 1.0f - static_cast<float>(time_elapsed) / static_cast<float>(FADE_DURATION_MS);
-    } else if (time_elapsed >= FADE_DURATION_MS) {
-        continue; // Skip rendering if completely faded out
+
+    // Fade out over time (fade out completely after 45 seconds for smoother transition)
+    const uint64_t FADE_DURATION_MS = 45000; // 45 seconds fade-out duration
+    if (time_elapsed >= FADE_DURATION_MS) {
+        it = trade_bubbles_.erase(it); // Remove completely faded bubbles
+        continue; // Skip to next bubble
+    } else if (time_elapsed > 0 && time_elapsed < FADE_DURATION_MS) {
+        // Apply smooth fade-out using cubic easing for more natural appearance
+        float t = static_cast<float>(time_elapsed) / static_cast<float>(FADE_DURATION_MS);
+        // Cubic ease-out: f(t) = 1 - pow(1-t, 3)
+        fade_factor = 1.0f - std::pow(1.0f - t, 3.0f);
     }
-    
+
     // Adjust color alpha based on fade factor
     ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
     color_vec.w *= fade_factor;
     ImU32 adjusted_color = ImGui::ColorConvertFloat4ToU32(color_vec);
-    
+
     // Adjust border color alpha as well
     ImVec4 border_color_vec = ImGui::ColorConvertU32ToFloat4(IM_COL32(255, 255, 255, 200));
     border_color_vec.w *= fade_factor;
     ImU32 adjusted_border_color = ImGui::ColorConvertFloat4ToU32(border_color_vec);
+
+    // Apply fade scaling to radius as well for smoother disappearance
+    float scaled_radius = bubble.radius * fade_factor;
 
     // Convert plot coordinates to pixel coordinates
     ImVec2 pixel_pos = ImPlot::PlotToPixels(bubble.x, bubble.y);
@@ -216,16 +231,16 @@ void DomSurfacePanel::renderTradeBubbles() {
     // Draw filled circle
     ImDrawList* draw_list = ImPlot::GetPlotDrawList();
     if (draw_list) {
-      draw_list->AddCircleFilled(pixel_pos, bubble.radius, adjusted_color, 32);
-      draw_list->AddCircle(pixel_pos, bubble.radius, adjusted_border_color, 32, 1.5f);
+      draw_list->AddCircleFilled(pixel_pos, scaled_radius, adjusted_color, 32);
+      draw_list->AddCircle(pixel_pos, scaled_radius, adjusted_border_color, 32, 1.5f);
 
       // Check for hover and show tooltip (only for non-faded bubbles)
-      if (fade_factor > 0.2f) { // Only show tooltip if not too faded
+      if (fade_factor > 0.1f) { // Only show tooltip if not too faded
         ImVec2 mouse_pos = ImGui::GetMousePos();
         float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
                                    std::pow(mouse_pos.y - pixel_pos.y, 2));
 
-        if (distance < bubble.radius) {
+        if (distance < scaled_radius) {
           std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}",
                                            bubble.is_buy ? "Buy" : "Sell",
                                            bubble.volume, bubble.price);
@@ -233,6 +248,8 @@ void DomSurfacePanel::renderTradeBubbles() {
         }
       }
     }
+    
+    ++it;
   }
 }
 

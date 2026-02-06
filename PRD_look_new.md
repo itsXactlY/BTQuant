@@ -443,7 +443,7 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
       - Replace `OrderbookData` with `BTQuant::RenderEngine::OrderbookData`.
       - Replace `TradeData` with `BTQuant::RenderEngine::TradeData`.
       - Replace `RenderEngine::CandleCluster` with `BTQuant::RenderEngine::CandleCluster`.
-- [ ] Add `using BTQuant::RenderEngine::OrderbookData;` / `TradeData;` / `CandleCluster;` at the top of the file if shorter aliases are preferred.
+- [x] Add `using BTQuant::RenderEngine::OrderbookData;` / `TradeData;` / `CandleCluster;` at the top of the file if shorter aliases are preferred.
 - [ ] Remove or update any access to non-existent members (e.g. `PriceLevel::timestamp`):
       - Verify the definition of `PriceLevel` in `market_data_processor.hpp`.
       - If `timestamp` is needed, add it to `PriceLevel` and populate it in the data source; otherwise, delete lines assigning `level.timestamp`.

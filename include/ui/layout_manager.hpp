@@ -1,46 +1,30 @@
 #ifndef BTQ_UI_LAYOUT_MANAGER_HPP
 #define BTQ_UI_LAYOUT_MANAGER_HPP
 
-#include <memory>
-
-namespace btq {
-namespace ui {
-
 /**
- * @brief Abstract base class for UI layout management
- * Provides an interface for arranging and managing UI elements
+ * @brief UI namespace wrapper for layout management functionality
+ * This header provides a unified interface to the UI layout management system
  */
-class LayoutManager {
-public:
-    virtual ~LayoutManager() = default;
-    
-    /**
-     * @brief Arranges child elements according to the layout strategy
-     */
-    virtual void arrangeElements() = 0;
-    
-    /**
-     * @brief Updates the layout when elements change
-     */
-    virtual void updateLayout() = 0;
-    
-    /**
-     * @brief Gets the current layout width
-     */
-    virtual int getWidth() const = 0;
-    
-    /**
-     * @brief Gets the current layout height
-     */
-    virtual int getHeight() const = 0;
-    
-    /**
-     * @brief Sets the dimensions for the layout
-     */
-    virtual void setDimensions(int width, int height) = 0;
-};
 
-} // namespace ui
-} // namespace btq
+// Include the main layout manager from the render engine
+#include "BTQ_Render_Engine/include/ui/layout_manager.hpp"
+
+namespace BTQ {
+/**
+ * @brief UI namespace - Contains all user interface related functionality
+ * This namespace wraps the UI components from the BTQ_Render_Engine
+ */
+namespace UI {
+
+    // Import the main LayoutManager from the render engine
+    using LayoutManager = BTQuant::UI::LayoutManager;
+    
+    // Expose the singleton instance getter
+    inline BTQuant::UI::LayoutManager& getLayoutManager() {
+        return BTQuant::UI::LayoutManager::getInstance();
+    }
+
+} // namespace UI
+} // namespace BTQ
 
 #endif // BTQ_UI_LAYOUT_MANAGER_HPP

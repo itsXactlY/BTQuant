@@ -1045,6 +1045,10 @@ std::string PanelManager::serialize_layout() const {
     // TPO Panel specific settings
     if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel.get())) {
         settings_json["symbol_id"] = tpo_panel->get_symbol_id();
+        settings_json["show_text"] = tpo_panel->get_show_text();
+        settings_json["show_grid"] = tpo_panel->get_show_grid();
+        settings_json["show_heatmap"] = tpo_panel->get_show_heatmap();
+        settings_json["time_window"] = tpo_panel->get_time_window();
     }
     // DOM Surface Panel specific settings
     else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel.get())) {
@@ -1055,6 +1059,10 @@ std::string PanelManager::serialize_layout() const {
         settings_json["large_order_threshold"] = dom_panel->get_large_order_threshold();
         settings_json["enable_fade_out"] = dom_panel->get_enable_fade_out();
         settings_json["heatmap_intensity"] = dom_panel->get_heatmap_intensity();
+        settings_json["persistence_threshold_ms"] = dom_panel->getPersistenceThresholdMs();
+        settings_json["persistence_timeout_ms"] = dom_panel->getPersistenceTimeoutMs();
+        settings_json["show_persistent_lines"] = dom_panel->getShowPersistentLines();
+        settings_json["max_large_order_markers"] = dom_panel->getMaxLargeOrderMarkers();
     }
     // Option Analytics Panel specific settings
     else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
@@ -1133,6 +1141,18 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                     if (settings.contains("symbol_id")) {
                         tpo_panel->set_symbol_id(settings["symbol_id"].get<uint32_t>());
                     }
+                    if (settings.contains("show_text")) {
+                        tpo_panel->set_show_text(settings["show_text"].get<bool>());
+                    }
+                    if (settings.contains("show_grid")) {
+                        tpo_panel->set_show_grid(settings["show_grid"].get<bool>());
+                    }
+                    if (settings.contains("show_heatmap")) {
+                        tpo_panel->set_show_heatmap(settings["show_heatmap"].get<bool>());
+                    }
+                    if (settings.contains("time_window")) {
+                        tpo_panel->set_time_window(settings["time_window"].get<float>());
+                    }
                 }
                 // DOM Surface Panel specific settings
                 else if (auto* dom_panel = dynamic_cast<DomSurfacePanel*>(panel)) {
@@ -1156,6 +1176,18 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                     }
                     if (settings.contains("heatmap_intensity")) {
                         dom_panel->set_heatmap_intensity(settings["heatmap_intensity"].get<float>());
+                    }
+                    if (settings.contains("persistence_threshold_ms")) {
+                        dom_panel->setPersistenceThresholdMs(settings["persistence_threshold_ms"].get<uint64_t>());
+                    }
+                    if (settings.contains("persistence_timeout_ms")) {
+                        dom_panel->setPersistenceTimeoutMs(settings["persistence_timeout_ms"].get<double>());
+                    }
+                    if (settings.contains("show_persistent_lines")) {
+                        dom_panel->setShowPersistentLines(settings["show_persistent_lines"].get<bool>());
+                    }
+                    if (settings.contains("max_large_order_markers")) {
+                        dom_panel->setMaxLargeOrderMarkers(settings["max_large_order_markers"].get<int>());
                     }
                 }
                 // Option Analytics Panel specific settings

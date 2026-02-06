@@ -44,6 +44,8 @@ public:
 
     void switchTab(int tabIndex);
     std::string getActiveTabName() const;
+    int get_active_tab() const { return activeTab; }
+    void set_active_tab(int tab_index) { activeTab = tab_index; }
 
 private:
     void initializeSampleData();

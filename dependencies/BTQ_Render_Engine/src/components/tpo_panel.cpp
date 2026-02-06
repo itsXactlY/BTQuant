@@ -32,20 +32,16 @@ void TpoPanel::render() {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
-  static bool show_text = true;
-  ImGui::Checkbox("Delta Labels", &show_text);
+  ImGui::Checkbox("Delta Labels", &show_text_);
   ImGui::SameLine();
-  static bool show_grid = true;
-  ImGui::Checkbox("Grid", &show_grid);
+  ImGui::Checkbox("Grid", &show_grid_);
   ImGui::SameLine();
-  static bool show_heatmap = true;
-  ImGui::Checkbox("Heatmap", &show_heatmap);
+  ImGui::Checkbox("Heatmap", &show_heatmap_);
 
   // Time window configuration
-  static float time_window = 30.0f;
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  ImGui::SliderFloat("Time Window", &time_window, 10.0f, 300.0f, "%.0f s");
+  ImGui::SliderFloat("Time Window", &time_window_, 10.0f, 300.0f, "%.0f s");
 
   auto clusters = renderer_->getFootprintClusters();
   auto stats = renderer_->getStats();
@@ -119,7 +115,7 @@ void TpoPanel::render() {
 
   // Base time for labeling (relative to time window)
   double base_time_sec =
-      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - time_window;
+      static_cast<double>(stats.lastUpdateTimeNs) / 1'000'000'000.0 - time_window_;
 
   if (ImPlot::BeginPlot("##TPOProfile", ImVec2(-1, -1),
                         ImPlotFlags_NoLegend | ImPlotFlags_Crosshairs)) {
@@ -127,7 +123,7 @@ void TpoPanel::render() {
     ImPlot::SetupAxes("Time", "Price", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
 
     // Enable grid if requested (must call SetupAxis before SetupAxisLimits)
-    if (show_grid) {
+    if (show_grid_) {
       ImPlot::SetupAxis(ImAxis_X1, "Time", ImPlotAxisFlags_None);
       ImPlot::SetupAxis(ImAxis_Y1, "Price", ImPlotAxisFlags_None);
     }
@@ -144,7 +140,7 @@ void TpoPanel::render() {
     }
 
     // Apply all axis limits at once
-    ImPlot::SetupAxisLimits(ImAxis_X1, 0, time_window, ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_X1, 0, time_window_, ImPlotCond_Always);
     if (!clusters.empty()) {
       ImPlot::SetupAxisLimits(ImAxis_Y1, (double)p_min - 10, (double)p_max + 10, ImPlotCond_Once);
     }
@@ -165,11 +161,11 @@ void TpoPanel::render() {
         &base_time_sec);
 
     // Render Heatmap Background if available
-    if (show_heatmap) {
+    if (show_heatmap_) {
       void* texID = renderer_->getHeatmapTextureID();
       if (texID) {
         ImPlot::PlotImage("Heatmap", texID, ImPlotPoint(0, (double)p_min),
-                          ImPlotPoint(time_window, (double)p_max));
+                          ImPlotPoint(time_window_, (double)p_max));
       }
     }
 
@@ -197,7 +193,7 @@ void TpoPanel::render() {
       draw_list->AddRectFilled(p1, p2, color);
       draw_list->AddRect(p1, p2, ImColor(1.0f, 1.0f, 1.0f, 0.05f));
 
-      if (show_text && (std::abs(p2.y - p1.y) > 18)) {
+      if (show_text_ && (std::abs(p2.y - p1.y) > 18)) {
         std::string label = std::format("{}", delta);
         ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
         draw_list->AddText(
@@ -209,22 +205,22 @@ void TpoPanel::render() {
     // Draw Value Area (shaded region between VAH and VAL)
     if (value_area_low < value_area_high && value_area_low > 0) {
       // Draw shaded area for Value Area
-      double va_x[] = {0.0, time_window, time_window, 0.0};
+      double va_x[] = {0.0, time_window_, time_window_, 0.0};
       double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
-      
+
       ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
       ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
       ImPlot::PopStyleColor();
-      
+
       // Draw Value Area High (VAH) line
-      double vah_line_x[2] = {0, time_window};
+      double vah_line_x[2] = {0, time_window_};
       double vah_line_y[2] = {value_area_high, value_area_high};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
-      
+
       // Draw Value Area Low (VAL) line
-      double val_line_x[2] = {0, time_window};
+      double val_line_x[2] = {0, time_window_};
       double val_line_y[2] = {value_area_low, value_area_low};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
@@ -233,7 +229,7 @@ void TpoPanel::render() {
 
     // Draw POC line if found (using pre-calculated value)
     if (local_poc_price > 0) {
-      double poc_line_x[2] = {0, time_window};
+      double poc_line_x[2] = {0, time_window_};
       double poc_line_y[2] = {local_poc_price, local_poc_price};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
       ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested

@@ -11,7 +11,7 @@ namespace BTQuant {
 namespace RenderEngine {
 
 OptionAnalyticsPanel::OptionAnalyticsPanel(StrategyBuilder* strategy_builder)
-    : PanelBase(PanelConfig{.title = "Option Analytics", .type = PanelType::SCREENER})
+    : PanelBase(PanelConfig{.title = "Option Analytics", .type = PanelType::OPTION_ANALYTICS})
     , activeTab(0)
     , strategy_builder_(strategy_builder)
 {

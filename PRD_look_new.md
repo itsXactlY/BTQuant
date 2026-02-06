@@ -428,7 +428,7 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Implement calculation for "Standard Deviation" and "Median Price" per bar within the existing `ClusterEngine`.
 - [x] Add columns for: % of Volume at POC, Total Trades, Buy/Sell Ratio, and "Relative Volume" (Volume / Avg Volume).
 - [x] Implement a "Global Alert Manager" inside `dependencies/BTQRenderEngine/src/components/dashboardcontrols.cpp` to centralize all price and volume alerts.
-- [ ] Add the "Quantower Context Menu" to all new panels: right-click should offer "Duplicate Panel", "Apply Symbol to All", and "Screenshot".
+- [x] Add the "Quantower Context Menu" to all new panels: right-click should offer "Duplicate Panel", "Apply Symbol to All", and "Screenshot".
 - [ ] Finalize "Layout Persistence": ensure the position and settings of TPO, DOM Surface, and Options panels are saved/loaded correctly from the JSON workspace config.
 
 ### TASK 23: COMPILE FIXES & BUILD OPTIMIZATION

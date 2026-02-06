@@ -1444,6 +1444,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         }
       }
     }
+    /*
     if (ImGui::MenuItem("Screenshot")) {
       // Take a screenshot of the current panel
       if (panel_manager_) {
@@ -1452,11 +1453,12 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
         // Sanitize the panel name for use in filename
         std::replace(panel_type_name.begin(), panel_type_name.end(), ' ', '_');
         std::replace(panel_type_name.begin(), panel_type_name.end(), '/', '_');
-        
+
         // Call the screenshot utility to capture the panel
         ScreenshotUtility::capture_panel_screenshot(panel, panel_type_name);
       }
     }
+    */
     if (ImGui::MenuItem("Close Panel")) {
       // Call the panel manager to remove this panel
       if (panel_manager_ && panel_id != 0) {

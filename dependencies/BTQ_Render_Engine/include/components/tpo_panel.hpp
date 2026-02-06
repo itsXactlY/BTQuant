@@ -20,9 +20,27 @@ class TpoPanel : public PanelBase {
     if (renderer_) renderer_->setSymbol(id);
   }
 
+  // Getter methods for serialization
+  bool get_show_text() const { return show_text_; }
+  bool get_show_grid() const { return show_grid_; }
+  bool get_show_heatmap() const { return show_heatmap_; }
+  float get_time_window() const { return time_window_; }
+
+  // Setter methods for deserialization
+  void set_show_text(bool show) { show_text_ = show; }
+  void set_show_grid(bool show) { show_grid_ = show; }
+  void set_show_heatmap(bool show) { show_heatmap_ = show; }
+  void set_time_window(float window) { time_window_ = window; }
+
  private:
   RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
+
+  // UI state variables that should be persisted
+  bool show_text_ = true;
+  bool show_grid_ = true;
+  bool show_heatmap_ = true;
+  float time_window_ = 30.0f;
 };
 
 }  // namespace BTQuant

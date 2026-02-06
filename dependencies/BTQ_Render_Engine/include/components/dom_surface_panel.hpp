@@ -84,6 +84,7 @@ class DomSurfacePanel : public PanelBase {
   void setLargeOrderFadeOut(bool enable) { enable_fade_out_ = enable; }
   float get_large_order_threshold() const { return large_order_threshold_; }
   bool get_enable_fade_out() const { return enable_fade_out_; }
+  int getMaxLargeOrderMarkers() const { return max_large_order_markers_; }
 
   // Setters for deserialization (snake_case aliases)
   void set_price_range(double range) { price_range_ = range; }

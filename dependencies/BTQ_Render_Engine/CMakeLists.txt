@@ -128,7 +128,6 @@ set(DASHBOARD_SOURCES
     src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
-    src/components/realtime_dashboard_component.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
     src/components/trading_orders_panel.cpp
@@ -271,7 +270,6 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/risk_analyzer_panel.cpp
     src/components/MarketMicrostructureRenderer.cpp
     src/components/VulkanSynchronization.cpp
-    src/components/realtime_dashboard_component.cpp
     src/components/correlation_heatmap_component.cpp
     src/components/symbol_selector.cpp
     src/components/trading_orders_panel.cpp

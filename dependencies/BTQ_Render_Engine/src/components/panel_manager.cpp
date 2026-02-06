@@ -693,6 +693,40 @@ void PanelManager::auto_arrange_panels() {
   }
 }
 
+void PanelManager::reset_to_factory_layout() {
+  // Clear all panels and groups
+  panels_.clear();
+  panel_groups_.clear();
+  panel_to_group_map_.clear();
+  
+  // Reset ID counters
+  next_panel_id_ = 1;
+  next_group_id_ = 1;
+
+  // Set grid layout (3 columns, 5 rows to fit 2x2 chart properly)
+  set_grid_layout(3, 5);
+
+  // Create default factory panels with specific positions to avoid overlaps
+  // Row 0: Status Bar and Alerts
+  add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 2, 1);
+  add_panel(PanelType::ALERTS, "Alerts", 2, 0, 1, 1);
+
+  // Row 1-2: Main Chart (2x2) and Depth Chart (1x2)
+  add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
+  add_panel(PanelType::DEPTH_CHART, "Depth Chart", 2, 1, 1, 2);
+
+  // Row 3: Orderbook Ladder (2x1) and Tape (1x1)
+  add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 3, 2, 1);
+  add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
+
+  // Row 4: DOM Surface (2x1) and Watchlist (1x1)
+  add_panel(PanelType::HEATMAP, "DOM Surface", 0, 4, 2, 1);
+  add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
+
+  // Initialize with default symbol
+  set_active_symbol(1, "BTC-USDT"); // Use a default symbol ID and name
+}
+
 ImVec2 PanelManager::get_panel_position(uint32_t panel_id) const {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {

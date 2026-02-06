@@ -81,6 +81,7 @@ class PanelManager {
   // Layout management
   void set_grid_layout(int columns, int rows);
   void auto_arrange_panels();
+  void reset_to_factory_layout();  // Reset to clean, grid-aligned factory layout
   ImVec2 get_panel_position(uint32_t panel_id) const;
   ImVec2 get_panel_size(uint32_t panel_id) const;
   void save_layout(const std::string& filename);

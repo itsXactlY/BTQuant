@@ -774,6 +774,15 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::Spacing();
 
+      if (ImGui::Button("Reset to Factory Layout")) {
+        if (panel_manager_) {
+          // Reset to clean, grid-aligned factory layout
+          panel_manager_->reset_to_factory_layout();
+        }
+      }
+
+      ImGui::Spacing();
+
       if (ImGui::Button("Auto Arrange")) {
         if (panel_manager_) {
           panel_manager_->auto_arrange_panels();

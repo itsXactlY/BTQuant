@@ -3,13 +3,6 @@
 #include <vector>
 #include <cstdint>
 
-// Price level for order book data
-struct PriceLevel {
-  double price;
-  double size;
-  uint64_t timestamp = 0;  // Optional timestamp for individual price levels
-};
-
 struct VolumeProfileLevel {
   double price;
   double total_volume;
@@ -19,6 +12,13 @@ struct VolumeProfileLevel {
 
 namespace BTQuant {
 namespace RenderEngine {
+
+// Price level for order book data
+struct PriceLevel {
+  double price;
+  double size;
+  uint64_t timestamp = 0;  // Optional timestamp for individual price levels
+};
 
 // Time frame definitions for OHLCV aggregation
 // Extended to include higher timeframes for multi-timeframe analysis

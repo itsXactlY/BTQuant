@@ -589,13 +589,13 @@ void DomSurfacePanel::render() {
     ImPlot::EndPlot();
   }
 
-  // Debug Overlay for DOM troubleshooting
+  // Status Information Overlay
   if (heatmap_data_.size() > 0) {
     ImGui::SetCursorPos(ImVec2(10, 30));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Liquidity: Max=%.2f, Samples: %zu, Bins: %d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
-    ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Large Orders: %zu (Median: %.2f), Trades: %zu", large_order_markers_.size(),
+    ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
+    ImGui::Text("Markers: %zu (Avg: %.2f), Trades: %zu", large_order_markers_.size(),
                 median_order_size_, trade_bubbles_.size());
   }
 
@@ -849,37 +849,34 @@ void DomSurfacePanel::updateVulkanTexture() {
       // Clamp normalized value to [0, 1] range
       normalized = std::clamp(normalized, 0.0f, 1.0f);
 
-      // Apply colormap (Viridis-like gradient)
+      // Apply colormap (Dark Blue to Bright Yellow gradient)
       uint8_t r, g, b, a = 255;
 
-      // Improved Viridis-like mapping for better visualization
-      if (normalized <= 0.0f) {
-        r = 68; g = 1; b = 84; // Dark purple
-      } else if (normalized <= 0.125f) {
-        float t = normalized / 0.125f;
-        r = static_cast<uint8_t>(68 + (t * (253 - 68))); // Purple to blue transition
-        g = static_cast<uint8_t>(1 + (t * (71 - 1)));
-        b = static_cast<uint8_t>(84 + (t * (194 - 84)));
-      } else if (normalized <= 0.25f) {
-        float t = (normalized - 0.125f) / 0.25f;
-        r = static_cast<uint8_t>(253 + (t * (244 - 253))); // Blue to light blue
-        g = static_cast<uint8_t>(71 + (t * (172 - 71)));
-        b = static_cast<uint8_t>(194 + (t * (248 - 194)));
+      // Dark Blue to Bright Yellow gradient mapping
+      if (normalized <= 0.25f) {
+        // Dark Blue (0,0,139) to Blue (0,0,255)
+        float t = normalized / 0.25f;
+        r = 0;
+        g = 0;
+        b = static_cast<uint8_t>(139 + (t * 116));
       } else if (normalized <= 0.5f) {
+        // Blue (0,0,255) to Cyan (0,255,255)
         float t = (normalized - 0.25f) / 0.25f;
-        r = static_cast<uint8_t>(244 + (t * (58 - 244))); // Light blue to green
-        g = static_cast<uint8_t>(172 + (t * (204 - 172)));
-        b = static_cast<uint8_t>(248 + (t * (22 - 248)));
+        r = 0;
+        g = static_cast<uint8_t>(t * 255);
+        b = 255;
       } else if (normalized <= 0.75f) {
+        // Cyan (0,255,255) to Green (0,255,0)
         float t = (normalized - 0.5f) / 0.25f;
-        r = static_cast<uint8_t>(58 + (t * (128 - 58))); // Green to yellow
-        g = static_cast<uint8_t>(204 + (t * (253 - 204)));
-        b = static_cast<uint8_t>(22 + (t * (220 - 22)));
+        r = 0;
+        g = 255;
+        b = static_cast<uint8_t>(255 - (t * 255));
       } else {
+        // Green (0,255,0) to Bright Yellow (255,255,0)
         float t = (normalized - 0.75f) / 0.25f;
-        r = static_cast<uint8_t>(128 + (t * (244 - 128))); // Yellow to red
-        g = static_cast<uint8_t>(253 + (t * (255 - 253)));
-        b = static_cast<uint8_t>(220 + (t * (29 - 220)));
+        r = static_cast<uint8_t>(t * 255);
+        g = 255;
+        b = 0;
       }
 
       // Store in row-major order for texture (x = column, y = row)

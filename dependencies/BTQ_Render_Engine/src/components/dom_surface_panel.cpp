@@ -808,8 +808,38 @@ void DomSurfacePanel::renderPersistentLevels() {
 
   // Get plot area bounds
   ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+  
+  // Get the current orderbook data to determine liquidity bar widths
+  if (current_symbol_id_ == 0 || !processor_) return;
+  auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+  if (!orderbook_opt) return;
+  const auto& orderbook = *orderbook_opt;
 
-  // Render each persistent level as a horizontal line or rectangle
+  // Calculate max volume across all levels for normalization
+  double max_total_volume = 0.0;
+  for (const auto& level : orderbook.bids) {
+    max_total_volume = std::max(max_total_volume, level.size);
+  }
+  for (const auto& level : orderbook.asks) {
+    max_total_volume = std::max(max_total_volume, level.size);
+  }
+
+  if (max_total_volume <= 0) return;
+
+  // Calculate max bar width based on plot dimensions (10% of plot width as max)
+  float max_bar_width = ImPlot::GetPlotSize().x * 0.1f;
+  if (max_bar_width < 5.0f) max_bar_width = 5.0f;
+
+  // Calculate the pixel height that corresponds to a small price range
+  float bar_height_px = 3.0f; // Fixed height in pixels for each bar
+  double price_per_px = (plot_rect.Y.Max - plot_rect.Y.Min) / ImPlot::GetPlotSize().y;
+  double price_range_for_bar = price_per_px * bar_height_px;
+
+  // Get draw list for manual drawing of borders around liquidity bars
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  if (!draw_list) return;
+
+  // Render each persistent level as a border around the liquidity bar
   for (const auto& level : persistent_levels_) {
     // Only render if the level is considered "persistent" (has been present for threshold time)
     uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -819,77 +849,71 @@ void DomSurfacePanel::renderPersistentLevels() {
     if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
       ImU32 color = getPersistentLevelColor(level);
 
-      // Draw a "glow" effect around the persistent level as required by PRD
-      // This implements "draw a distinct border or 'glow' around liquidity levels that have remained static for more than 30 seconds"
-      // First, draw a wider, more transparent line as the glow
-      ImU32 glow_color = IM_COL32(
-          (color >> 16) & 0xFF,  // R component
-          (color >> 8) & 0xFF,   // G component  
-          color & 0xFF,          // B component
-          80                     // Reduced alpha for glow effect
-      );
-      
-      ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Wider line for glow effect
-      
-      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double ys[2] = {level.price, level.price};
-      ImPlot::PlotLine("##PersistentLevelGlow", xs, ys, 2);
-      
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
+      // Find the volume at this specific price level to calculate bar width
+      double volume_at_level = 0.0;
+      bool level_exists = false;
 
-      // Draw the main line with a distinct border
-      ImPlot::PushStyleColor(ImPlotCol_Line, color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 3.0f); // Thicker line for better visibility
+      if (level.is_bid) {
+        for (const auto& bid_level : orderbook.bids) {
+          if (std::abs(bid_level.price - level.price) < 0.0001) {
+            volume_at_level = bid_level.size;
+            level_exists = true;
+            break;
+          }
+        }
+      } else {
+        for (const auto& ask_level : orderbook.asks) {
+          if (std::abs(ask_level.price - level.price) < 0.0001) {
+            volume_at_level = ask_level.size;
+            level_exists = true;
+            break;
+          }
+        }
+      }
 
-      // Draw horizontal line at the price level from left to right of the plot
-      ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
+      if (!level_exists) continue; // Skip if level no longer exists
 
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
+      // Calculate bar width based on volume
+      float volume_ratio = static_cast<float>(volume_at_level / max_total_volume);
+      float bar_width = volume_ratio * max_bar_width;
 
-      // Draw a more prominent rectangle to highlight the level
-      // Extract the RGB components and set alpha to 15% transparency for better visibility
+      // Calculate the price range for the bar (centered at the price level)
+      double top_price = level.price + price_range_for_bar / 2.0;
+      double bottom_price = level.price - price_range_for_bar / 2.0;
+
+      // Convert to pixel coordinates
+      ImVec2 top_right = ImPlot::PlotToPixels(plot_rect.X.Max, top_price);
+      ImVec2 bottom_right = ImPlot::PlotToPixels(plot_rect.X.Max, bottom_price);
+
+      // Calculate left edge of the bar (extending left from the right edge)
+      ImVec2 top_left = ImVec2(top_right.x - bar_width, top_right.y);
+      ImVec2 bottom_left = ImVec2(bottom_right.x - bar_width, bottom_right.y);
+
+      // Draw the border around the liquidity bar with glow effect
+      ImVec2 rect_min = ImVec2(top_left.x, std::min(top_right.y, bottom_right.y));
+      ImVec2 rect_max = ImVec2(top_right.x, std::max(top_right.y, bottom_right.y));
+
+      // Draw the main border
+      draw_list->AddRect(rect_min, rect_max, color, 0.0f, ImDrawFlags_None, 3.0f);
+
+      // Glow effect - draw additional borders with decreasing opacity
       ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      color_vec.w = 0.15f; // Set alpha to 15% transparency
-      ImU32 transparent_color = ImGui::ColorConvertFloat4ToU32(color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, transparent_color);
+      
+      // Outer glow
+      color_vec.w *= 0.6f; // Reduce opacity
+      ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+      draw_list->AddRect(
+          ImVec2(rect_min.x - 2, rect_min.y - 2),
+          ImVec2(rect_max.x + 2, rect_max.y + 2),
+          glow_color, 0.0f, ImDrawFlags_None, 1.5f);
 
-      // Calculate a vertical range around the price level for the rectangle
-      // Make it proportional to the zoom level for better visibility
-      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
-      double price_range = visible_price_range * 0.005; // 0.5% of the visible price range (adjustable)
-      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
-
-      double y_min = level.price - price_range/2.0;
-      double y_max = level.price + price_range/2.0;
-
-      // Draw a horizontal shaded area spanning the full time axis
-      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double shade_y1[2] = {y_min, y_min};
-      double shade_y2[2] = {y_max, y_max};
-      ImPlot::PlotShaded("##PersistentLevelRect", shade_x, shade_y1, shade_y2, 2);
-
-      ImPlot::PopStyleColor();
-
-      // Add a subtle highlight effect above the main line
-      ImVec4 highlight_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      highlight_color_vec.w = 0.08f; // Even more transparent for highlight
-      ImU32 highlight_color = ImGui::ColorConvertFloat4ToU32(highlight_color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Line, highlight_color);
-
-      // Draw highlight slightly above the main line
-      double highlight_y_min = level.price + price_range/2.0;
-      double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
-
-      // Draw highlight shaded area
-      double highlight_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
-      double highlight_shade_y2[2] = {highlight_y_max, highlight_y_max};
-      ImPlot::PlotShaded("##PersistentLevelHighlight", highlight_shade_x, highlight_shade_y1, highlight_shade_y2, 2);
-
-      ImPlot::PopStyleColor();
+      // Inner glow
+      color_vec.w *= 0.4f; // Further reduce opacity
+      glow_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+      draw_list->AddRect(
+          ImVec2(rect_min.x + 1, rect_min.y + 1),
+          ImVec2(rect_max.x - 1, rect_max.y - 1),
+          glow_color, 0.0f, ImDrawFlags_None, 1.0f);
     }
   }
 }

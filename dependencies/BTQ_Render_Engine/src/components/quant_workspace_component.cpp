@@ -71,9 +71,9 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
   // Use window management functions to keep it on top since ImGuiWindowFlags_TopMost doesn't exist
   ImGui::SetNextWindowFocus(); // Emulate "always on top" by focusing the window each frame
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus)) {  // Prevent other windows from stealing focus
     // Ensure the window stays on top by bringing it to front every frame
-    ImGui::SetWindowFocus();
+    // Do NOT call SetWindowFocus() here as it can cause conflicts with other panels
     ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y));
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
     

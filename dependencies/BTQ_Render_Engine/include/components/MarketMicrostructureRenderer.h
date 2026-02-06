@@ -52,22 +52,46 @@ struct CandleCluster {
     uint32_t askVolume;               // Total ask volume
     uint32_t tradeCount;              // Number of trades
     float vwap;                       // Volume-weighted average price
-    bool hasTrades;                   // Trade activity indicator
+    uint32_t hasTrades;               // Trade activity indicator (0 or 1, was bool)
     uint32_t buyTradeCount;           // Number of buy trades
     uint32_t sellTradeCount;          // Number of sell trades
     float maxSingleTradeVolume;       // Maximum single trade volume in cluster
-    uint64_t startTimeNs;             // Start time in nanoseconds
-    uint64_t endTimeNs;               // End time in nanoseconds
+    uint32_t startTimeLow;            // Start time lower 32 bits (was uint64_t)
+    uint32_t startTimeHigh;           // Start time upper 32 bits (was uint64_t)
+    uint32_t endTimeLow;              // End time lower 32 bits (was uint64_t)
+    uint32_t endTimeHigh;             // End time upper 32 bits (was uint64_t)
 
     // Constructor
     CandleCluster(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
                  uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t count = 0, float v = 0.0f,
-                 bool has = true, uint32_t buyCount = 0, uint32_t sellCount = 0, 
+                 bool has = true, uint32_t buyCount = 0, uint32_t sellCount = 0,
                  float maxVol = 0.0f, uint64_t startNs = 0, uint64_t endNs = 0)
         : centerX(x), centerY(y), width(w), height(h), bidVolume(bidVol), askVolume(askVol),
-          tradeCount(count), vwap(v), hasTrades(has), buyTradeCount(buyCount), 
-          sellTradeCount(sellCount), maxSingleTradeVolume(maxVol), 
-          startTimeNs(startNs), endTimeNs(endNs) {}
+          tradeCount(count), vwap(v), hasTrades(has ? 1u : 0u), buyTradeCount(buyCount),
+          sellTradeCount(sellCount), maxSingleTradeVolume(maxVol),
+          startTimeLow(static_cast<uint32_t>(startNs)), 
+          startTimeHigh(static_cast<uint32_t>(startNs >> 32)),
+          endTimeLow(static_cast<uint32_t>(endNs)), 
+          endTimeHigh(static_cast<uint32_t>(endNs >> 32)) {}
+
+    // Helper methods to get/set the full 64-bit timestamps
+    uint64_t getStartTimeNs() const {
+        return (static_cast<uint64_t>(startTimeHigh) << 32) | startTimeLow;
+    }
+    
+    uint64_t getEndTimeNs() const {
+        return (static_cast<uint64_t>(endTimeHigh) << 32) | endTimeLow;
+    }
+    
+    void setStartTimeNs(uint64_t timeNs) {
+        startTimeLow = static_cast<uint32_t>(timeNs);
+        startTimeHigh = static_cast<uint32_t>(timeNs >> 32);
+    }
+    
+    void setEndTimeNs(uint64_t timeNs) {
+        endTimeLow = static_cast<uint32_t>(timeNs);
+        endTimeHigh = static_cast<uint32_t>(timeNs >> 32);
+    }
 };
 
 struct RendererStats {

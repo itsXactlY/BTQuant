@@ -1354,8 +1354,8 @@ void FootprintPanel::render() {
         cell.buy_trade_count = cluster.buyTradeCount;
         cell.sell_trade_count = cluster.sellTradeCount;
         cell.max_single_trade_volume = static_cast<double>(cluster.maxSingleTradeVolume);
-        cell.start_time_ns = cluster.startTimeNs;
-        cell.end_time_ns = cluster.endTimeNs;
+        cell.start_time_ns = cluster.getStartTimeNs();
+        cell.end_time_ns = cluster.getEndTimeNs();
 
         // ENHANCED: Calculate value based on active VolumeAnalysisType for this specific cell
         // This is the core logic that determines what value is displayed in each cell

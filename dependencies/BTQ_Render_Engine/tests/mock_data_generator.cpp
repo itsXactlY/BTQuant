@@ -178,9 +178,11 @@ std::vector<CandleCluster> generateMockCandleClusters(size_t count) {
         cluster.buyTradeCount = count_dist(rng);
         cluster.sellTradeCount = count_dist(rng);
         cluster.maxSingleTradeVolume = std::uniform_real_distribution<float>(0.1f, 10.0f)(rng);
-        cluster.startTimeNs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        uint64_t startTimeNs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count()) + (i * 1000000000ULL); // 1 sec intervals
-        cluster.endTimeNs = cluster.startTimeNs + 500000000ULL; // 0.5 sec duration
+        uint64_t endTimeNs = startTimeNs + 500000000ULL; // 0.5 sec duration
+        cluster.setStartTimeNs(startTimeNs);
+        cluster.setEndTimeNs(endTimeNs);
         
         clusters.push_back(cluster);
     }

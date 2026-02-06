@@ -26,8 +26,8 @@ public:
     cluster.buyTradeCount = 7;
     cluster.sellTradeCount = 3;
     cluster.maxSingleTradeVolume = 25;
-    cluster.startTimeNs = 1000000000ULL;
-    cluster.endTimeNs = 1000000001ULL;
+    cluster.setStartTimeNs(1000000000ULL);
+    cluster.setEndTimeNs(1000000001ULL);
 
     clusters.push_back(cluster);
     return clusters;

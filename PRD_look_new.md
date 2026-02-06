@@ -432,14 +432,14 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Finalize "Layout Persistence": ensure the position and settings of TPO, DOM Surface, and Options panels are saved/loaded correctly from the JSON workspace config.
 
 ### TASK 27: FIX UI NAMESPACE & LAYOUTMANAGER USAGE
-- [ ] Define a UI namespace wrapper in a new header `include/ui/layout_manager.hpp`:
+- [x] Define a UI namespace wrapper in a new header `include/ui/layout_manager.hpp`:
       - `namespace BTQuant::UI { using LayoutManager = BTQuant::RenderEngine::LayoutManager; }`
       - Or move the existing `LayoutManager` class into `BTQuant::UI` and adjust its header accordingly.
-- [ ] Include `ui/layout_manager.hpp` in `src/main_trading_terminal.cpp` and replace bare uses of `LayoutManager` with `BTQuant::UI::LayoutManager` if needed.
-- [ ] Ensure `LayoutManager::getInstance()` is declared `static LayoutManager& getInstance();` in the class and defined in the corresponding `.cpp`.
+- [x] Include `ui/layout_manager.hpp` in `src/main_trading_terminal.cpp` and replace bare uses of `LayoutManager` with `BTQuant::UI::LayoutManager` if needed.
+- [x] Ensure `LayoutManager::getInstance()` is declared `static LayoutManager& getInstance();` in the class and defined in the corresponding `.cpp`.
 
 ### TASK 28: FIX VULKAN_DASHBOARD_ADVANCED TYPES
-- [ ] In `src/vulkan_dashboard_advanced.cpp`, fully qualify engine types:
+- [x] In `src/vulkan_dashboard_advanced.cpp`, fully qualify engine types:
       - Replace `OrderbookData` with `BTQuant::RenderEngine::OrderbookData`.
       - Replace `TradeData` with `BTQuant::RenderEngine::TradeData`.
       - Replace `RenderEngine::CandleCluster` with `BTQuant::RenderEngine::CandleCluster`.

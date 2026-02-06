@@ -24,25 +24,40 @@ using LayoutPtr = std::shared_ptr<Layout>;
  */
 class LayoutManager {
 public:
+    // Singleton access
+    static LayoutManager& getInstance() {
+        static LayoutManager instance;
+        return instance;
+    }
+
+    // Delete copy and move constructors and assignment operators
+    LayoutManager(const LayoutManager&) = delete;
+    LayoutManager& operator=(const LayoutManager&) = delete;
+    LayoutManager(LayoutManager&&) = delete;
+    LayoutManager& operator=(LayoutManager&&) = delete;
+
     // Virtual destructor for proper inheritance
     virtual ~LayoutManager() = default;
 
-    // Pure virtual methods that derived classes must implement
-    virtual void arrangeElements() = 0;
-    virtual void updateLayout() = 0;
-    
+    // Methods that can be overridden by derived classes
+    virtual void arrangeElements();
+    virtual void updateLayout();
+
     // Common interface methods
-    virtual void addElement(WidgetPtr element) = 0;
-    virtual void removeElement(WidgetPtr element) = 0;
-    virtual void clearElements() = 0;
-    
+    virtual void addElement(WidgetPtr element);
+    virtual void removeElement(WidgetPtr element);
+    virtual void clearElements();
+
     // Layout management
-    virtual void setLayout(LayoutPtr layout) = 0;
-    virtual LayoutPtr getLayout() const = 0;
-    
+    virtual void setLayout(LayoutPtr layout);
+    virtual LayoutPtr getLayout() const;
+
 protected:
     // Protected constructor to prevent direct instantiation
     LayoutManager() = default;
+
+private:
+    LayoutPtr currentLayout_;  // Store the current layout
 };
 
 // More specific layout manager implementations could go here

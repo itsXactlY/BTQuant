@@ -20,7 +20,7 @@ struct TradeBubble {
   double volume;       // Trade volume
   double price;        // Exact price
   bool is_buy;         // true = Buy, false = Sell
-  uint64_t timestamp;  // Timestamp for positioning
+  uint64_t timestamp;  // Timestamp for positioning and fade-out
   float radius;        // Calculated radius for rendering
 
   // Constructor

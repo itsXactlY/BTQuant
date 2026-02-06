@@ -139,12 +139,27 @@ void DomSurfacePanel::cleanupOldTradeBubbles() {
 }
 
 float DomSurfacePanel::calculateBubbleRadius(double volume) const {
-  if (max_trade_volume_ <= 0.0) return 5.0f;  // Default radius
+  // Use logarithmic scaling to prevent massive trades from covering the entire price axis
+  // Add 1 to volume to handle volume = 0 case, then apply log scaling
+  float log_volume = std::log10(std::max(static_cast<float>(volume), 1.0f));
   
-  // Calculate radius: base_radius * sqrt(volume / max_volume) to make differences more visible
-  float base_radius = 8.0f;  // Base radius for smallest trades
-  float calculated_radius = base_radius * std::sqrt(volume / max_trade_volume_) * 3.0f;  // Amplify effect
+  // Define log range based on min/max volumes (using 1 as minimum and current max as maximum)
+  float min_log_volume = std::log10(1.0f);  // log10(1) = 0
+  float max_log_volume = std::log10(std::max(static_cast<float>(max_trade_volume_), 1.0f));
   
+  // Normalize the log volume to 0-1 range
+  float normalized_log_volume = 0.0f;
+  if (max_log_volume > min_log_volume) {
+    normalized_log_volume = std::clamp(log_volume / max_log_volume, 0.0f, 1.0f);  // Since min_log_volume is 0
+  } else {
+    normalized_log_volume = 0.0f; // Default to minimum size if range is invalid
+  }
+
+  // Calculate radius: base_radius scaled by normalized log volume
+  float base_radius = 3.0f;  // Base radius for smallest trades
+  float max_radius = 20.0f;  // Maximum radius
+  float calculated_radius = base_radius + (max_radius - base_radius) * normalized_log_volume;
+
   // Clamp to reasonable range
   return std::clamp(calculated_radius, 3.0f, 20.0f);
 }
@@ -164,10 +179,36 @@ void DomSurfacePanel::renderTradeBubbles() {
   // Get plot area for manual circle rendering
   ImPlotRect plot_rect = ImPlot::GetPlotLimits();
 
+  // Get current time for fade-out calculations
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
   // Render each trade bubble as a circle
   for (const auto& bubble : trade_bubbles_) {
     ImU32 color = getBubbleColor(bubble);
-    ImU32 border_color = IM_COL32(255, 255, 255, 200);  // White semi-transparent border
+    
+    // Calculate fade-out factor based on time elapsed since trade
+    uint64_t time_elapsed = current_time - (bubble.timestamp / 1000); // Convert timestamp from microseconds to milliseconds
+    float fade_factor = 1.0f; // Full opacity initially
+    
+    // Fade out over time (e.g., fade out completely after 30 seconds)
+    const uint64_t FADE_DURATION_MS = 30000; // 30 seconds fade-out duration
+    if (time_elapsed > 0 && time_elapsed < FADE_DURATION_MS) {
+        fade_factor = 1.0f - static_cast<float>(time_elapsed) / static_cast<float>(FADE_DURATION_MS);
+    } else if (time_elapsed >= FADE_DURATION_MS) {
+        continue; // Skip rendering if completely faded out
+    }
+    
+    // Adjust color alpha based on fade factor
+    ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
+    color_vec.w *= fade_factor;
+    ImU32 adjusted_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+    
+    // Adjust border color alpha as well
+    ImVec4 border_color_vec = ImGui::ColorConvertU32ToFloat4(IM_COL32(255, 255, 255, 200));
+    border_color_vec.w *= fade_factor;
+    ImU32 adjusted_border_color = ImGui::ColorConvertFloat4ToU32(border_color_vec);
 
     // Convert plot coordinates to pixel coordinates
     ImVec2 pixel_pos = ImPlot::PlotToPixels(bubble.x, bubble.y);
@@ -175,19 +216,21 @@ void DomSurfacePanel::renderTradeBubbles() {
     // Draw filled circle
     ImDrawList* draw_list = ImPlot::GetPlotDrawList();
     if (draw_list) {
-      draw_list->AddCircleFilled(pixel_pos, bubble.radius, color, 32);
-      draw_list->AddCircle(pixel_pos, bubble.radius, border_color, 32, 1.5f);
+      draw_list->AddCircleFilled(pixel_pos, bubble.radius, adjusted_color, 32);
+      draw_list->AddCircle(pixel_pos, bubble.radius, adjusted_border_color, 32, 1.5f);
 
-      // Check for hover and show tooltip
-      ImVec2 mouse_pos = ImGui::GetMousePos();
-      float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
-                                 std::pow(mouse_pos.y - pixel_pos.y, 2));
+      // Check for hover and show tooltip (only for non-faded bubbles)
+      if (fade_factor > 0.2f) { // Only show tooltip if not too faded
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        float distance = std::sqrt(std::pow(mouse_pos.x - pixel_pos.x, 2) +
+                                   std::pow(mouse_pos.y - pixel_pos.y, 2));
 
-      if (distance < bubble.radius) {
-        std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}", 
-                                         bubble.is_buy ? "Buy" : "Sell", 
-                                         bubble.volume, bubble.price);
-        ImGui::SetTooltip("%s", tooltip.c_str());
+        if (distance < bubble.radius) {
+          std::string tooltip = std::format("Trade: {} {:.2f} @ ${:.2f}",
+                                           bubble.is_buy ? "Buy" : "Sell",
+                                           bubble.volume, bubble.price);
+          ImGui::SetTooltip("%s", tooltip.c_str());
+        }
       }
     }
   }

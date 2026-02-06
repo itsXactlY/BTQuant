@@ -1614,7 +1614,7 @@ void FootprintPanel::render() {
     // This optimization reduces redundant processing by only considering visible clusters
     // The grouping now takes into account the active VolumeAnalysisType for more accurate
     // aggregations
-    std::map<double, std::vector<BTQuant::RenderEngine::CandleCluster>> clusters_by_time;
+    std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;
 
     // Iterate through visible clusters to group by time
     for (const auto& cluster : clusters) {
@@ -1624,7 +1624,7 @@ void FootprintPanel::render() {
         // Round x to nearest time unit to group clusters by time bar
         // Using a more precise rounding method for better time alignment
         double time_key = std::round(cluster.centerX * 10.0) / 10.0;  // Adjust precision as needed
-        clusters_by_time[time_key].push_back(cluster);
+        clusters_by_time[time_key].push_back(&cluster);
       }
     }
 

@@ -515,12 +515,12 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
 - [x] Fix the `PriceLevel` timestamp error:
     - If `BTQuant::RenderEngine::PriceLevel` does not have a `timestamp`, remove the lines `level.timestamp = orderbookData.timestamp;` (Price levels in a snapshot typically share the snapshot's global timestamp).
-- [ ] Correct the `updateTradeData` and `updateFootprintClusters` calls:
+- [x] Correct the `updateTradeData` and `updateFootprintClusters` calls:
     - Ensure `std::vector<TradeData> trades;` is properly typed.
     - If `std::span` conversion fails, explicitly cast: `micro_renderer_->updateTradeData(std::span<const TradeData>(trades));`.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 34: GLOBAL NAMESPACE SANITY CHECK
-- [ ] Verify that `include/market_data_processor.hpp` wraps its structs (`TradeData`, `OrderbookData`, `PriceLevel`) in `namespace BTQuant::RenderEngine`.
-- [ ] Check `src/main_trading_terminal.cpp` for any remaining `BTQuant::UI` errors; ensure `LayoutManager` is either in `BTQuant::RenderEngine` or `BTQuant::UI` and consistently called.
-- [ ] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
+- [x] Verify that `include/market_data_processor.hpp` wraps its structs (`TradeData`, `OrderbookData`, `PriceLevel`) in `namespace BTQuant::RenderEngine`.
+- [x] Check `src/main_trading_terminal.cpp` for any remaining `BTQuant::UI` errors; ensure `LayoutManager` is either in `BTQuant::RenderEngine` or `BTQuant::UI` and consistently called.
+- [x] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.

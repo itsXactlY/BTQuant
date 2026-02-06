@@ -1058,7 +1058,7 @@ void FootprintPanel::render() {
     // value
 
     // First, collect all visible clusters and organize them by time and price levels
-    std::map<double, std::map<double, BTQuant::RenderEngine::CandleCluster>> visible_clusters;
+    std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;
 
     // Calculate max volume across all visible clusters for adaptive alpha calculation
     // This is done in the same loop to avoid a second iteration
@@ -1067,7 +1067,7 @@ void FootprintPanel::render() {
       if (cluster.centerX >= x_min && cluster.centerX <= x_max && cluster.centerY >= y_min &&
           cluster.centerY <= y_max) {
         // Organize clusters by time (x-axis) and price (y-axis) for efficient iteration
-        visible_clusters[cluster.centerX][cluster.centerY] = cluster;
+        visible_clusters[cluster.centerX][cluster.centerY] = &cluster;
 
         // Also calculate max volume for adaptive alpha calculation
         // Use the appropriate value based on the active VolumeAnalysisType
@@ -1336,7 +1336,8 @@ void FootprintPanel::render() {
     // ENHANCED: Iterate through visible time bars and price levels with improved efficiency
     // Process each visible cluster according to the active VolumeAnalysisType
     for (const auto& [time_level, price_clusters] : visible_clusters) {
-      for (const auto& [price_level, cluster] : price_clusters) {
+      for (const auto& [price_level, cluster_ptr] : price_clusters) {
+        const auto& cluster = *cluster_ptr;  // Dereference the pointer
 
         // Convert cluster to footprint cell with all relevant data
         FootprintCell cell(cluster.centerX,                         // x (time)

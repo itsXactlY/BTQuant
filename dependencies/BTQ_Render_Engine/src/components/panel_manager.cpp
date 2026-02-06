@@ -2293,13 +2293,13 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     // Try expanding to the right (within reasonable bounds)
     int expand_right_x = config.grid_x + config.grid_width;
     int expand_right_y = config.grid_y;
-    if (expand_right_x + width <= max_cols * 2) {  // Allow expansion up to 2x the column count
+    if (expand_right_x + width <= max_cols * 3) {  // Allow expansion up to 3x the column count
       bool can_expand_right = true;
       for (int dy = 0; dy < height && can_expand_right; ++dy) {
         for (int dx = 0; dx < width && can_expand_right; ++dx) {
           int check_x = expand_right_x + dx;
           int check_y = expand_right_y + dy;
-          if (check_x >= 0 && check_y >= 0 && check_y < max_rows * 2) {  // Allow expansion up to 2x the row count
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows * 3) {  // Allow expansion up to 3x the row count
             if (check_x < max_cols && check_y < max_rows) {
               // Within original grid - check occupation
               if (occupied[check_y][check_x]) {
@@ -2307,7 +2307,31 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                 break;
               }
             }
-            // For expanded areas beyond original grid, just check if coordinates are reasonable
+            // For expanded areas beyond original grid, check if coordinates are reasonable and not occupied
+            else if (check_x < max_cols * 3 && check_y < max_rows * 3) {
+              // Check if this expanded area is occupied by any panel
+              bool expanded_area_occupied = false;
+              for (const auto& [other_id, other_panel] : panels_) {
+                const auto& other_config = other_panel->get_config();
+                
+                // Check if the new position overlaps with any existing panel in the expanded area
+                if ((check_x < other_config.grid_x + other_config.grid_width) &&
+                    (check_x + width > other_config.grid_x) &&
+                    (check_y < other_config.grid_y + other_config.grid_height) &&
+                    (check_y + height > other_config.grid_y)) {
+                  expanded_area_occupied = true;
+                  break;
+                }
+              }
+              
+              if (expanded_area_occupied) {
+                can_expand_right = false;
+                break;
+              }
+            } else {
+              can_expand_right = false;  // Out of reasonable bounds
+              break;
+            }
           } else {
             can_expand_right = false;  // Out of reasonable bounds
             break;
@@ -2322,13 +2346,13 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     // Try expanding below (within reasonable bounds)
     int expand_below_x = config.grid_x;
     int expand_below_y = config.grid_y + config.grid_height;
-    if (expand_below_y + height <= max_rows * 2) {  // Allow expansion up to 2x the row count
+    if (expand_below_y + height <= max_rows * 3) {  // Allow expansion up to 3x the row count
       bool can_expand_below = true;
       for (int dy = 0; dy < height && can_expand_below; ++dy) {
         for (int dx = 0; dx < width && can_expand_below; ++dx) {
           int check_x = expand_below_x + dx;
           int check_y = expand_below_y + dy;
-          if (check_x >= 0 && check_y >= 0 && check_x < max_cols * 2) {  // Allow expansion up to 2x the column count
+          if (check_x >= 0 && check_y >= 0 && check_x < max_cols * 3) {  // Allow expansion up to 3x the column count
             if (check_x < max_cols && check_y < max_rows) {
               // Within original grid - check occupation
               if (occupied[check_y][check_x]) {
@@ -2336,7 +2360,31 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                 break;
               }
             }
-            // For expanded areas beyond original grid, just check if coordinates are reasonable
+            // For expanded areas beyond original grid, check if coordinates are reasonable and not occupied
+            else if (check_x < max_cols * 3 && check_y < max_rows * 3) {
+              // Check if this expanded area is occupied by any panel
+              bool expanded_area_occupied = false;
+              for (const auto& [other_id, other_panel] : panels_) {
+                const auto& other_config = other_panel->get_config();
+                
+                // Check if the new position overlaps with any existing panel in the expanded area
+                if ((check_x < other_config.grid_x + other_config.grid_width) &&
+                    (check_x + width > other_config.grid_x) &&
+                    (check_y < other_config.grid_y + other_config.grid_height) &&
+                    (check_y + height > other_config.grid_y)) {
+                  expanded_area_occupied = true;
+                  break;
+                }
+              }
+              
+              if (expanded_area_occupied) {
+                can_expand_below = false;
+                break;
+              }
+            } else {
+              can_expand_below = false;  // Out of reasonable bounds
+              break;
+            }
           } else {
             can_expand_below = false;  // Out of reasonable bounds
             break;
@@ -2347,10 +2395,197 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         return std::make_pair(expand_below_x, expand_below_y);
       }
     }
+
+    // Try expanding to the left (within reasonable bounds)
+    int expand_left_x = config.grid_x - width;
+    int expand_left_y = config.grid_y;
+    if (expand_left_x >= -max_cols * 2) {  // Allow expansion to negative coordinates up to 2x the column count
+      bool can_expand_left = true;
+      for (int dy = 0; dy < height && can_expand_left; ++dy) {
+        for (int dx = 0; dx < width && can_expand_left; ++dx) {
+          int check_x = expand_left_x + dx;
+          int check_y = expand_left_y + dy;
+          if (check_x >= -max_cols * 2 && check_y >= 0 && check_y < max_rows * 3) {  // Allow negative x coordinates
+            if (check_x < max_cols && check_y < max_rows && check_x >= 0) {
+              // Within original grid - check occupation
+              if (occupied[check_y][check_x]) {
+                can_expand_left = false;
+                break;
+              }
+            }
+            // For expanded areas beyond original grid, check if coordinates are reasonable and not occupied
+            else if (check_x < max_cols * 3 && check_x >= -max_cols * 2 && check_y < max_rows * 3) {
+              // Check if this expanded area is occupied by any panel
+              bool expanded_area_occupied = false;
+              for (const auto& [other_id, other_panel] : panels_) {
+                const auto& other_config = other_panel->get_config();
+                
+                // Check if the new position overlaps with any existing panel in the expanded area
+                if ((check_x < other_config.grid_x + other_config.grid_width) &&
+                    (check_x + width > other_config.grid_x) &&
+                    (check_y < other_config.grid_y + other_config.grid_height) &&
+                    (check_y + height > other_config.grid_y)) {
+                  expanded_area_occupied = true;
+                  break;
+                }
+              }
+              
+              if (expanded_area_occupied) {
+                can_expand_left = false;
+                break;
+              }
+            } else {
+              can_expand_left = false;  // Out of reasonable bounds
+              break;
+            }
+          } else {
+            can_expand_left = false;  // Out of reasonable bounds
+            break;
+          }
+        }
+      }
+      if (can_expand_left) {
+        return std::make_pair(expand_left_x, expand_left_y);
+      }
+    }
+
+    // Try expanding above (within reasonable bounds)
+    int expand_above_x = config.grid_x;
+    int expand_above_y = config.grid_y - height;
+    if (expand_above_y >= -max_rows * 2) {  // Allow expansion to negative coordinates up to 2x the row count
+      bool can_expand_above = true;
+      for (int dy = 0; dy < height && can_expand_above; ++dy) {
+        for (int dx = 0; dx < width && can_expand_above; ++dx) {
+          int check_x = expand_above_x + dx;
+          int check_y = expand_above_y + dy;
+          if (check_x >= 0 && check_x < max_cols * 3 && check_y >= -max_rows * 2) {  // Allow negative y coordinates
+            if (check_x < max_cols && check_y < max_rows && check_y >= 0) {
+              // Within original grid - check occupation
+              if (occupied[check_y][check_x]) {
+                can_expand_above = false;
+                break;
+              }
+            }
+            // For expanded areas beyond original grid, check if coordinates are reasonable and not occupied
+            else if (check_x < max_cols * 3 && check_x >= 0 && check_y < max_rows * 3 && check_y >= -max_rows * 2) {
+              // Check if this expanded area is occupied by any panel
+              bool expanded_area_occupied = false;
+              for (const auto& [other_id, other_panel] : panels_) {
+                const auto& other_config = other_panel->get_config();
+                
+                // Check if the new position overlaps with any existing panel in the expanded area
+                if ((check_x < other_config.grid_x + other_config.grid_width) &&
+                    (check_x + width > other_config.grid_x) &&
+                    (check_y < other_config.grid_y + other_config.grid_height) &&
+                    (check_y + height > other_config.grid_y)) {
+                  expanded_area_occupied = true;
+                  break;
+                }
+              }
+              
+              if (expanded_area_occupied) {
+                can_expand_above = false;
+                break;
+              }
+            } else {
+              can_expand_above = false;  // Out of reasonable bounds
+              break;
+            }
+          } else {
+            can_expand_above = false;  // Out of reasonable bounds
+            break;
+          }
+        }
+      }
+      if (can_expand_above) {
+        return std::make_pair(expand_above_x, expand_above_y);
+      }
+    }
   }
 
-  // If still no space found, return (0,0) as fallback
-  return std::make_pair(0, 0);
+  // If still no space found adjacent to existing panels, create a position next to the first panel
+  // This ensures we never fall back to (0,0) when there are existing panels
+  if (!panels_.empty()) {
+    // Find the first visible panel that is not locked
+    for (const auto& [id, panel] : panels_) {
+      const auto& config = panel->get_config();
+      
+      if (!config.visible) continue;
+
+      bool is_locked = false;
+      auto group_it = panel_to_group_map_.find(id);
+      if (group_it != panel_to_group_map_.end()) {
+        uint32_t group_id = group_it->second;
+        auto panel_group_it = panel_groups_.find(group_id);
+        if (panel_group_it != panel_groups_.end() && panel_group_it->second.locked) {
+          is_locked = true;
+        }
+      }
+
+      if (is_locked) continue;
+      
+      // Try to place to the right of the first panel
+      int fallback_x = config.grid_x + config.grid_width;
+      int fallback_y = config.grid_y;
+      
+      // Check if this position is valid and not overlapping
+      bool position_valid = true;
+      for (const auto& [other_id, other_panel] : panels_) {
+        const auto& other_config = other_panel->get_config();
+        
+        if ((fallback_x < other_config.grid_x + other_config.grid_width) &&
+            (fallback_x + width > other_config.grid_x) &&
+            (fallback_y < other_config.grid_y + other_config.grid_height) &&
+            (fallback_y + height > other_config.grid_y)) {
+          position_valid = false;
+          break;
+        }
+      }
+      
+      if (position_valid) {
+        return std::make_pair(fallback_x, fallback_y);
+      }
+      
+      // If right doesn't work, try below
+      fallback_x = config.grid_x;
+      fallback_y = config.grid_y + config.grid_height;
+      
+      position_valid = true;
+      for (const auto& [other_id, other_panel] : panels_) {
+        const auto& other_config = other_panel->get_config();
+        
+        if ((fallback_x < other_config.grid_x + other_config.grid_width) &&
+            (fallback_x + width > other_config.grid_x) &&
+            (fallback_y < other_config.grid_y + other_config.grid_height) &&
+            (fallback_y + height > other_config.grid_y)) {
+          position_valid = false;
+          break;
+        }
+      }
+      
+      if (position_valid) {
+        return std::make_pair(fallback_x, fallback_y);
+      }
+    }
+  }
+
+  // If no panels exist, return (0,0) as the starting position
+  // This is the only legitimate case to return (0,0)
+  if (panels_.empty()) {
+    return std::make_pair(0, 0);
+  }
+
+  // If we have panels but couldn't find a suitable position, return a position far to the right
+  // of the rightmost panel as a last resort
+  int max_x = 0;
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    if (config.grid_x + config.grid_width > max_x) {
+      max_x = config.grid_x + config.grid_width;
+    }
+  }
+  
+  return std::make_pair(max_x, 0);
 }
 
 }  // namespace BTQuant

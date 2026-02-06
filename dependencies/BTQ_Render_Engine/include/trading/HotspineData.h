@@ -50,24 +50,24 @@ static_assert(GpuAlignable<HotspineOrderBookSnapshot>,
 
 // Candle cluster structure for footprint chart rendering
 struct alignas(16) CandleCluster {
-  float centerX;               // X coordinate (time)
-  float centerY;               // Y coordinate (price)
-  float width;                 // Time duration
-  float height;                // Price range
-  uint32_t bidVolume;          // Total bid volume
-  uint32_t askVolume;          // Total ask volume
-  uint32_t tradeCount;         // Number of trades
-  float vwap;                  // Volume-weighted average price
-  bool hasTrades;              // Trade activity indicator
-  uint32_t buyTradeCount;      // Number of buy trades
-  uint32_t sellTradeCount;     // Number of sell trades
-  float maxSingleTradeVolume;  // Maximum single trade volume
-  uint64_t startTimeNs;        // Start timestamp in nanoseconds
-  uint64_t endTimeNs;          // End timestamp in nanoseconds
+  double centerX;                // X coordinate (time) - changed from float to double as per PRD
+  double centerY;                // Y coordinate (price) - changed from float to double as per PRD
+  float width;                   // Time duration
+  float height;                  // Price range
+  uint32_t bidVolume;            // Total bid volume
+  uint32_t askVolume;            // Total ask volume
+  uint32_t tradeCount;           // Number of trades
+  float vwap;                    // Volume-weighted average price
+  bool hasTrades;                // Trade activity indicator
+  uint32_t buyTradeCount;        // Number of buy trades
+  uint32_t sellTradeCount;       // Number of sell trades
+  float maxSingleTradeVolume;    // Maximum single trade volume - added field as per PRD
+  uint64_t startTimeNs;          // Start timestamp in nanoseconds
+  uint64_t endTimeNs;            // End timestamp in nanoseconds
 
   CandleCluster() = default;
 
-  CandleCluster(float x, float y, float w, float h, uint32_t bidVol, uint32_t askVol,
+  CandleCluster(double x, double y, float w, float h, uint32_t bidVol, uint32_t askVol,
                 uint32_t tradeCnt, float vw, bool hasTrades)
       : centerX(x),
         centerY(y),
@@ -85,7 +85,7 @@ struct alignas(16) CandleCluster {
         endTimeNs(0) {}
 
   // Extended constructor with all fields
-  CandleCluster(float x, float y, float w, float h, uint32_t bidVol, uint32_t askVol,
+  CandleCluster(double x, double y, float w, float h, uint32_t bidVol, uint32_t askVol,
                 uint32_t tradeCnt, float vw, bool hasTrades, uint32_t buyTrades,
                 uint32_t sellTrades, float maxTradeVol, uint64_t startNs, uint64_t endNs)
       : centerX(x),

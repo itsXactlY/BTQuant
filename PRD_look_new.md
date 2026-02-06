@@ -534,8 +534,8 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Refactor `src/main_trading_terminal.cpp`: Remove manual `panel_mgr->add_panel(...)` calls. Replace with a single call: `workspace->set_layout(BTQuant::PanelManager::LayoutPreset::PRO_QUANT);`.
 
 #### Phase 35e: Code Deletion (The Cleanup)
-- [ ] Delete `src/components/realtime_dashboard_component.cpp` and `include/components/realtime_dashboard_component.hpp`.
-- [ ] Remove `RealtimeDashboardComponent` references from `CMakeLists.txt` and `src/vulkan_dashboard_advanced.hpp`.
+- [x] Delete `src/components/realtime_dashboard_component.cpp` and `include/components/realtime_dashboard_component.hpp`.
+- [x] Remove `RealtimeDashboardComponent` references from `CMakeLists.txt` and `src/vulkan_dashboard_advanced.hpp`.
 - [ ] Verify `QuantWorkspaceComponent` is the ONLY place instantiating `PanelManager`.
 
 ---

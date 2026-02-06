@@ -39,7 +39,7 @@ This module implements a high-performance memory pool system for frequently allo
   - `FastClusterCellPool` - Optimized for clustering operations
   - `FastEMAIndicatorPool` - Enhanced EMA indicator handling
   - `FastFootprintCellPool` - Optimized for footprint charts
-  - `FastHotspineTradeTickPool` - High-frequency trade tick processing
+  - `FastTradeDataPool` - High-frequency trade data processing
   - `FastTradePaceDataPool` - Optimized for trade pace analysis
   - `FastTradePairPool` - Optimized for trade pair analysis
   - `FastIndicatorValuePairPool` - Optimized for indicator value pairs
@@ -54,7 +54,7 @@ This module implements a high-performance memory pool system for frequently allo
   - `VolumeProfileLevelPool` - Volume profile levels
   - `CandleClusterPool` - Clustered candle data
   - `FootprintCellPool` - Footprint chart cells
-  - `HotspineTradeTickPool` - High-frequency trade ticks
+  - `TradeDataPool` - High-frequency trade data
 
 ## Usage
 

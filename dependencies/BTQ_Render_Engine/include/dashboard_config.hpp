@@ -18,7 +18,7 @@ namespace RenderEngine {
 
 // Data source configuration
 struct DataSourceConfig {
-  std::string hotspine_shm_name = "/btquant_hotspine";
+  std::string data_source_uri = "tcp://localhost:5555";
   std::string symbols_file = "/dev/shm/btquant_symbols.json";
   bool auto_reconnect = true;
   uint32_t reconnect_interval_ms = 5000;
@@ -88,7 +88,7 @@ struct UserPreferences {
  * DashboardConfig - Comprehensive configuration management system
  *
  * This class manages all configuration aspects of the dashboard including:
- * - Data source settings (HotSpine connection, symbol files)
+ * - Data source settings (connection URI, symbol files)
  * - Display settings (resolution, fullscreen, performance)
  * - Theme and color management
  * - Layout and UI preferences

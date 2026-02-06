@@ -19,7 +19,7 @@ struct OrderBookLevel {
     uint numOrders;        // Number of orders at this price
 };
 
-// Hotspine Order Book Snapshot (SSBO)
+// Order Book Snapshot (SSBO)
 layout(std430, set = 0, binding = 0) readonly buffer OrderBookSnapshot {
     uint currentTimeIndex;     // Current cyclic time index
     uint priceLevelsCount;     // Number of price levels

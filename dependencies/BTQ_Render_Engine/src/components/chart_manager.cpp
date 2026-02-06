@@ -99,7 +99,7 @@ std::optional<uint32_t> ChartManager::getSymbolId(const std::string& symbol_name
     return it->second;
   }
 
-  // Query SymbolRegistry for the actual ID used by HotSpine
+  // Query SymbolRegistry for the actual symbol ID
   auto all_symbols = SymbolRegistry::instance().get_all_symbols();
   for (const auto& info : all_symbols) {
     if (info.symbol == symbol_name) {

@@ -100,7 +100,7 @@ bool DashboardConfig::saveConfiguration() const {
 
     // Data source configuration
     file << "[data_source]" << std::endl;
-    file << "hotspine_shm_name=" << data_source_config_.hotspine_shm_name << std::endl;
+    file << "data_source_uri=" << data_source_config_.data_source_uri << std::endl;
     file << "symbols_file=" << data_source_config_.symbols_file << std::endl;
     file << "auto_reconnect=" << (data_source_config_.auto_reconnect ? "true" : "false")
          << std::endl;
@@ -440,7 +440,7 @@ std::string DashboardConfig::getLayoutFilePath(const std::string& layout_name) c
 
 void DashboardConfig::initializeDefaults() {
   // Data source defaults
-  data_source_config_.hotspine_shm_name = "/btquant_hotspine";
+  data_source_config_.data_source_uri = "tcp://localhost:5555";
   data_source_config_.symbols_file = "/dev/shm/btquant_symbols.json";
   data_source_config_.auto_reconnect = true;
   data_source_config_.reconnect_interval_ms = 5000;
@@ -492,8 +492,8 @@ void DashboardConfig::initializeDefaults() {
 void DashboardConfig::parseConfigValue(const std::string& section, const std::string& key,
                                        const std::string& value) {
   if (section == "data_source") {
-    if (key == "hotspine_shm_name")
-      data_source_config_.hotspine_shm_name = value;
+    if (key == "data_source_uri")
+      data_source_config_.data_source_uri = value;
     else if (key == "symbols_file")
       data_source_config_.symbols_file = value;
     else if (key == "auto_reconnect")

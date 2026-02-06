@@ -51,13 +51,13 @@ if ! command -v vulkaninfo &> /dev/null; then
     print_warning "Vulkan tools not found. Dashboard will run in limited mode."
 fi
 
-# Check for HotSpine shared memory
-if [ -e "/dev/shm/btquant_hotspine" ]; then
-    print_success "HotSpine shared memory detected - live data mode available"
-    HOTSPINE_AVAILABLE=true
+# Check for data source availability
+if nc -z localhost 5555 2>/dev/null || [ -e "/dev/shm/btquant_data" ]; then
+    print_success "Data source available - live data mode available"
+    DATA_SOURCE_AVAILABLE=true
 else
-    print_warning "HotSpine shared memory not found - will run in demo mode"
-    HOTSPINE_AVAILABLE=false
+    print_warning "Data source not found - will run in demo mode"
+    DATA_SOURCE_AVAILABLE=false
 fi
 
 # Check for symbol mappings
@@ -107,7 +107,7 @@ if [ -f "./build/bin/dashboard_advanced" ]; then
     echo "=== Build Summary ==="
     echo "Dashboard executable: $(pwd)/build/bin/dashboard_advanced"
     echo "Integration test: $(pwd)/build/bin/dashboard_test"
-    echo "HotSpine integration: $($HOTSPINE_AVAILABLE && echo "Available" || echo "Demo mode")"
+    echo "Data source integration: $($DATA_SOURCE_AVAILABLE && echo "Available" || echo "Demo mode")"
     echo "Symbol mappings: $($SYMBOLS_AVAILABLE && echo "Available" || echo "Defaults")"
     echo ""
 
@@ -137,9 +137,9 @@ if [ -f "./build/bin/dashboard_advanced" ]; then
     echo "  ./bin/dashboard_test"
     echo ""
 
-    if [ "$HOTSPINE_AVAILABLE" = true ]; then
-        echo "🔥 Live HotSpine data mode:"
-        echo "  - Real-time market data from shared memory"
+    if [ "$DATA_SOURCE_AVAILABLE" = true ]; then
+        echo "🔥 Live data mode:"
+        echo "  - Real-time market data from data source"
         echo "  - Live symbol updates and discovery"
         echo "  - Full performance monitoring"
     else

@@ -324,64 +324,6 @@ void VulkanSyncContext::waitForCompletion() const { fenceManager_->waitAll(); }
 
 void VulkanSyncContext::reset() const { fenceManager_->resetAll(); }
 
-// ============================================
-// HotspineBarrierManager Implementation
-// ============================================
-
-HotspineBarrierManager::HotspineBarrierManager(VkDevice device) : device_(device) {}
-
-[[nodiscard]] VkMemoryBarrier HotspineBarrierManager::createBufferMemoryBarrier(
-    [[maybe_unused]] VkPipelineStageFlags srcStage,
-    [[maybe_unused]] VkPipelineStageFlags dstStage) const {
-  return VkMemoryBarrier{.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-                         .pNext = nullptr,
-                         .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
-                         .dstAccessMask = VK_ACCESS_SHADER_READ_BIT};
-}
-
-[[nodiscard]] VkBufferMemoryBarrier HotspineBarrierManager::createSSBOBufferBarrier(
-    VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size) const {
-  return VkBufferMemoryBarrier{
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-      .pNext = nullptr,
-      .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .buffer = buffer,
-      .offset = offset,
-      .size = size};
-}
-
-[[nodiscard]] VkImageMemoryBarrier HotspineBarrierManager::createHeatmapImageBarrier(
-    VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) const {
-  return VkImageMemoryBarrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                              .pNext = nullptr,
-                              .srcAccessMask = (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED)
-                                                   ? VkAccessFlags{0}
-                                                   : VK_ACCESS_SHADER_WRITE_BIT,
-                              .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-                              .oldLayout = oldLayout,
-                              .newLayout = newLayout,
-                              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                              .image = image,
-                              .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                   .baseMipLevel = 0,
-                                                   .levelCount = 1,
-                                                   .baseArrayLayer = 0,
-                                                   .layerCount = 1}};
-}
-
-void HotspineBarrierManager::recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer, VkBuffer buffer,
-                                                         VkDeviceSize offset,
-                                                         VkDeviceSize size) const {
-  auto bufferBarrier = createSSBOBufferBarrier(buffer, offset, size);
-
-  vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
-                       VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                       0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
-}
 
 // ============================================
 // RingBufferSyncManager Implementation

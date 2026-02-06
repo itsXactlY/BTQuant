@@ -11,7 +11,6 @@
 #include "../data/VolumeDataTypes.h"
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
-#include "trading/HotspineData.h"
 
 namespace BTQuant {
 namespace RenderEngine {
@@ -80,10 +79,10 @@ class MarketMicrostructureRenderer {
   void executeGraphics(VkCommandBuffer cmdBuffer);
 
   // Update order book data
-  void updateLOBData(const HotspineOrderBookSnapshot& snapshot);
+  void updateLOBData(const OrderbookData& orderbookData);
 
   // Update trade data
-  void updateTradeData(std::span<const HotspineTradeTick> trades);
+  void updateTradeData(std::span<const TradeData> trades);
 
   // Update footprint chart clusters
   void updateFootprintClusters(std::span<const CandleCluster> clusters);
@@ -234,7 +233,7 @@ class MarketMicrostructureRenderer {
 
   // Current frame data (Storage for GPU-friendly formats)
   std::vector<uint8_t> lobSnapshotBuffer_;
-  std::vector<HotspineTradeTick> currentTradeData_;
+  std::vector<TradeData> currentTradeData_;
   std::vector<CandleCluster> currentFootprintClusters_;
   mutable std::mutex dataMutex_;
 

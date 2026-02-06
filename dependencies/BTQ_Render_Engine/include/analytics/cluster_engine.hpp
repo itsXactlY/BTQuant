@@ -9,20 +9,42 @@
 #include <vector>
 
 #include "../../../../dependencies/ccapi/example/src/market_data_collector/market_data_types.h"
+#include <atomic>
 #include "../data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
-#include "../hotspine_layout_v3.hpp"
 
 namespace Analytics {
+
+// Define VolumeNode structure since it was removed from HotSpine
+struct VolumeNode {
+  float sell_vol = 0.0f;
+  float buy_vol = 0.0f;
+  int64_t timestamp = 0;
+  int trade_count = 0;
+  uint32_t tpo_bits = 0;  // Bitfield for TPO (Time Price Opportunity) counting
+};
+
+// Constants for cluster visualization
+constexpr std::size_t VIEWPORT_ROWS = 256;
+
+struct ClusterColumn {
+  double open = 0.0;
+  double high = 0.0;
+  double low = 0.0;
+  double close = 0.0;
+  double tick_size = 0.0;
+  int64_t base_tick_index = 0;
+  VolumeNode rows[VIEWPORT_ROWS];  // The visual rows
+};
 
 struct ClusterCell {
   mutable std::mutex volume_mutex;  // Mutex to protect double values
   double total_volume{0.0};
   double buy_volume{0.0};
   double sell_volume{0.0};
-  std::atomic<int> trade_count{0};
-  std::atomic<int> buy_trade_count{0};
-  std::atomic<int> sell_trade_count{0};
-  std::atomic<double> max_single_trade_volume{0.0};
+  int trade_count{0};
+  int buy_trade_count{0};
+  int sell_trade_count{0};
+  double max_single_trade_volume{0.0};
   double sum_of_volumes{0.0};  // for average calculations
 
   // Fields for statistical calculations
@@ -38,10 +60,10 @@ struct ClusterCell {
       : total_volume(other.total_volume),
         buy_volume(other.buy_volume),
         sell_volume(other.sell_volume),
-        trade_count(other.trade_count.load()),
-        buy_trade_count(other.buy_trade_count.load()),
-        sell_trade_count(other.sell_trade_count.load()),
-        max_single_trade_volume(other.max_single_trade_volume.load()),
+        trade_count(other.trade_count),
+        buy_trade_count(other.buy_trade_count),
+        sell_trade_count(other.sell_trade_count),
+        max_single_trade_volume(other.max_single_trade_volume),
         sum_of_volumes(other.sum_of_volumes),
         prices(other.prices),
         sum_of_prices(other.sum_of_prices),
@@ -56,10 +78,10 @@ struct ClusterCell {
       total_volume = other.total_volume;
       buy_volume = other.buy_volume;
       sell_volume = other.sell_volume;
-      trade_count.store(other.trade_count.load());
-      buy_trade_count.store(other.buy_trade_count.load());
-      sell_trade_count.store(other.sell_trade_count.load());
-      max_single_trade_volume.store(other.max_single_trade_volume.load());
+      trade_count = other.trade_count;
+      buy_trade_count = other.buy_trade_count;
+      sell_trade_count = other.sell_trade_count;
+      max_single_trade_volume = other.max_single_trade_volume;
       sum_of_volumes = other.sum_of_volumes;
       prices = other.prices;
       sum_of_prices = other.sum_of_prices;
@@ -106,7 +128,7 @@ class ClusterEngine {
       size_t padding = 100;
       size_t final_insert = deficit + padding;
 
-      canvas_.insert(canvas_.begin(), final_insert, HotSpine::V3::VolumeNode{});
+      canvas_.insert(canvas_.begin(), final_insert, VolumeNode{});
       min_tick_index_ -= (int64_t)final_insert;
       relative_index = abs_tick_index - min_tick_index_;
     }
@@ -166,9 +188,9 @@ class ClusterEngine {
   // Calculate median price for a specific price level and time bucket
   double calculateMedianPrice(int64_t price_level, int time_bucket) const;
 
-  void snapshot_to_viewport(HotSpine::V3::ClusterColumn& out, double center_price) {
+  void snapshot_to_viewport(ClusterColumn& out, double center_price) {
     int64_t center_idx = static_cast<int64_t>(std::round(center_price / tick_size_));
-    int64_t start_abs_index = center_idx - (HotSpine::V3::VIEWPORT_ROWS / 2);
+    int64_t start_abs_index = center_idx - (VIEWPORT_ROWS / 2);
 
     out.tick_size = tick_size_;
     out.base_tick_index = start_abs_index;
@@ -177,7 +199,7 @@ class ClusterEngine {
     // session/candle context, which this specific rasterizer doesn't
     // necessarily track. The processor loop should populate them.
 
-    for (size_t i = 0; i < HotSpine::V3::VIEWPORT_ROWS; ++i) {
+    for (size_t i = 0; i < VIEWPORT_ROWS; ++i) {
       int64_t current_abs_idx = start_abs_index + i;
       int64_t relative_idx = current_abs_idx - min_tick_index_;
 
@@ -186,7 +208,7 @@ class ClusterEngine {
       if (relative_idx >= 0 && static_cast<size_t>(relative_idx) < canvas_.size()) {
         row = canvas_[relative_idx];
       } else {
-        row = HotSpine::V3::VolumeNode{};
+        row = VolumeNode{};
       }
     }
   }
@@ -195,7 +217,7 @@ class ClusterEngine {
   double tick_size_;
   int64_t min_tick_index_;
   int64_t session_start_us_;
-  std::vector<HotSpine::V3::VolumeNode> canvas_;
+  std::vector<VolumeNode> canvas_;
 
   // Additional data structure for cluster cells with time buckets
   std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]

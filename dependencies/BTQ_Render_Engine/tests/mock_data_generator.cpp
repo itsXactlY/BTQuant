@@ -1,7 +1,6 @@
 #include "../include/data/data_types.hpp"
 #include "../include/data/TradeData.h"
 #include "../include/data/VolumeDataTypes.h"
-#include "../include/trading/HotspineData.h"
 #include <vector>
 #include <random>
 #include <chrono>
@@ -189,32 +188,6 @@ std::vector<CandleCluster> generateMockCandleClusters(size_t count) {
     return clusters;
 }
 
-// Generate mock HotspineTradeTick data
-std::vector<HotspineTradeTick> generateMockHotspineTradeTicks(size_t count) {
-    std::vector<HotspineTradeTick> ticks;
-    ticks.reserve(count);
-    
-    auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    
-    std::uniform_real_distribution<float> price_dist(100.0f, 200.0f);
-    std::uniform_real_distribution<float> size_dist(0.1f, 10.0f);
-    std::uniform_int_distribution<uint32_t> symbol_dist(1, 100); // 100 symbols
-    std::uniform_int_distribution<int> buy_dist(0, 1);
-    
-    for (size_t i = 0; i < count; ++i) {
-        HotspineTradeTick tick;
-        tick.timestamp = static_cast<uint64_t>(now + (i * 100000000)); // 100ms intervals in ns
-        tick.price = price_dist(rng);
-        tick.size = size_dist(rng);
-        tick.symbolId = symbol_dist(rng);
-        tick.isBuy = buy_dist(rng) ? true : false;
-        
-        ticks.push_back(tick);
-    }
-    
-    return ticks;
-}
 
 // Generate mock RendererStats
 RendererStats generateMockRendererStats() {

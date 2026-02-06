@@ -434,58 +434,54 @@ void VulkanDashboard::pollDataToRenderer() {
   }
 
   // 3. Update LOB Heatmap Data
-  uint32_t bidsCount = static_cast<uint32_t>(analytics.consolidated_bids.size());
-  uint32_t asksCount = static_cast<uint32_t>(analytics.consolidated_asks.size());
-  uint32_t totalLevels = bidsCount + asksCount;
-
-  if (totalLevels > 0) {
-    size_t bufferSize = RenderEngine::HotspineOrderBookSnapshot::calculateBufferSize(totalLevels);
-    std::vector<uint8_t> buffer(bufferSize);
-    auto* snapshot = reinterpret_cast<RenderEngine::HotspineOrderBookSnapshot*>(buffer.data());
-
-    snapshot->currentTimeIndex = static_cast<uint32_t>(vulkan_core_->get_current_frame_index());
-    snapshot->priceLevelsCount = totalLevels;
-
-    // Calculate dynamic price range for the snapshot
-    float minPrice = 1e9f, maxPrice = -1e9f;
-    if (!analytics.consolidated_bids.empty()) {
-      minPrice =
-          std::min(minPrice, static_cast<float>(analytics.consolidated_bids.rbegin()->first));
-      maxPrice = std::max(maxPrice, static_cast<float>(analytics.consolidated_bids.begin()->first));
-    }
-    if (!analytics.consolidated_asks.empty()) {
-      minPrice = std::min(minPrice, static_cast<float>(analytics.consolidated_asks.begin()->first));
-      maxPrice =
-          std::max(maxPrice, static_cast<float>(analytics.consolidated_asks.rbegin()->first));
-    }
-
-    snapshot->basePrice = minPrice;
-    snapshot->priceRange = (maxPrice - minPrice) > 1e-6f ? (maxPrice - minPrice) : 1.0f;
-
-    uint32_t idx = 0;
+  if (!analytics.consolidated_bids.empty() || !analytics.consolidated_asks.empty()) {
+    // Create OrderbookData from consolidated data
+    OrderbookData orderbookData;
+    orderbookData.symbol = "SYMBOL"; // Placeholder
+    orderbookData.symbol_id = 0; // Placeholder
+    orderbookData.timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    
+    // Convert consolidated bids to PriceLevel format
     for (auto const& [price, size] : analytics.consolidated_bids) {
-      snapshot->levels[idx++] = {static_cast<float>(price), 0, static_cast<uint32_t>(size), 0};
+      PriceLevel level;
+      level.price = price;
+      level.size = size;
+      level.timestamp = orderbookData.timestamp;
+      orderbookData.bids.push_back(level);
     }
+    
+    // Convert consolidated asks to PriceLevel format
     for (auto const& [price, size] : analytics.consolidated_asks) {
-      snapshot->levels[idx++] = {static_cast<float>(price), static_cast<uint32_t>(size), 0, 0};
+      PriceLevel level;
+      level.price = price;
+      level.size = size;
+      level.timestamp = orderbookData.timestamp;
+      orderbookData.asks.push_back(level);
     }
-
-    micro_renderer_->updateLOBData(*snapshot);
+    
+    micro_renderer_->updateLOBData(orderbookData);
   }
 
   // 4. Update Trade Data
   if (!analytics.recent_trades.empty()) {
-    std::vector<RenderEngine::HotspineTradeTick> ticks;
     size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades.size());
-    ticks.reserve(count);
+    std::vector<TradeData> trades;
+    trades.reserve(count);
 
     for (size_t i = analytics.recent_trades.size() - count; i < analytics.recent_trades.size();
          ++i) {
       const auto& t = analytics.recent_trades[i];
-      ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
-                         t.symbol_id, t.is_buy);
+      TradeData tradeData;
+      tradeData.symbol = t.symbol; // Assuming symbol exists in original struct
+      tradeData.symbol_id = t.symbol_id;
+      tradeData.timestamp = t.timestamp;
+      tradeData.price = t.price;
+      tradeData.size = t.size;
+      tradeData.is_buy = t.is_buy;
+      trades.push_back(tradeData);
     }
-    micro_renderer_->updateTradeData(ticks);
+    micro_renderer_->updateTradeData(trades);
   }
 
   // 5. Aggregate Footprint Clusters (Exocharts Style)

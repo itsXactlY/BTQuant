@@ -41,8 +41,8 @@ struct VulkanDashboardConfig {
   size_t uniform_pool_size = 32 * 1024 * 1024;  // 32MB
   size_t storage_pool_size = 64 * 1024 * 1024;  // 64MB
 
-  // HotSpine integration
-  std::string shm_name = "/btquant_hotspine";
+  // Data source integration
+  std::string data_source_uri = "tcp://localhost:5555";
   std::string symbol_registry_path = "/dev/shm/btquant_symbols.json";
 
   // Performance optimization flags

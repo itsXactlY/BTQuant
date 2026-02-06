@@ -20,6 +20,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <print>
 #include <span>
 #include <stdexcept>
@@ -30,7 +31,6 @@
 #include "../../include/components/VulkanSynchronization.h"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
-#include "../../include/trading/HotspineData.h"
 #include "../../include/vulkan_base_types.hpp"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
@@ -246,19 +246,100 @@ void MarketMicrostructureRenderer::executeGraphics(VkCommandBuffer cmdBuffer) {
   }
 }
 
-void MarketMicrostructureRenderer::updateLOBData(const HotspineOrderBookSnapshot& snapshot) {
+void MarketMicrostructureRenderer::updateLOBData(const OrderbookData& orderbookData) {
   if (!initialized_) [[unlikely]] {
     return;
   }
 
   std::lock_guard lock(dataMutex_);
 
-  // Store snapshot for processing during render
-  size_t size = HotspineOrderBookSnapshot::calculateBufferSize(snapshot.priceLevelsCount);
-  lobSnapshotBuffer_.resize(size);
-  std::memcpy(lobSnapshotBuffer_.data(), &snapshot, size);
+  // Convert OrderbookData to GPU-friendly format
+  // Calculate total levels
+  uint32_t totalLevels = static_cast<uint32_t>(orderbookData.bids.size() + orderbookData.asks.size());
+  
+  if (totalLevels > 0) {
+    // Create GPU-friendly buffer
+    size_t headerSize = sizeof(uint32_t) * 4; // currentTimeIndex, priceLevelsCount, basePrice, priceRange placeholder
+    size_t levelSize = totalLevels * (sizeof(float) * 1 + sizeof(uint32_t) * 3); // price, askQuantity, bidQuantity, numOrders
+    size_t totalSize = headerSize + levelSize;
+    
+    lobSnapshotBuffer_.resize(totalSize);
+    
+    // Fill the buffer with converted data
+    uint8_t* bufferPtr = lobSnapshotBuffer_.data();
+    
+    // Write header data
+    uint32_t currentTimeIndex = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+    std::memcpy(bufferPtr, &currentTimeIndex, sizeof(currentTimeIndex));
+    bufferPtr += sizeof(currentTimeIndex);
+    
+    std::memcpy(bufferPtr, &totalLevels, sizeof(totalLevels));
+    bufferPtr += sizeof(totalLevels);
+    
+    // Calculate base price and price range
+    float basePrice = 0.0f;
+    float priceRange = 1.0f;
+    if (!orderbookData.bids.empty() || !orderbookData.asks.empty()) {
+        double minPrice = std::numeric_limits<double>::max();
+        double maxPrice = std::numeric_limits<double>::lowest();
+        
+        for (const auto& bid : orderbookData.bids) {
+            minPrice = std::min(minPrice, bid.price);
+            maxPrice = std::max(maxPrice, bid.price);
+        }
+        for (const auto& ask : orderbookData.asks) {
+            minPrice = std::min(minPrice, ask.price);
+            maxPrice = std::max(maxPrice, ask.price);
+        }
+        
+        basePrice = static_cast<float>(minPrice);
+        priceRange = static_cast<float>(maxPrice - minPrice);
+        if (priceRange <= 0.0f) priceRange = 1.0f; // Prevent division by zero
+    }
+    
+    std::memcpy(bufferPtr, &basePrice, sizeof(basePrice));
+    bufferPtr += sizeof(basePrice);
+    
+    std::memcpy(bufferPtr, &priceRange, sizeof(priceRange));
+    bufferPtr += sizeof(priceRange);
+    
+    // Write level data
+    for (const auto& bid : orderbookData.bids) {
+        float price = static_cast<float>(bid.price);
+        uint32_t bidQty = static_cast<uint32_t>(bid.size);
+        uint32_t askQty = 0u; // No ask quantity for bid
+        uint32_t numOrders = 1u; // Placeholder
+        
+        std::memcpy(bufferPtr, &price, sizeof(price));
+        bufferPtr += sizeof(price);
+        std::memcpy(bufferPtr, &askQty, sizeof(askQty)); // Ask quantity (0 for bids)
+        bufferPtr += sizeof(askQty);
+        std::memcpy(bufferPtr, &bidQty, sizeof(bidQty)); // Bid quantity
+        bufferPtr += sizeof(bidQty);
+        std::memcpy(bufferPtr, &numOrders, sizeof(numOrders));
+        bufferPtr += sizeof(numOrders);
+    }
+    
+    for (const auto& ask : orderbookData.asks) {
+        float price = static_cast<float>(ask.price);
+        uint32_t askQty = static_cast<uint32_t>(ask.size);
+        uint32_t bidQty = 0u; // No bid quantity for ask
+        uint32_t numOrders = 1u; // Placeholder
+        
+        std::memcpy(bufferPtr, &price, sizeof(price));
+        bufferPtr += sizeof(price);
+        std::memcpy(bufferPtr, &askQty, sizeof(askQty)); // Ask quantity
+        bufferPtr += sizeof(askQty);
+        std::memcpy(bufferPtr, &bidQty, sizeof(bidQty)); // Bid quantity (0 for asks)
+        bufferPtr += sizeof(bidQty);
+        std::memcpy(bufferPtr, &numOrders, sizeof(numOrders));
+        bufferPtr += sizeof(numOrders);
+    }
+  }
 
-  currentHeatmapTimeIndex_ = snapshot.currentTimeIndex;
+  currentHeatmapTimeIndex_ = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count());
 
   {
     std::lock_guard statsLock(statsMutex_);
@@ -266,13 +347,19 @@ void MarketMicrostructureRenderer::updateLOBData(const HotspineOrderBookSnapshot
   }
 }
 
-void MarketMicrostructureRenderer::updateTradeData(std::span<const HotspineTradeTick> trades) {
+void MarketMicrostructureRenderer::updateTradeData(std::span<const TradeData> trades) {
   if (!initialized_) [[unlikely]] {
     return;
   }
 
   std::lock_guard lock(dataMutex_);
-  currentTradeData_.assign(trades.begin(), trades.end());
+  currentTradeData_.clear();
+  currentTradeData_.reserve(trades.size());
+  
+  // Convert TradeData to internal format
+  for (const auto& trade : trades) {
+    currentTradeData_.push_back(trade);
+  }
 
   {
     std::lock_guard statsLock(statsMutex_);
@@ -396,7 +483,7 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
 
     const auto& book = *bookOpt;
 
-    // Convert OrderbookData to HotspineOrderBookSnapshot
+    // Convert OrderbookData to GPU-compatible format
     // We need to merge bids and asks into price levels (assuming single price
     // represents row) Or separate? LOB Heatmap usually assumes Price -> BidVol,
     // AskVol
@@ -407,34 +494,77 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
 
     size_t numLevels = levels.size();
     size_t bufferSize =
-        HotspineOrderBookSnapshot::calculateBufferSize(static_cast<uint32_t>(numLevels));
+        sizeof(uint32_t) * 4 + numLevels * (sizeof(float) * 1 + sizeof(uint32_t) * 3);
     std::vector<uint8_t> buffer(bufferSize);
 
-    HotspineOrderBookSnapshot* snapshot =
-        reinterpret_cast<HotspineOrderBookSnapshot*>(buffer.data());
-    snapshot->currentTimeIndex = static_cast<uint32_t>(book.timestamp / 1000);  // ms
-    snapshot->priceLevelsCount = static_cast<uint32_t>(numLevels);
-
+    uint8_t* bufferPtr = buffer.data();
+    
+    // Write header data
+    uint32_t currentTimeIndex = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+    std::memcpy(bufferPtr, &currentTimeIndex, sizeof(currentTimeIndex));
+    bufferPtr += sizeof(currentTimeIndex);
+    
+    uint32_t priceLevelsCount = static_cast<uint32_t>(numLevels);
+    std::memcpy(bufferPtr, &priceLevelsCount, sizeof(priceLevelsCount));
+    bufferPtr += sizeof(priceLevelsCount);
+    
+    // Calculate base price and price range
+    float basePrice = 0.0f;
+    float priceRange = 1.0f;
     if (!levels.empty()) {
-      snapshot->basePrice = static_cast<float>(levels.begin()->first);
-      snapshot->priceRange = static_cast<float>(levels.rbegin()->first - levels.begin()->first);
-      // Avoid zero range
-      if (snapshot->priceRange == 0) snapshot->priceRange = 1.0f;
-    } else {
-      snapshot->basePrice = 0;
-      snapshot->priceRange = 1;
+        double minPrice = levels.begin()->first;
+        double maxPrice = levels.rbegin()->first;
+        basePrice = static_cast<float>(minPrice);
+        priceRange = static_cast<float>(maxPrice - minPrice);
+        if (priceRange <= 0.0f) priceRange = 1.0f; // Prevent division by zero
+    }
+    
+    std::memcpy(bufferPtr, &basePrice, sizeof(basePrice));
+    bufferPtr += sizeof(basePrice);
+    
+    std::memcpy(bufferPtr, &priceRange, sizeof(priceRange));
+    bufferPtr += sizeof(priceRange);
+    
+    // Write level data
+    uint32_t idx = 0;
+    for (const auto& [price, volumes] : levels) {
+        float fPrice = static_cast<float>(price);
+        uint32_t askQty = static_cast<uint32_t>(volumes.second);
+        uint32_t bidQty = static_cast<uint32_t>(volumes.first);
+        uint32_t numOrders = 1u; // Placeholder
+        
+        std::memcpy(bufferPtr, &fPrice, sizeof(fPrice));
+        bufferPtr += sizeof(fPrice);
+        std::memcpy(bufferPtr, &askQty, sizeof(askQty)); // Ask quantity
+        bufferPtr += sizeof(askQty);
+        std::memcpy(bufferPtr, &bidQty, sizeof(bidQty)); // Bid quantity
+        bufferPtr += sizeof(bidQty);
+        std::memcpy(bufferPtr, &numOrders, sizeof(numOrders));
+        bufferPtr += sizeof(numOrders);
+    }
+    
+    // Create OrderbookData from the levels map
+    OrderbookData orderbookData;
+    orderbookData.symbol = "SYMBOL"; // Placeholder
+    orderbookData.symbol_id = 0; // Placeholder
+    orderbookData.timestamp = book.timestamp;
+    
+    // Convert levels back to bids and asks
+    for (const auto& [price, volumes] : levels) {
+        PriceLevel level;
+        level.price = price;
+        level.size = volumes.first + volumes.second; // Combined size
+        level.timestamp = book.timestamp;
+        
+        if (volumes.first > 0) { // Has bid volume
+            orderbookData.bids.push_back(level);
+        } else if (volumes.second > 0) { // Has ask volume
+            orderbookData.asks.push_back(level);
+        }
     }
 
-    int i = 0;
-    for (const auto& [price, vols] : levels) {
-      snapshot->levels[i].price = static_cast<float>(price);
-      snapshot->levels[i].bidQuantity = static_cast<uint32_t>(vols.first);
-      snapshot->levels[i].askQuantity = static_cast<uint32_t>(vols.second);
-      snapshot->levels[i].numOrders = 0;  // Not available in OrderbookData
-      i++;
-    }
-
-    updateLOBData(*snapshot);
+    updateLOBData(orderbookData);
   } else if (type == NotificationType::TRADE) {
     // Fetch recent trades for this symbol
     // Processor doesn't give us "just the new trade" in callback easily without
@@ -444,13 +574,19 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
     // trades to ensure we have data.
     auto analytics = marketDataProcessor_->getSymbolAnalytics(symbol_id);
 
-    // Convert to HotspineTradeTick
-    std::vector<HotspineTradeTick> ticks;
-    ticks.reserve(analytics.recent_trades.size());
+    // Convert to TradeData
+    std::vector<TradeData> trades;
+    trades.reserve(analytics.recent_trades.size());
 
     for (const auto& t : analytics.recent_trades) {
-      ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
-                         t.symbol_id, t.is_buy);
+      TradeData trade;
+      trade.symbol = t.symbol; // Assuming symbol exists in original struct
+      trade.symbol_id = t.symbol_id;
+      trade.timestamp = t.timestamp;
+      trade.price = t.price;
+      trade.size = t.size;
+      trade.is_buy = t.is_buy;
+      trades.push_back(trade);
 
       // Process the trade with the cluster engine
       // Convert to MarketData::Trade format for the cluster engine
@@ -474,7 +610,7 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
       }
     }
 
-    updateTradeData(ticks);
+    updateTradeData(trades);
 
     // Also update Footprint Clusters?
     // If we don't have a cluster logic here, we rely on someone else calling
@@ -1077,7 +1213,7 @@ void MarketMicrostructureRenderer::updateStorageBuffers() {
 
     std::memcpy(tpoProfileSSBO_.mapped_ptr, &header, sizeof(header));
     std::memcpy(static_cast<char*>(tpoProfileSSBO_.mapped_ptr) + sizeof(header),
-                currentTradeData_.data(), currentTradeData_.size() * sizeof(HotspineTradeTick));
+                currentTradeData_.data(), currentTradeData_.size() * sizeof(TradeData));
   }
 
   // 3. Update LOB Heatmap Snapshot SSBO

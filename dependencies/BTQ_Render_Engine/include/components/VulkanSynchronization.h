@@ -177,31 +177,6 @@ class SyncDebugUtils {
   static PerformanceStats performanceStats;
 };
 
-// ============================================================================
-// Hotspine Barrier Manager - Manages memory barriers for Hotspine data
-// ============================================================================
-
-class HotspineBarrierManager {
- public:
-  explicit HotspineBarrierManager(VkDevice device);
-
-  // Create memory barriers for Hotspine data synchronization
-  VkMemoryBarrier createBufferMemoryBarrier(VkPipelineStageFlags srcStage,
-                                            VkPipelineStageFlags dstStage) const;
-
-  VkBufferMemoryBarrier createSSBOBufferBarrier(VkBuffer buffer, VkDeviceSize offset,
-                                                VkDeviceSize size) const;
-
-  VkImageMemoryBarrier createHeatmapImageBarrier(VkImage image, VkImageLayout oldLayout,
-                                                 VkImageLayout newLayout) const;
-
-  // Record barrier commands
-  void recordHotspineUpdateBarrier(VkCommandBuffer cmdBuffer, VkBuffer buffer, VkDeviceSize offset,
-                                   VkDeviceSize size) const;
-
- private:
-  VkDevice device_;
-};
 
 // ============================================================================
 // Ring Buffer Sync Manager - Lock-free ring buffer slot management

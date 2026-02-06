@@ -17,7 +17,6 @@
 #include "../include/analytics/technical_analysis.hpp"
 #include "../include/data/data_types.hpp"
 #include "../include/trading/position_manager.hpp"
-#include "../include/trading/HotspineData.h"
 #include "../include/data/compression.hpp"
 #include "../include/components/chart_panel.hpp"
 #include "../include/vulkan_dashboard_advanced.hpp"
@@ -326,23 +325,6 @@ private:
     ObjectPool<PositionManager::TradeRecord> pool_;
 };
 
-// HotspineTradeTickPool for frequently allocated trade ticks
-class HotspineTradeTickPool {
-public:
-    static HotspineTradeTickPool& getInstance();
-
-    RenderEngine::HotspineTradeTick* allocate();
-    void deallocate(RenderEngine::HotspineTradeTick* tick);
-    void preallocate(size_t count = 2048); // Higher count since these are frequently allocated
-
-    size_t getTotalObjects() const { return pool_.get_total_objects(); }
-    size_t getFreeObjects() const { return pool_.get_free_objects(); }
-    size_t getUsedObjects() const { return pool_.get_used_objects(); }
-
-private:
-    HotspineTradeTickPool() = default;
-    ObjectPool<RenderEngine::HotspineTradeTick> pool_;
-};
 
 // OrderBookLevelPool for order book levels
 class OrderBookLevelPool {
@@ -858,24 +840,6 @@ private:
     ThreadLocalObjectPool<PositionManager::TradeRecord> pool_;
 };
 
-class FastHotspineTradeTickPool {
-public:
-    static FastHotspineTradeTickPool& getInstance();
-
-    RenderEngine::HotspineTradeTick* allocate();
-    void deallocate(RenderEngine::HotspineTradeTick* tick);
-    void preallocate(size_t count = 4096); // Higher count for frequent allocation
-
-    size_t getTotalObjects() const { return pool_.get_total_objects(); }
-    size_t getFreeObjects() const { return pool_.get_free_objects(); }
-    size_t getUsedObjects() const { return pool_.get_used_objects(); }
-    size_t getAllocationCount() const { return pool_.get_allocation_count(); }
-    size_t getDeallocationCount() const { return pool_.get_deallocation_count(); }
-
-private:
-    FastHotspineTradeTickPool() = default;
-    ThreadLocalObjectPool<RenderEngine::HotspineTradeTick> pool_;
-};
 
 class FastOrderBookLevelPool {
 public:

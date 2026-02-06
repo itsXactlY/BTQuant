@@ -257,24 +257,6 @@ void TradeRecordPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 
-// HotspineTradeTickPool implementation
-HotspineTradeTickPool& HotspineTradeTickPool::getInstance() {
-    static HotspineTradeTickPool instance;
-    return instance;
-}
-
-RenderEngine::HotspineTradeTick* HotspineTradeTickPool::allocate() {
-    return pool_.allocate();
-}
-
-void HotspineTradeTickPool::deallocate(RenderEngine::HotspineTradeTick* tick) {
-    pool_.deallocate(tick);
-}
-
-void HotspineTradeTickPool::preallocate(size_t count) {
-    pool_.preallocate(count);
-}
-
 // OrderBookLevelPool implementation
 OrderBookLevelPool& OrderBookLevelPool::getInstance() {
     static OrderBookLevelPool instance;
@@ -708,24 +690,6 @@ void FastTradeRecordPool::deallocate(PositionManager::TradeRecord* record) {
 }
 
 void FastTradeRecordPool::preallocate(size_t count) {
-    pool_.preallocate(count);
-}
-
-// FastHotspineTradeTickPool implementation
-FastHotspineTradeTickPool& FastHotspineTradeTickPool::getInstance() {
-    static FastHotspineTradeTickPool instance;
-    return instance;
-}
-
-RenderEngine::HotspineTradeTick* FastHotspineTradeTickPool::allocate() {
-    return pool_.allocate();
-}
-
-void FastHotspineTradeTickPool::deallocate(RenderEngine::HotspineTradeTick* tick) {
-    pool_.deallocate(tick);
-}
-
-void FastHotspineTradeTickPool::preallocate(size_t count) {
     pool_.preallocate(count);
 }
 

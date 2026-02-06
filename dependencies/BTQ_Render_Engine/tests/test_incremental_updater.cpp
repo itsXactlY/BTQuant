@@ -2,6 +2,10 @@
 #include <iostream>
 #include <cassert>
 
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 int main() {
     std::cout << "Testing Incremental Updater..." << std::endl;
     

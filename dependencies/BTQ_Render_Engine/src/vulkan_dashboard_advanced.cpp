@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <span>
 
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -18,6 +19,10 @@
 #include "performance_monitor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "ui/layout_manager.hpp"
+
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
 
 
 namespace BTQuant {
@@ -482,7 +487,7 @@ void VulkanDashboard::pollDataToRenderer() {
       tradeData.is_buy = t.is_buy;
       trades.push_back(tradeData);
     }
-    micro_renderer_->updateTradeData(trades);
+    micro_renderer_->updateTradeData(std::span<const TradeData>(trades));
   }
 
   // 5. Aggregate Footprint Clusters (Exocharts Style)
@@ -554,7 +559,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(clusters);
+      micro_renderer_->updateFootprintClusters(std::span<const CandleCluster>(clusters));
     }
   }
 }
@@ -567,9 +572,12 @@ void VulkanDashboard::render_performance_overlay() {
   ImGui::SetNextWindowPos(ImVec2(10, 40), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(300, 200), ImGuiCond_FirstUseEver);
 
+  // Use window management functions to keep it on top since ImGuiWindowFlags_TopMost doesn't exist
+  ImGui::SetNextWindowFocus(); // Emulate "always on top" by focusing the window each frame
   if (ImGui::Begin("Performance", nullptr,
                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                       ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize)) {
+                       ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus)) {
     double fps = g_performance_monitor.get_fps();
     double frame_time = g_performance_monitor.get_frame_time_ms();
 

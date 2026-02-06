@@ -184,6 +184,8 @@ void DebugOverlay::render() {
     ImGui::SetNextWindowPos(ImVec2(position_x_, position_y_), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(window_width_, window_height_), ImGuiCond_Always);
 
+    // Use window management functions to keep it on top since ImGuiWindowFlags_TopMost doesn't exist
+    ImGui::SetNextWindowFocus(); // Emulate "always on top" by focusing the window each frame
     // Create an always-topmost, borderless window for the debug overlay
     ImGui::Begin("Performance Debug Overlay",
                  nullptr,
@@ -196,7 +198,8 @@ void DebugOverlay::render() {
                  ImGuiWindowFlags_AlwaysAutoResize |
                  ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoFocusOnAppearing |
-                 ImGuiWindowFlags_NoNav);
+                 ImGuiWindowFlags_NoNav |
+                 ImGuiWindowFlags_NoBringToFrontOnFocus); // Prevent other windows from stealing focus
 
     // Performance Metrics Section
     ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "=== PERFORMANCE METRICS ===");

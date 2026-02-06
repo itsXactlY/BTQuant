@@ -244,7 +244,12 @@ bool KeyboardShortcutsComponent::handle_key_event(int keycode, bool pressed, uin
 }
 
 void KeyboardShortcutsComponent::render_gui() {
-    ImGui::Begin("Keyboard Shortcuts Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    // Use window management functions to keep it on top since ImGuiWindowFlags_TopMost doesn't exist
+    ImGui::SetNextWindowFocus(); // Emulate "always on top" by focusing the window each frame
+    ImGui::Begin("Keyboard Shortcuts Editor", nullptr, 
+                 ImGuiWindowFlags_AlwaysAutoResize | 
+                 ImGuiWindowFlags_NoFocusOnAppearing | 
+                 ImGuiWindowFlags_NoBringToFrontOnFocus); // Prevent other windows from stealing focus
     
     static std::string filter = "";
     ImGui::Text("Filter shortcuts:");

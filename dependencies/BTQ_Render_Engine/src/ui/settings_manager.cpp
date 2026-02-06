@@ -517,7 +517,12 @@ void SettingsManager::reset_to_defaults() {
 }
 
 void SettingsManager::render_settings_ui() {
-    ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+    // Use window management functions to keep it on top since ImGuiWindowFlags_TopMost doesn't exist
+    ImGui::SetNextWindowFocus(); // Emulate "always on top" by focusing the window each frame
+    ImGui::Begin("Settings", nullptr, 
+                 ImGuiWindowFlags_AlwaysAutoResize | 
+                 ImGuiWindowFlags_NoFocusOnAppearing | 
+                 ImGuiWindowFlags_NoBringToFrontOnFocus); // Prevent other windows from stealing focus
 
     // Category selection
     static SettingCategory selected_category = SettingCategory::APPEARANCE;

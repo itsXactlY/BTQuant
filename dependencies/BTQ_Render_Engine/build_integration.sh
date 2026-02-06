@@ -69,18 +69,9 @@ else
     SYMBOLS_AVAILABLE=false
 fi
 
-# Create build directory
-print_status "Setting up build environment..."
-mkdir -p build
-cd build
-
-# Configure with CMake
-print_status "Configuring build with CMake..."
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-# Build the project
-print_status "Building dashboard components..."
-make -j$(nproc)
+# Configure and build with Ninja for faster iteration
+print_status "Configuring and building with Ninja..."
+rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build
 
 if [ $? -eq 0 ]; then
     print_success "Build completed successfully!"
@@ -92,10 +83,12 @@ fi
 # Run integration tests
 print_status "Running integration tests..."
 
-if [ -f "./dashboard_test" ]; then
+if [ -f "build/dashboard_test" ]; then
     print_status "Executing integration test suite..."
+    cd build
     ./dashboard_test
-    
+    cd ..
+
     if [ $? -eq 0 ]; then
         print_success "Integration tests passed!"
     else
@@ -106,21 +99,21 @@ else
 fi
 
 # Check if main dashboard was built
-if [ -f "./bin/dashboard_advanced" ]; then
+if [ -f "./build/bin/dashboard_advanced" ]; then
     print_success "Main dashboard executable built successfully"
 
     # Display build information
     echo ""
     echo "=== Build Summary ==="
-    echo "Dashboard executable: $(pwd)/bin/dashboard_advanced"
-    echo "Integration test: $(pwd)/bin/dashboard_test"
+    echo "Dashboard executable: $(pwd)/build/bin/dashboard_advanced"
+    echo "Integration test: $(pwd)/build/bin/dashboard_test"
     echo "HotSpine integration: $($HOTSPINE_AVAILABLE && echo "Available" || echo "Demo mode")"
     echo "Symbol mappings: $($SYMBOLS_AVAILABLE && echo "Available" || echo "Defaults")"
     echo ""
 
     # Show file sizes
     echo "=== Executable Information ==="
-    ls -lh bin/dashboard_advanced bin/dashboard_test 2>/dev/null || true
+    ls -lh build/bin/dashboard_advanced build/bin/dashboard_test 2>/dev/null || true
     echo ""
 
     # Performance validation
@@ -136,10 +129,11 @@ if [ -f "./bin/dashboard_advanced" ]; then
     # Usage instructions
     echo "=== Usage Instructions ==="
     echo "To run the real-time dashboard:"
-    echo "  cd $(pwd)"
+    echo "  cd $(pwd)/build"
     echo "  ./bin/dashboard_advanced"
     echo ""
     echo "To run integration tests:"
+    echo "  cd $(pwd)/build"
     echo "  ./bin/dashboard_test"
     echo ""
 

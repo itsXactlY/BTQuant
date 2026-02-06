@@ -34,6 +34,7 @@
 #include "../../include/vulkan_base_types.hpp"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
+#include "../../include/components/panel_manager.hpp"  // Include for PanelManager
 
 namespace BTQuant::RenderEngine {
 
@@ -1251,10 +1252,21 @@ std::vector<std::vector<Analytics::ClusterCell>> MarketMicrostructureRenderer::g
 
 void MarketMicrostructureRenderer::set_on_cluster_engine_trade_callback(std::function<void()> callback) {
   on_cluster_engine_trade_callback_ = std::move(callback);
-  
+
   // Set up the callback in the cluster engine to notify when a trade is processed
   if (cluster_engine_ && on_cluster_engine_trade_callback_) {
     cluster_engine_->set_on_trade_processed_callback(on_cluster_engine_trade_callback_);
+  }
+}
+
+void MarketMicrostructureRenderer::set_cluster_engine_panel_manager(BTQuant::PanelManager* panel_manager) {
+  if (cluster_engine_) {
+    // Set up a callback that marks visualization panels as dirty when trades arrive
+    cluster_engine_->set_mark_dirty_callback([panel_manager]() {
+      if (panel_manager) {
+        panel_manager->mark_visualization_panels_dirty();
+      }
+    });
   }
 }
 

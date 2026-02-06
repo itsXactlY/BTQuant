@@ -215,6 +215,9 @@ class MarketMicrostructureRenderer {
   // This is used to mark panels as dirty when new trade data arrives
   void set_on_cluster_engine_trade_callback(std::function<void()> callback);
 
+  // Set the panel manager that will be marked as dirty when trades arrive in the cluster engine
+  void set_cluster_engine_panel_manager(BTQuant::PanelManager* panel_manager);
+
  private:
   // Data Update Callback
   void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);

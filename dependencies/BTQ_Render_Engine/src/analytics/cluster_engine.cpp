@@ -92,6 +92,11 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
   if (on_trade_processed_callback_) {
     on_trade_processed_callback_();
   }
+  
+  // Mark visualization panels as dirty if callback is set
+  if (mark_dirty_callback_) {
+    mark_dirty_callback_();
+  }
 }
 
 std::vector<std::tuple<int64_t, int, double, double, double>>

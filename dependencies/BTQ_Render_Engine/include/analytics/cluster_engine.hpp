@@ -13,6 +13,11 @@
 #include <atomic>
 #include "../data/VolumeDataTypes.h"  // Include for Data::TimeAggregationType
 
+// Forward declaration for PanelManager
+namespace BTQuant {
+    class PanelManager;
+}
+
 namespace Analytics {
 
 // Define VolumeNode structure since it was removed from HotSpine
@@ -161,6 +166,11 @@ class ClusterEngine {
         node.tpo_bits |= (1 << bucket);
       }
     }
+    
+    // Mark visualization panels as dirty if callback is set
+    if (mark_dirty_callback_) {
+      mark_dirty_callback_();
+    }
   }
 
   // Process trade with atomic updates to ClusterCell counters for given price level and time bucket
@@ -219,6 +229,11 @@ class ClusterEngine {
     on_trade_processed_callback_ = std::move(callback);
   }
 
+  // Method to set the callback function that marks visualization panels as dirty when trades arrive
+  void set_mark_dirty_callback(std::function<void()> callback) {
+    mark_dirty_callback_ = std::move(callback);
+  }
+
  private:
   double tick_size_;
   int64_t min_tick_index_;
@@ -227,8 +242,11 @@ class ClusterEngine {
 
   // Additional data structure for cluster cells with time buckets
   std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]
-  
+
   // Callback to notify when a trade is processed (for marking panels dirty)
   std::function<void()> on_trade_processed_callback_;
+  
+  // Callback to mark visualization panels as dirty when trades arrive
+  std::function<void()> mark_dirty_callback_;
 };
 }  // namespace Analytics

@@ -131,7 +131,7 @@ void DashboardControls::render_dashboard_controls() {
 
   // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
   // Add AlwaysTopMost flag to ensure the window stays on top regardless of other interactions
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_AlwaysTopMost)) {
+  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus)) {
     // Ensure the window stays on top by bringing it to front every frame
     ImGui::SetWindowFocus();
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
@@ -792,6 +792,9 @@ void DashboardControls::render_dashboard_controls() {
 
   // Render the create alert modal if needed
   render_create_alert_modal();
+
+  // Ensure the window stays on top by bringing it to front after all content is rendered
+  ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
   ImGui::End();
 }

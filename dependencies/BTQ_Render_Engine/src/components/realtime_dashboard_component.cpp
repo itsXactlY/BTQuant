@@ -78,10 +78,13 @@ void RealtimeDashboardComponent::update(float dt) {
 }
 
 void RealtimeDashboardComponent::render_gui() {
+  // Render all panels first
+  panel_manager_->render();
+  
+  // Render dashboard controls last to ensure they stay on top
   if (show_dashboard_controls_ && dashboard_controls_) {
     dashboard_controls_->render_gui();
   }
-  panel_manager_->render();
 }
 
 

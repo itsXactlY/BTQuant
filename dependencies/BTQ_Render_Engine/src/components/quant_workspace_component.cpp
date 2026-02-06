@@ -68,7 +68,7 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(window_width, 250), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_AlwaysTopMost)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBringToFrontOnFocus)) {
     // Ensure the window stays on top by bringing it to front every frame
     ImGui::SetWindowFocus();
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());

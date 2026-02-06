@@ -201,9 +201,9 @@
                 210.0
             ],
             "symbol": "",
-            "title": "BNBUSDT Orderbook",
+            "title": "Orderbook",
             "type": 10,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,

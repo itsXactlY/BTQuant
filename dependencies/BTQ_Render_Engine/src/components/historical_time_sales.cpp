@@ -11,15 +11,15 @@
 #include <cstdlib>
 #endif
 
+#include "../../include/components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
-#include "../../include/components/theme_manager.hpp"
 
 namespace BTQuant {
 
-HistoricalTimeSalesPanel::HistoricalTimeSalesPanel(const PanelConfig& config,
-                                   std::shared_ptr<HotSpineDataBridge> bridge,
-                                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+HistoricalTimeSalesPanel::HistoricalTimeSalesPanel(
+    const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(config), bridge_(bridge), processor_(processor) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
@@ -97,7 +97,7 @@ void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, ui
                          cached_trades_.begin() + (cached_trades_.size() - MAX_VISIBLE_TRADES));
   }
 
-  markDirty(); // Force refresh of the display
+  markDirty();  // Force refresh of the display
 }
 
 void HistoricalTimeSalesPanel::render() {
@@ -146,9 +146,12 @@ void HistoricalTimeSalesPanel::render_panel_header() {
 
   // Display trade pace information in the header
   if (!cached_trades_.empty()) {
-    double tpm_1min = calculateTradesPerMinute(cached_trades_, 60 * 1000000);      // 1 minute in microseconds
-    double tpm_5min = calculateTradesPerMinute(cached_trades_, 5 * 60 * 1000000);  // 5 minutes in microseconds
-    double tpm_15min = calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000); // 15 minutes in microseconds
+    double tpm_1min =
+        calculateTradesPerMinute(cached_trades_, 60 * 1000000);  // 1 minute in microseconds
+    double tpm_5min =
+        calculateTradesPerMinute(cached_trades_, 5 * 60 * 1000000);  // 5 minutes in microseconds
+    double tpm_15min =
+        calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000);  // 15 minutes in microseconds
 
     ImGui::Text("| TPM: 1m:%.1f 5m:%.1f 15m:%.1f", tpm_1min, tpm_5min, tpm_15min);
   }
@@ -174,14 +177,15 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::Text("Min Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##min_size_filter", min_size_input_, sizeof(min_size_input_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("##min_size_filter", min_size_input_, sizeof(min_size_input_),
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse minimum size when Enter is pressed
     try {
       min_size_filter_ = std::stod(std::string(min_size_input_));
     } catch (...) {
       min_size_filter_ = 0.0;
     }
-    markDirty(); // Refresh the display with new filter
+    markDirty();  // Refresh the display with new filter
   }
 
   // Maximum Size Filter
@@ -190,7 +194,8 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::Text("Max Size:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##max_size_filter", max_size_input_, sizeof(max_size_input_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("##max_size_filter", max_size_input_, sizeof(max_size_input_),
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse maximum size when Enter is pressed, empty means no limit
     if (strlen(max_size_input_) > 0) {
       try {
@@ -199,9 +204,9 @@ void HistoricalTimeSalesPanel::render_controls() {
         max_size_filter_ = 0.0;
       }
     } else {
-      max_size_filter_ = 0.0; // 0 means no upper limit
+      max_size_filter_ = 0.0;  // 0 means no upper limit
     }
-    markDirty(); // Refresh the display with new filter
+    markDirty();  // Refresh the display with new filter
   }
 
   // Exchange Filter
@@ -210,10 +215,11 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::Text("Exchange:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(100);
-  if (ImGui::InputText("##exchange_filter", exchange_input_, sizeof(exchange_input_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("##exchange_filter", exchange_input_, sizeof(exchange_input_),
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Set exchange filter when Enter is pressed, empty means no filter
     exchange_filter_ = std::string(exchange_input_);
-    markDirty(); // Refresh the display with new filter
+    markDirty();  // Refresh the display with new filter
   }
 
   // Start Time Filter
@@ -222,7 +228,8 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::Text("Start:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##start_time_filter", start_time_input_, sizeof(start_time_input_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("##start_time_filter", start_time_input_, sizeof(start_time_input_),
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse start time when Enter is pressed
     if (strlen(start_time_input_) > 0) {
       std::string time_str = std::string(start_time_input_);
@@ -240,7 +247,7 @@ void HistoricalTimeSalesPanel::render_controls() {
     } else {
       start_time_filter_ = 0;
     }
-    markDirty(); // Refresh the display with new filter
+    markDirty();  // Refresh the display with new filter
   }
 
   // End Time Filter
@@ -249,7 +256,8 @@ void HistoricalTimeSalesPanel::render_controls() {
   ImGui::Text("End:");
   ImGui::SameLine();
   ImGui::SetNextItemWidth(80);
-  if (ImGui::InputText("##end_time_filter", end_time_input_, sizeof(end_time_input_), ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("##end_time_filter", end_time_input_, sizeof(end_time_input_),
+                       ImGuiInputTextFlags_EnterReturnsTrue)) {
     // Parse end time when Enter is pressed
     if (strlen(end_time_input_) > 0) {
       std::string time_str = std::string(end_time_input_);
@@ -267,7 +275,7 @@ void HistoricalTimeSalesPanel::render_controls() {
     } else {
       end_time_filter_ = 0;
     }
-    markDirty(); // Refresh the display with new filter
+    markDirty();  // Refresh the display with new filter
   }
 
   // Add Apply and Reset buttons
@@ -288,7 +296,7 @@ void HistoricalTimeSalesPanel::render_controls() {
         max_size_filter_ = 0.0;
       }
     } else {
-      max_size_filter_ = 0.0; // 0 means no upper limit
+      max_size_filter_ = 0.0;  // 0 means no upper limit
     }
 
     // Set exchange filter
@@ -330,7 +338,7 @@ void HistoricalTimeSalesPanel::render_controls() {
       end_time_filter_ = 0;
     }
 
-    markDirty(); // Refresh the display with new filters
+    markDirty();  // Refresh the display with new filters
   }
 
   ImGui::SameLine();
@@ -345,7 +353,7 @@ void HistoricalTimeSalesPanel::render_controls() {
     strcpy(exchange_input_, "");
     strcpy(start_time_input_, "");
     strcpy(end_time_input_, "");
-    markDirty(); // Refresh the display
+    markDirty();  // Refresh the display
   }
 
   if (show_search_) {  // Add search controls
@@ -477,7 +485,7 @@ void HistoricalTimeSalesPanel::render_search_controls() {
       search_end_time_ = 0;
     }
 
-    markDirty(); // Refresh the display with new search criteria
+    markDirty();  // Refresh the display with new search criteria
   }
 
   // Reset button
@@ -497,7 +505,7 @@ void HistoricalTimeSalesPanel::render_search_controls() {
     strcpy(exchange_input_, "");
     strcpy(start_time_input_, "");
     strcpy(end_time_input_, "");
-    markDirty(); // Refresh the display
+    markDirty();  // Refresh the display
   }
 }
 
@@ -531,7 +539,8 @@ void HistoricalTimeSalesPanel::render_trade_size_histogram() {
       // Last bucket is ">= upper bound"
       snprintf(label, sizeof(label), ">=%.3f", histogram[i].lower_bound);
     } else {
-      snprintf(label, sizeof(label), "%.3f-%.3f", histogram[i].lower_bound, histogram[i].upper_bound);
+      snprintf(label, sizeof(label), "%.3f-%.3f", histogram[i].lower_bound,
+               histogram[i].upper_bound);
     }
     label_strings.push_back(std::string(label));
     labels.push_back(label_strings.back().c_str());
@@ -541,7 +550,6 @@ void HistoricalTimeSalesPanel::render_trade_size_histogram() {
   if (ImGui::BeginChild("TradeSizeHistogramArea", ImVec2(0, 150), true)) {
     if (ImPlot::BeginPlot(plot_title, nullptr, nullptr, ImVec2(-1, -1),
                           ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
-
       ImPlot::SetupAxes(nullptr, "Count", ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
 
       // Set up custom x-axis labels
@@ -551,7 +559,8 @@ void HistoricalTimeSalesPanel::render_trade_size_histogram() {
       }
 
       // Plot the histogram bars
-      ImPlot::PlotBars("Counts", x_positions.data(), hist_counts.data(), static_cast<int>(histogram.size()), 0.8);
+      ImPlot::PlotBars("Counts", x_positions.data(), hist_counts.data(),
+                       static_cast<int>(histogram.size()), 0.8);
 
       ImPlot::EndPlot();
     }
@@ -619,7 +628,7 @@ uint64_t HistoricalTimeSalesPanel::parseTimeString(const std::string& time_str) 
   // This is a simplified parser - in a real implementation, you'd want to handle
   // date components and timezone properly
   // For now, we'll assume the time is today and convert to microseconds since epoch
-  
+
   // Parse HH:MM:SS[.mmm] format
   int hours = 0, minutes = 0, seconds = 0;
   double fraction = 0.0;
@@ -644,14 +653,14 @@ uint64_t HistoricalTimeSalesPanel::parseTimeString(const std::string& time_str) 
         if (dot_pos != std::string::npos) {
           seconds = std::stoi(sec_part.substr(0, dot_pos));
           fraction = std::stod(sec_part);
-          fraction -= seconds; // Remove integer part
+          fraction -= seconds;  // Remove integer part
         } else {
           seconds = std::stoi(sec_part);
         }
       }
     }
   } catch (...) {
-    return 0; // Return 0 if parsing fails
+    return 0;  // Return 0 if parsing fails
   }
 
   // Convert to seconds since midnight
@@ -664,8 +673,8 @@ uint64_t HistoricalTimeSalesPanel::parseTimeString(const std::string& time_str) 
   local_tm.tm_min = minutes;
   local_tm.tm_sec = seconds;
 
-  uint64_t timestamp = mktime(&local_tm) * 1000000; // Convert to microseconds
-  timestamp += static_cast<uint64_t>(fraction * 1000000); // Add fractional microseconds
+  uint64_t timestamp = mktime(&local_tm) * 1000000;        // Convert to microseconds
+  timestamp += static_cast<uint64_t>(fraction * 1000000);  // Add fractional microseconds
 
   return timestamp;
 }
@@ -679,19 +688,19 @@ void HistoricalTimeSalesPanel::render_trade_table() {
   double total_size = 0.0;
   int valid_trade_count = 0;
   for (const auto& trade : cached_trades_) {
-      // Apply filters to calculate average only on filtered trades
-      if (trade.size < min_size_filter_) continue;
-      if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
-      // Note: Price filters are not applied to the calculation since they're for search highlighting
-      if (!exchange_filter_.empty()) {
-          std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
-          if (exchange != exchange_filter_) continue;
-      }
-      if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
-      if (end_time_filter_ > 0 && trade.timestamp > end_time_filter_) continue;
+    // Apply filters to calculate average only on filtered trades
+    if (trade.size < min_size_filter_) continue;
+    if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
+    // Note: Price filters are not applied to the calculation since they're for search highlighting
+    if (!exchange_filter_.empty()) {
+      std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+      if (exchange != exchange_filter_) continue;
+    }
+    if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
+    if (end_time_filter_ > 0 && trade.timestamp > end_time_filter_) continue;
 
-      total_size += trade.size;
-      valid_trade_count++;
+    total_size += trade.size;
+    valid_trade_count++;
   }
 
   double avg_trade_size = (valid_trade_count > 0) ? total_size / valid_trade_count : 0.0;
@@ -710,203 +719,213 @@ void HistoricalTimeSalesPanel::render_trade_table() {
     // Count filtered trades to determine the total for the clipper
     int filtered_trade_count = 0;
     for (const auto& trade : cached_trades_) {
-        // Apply filters (but not price filters since they're for search highlighting)
-        if (trade.size < min_size_filter_) continue;
-        if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
-        if (!exchange_filter_.empty()) {
-            std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
-            if (exchange != exchange_filter_) continue;
-        }
-        if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
-        if (end_time_filter_ > 0 && trade.timestamp > end_time_filter_) continue;
+      // Apply filters (but not price filters since they're for search highlighting)
+      if (trade.size < min_size_filter_) continue;
+      if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
+      if (!exchange_filter_.empty()) {
+        std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+        if (exchange != exchange_filter_) continue;
+      }
+      if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
+      if (end_time_filter_ > 0 && trade.timestamp > end_time_filter_) continue;
 
-        filtered_trade_count++;
+      filtered_trade_count++;
     }
 
     // Use ImGuiListClipper for virtualized scrolling to handle 100,000+ trades efficiently
     ImGuiListClipper clipper;
     clipper.Begin(filtered_trade_count);
 
-    int filtered_index = 0; // Index in the filtered list
-    int original_index = static_cast<int>(cached_trades_.size()) - 1; // Start from newest trade
+    int filtered_index = 0;                                            // Index in the filtered list
+    int original_index = static_cast<int>(cached_trades_.size()) - 1;  // Start from newest trade
 
     while (original_index >= 0 && clipper.Step()) {
-        // Process all rows in the current clipper step
-        while (clipper.DisplayStart < clipper.DisplayEnd && original_index >= 0) {
-            const auto& trade = cached_trades_[original_index];
+      // Process all rows in the current clipper step
+      while (clipper.DisplayStart < clipper.DisplayEnd && original_index >= 0) {
+        const auto& trade = cached_trades_[original_index];
 
-            // Apply filters (but not price filters since they're for search highlighting)
-            bool skip_trade = false;
-            if (trade.size < min_size_filter_) skip_trade = true;
-            if (!skip_trade && max_size_filter_ > 0 && trade.size > max_size_filter_) skip_trade = true;  // Add max size filter
-            if (!skip_trade && !exchange_filter_.empty()) {
-                std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
-                if (exchange != exchange_filter_) skip_trade = true;
-            }
-            if (!skip_trade && start_time_filter_ > 0 && trade.timestamp < start_time_filter_) skip_trade = true;
-            if (!skip_trade && end_time_filter_ > 0 && trade.timestamp > end_time_filter_) skip_trade = true;
-
-            if (!skip_trade) {
-                // This trade passes all filters
-                if (filtered_index >= clipper.DisplayStart) {
-                    // This trade should be displayed in the current view
-                    ImGui::PushID(filtered_index);
-                    ImGui::TableNextRow();
-
-                    // Check if this trade matches search criteria for highlighting
-                    bool is_search_match = true;
-                    if (min_size_filter_ > 0 && trade.size < min_size_filter_) is_search_match = false;
-                    if (max_size_filter_ > 0 && trade.size > max_size_filter_) is_search_match = false;
-                    if (search_min_price_ > 0 && trade.price < search_min_price_) is_search_match = false;
-                    if (search_max_price_ > 0 && trade.price > search_max_price_) is_search_match = false;
-                    if (search_start_time_ > 0 && trade.timestamp < search_start_time_) is_search_match = false;
-                    if (search_end_time_ > 0 && trade.timestamp > search_end_time_) is_search_match = false;
-                    if (!search_exchange_.empty()) {
-                        std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
-                        if (exchange != search_exchange_) is_search_match = false;
-                    }
-
-                    // Check if this trade is part of a cluster
-                    bool is_clustered = isTradeClustered(original_index, cached_trades_);
-
-                    // Set background color for search matches and clustered trades
-                    if (is_search_match) {
-                        // Highlight search results with light blue background
-                        const auto& colors = ThemeManager::getInstance().getColors();
-                        ImU32 search_highlight_color = ImGui::GetColorU32(ImVec4(0.3f, 0.5f, 1.0f, 0.3f)); // Light blue with transparency
-                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, search_highlight_color);
-                    } else if (is_clustered) {
-                        const auto& colors = ThemeManager::getInstance().getColors();
-                        ImU32 cluster_bg_color = ImGui::GetColorU32(ImVec4(0.8f, 0.6f, 0.2f, 0.3f)); // Light amber with transparency
-                        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
-                    }
-
-                    // Time column (HH:MM:SS.mmm)
-                    ImGui::TableSetColumnIndex(0);
-                    bool is_block_trade_time = (trade.size >= block_trade_threshold && block_trade_threshold > 0);
-
-                    if (is_block_trade_time) {
-                        // Make block trades stand out with a more prominent visual indicator
-                        // Using a heavier font weight if available, or a different approach
-                        ImGui::PushFont(ThemeManager::getInstance().getLargeFont() ?
-                                        ThemeManager::getInstance().getLargeFont() :
-                                        ThemeManager::getInstance().getMainFont());
-                    }
-
-                    if (trade.timestamp > 0) {
-                        time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
-                        uint64_t millis = (trade.timestamp / 1000) % 1000;
-                        char time_str[16];
-                        strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-                        ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
-                    } else {
-                        ImGui::Text("-");
-                    }
-
-                    if (is_block_trade_time) {
-                        ImGui::PopFont();
-                    }
-
-                    // Price column - Enhanced coloring based on trade size
-                    ImGui::TableSetColumnIndex(1);
-                    const auto& colors = ThemeManager::getInstance().getColors();
-
-                    // Determine color based on trade size and direction
-                    ImVec4 price_color = colors.text; // Default color
-                    bool is_block_trade_price = (trade.size >= block_trade_threshold && block_trade_threshold > 0);
-
-                    if (is_block_trade_price) {
-                        // Block trades (>avg*10) in orange
-                        price_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
-                    } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
-                        // Large trades (>avg*5) in yellow
-                        price_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-                    } else {
-                        // Regular trades: buy in green, sell in red
-                        price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
-                    }
-
-                    // Apply bold font for block trades if available
-                    if (is_block_trade_price) {
-                        ImGui::PushFont(ThemeManager::getInstance().getLargeFont() ?
-                                        ThemeManager::getInstance().getLargeFont() :
-                                        ThemeManager::getInstance().getMainFont());
-                    }
-
-                    ImGui::TextColored(price_color, "%.4f", trade.price);
-
-                    if (is_block_trade_price) {
-                        ImGui::PopFont();
-                    }
-
-                    // Size column
-                    ImGui::TableSetColumnIndex(2);
-                    // Color size based on trade size thresholds
-                    ImVec4 size_color = colors.text; // Default color
-                    bool is_block_trade_size = (trade.size >= block_trade_threshold && block_trade_threshold > 0);
-
-                    if (is_block_trade_size) {
-                        // Block trades in orange
-                        size_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
-                    } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
-                        // Large trades in yellow
-                        size_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-                    }
-
-                    // Apply bold font for block trades if available
-                    if (is_block_trade_size) {
-                        ImGui::PushFont(ThemeManager::getInstance().getLargeFont() ?
-                                        ThemeManager::getInstance().getLargeFont() :
-                                        ThemeManager::getInstance().getMainFont());
-                    }
-
-                    ImGui::TextColored(size_color, "%.4f", trade.size);
-
-                    if (is_block_trade_size) {
-                        ImGui::PopFont();
-                    }
-
-                    // Side column
-                    ImGui::TableSetColumnIndex(3);
-                    ImVec4 side_color = colors.text; // Default color
-                    bool is_block_trade_side = (trade.size >= block_trade_threshold && block_trade_threshold > 0);
-
-                    if (is_block_trade_side) {
-                        // Block trades in orange
-                        side_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f); // Orange
-                    } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
-                        // Large trades in yellow
-                        side_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow
-                    } else {
-                        // Regular trades: buy in green, sell in red
-                        side_color = trade.is_buy ? colors.accent_green : colors.accent_red;
-                    }
-
-                    // Apply bold font for block trades if available
-                    if (is_block_trade_side) {
-                        ImGui::PushFont(ThemeManager::getInstance().getLargeFont() ?
-                                        ThemeManager::getInstance().getLargeFont() :
-                                        ThemeManager::getInstance().getMainFont());
-                    }
-
-                    if (trade.is_buy) {
-                        ImGui::TextColored(side_color, "BUY");
-                    } else {
-                        ImGui::TextColored(side_color, "SELL");
-                    }
-
-                    if (is_block_trade_side) {
-                        ImGui::PopFont();
-                    }
-
-                    ImGui::PopID();
-
-                    if (filtered_index >= clipper.DisplayEnd - 1) break; // Move to next clipper step
-                }
-                filtered_index++;
-            }
-            original_index--;
+        // Apply filters (but not price filters since they're for search highlighting)
+        bool skip_trade = false;
+        if (trade.size < min_size_filter_) skip_trade = true;
+        if (!skip_trade && max_size_filter_ > 0 && trade.size > max_size_filter_)
+          skip_trade = true;  // Add max size filter
+        if (!skip_trade && !exchange_filter_.empty()) {
+          std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+          if (exchange != exchange_filter_) skip_trade = true;
         }
+        if (!skip_trade && start_time_filter_ > 0 && trade.timestamp < start_time_filter_)
+          skip_trade = true;
+        if (!skip_trade && end_time_filter_ > 0 && trade.timestamp > end_time_filter_)
+          skip_trade = true;
+
+        if (!skip_trade) {
+          // This trade passes all filters
+          if (filtered_index >= clipper.DisplayStart) {
+            // This trade should be displayed in the current view
+            ImGui::PushID(filtered_index);
+            ImGui::TableNextRow();
+
+            // Check if this trade matches search criteria for highlighting
+            bool is_search_match = true;
+            if (min_size_filter_ > 0 && trade.size < min_size_filter_) is_search_match = false;
+            if (max_size_filter_ > 0 && trade.size > max_size_filter_) is_search_match = false;
+            if (search_min_price_ > 0 && trade.price < search_min_price_) is_search_match = false;
+            if (search_max_price_ > 0 && trade.price > search_max_price_) is_search_match = false;
+            if (search_start_time_ > 0 && trade.timestamp < search_start_time_)
+              is_search_match = false;
+            if (search_end_time_ > 0 && trade.timestamp > search_end_time_) is_search_match = false;
+            if (!search_exchange_.empty()) {
+              std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+              if (exchange != search_exchange_) is_search_match = false;
+            }
+
+            // Check if this trade is part of a cluster
+            bool is_clustered = isTradeClustered(original_index, cached_trades_);
+
+            // Set background color for search matches and clustered trades
+            if (is_search_match) {
+              // Highlight search results with light blue background
+              const auto& colors = ThemeManager::getInstance().getColors();
+              ImU32 search_highlight_color = ImGui::GetColorU32(
+                  ImVec4(0.3f, 0.5f, 1.0f, 0.3f));  // Light blue with transparency
+              ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, search_highlight_color);
+            } else if (is_clustered) {
+              const auto& colors = ThemeManager::getInstance().getColors();
+              ImU32 cluster_bg_color = ImGui::GetColorU32(
+                  ImVec4(0.8f, 0.6f, 0.2f, 0.3f));  // Light amber with transparency
+              ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, cluster_bg_color);
+            }
+
+            // Time column (HH:MM:SS.mmm)
+            ImGui::TableSetColumnIndex(0);
+            bool is_block_trade_time =
+                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
+
+            if (is_block_trade_time) {
+              // Make block trades stand out with a more prominent visual indicator
+              // Using a heavier font weight if available, or a different approach
+              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
+                                  ? ThemeManager::getInstance().getLargeFont()
+                                  : ThemeManager::getInstance().getMainFont());
+            }
+
+            if (trade.timestamp > 0) {
+              time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
+              uint64_t millis = (trade.timestamp / 1000) % 1000;
+              char time_str[16];
+              strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
+              ImGui::Text("%s.%03lu", time_str, static_cast<unsigned long>(millis));
+            } else {
+              ImGui::Text("-");
+            }
+
+            if (is_block_trade_time) {
+              ImGui::PopFont();
+            }
+
+            // Price column - Enhanced coloring based on trade size
+            ImGui::TableSetColumnIndex(1);
+            const auto& colors = ThemeManager::getInstance().getColors();
+
+            // Determine color based on trade size and direction
+            ImVec4 price_color = colors.text;  // Default color
+            bool is_block_trade_price =
+                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
+
+            if (is_block_trade_price) {
+              // Block trades (>avg*10) in orange
+              price_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+            } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
+              // Large trades (>avg*5) in yellow
+              price_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+            } else {
+              // Regular trades: buy in green, sell in red
+              price_color = trade.is_buy ? colors.accent_green : colors.accent_red;
+            }
+
+            // Apply bold font for block trades if available
+            if (is_block_trade_price) {
+              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
+                                  ? ThemeManager::getInstance().getLargeFont()
+                                  : ThemeManager::getInstance().getMainFont());
+            }
+
+            ImGui::TextColored(price_color, "%.4f", trade.price);
+
+            if (is_block_trade_price) {
+              ImGui::PopFont();
+            }
+
+            // Size column
+            ImGui::TableSetColumnIndex(2);
+            // Color size based on trade size thresholds
+            ImVec4 size_color = colors.text;  // Default color
+            bool is_block_trade_size =
+                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
+
+            if (is_block_trade_size) {
+              // Block trades in orange
+              size_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+            } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
+              // Large trades in yellow
+              size_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+            }
+
+            // Apply bold font for block trades if available
+            if (is_block_trade_size) {
+              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
+                                  ? ThemeManager::getInstance().getLargeFont()
+                                  : ThemeManager::getInstance().getMainFont());
+            }
+
+            ImGui::TextColored(size_color, "%.4f", trade.size);
+
+            if (is_block_trade_size) {
+              ImGui::PopFont();
+            }
+
+            // Side column
+            ImGui::TableSetColumnIndex(3);
+            ImVec4 side_color = colors.text;  // Default color
+            bool is_block_trade_side =
+                (trade.size >= block_trade_threshold && block_trade_threshold > 0);
+
+            if (is_block_trade_side) {
+              // Block trades in orange
+              side_color = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // Orange
+            } else if (trade.size >= large_trade_threshold && large_trade_threshold > 0) {
+              // Large trades in yellow
+              side_color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);  // Yellow
+            } else {
+              // Regular trades: buy in green, sell in red
+              side_color = trade.is_buy ? colors.accent_green : colors.accent_red;
+            }
+
+            // Apply bold font for block trades if available
+            if (is_block_trade_side) {
+              ImGui::PushFont(ThemeManager::getInstance().getLargeFont()
+                                  ? ThemeManager::getInstance().getLargeFont()
+                                  : ThemeManager::getInstance().getMainFont());
+            }
+
+            if (trade.is_buy) {
+              ImGui::TextColored(side_color, "BUY");
+            } else {
+              ImGui::TextColored(side_color, "SELL");
+            }
+
+            if (is_block_trade_side) {
+              ImGui::PopFont();
+            }
+
+            ImGui::PopID();
+
+            if (filtered_index >= clipper.DisplayEnd - 1) break;  // Move to next clipper step
+          }
+          filtered_index++;
+        }
+        original_index--;
+      }
     }
 
     // Auto-scroll to bottom (newest trades)
@@ -919,7 +938,9 @@ void HistoricalTimeSalesPanel::render_trade_table() {
 }
 
 // Compute logarithmic trade size histogram
-std::vector<HistoricalTimeSalesPanel::LogBucket> HistoricalTimeSalesPanel::computeLogarithmicTradeSizeHistogram(const std::vector<RenderEngine::TradeData>& trades) const {
+std::vector<HistoricalTimeSalesPanel::LogBucket>
+HistoricalTimeSalesPanel::computeLogarithmicTradeSizeHistogram(
+    const std::vector<RenderEngine::TradeData>& trades) const {
   // Define logarithmic bucket boundaries (base 10)
   // Starting from 0.001 up to 10000 with logarithmic spacing
   std::vector<double> bucket_bounds = {0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0};
@@ -962,276 +983,284 @@ std::vector<HistoricalTimeSalesPanel::LogBucket> HistoricalTimeSalesPanel::compu
 }
 
 // Check if a trade at the given index is part of a cluster of rapid trades at the same price
-bool HistoricalTimeSalesPanel::isTradeClustered(int index, const std::vector<RenderEngine::TradeData>& trades) const {
-    if (index < 0 || index >= static_cast<int>(trades.size())) {
-        return false;
+bool HistoricalTimeSalesPanel::isTradeClustered(
+    int index, const std::vector<RenderEngine::TradeData>& trades) const {
+  if (index < 0 || index >= static_cast<int>(trades.size())) {
+    return false;
+  }
+
+  const auto& current_trade = trades[index];
+
+  // Look backward and forward to find trades at the same price within the time window
+  int cluster_count = 1;  // Start with 1 for the current trade
+
+  // Look backward (older trades)
+  for (int i = index + 1; i < static_cast<int>(trades.size()); ++i) {
+    const auto& trade = trades[i];
+
+    // Check if price matches (within tolerance)
+    if (std::abs(trade.price - current_trade.price) <= price_match_tolerance_) {
+      // Check if timestamp is within the clustering window
+      if (current_trade.timestamp >= trade.timestamp &&
+          current_trade.timestamp - trade.timestamp <= cluster_time_window_us_) {
+        cluster_count++;
+      } else {
+        // Stop looking if we're outside the time window
+        break;
+      }
     }
+  }
 
-    const auto& current_trade = trades[index];
+  // Look forward (newer trades)
+  for (int i = index - 1; i >= 0; --i) {
+    const auto& trade = trades[i];
 
-    // Look backward and forward to find trades at the same price within the time window
-    int cluster_count = 1; // Start with 1 for the current trade
-
-    // Look backward (older trades)
-    for (int i = index + 1; i < static_cast<int>(trades.size()); ++i) {
-        const auto& trade = trades[i];
-
-        // Check if price matches (within tolerance)
-        if (std::abs(trade.price - current_trade.price) <= price_match_tolerance_) {
-            // Check if timestamp is within the clustering window
-            if (current_trade.timestamp >= trade.timestamp &&
-                current_trade.timestamp - trade.timestamp <= cluster_time_window_us_) {
-                cluster_count++;
-            } else {
-                // Stop looking if we're outside the time window
-                break;
-            }
-        }
+    // Check if price matches (within tolerance)
+    if (std::abs(trade.price - current_trade.price) <= price_match_tolerance_) {
+      // Check if timestamp is within the clustering window
+      if (trade.timestamp >= current_trade.timestamp &&
+          trade.timestamp - current_trade.timestamp <= cluster_time_window_us_) {
+        cluster_count++;
+      } else {
+        // Stop looking if we're outside the time window
+        break;
+      }
     }
+  }
 
-    // Look forward (newer trades)
-    for (int i = index - 1; i >= 0; --i) {
-        const auto& trade = trades[i];
-
-        // Check if price matches (within tolerance)
-        if (std::abs(trade.price - current_trade.price) <= price_match_tolerance_) {
-            // Check if timestamp is within the clustering window
-            if (trade.timestamp >= current_trade.timestamp &&
-                trade.timestamp - current_trade.timestamp <= cluster_time_window_us_) {
-                cluster_count++;
-            } else {
-                // Stop looking if we're outside the time window
-                break;
-            }
-        }
-    }
-
-    // Return true if we found enough trades in the cluster
-    return cluster_count >= min_cluster_size_;
+  // Return true if we found enough trades in the cluster
+  return cluster_count >= min_cluster_size_;
 }
 
 // Calculate trades per minute for a given time window
-double HistoricalTimeSalesPanel::calculateTradesPerMinute(const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const {
-    if (trades.empty()) {
-        return 0.0;
+double HistoricalTimeSalesPanel::calculateTradesPerMinute(
+    const std::vector<RenderEngine::TradeData>& trades, uint64_t window_microseconds) const {
+  if (trades.empty()) {
+    return 0.0;
+  }
+
+  // Get the current time (latest trade timestamp)
+  uint64_t current_time = trades.back().timestamp;
+  uint64_t start_time = current_time - window_microseconds;
+
+  // Count trades within the time window
+  int trade_count = 0;
+  for (const auto& trade : trades) {
+    if (trade.timestamp >= start_time && trade.timestamp <= current_time) {
+      trade_count++;
     }
+  }
 
-    // Get the current time (latest trade timestamp)
-    uint64_t current_time = trades.back().timestamp;
-    uint64_t start_time = current_time - window_microseconds;
+  // Convert microseconds to minutes for the rate calculation
+  double window_minutes = static_cast<double>(window_microseconds) / (1000000.0 * 60.0);
 
-    // Count trades within the time window
-    int trade_count = 0;
-    for (const auto& trade : trades) {
-        if (trade.timestamp >= start_time && trade.timestamp <= current_time) {
-            trade_count++;
-        }
-    }
-
-    // Convert microseconds to minutes for the rate calculation
-    double window_minutes = static_cast<double>(window_microseconds) / (1000000.0 * 60.0);
-
-    // Calculate trades per minute
-    if (window_minutes > 0.0) {
-        return static_cast<double>(trade_count) / window_minutes;
-    } else {
-        return 0.0;
-    }
+  // Calculate trades per minute
+  if (window_minutes > 0.0) {
+    return static_cast<double>(trade_count) / window_minutes;
+  } else {
+    return 0.0;
+  }
 }
 
 // Update trade pace history for all time windows
 void HistoricalTimeSalesPanel::updateTradePaceHistory() {
-    if (cached_trades_.empty()) {
-        return;
-    }
+  if (cached_trades_.empty()) {
+    return;
+  }
 
-    // Calculate current trades per minute for each time window
-    double tpm_1min = calculateTradesPerMinute(cached_trades_, 60 * 1000000);      // 1 minute in microseconds
-    double tpm_5min = calculateTradesPerMinute(cached_trades_, 5 * 60 * 1000000);  // 5 minutes in microseconds
-    double tpm_15min = calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000); // 15 minutes in microseconds
+  // Calculate current trades per minute for each time window
+  double tpm_1min =
+      calculateTradesPerMinute(cached_trades_, 60 * 1000000);  // 1 minute in microseconds
+  double tpm_5min =
+      calculateTradesPerMinute(cached_trades_, 5 * 60 * 1000000);  // 5 minutes in microseconds
+  double tpm_15min =
+      calculateTradesPerMinute(cached_trades_, 15 * 60 * 1000000);  // 15 minutes in microseconds
 
-    // Add current measurements to history
-    uint64_t current_time = cached_trades_.back().timestamp;
+  // Add current measurements to history
+  uint64_t current_time = cached_trades_.back().timestamp;
 
-    trade_pace_1min_history_.push_back({current_time, tpm_1min});
-    trade_pace_5min_history_.push_back({current_time, tpm_5min});
-    trade_pace_15min_history_.push_back({current_time, tpm_15min});
+  trade_pace_1min_history_.push_back({current_time, tpm_1min});
+  trade_pace_5min_history_.push_back({current_time, tpm_5min});
+  trade_pace_15min_history_.push_back({current_time, tpm_15min});
 
-    // Limit history size to prevent memory bloat
-    const size_t MAX_HISTORY_SIZE = 1000;
-    if (trade_pace_1min_history_.size() > MAX_HISTORY_SIZE) {
-        trade_pace_1min_history_.erase(trade_pace_1min_history_.begin(),
-                                      trade_pace_1min_history_.begin() + (trade_pace_1min_history_.size() - MAX_HISTORY_SIZE));
-    }
-    if (trade_pace_5min_history_.size() > MAX_HISTORY_SIZE) {
-        trade_pace_5min_history_.erase(trade_pace_5min_history_.begin(),
-                                      trade_pace_5min_history_.begin() + (trade_pace_5min_history_.size() - MAX_HISTORY_SIZE));
-    }
-    if (trade_pace_15min_history_.size() > MAX_HISTORY_SIZE) {
-        trade_pace_15min_history_.erase(trade_pace_15min_history_.begin(),
-                                       trade_pace_15min_history_.begin() + (trade_pace_15min_history_.size() - MAX_HISTORY_SIZE));
-    }
+  // Limit history size to prevent memory bloat
+  const size_t MAX_HISTORY_SIZE = 1000;
+  if (trade_pace_1min_history_.size() > MAX_HISTORY_SIZE) {
+    trade_pace_1min_history_.erase(
+        trade_pace_1min_history_.begin(),
+        trade_pace_1min_history_.begin() + (trade_pace_1min_history_.size() - MAX_HISTORY_SIZE));
+  }
+  if (trade_pace_5min_history_.size() > MAX_HISTORY_SIZE) {
+    trade_pace_5min_history_.erase(
+        trade_pace_5min_history_.begin(),
+        trade_pace_5min_history_.begin() + (trade_pace_5min_history_.size() - MAX_HISTORY_SIZE));
+  }
+  if (trade_pace_15min_history_.size() > MAX_HISTORY_SIZE) {
+    trade_pace_15min_history_.erase(
+        trade_pace_15min_history_.begin(),
+        trade_pace_15min_history_.begin() + (trade_pace_15min_history_.size() - MAX_HISTORY_SIZE));
+  }
 }
 
 // Render the trade pace chart in the header
 void HistoricalTimeSalesPanel::renderTradePaceChart() {
-    if (trade_pace_1min_history_.empty()) {
-        return;
+  if (trade_pace_1min_history_.empty()) {
+    return;
+  }
+
+  // Create a small plot for the trade pace chart
+  char plot_title[64];
+  snprintf(plot_title, sizeof(plot_title), "##TradePace_%s", config_.title.c_str());
+
+  // Prepare data for plotting - only show the last N points to keep the chart readable
+  const size_t DISPLAY_POINTS = 50;  // Show last 50 points
+  size_t start_idx = trade_pace_1min_history_.size() > DISPLAY_POINTS
+                         ? trade_pace_1min_history_.size() - DISPLAY_POINTS
+                         : 0;
+
+  std::vector<double> timestamps;
+  std::vector<double> tpm_1min_values;
+  std::vector<double> tpm_5min_values;
+  std::vector<double> tpm_15min_values;
+
+  for (size_t i = start_idx; i < trade_pace_1min_history_.size(); ++i) {
+    // Normalize timestamps for the plot (relative to the first shown point)
+    double normalized_time = static_cast<double>(trade_pace_1min_history_[i].timestamp -
+                                                 trade_pace_1min_history_[start_idx].timestamp) /
+                             1000000.0;  // Convert to seconds
+    timestamps.push_back(normalized_time);
+
+    tpm_1min_values.push_back(trade_pace_1min_history_[i].trades_per_minute);
+    tpm_5min_values.push_back(trade_pace_5min_history_[i].trades_per_minute);
+    tpm_15min_values.push_back(trade_pace_15min_history_[i].trades_per_minute);
+  }
+
+  // Create a small plot area in the header
+  if (ImGui::BeginChild("TradePaceChartArea", ImVec2(0, 80), true)) {
+    if (ImPlot::BeginPlot(plot_title, "Time (s)", "Trades/Min", ImVec2(-1, -1),
+                          ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
+      ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
+
+      // Plot the three different time windows
+      if (!tpm_1min_values.empty()) {
+        ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f);  // Red for 1min
+        ImPlot::PlotLine("1 Min", timestamps.data(), tpm_1min_values.data(),
+                         static_cast<int>(timestamps.size()));
+      }
+
+      if (!tpm_5min_values.empty()) {
+        ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.0f);  // Green for 5min
+        ImPlot::PlotLine("5 Min", timestamps.data(), tpm_5min_values.data(),
+                         static_cast<int>(timestamps.size()));
+      }
+
+      if (!tpm_15min_values.empty()) {
+        ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 1.0f);  // Blue for 15min
+        ImPlot::PlotLine("15 Min", timestamps.data(), tpm_15min_values.data(),
+                         static_cast<int>(timestamps.size()));
+      }
+
+      ImPlot::EndPlot();
     }
-
-    // Create a small plot for the trade pace chart
-    char plot_title[64];
-    snprintf(plot_title, sizeof(plot_title), "##TradePace_%s", config_.title.c_str());
-
-    // Prepare data for plotting - only show the last N points to keep the chart readable
-    const size_t DISPLAY_POINTS = 50;  // Show last 50 points
-    size_t start_idx = trade_pace_1min_history_.size() > DISPLAY_POINTS ?
-                      trade_pace_1min_history_.size() - DISPLAY_POINTS : 0;
-
-    std::vector<double> timestamps;
-    std::vector<double> tpm_1min_values;
-    std::vector<double> tpm_5min_values;
-    std::vector<double> tpm_15min_values;
-
-    for (size_t i = start_idx; i < trade_pace_1min_history_.size(); ++i) {
-        // Normalize timestamps for the plot (relative to the first shown point)
-        double normalized_time = static_cast<double>(trade_pace_1min_history_[i].timestamp - trade_pace_1min_history_[start_idx].timestamp) / 1000000.0; // Convert to seconds
-        timestamps.push_back(normalized_time);
-
-        tpm_1min_values.push_back(trade_pace_1min_history_[i].trades_per_minute);
-        tpm_5min_values.push_back(trade_pace_5min_history_[i].trades_per_minute);
-        tpm_15min_values.push_back(trade_pace_15min_history_[i].trades_per_minute);
-    }
-
-    // Create a small plot area in the header
-    if (ImGui::BeginChild("TradePaceChartArea", ImVec2(0, 80), true)) {
-        if (ImPlot::BeginPlot(plot_title, "Time (s)", "Trades/Min", ImVec2(-1, -1),
-                              ImPlotFlags_NoLegend | ImPlotFlags_NoMenus | ImPlotFlags_NoBoxSelect)) {
-
-            ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_None, ImPlotAxisFlags_AutoFit);
-
-            // Plot the three different time windows
-            if (!tpm_1min_values.empty()) {
-                ImPlot::SetNextLineStyle(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), 1.0f); // Red for 1min
-                ImPlot::PlotLine("1 Min", timestamps.data(), tpm_1min_values.data(), static_cast<int>(timestamps.size()));
-            }
-
-            if (!tpm_5min_values.empty()) {
-                ImPlot::SetNextLineStyle(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), 1.0f); // Green for 5min
-                ImPlot::PlotLine("5 Min", timestamps.data(), tpm_5min_values.data(), static_cast<int>(timestamps.size()));
-            }
-
-            if (!tpm_15min_values.empty()) {
-                ImPlot::SetNextLineStyle(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), 1.0f); // Blue for 15min
-                ImPlot::PlotLine("15 Min", timestamps.data(), tpm_15min_values.data(), static_cast<int>(timestamps.size()));
-            }
-
-            ImPlot::EndPlot();
-        }
-        ImGui::EndChild();
-    }
+  }
+  ImGui::EndChild();
 }
 
 // CSV Export functionality
 void HistoricalTimeSalesPanel::exportTradesToCSV() {
-    if (cached_trades_.empty()) {
-        // Nothing to export
-        return;
+  if (cached_trades_.empty()) {
+    // Nothing to export
+    return;
+  }
+
+  // Generate filename with timestamp
+  time_t now = time(nullptr);
+  char buffer[100];
+  strftime(buffer, sizeof(buffer), "historical_trades_export_%Y%m%d_%H%M%S.csv", localtime(&now));
+
+  std::ofstream file(buffer);
+  if (!file.is_open()) {
+    // Could not open file for writing
+    return;
+  }
+
+  // Write CSV header with custom fields
+  file << "timestamp,exchange,symbol,price,size,side,volume_at_price,trade_velocity,price_change_"
+          "from_vwap,custom_fields\n";
+
+  // Calculate some analytics for custom fields
+  double total_size = 0.0;
+  int valid_trade_count = 0;
+  for (const auto& trade : cached_trades_) {
+    total_size += trade.size;
+    valid_trade_count++;
+  }
+  double avg_trade_size = (valid_trade_count > 0) ? total_size / valid_trade_count : 0.0;
+  double large_trade_threshold = avg_trade_size * 5.0;
+
+  // Get symbol analytics for VWAP
+  RenderEngine::SymbolAnalytics analytics;
+  if (processor_) {
+    analytics = processor_->getSymbolAnalytics(symbol_id_);
+  }
+
+  // Write trade data
+  for (size_t i = 0; i < cached_trades_.size(); ++i) {
+    const auto& trade = cached_trades_[i];
+
+    // Get exchange name from bridge
+    std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+
+    // Get symbol name
+    std::string symbol = trade.symbol.empty() ? symbol_name_ : trade.symbol;
+
+    // Format timestamp as readable string (HH:MM:SS.mmm format)
+    time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
+    uint64_t millis = (trade.timestamp / 1000) % 1000;
+    char time_str[20];
+    strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
+    std::string formatted_timestamp = std::string(time_str) + "." + std::to_string(millis);
+
+    // Calculate custom fields
+    std::string volume_at_price = "N/A";  // Would need to aggregate volume at each price level
+    std::string trade_velocity = "N/A";   // Would need to calculate based on time intervals
+    std::string price_vwap_diff = "N/A";
+
+    // Calculate difference from VWAP if available
+    if (analytics.vwap != 0.0) {
+      double diff_pct = ((trade.price - analytics.vwap) / analytics.vwap) * 100.0;
+      price_vwap_diff = std::to_string(diff_pct);
     }
 
-    // Generate filename with timestamp
-    time_t now = time(nullptr);
-    char buffer[100];
-    strftime(buffer, sizeof(buffer), "historical_trades_export_%Y%m%d_%H%M%S.csv", localtime(&now));
-
-    std::ofstream file(buffer);
-    if (!file.is_open()) {
-        // Could not open file for writing
-        return;
+    // Determine if this is a large trade
+    std::string custom_fields = "regular";
+    if (trade.size >= large_trade_threshold) {
+      custom_fields = "large_trade";
+    } else if (isTradeClustered(static_cast<int>(i), cached_trades_)) {
+      custom_fields = "clustered_trade";
     }
 
-    // Write CSV header with custom fields
-    file << "timestamp,exchange,symbol,price,size,side,volume_at_price,trade_velocity,price_change_from_vwap,custom_fields\n";
+    // Write the row
+    file << formatted_timestamp << "," << exchange << "," << symbol << "," << trade.price << ","
+         << trade.size << "," << (trade.is_buy ? "BUY" : "SELL") << "," << volume_at_price << ","
+         << trade_velocity << "," << price_vwap_diff << "," << custom_fields << "\n";
+  }
 
-    // Calculate some analytics for custom fields
-    double total_size = 0.0;
-    int valid_trade_count = 0;
-    for (const auto& trade : cached_trades_) {
-        total_size += trade.size;
-        valid_trade_count++;
-    }
-    double avg_trade_size = (valid_trade_count > 0) ? total_size / valid_trade_count : 0.0;
-    double large_trade_threshold = avg_trade_size * 5.0;
-
-    // Get symbol analytics for VWAP
-    RenderEngine::SymbolAnalytics analytics;
-    if (processor_) {
-        analytics = processor_->getSymbolAnalytics(symbol_id_);
-    }
-
-    // Write trade data
-    for (size_t i = 0; i < cached_trades_.size(); ++i) {
-        const auto& trade = cached_trades_[i];
-
-        // Get exchange name from bridge
-        std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
-
-        // Get symbol name
-        std::string symbol = trade.symbol.empty() ? symbol_name_ : trade.symbol;
-
-        // Format timestamp as readable string (HH:MM:SS.mmm format)
-        time_t time_sec = trade.timestamp / 1000000;  // micros to seconds
-        uint64_t millis = (trade.timestamp / 1000) % 1000;
-        char time_str[20];
-        strftime(time_str, sizeof(time_str), "%H:%M:%S", localtime(&time_sec));
-        std::string formatted_timestamp = std::string(time_str) + "." + std::to_string(millis);
-
-        // Calculate custom fields
-        std::string volume_at_price = "N/A";  // Would need to aggregate volume at each price level
-        std::string trade_velocity = "N/A";   // Would need to calculate based on time intervals
-        std::string price_vwap_diff = "N/A";
-
-        // Calculate difference from VWAP if available
-        if (analytics.vwap != 0.0) {
-            double diff_pct = ((trade.price - analytics.vwap) / analytics.vwap) * 100.0;
-            price_vwap_diff = std::to_string(diff_pct);
-        }
-
-        // Determine if this is a large trade
-        std::string custom_fields = "regular";
-        if (trade.size >= large_trade_threshold) {
-            custom_fields = "large_trade";
-        } else if (isTradeClustered(static_cast<int>(i), cached_trades_)) {
-            custom_fields = "clustered_trade";
-        }
-
-        // Write the row
-        file << formatted_timestamp << ","
-             << exchange << ","
-             << symbol << ","
-             << trade.price << ","
-             << trade.size << ","
-             << (trade.is_buy ? "BUY" : "SELL") << ","
-             << volume_at_price << ","
-             << trade_velocity << ","
-             << price_vwap_diff << ","
-             << custom_fields << "\n";
-    }
-
-    file.close();
+  file.close();
 }
 
 // Show trades for a specific time range in a popup window
-void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t end_time, const std::string& symbol_name) {
+void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t end_time,
+                                                 const std::string& symbol_name) {
   // Create a unique popup ID based on the clicked time range
   char popup_id[128];
   snprintf(popup_id, sizeof(popup_id), "TradesForBar_%llu_%llu_%s",
-           static_cast<unsigned long long>(start_time),
-           static_cast<unsigned long long>(end_time),
+           static_cast<unsigned long long>(start_time), static_cast<unsigned long long>(end_time),
            symbol_name.c_str());
 
   // Open the modal popup
-  if (ImGui::BeginPopupModal(popup_id, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
+  if (ImGui::BeginPopupModal(popup_id, nullptr,
+                             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
     // Get symbol analytics to retrieve trades for the time range
     if (processor_ && symbol_id_ != 0) {
       auto analytics = processor_->getSymbolAnalytics(symbol_id_);
@@ -1252,9 +1281,8 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
       // Display header information
       ImGui::Text("Trades for Bar: %s", symbol_name.c_str());
-      ImGui::Text("Time Range: %llu - %llu",
-                 static_cast<unsigned long long>(start_time),
-                 static_cast<unsigned long long>(end_time));
+      ImGui::Text("Time Range: %llu - %llu", static_cast<unsigned long long>(start_time),
+                  static_cast<unsigned long long>(end_time));
       ImGui::Text("Number of Trades: %zu", trades_for_bar.size());
 
       // Add statistics about the trades
@@ -1269,8 +1297,10 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
           max_price = std::max(max_price, trade.price);
           total_volume += trade.size;
 
-          if (trade.is_buy) buy_count++;
-          else sell_count++;
+          if (trade.is_buy)
+            buy_count++;
+          else
+            sell_count++;
         }
 
         ImGui::Text("Price Range: %.4f - %.4f", min_price, max_price);
@@ -1287,7 +1317,7 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
         if (ImGui::BeginTable("TradesTable", 5,
                               ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable,
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable,
                               ImVec2(0, table_height))) {
           ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
           ImGui::TableSetupColumn("Price", ImGuiTableColumnFlags_WidthStretch);
@@ -1321,9 +1351,8 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
               // Price column
               ImGui::TableSetColumnIndex(1);
-              ImVec4 price_color = trade.is_buy ?
-                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
-                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
+              ImVec4 price_color = trade.is_buy ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
+                                       ImVec4(1.0f, 0.0f, 0.0f, 1.0f);              // Red for sell
               ImGui::TextColored(price_color, "%.4f", trade.price);
 
               // Size column
@@ -1332,9 +1361,8 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
               // Side column
               ImGui::TableSetColumnIndex(3);
-              ImVec4 side_color = trade.is_buy ?
-                ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
-                ImVec4(1.0f, 0.0f, 0.0f, 1.0f);   // Red for sell
+              ImVec4 side_color = trade.is_buy ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) :  // Green for buy
+                                      ImVec4(1.0f, 0.0f, 0.0f, 1.0f);              // Red for sell
               if (trade.is_buy) {
                 ImGui::TextColored(side_color, "BUY");
               } else {
@@ -1343,7 +1371,8 @@ void HistoricalTimeSalesPanel::show_trades_popup(uint64_t start_time, uint64_t e
 
               // Exchange column
               ImGui::TableSetColumnIndex(4);
-              std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+              std::string exchange =
+                  bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
               ImGui::Text("%s", exchange.c_str());
 
               ImGui::PopID();

@@ -114,12 +114,6 @@ class OrderbookPanel : public PanelBase {
   std::vector<HeatmapRect> heatmap_rects_;
 
   // Track processed trades to avoid double counting
-  // This needs to be coordinated with the ring buffer index
-  // For simplicity, we'll traverse the buffer backward until we hit a timestamp
-  // older than last frame? Or if the bridge provides a monotonic index, use
-  // that. HotSpineDataBridge doesn't seem to expose a monotonic trade index
-  // publicly in getTradeBuffer() return type (std::span). But
-  // SharedMemoryHeader has write_index.
   uint64_t last_processed_trade_ts_ = 0;
   uint64_t last_order_flow_update_ts_ = 0;
 

@@ -515,6 +515,14 @@ void DomSurfacePanel::render() {
     updateHeatmapData();
     updateLargeOrderMarkers();
     updateTradeBubbles();
+    
+    // Update persistent levels if we have current orderbook data
+    if (current_symbol_id_ != 0 && processor_) {
+      auto orderbook_opt = processor_->getOrderbookData(current_symbol_id_);
+      if (orderbook_opt) {
+        updatePersistentLevels(*orderbook_opt);
+      }
+    }
   }
 
   begin_panel_window();
@@ -586,6 +594,9 @@ void DomSurfacePanel::render() {
     // Render Liquidity Bars on the right-hand price axis
     renderLiquidityBars();
 
+    // Render Persistent Level Indicators OVER everything else
+    renderPersistentLevelIndicators();
+
     ImPlot::EndPlot();
   }
 
@@ -595,8 +606,8 @@ void DomSurfacePanel::render() {
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Liquidity: Max=%.2f, Samples: %zu, Bins: %d", scale_max_,
                        heatmap_data_.size() / price_bins_, price_bins_);
     ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Markers: %zu (Avg: %.2f), Trades: %zu", large_order_markers_.size(),
-                median_order_size_, trade_bubbles_.size());
+    ImGui::Text("Markers: %zu (Avg: %.2f), Trades: %zu, Persistent: %zu", large_order_markers_.size(),
+                median_order_size_, trade_bubbles_.size(), persistent_levels_.size());
   }
 
   end_panel_window();
@@ -1160,6 +1171,144 @@ ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade
 std::string DomSurfacePanel::getTradeBubbleTooltip(const BTQuant::Data::TradeData& trade) const {
   std::string side = (trade.side == BTQuant::Data::TradeSide::BUY) ? "Buy" : "Sell";
   return std::format("Trade {}: {} @ ${:.2f}", side, trade.volume, trade.price);
+}
+
+void DomSurfacePanel::updatePersistentLevels(const OrderbookData& orderbook) {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Create a map of current price levels for quick lookup
+  std::map<double, std::pair<bool, double>> current_levels; // price -> (is_bid, volume)
+  
+  // Add current bids
+  for (const auto& level : orderbook.bids) {
+    current_levels[level.price] = std::make_pair(true, level.size);
+  }
+  
+  // Add current asks
+  for (const auto& level : orderbook.asks) {
+    current_levels[level.price] = std::make_pair(false, level.size);
+  }
+
+  // Update existing persistent levels
+  for (auto& persistent_level : persistent_levels_) {
+    auto it = current_levels.find(persistent_level.price);
+    if (it != current_levels.end()) {
+      // Level still exists, check if volume changed significantly
+      bool is_current_bid = it->second.first;
+      double current_volume = it->second.second;
+      
+      // If the side changed or volume changed significantly, update the timestamp
+      if (persistent_level.is_bid != is_current_bid || 
+          std::abs(persistent_level.volume - current_volume) > 0.0001) {
+        persistent_level.last_change_time = current_time;
+        persistent_level.is_bid = is_current_bid;
+        persistent_level.volume = current_volume;
+      }
+    } else {
+      // Level no longer exists, remove it from persistent levels
+      persistent_level.last_change_time = 0; // Mark for removal
+    }
+  }
+
+  // Remove levels that no longer exist
+  persistent_levels_.erase(
+      std::remove_if(persistent_levels_.begin(), persistent_levels_.end(),
+                     [](const PersistentLevel& level) {
+                       return level.last_change_time == 0;
+                     }),
+      persistent_levels_.end());
+
+  // Add new levels that aren't already being tracked
+  for (const auto& [price, info] : current_levels) {
+    bool is_bid = info.first;
+    double volume = info.second;
+    
+    // Check if this price level is already in our persistent levels
+    bool exists = false;
+    for (auto& persistent_level : persistent_levels_) {
+      if (std::abs(persistent_level.price - price) < 0.0001) {
+        exists = true;
+        break;
+      }
+    }
+    
+    if (!exists) {
+      // Add new persistent level
+      persistent_levels_.emplace_back(price, current_time, is_bid, volume);
+    }
+  }
+}
+
+void DomSurfacePanel::renderPersistentLevelIndicators() {
+  if (persistent_levels_.empty()) return;
+
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+  ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+  if (!draw_list) return;
+
+  // Get plot dimensions to determine appropriate indicator size
+  ImVec2 plot_size = ImPlot::GetPlotSize();
+  double price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+  float px_per_price = plot_size.y / static_cast<float>(price_range);
+
+  // Calculate a reasonable indicator thickness based on the plot dimensions
+  float indicator_thickness = std::max(1.0f, 2.0f / px_per_price); // At least 1 price unit, max 2 pixels
+
+  for (const auto& level : persistent_levels_) {
+    // Check if this level has been persistent for more than 30 seconds
+    if ((current_time - level.last_change_time) >= PERSISTENT_LEVEL_THRESHOLD_US) {
+      ImU32 color = getPersistentLevelColor(level);
+      
+      // Calculate positions for the horizontal line at the price level
+      double y_pos = level.price;
+      double top_y = y_pos + indicator_thickness / 2.0;
+      double bottom_y = y_pos - indicator_thickness / 2.0;
+      
+      // Convert to pixel coordinates
+      ImVec2 left_pixel = ImPlot::PlotToPixels(plot_rect.X.Min, y_pos);
+      ImVec2 right_pixel = ImPlot::PlotToPixels(plot_rect.X.Max, y_pos);
+      
+      // Draw a horizontal line across the entire plot width at the price level
+      draw_list->AddLine(
+          ImVec2(left_pixel.x, left_pixel.y),
+          ImVec2(right_pixel.x, right_pixel.y),
+          color, 3.0f); // 3 pixel thick line
+      
+      // Optionally add a subtle glow effect by drawing multiple lines with decreasing opacity
+      for (int i = 1; i <= 3; i++) {
+        ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
+        color_vec.w *= (0.4f / i); // Decreasing opacity for glow effect
+        ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+        
+        float y_offset = static_cast<float>(i) * 0.5f; // Small vertical offset for glow
+        
+        draw_list->AddLine(
+            ImVec2(left_pixel.x, left_pixel.y - y_offset),
+            ImVec2(right_pixel.x, right_pixel.y - y_offset),
+            glow_color, 2.0f);
+            
+        draw_list->AddLine(
+            ImVec2(left_pixel.x, left_pixel.y + y_offset),
+            ImVec2(right_pixel.x, right_pixel.y + y_offset),
+            glow_color, 2.0f);
+      }
+    }
+  }
+}
+
+ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) const {
+  // Use different colors for bids and asks with high visibility
+  if (level.is_bid) {
+    return IM_COL32(0, 255, 255, 200);  // Cyan for persistent bids
+  } else {
+    return IM_COL32(255, 105, 180, 200);  // Hot pink for persistent asks
+  }
 }
 
 }  // namespace RenderEngine

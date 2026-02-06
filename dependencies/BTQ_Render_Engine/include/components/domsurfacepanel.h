@@ -145,6 +145,21 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float TRADE_BUBBLE_MIN_VOLUME = 0.01f;  // Minimum volume for visible bubble
   static constexpr float TRADE_BUBBLE_MAX_VOLUME = 1000.0f; // Maximum volume for scaling
 
+  // Persistent Level Tracking
+  struct PersistentLevel {
+    double price;                    // Price level
+    uint64_t last_change_time;       // Last time this level changed (microseconds)
+    bool is_bid;                     // true = Bid, false = Ask
+    double volume;                   // Current volume at this level
+    
+    PersistentLevel(double p, uint64_t time, bool bid, double vol)
+        : price(p), last_change_time(time), is_bid(bid), volume(vol) {}
+  };
+  
+  std::vector<PersistentLevel> persistent_levels_;
+  static constexpr uint64_t PERSISTENT_LEVEL_THRESHOLD_US = 30'000'000;  // 30 seconds in microseconds
+  static constexpr float PERSISTENT_GLOW_RADIUS_ADDITION = 2.0f;  // Additional radius for glow effect
+
   // Vulkan resources for accelerated rendering
   VulkanCore* vulkan_core_ = nullptr;
   VkImage heatmap_image_ = nullptr;
@@ -173,6 +188,11 @@ class DomSurfacePanel : public PanelBase {
   // Liquidity Bars Methods
   void renderLiquidityBars();
   double getMaxVolumeAtPrice(const OrderbookData& orderbook, double price) const;
+
+  // Persistent Level Tracking Methods
+  void updatePersistentLevels(const OrderbookData& orderbook);
+  void renderPersistentLevelIndicators();
+  ImU32 getPersistentLevelColor(const PersistentLevel& level) const;
 
   // Trade Bubble Methods
   void updateTradeBubbles();

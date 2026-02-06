@@ -130,15 +130,12 @@ void DashboardControls::render_dashboard_controls() {
   ImGui::SetNextWindowSize(ImVec2(window_width, 500), ImGuiCond_FirstUseEver);
 
   // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
-  // Add AlwaysTopMost flag to ensure the window stays on top regardless of other interactions
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_AlwaysTopMost)) {
+  // Add AlwaysAutoResize to ensure proper sizing, and remove NoBringToFrontOnFocus which might interfere
+  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking)) {
     // Ensure the window stays on top by bringing it to front every frame
     ImGui::SetWindowFocus();
+    ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y));
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-    
-    // Ensure position is maintained in the top-right corner
-    ImVec2 pos = ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y);
-    ImGui::SetWindowPos(pos);
     
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
@@ -800,8 +797,9 @@ void DashboardControls::render_dashboard_controls() {
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 
   ImGui::End();
-  
+
   // Final check to ensure window stays on top and in correct position
+  // This ensures the position is set for the next frame
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
 }
 

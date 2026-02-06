@@ -68,14 +68,13 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(window_width, 250), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_AlwaysTopMost)) {
+  // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
+  // Add NoDocking to prevent docking behavior that might affect z-order
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoDocking)) {
     // Ensure the window stays on top by bringing it to front every frame
     ImGui::SetWindowFocus();
+    ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y));
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-    
-    // Ensure position is maintained in the top-right corner
-    ImVec2 pos = ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y);
-    ImGui::SetWindowPos(pos);
     
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();

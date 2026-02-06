@@ -9,7 +9,6 @@
 
 #include "data/unified_data_pipeline.hpp"
 #include "data/TradeData.h"
-#include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "symbol_manager.hpp"
 

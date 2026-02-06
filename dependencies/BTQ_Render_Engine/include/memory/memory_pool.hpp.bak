@@ -26,7 +26,6 @@
 #include "../include/widgets/VolumeProfileNode.h"
 #include "../include/widgets/FootprintCell.h"
 #include "../include/analytics/trading_analytics.hpp"
-#include "../include/hotspine_data_bridge.hpp"
 
 // Forward declaration for TradePaceData instead of including tape_panel.hpp
 namespace BTQuant {

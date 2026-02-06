@@ -96,7 +96,6 @@ set(DASHBOARD_SOURCES
     src/main_trading_terminal.cpp
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
@@ -180,7 +179,6 @@ set(REALTIME_DASHBOARD_SOURCES
     src/main_realtime_dashboard.cpp
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp

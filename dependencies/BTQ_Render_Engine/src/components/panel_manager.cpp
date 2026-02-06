@@ -2193,36 +2193,12 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     }
   }
 
-  // Priority 1: Look for the first available spot that fits the new panel in the grid
-  for (int y = 0; y < max_rows; ++y) {
-    for (int x = 0; x < max_cols; ++x) {
-      // Check if the space starting at (x,y) is available for the panel size
-      bool can_place = true;
-      if (x + width > max_cols || y + height > max_rows) {
-        can_place = false; // Panel would extend beyond grid boundaries
-      } else {
-        for (int dy = 0; dy < height && can_place; ++dy) {
-          for (int dx = 0; dx < width && can_place; ++dx) {
-            if (occupied[y + dy][x + dx]) {
-              can_place = false;
-              break;
-            }
-          }
-        }
-      }
-
-      if (can_place) {
-        return std::make_pair(x, y);
-      }
-    }
-  }
-
-  // Priority 2: Try to dock to the edges of existing panels in a preferred order
+  // Priority 1: Try to dock to the edges of existing panels in a preferred order
   // Order: Right edge, Below, Left edge, Above (clockwise around existing panels)
-  
+
   // Collect all potential docking positions with priority
   std::vector<std::pair<int, int>> potential_positions;
-  
+
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
 
@@ -2347,6 +2323,30 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     return potential_positions[0];
   }
 
+  // Priority 2: Look for the first available spot that fits the new panel in the grid
+  for (int y = 0; y < max_rows; ++y) {
+    for (int x = 0; x < max_cols; ++x) {
+      // Check if the space starting at (x,y) is available for the panel size
+      bool can_place = true;
+      if (x + width > max_cols || y + height > max_rows) {
+        can_place = false; // Panel would extend beyond grid boundaries
+      } else {
+        for (int dy = 0; dy < height && can_place; ++dy) {
+          for (int dx = 0; dx < width && can_place; ++dx) {
+            if (occupied[y + dy][x + dx]) {
+              can_place = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (can_place) {
+        return std::make_pair(x, y);
+      }
+    }
+  }
+
   // Priority 3: If still no space found, try to expand the grid by looking for positions
   // just adjacent to existing panels even if they go beyond the original grid bounds
   // (within reason - we don't want to place too far away)
@@ -2391,7 +2391,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
               bool expanded_area_occupied = false;
               for (const auto& [other_id, other_panel] : panels_) {
                 const auto& other_config = other_panel->get_config();
-                
+
                 // Check if the new position overlaps with any existing panel in the expanded area
                 if ((check_x < other_config.grid_x + other_config.grid_width) &&
                     (check_x + width > other_config.grid_x) &&
@@ -2401,7 +2401,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                   break;
                 }
               }
-              
+
               if (expanded_area_occupied) {
                 can_expand_right = false;
                 break;
@@ -2444,7 +2444,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
               bool expanded_area_occupied = false;
               for (const auto& [other_id, other_panel] : panels_) {
                 const auto& other_config = other_panel->get_config();
-                
+
                 // Check if the new position overlaps with any existing panel in the expanded area
                 if ((check_x < other_config.grid_x + other_config.grid_width) &&
                     (check_x + width > other_config.grid_x) &&
@@ -2454,7 +2454,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                   break;
                 }
               }
-              
+
               if (expanded_area_occupied) {
                 can_expand_below = false;
                 break;
@@ -2497,7 +2497,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
               bool expanded_area_occupied = false;
               for (const auto& [other_id, other_panel] : panels_) {
                 const auto& other_config = other_panel->get_config();
-                
+
                 // Check if the new position overlaps with any existing panel in the expanded area
                 if ((check_x < other_config.grid_x + other_config.grid_width) &&
                     (check_x + width > other_config.grid_x) &&
@@ -2507,7 +2507,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                   break;
                 }
               }
-              
+
               if (expanded_area_occupied) {
                 can_expand_left = false;
                 break;
@@ -2550,7 +2550,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
               bool expanded_area_occupied = false;
               for (const auto& [other_id, other_panel] : panels_) {
                 const auto& other_config = other_panel->get_config();
-                
+
                 // Check if the new position overlaps with any existing panel in the expanded area
                 if ((check_x < other_config.grid_x + other_config.grid_width) &&
                     (check_x + width > other_config.grid_x) &&
@@ -2560,7 +2560,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
                   break;
                 }
               }
-              
+
               if (expanded_area_occupied) {
                 can_expand_above = false;
                 break;
@@ -2587,7 +2587,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     // Find the first visible panel that is not locked
     for (const auto& [id, panel] : panels_) {
       const auto& config = panel->get_config();
-      
+
       if (!config.visible) continue;
 
       bool is_locked = false;
@@ -2601,16 +2601,16 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
       }
 
       if (is_locked) continue;
-      
+
       // Try to place to the right of the first panel
       int fallback_x = config.grid_x + config.grid_width;
       int fallback_y = config.grid_y;
-      
+
       // Check if this position is valid and not overlapping
       bool position_valid = true;
       for (const auto& [other_id, other_panel] : panels_) {
         const auto& other_config = other_panel->get_config();
-        
+
         if ((fallback_x < other_config.grid_x + other_config.grid_width) &&
             (fallback_x + width > other_config.grid_x) &&
             (fallback_y < other_config.grid_y + other_config.grid_height) &&
@@ -2619,19 +2619,19 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
           break;
         }
       }
-      
+
       if (position_valid) {
         return std::make_pair(fallback_x, fallback_y);
       }
-      
+
       // If right doesn't work, try below
       fallback_x = config.grid_x;
       fallback_y = config.grid_y + config.grid_height;
-      
+
       position_valid = true;
       for (const auto& [other_id, other_panel] : panels_) {
         const auto& other_config = other_panel->get_config();
-        
+
         if ((fallback_x < other_config.grid_x + other_config.grid_width) &&
             (fallback_x + width > other_config.grid_x) &&
             (fallback_y < other_config.grid_y + other_config.grid_height) &&
@@ -2640,7 +2640,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
           break;
         }
       }
-      
+
       if (position_valid) {
         return std::make_pair(fallback_x, fallback_y);
       }
@@ -2662,7 +2662,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
       max_x = config.grid_x + config.grid_width;
     }
   }
-  
+
   return std::make_pair(max_x, 0);
 }
 

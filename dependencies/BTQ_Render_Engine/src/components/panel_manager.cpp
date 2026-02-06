@@ -1349,4 +1349,153 @@ void PanelManager::load_all_panel_configs(const std::string& config_file) {
   }
 }
 
+void PanelManager::apply_layout_preset(LayoutPreset preset) {
+  clear_panels();
+
+  switch (preset) {
+    case LayoutPreset::DEFAULT:
+      // Default layout: Basic trading setup with chart, orderbook, watchlist
+      set_grid_layout(3, 5);
+
+      // Row 0: Status Bar and Alerts
+      add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 2, 1);
+      add_panel(PanelType::ALERTS, "Alerts", 2, 0, 1, 1);
+
+      // Row 1-2: Main Chart (2x2) and Depth Chart (1x2)
+      add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
+      add_panel(PanelType::DEPTH_CHART, "Depth Chart", 2, 1, 1, 2);
+
+      // Row 3: Orderbook Ladder (2x1) and Tape (1x1)
+      add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 3, 2, 1);
+      add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
+
+      // Row 4: DOM Surface (2x1) and Watchlist (1x1)
+      add_panel(PanelType::HEATMAP, "DOM Surface", 0, 4, 2, 1);
+      add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
+      break;
+
+    case LayoutPreset::MODERN_TRADING:
+      // Modern Trading layout: Based on RealtimeDashboardComponent setup
+      set_grid_layout(6, 5);
+
+      // 1. Chart (Top Left, Large) - 4x3
+      add_panel(PanelType::CHART, "BTCUSDT Chart", 0, 0, 4, 3);
+
+      // 2. DOM Surface (Top Right) - 2x2
+      add_panel(PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
+
+      // 3. Orderbook (Middle Right) - 2x2
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 4, 2, 2, 2);
+
+      // 4. Time & Sales (Bottom Left 1) - 2x1
+      add_panel(PanelType::TAPE, "Time & Sales", 0, 3, 2, 1);
+
+      // 5. Watchlist (Bottom Left 2) - 2x1
+      add_panel(PanelType::WATCHLIST, "Watchlist", 2, 3, 2, 1);
+
+      // 6. Positions / Risk (Bottom Row) - 6x1
+      add_panel(PanelType::TRADING_POSITIONS, "Positions", 0, 4, 6, 1);
+      break;
+
+    case LayoutPreset::PRO_QUANT:
+      // Pro Quant layout: Based on main_trading_terminal.cpp setup
+      set_grid_layout(6, 10);
+
+      // 1. Main Chart (Top Left, large)
+      add_panel(PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
+
+      // 2. Orderbook / DOM (Right side)
+      // DOM Surface (Heatmap)
+      add_panel(PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
+      // Classic Orderbook
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 4, 2, 2, 2);
+
+      // 3. Bottom Row 1 (Tape / Orders)
+      add_panel(PanelType::TAPE, "Time & Sales", 0, 3, 2, 1);
+      add_panel(PanelType::TRADING_ORDERS, "Active Orders", 2, 3, 2, 1);
+
+      // 4. Bottom Row 2 (Positions / Risk)
+      add_panel(PanelType::TRADING_POSITIONS, "Positions", 0, 4, 2, 1);
+
+      // 5. Add remaining components for complete integration
+      // Volume Profile (Bottom Right)
+      add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 2, 4, 2, 1);
+
+      // Watchlist (Far Right Bottom)
+      add_panel(PanelType::WATCHLIST, "Watchlist", 4, 4, 2, 1);
+
+      // Add Footprint Chart and TPO Profile
+      add_panel(PanelType::FOOTPRINT_CHART, "Footprint Chart", 0, 5, 3, 2);
+      add_panel(PanelType::TPO_PROFILE, "TPO Profile", 3, 5, 3, 2);
+
+      // Add Performance Monitor panel
+      add_panel(PanelType::PERFORMANCE_MONITOR, "Performance Monitor", 0, 7, 6, 2);
+
+      // Add Alerts panel
+      add_panel(PanelType::ALERTS, "Alerts", 4, 5, 2, 2);
+
+      // Add Strategy Builder as footer panel
+      add_panel(PanelType::STRATEGY_BUILDER, "Strategy Builder Footer", 0, 8, 6, 1);
+      break;
+
+    case LayoutPreset::SCALPER_DOM:
+      // Scalper DOM layout: Focus on DOM and order execution
+      set_grid_layout(4, 6);
+
+      // Main DOM heatmap taking most of the screen
+      add_panel(PanelType::HEATMAP, "DOM Surface", 0, 0, 2, 4);
+      
+      // Large orderbook
+      add_panel(PanelType::ORDERBOOK, "Orderbook", 2, 0, 2, 4);
+      
+      // Small chart for reference
+      add_panel(PanelType::CHART, "Chart", 0, 4, 2, 2);
+      
+      // Time & Sales
+      add_panel(PanelType::TAPE, "Time & Sales", 2, 4, 1, 1);
+      
+      // Active orders
+      add_panel(PanelType::TRADING_ORDERS, "Active Orders", 3, 4, 1, 1);
+      
+      // Positions
+      add_panel(PanelType::TRADING_POSITIONS, "Positions", 2, 5, 2, 1);
+      
+      // Watchlist
+      add_panel(PanelType::WATCHLIST, "Watchlist", 0, 5, 2, 1);
+      break;
+
+    case LayoutPreset::ANALYTICS_FOCUS:
+      // Analytics Focus layout: Charts and analytical tools
+      set_grid_layout(6, 6);
+
+      // Main chart
+      add_panel(PanelType::CHART, "Main Chart", 0, 0, 3, 3);
+      
+      // Secondary chart
+      add_panel(PanelType::CHART, "Secondary Chart", 3, 0, 3, 2);
+      
+      // Time statistics
+      add_panel(PanelType::TIME_STATISTICS, "Time Statistics", 3, 2, 3, 2);
+      
+      // Volume profile
+      add_panel(PanelType::VOLUME_PROFILE, "Volume Profile", 0, 3, 2, 2);
+      
+      // Footprint chart
+      add_panel(PanelType::FOOTPRINT_CHART, "Footprint Chart", 2, 3, 2, 2);
+      
+      // TPO profile
+      add_panel(PanelType::TPO_PROFILE, "TPO Profile", 4, 3, 2, 2);
+      
+      // Metrics
+      add_panel(PanelType::METRICS, "Metrics", 0, 5, 2, 1);
+      
+      // Risk metrics
+      add_panel(PanelType::RISK_METRICS, "Risk Metrics", 2, 5, 2, 1);
+      
+      // Watchlist
+      add_panel(PanelType::WATCHLIST, "Watchlist", 4, 5, 2, 1);
+      break;
+  }
+}
+
 }  // namespace BTQuant

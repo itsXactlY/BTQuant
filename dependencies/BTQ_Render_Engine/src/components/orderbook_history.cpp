@@ -288,8 +288,8 @@ int OrderbookHistoryPanel::get_level_option_index() {
     return 1; // Default to 20 if not found
 }
 
-void OrderbookHistoryPanel::render_orderbook_ladder(const std::vector<PriceLevel>& bids,
-                                                   const std::vector<PriceLevel>& asks,
+void OrderbookHistoryPanel::render_orderbook_ladder(const std::vector<RenderEngine::PriceLevel>& bids,
+                                                   const std::vector<RenderEngine::PriceLevel>& asks,
                                                    const std::string& title) {
     if (!title.empty()) {
         ImGui::Text("%s", title.c_str());
@@ -670,8 +670,8 @@ void OrderbookHistoryPanel::cleanupOldSnapshots() {
     }
 }
 
-double OrderbookHistoryPanel::calculateAverageOrderSize(const std::vector<PriceLevel>& bids,
-                                                      const std::vector<PriceLevel>& asks) const {
+double OrderbookHistoryPanel::calculateAverageOrderSize(const std::vector<RenderEngine::PriceLevel>& bids,
+                                                      const std::vector<RenderEngine::PriceLevel>& asks) const {
     size_t total_levels = bids.size() + asks.size();
     if (total_levels == 0) return 0.0;
 
@@ -682,8 +682,8 @@ double OrderbookHistoryPanel::calculateAverageOrderSize(const std::vector<PriceL
     return total_size / total_levels;
 }
 
-double OrderbookHistoryPanel::getMaxVolume(const std::vector<PriceLevel>& bids,
-                                          const std::vector<PriceLevel>& asks) const {
+double OrderbookHistoryPanel::getMaxVolume(const std::vector<RenderEngine::PriceLevel>& bids,
+                                          const std::vector<RenderEngine::PriceLevel>& asks) const {
     double max_vol = 1.0;
     for (const auto& level : bids) max_vol = std::max(max_vol, level.size);
     for (const auto& level : asks) max_vol = std::max(max_vol, level.size);

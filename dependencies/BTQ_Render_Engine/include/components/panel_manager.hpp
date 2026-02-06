@@ -108,6 +108,9 @@ class PanelManager {
   std::string get_current_layout_name() const { return current_layout_name_; }
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
+  // Layout presets
+  void apply_layout_preset(LayoutPreset preset);
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;

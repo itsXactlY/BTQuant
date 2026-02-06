@@ -57,14 +57,14 @@ double OrderbookPanel::getAggregationValue(double price) const {
     }
 }
 
-std::vector<PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
-    const std::vector<PriceLevel>& levels) const {
+std::vector<RenderEngine::PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
+    const std::vector<RenderEngine::PriceLevel>& levels) const {
 
     if (aggregation_mode_ == OrderbookAggregationMode::NONE) {
         return levels; // Return original levels if no aggregation
     }
 
-    std::map<double, PriceLevel> aggregated_levels;
+    std::map<double, RenderEngine::PriceLevel> aggregated_levels;
 
     for (const auto& level : levels) {
         double aggregated_price = getAggregationValue(level.price);
@@ -75,7 +75,7 @@ std::vector<PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
             it->second.size += level.size;
         } else {
             // Create new aggregated level
-            PriceLevel new_level;
+            RenderEngine::PriceLevel new_level;
             new_level.price = aggregated_price;
             new_level.size = level.size;
             aggregated_levels[aggregated_price] = new_level;
@@ -83,7 +83,7 @@ std::vector<PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
     }
 
     // Convert map back to vector
-    std::vector<PriceLevel> result;
+    std::vector<RenderEngine::PriceLevel> result;
     result.reserve(aggregated_levels.size());
 
     for (const auto& pair : aggregated_levels) {
@@ -91,7 +91,7 @@ std::vector<PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
     }
 
     // Sort by price (ascending for asks, descending for bids in the UI)
-    std::sort(result.begin(), result.end(), [](const PriceLevel& a, const PriceLevel& b) {
+    std::sort(result.begin(), result.end(), [](const RenderEngine::PriceLevel& a, const RenderEngine::PriceLevel& b) {
         return a.price < b.price;
     });
 
@@ -520,8 +520,8 @@ int OrderbookPanel::get_level_option_index() {
 
 void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook) {
   // Apply aggregation to bids and asks if needed
-  std::vector<PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
-  std::vector<PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
+  std::vector<RenderEngine::PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
+  std::vector<RenderEngine::PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
 
   // Calculate average order size for large order detection
   size_t total_levels = aggregated_bids.size() + aggregated_asks.size();
@@ -1255,8 +1255,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
 void OrderbookPanel::render_market_depth_chart(const RenderEngine::OrderbookData& orderbook) {
   // Apply aggregation to bids and asks if needed
-  std::vector<PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
-  std::vector<PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
+  std::vector<RenderEngine::PriceLevel> aggregated_bids = aggregateOrderbookLevels(orderbook.bids);
+  std::vector<RenderEngine::PriceLevel> aggregated_asks = aggregateOrderbookLevels(orderbook.asks);
 
   if (aggregated_bids.empty() || aggregated_asks.empty()) return;
 

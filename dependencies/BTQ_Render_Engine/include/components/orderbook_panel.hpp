@@ -73,8 +73,8 @@ class OrderbookPanel : public PanelBase {
 
   // Aggregation functions
   double getAggregationValue(double price) const;
-  std::vector<PriceLevel> aggregateOrderbookLevels(
-      const std::vector<PriceLevel>& levels) const;
+  std::vector<RenderEngine::PriceLevel> aggregateOrderbookLevels(
+      const std::vector<RenderEngine::PriceLevel>& levels) const;
 
   // View control functions
   void center_price();

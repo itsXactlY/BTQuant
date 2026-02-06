@@ -485,42 +485,42 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
     - Change: `std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;`
     - To: `std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;`
 - [x] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 33: RESOLVE VULKAN_DASHBOARD_ADVANCED TYPE ERRORS
-- [ ] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
-- [ ] Fix the `PriceLevel` timestamp error:
+- [x] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
+- [x] Fix the `PriceLevel` timestamp error:
     - If `BTQuant::RenderEngine::PriceLevel` does not have a `timestamp`, remove the lines `level.timestamp = orderbookData.timestamp;` (Price levels in a snapshot typically share the snapshot's global timestamp).
-- [ ] Correct the `updateTradeData` and `updateFootprintClusters` calls:
+- [x] Correct the `updateTradeData` and `updateFootprintClusters` calls:
     - Ensure `std::vector<TradeData> trades;` is properly typed.
     - If `std::span` conversion fails, explicitly cast: `micro_renderer_->updateTradeData(std::span<const TradeData>(trades));`.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 34: GLOBAL NAMESPACE SANITY CHECK
-- [ ] Verify that `include/market_data_processor.hpp` wraps its structs (`TradeData`, `OrderbookData`, `PriceLevel`) in `namespace BTQuant::RenderEngine`.
-- [ ] Check `src/main_trading_terminal.cpp` for any remaining `BTQuant::UI` errors; ensure `LayoutManager` is either in `BTQuant::RenderEngine` or `BTQuant::UI` and consistently called.
-- [ ] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
+- [x] Verify that `include/market_data_processor.hpp` wraps its structs (`TradeData`, `OrderbookData`, `PriceLevel`) in `namespace BTQuant::RenderEngine`.
+- [x] Check `src/main_trading_terminal.cpp` for any remaining `BTQuant::UI` errors; ensure `LayoutManager` is either in `BTQuant::RenderEngine` or `BTQuant::UI` and consistently called.
+- [x] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
 
 ### TASK 35: THE GREAT UNIFICATION (Fixing the "2 Brains" Problem)
 **Objective:** Delete the "Parallel Implementation Divergence". Merge `RealtimeDashboard` logic into `PanelManager` and establish `QuantWorkspaceComponent` as the single source of truth.
 
 #### Phase 35a: PanelManager Presets (Replacing Hardcoded Layouts)
-- [ ] In `include/components/panel_manager.hpp`, add `enum class LayoutPreset { DEFAULT, MODERN_TRADING, PRO_QUANT, SCALPER_DOM, ANALYTICS_FOCUS };`
-- [ ] In `include/components/panel_manager.hpp`, add public methods:
+- [x] In `include/components/panel_manager.hpp`, add `enum class LayoutPreset { DEFAULT, MODERN_TRADING, PRO_QUANT, SCALPER_DOM, ANALYTICS_FOCUS };`
+- [x] In `include/components/panel_manager.hpp`, add public methods:
     - `void apply_layout_preset(LayoutPreset preset);`
     - `uint32_t get_active_symbol_id() const;`
     - `std::string get_active_symbol_name() const;`
-- [ ] In `src/components/panel_manager.cpp`, implement `apply_layout_preset` to reconstruct the layouts that were previously hardcoded in `main_trading_terminal.cpp` and `RealtimeDashboardComponent`.
+- [x] In `src/components/panel_manager.cpp`, implement `apply_layout_preset` to reconstruct the layouts that were previously hardcoded in `main_trading_terminal.cpp` and `RealtimeDashboardComponent`.
 
 #### Phase 35b: Workspace State Exposure (The Bridge)
-- [ ] In `include/components/quant_workspace_component.hpp`, add pass-through methods to expose state to the Dashboard:
+- [x] In `include/components/quant_workspace_component.hpp`, add pass-through methods to expose state to the Dashboard:
     - `uint32_t get_active_symbol_id() const;`
     - `std::string get_active_symbol_name() const;`
     - `void set_layout(PanelManager::LayoutPreset preset);`
 
 #### Phase 35c: VulkanDashboard Rewiring (The Brain Transplant)
-- [ ] Modify `src/vulkan_dashboard_advanced.cpp` to **remove** `RealtimeDashboardComponent` instantiation and usage.
-- [ ] In `VulkanDashboard::render_frame()`, add logic to sync UI state to Data feed (Fixing the Data Disconnect):
+- [x] Modify `src/vulkan_dashboard_advanced.cpp` to **remove** `RealtimeDashboardComponent` instantiation and usage.
+- [x] In `VulkanDashboard::render_frame()`, add logic to sync UI state to Data feed (Fixing the Data Disconnect):
     ```cpp
     std::string ui_symbol = workspace_->get_active_symbol_name();
     if (!ui_symbol.empty() && ui_symbol != active_symbol_) {
@@ -528,10 +528,10 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
         if(micro_renderer_) micro_renderer_->setSymbol(workspace_->get_active_symbol_id());
     }
     ```
-- [ ] Update `init_components()` to register hotkeys (1-4) to call `workspace_->set_layout(...)` instead of switching component pointers.
+- [x] Update `init_components()` to register hotkeys (1-4) to call `workspace_->set_layout(...)` instead of switching component pointers.
 
 #### Phase 35d: Main Entry Cleanup
-- [ ] Refactor `src/main_trading_terminal.cpp`: Remove manual `panel_mgr->add_panel(...)` calls. Replace with a single call: `workspace->set_layout(BTQuant::PanelManager::LayoutPreset::PRO_QUANT);`.
+- [x] Refactor `src/main_trading_terminal.cpp`: Remove manual `panel_mgr->add_panel(...)` calls. Replace with a single call: `workspace->set_layout(BTQuant::PanelManager::LayoutPreset::PRO_QUANT);`.
 
 #### Phase 35e: Code Deletion (The Cleanup)
 - [ ] Delete `src/components/realtime_dashboard_component.cpp` and `include/components/realtime_dashboard_component.hpp`.

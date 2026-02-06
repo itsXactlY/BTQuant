@@ -16,14 +16,14 @@ namespace BTQuant {
 struct OrderbookSnapshot {
     uint64_t timestamp;                    // Timestamp of the snapshot
     uint32_t symbol_id;                    // Symbol identifier
-    std::vector<PriceLevel> bids;          // Bid levels
-    std::vector<PriceLevel> asks;          // Ask levels
+    std::vector<RenderEngine::PriceLevel> bids;          // Bid levels
+    std::vector<RenderEngine::PriceLevel> asks;          // Ask levels
     double spread;                         // Current spread
     double imbalance;                      // Current imbalance
     
     OrderbookSnapshot() : timestamp(0), symbol_id(0), spread(0.0), imbalance(0.0) {}
     
-    OrderbookSnapshot(const RenderEngine::OrderbookData& data, uint32_t sym_id) 
+    OrderbookSnapshot(const RenderEngine::OrderbookData& data, uint32_t sym_id)
         : timestamp(std::chrono::duration_cast<std::chrono::microseconds>(
                      std::chrono::high_resolution_clock::now().time_since_epoch()).count()),
           symbol_id(sym_id),
@@ -101,17 +101,17 @@ private:
     
     // Private helper methods
     int get_level_option_index();
-    void render_orderbook_ladder(const std::vector<PriceLevel>& bids, 
-                                const std::vector<PriceLevel>& asks,
+    void render_orderbook_ladder(const std::vector<RenderEngine::PriceLevel>& bids,
+                                const std::vector<RenderEngine::PriceLevel>& asks,
                                 const std::string& title = "");
     void render_comparison_view();
     void cleanupOldSnapshots();
     
     // Data processing helpers
-    double calculateAverageOrderSize(const std::vector<PriceLevel>& bids, 
-                                   const std::vector<PriceLevel>& asks) const;
-    double getMaxVolume(const std::vector<PriceLevel>& bids, 
-                       const std::vector<PriceLevel>& asks) const;
+    double calculateAverageOrderSize(const std::vector<RenderEngine::PriceLevel>& bids,
+                                   const std::vector<RenderEngine::PriceLevel>& asks) const;
+    double getMaxVolume(const std::vector<RenderEngine::PriceLevel>& bids,
+                       const std::vector<RenderEngine::PriceLevel>& asks) const;
 };
 
 }  // namespace BTQuant

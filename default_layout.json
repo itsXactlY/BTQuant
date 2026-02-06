@@ -20,7 +20,7 @@
             "symbol": "",
             "title": "Strategy Builder Footer",
             "type": 27,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -38,7 +38,7 @@
             "symbol": "",
             "title": "Alerts",
             "type": 9,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -56,7 +56,7 @@
             "symbol": "",
             "title": "Performance Monitor",
             "type": 20,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -81,7 +81,7 @@
             "symbol": "",
             "title": "TPO Profile",
             "type": 19,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -99,7 +99,7 @@
             "symbol": "",
             "title": "Footprint Chart",
             "type": 18,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -117,7 +117,7 @@
             "symbol": "",
             "title": "Watchlist",
             "type": 11,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -135,7 +135,7 @@
             "symbol": "",
             "title": "Volume Profile",
             "type": 14,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -153,7 +153,7 @@
             "symbol": "",
             "title": "Positions",
             "type": 7,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -171,7 +171,7 @@
             "symbol": "",
             "title": "Active Orders",
             "type": 6,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -189,7 +189,7 @@
             "symbol": "",
             "title": "Time & Sales",
             "type": 13,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 2,
@@ -207,7 +207,7 @@
             "symbol": "",
             "title": "Orderbook",
             "type": 10,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 1,
@@ -238,7 +238,7 @@
             "symbol": "",
             "title": "DOM Surface",
             "type": 2,
-            "visible": false
+            "visible": true
         },
         {
             "grid_height": 3,
@@ -256,7 +256,7 @@
             "symbol": "",
             "title": "BTC/USDT Chart",
             "type": 0,
-            "visible": false
+            "visible": true
         }
     ]
 }

@@ -346,7 +346,7 @@ void HotSpineDataBridge::sync_shm() {
     for (int i = 0; i < safe_bids_count; ++i) {
       if (snap.bids[i].price <= 0 || snap.bids[i].size <= 0) continue;
 
-      PriceLevel level;
+      RenderEngine::PriceLevel level;
       level.price = snap.bids[i].price;
       level.size = snap.bids[i].size;
       update.bids.push_back(level);
@@ -356,7 +356,7 @@ void HotSpineDataBridge::sync_shm() {
     for (int i = 0; i < safe_asks_count; ++i) {
       if (snap.asks[i].price <= 0 || snap.asks[i].size <= 0) continue;
 
-      PriceLevel level;
+      RenderEngine::PriceLevel level;
       level.price = snap.asks[i].price;
       level.size = snap.asks[i].size;
       update.asks.push_back(level);

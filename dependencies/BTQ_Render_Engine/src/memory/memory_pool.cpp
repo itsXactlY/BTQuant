@@ -390,13 +390,13 @@ CandleClusterPool& CandleClusterPool::getInstance() {
     return instance;
 }
 
-RenderEngine::CandleCluster* CandleClusterPool::allocate(float x, float y, float w, float h,
+BTQuant::RenderEngine::CandleCluster* CandleClusterPool::allocate(float x, float y, float w, float h,
                                                         uint32_t bidVol, uint32_t askVol, uint32_t tradeCnt,
                                                         float vw, bool hasTrades) {
     return pool_.allocate(x, y, w, h, bidVol, askVol, tradeCnt, vw, hasTrades);
 }
 
-void CandleClusterPool::deallocate(RenderEngine::CandleCluster* cluster) {
+void CandleClusterPool::deallocate(BTQuant::RenderEngine::CandleCluster* cluster) {
     pool_.deallocate(cluster);
 }
 
@@ -825,13 +825,13 @@ FastCandleClusterPool& FastCandleClusterPool::getInstance() {
     return instance;
 }
 
-RenderEngine::CandleCluster* FastCandleClusterPool::allocate(float x, float y, float w, float h,
+BTQuant::RenderEngine::CandleCluster* FastCandleClusterPool::allocate(float x, float y, float w, float h,
                                                             uint32_t bidVol, uint32_t askVol, uint32_t tradeCnt,
                                                             float vw, bool hasTrades) {
     return pool_.allocate(x, y, w, h, bidVol, askVol, tradeCnt, vw, hasTrades);
 }
 
-void FastCandleClusterPool::deallocate(RenderEngine::CandleCluster* cluster) {
+void FastCandleClusterPool::deallocate(BTQuant::RenderEngine::CandleCluster* cluster) {
     pool_.deallocate(cluster);
 }
 

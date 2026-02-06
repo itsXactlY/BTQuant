@@ -9,12 +9,12 @@ class MockRenderer : public RenderEngine::MarketMicrostructureRenderer {
 public:
   MockRenderer() : RenderEngine::MarketMicrostructureRenderer(nullptr) {}
 
-  std::vector<RenderEngine::CandleCluster>
+  std::vector<BTQuant::RenderEngine::CandleCluster>
   getFootprintClusters() const override {
-    std::vector<RenderEngine::CandleCluster> clusters;
+    std::vector<BTQuant::RenderEngine::CandleCluster> clusters;
 
     // Create a sample cluster for testing
-    RenderEngine::CandleCluster cluster;
+    BTQuant::RenderEngine::CandleCluster cluster;
     cluster.centerX = 1.0;
     cluster.centerY = 100.0;
     cluster.width = 0.1;
@@ -54,8 +54,8 @@ public:
     return cells;
   }
 
-  RenderEngine::Statistics getStats() const override {
-    RenderEngine::Statistics stats;
+  BTQuant::RenderEngine::Statistics getStats() const override {
+    BTQuant::RenderEngine::Statistics stats;
     stats.lastUpdateTimeNs = 1000000000ULL;
     return stats;
   }

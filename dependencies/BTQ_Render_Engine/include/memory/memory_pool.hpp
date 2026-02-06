@@ -457,10 +457,10 @@ class CandleClusterPool {
 public:
     static CandleClusterPool& getInstance();
 
-    RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+    BTQuant::RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
                                          uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t tradeCnt = 0,
                                          float vw = 0.0f, bool hasTrades = false);
-    void deallocate(RenderEngine::CandleCluster* cluster);
+    void deallocate(BTQuant::RenderEngine::CandleCluster* cluster);
     void preallocate(size_t count = 512);
 
     size_t getTotalObjects() const { return pool_.get_total_objects(); }
@@ -469,7 +469,7 @@ public:
 
 private:
     CandleClusterPool() = default;
-    ObjectPool<RenderEngine::CandleCluster> pool_;
+    ObjectPool<BTQuant::RenderEngine::CandleCluster> pool_;
 };
 
 // VolumeProfileNodePool for frequently allocated volume profile nodes
@@ -978,10 +978,10 @@ class FastCandleClusterPool {
 public:
     static FastCandleClusterPool& getInstance();
 
-    RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
+    BTQuant::RenderEngine::CandleCluster* allocate(float x = 0.0f, float y = 0.0f, float w = 0.0f, float h = 0.0f,
                                          uint32_t bidVol = 0, uint32_t askVol = 0, uint32_t tradeCnt = 0,
                                          float vw = 0.0f, bool hasTrades = false);
-    void deallocate(RenderEngine::CandleCluster* cluster);
+    void deallocate(BTQuant::RenderEngine::CandleCluster* cluster);
     void preallocate(size_t count = 1024); // Higher count for frequent allocation
 
     size_t getTotalObjects() const { return pool_.get_total_objects(); }
@@ -992,7 +992,7 @@ public:
 
 private:
     FastCandleClusterPool() = default;
-    ThreadLocalObjectPool<RenderEngine::CandleCluster> pool_;
+    ThreadLocalObjectPool<BTQuant::RenderEngine::CandleCluster> pool_;
 };
 
 class FastVolumeProfileNodePool {

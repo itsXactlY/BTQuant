@@ -10,7 +10,7 @@ public:
   MockRenderer() : RenderEngine::MarketMicrostructureRenderer() {}
 
   // Mock implementations for required methods
-  std::vector<RenderEngine::CandleCluster>
+  std::vector<BTQuant::RenderEngine::CandleCluster>
   getFootprintClusters() const override {
     return {};
   }
@@ -20,7 +20,7 @@ public:
     return {};
   }
 
-  RenderEngine::Stats getStats() const override { return {}; }
+  BTQuant::RenderEngine::Stats getStats() const override { return {}; }
 
   void setSymbol(uint32_t symbol_id) override {}
   void setTimeAggregationType(Data::TimeAggregationType type) override {}

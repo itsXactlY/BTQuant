@@ -24,8 +24,7 @@ struct TradeBubble {
   float radius;        // Calculated radius for rendering
 
   // Constructor
-  TradeBubble(double x_pos, double y_pos, double vol, double trade_price, bool buy,
-              uint64_t ts)
+  TradeBubble(double x_pos, double y_pos, double vol, double trade_price, bool buy, uint64_t ts)
       : x(x_pos),
         y(y_pos),
         volume(vol),
@@ -64,7 +63,7 @@ class DomSurfacePanel : public PanelBase {
 
   void render() override;
   void setSymbol(uint32_t symbol_id);
-  
+
   // Override panel header to add heatmap intensity control
   void render_panel_header();
 
@@ -72,10 +71,27 @@ class DomSurfacePanel : public PanelBase {
   void setHistoryDepth(int depth) { history_depth_ = depth; }
   void setPriceRange(double range) { price_range_ = range; }
 
+  // Getters for serialization
+  uint32_t get_symbol_id() const { return current_symbol_id_; }
+  double get_price_range() const { return price_range_; }
+  int get_price_bins() const { return price_bins_; }
+  bool get_auto_scale_price() const { return auto_scale_price_; }
+  float get_heatmap_intensity() const { return heatmap_intensity_; }
+
   // Large Order Marker Configuration
   void setLargeOrderThreshold(double threshold) { large_order_threshold_ = threshold; }
   void setMaxLargeOrderMarkers(int max) { max_large_order_markers_ = max; }
   void setLargeOrderFadeOut(bool enable) { enable_fade_out_ = enable; }
+  float get_large_order_threshold() const { return large_order_threshold_; }
+  bool get_enable_fade_out() const { return enable_fade_out_; }
+
+  // Setters for deserialization (snake_case aliases)
+  void set_price_range(double range) { price_range_ = range; }
+  void set_price_bins(int bins) { price_bins_ = bins; }
+  void set_auto_scale_price(bool auto_scale) { auto_scale_price_ = auto_scale; }
+  void set_large_order_threshold(float threshold) { large_order_threshold_ = threshold; }
+  void set_enable_fade_out(bool enable) { enable_fade_out_ = enable; }
+  void set_heatmap_intensity(float intensity) { heatmap_intensity_ = intensity; }
 
   // Persistent Level Configuration
   void setPersistenceThresholdMs(uint64_t ms) { persistence_threshold_ms_ = ms; }
@@ -90,9 +106,9 @@ class DomSurfacePanel : public PanelBase {
   uint32_t current_symbol_id_ = 0;
 
   // Visualization parameters
-  int history_depth_ = 300;    // Number of snapshots to show (X-axis time)
-  int price_bins_ = 100;       // Number of vertical price buckets (Y-axis price)
-  double price_range_ = 0.02;  // +/- 2% from mid price
+  int history_depth_ = 300;         // Number of snapshots to show (X-axis time)
+  int price_bins_ = 100;            // Number of vertical price buckets (Y-axis price)
+  double price_range_ = 0.02;       // +/- 2% from mid price
   float heatmap_intensity_ = 1.0f;  // Intensity/sensitivity of heatmap color mapping
 
   // Data storage for heatmap
@@ -113,7 +129,7 @@ class DomSurfacePanel : public PanelBase {
 
   // Trade Bubbles System
   std::vector<TradeBubble> trade_bubbles_;
-  double max_trade_volume_ = 1.0;  // For scaling bubble sizes
+  double max_trade_volume_ = 1.0;                      // For scaling bubble sizes
   static constexpr size_t TRADE_HISTORY_SIZE = 10000;  // Number of recent trades to track
 
   // Large Order Marker System
@@ -135,22 +151,26 @@ class DomSurfacePanel : public PanelBase {
 
   // Persistent Large Order Tracker (Horizontal Lines/Rectangles)
   struct PersistentLevel {
-    double price;                    // Price level where large order persists
-    bool is_bid;                     // true = Bid, false = Ask
-    double size;                     // Size of the large order
-    uint64_t first_detected_time;    // When first detected at this level
-    uint64_t last_updated_time;      // Last time order was seen at this level
-    bool is_active;                  // Whether the level is currently active
+    double price;                  // Price level where large order persists
+    bool is_bid;                   // true = Bid, false = Ask
+    double size;                   // Size of the large order
+    uint64_t first_detected_time;  // When first detected at this level
+    uint64_t last_updated_time;    // Last time order was seen at this level
+    bool is_active;                // Whether the level is currently active
 
     PersistentLevel(double p, bool b, double s, uint64_t time)
-        : price(p), is_bid(b), size(s), first_detected_time(time),
-          last_updated_time(time), is_active(true) {}
+        : price(p),
+          is_bid(b),
+          size(s),
+          first_detected_time(time),
+          last_updated_time(time),
+          is_active(true) {}
   };
 
   std::vector<PersistentLevel> persistent_levels_;
   uint64_t persistence_threshold_ms_ = 5000;  // 5 seconds persistence threshold
   double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
-  bool show_persistent_lines_ = true;          // Toggle for persistent line display
+  bool show_persistent_lines_ = true;         // Toggle for persistent line display
 
   // Helper to refresh data buffer
   void updateHeatmapData();

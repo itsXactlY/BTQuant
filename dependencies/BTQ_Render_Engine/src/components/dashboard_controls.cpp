@@ -3,48 +3,70 @@
 #include <imgui.h>
 #include <imgui_internal.h>  // For ImGui::InputTextWithHint
 
-#include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 #include <unordered_set>
 
-#include "../../include/components/panel_manager.hpp"
-#include "../../include/components/chart_panel.hpp"
-#include "../../include/components/footprint_panel.hpp"
-#include "../../include/components/chart_replay_panel.hpp"
-#include "../../include/ui/ui_base.hpp"
-#include "../../include/symbol_registry.hpp"
-#include "../../include/hotspine_data_bridge.hpp"
-#include "../../include/ui/tooltips.hpp"
 #include "../../include/components/alerts_panel.hpp"
+#include "../../include/components/chart_panel.hpp"
+#include "../../include/components/chart_replay_panel.hpp"
+#include "../../include/components/footprint_panel.hpp"
+#include "../../include/components/panel_manager.hpp"
+#include "../../include/hotspine_data_bridge.hpp"
+#include "../../include/symbol_registry.hpp"
+#include "../../include/ui/tooltips.hpp"
+#include "../../include/ui/ui_base.hpp"
 
 namespace BTQuant {
 
 // Helper function to convert timeframe to string representation
 static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
   switch (tf) {
-    case RenderEngine::TimeFrame::TF_1MIN:  return "1m";
-    case RenderEngine::TimeFrame::TF_5MIN:  return "5m";
-    case RenderEngine::TimeFrame::TF_15MIN: return "15m";
-    case RenderEngine::TimeFrame::TF_30MIN: return "30m";
-    case RenderEngine::TimeFrame::TF_1HOUR: return "1h";
-    case RenderEngine::TimeFrame::TF_4HOUR: return "4h";
-    case RenderEngine::TimeFrame::TF_1DAY:  return "1d";
-    case RenderEngine::TimeFrame::TF_1WEEK: return "1w";
-    case RenderEngine::TimeFrame::TF_1MS:   return "1ms";
-    case RenderEngine::TimeFrame::TF_10MS:  return "10ms";
-    case RenderEngine::TimeFrame::TF_100MS: return "100ms";
-    case RenderEngine::TimeFrame::TF_500MS: return "500ms";
-    case RenderEngine::TimeFrame::TF_1SEC:  return "1s";
-    case RenderEngine::TimeFrame::TF_3SEC:  return "3s";
-    case RenderEngine::TimeFrame::TF_5SEC:  return "5s";
-    case RenderEngine::TimeFrame::TF_15SEC: return "15s";
-    case RenderEngine::TimeFrame::TF_30SEC: return "30s";
-    case RenderEngine::TimeFrame::TF_2MIN:  return "2m";
-    case RenderEngine::TimeFrame::TF_2HOUR: return "2h";
-    case RenderEngine::TimeFrame::TF_6HOUR: return "6h";
-    case RenderEngine::TimeFrame::TF_12HOUR: return "12h";
-    default: return "1m";
+    case RenderEngine::TimeFrame::TF_1MIN:
+      return "1m";
+    case RenderEngine::TimeFrame::TF_5MIN:
+      return "5m";
+    case RenderEngine::TimeFrame::TF_15MIN:
+      return "15m";
+    case RenderEngine::TimeFrame::TF_30MIN:
+      return "30m";
+    case RenderEngine::TimeFrame::TF_1HOUR:
+      return "1h";
+    case RenderEngine::TimeFrame::TF_4HOUR:
+      return "4h";
+    case RenderEngine::TimeFrame::TF_1DAY:
+      return "1d";
+    case RenderEngine::TimeFrame::TF_1WEEK:
+      return "1w";
+    case RenderEngine::TimeFrame::TF_1MS:
+      return "1ms";
+    case RenderEngine::TimeFrame::TF_10MS:
+      return "10ms";
+    case RenderEngine::TimeFrame::TF_100MS:
+      return "100ms";
+    case RenderEngine::TimeFrame::TF_500MS:
+      return "500ms";
+    case RenderEngine::TimeFrame::TF_1SEC:
+      return "1s";
+    case RenderEngine::TimeFrame::TF_3SEC:
+      return "3s";
+    case RenderEngine::TimeFrame::TF_5SEC:
+      return "5s";
+    case RenderEngine::TimeFrame::TF_15SEC:
+      return "15s";
+    case RenderEngine::TimeFrame::TF_30SEC:
+      return "30s";
+    case RenderEngine::TimeFrame::TF_2MIN:
+      return "2m";
+    case RenderEngine::TimeFrame::TF_2HOUR:
+      return "2h";
+    case RenderEngine::TimeFrame::TF_6HOUR:
+      return "6h";
+    case RenderEngine::TimeFrame::TF_12HOUR:
+      return "12h";
+    default:
+      return "1m";
   }
 }
 
@@ -53,7 +75,7 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
   if (!panel_manager_) {
     std::cerr << "[DashboardControls] Error: PanelManager is null" << std::endl;
   }
-  
+
   // Initialize the Global Alert Manager
   if (panel_manager_) {
     auto chart_manager = panel_manager_->get_chart_manager();
@@ -62,38 +84,43 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
       if (bridge) {
         // Find the alerts panel to connect to it
         auto panel_ids = panel_manager_->get_all_panel_ids();
-        std::shared_ptr<AlertsPanel> alerts_panel = nullptr;
-        
+        AlertsPanel* alerts_panel_ptr = nullptr;
+
         for (uint32_t panel_id : panel_ids) {
           auto panel = panel_manager_->get_panel_by_id(panel_id);
           if (panel && panel->get_config().type == PanelType::ALERTS) {
-            alerts_panel = std::dynamic_pointer_cast<AlertsPanel>(panel);
+            alerts_panel_ptr = dynamic_cast<AlertsPanel*>(panel);
             break;
           }
         }
-        
+
         // Create the Global Alert Manager
+        // Note: Market data processor is not available through ChartManager's public API
+        // so we pass nullptr for now - GlobalAlertManager will need to be updated
+        // to work without it or get it from another source
         global_alert_manager_ = std::make_shared<GlobalAlertManager>(
-            bridge, 
-            chart_manager->get_market_data_processor(), 
-            alerts_panel
-        );
-        
+            bridge, nullptr,
+            alerts_panel_ptr ? std::shared_ptr<AlertsPanel>(alerts_panel_ptr, [](AlertsPanel*) {})
+                             : nullptr);
+
         std::cout << "[DashboardControls] Initialized Global Alert Manager" << std::endl;
       } else {
-        std::cerr << "[DashboardControls] Warning: Could not get bridge for Global Alert Manager" << std::endl;
+        std::cerr << "[DashboardControls] Warning: Could not get bridge for Global Alert Manager"
+                  << std::endl;
       }
     } else {
-      std::cerr << "[DashboardControls] Warning: Could not get chart manager for Global Alert Manager" << std::endl;
+      std::cerr
+          << "[DashboardControls] Warning: Could not get chart manager for Global Alert Manager"
+          << std::endl;
     }
   } else {
-    std::cerr << "[DashboardControls] Warning: PanelManager is null, cannot initialize Global Alert Manager" << std::endl;
+    std::cerr << "[DashboardControls] Warning: PanelManager is null, cannot initialize Global "
+                 "Alert Manager"
+              << std::endl;
   }
 }
 
-void DashboardControls::render_gui() {
-  render_dashboard_controls();
-}
+void DashboardControls::render_gui() { render_dashboard_controls(); }
 
 void DashboardControls::render_dashboard_controls() {
   // Floating Dashboard Controls Panel
@@ -112,7 +139,8 @@ void DashboardControls::render_dashboard_controls() {
 
         // Initialize selected_exchanges_ vector with all exchanges selected by default
         selected_exchanges_.resize(all_exchanges_.size());
-        std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1); // 1 means true/selected
+        std::fill(selected_exchanges_.begin(), selected_exchanges_.end(),
+                  1);  // 1 means true/selected
 
         exchanges_loaded_ = true;
 
@@ -156,18 +184,19 @@ void DashboardControls::render_dashboard_controls() {
       static char exchange_search_buffer[128] = "";
 
       // Show exchange selection popup as a proper dropdown
-      bool any_changes = false; // Move this declaration outside the Begin/End block
+      bool any_changes = false;  // Move this declaration outside the Begin/End block
       if (show_exchange_selector) {
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y));
-        ImGui::SetNextWindowSize(ImVec2(ImGui::GetItemRectSize().x, 350)); // Increased height for better UX
+        ImGui::SetNextWindowSize(
+            ImVec2(ImGui::GetItemRectSize().x, 350));  // Increased height for better UX
 
         if (ImGui::Begin("##ExchangeSelectorPopup", &show_exchange_selector,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
-                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
-                         ImGuiWindowFlags_NoSavedSettings)) {
-
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize |
+                             ImGuiWindowFlags_NoSavedSettings)) {
           // Select All / Deselect All buttons with better layout
-          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 5)); // Reduce spacing between buttons
+          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                              ImVec2(5, 5));  // Reduce spacing between buttons
           if (ImGui::Button("Select All", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             std::fill(selected_exchanges_.begin(), selected_exchanges_.end(), 1);
             any_changes = true;
@@ -186,22 +215,23 @@ void DashboardControls::render_dashboard_controls() {
             }
             any_changes = true;
           }
-          ImGui::PopStyleVar(); // Restore item spacing
+          ImGui::PopStyleVar();  // Restore item spacing
 
           ImGui::Separator();
 
           // Search input for filtering exchanges
-          ImGui::InputTextWithHint("##exchange_search", "Filter exchanges...", exchange_search_buffer, sizeof(exchange_search_buffer));
+          ImGui::InputTextWithHint("##exchange_search", "Filter exchanges...",
+                                   exchange_search_buffer, sizeof(exchange_search_buffer));
 
           ImGui::Separator();
 
           // Show selected exchanges count
           int selected_count = std::count_if(selected_exchanges_.begin(), selected_exchanges_.end(),
-                                            [](int val) { return val != 0; });
+                                             [](int val) { return val != 0; });
           ImGui::Text("Selected: %d/%zu", selected_count, all_exchanges_.size());
 
           // Individual exchange checkboxes with scrollable area
-          ImGui::BeginChild("ExchangeList", ImVec2(0, 220), true); // Increased height
+          ImGui::BeginChild("ExchangeList", ImVec2(0, 220), true);  // Increased height
 
           // Convert search term to lowercase for case-insensitive comparison
           std::string search_term = exchange_search_buffer;
@@ -211,10 +241,11 @@ void DashboardControls::render_dashboard_controls() {
             // Skip exchanges that don't match the search term (if search is not empty)
             if (!search_term.empty()) {
               std::string exchange_lower = all_exchanges_[i];
-              std::transform(exchange_lower.begin(), exchange_lower.end(), exchange_lower.begin(), ::tolower);
+              std::transform(exchange_lower.begin(), exchange_lower.end(), exchange_lower.begin(),
+                             ::tolower);
 
               if (exchange_lower.find(search_term) == std::string::npos) {
-                continue; // Skip this exchange if it doesn't match the search
+                continue;  // Skip this exchange if it doesn't match the search
               }
             }
 
@@ -222,7 +253,9 @@ void DashboardControls::render_dashboard_controls() {
 
             // Highlight selected exchanges with different color
             if (temp_selected) {
-              ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.2f, 0.8f, 0.2f, 1.0f)); // Green checkmark for selected
+              ImGui::PushStyleColor(
+                  ImGuiCol_CheckMark,
+                  ImVec4(0.2f, 0.8f, 0.2f, 1.0f));  // Green checkmark for selected
             }
 
             if (ImGui::Checkbox(all_exchanges_[i].c_str(), &temp_selected)) {
@@ -231,14 +264,15 @@ void DashboardControls::render_dashboard_controls() {
             }
 
             if (temp_selected) {
-              ImGui::PopStyleColor(); // Restore checkmark color
+              ImGui::PopStyleColor();  // Restore checkmark color
             }
           }
 
           ImGui::EndChild();
 
           // Apply and Cancel buttons
-          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 5)); // Reduce spacing between buttons
+          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                              ImVec2(5, 5));  // Reduce spacing between buttons
           if (ImGui::Button("Apply", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             show_exchange_selector = false;
 
@@ -254,7 +288,8 @@ void DashboardControls::render_dashboard_controls() {
           if (ImGui::Button("Cancel", ImVec2(ImGui::GetContentRegionAvail().x * 0.48f, 0))) {
             // Revert changes by reloading the exchanges - restore original selections
             if (show_exchange_selector) {
-              // Reload original state by resetting to saved values (we don't have a backup, so just close)
+              // Reload original state by resetting to saved values (we don't have a backup, so just
+              // close)
               show_exchange_selector = false;
             }
 
@@ -279,7 +314,7 @@ void DashboardControls::render_dashboard_controls() {
             // Clear the search buffer when closing
             memset(exchange_search_buffer, 0, sizeof(exchange_search_buffer));
           }
-          ImGui::PopStyleVar(); // Restore item spacing
+          ImGui::PopStyleVar();  // Restore item spacing
 
           if (any_changes) {
             // Update preview text immediately when changes occur
@@ -329,24 +364,25 @@ void DashboardControls::render_dashboard_controls() {
 
     // Enhanced search-enabled symbol selection dropdown - more prominent
     // Search input for filtering the dropdown options
-    if (ImGui::InputTextWithHint("##symbol_search_top", "Search symbols...", symbol_input_buffer_.data(), symbol_input_buffer_.size())) {
-        // Filter symbols based on search input
-        filtered_symbols_.clear();
+    if (ImGui::InputTextWithHint("##symbol_search_top", "Search symbols...",
+                                 symbol_input_buffer_.data(), symbol_input_buffer_.size())) {
+      // Filter symbols based on search input
+      filtered_symbols_.clear();
 
-        std::string search_lower = symbol_input_buffer_.data();
-        std::transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
+      std::string search_lower = symbol_input_buffer_.data();
+      std::transform(search_lower.begin(), search_lower.end(), search_lower.begin(), ::tolower);
 
-        for (const auto& symbol : all_symbols_) {
-          std::string symbol_lower = symbol;
-          std::transform(symbol_lower.begin(), symbol_lower.end(), symbol_lower.begin(), ::tolower);
+      for (const auto& symbol : all_symbols_) {
+        std::string symbol_lower = symbol;
+        std::transform(symbol_lower.begin(), symbol_lower.end(), symbol_lower.begin(), ::tolower);
 
-          if (symbol_lower.find(search_lower) != std::string::npos) {
-            filtered_symbols_.push_back(symbol);
-          }
+        if (symbol_lower.find(search_lower) != std::string::npos) {
+          filtered_symbols_.push_back(symbol);
         }
+      }
     } else if (needs_refresh_) {
-        // If symbols were refreshed due to exchange selection, update the filtered list too
-        filtered_symbols_ = all_symbols_;
+      // If symbols were refreshed due to exchange selection, update the filtered list too
+      filtered_symbols_ = all_symbols_;
     }
 
     // Create a unique ID for the combo box
@@ -362,7 +398,8 @@ void DashboardControls::render_dashboard_controls() {
       // Display filtered symbols in the combo box
       for (int i = 0; i < static_cast<int>(filtered_symbols_.size()); ++i) {
         const std::string& symbol = filtered_symbols_[i];
-        bool is_selected = (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size()) &&
+        bool is_selected = (selected_symbol_idx_ >= 0 &&
+                            selected_symbol_idx_ < static_cast<int>(all_symbols_.size()) &&
                             all_symbols_[selected_symbol_idx_] == symbol);
 
         if (ImGui::Selectable(symbol.c_str(), is_selected)) {
@@ -389,7 +426,7 @@ void DashboardControls::render_dashboard_controls() {
                 }
               } else {
                 // If symbol not found in registry, try to register it
-                std::string exchange_name = "Unknown"; // Default exchange
+                std::string exchange_name = "Unknown";  // Default exchange
 
                 // Try to determine exchange from selected exchanges
                 if (!selected_exchanges_.empty() && !all_exchanges_.empty()) {
@@ -401,14 +438,16 @@ void DashboardControls::render_dashboard_controls() {
                   }
                 }
 
-                uint32_t new_symbol_id = SymbolRegistry::instance().register_symbol(exchange_name, symbol);
+                uint32_t new_symbol_id =
+                    SymbolRegistry::instance().register_symbol(exchange_name, symbol);
 
                 if (panel_manager_) {
                   panel_manager_->set_active_symbol(new_symbol_id, symbol);
 
                   // Log the symbol registration and change for debugging
                   std::cout << "[DashboardControls] Registered and set active symbol: " << symbol
-                            << " (ID: " << new_symbol_id << ") on exchange: " << exchange_name << std::endl;
+                            << " (ID: " << new_symbol_id << ") on exchange: " << exchange_name
+                            << std::endl;
 
                   // Ensure all panels receive the symbol update
                   sync_symbol_to_all_panels(new_symbol_id, symbol);
@@ -447,15 +486,16 @@ void DashboardControls::render_dashboard_controls() {
     // Add an Apply to All button to ensure all panels get the current symbol
     ImGui::SameLine();
     if (ImGui::Button("Apply to All")) {
-      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+      if (selected_symbol_idx_ >= 0 &&
+          selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
         const std::string& symbol = all_symbols_[selected_symbol_idx_];
         auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
         if (symbol_info_opt) {
           uint32_t symbol_id = symbol_info_opt->id;
           if (panel_manager_) {
             panel_manager_->set_active_symbol(symbol_id, symbol);
-            std::cout << "[DashboardControls] Applied symbol " << symbol
-                      << " (ID: " << symbol_id << ") to all panels" << std::endl;
+            std::cout << "[DashboardControls] Applied symbol " << symbol << " (ID: " << symbol_id
+                      << ") to all panels" << std::endl;
           }
         }
       }
@@ -507,22 +547,24 @@ void DashboardControls::render_dashboard_controls() {
           // Update filtered symbols to match the newly loaded symbols
           filtered_symbols_ = all_symbols_;
 
-          std::cout << "[DashboardControls] Force refreshed " << all_symbols_.size() << " symbols from exchange API" << std::endl;
+          std::cout << "[DashboardControls] Force refreshed " << all_symbols_.size()
+                    << " symbols from exchange API" << std::endl;
         }
       }
 
       ImGui::SameLine();
       if (ImGui::Button("Sync All Panels")) {
         // Synchronize the currently selected symbol to all panels
-        if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+        if (selected_symbol_idx_ >= 0 &&
+            selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
           const std::string& symbol = all_symbols_[selected_symbol_idx_];
           auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
           if (symbol_info_opt) {
             uint32_t symbol_id = symbol_info_opt->id;
             if (panel_manager_) {
               panel_manager_->set_active_symbol(symbol_id, symbol);
-              std::cout << "[DashboardControls] Synced symbol " << symbol
-                        << " (ID: " << symbol_id << ") to all panels" << std::endl;
+              std::cout << "[DashboardControls] Synced symbol " << symbol << " (ID: " << symbol_id
+                        << ") to all panels" << std::endl;
             }
           }
         } else {
@@ -538,7 +580,8 @@ void DashboardControls::render_dashboard_controls() {
       ImGui::Spacing();
       ImGui::Text("Symbol Selection Info:");
       ImGui::Indent();
-      if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
+      if (selected_symbol_idx_ >= 0 &&
+          selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
         const std::string& current_symbol = all_symbols_[selected_symbol_idx_];
         auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(current_symbol);
         if (symbol_info_opt) {
@@ -552,14 +595,14 @@ void DashboardControls::render_dashboard_controls() {
         ImGui::Text("- Current Symbol: None selected");
       }
       ImGui::Text("- Total Available Symbols: %zu", all_symbols_.size());
-      ImGui::Text("- Selected Exchanges: %zu", std::count_if(selected_exchanges_.begin(), selected_exchanges_.end(),
-                                                            [](int val) { return val != 0; }));
+      ImGui::Text("- Selected Exchanges: %zu",
+                  std::count_if(selected_exchanges_.begin(), selected_exchanges_.end(),
+                                [](int val) { return val != 0; }));
       ImGui::Unindent();
     }
 
     // Panel management section with all requested panel types
     if (ImGui::CollapsingHeader("Add Panels", ImGuiTreeNodeFlags_DefaultOpen)) {
-
       // Create a grid layout for panel buttons (2 columns)
       ImGui::Columns(2, "panel_buttons", true);
 
@@ -634,7 +677,7 @@ void DashboardControls::render_dashboard_controls() {
       }
       ImGui::NextColumn();
 
-      ImGui::Columns(1); // Reset to single column
+      ImGui::Columns(1);  // Reset to single column
 
       ImGui::Spacing();
 
@@ -652,15 +695,10 @@ void DashboardControls::render_dashboard_controls() {
 
       // Define the target timeframes for the buttons
       const std::vector<std::pair<RenderEngine::TimeFrame, const char*>> timeframes = {
-        {RenderEngine::TimeFrame::TF_1MIN, "1m"},
-        {RenderEngine::TimeFrame::TF_5MIN, "5m"},
-        {RenderEngine::TimeFrame::TF_15MIN, "15m"},
-        {RenderEngine::TimeFrame::TF_30MIN, "30m"},
-        {RenderEngine::TimeFrame::TF_1HOUR, "1h"},
-        {RenderEngine::TimeFrame::TF_4HOUR, "4h"},
-        {RenderEngine::TimeFrame::TF_1DAY, "1d"},
-        {RenderEngine::TimeFrame::TF_1WEEK, "1w"}
-      };
+          {RenderEngine::TimeFrame::TF_1MIN, "1m"},   {RenderEngine::TimeFrame::TF_5MIN, "5m"},
+          {RenderEngine::TimeFrame::TF_15MIN, "15m"}, {RenderEngine::TimeFrame::TF_30MIN, "30m"},
+          {RenderEngine::TimeFrame::TF_1HOUR, "1h"},  {RenderEngine::TimeFrame::TF_4HOUR, "4h"},
+          {RenderEngine::TimeFrame::TF_1DAY, "1d"},   {RenderEngine::TimeFrame::TF_1WEEK, "1w"}};
 
       // Create a row of buttons for each timeframe
       for (size_t i = 0; i < timeframes.size(); ++i) {
@@ -669,7 +707,8 @@ void DashboardControls::render_dashboard_controls() {
         // Highlight the currently selected timeframe button
         if (current_timeframe_ == timeframe) {
           ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
         }
 
         if (ImGui::Button(label, ImVec2(60, 30))) {
@@ -681,14 +720,14 @@ void DashboardControls::render_dashboard_controls() {
         }
 
         if (current_timeframe_ == timeframe) {
-          ImGui::PopStyleColor(2); // Pop the two pushed colors
+          ImGui::PopStyleColor(2);  // Pop the two pushed colors
         }
 
         // Add spacing between buttons, except for the last one in each row
         if ((i + 1) % 4 != 0 && i < timeframes.size() - 1) {  // 4 buttons per row
           ImGui::SameLine();
         } else if ((i + 1) % 4 == 0 || i == timeframes.size() - 1) {
-          ImGui::Spacing(); // Add vertical spacing after each row
+          ImGui::Spacing();  // Add vertical spacing after each row
         }
       }
 
@@ -732,7 +771,7 @@ void DashboardControls::render_dashboard_controls() {
 
     // Global Alerts Section
     render_global_alerts_section();
-    
+
     // Status information
     ImGui::Separator();
     if (panel_manager_) {
@@ -741,10 +780,10 @@ void DashboardControls::render_dashboard_controls() {
     }
     ImGui::Text("Ready to add panels");
   }
-  
+
   // Render the create alert modal if needed
   render_create_alert_modal();
-  
+
   ImGui::End();
 }
 
@@ -777,7 +816,8 @@ bool DashboardControls::is_exchange_selected(const std::string& exchange_name) c
 
 void DashboardControls::refresh_symbols_for_selected_exchanges() {
   if (!panel_manager_) {
-    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot refresh symbols" << std::endl;
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot refresh symbols"
+              << std::endl;
     return;
   }
 
@@ -819,7 +859,8 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
           }
 
           // Check if this symbol's exchange is in the selected exchanges
-          bool exchange_selected = !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
+          bool exchange_selected =
+              !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
 
           if (exchange_selected) {
             unique_symbols.insert(symbol_name);
@@ -838,31 +879,35 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
   // Update filtered symbols to match the newly loaded symbols
   filtered_symbols_ = all_symbols_;
 
-  std::cout << "[DashboardControls] Refreshed symbols for selected exchanges. Total symbols: " << all_symbols_.size() << std::endl;
+  std::cout << "[DashboardControls] Refreshed symbols for selected exchanges. Total symbols: "
+            << all_symbols_.size() << std::endl;
 
   // Update the selected symbol index if the previously selected symbol is no longer available
   if (selected_symbol_idx_ >= static_cast<int>(all_symbols_.size())) {
-    selected_symbol_idx_ = -1; // Reset to no selection
+    selected_symbol_idx_ = -1;  // Reset to no selection
   }
 }
 
 void DashboardControls::fetch_symbols_from_exchange_api() {
   // This method integrates with exchange APIs to fetch live symbols
   if (!panel_manager_) {
-    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot fetch symbols from API" << std::endl;
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot fetch symbols from API"
+              << std::endl;
     return;
   }
 
   // Get the chart manager to access the bridge
   auto chart_manager = panel_manager_->get_chart_manager();
   if (!chart_manager) {
-    std::cerr << "[DashboardControls] Error: ChartManager is null, cannot fetch symbols from API" << std::endl;
+    std::cerr << "[DashboardControls] Error: ChartManager is null, cannot fetch symbols from API"
+              << std::endl;
     return;
   }
 
   auto bridge = chart_manager->get_bridge();
   if (!bridge) {
-    std::cerr << "[DashboardControls] Error: Data bridge is null, cannot fetch symbols from API" << std::endl;
+    std::cerr << "[DashboardControls] Error: Data bridge is null, cannot fetch symbols from API"
+              << std::endl;
     return;
   }
 
@@ -874,7 +919,8 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
     if (selected_exchanges_[i] != 0) {  // If exchange is selected
       const std::string& exchange_name = all_exchanges_[i];
 
-      std::cout << "[DashboardControls] Fetching symbols from exchange: " << exchange_name << std::endl;
+      std::cout << "[DashboardControls] Fetching symbols from exchange: " << exchange_name
+                << std::endl;
 
       // In a real implementation, this would call the actual exchange API
       // For now, we'll simulate API calls by fetching from the symbol registry
@@ -938,20 +984,22 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
   // Update filtered symbols to match the newly loaded symbols
   filtered_symbols_ = all_symbols_;
 
-  std::cout << "[DashboardControls] Fetched " << all_symbols_.size() << " symbols from exchange APIs" << std::endl;
+  std::cout << "[DashboardControls] Fetched " << all_symbols_.size()
+            << " symbols from exchange APIs" << std::endl;
 
   // Update the symbol input buffer to clear any previous search
   std::fill(symbol_input_buffer_.begin(), symbol_input_buffer_.end(), 0);
 
   // Update the selected symbol index if the previously selected symbol is no longer available
   if (selected_symbol_idx_ >= static_cast<int>(all_symbols_.size())) {
-    selected_symbol_idx_ = -1; // Reset to no selection
+    selected_symbol_idx_ = -1;  // Reset to no selection
   }
 }
 
 void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame timeframe) {
   if (!panel_manager_) {
-    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot update chart timeframes" << std::endl;
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot update chart timeframes"
+              << std::endl;
     return;
   }
 
@@ -982,7 +1030,6 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
         panel->get_config().type == PanelType::HISTORICAL_TIME_SALES ||
         panel->get_config().type == PanelType::TPO_PROFILE ||
         panel->get_config().type == PanelType::CHART_REPLAY) {
-
       // Handle different chart panel types that have specific timeframe methods
       if (panel->get_config().type == PanelType::CHART) {
         // Regular chart panel - use set_timeframe method
@@ -990,15 +1037,13 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
         if (chart_panel) {
           chart_panel->set_timeframe(timeframe);
         }
-      }
-      else if (panel->get_config().type == PanelType::CHART_REPLAY) {
+      } else if (panel->get_config().type == PanelType::CHART_REPLAY) {
         // Chart replay panel - update replay config
         auto* chart_replay_panel = dynamic_cast<class ChartReplayPanel*>(panel);
         if (chart_replay_panel) {
           chart_replay_panel->set_timeframe(timeframe);
         }
-      }
-      else if (panel->get_config().type == PanelType::FOOTPRINT_CHART) {
+      } else if (panel->get_config().type == PanelType::FOOTPRINT_CHART) {
         // Footprint chart panel - update time aggregation type
         auto* footprint_panel = dynamic_cast<class FootprintPanel*>(panel);
         if (footprint_panel) {
@@ -1039,14 +1084,16 @@ void DashboardControls::update_all_chart_timeframes(RenderEngine::TimeFrame time
       // For other chart-like panels that don't have direct timeframe setters,
       // they will automatically receive updated data when the underlying chart manager
       // updates the data sources with the new timeframe
-      // The panels will refresh their data on the next render cycle due to the reactive architecture
+      // The panels will refresh their data on the next render cycle due to the reactive
+      // architecture
     }
   }
 }
 
 void DashboardControls::sync_symbol_to_all_panels(uint32_t symbol_id, const std::string& symbol) {
   if (!panel_manager_) {
-    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot sync symbol to panels" << std::endl;
+    std::cerr << "[DashboardControls] Error: PanelManager is null, cannot sync symbol to panels"
+              << std::endl;
     return;
   }
 
@@ -1062,12 +1109,12 @@ void DashboardControls::sync_symbol_to_all_panels(uint32_t symbol_id, const std:
     panel_manager_->set_panel_symbol(panel_id, symbol);
 
     // Log the update for debugging
-    std::cout << "[DashboardControls] Updated panel " << panel_id
-              << " with symbol: " << symbol << " (ID: " << symbol_id << ")" << std::endl;
+    std::cout << "[DashboardControls] Updated panel " << panel_id << " with symbol: " << symbol
+              << " (ID: " << symbol_id << ")" << std::endl;
   }
 
-  std::cout << "[DashboardControls] Successfully synced symbol " << symbol
-            << " (ID: " << symbol_id << ") to all " << panel_ids.size() << " panels" << std::endl;
+  std::cout << "[DashboardControls] Successfully synced symbol " << symbol << " (ID: " << symbol_id
+            << ") to all " << panel_ids.size() << " panels" << std::endl;
 }
 
 void DashboardControls::render_global_alerts_section() {
@@ -1080,22 +1127,22 @@ void DashboardControls::render_global_alerts_section() {
       ImGui::Text("- Active Alerts: %zu", global_alert_manager_->get_active_alerts_count());
       ImGui::Text("- Triggered Alerts: %zu", global_alert_manager_->get_triggered_alerts_count());
       ImGui::Unindent();
-      
+
       ImGui::Spacing();
-      
+
       // Buttons for managing alerts
       if (ImGui::Button("Create New Alert")) {
         show_create_alert_modal_ = true;
       }
-      
+
       ImGui::SameLine();
       if (ImGui::Button("View All Alerts")) {
         // This could open a detailed view of all alerts
         // For now, we'll just show a simple list in the same window
       }
-      
+
       ImGui::Spacing();
-      
+
       // Show active alerts table
       auto all_alerts = global_alert_manager_->get_all_alerts();
       if (!all_alerts.empty()) {
@@ -1107,16 +1154,16 @@ void DashboardControls::render_global_alerts_section() {
         ImGui::TableSetupColumn("Threshold");
         ImGui::TableSetupColumn("Status");
         ImGui::TableHeadersRow();
-        
+
         for (const auto& [id, alert] : all_alerts) {
           ImGui::TableNextRow();
-          
+
           ImGui::TableSetColumnIndex(0);
           ImGui::Text("%s", alert.name.c_str());
-          
+
           ImGui::TableSetColumnIndex(1);
           ImGui::Text("%s", alert.symbol_name.c_str());
-          
+
           ImGui::TableSetColumnIndex(2);
           switch (alert.type) {
             case GlobalAlertType::PRICE_ABOVE:
@@ -1135,10 +1182,10 @@ void DashboardControls::render_global_alerts_section() {
               ImGui::Text("Custom");
               break;
           }
-          
+
           ImGui::TableSetColumnIndex(3);
           ImGui::Text("%.2f", alert.threshold_value);
-          
+
           ImGui::TableSetColumnIndex(4);
           switch (alert.status) {
             case AlertStatus::ACTIVE:
@@ -1172,30 +1219,35 @@ void DashboardControls::render_create_alert_modal() {
   if (show_create_alert_modal_) {
     ImGui::OpenPopup("Create New Alert");
   }
-  
-  if (ImGui::BeginPopupModal("Create New Alert", &show_create_alert_modal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+
+  if (ImGui::BeginPopupModal("Create New Alert", &show_create_alert_modal_,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Create a new price or volume alert");
     ImGui::Separator();
-    
+
     // Alert name
-    ImGui::InputTextWithHint("Alert Name", "Enter alert name...", new_alert_name_, sizeof(new_alert_name_));
-    
+    ImGui::InputTextWithHint("Alert Name", "Enter alert name...", new_alert_name_,
+                             sizeof(new_alert_name_));
+
     // Symbol selection
     if (selected_symbol_idx_ >= 0 && selected_symbol_idx_ < static_cast<int>(all_symbols_.size())) {
-      strncpy(new_alert_symbol_, all_symbols_[selected_symbol_idx_].c_str(), sizeof(new_alert_symbol_) - 1);
+      strncpy(new_alert_symbol_, all_symbols_[selected_symbol_idx_].c_str(),
+              sizeof(new_alert_symbol_) - 1);
       new_alert_symbol_[sizeof(new_alert_symbol_) - 1] = '\0';
     }
-    ImGui::InputTextWithHint("Symbol", "Enter symbol...", new_alert_symbol_, sizeof(new_alert_symbol_));
-    
+    ImGui::InputTextWithHint("Symbol", "Enter symbol...", new_alert_symbol_,
+                             sizeof(new_alert_symbol_));
+
     // Alert type selection
-    const char* alert_types[] = { "Price Above", "Price Below", "Volume Above", "Volume Below" };
+    const char* alert_types[] = {"Price Above", "Price Below", "Volume Above", "Volume Below"};
     ImGui::Combo("Alert Type", &new_alert_type_, alert_types, IM_ARRAYSIZE(alert_types));
-    
+
     // Threshold value
-    ImGui::InputTextWithHint("Threshold Value", "Enter threshold...", new_alert_threshold_, sizeof(new_alert_threshold_));
-    
+    ImGui::InputTextWithHint("Threshold Value", "Enter threshold...", new_alert_threshold_,
+                             sizeof(new_alert_threshold_));
+
     ImGui::Spacing();
-    
+
     // Buttons
     if (ImGui::Button("Create Alert", ImVec2(120, 0))) {
       create_alert_from_modal();
@@ -1206,7 +1258,7 @@ void DashboardControls::render_create_alert_modal() {
       memset(new_alert_threshold_, 0, sizeof(new_alert_threshold_));
       new_alert_type_ = 0;
     }
-    
+
     ImGui::SameLine();
     if (ImGui::Button("Cancel", ImVec2(120, 0))) {
       show_create_alert_modal_ = false;
@@ -1216,7 +1268,7 @@ void DashboardControls::render_create_alert_modal() {
       memset(new_alert_threshold_, 0, sizeof(new_alert_threshold_));
       new_alert_type_ = 0;
     }
-    
+
     ImGui::EndPopup();
   }
 }
@@ -1226,18 +1278,18 @@ void DashboardControls::create_alert_from_modal() {
     std::cerr << "[DashboardControls] Error: Global Alert Manager not initialized" << std::endl;
     return;
   }
-  
+
   // Validate inputs
   if (strlen(new_alert_symbol_) == 0) {
     std::cerr << "[DashboardControls] Error: Symbol is required" << std::endl;
     return;
   }
-  
+
   if (strlen(new_alert_threshold_) == 0) {
     std::cerr << "[DashboardControls] Error: Threshold is required" << std::endl;
     return;
   }
-  
+
   // Convert threshold to double
   double threshold_value = 0.0;
   try {
@@ -1246,56 +1298,60 @@ void DashboardControls::create_alert_from_modal() {
     std::cerr << "[DashboardControls] Error parsing threshold value: " << e.what() << std::endl;
     return;
   }
-  
+
   // Get symbol ID from registry
   uint32_t symbol_id = 0;
-  auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(std::string(new_alert_symbol_));
+  auto symbol_info_opt =
+      SymbolRegistry::instance().get_symbol_by_name(std::string(new_alert_symbol_));
   if (symbol_info_opt) {
     symbol_id = symbol_info_opt->id;
   } else {
     // If not found, try to register it
-    symbol_id = SymbolRegistry::instance().register_symbol("Default", std::string(new_alert_symbol_));
+    symbol_id =
+        SymbolRegistry::instance().register_symbol("Default", std::string(new_alert_symbol_));
   }
-  
+
   if (symbol_id == 0) {
     std::cerr << "[DashboardControls] Error: Could not get or register symbol ID" << std::endl;
     return;
   }
-  
+
   // Determine alert type and create the alert
-  std::string alert_name = strlen(new_alert_name_) > 0 ? std::string(new_alert_name_) : 
-                          std::string("Alert: ") + std::string(new_alert_symbol_);
-  
+  std::string alert_name = strlen(new_alert_name_) > 0
+                               ? std::string(new_alert_name_)
+                               : std::string("Alert: ") + std::string(new_alert_symbol_);
+
   GlobalAlertType alert_type;
   switch (new_alert_type_) {
-    case 0: // Price Above
+    case 0:  // Price Above
       alert_type = GlobalAlertType::PRICE_ABOVE;
       break;
-    case 1: // Price Below
+    case 1:  // Price Below
       alert_type = GlobalAlertType::PRICE_BELOW;
       break;
-    case 2: // Volume Above
+    case 2:  // Volume Above
       alert_type = GlobalAlertType::VOLUME_ABOVE;
       break;
-    case 3: // Volume Below
+    case 3:  // Volume Below
       alert_type = GlobalAlertType::VOLUME_BELOW;
       break;
     default:
       alert_type = GlobalAlertType::PRICE_ABOVE;
       break;
   }
-  
+
   std::string alert_id;
   if (alert_type == GlobalAlertType::PRICE_ABOVE || alert_type == GlobalAlertType::PRICE_BELOW) {
-    alert_id = global_alert_manager_->add_price_alert(symbol_id, std::string(new_alert_symbol_), 
-                                                     threshold_value, alert_type, alert_name);
-  } else {
-    alert_id = global_alert_manager_->add_volume_alert(symbol_id, std::string(new_alert_symbol_), 
+    alert_id = global_alert_manager_->add_price_alert(symbol_id, std::string(new_alert_symbol_),
                                                       threshold_value, alert_type, alert_name);
+  } else {
+    alert_id = global_alert_manager_->add_volume_alert(symbol_id, std::string(new_alert_symbol_),
+                                                       threshold_value, alert_type, alert_name);
   }
-  
+
   if (!alert_id.empty()) {
-    std::cout << "[DashboardControls] Created new alert: " << alert_id << " - " << alert_name << std::endl;
+    std::cout << "[DashboardControls] Created new alert: " << alert_id << " - " << alert_name
+              << std::endl;
   } else {
     std::cerr << "[DashboardControls] Failed to create alert" << std::endl;
   }

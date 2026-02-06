@@ -1342,4 +1342,22 @@ void OrderbookPanel::reset_depth() {
   // For now, we'll just log the action
 }
 
+void OrderbookPanel::render_panel_header() {
+  // Call parent implementation to render the default header
+  PanelBase::render_panel_header();
+
+  // Add heatmap intensity slider to the panel header
+  ImGui::Separator();
+  ImGui::Text("Heatmap Intensity:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(200);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  if (ImGui::Button("Reset##HeatmapIntensity")) {
+    heatmap_intensity_ = 1.0f;
+  }
+  ImGui::Separator();
+}
+
 }  // namespace BTQuant

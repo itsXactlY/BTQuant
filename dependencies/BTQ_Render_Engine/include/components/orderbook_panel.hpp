@@ -36,6 +36,7 @@ class OrderbookPanel : public PanelBase {
 
   void update(float dt) override;
   void render() override;
+  void render_panel_header();
 
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 

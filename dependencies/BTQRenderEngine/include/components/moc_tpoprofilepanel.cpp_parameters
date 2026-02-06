@@ -1,0 +1,12 @@
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/include
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/../BTQ_Render_Engine/include
+-I/usr/include
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/_deps/imgui-src
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/_deps/imgui-src/backends
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/_deps/implot-src
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/_deps/concurrentqueue-src
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/../BTQ_Render_Engine/include/components
+-I/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/_deps/glm-src
+-o
+/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/include/components/moc_tpoprofilepanel.cpp
+/home/alca/projects/PubBTQuant/dependencies/BTQRenderEngine/include/components/tpoprofilepanel.h

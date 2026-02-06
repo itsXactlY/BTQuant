@@ -9,6 +9,7 @@ struct PriceLevel {
   double askVolume;
   int bidOrders;
   int askOrders;
+  uint64_t timestamp = 0;  // Optional timestamp for individual price levels
 };
 
 #endif  // PRICE_LEVEL_H

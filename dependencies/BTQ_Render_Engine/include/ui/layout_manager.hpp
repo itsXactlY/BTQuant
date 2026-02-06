@@ -20,10 +20,7 @@ namespace UI {
 class LayoutManager {
 public:
     // Singleton access
-    static LayoutManager& getInstance() {
-        static LayoutManager instance;
-        return instance;
-    }
+    static LayoutManager& getInstance();
 
     // Delete copy and move constructors and assignment operators
     LayoutManager(const LayoutManager&) = delete;

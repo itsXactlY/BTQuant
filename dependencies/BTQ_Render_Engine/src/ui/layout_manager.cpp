@@ -20,6 +20,11 @@ namespace UI {
 // LayoutManager Implementation
 // ============================================================================
 
+LayoutManager& LayoutManager::getInstance() {
+    static LayoutManager instance;
+    return instance;
+}
+
 LayoutManager::LayoutManager() {
     preset_manager_ = std::make_unique<Layout::LayoutPresetManager>();
     dashboard_layout_manager_ = std::make_unique<Layout::DashboardLayoutManager>();

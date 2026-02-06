@@ -25,7 +25,7 @@ namespace BTQuant {
 
 namespace BTQuant {
 
-// Structure to represent a group of bound panels
+// Structure to represent a group of bound panels (Super-panel)
 struct PanelGroup {
     std::set<uint32_t> panel_ids;  // IDs of panels in this group
     int grid_x = 0;                // Grid position of the group (top-left)
@@ -33,10 +33,11 @@ struct PanelGroup {
     int grid_width = 0;            // Total width of the group in grid cells
     int grid_height = 0;           // Total height of the group in grid cells
     bool locked = false;           // Whether the group is locked (cannot be modified)
-    
+    bool super_panel = false;      // Whether this group acts as a Super-panel (all panels move/resized together)
+
     PanelGroup() = default;
-    explicit PanelGroup(int x, int y, int width, int height) 
-        : grid_x(x), grid_y(y), grid_width(width), grid_height(height) {}
+    explicit PanelGroup(int x, int y, int width, int height, bool is_super_panel = false)
+        : grid_x(x), grid_y(y), grid_width(width), grid_height(height), super_panel(is_super_panel) {}
 };
 
 struct GridLayout {
@@ -120,7 +121,9 @@ class PanelManager {
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
   // Panel binding/grouping functionality
-  uint32_t create_panel_group(int grid_x, int grid_y, int width, int height);
+  uint32_t create_panel_group(int grid_x, int grid_y, int width, int height, bool is_super_panel = false);
+  uint32_t create_super_panel_group(int grid_x, int grid_y, int width, int height);  // Convenience method for creating super-panel groups
+  uint32_t bind_panels_together(const std::vector<uint32_t>& panel_ids, int grid_x, int grid_y, int width, int height);  // Bind multiple panels into a super-panel
   bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
   bool remove_panel_from_group(uint32_t group_id, uint32_t panel_id);
   bool lock_panel_group(uint32_t group_id);

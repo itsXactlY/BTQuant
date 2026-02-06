@@ -13,11 +13,18 @@ struct CandleCluster {
     float centerY;           // Center Y coordinate (price)
     float width;             // Cluster width (time duration)
     float height;            // Cluster height (price range)
-    uint32_t bidVolume;      // Total bid volume
-    uint32_t askVolume;      // Total ask volume
-    uint32_t tradeCount;     // Number of trades
+    uint bidVolume;          // Total bid volume
+    uint askVolume;          // Total ask volume
+    uint tradeCount;         // Number of trades
     float vwap;              // Volume-weighted average price
-    bool hasTrades;          // Trade activity indicator
+    uint hasTrades;          // Trade activity indicator (0 or 1, was bool)
+    uint buyTradeCount;      // Number of buy trades
+    uint sellTradeCount;     // Number of sell trades
+    float maxSingleTradeVolume; // Maximum single trade volume in cluster
+    uint startTimeLow;       // Start time lower 32 bits (was uint64_t)
+    uint startTimeHigh;      // Start time upper 32 bits (was uint64_t)
+    uint endTimeLow;         // End time lower 32 bits (was uint64_t)
+    uint endTimeHigh;        // End time upper 32 bits (was uint64_t)
 };
 
 // ========================================

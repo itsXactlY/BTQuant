@@ -417,13 +417,8 @@ void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& tra
   }
 
   // Process the trade with the determined time bucket
+  // The processTrade method will handle calling the dirty callback, so we don't call it again here
   processTrade(trade, time_bucket);
-
-  // Ensure visualization panels are marked as dirty when new trade arrives
-  // This guarantees that visuals update properly regardless of the processing path
-  if (mark_dirty_callback_) {
-    mark_dirty_callback_();
-  }
 }
 
 // Calculate standard deviation for a specific price level and time bucket

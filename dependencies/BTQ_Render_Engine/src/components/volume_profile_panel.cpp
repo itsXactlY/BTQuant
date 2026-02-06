@@ -10,6 +10,11 @@
 #include "../../include/components/interaction_manager.hpp"
 #include <ctime>
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 VolumeProfilePanel::VolumeProfilePanel(const PanelConfig& config,

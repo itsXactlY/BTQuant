@@ -6,6 +6,11 @@
 #include <iostream>
 #include <numeric>
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)

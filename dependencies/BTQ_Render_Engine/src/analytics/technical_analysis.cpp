@@ -5,6 +5,11 @@
 #include <map>
 #include <numeric>
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 // ============================================================================

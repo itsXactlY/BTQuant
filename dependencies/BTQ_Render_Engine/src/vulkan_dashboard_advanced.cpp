@@ -17,6 +17,11 @@
 #include "performance/debug_overlay.hpp"
 #include "ui/layout_manager.hpp"
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,

@@ -14,6 +14,11 @@
 #include "../../include/components/theme_manager.hpp"
 #include "imgui.h"
 
+// Shorter aliases for commonly used types
+using BTQuant::RenderEngine::OrderbookData;
+using BTQuant::RenderEngine::TradeData;
+using BTQuant::RenderEngine::CandleCluster;
+
 namespace BTQuant {
 
 TimeAndSalesPanel::TimeAndSalesPanel(const PanelConfig& config,

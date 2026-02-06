@@ -509,7 +509,7 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
     - Change: `std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;`
     - To: `std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;`
 - [ ] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 33: RESOLVE VULKAN_DASHBOARD_ADVANCED TYPE ERRORS
 - [ ] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.

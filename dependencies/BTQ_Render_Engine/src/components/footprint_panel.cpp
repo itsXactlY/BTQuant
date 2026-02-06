@@ -1616,7 +1616,7 @@ void FootprintPanel::render() {
     // This optimization reduces redundant processing by only considering visible clusters
     // The grouping now takes into account the active VolumeAnalysisType for more accurate
     // aggregations
-    std::map<double, std::vector<const CandleCluster*>> clusters_by_time;
+    std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;
 
     // Iterate through visible clusters to group by time
     for (const auto& cluster : clusters) {

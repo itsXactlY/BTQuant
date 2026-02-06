@@ -7,6 +7,7 @@
 #include "backends/imgui_impl_vulkan.h"
 #include "components/footprint_panel.hpp"
 #include "components/interaction_manager.hpp"
+#include "components/MarketMicrostructureRenderer.h"
 #include "components/quant_workspace_component.hpp"
 #include "components/realtime_dashboard_component.hpp"
 #include "components/tpo_panel.hpp"
@@ -492,7 +493,7 @@ void VulkanDashboard::pollDataToRenderer() {
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);
     }
-    micro_renderer_->updateTradeData(ticks);
+    micro_renderer_->updateTradeData(std::span<const RenderEngine::HotspineTradeTick>(ticks));
   }
 
   // 5. Aggregate Footprint Clusters (Exocharts Style)
@@ -564,7 +565,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(clusters);
+      micro_renderer_->updateFootprintClusters(std::span<const RenderEngine::CandleCluster>(clusters));
     }
   }
 }
@@ -667,6 +668,16 @@ void VulkanDashboard::render_layout_indicator() {
 
   ImGui::PopStyleColor(2);
   ImGui::End();
+}
+
+void VulkanDashboard::set_always_on_top(bool enabled) {
+  if (window_ && glfwGetWindowAttrib(window_, GLFW_VISIBLE)) {
+    glfwSetWindowAttrib(window_, GLFW_FLOATING, enabled ? GLFW_TRUE : GLFW_FALSE);
+    always_on_top_ = enabled;
+    
+    std::cout << "[VulkanDashboard] Always on top " 
+              << (enabled ? "enabled" : "disabled") << std::endl;
+  }
 }
 
 }  // namespace BTQuant

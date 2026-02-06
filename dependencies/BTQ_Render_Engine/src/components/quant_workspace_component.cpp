@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "implot.h"
 
 namespace BTQuant {

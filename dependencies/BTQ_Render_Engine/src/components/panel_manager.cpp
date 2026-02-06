@@ -64,6 +64,9 @@ PanelManager::PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> pr
     micro_renderer_->set_on_cluster_engine_trade_callback([this]() {
       this->mark_visualization_panels_dirty();
     });
+    
+    // Also set up the cluster engine panel manager connection for direct dirty callback
+    micro_renderer_->set_cluster_engine_panel_manager(this);
   }
 }
 

@@ -39,6 +39,7 @@
 #include "../../include/components/tabbed_panel.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/performance/panel_profiler.hpp"
+#include "../../include/ui/layout_manager.hpp"
 
 using json = nlohmann::json;
 
@@ -698,7 +699,7 @@ void PanelManager::reset_to_factory_layout() {
   panels_.clear();
   panel_groups_.clear();
   panel_to_group_map_.clear();
-  
+
   // Reset ID counters
   next_panel_id_ = 1;
   next_group_id_ = 1;
@@ -715,7 +716,7 @@ void PanelManager::reset_to_factory_layout() {
   add_panel(PanelType::CHART, "BTC-USDT Chart", 0, 1, 2, 2);
   add_panel(PanelType::DEPTH_CHART, "Depth Chart", 2, 1, 1, 2);
 
-  // Row 3: Orderbook Ladder (2x1) and Tape (1x1)
+  // Row 3: Orderbook Ladder (2x1) and Tape (1x1) - corrected to avoid overlap
   add_panel(PanelType::ORDERBOOK, "BTC-USDT Orderbook", 0, 3, 2, 1);
   add_panel(PanelType::TAPE, "Time & Sales", 2, 3, 1, 1);
 
@@ -725,6 +726,10 @@ void PanelManager::reset_to_factory_layout() {
 
   // Initialize with default symbol
   set_active_symbol(1, "BTC-USDT"); // Use a default symbol ID and name
+  
+  // Reset the layout manager to ensure clean state for any layout-related settings
+  auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
+  layoutManager.set_active_quick_slot(0); // Clear any active quick save slot
 }
 
 ImVec2 PanelManager::get_panel_position(uint32_t panel_id) const {

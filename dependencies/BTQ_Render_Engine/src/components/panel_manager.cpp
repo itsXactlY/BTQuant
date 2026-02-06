@@ -52,7 +52,8 @@ PanelManager::PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> pr
       order_manager_(order_manager),
       position_manager_(position_manager),
       risk_assessment_(risk_assessment),
-      micro_renderer_(micro_renderer) {
+      micro_renderer_(micro_renderer),
+      next_group_id_(1) {
   chart_manager_ = std::make_unique<ChartManager>(processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
   strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
@@ -62,6 +63,8 @@ PanelManager::~PanelManager() {
   context_menu_manager_.reset(); // Explicitly reset context menu manager before other members
   strategy_builder_.reset(); // Explicitly reset strategy builder before other members
   panels_.clear();
+  panel_groups_.clear();
+  panel_to_group_map_.clear();
 }
 
 void PanelManager::initialize() {
@@ -532,6 +535,29 @@ PanelBase* PanelManager::get_panel_by_id(uint32_t panel_id) const {
 void PanelManager::remove_panel(uint32_t panel_id) {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {
+    // Check if the panel is part of a group
+    auto group_it = panel_to_group_map_.find(panel_id);
+    if (group_it != panel_to_group_map_.end()) {
+      // Remove panel from its group
+      uint32_t group_id = group_it->second;
+      auto panel_group_it = panel_groups_.find(group_id);
+      if (panel_group_it != panel_groups_.end()) {
+        PanelGroup& group = panel_group_it->second;
+        
+        // Check if group is locked
+        if (!group.locked) {
+          // Remove panel from the group
+          group.panel_ids.erase(panel_id);
+          panel_to_group_map_.erase(group_it);
+          
+          // If the group becomes empty, consider removing it
+          if (group.panel_ids.empty()) {
+            panel_groups_.erase(panel_group_it);
+          }
+        }
+      }
+    }
+    
     panels_.erase(it);
 
     // Notify all registered callbacks about the removed panel
@@ -545,26 +571,77 @@ void PanelManager::remove_panel(uint32_t panel_id) {
 
 void PanelManager::clear_panels() {
   panels_.clear();
+  panel_to_group_map_.clear();
+  panel_groups_.clear();
   next_panel_id_ = 1;
+  next_group_id_ = 1;
 }
 
 void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y) {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {
-    auto& config = it->second->get_config();
-    config.grid_x = new_grid_x;
-    config.grid_y = new_grid_y;
-    config.position = calculate_panel_position(new_grid_x, new_grid_y);
+    // Check if the panel is part of a group
+    auto group_it = panel_to_group_map_.find(panel_id);
+    if (group_it != panel_to_group_map_.end()) {
+      // Panel is part of a group, move the entire group
+      uint32_t group_id = group_it->second;
+      auto panel_group_it = panel_groups_.find(group_id);
+      if (panel_group_it != panel_groups_.end()) {
+        PanelGroup& group = panel_group_it->second;
+        
+        // Check if group is locked
+        if (group.locked) {
+          return; // Cannot move a locked group
+        }
+        
+        // Update the group's position
+        group.grid_x = new_grid_x;
+        group.grid_y = new_grid_y;
+        
+        // Update all panels in the group
+        update_group_position(group_id);
+      }
+    } else {
+      // Panel is not part of a group, move individually
+      auto& config = it->second->get_config();
+      config.grid_x = new_grid_x;
+      config.grid_y = new_grid_y;
+      config.position = calculate_panel_position(new_grid_x, new_grid_y);
+    }
   }
 }
 
 void PanelManager::resize_panel(uint32_t panel_id, int new_width, int new_height) {
   auto it = panels_.find(panel_id);
   if (it != panels_.end()) {
-    auto& config = it->second->get_config();
-    config.grid_width = new_width;
-    config.grid_height = new_height;
-    config.size = calculate_panel_size(new_width, new_height);
+    // Check if the panel is part of a group
+    auto group_it = panel_to_group_map_.find(panel_id);
+    if (group_it != panel_to_group_map_.end()) {
+      // Panel is part of a group, resize the entire group
+      uint32_t group_id = group_it->second;
+      auto panel_group_it = panel_groups_.find(group_id);
+      if (panel_group_it != panel_groups_.end()) {
+        PanelGroup& group = panel_group_it->second;
+        
+        // Check if group is locked
+        if (group.locked) {
+          return; // Cannot resize a locked group
+        }
+        
+        // Update the group's size
+        group.grid_width = new_width;
+        group.grid_height = new_height;
+        
+        // Update all panels in the group
+        update_group_size(group_id);
+      }
+    } else {
+      // Panel is not part of a group, resize individually
+      auto& config = it->second->get_config();
+      config.grid_width = new_width;
+      config.grid_height = new_height;
+      config.size = calculate_panel_size(new_width, new_height);
+    }
   }
 }
 
@@ -1006,7 +1083,7 @@ std::string PanelManager::serialize_layout() const {
 
     // Serialize panel-specific settings
     json settings_json;
-    
+
     // TPO Panel specific settings
     if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel.get())) {
         settings_json["symbol_id"] = tpo_panel->get_symbol_id();
@@ -1033,15 +1110,43 @@ std::string PanelManager::serialize_layout() const {
     else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
         settings_json["active_tab"] = option_panel->get_active_tab();
     }
-    
+
     // Add settings if any were captured
     if (!settings_json.empty()) {
         panel_json["settings"] = settings_json;
     }
 
+    // Add group information if panel is part of a group
+    auto group_it = panel_to_group_map_.find(id);
+    if (group_it != panel_to_group_map_.end()) {
+        panel_json["group_id"] = group_it->second;
+    }
+
     panels_json.push_back(panel_json);
   }
   layout_json["panels"] = panels_json;
+
+  // Serialize panel groups
+  json groups_json = json::array();
+  for (const auto& [group_id, group] : panel_groups_) {
+    json group_json;
+    group_json["id"] = group_id;
+    group_json["grid_x"] = group.grid_x;
+    group_json["grid_y"] = group.grid_y;
+    group_json["grid_width"] = group.grid_width;
+    group_json["grid_height"] = group.grid_height;
+    group_json["locked"] = group.locked;
+    
+    // Serialize panel IDs in the group
+    json panel_ids_json = json::array();
+    for (uint32_t panel_id : group.panel_ids) {
+        panel_ids_json.push_back(panel_id);
+    }
+    group_json["panel_ids"] = panel_ids_json;
+    
+    groups_json.push_back(group_json);
+  }
+  layout_json["groups"] = groups_json;
 
   return layout_json.dump(4);
 }
@@ -1050,12 +1155,13 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
   try {
     auto j = json::parse(layout_json);
 
-    // clear existing panels
+    // clear existing panels and groups
     panels_.clear();
-    // Reset ID counter? Maybe risky if other things hold IDs, but typically
-    // fine for full reload. However, if we don't reset, IDs grow
-    // indefinitely. Let's reset for fresh start.
+    panel_groups_.clear();
+    panel_to_group_map_.clear();
+    // Reset ID counters
     next_panel_id_ = 1;
+    next_group_id_ = 1;
 
     if (j.contains("grid")) {
       set_grid_layout(j["grid"]["columns"], j["grid"]["rows"]);
@@ -1073,7 +1179,7 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
 
         // Create panel config with position and size
         PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
-        
+
         // Restore position and size if available
         if (p.contains("position")) {
             auto pos_array = p["position"];
@@ -1088,7 +1194,7 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
         }
 
         uint32_t id = add_panel(type, title, grid_x, grid_y, width, height);
-        
+
         // Get the newly created panel to apply specific settings
         auto* panel = get_panel_by_id(id);
         if (panel) {
@@ -1096,11 +1202,11 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
             auto& panel_config = panel->get_config();
             panel_config.position = config.position;
             panel_config.size = config.size;
-            
+
             // Apply panel-specific settings if available
             if (p.contains("settings")) {
                 auto settings = p["settings"];
-                
+
                 // TPO Panel specific settings
                 if (auto* tpo_panel = dynamic_cast<TpoPanel*>(panel)) {
                     if (settings.contains("symbol_id")) {
@@ -1163,9 +1269,49 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                 }
             }
         }
-        
+
         set_panel_visible(id, visible);
+        
+        // Add to group if specified
+        if (p.contains("group_id")) {
+            uint32_t group_id = p["group_id"].get<uint32_t>();
+            add_panel_to_group(group_id, id);
+        }
       }
+    }
+
+    // Now recreate the panel groups if they exist in the layout
+    if (j.contains("groups")) {
+        for (const auto& g : j["groups"]) {
+            uint32_t group_id = g["id"].get<uint32_t>();
+            int grid_x = g["grid_x"].get<int>();
+            int grid_y = g["grid_y"].get<int>();
+            int grid_width = g["grid_width"].get<int>();
+            int grid_height = g["grid_height"].get<int>();
+            bool locked = g["locked"].get<bool>();
+
+            // Create the group
+            PanelGroup group(grid_x, grid_y, grid_width, grid_height);
+            group.locked = locked;
+
+            // Add panels to the group (these will be handled by the individual panel processing above)
+            if (g.contains("panel_ids")) {
+                for (const auto& panel_id_val : g["panel_ids"]) {
+                    uint32_t panel_id = panel_id_val.get<uint32_t>();
+                    if (panels_.find(panel_id) != panels_.end()) { // Check if panel exists
+                        group.panel_ids.insert(panel_id);
+                    }
+                }
+            }
+
+            // Store the group
+            panel_groups_[group_id] = group;
+            
+            // Update the next_group_id if needed
+            if (group_id >= next_group_id_) {
+                next_group_id_ = group_id + 1;
+            }
+        }
     }
 
     // Re-initialize active symbol after load if possible,
@@ -1175,6 +1321,16 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
   } catch (const std::exception& e) {
     std::cerr << "Error deserializing layout: " << e.what() << std::endl;
   }
+}
+
+uint32_t PanelManager::find_panel_by_type_and_position(PanelType type, int grid_x, int grid_y) const {
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    if (config.type == type && config.grid_x == grid_x && config.grid_y == grid_y) {
+      return id;
+    }
+  }
+  return 0; // Not found
 }
 
 void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symbol_name) {
@@ -1323,6 +1479,206 @@ void PanelManager::load_all_panel_configs(const std::string& config_file) {
     if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
       watchlist->load_watchlist_order_from_config(config_file);
     }
+  }
+}
+
+uint32_t PanelManager::create_panel_group(int grid_x, int grid_y, int width, int height) {
+  uint32_t group_id = next_group_id_++;
+  
+  PanelGroup group(grid_x, grid_y, width, height);
+  panel_groups_[group_id] = group;
+  
+  return group_id;
+}
+
+bool PanelManager::add_panel_to_group(uint32_t group_id, uint32_t panel_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+  
+  auto panel_it = panels_.find(panel_id);
+  if (panel_it == panels_.end()) {
+    return false; // Panel doesn't exist
+  }
+  
+  PanelGroup& group = group_it->second;
+  
+  // Check if group is locked
+  if (group.locked) {
+    return false;
+  }
+  
+  // Check if panel is already in another group
+  auto existing_group_it = panel_to_group_map_.find(panel_id);
+  if (existing_group_it != panel_to_group_map_.end()) {
+    // Remove from existing group first
+    uint32_t old_group_id = existing_group_it->second;
+    auto& old_group = panel_groups_[old_group_id];
+    old_group.panel_ids.erase(panel_id);
+    panel_to_group_map_.erase(existing_group_it);
+  }
+  
+  // Add panel to the new group
+  group.panel_ids.insert(panel_id);
+  panel_to_group_map_[panel_id] = group_id;
+  
+  // Update the panel's grid position to match the group
+  auto& panel_config = panel_it->second->get_config();
+  panel_config.grid_x = group.grid_x;
+  panel_config.grid_y = group.grid_y;
+  panel_config.position = calculate_panel_position(group.grid_x, group.grid_y);
+  
+  return true;
+}
+
+bool PanelManager::remove_panel_from_group(uint32_t group_id, uint32_t panel_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+  
+  PanelGroup& group = group_it->second;
+  
+  // Check if group is locked
+  if (group.locked) {
+    return false;
+  }
+  
+  // Check if panel is in this group
+  if (group.panel_ids.find(panel_id) == group.panel_ids.end()) {
+    return false; // Panel is not in this group
+  }
+  
+  // Remove panel from group
+  group.panel_ids.erase(panel_id);
+  panel_to_group_map_.erase(panel_id);
+  
+  return true;
+}
+
+bool PanelManager::lock_panel_group(uint32_t group_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+  
+  group_it->second.locked = true;
+  return true;
+}
+
+bool PanelManager::unlock_panel_group(uint32_t group_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+  
+  group_it->second.locked = false;
+  return true;
+}
+
+bool PanelManager::delete_panel_group(uint32_t group_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return false; // Group doesn't exist
+  }
+  
+  // Check if group is locked
+  if (group_it->second.locked) {
+    return false;
+  }
+  
+  // Remove all panels from the group mapping
+  for (uint32_t panel_id : group_it->second.panel_ids) {
+    panel_to_group_map_.erase(panel_id);
+  }
+  
+  // Remove the group
+  panel_groups_.erase(group_it);
+  
+  return true;
+}
+
+std::vector<uint32_t> PanelManager::get_panel_groups_for_panel(uint32_t panel_id) const {
+  std::vector<uint32_t> group_ids;
+  
+  auto it = panel_to_group_map_.find(panel_id);
+  if (it != panel_to_group_map_.end()) {
+    group_ids.push_back(it->second);
+  }
+  
+  return group_ids;
+}
+
+bool PanelManager::is_panel_bound(uint32_t panel_id) const {
+  return panel_to_group_map_.find(panel_id) != panel_to_group_map_.end();
+}
+
+void PanelManager::update_group_position(uint32_t group_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return; // Group doesn't exist
+  }
+  
+  const PanelGroup& group = group_it->second;
+  
+  // Update position for all panels in the group
+  for (uint32_t panel_id : group.panel_ids) {
+    auto panel_it = panels_.find(panel_id);
+    if (panel_it != panels_.end()) {
+      auto& config = panel_it->second->get_config();
+      config.grid_x = group.grid_x;
+      config.grid_y = group.grid_y;
+      config.position = calculate_panel_position(group.grid_x, group.grid_y);
+    }
+  }
+}
+
+void PanelManager::update_group_size(uint32_t group_id) {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return; // Group doesn't exist
+  }
+  
+  const PanelGroup& group = group_it->second;
+  
+  // Calculate the size for each panel based on the group dimensions and number of panels
+  int num_cols = 0;
+  int num_rows = 0;
+  
+  // Determine how to distribute the space among panels (for simplicity, we'll arrange them in a grid)
+  int panel_count = static_cast<int>(group.panel_ids.size());
+  if (panel_count > 0) {
+    num_cols = static_cast<int>(std::ceil(std::sqrt(static_cast<double>(panel_count))));
+    num_rows = static_cast<int>(std::ceil(static_cast<double>(panel_count) / num_cols));
+    
+    // Ensure we don't exceed the group dimensions
+    num_cols = std::min(num_cols, group.grid_width);
+    num_rows = std::min(num_rows, group.grid_height);
+  }
+  
+  int col_width = group.grid_width / num_cols;
+  int row_height = group.grid_height / num_rows;
+  
+  // Update size and position for all panels in the group
+  int idx = 0;
+  for (uint32_t panel_id : group.panel_ids) {
+    auto panel_it = panels_.find(panel_id);
+    if (panel_it != panels_.end()) {
+      auto& config = panel_it->second->get_config();
+      
+      int col = idx % num_cols;
+      int row = idx / num_cols;
+      
+      config.grid_x = group.grid_x + col * col_width;
+      config.grid_y = group.grid_y + row * row_height;
+      config.grid_width = col_width;
+      config.grid_height = row_height;
+      
+      config.position = calculate_panel_position(config.grid_x, config.grid_y);
+      config.size = calculate_panel_size(config.grid_width, config.grid_height);
+    }
+    idx++;
   }
 }
 

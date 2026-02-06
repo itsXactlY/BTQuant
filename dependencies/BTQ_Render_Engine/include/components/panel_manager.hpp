@@ -6,6 +6,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 #include "../market_data_processor.hpp"
 #include "../trading/order_manager.hpp"
@@ -23,6 +24,20 @@ namespace BTQuant {
 }
 
 namespace BTQuant {
+
+// Structure to represent a group of bound panels
+struct PanelGroup {
+    std::set<uint32_t> panel_ids;  // IDs of panels in this group
+    int grid_x = 0;                // Grid position of the group (top-left)
+    int grid_y = 0;
+    int grid_width = 0;            // Total width of the group in grid cells
+    int grid_height = 0;           // Total height of the group in grid cells
+    bool locked = false;           // Whether the group is locked (cannot be modified)
+    
+    PanelGroup() = default;
+    explicit PanelGroup(int x, int y, int width, int height) 
+        : grid_x(x), grid_y(y), grid_width(width), grid_height(height) {}
+};
 
 struct GridLayout {
   int columns = 3;
@@ -104,6 +119,16 @@ class PanelManager {
   std::string get_current_layout_name() const { return current_layout_name_; }
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
+  // Panel binding/grouping functionality
+  uint32_t create_panel_group(int grid_x, int grid_y, int width, int height);
+  bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
+  bool remove_panel_from_group(uint32_t group_id, uint32_t panel_id);
+  bool lock_panel_group(uint32_t group_id);
+  bool unlock_panel_group(uint32_t group_id);
+  bool delete_panel_group(uint32_t group_id);
+  std::vector<uint32_t> get_panel_groups_for_panel(uint32_t panel_id) const;
+  bool is_panel_bound(uint32_t panel_id) const;
+
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<OrderManager> order_manager_;
@@ -117,6 +142,11 @@ class PanelManager {
   GridLayout grid_layout_;
   std::unordered_map<uint32_t, std::unique_ptr<PanelBase>> panels_;
   uint32_t next_panel_id_ = 1;
+
+  // Panel grouping/binding system
+  std::unordered_map<uint32_t, PanelGroup> panel_groups_;  // Maps group ID to PanelGroup
+  std::unordered_map<uint32_t, uint32_t> panel_to_group_map_;  // Maps panel ID to group ID
+  uint32_t next_group_id_ = 1;
 
   ImVec2 dashboard_size_ = ImVec2(1920, 1080);
 
@@ -139,6 +169,13 @@ class PanelManager {
   ImVec2 calculate_panel_position(int grid_x, int grid_y) const;
   ImVec2 calculate_panel_size(int width, int height) const;
   std::string get_default_panel_title(PanelType type);
+
+  // Helper methods for panel binding
+  void update_group_position(uint32_t group_id);
+  void update_group_size(uint32_t group_id);
+
+  // Helper method for deserialization
+  uint32_t find_panel_by_type_and_position(PanelType type, int grid_x, int grid_y) const;
 };
 
 }  // namespace BTQuant

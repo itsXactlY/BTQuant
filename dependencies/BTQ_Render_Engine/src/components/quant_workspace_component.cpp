@@ -59,10 +59,11 @@ void QuantWorkspaceComponent::render_gui() {
 }
 
 void QuantWorkspaceComponent::render_dashboard_controls() {
-  ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+  ImGuiIO& io = ImGui::GetIO();
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 320, 20), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(300, 250), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_TopMost)) {
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 

@@ -476,7 +476,7 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
       }
     }
 
-    updateTradeData(std::span<const HotspineTradeTick>(ticks));
+    updateTradeData(ticks);
 
     // Also update Footprint Clusters?
     // If we don't have a cluster logic here, we rely on someone else calling

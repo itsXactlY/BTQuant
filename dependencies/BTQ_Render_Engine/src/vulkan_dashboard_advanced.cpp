@@ -494,7 +494,7 @@ void VulkanDashboard::pollDataToRenderer() {
       ticks.emplace_back(t.timestamp, static_cast<float>(t.price), static_cast<float>(t.size),
                          t.symbol_id, t.is_buy);
     }
-    micro_renderer_->updateTradeData(std::span<const RenderEngine::HotspineTradeTick>(ticks));
+    micro_renderer_->updateTradeData(ticks);
   }
 
   // 5. Aggregate Footprint Clusters (Exocharts Style)
@@ -566,7 +566,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(std::span<const BTQuant::RenderEngine::CandleCluster>(clusters));
+      micro_renderer_->updateFootprintClusters(clusters);
     }
   }
 }

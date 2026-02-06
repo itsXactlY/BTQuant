@@ -200,9 +200,9 @@ SettingInfo* SettingsManager::get_setting(const std::string& key) {
 
 std::vector<SettingInfo*> SettingsManager::get_settings_by_category(SettingCategory category) {
     std::vector<SettingInfo*> result;
-    for (auto& pair : settings_) {
-        if (pair.second.category == category) {
-            result.push_back(&(pair.second));
+    for (auto& [key, setting] : settings_) {
+        if (setting.category == category) {
+            result.push_back(&setting);
         }
     }
     return result;
@@ -210,8 +210,8 @@ std::vector<SettingInfo*> SettingsManager::get_settings_by_category(SettingCateg
 
 std::vector<SettingInfo*> SettingsManager::get_all_settings() {
     std::vector<SettingInfo*> result;
-    for (auto& pair : settings_) {
-        result.push_back(&(pair.second));
+    for (auto& [key, setting] : settings_) {
+        result.push_back(&setting);
     }
     return result;
 }
@@ -339,9 +339,7 @@ bool SettingsManager::save_settings(const std::string& file_path) const {
     try {
         nlohmann::json settings_json;
 
-        for (const auto& pair : settings_) {
-            const auto& key = pair.first;
-            const auto& setting = pair.second;
+        for (const auto& [key, setting] : settings_) {
 
             nlohmann::json setting_json;
             setting_json["key"] = setting.key;
@@ -750,9 +748,7 @@ void SettingsManager::set_saved_version(const std::string& version) {
     try {
         nlohmann::json settings_json;
 
-        for (const auto& pair : settings_) {
-            const auto& key = pair.first;
-            const auto& setting = pair.second;
+        for (const auto& [key, setting] : settings_) {
 
             nlohmann::json setting_json;
             setting_json["key"] = setting.key;

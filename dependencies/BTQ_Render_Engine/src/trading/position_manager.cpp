@@ -108,9 +108,9 @@ void PositionManager::update_market_prices(const std::unordered_map<std::string,
 std::vector<PositionManager::Position> PositionManager::get_positions() const {
   std::vector<Position> result;
 
-  for (const auto& pair : positions_) {
-    if (pair.second.quantity != 0) {
-      result.push_back(pair.second);
+  for (const auto& [symbol, position] : positions_) {
+    if (position.quantity != 0) {
+      result.push_back(position);
     }
   }
 
@@ -120,8 +120,8 @@ std::vector<PositionManager::Position> PositionManager::get_positions() const {
 std::vector<PositionManager::Position> PositionManager::get_all_positions() const {
   std::vector<Position> result;
 
-  for (const auto& pair : positions_) {
-    result.push_back(pair.second);
+  for (const auto& [symbol, position] : positions_) {
+    result.push_back(position);
   }
 
   return result;
@@ -142,8 +142,7 @@ PositionManager::PortfolioSummary PositionManager::get_portfolio_summary() const
   summary.position_count = 0;
   summary.trade_count = 0;
 
-  for (const auto& pair : positions_) {
-    const Position& pos = pair.second;
+  for (const auto& [symbol, pos] : positions_) {
 
     if (pos.quantity != 0) {
       summary.total_value += pos.market_value;
@@ -186,8 +185,7 @@ bool PositionManager::is_buy_execution(const OrderManager::OrderExecution& execu
 }
 
 void PositionManager::update_market_values() {
-  for (auto& pair : positions_) {
-    Position& position = pair.second;
+  for (auto& [symbol, position] : positions_) {
     auto price_it = market_prices_.find(position.symbol);
 
     if (price_it != market_prices_.end()) {
@@ -244,8 +242,7 @@ double PositionManager::calculate_buying_power() const {
 double PositionManager::calculate_margin_used() const {
   double margin = 0.0;
 
-  for (const auto& pair : positions_) {
-    const Position& pos = pair.second;
+  for (const auto& [symbol, pos] : positions_) {
     if (pos.quantity < 0) {
       // Short position requires margin
       margin += pos.market_value * 0.5;  // 50% initial margin
@@ -263,8 +260,7 @@ double PositionManager::calculate_portfolio_beta() const {
   double weighted_beta = 0.0;
   double total_value = 0.0;
 
-  for (const auto& pair : positions_) {
-    const Position& pos = pair.second;
+  for (const auto& [symbol, pos] : positions_) {
     if (pos.quantity != 0) {
       weighted_beta += pos.beta * std::abs(pos.market_value);
       total_value += std::abs(pos.market_value);
@@ -281,8 +277,7 @@ double PositionManager::calculate_portfolio_var() const {
 
   double total_var = 0.0;
 
-  for (const auto& pair : positions_) {
-    const Position& pos = pair.second;
+  for (const auto& [symbol, pos] : positions_) {
     if (pos.quantity != 0) {
       total_var += pos.var_95 * pos.var_95;  // Simplified VaR calculation
     }

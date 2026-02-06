@@ -231,10 +231,10 @@ bool KeyboardShortcutsComponent::handle_key_event(int keycode, bool pressed, uin
     
     // Find and execute the matching shortcut
     std::lock_guard<std::mutex> lock(data_mutex_);
-    for (auto& pair : shortcuts_) {
-        if (pair.second.keys == key_combo && pair.second.active) {
-            if (pair.second.callback) {
-                pair.second.callback();
+    for (auto& [name, shortcut] : shortcuts_) {
+        if (shortcut.keys == key_combo && shortcut.active) {
+            if (shortcut.callback) {
+                shortcut.callback();
                 return true;
             }
         }
@@ -281,10 +281,8 @@ void KeyboardShortcutsComponent::render_gui() {
         ImGui::TableHeadersRow();
         
         std::lock_guard<std::mutex> lock(data_mutex_);
-        for (auto& pair : shortcuts_) {
-            const auto& name = pair.first;
-            auto& shortcut = pair.second;
-            
+        for (auto& [name, shortcut] : shortcuts_) {
+
             // Apply filter
             if (!filter.empty()) {
                 std::string lower_name = name;
@@ -293,25 +291,25 @@ void KeyboardShortcutsComponent::render_gui() {
                 std::transform(lower_desc.begin(), lower_desc.end(), lower_desc.begin(), ::tolower);
                 std::string lower_filter = filter;
                 std::transform(lower_filter.begin(), lower_filter.end(), lower_filter.begin(), ::tolower);
-                
-                if (lower_name.find(lower_filter) == std::string::npos && 
+
+                if (lower_name.find(lower_filter) == std::string::npos &&
                     lower_desc.find(lower_filter) == std::string::npos) {
                     continue;
                 }
             }
-            
+
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%s", name.c_str());
-            
+
             ImGui::TableSetColumnIndex(1);
             ImGui::Text("%s", shortcut.description.c_str());
-            
+
             ImGui::TableSetColumnIndex(2);
             static std::string editing_shortcut = "";
             static bool is_editing = false;
             static std::string editing_name = "";
-            
+
             if (is_editing && editing_name == name) {
                 ImGui::InputText("##edit_shortcut", &editing_shortcut);
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
@@ -330,7 +328,7 @@ void KeyboardShortcutsComponent::render_gui() {
                     editing_name = name;
                 }
             }
-            
+
             ImGui::TableSetColumnIndex(3);
             ImGui::PushID(name.c_str());
             if (ImGui::Checkbox("##active", &shortcut.active)) {
@@ -366,9 +364,7 @@ void KeyboardShortcutsComponent::import_shortcut_profile() {
         file.close();
 
         std::lock_guard<std::mutex> lock(data_mutex_);
-        for (auto& pair : shortcuts_json.items()) {
-            std::string name = pair.key();
-            auto shortcut_json = pair.value();
+        for (auto& [name, shortcut_json] : shortcuts_json.items()) {
 
             auto it = shortcuts_.find(name);
             if (it != shortcuts_.end()) {
@@ -393,9 +389,7 @@ void KeyboardShortcutsComponent::export_shortcut_profile() {
         nlohmann::json shortcuts_json;
 
         std::lock_guard<std::mutex> lock(data_mutex_);
-        for (const auto& pair : shortcuts_) {
-            const auto& name = pair.first;
-            const auto& shortcut = pair.second;
+        for (const auto& [name, shortcut] : shortcuts_) {
 
             nlohmann::json shortcut_json;
             shortcut_json["name"] = shortcut.name;

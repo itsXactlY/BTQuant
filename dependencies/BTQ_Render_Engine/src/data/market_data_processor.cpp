@@ -96,12 +96,12 @@ std::vector<uint32_t> MarketDataProcessor::getActiveSymbols() const {
 void MarketDataProcessor::clearHistory() {
   for (auto& shard_ptr : shards_) {
     std::unique_lock lock(shard_ptr->mutex);
-    for (auto& pair : shard_ptr->data) {
-      pair.second.candles.clear();
-      pair.second.recent_trades.clear();
-      pair.second.recent_orderbooks.clear();
-      pair.second.consolidated_bids.clear();
-      pair.second.consolidated_asks.clear();
+    for (auto& [symbol, data] : shard_ptr->data) {
+      data.candles.clear();
+      data.recent_trades.clear();
+      data.recent_orderbooks.clear();
+      data.consolidated_bids.clear();
+      data.consolidated_asks.clear();
     }
   }
 }

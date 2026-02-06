@@ -294,15 +294,15 @@ void SymbolManager::autoDiscoveryLoop() {
 void SymbolManager::discoverNewSymbols() {
   // This would typically integrate with exchange APIs or data feeds
   // For now, we'll implement a placeholder that monitors for new symbols
-  // in the HotSpine data stream
+  // in the data stream
 
   // In a real implementation, this would:
-  // 1. Check for new symbol IDs in the HotSpine stream
+  // 1. Check for new symbol IDs in the data stream
   // 2. Query exchange APIs for symbol information
   // 3. Register new symbols with appropriate metadata
 
   // Placeholder: Check if we have any unregistered symbol IDs
-  // This would be integrated with the HotSpine data bridge
+  // Integration with data pipeline occurs through unified data structures
 }
 
 void SymbolManager::updateExchangeStatistics(const std::string& exchange) {

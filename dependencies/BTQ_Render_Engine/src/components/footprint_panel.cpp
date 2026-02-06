@@ -1058,7 +1058,7 @@ void FootprintPanel::render() {
     // value
 
     // First, collect all visible clusters and organize them by time and price levels
-    std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;
+    std::map<double, std::map<double, BTQuant::RenderEngine::CandleCluster>> visible_clusters;
 
     // Calculate max volume across all visible clusters for adaptive alpha calculation
     // This is done in the same loop to avoid a second iteration
@@ -1067,7 +1067,7 @@ void FootprintPanel::render() {
       if (cluster.centerX >= x_min && cluster.centerX <= x_max && cluster.centerY >= y_min &&
           cluster.centerY <= y_max) {
         // Organize clusters by time (x-axis) and price (y-axis) for efficient iteration
-        visible_clusters[cluster.centerX][cluster.centerY] = &cluster;
+        visible_clusters[cluster.centerX][cluster.centerY] = cluster;
 
         // Also calculate max volume for adaptive alpha calculation
         // Use the appropriate value based on the active VolumeAnalysisType
@@ -1336,8 +1336,7 @@ void FootprintPanel::render() {
     // ENHANCED: Iterate through visible time bars and price levels with improved efficiency
     // Process each visible cluster according to the active VolumeAnalysisType
     for (const auto& [time_level, price_clusters] : visible_clusters) {
-      for (const auto& [price_level, cluster_ptr] : price_clusters) {
-        const auto& cluster = *cluster_ptr;
+      for (const auto& [price_level, cluster] : price_clusters) {
 
         // Convert cluster to footprint cell with all relevant data
         FootprintCell cell(cluster.centerX,                         // x (time)
@@ -1615,7 +1614,7 @@ void FootprintPanel::render() {
     // This optimization reduces redundant processing by only considering visible clusters
     // The grouping now takes into account the active VolumeAnalysisType for more accurate
     // aggregations
-    std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;
+    std::map<double, std::vector<BTQuant::RenderEngine::CandleCluster>> clusters_by_time;
 
     // Iterate through visible clusters to group by time
     for (const auto& cluster : clusters) {
@@ -1625,7 +1624,7 @@ void FootprintPanel::render() {
         // Round x to nearest time unit to group clusters by time bar
         // Using a more precise rounding method for better time alignment
         double time_key = std::round(cluster.centerX * 10.0) / 10.0;  // Adjust precision as needed
-        clusters_by_time[time_key].push_back(&cluster);
+        clusters_by_time[time_key].push_back(cluster);
       }
     }
 
@@ -1651,7 +1650,7 @@ void FootprintPanel::render() {
           0.0;  // Track max value for POC based on analysis type
 
       // Process each cluster within the time bar
-      for (const auto* cluster : time_clusters) {
+      for (const auto& cluster : time_clusters) {
         // Calculate value based on active VolumeAnalysisType
         double cluster_value = 0.0;
 

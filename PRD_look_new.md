@@ -453,4 +453,68 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 - [x] Implement "Symbol Link Groups": add color-coded link icons (Red, Green, Blue) to all panel headers. Panels in the same color group must update their symbol simultaneously when one is changed.
 - [x] Create "Layout Templates": define and export JSON presets for "Scalper" (DOM + Tape), "Analyst" (Charts), and "Options" (Desk + Risk) layouts.
 - [x] Add "Save as Default": allow users to save their current panel arrangement as the default startup workspace.
-- [ ] Implement "Global Reset": add a "Reset to Factory Layout" button in Dashboard Controls to clear all panel overlaps and return to a clean, grid-aligned state.
+- [x] Implement "Global Reset": add a "Reset to Factory Layout" button in Dashboard Controls to clear all panel overlaps and return to a clean, grid-aligned state.
+
+### TASK 27: FIX UI NAMESPACE & LAYOUTMANAGER USAGE
+- [x] Define a UI namespace wrapper in a new header `include/ui/layout_manager.hpp`:
+      - `namespace BTQuant::UI { using LayoutManager = BTQuant::RenderEngine::LayoutManager; }`
+      - Or move the existing `LayoutManager` class into `BTQuant::UI` and adjust its header accordingly.
+- [x] Include `ui/layout_manager.hpp` in `src/main_trading_terminal.cpp` and replace bare uses of `LayoutManager` with `BTQuant::UI::LayoutManager` if needed.
+- [x] Ensure `LayoutManager::getInstance()` is declared `static LayoutManager& getInstance();` in the class and defined in the corresponding `.cpp`.
+
+### TASK 28: FIX VULKAN_DASHBOARD_ADVANCED TYPES
+- [ ] In `src/vulkan_dashboard_advanced.cpp`, fully qualify engine types:
+      - Replace `OrderbookData` with `BTQuant::RenderEngine::OrderbookData`.
+      - Replace `TradeData` with `BTQuant::RenderEngine::TradeData`.
+      - Replace `RenderEngine::CandleCluster` with `BTQuant::RenderEngine::CandleCluster`.
+- [ ] Add `using BTQuant::RenderEngine::OrderbookData;` / `TradeData;` / `CandleCluster;` at the top of the file if shorter aliases are preferred.
+- [ ] Remove or update any access to non-existent members (e.g. `PriceLevel::timestamp`):
+      - Verify the definition of `PriceLevel` in `market_data_processor.hpp`.
+      - If `timestamp` is needed, add it to `PriceLevel` and populate it in the data source; otherwise, delete lines assigning `level.timestamp`.
+- [ ] Ensure `micro_renderer_->updateTradeData(...)` and `updateFootprintClusters(...)` are called with `std::span<const TradeData>` and `std::span<const CandleCluster>`:
+      - Declare `std::vector<BTQuant::RenderEngine::TradeData> trades;` and `std::vector<BTQuant::RenderEngine::CandleCluster> clusters;`
+      - Pass `std::span<const TradeData>(trades.data(), trades.size())` (or rely on implicit span from vector in C++23).
+
+### TASK 29: FIX QUANT_WORKSPACE_COMPONENT IMGUI FLAGS
+- [ ] Replace the non-existing `ImGuiWindowFlags_TopMost` in `src/components/quant_workspace_component.cpp`:
+      - Use a combination such as `ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse` to approximate a pinned top control bar.
+- [ ] If "always on top" is required, emulate it by:
+      - Calling `ImGui::SetNextWindowFocus()` on the Dashboard Controls window each frame before `Begin()`.
+      - Rendering the Dashboard window after all other panels so it appears visually on top.
+
+### TASK 30: ADD MISSING INCLUDES & CLEAN BUILD
+- [ ] Verify all three failing files include the correct headers:
+      - `main_trading_terminal.cpp` must include `"ui/layout_manager.hpp"` (or the header where `LayoutManager` is declared).
+      - `vulkan_dashboard_advanced.cpp` must include `"market_data_processor.hpp"` and `"components/MarketMicrostructureRenderer.h"`.
+      - `quant_workspace_component.cpp` must include `"imgui.h"` and `"imgui_internal.h"` for window flags and focus helpers.
+- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+
+### TASK 31: HARMONIZE CANDLECLUSTER DEFINITION
+- [ ] Update `include/components/MarketMicrostructureRenderer.h` to ensure `struct CandleCluster` is inside the `BTQuant::RenderEngine` namespace.
+- [ ] Add missing fields to `CandleCluster` struct:
+    - `float maxSingleTradeVolume;`
+    - `double centerX;`
+    - `double centerY;`
+- [ ] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
+
+### TASK 32: FIX FOOTPRINT_PANEL DATA STRUCTURES
+- [ ] In `src/components/footprint_panel.cpp`, fix the map declarations to use the correct type pointers:
+    - Change: `std::map<double, std::map<double, const RenderEngine::CandleCluster*>> visible_clusters;`
+    - To: `std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;`
+- [ ] Update `clusters_by_time` declaration:
+    - Change: `std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;`
+    - To: `std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;`
+- [ ] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
+
+### TASK 33: RESOLVE VULKAN_DASHBOARD_ADVANCED TYPE ERRORS
+- [ ] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
+- [ ] Fix the `PriceLevel` timestamp error:
+    - If `BTQuant::RenderEngine::PriceLevel` does not have a `timestamp`, remove the lines `level.timestamp = orderbookData.timestamp;` (Price levels in a snapshot typically share the snapshot's global timestamp).
+- [ ] Correct the `updateTradeData` and `updateFootprintClusters` calls:
+    - Ensure `std::vector<TradeData> trades;` is properly typed.
+    - If `std::span` conversion fails, explicitly cast: `micro_renderer_->updateTradeData(std::span<const TradeData>(trades));`.
+
+### TASK 34: GLOBAL NAMESPACE SANITY CHECK
+- [ ] Verify that `include/market_data_processor.hpp` wraps its structs (`TradeData`, `OrderbookData`, `PriceLevel`) in `namespace BTQuant::RenderEngine`.
+- [ ] Check `src/main_trading_terminal.cpp` for any remaining `BTQuant::UI` errors; ensure `LayoutManager` is either in `BTQuant::RenderEngine` or `BTQuant::UI` and consistently called.
+- [ ] Run a clean build: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.

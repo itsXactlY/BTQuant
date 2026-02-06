@@ -695,7 +695,7 @@ void PanelManager::auto_arrange_panels() {
 }
 
 void PanelManager::reset_to_factory_layout() {
-  // Clear all panels and groups
+  // Clear all panels and groups to eliminate any overlaps or bindings
   panels_.clear();
   panel_groups_.clear();
   panel_to_group_map_.clear();
@@ -704,10 +704,16 @@ void PanelManager::reset_to_factory_layout() {
   next_panel_id_ = 1;
   next_group_id_ = 1;
 
+  // Reset any symbol link groups by clearing panel configurations that might affect linking
+  // This ensures no panels remain linked after reset
+  active_symbol_id_ = 0;
+  active_symbol_name_ = "";
+
   // Set grid layout (3 columns, 5 rows to fit 2x2 chart properly)
   set_grid_layout(3, 5);
 
   // Create default factory panels with specific positions to avoid overlaps
+  // All panels are placed in a clean grid-aligned layout with no overlaps
   // Row 0: Status Bar and Alerts
   add_panel(PanelType::STATUS_BAR, "Status Bar", 0, 0, 2, 1);
   add_panel(PanelType::ALERTS, "Alerts", 2, 0, 1, 1);
@@ -726,10 +732,12 @@ void PanelManager::reset_to_factory_layout() {
 
   // Initialize with default symbol
   set_active_symbol(1, "BTC-USDT"); // Use a default symbol ID and name
-  
+
   // Reset the layout manager to ensure clean state for any layout-related settings
   auto& layoutManager = BTQuant::UI::LayoutManager::getInstance();
   layoutManager.set_active_quick_slot(0); // Clear any active quick save slot
+  
+  std::cout << "[PanelManager] Global Reset: Factory layout restored with clean grid-aligned state" << std::endl;
 }
 
 ImVec2 PanelManager::get_panel_position(uint32_t panel_id) const {

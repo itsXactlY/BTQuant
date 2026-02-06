@@ -19,6 +19,7 @@
 #include "market_data_processor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
+#include "ui/layout_manager.hpp"
 #include "vulkan_dashboard_advanced.hpp"
 
 using namespace BTQuant;

@@ -104,6 +104,7 @@ set(DASHBOARD_SOURCES
     src/components/metrics_panel.cpp
     src/components/panel_manager.cpp
     src/components/chart_manager.cpp
+    src/components/tabbed_panel.cpp
     src/rendering/panel_culler.cpp
     src/rendering/chart_culler.cpp
     src/rendering/footprint_lod.cpp
@@ -247,6 +248,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/components/metrics_panel.cpp
     src/components/panel_manager.cpp
     src/components/chart_manager.cpp
+    src/components/tabbed_panel.cpp
     src/rendering/panel_culler.cpp
     src/rendering/chart_culler.cpp
     src/rendering/footprint_lod.cpp

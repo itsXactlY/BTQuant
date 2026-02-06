@@ -19,10 +19,6 @@
 #include "performance/debug_overlay.hpp"
 #include "ui/layout_manager.hpp"
 
-// Shorter aliases for commonly used types
-using BTQuant::RenderEngine::OrderbookData;
-using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::CandleCluster;
 
 namespace BTQuant {
 
@@ -443,12 +439,12 @@ void VulkanDashboard::pollDataToRenderer() {
   // 3. Update LOB Heatmap Data
   if (!analytics.consolidated_bids.empty() || !analytics.consolidated_asks.empty()) {
     // Create OrderbookData from consolidated data
-    OrderbookData orderbookData;
+    BTQuant::RenderEngine::OrderbookData orderbookData;
     orderbookData.symbol = "SYMBOL"; // Placeholder
     orderbookData.symbol_id = 0; // Placeholder
     orderbookData.timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
-    
+
     // Convert consolidated bids to PriceLevel format
     for (auto const& [price, size] : analytics.consolidated_bids) {
       PriceLevel level;
@@ -456,7 +452,7 @@ void VulkanDashboard::pollDataToRenderer() {
       level.size = size;
       orderbookData.bids.push_back(level);
     }
-    
+
     // Convert consolidated asks to PriceLevel format
     for (auto const& [price, size] : analytics.consolidated_asks) {
       PriceLevel level;
@@ -464,20 +460,20 @@ void VulkanDashboard::pollDataToRenderer() {
       level.size = size;
       orderbookData.asks.push_back(level);
     }
-    
+
     micro_renderer_->updateLOBData(orderbookData);
   }
 
   // 4. Update Trade Data
   if (!analytics.recent_trades.empty()) {
     size_t count = std::min(static_cast<size_t>(1000), analytics.recent_trades.size());
-    std::vector<TradeData> trades;
+    std::vector<BTQuant::RenderEngine::TradeData> trades;
     trades.reserve(count);
 
     for (size_t i = analytics.recent_trades.size() - count; i < analytics.recent_trades.size();
          ++i) {
       const auto& t = analytics.recent_trades[i];
-      TradeData tradeData;
+      BTQuant::RenderEngine::TradeData tradeData;
       tradeData.symbol = t.symbol; // Assuming symbol exists in original struct
       tradeData.symbol_id = t.symbol_id;
       tradeData.timestamp = t.timestamp;
@@ -500,7 +496,7 @@ void VulkanDashboard::pollDataToRenderer() {
     const uint64_t window_us = 30'000'000;    // 30 seconds window
     constexpr float tickSize = 0.5f;
 
-    std::vector<RenderEngine::CandleCluster> clusters;
+    std::vector<BTQuant::RenderEngine::CandleCluster> clusters;
 
     // Efficiency: Use an ordered map for aggregation (stable for rendering)
     struct ClusterKey {

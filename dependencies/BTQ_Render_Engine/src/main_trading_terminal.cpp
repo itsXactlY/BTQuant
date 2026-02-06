@@ -177,6 +177,11 @@ int main(int argc, char** argv) {
           workspace->getPanelManager()->auto_arrange_panels();
       }
 
+      // Add Always on Top toggle
+      if (ImGui::MenuItem("Always on Top", nullptr, dashboard->is_always_on_top())) {
+        dashboard->set_always_on_top(!dashboard->is_always_on_top());
+      }
+
       ImGui::EndMenu();
     }
 

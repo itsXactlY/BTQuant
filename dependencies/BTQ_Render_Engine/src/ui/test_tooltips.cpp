@@ -1,4 +1,4 @@
-#include "../../../include/ui/tooltips.hpp"
+#include "../../include/ui/tooltips.hpp"
 #include <iostream>
 
 int main() {

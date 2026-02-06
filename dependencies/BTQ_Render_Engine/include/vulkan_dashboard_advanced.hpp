@@ -296,6 +296,12 @@ class VulkanDashboard {
   /// @brief Toggle performance overlay
   void set_show_performance_overlay(bool show) { show_performance_overlay_ = show; }
 
+  /// @brief Toggle always on top window property
+  void set_always_on_top(bool enabled);
+
+  /// @brief Check if always on top is enabled
+  bool is_always_on_top() const { return always_on_top_; }
+
  private:
   /// @brief Initialize all UI components
   void init_components();
@@ -327,6 +333,7 @@ class VulkanDashboard {
   // Customization
   std::function<void()> custom_menubar_callback_;
   bool show_performance_overlay_ = false;
+  bool always_on_top_ = false;
 
   bool use_modern_dashboard_ = false;
   uint32_t current_image_index_ = 0;

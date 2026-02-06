@@ -12,6 +12,7 @@
 #endif
 
 #include "../../include/components/theme_manager.hpp"
+#include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 
 // Shorter aliases for commonly used types

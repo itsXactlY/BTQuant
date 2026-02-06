@@ -68,7 +68,11 @@
                 30.0
             ],
             "settings": {
-                "symbol_id": 0
+                "show_grid": true,
+                "show_heatmap": true,
+                "show_text": true,
+                "symbol_id": 0,
+                "time_window": 30.0
             },
             "size": [
                 960.0,
@@ -219,8 +223,12 @@
                 "enable_fade_out": false,
                 "heatmap_intensity": 1.0,
                 "large_order_threshold": 10.0,
+                "max_large_order_markers": 100,
+                "persistence_threshold_ms": 5000,
+                "persistence_timeout_ms": 30000.0,
                 "price_bins": 100,
                 "price_range": 0.02,
+                "show_persistent_lines": true,
                 "symbol_id": 0
             },
             "size": [

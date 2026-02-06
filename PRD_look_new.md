@@ -444,47 +444,47 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
       - Replace `TradeData` with `BTQuant::RenderEngine::TradeData`.
       - Replace `RenderEngine::CandleCluster` with `BTQuant::RenderEngine::CandleCluster`.
 - [x] Add `using BTQuant::RenderEngine::OrderbookData;` / `TradeData;` / `CandleCluster;` at the top of the file if shorter aliases are preferred.
-- [ ] Remove or update any access to non-existent members (e.g. `PriceLevel::timestamp`):
+- [x] Remove or update any access to non-existent members (e.g. `PriceLevel::timestamp`):
       - Verify the definition of `PriceLevel` in `market_data_processor.hpp`.
       - If `timestamp` is needed, add it to `PriceLevel` and populate it in the data source; otherwise, delete lines assigning `level.timestamp`.
-- [ ] Ensure `micro_renderer_->updateTradeData(...)` and `updateFootprintClusters(...)` are called with `std::span<const TradeData>` and `std::span<const CandleCluster>`:
+- [x] Ensure `micro_renderer_->updateTradeData(...)` and `updateFootprintClusters(...)` are called with `std::span<const TradeData>` and `std::span<const CandleCluster>`:
       - Declare `std::vector<BTQuant::RenderEngine::TradeData> trades;` and `std::vector<BTQuant::RenderEngine::CandleCluster> clusters;`
       - Pass `std::span<const TradeData>(trades.data(), trades.size())` (or rely on implicit span from vector in C++23).
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 29: FIX QUANT_WORKSPACE_COMPONENT IMGUI FLAGS
-- [ ] Replace the non-existing `ImGuiWindowFlags_TopMost` in `src/components/quant_workspace_component.cpp`:
+- [x] Replace the non-existing `ImGuiWindowFlags_TopMost` in `src/components/quant_workspace_component.cpp`:
       - Use a combination such as `ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse` to approximate a pinned top control bar.
-- [ ] If "always on top" is required, emulate it by:
+- [x] If "always on top" is required, emulate it by:
       - Calling `ImGui::SetNextWindowFocus()` on the Dashboard Controls window each frame before `Begin()`.
       - Rendering the Dashboard window after all other panels so it appears visually on top.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 30: ADD MISSING INCLUDES & CLEAN BUILD
-- [ ] Verify all three failing files include the correct headers:
+- [x] Verify all three failing files include the correct headers:
       - `main_trading_terminal.cpp` must include `"ui/layout_manager.hpp"` (or the header where `LayoutManager` is declared).
       - `vulkan_dashboard_advanced.cpp` must include `"market_data_processor.hpp"` and `"components/MarketMicrostructureRenderer.h"`.
       - `quant_workspace_component.cpp` must include `"imgui.h"` and `"imgui_internal.h"` for window flags and focus helpers.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 31: HARMONIZE CANDLECLUSTER DEFINITION
-- [ ] Update `include/components/MarketMicrostructureRenderer.h` to ensure `struct CandleCluster` is inside the `BTQuant::RenderEngine` namespace.
-- [ ] Add missing fields to `CandleCluster` struct:
+- [x] Update `include/components/MarketMicrostructureRenderer.h` to ensure `struct CandleCluster` is inside the `BTQuant::RenderEngine` namespace.
+- [x] Add missing fields to `CandleCluster` struct:
     - `float maxSingleTradeVolume;`
     - `double centerX;`
     - `double centerY;`
-- [ ] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 
 ### TASK 32: FIX FOOTPRINT_PANEL DATA STRUCTURES
-- [ ] In `src/components/footprint_panel.cpp`, fix the map declarations to use the correct type pointers:
+- [x] In `src/components/footprint_panel.cpp`, fix the map declarations to use the correct type pointers:
     - Change: `std::map<double, std::map<double, const RenderEngine::CandleCluster*>> visible_clusters;`
     - To: `std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;`
-- [ ] Update `clusters_by_time` declaration:
+- [x] Update `clusters_by_time` declaration:
     - Change: `std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;`
     - To: `std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;`
-- [ ] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
+- [x] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
 - [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 33: RESOLVE VULKAN_DASHBOARD_ADVANCED TYPE ERRORS

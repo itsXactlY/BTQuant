@@ -21,7 +21,6 @@
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
 using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::CandleCluster;
 
 namespace BTQuant {
 
@@ -507,7 +506,7 @@ void VulkanDashboard::pollDataToRenderer() {
     const uint64_t window_us = 30'000'000;    // 30 seconds window
     constexpr float tickSize = 0.5f;
 
-    std::vector<RenderEngine::CandleCluster> clusters;
+    std::vector<BTQuant::RenderEngine::CandleCluster> clusters;
 
     // Efficiency: Use an ordered map for aggregation (stable for rendering)
     struct ClusterKey {
@@ -565,7 +564,7 @@ void VulkanDashboard::pollDataToRenderer() {
     }
 
     if (!clusters.empty()) {
-      micro_renderer_->updateFootprintClusters(std::span<const RenderEngine::CandleCluster>(clusters));
+      micro_renderer_->updateFootprintClusters(std::span<const BTQuant::RenderEngine::CandleCluster>(clusters));
     }
   }
 }

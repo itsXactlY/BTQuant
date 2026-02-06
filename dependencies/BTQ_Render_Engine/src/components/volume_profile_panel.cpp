@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <limits>
 
+#include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 #include "implot.h"
 #include "../../include/components/interaction_manager.hpp"

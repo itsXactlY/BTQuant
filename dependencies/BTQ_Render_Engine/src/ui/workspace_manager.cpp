@@ -1,11 +1,11 @@
-#include "../../../include/ui/workspace_manager.hpp"
+#include "../../include/ui/workspace_manager.hpp"
 
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 
-#include "../../../include/components/quant_workspace_component.hpp"
-#include "../../../include/symbol_registry.hpp"
+#include "../../include/components/quant_workspace_component.hpp"
+#include "../../include/symbol_registry.hpp"
 
 using json = nlohmann::json;
 

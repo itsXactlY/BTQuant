@@ -9,6 +9,8 @@
 #include "imgui.h"
 #include "implot.h"
 
+#include "../../include/trading/HotspineData.h"
+
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
 using BTQuant::RenderEngine::TradeData;

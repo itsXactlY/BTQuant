@@ -567,7 +567,17 @@ void DomSurfacePanel::render() {
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
     if (cols > 0 && rows > 0) {
-      ImPlot::PushColormap(ImPlotColormap_Viridis);
+      // Define custom colormap data for Dark Blue to Bright Yellow
+      static const ImU32 custom_colors[] = {
+          IM_COL32(0, 0, 139, 255),   // Dark Blue
+          IM_COL32(0, 0, 255, 255),   // Blue
+          IM_COL32(0, 255, 255, 255), // Cyan
+          IM_COL32(0, 255, 0, 255),   // Green
+          IM_COL32(255, 255, 0, 255)  // Bright Yellow
+      };
+      static ImPlotColormap custom_colormap = ImPlot::AddColormap("CustomBlueYellow", custom_colors, 5);
+
+      ImPlot::PushColormap(custom_colormap);
 
       // Use the Vulkan-accelerated texture if available
       if (vulkan_texture_id_ != nullptr) {
@@ -577,7 +587,7 @@ void DomSurfacePanel::render() {
                          ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                          ImPlotPoint(bounds_max_[0], bounds_max_[1]));
       } else {
-        // Fallback to CPU rendering
+        // Fallback to CPU rendering with the same custom colormap
         ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, scale_max_, nullptr,
                             ImPlotPoint(bounds_min_[0], bounds_min_[1]),
                             ImPlotPoint(bounds_max_[0], bounds_max_[1]));
@@ -860,33 +870,69 @@ void DomSurfacePanel::updateVulkanTexture() {
       // Clamp normalized value to [0, 1] range
       normalized = std::clamp(normalized, 0.0f, 1.0f);
 
-      // Apply colormap (Dark Blue to Bright Yellow gradient)
+      // Apply enhanced colormap (Deep Navy Blue to Amber gradient)
       uint8_t r, g, b, a = 255;
 
-      // Dark Blue to Bright Yellow gradient mapping
-      if (normalized <= 0.25f) {
+      // Enhanced Dark Blue to Bright Yellow gradient mapping with more color stops
+      if (normalized <= 0.1f) {
+        // Deep Navy Blue (0,0,50) to Dark Blue (0,0,139)
+        float t = normalized / 0.1f;
+        r = 0;
+        g = 0;
+        b = static_cast<uint8_t>(50 + (t * 89));
+      } else if (normalized <= 0.2f) {
         // Dark Blue (0,0,139) to Blue (0,0,255)
-        float t = normalized / 0.25f;
+        float t = (normalized - 0.1f) / 0.1f;
         r = 0;
         g = 0;
         b = static_cast<uint8_t>(139 + (t * 116));
-      } else if (normalized <= 0.5f) {
-        // Blue (0,0,255) to Cyan (0,255,255)
-        float t = (normalized - 0.25f) / 0.25f;
+      } else if (normalized <= 0.3f) {
+        // Blue (0,0,255) to Light Blue (0,200,255)
+        float t = (normalized - 0.2f) / 0.1f;
         r = 0;
-        g = static_cast<uint8_t>(t * 255);
+        g = static_cast<uint8_t>(t * 200);
         b = 255;
-      } else if (normalized <= 0.75f) {
-        // Cyan (0,255,255) to Green (0,255,0)
-        float t = (normalized - 0.5f) / 0.25f;
+      } else if (normalized <= 0.4f) {
+        // Light Blue (0,200,255) to Cyan (0,255,255)
+        float t = (normalized - 0.3f) / 0.1f;
+        r = 0;
+        g = static_cast<uint8_t>(200 + (t * 55));
+        b = 255;
+      } else if (normalized <= 0.5f) {
+        // Cyan (0,255,255) to Light Cyan (0,255,200)
+        float t = (normalized - 0.4f) / 0.1f;
         r = 0;
         g = 255;
-        b = static_cast<uint8_t>(255 - (t * 255));
-      } else {
-        // Green (0,255,0) to Bright Yellow (255,255,0)
-        float t = (normalized - 0.75f) / 0.25f;
-        r = static_cast<uint8_t>(t * 255);
+        b = static_cast<uint8_t>(255 - (t * 55));
+      } else if (normalized <= 0.6f) {
+        // Light Cyan (0,255,200) to Green (0,200,0)
+        float t = (normalized - 0.5f) / 0.1f;
+        r = 0;
+        g = static_cast<uint8_t>(255 - (t * 55));
+        b = static_cast<uint8_t>((1.0f - t) * 200);
+      } else if (normalized <= 0.7f) {
+        // Green (0,200,0) to Green (0,255,0)
+        float t = (normalized - 0.6f) / 0.1f;
+        r = 0;
+        g = static_cast<uint8_t>(200 + (t * 55));
+        b = 0;
+      } else if (normalized <= 0.8f) {
+        // Green (0,255,0) to Lime Green (180,255,0)
+        float t = (normalized - 0.7f) / 0.1f;
+        r = static_cast<uint8_t>(t * 180);
         g = 255;
+        b = 0;
+      } else if (normalized <= 0.9f) {
+        // Lime Green (180,255,0) to Bright Yellow (255,255,0)
+        float t = (normalized - 0.8f) / 0.1f;
+        r = static_cast<uint8_t>(180 + (t * 75));
+        g = 255;
+        b = 0;
+      } else {
+        // Bright Yellow (255,255,0) to Amber (255,200,0)
+        float t = (normalized - 0.9f) / 0.1f;
+        r = 255;
+        g = static_cast<uint8_t>(255 - (t * 55));
         b = 0;
       }
 

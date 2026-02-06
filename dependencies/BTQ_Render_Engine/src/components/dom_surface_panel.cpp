@@ -634,16 +634,21 @@ void DomSurfacePanel::render() {
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
     if (cols > 0 && rows > 0) {
-      // Define custom colormap data for Dark Blue to Bright Yellow
+      // Define custom colormap data for Dark Blue to Bright Yellow with enhanced intensity mapping
       static const ImU32 custom_colors[] = {
+          IM_COL32(0, 0, 50, 255),    // Deep Navy Blue (enhanced dark start)
           IM_COL32(0, 0, 139, 255),   // Dark Blue
           IM_COL32(0, 0, 255, 255),   // Blue
+          IM_COL32(0, 200, 255, 255), // Light Blue
           IM_COL32(0, 255, 255, 255), // Cyan
+          IM_COL32(0, 200, 0, 255),   // Dark Green
           IM_COL32(0, 255, 0, 255),   // Green
-          IM_COL32(255, 255, 0, 255)  // Bright Yellow
+          IM_COL32(180, 255, 0, 255), // Lime Green
+          IM_COL32(255, 255, 0, 255), // Bright Yellow
+          IM_COL32(255, 200, 0, 255)  // Amber
       };
-      static ImPlotColormap custom_colormap = ImPlot::AddColormap("CustomBlueYellow", custom_colors, 5);
-      
+      static ImPlotColormap custom_colormap = ImPlot::AddColormap("EnhancedBlueYellow", custom_colors, 10);
+
       ImPlot::PushColormap(custom_colormap);
       // Apply heatmap intensity to adjust color mapping sensitivity
       double adjusted_scale_max = scale_max_ / heatmap_intensity_;

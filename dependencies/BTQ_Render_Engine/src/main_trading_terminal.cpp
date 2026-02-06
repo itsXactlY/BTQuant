@@ -75,61 +75,9 @@ int main(int argc, char** argv) {
   // 5. Configure Layout (via Workspace Component)
   // We access the internal components to set up the default trading layout
   if (auto* workspace = dashboard->get_workspace_component()) {
-    if (auto* panel_mgr = workspace->getPanelManager()) {
-      std::cout << "Configuring Default Layout..." << std::endl;
-
-      // Clear existing default if any
-      // 0. Reset any default panels (avoid duplication)
-      panel_mgr->clear_panels();
-
-      // Construct the PRO Trading Layout
-      // Grid: 6x10 (Wider Aspect Ratio, extra rows for all components including footer)
-      panel_mgr->set_grid_layout(6, 10);
-
-      // 1. Main Chart (Top Left, large)
-      panel_mgr->add_panel(BTQuant::PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
-
-      // 2. Orderbook / DOM (Right side)
-      // DOM Surface (Heatmap)
-      panel_mgr->add_panel(BTQuant::PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
-      // Classic Orderbook
-      panel_mgr->add_panel(BTQuant::PanelType::ORDERBOOK, "Orderbook", 4, 2, 2, 2);
-
-      // 3. Bottom Row 1 (Tape / Orders)
-      panel_mgr->add_panel(BTQuant::PanelType::TAPE, "Time & Sales", 0, 3, 2, 1);
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_ORDERS, "Active Orders", 2, 3, 2, 1);
-
-      // 4. Bottom Row 2 (Positions / Risk)
-      panel_mgr->add_panel(BTQuant::PanelType::TRADING_POSITIONS, "Positions", 0, 4, 2, 1);
-
-      // 5. Add remaining components for complete integration
-      // Volume Profile (Bottom Right)
-      panel_mgr->add_panel(BTQuant::PanelType::VOLUME_PROFILE, "Volume Profile", 2, 4, 2, 1);
-
-      // Watchlist (Far Right Bottom)
-      panel_mgr->add_panel(BTQuant::PanelType::WATCHLIST, "Watchlist", 4, 4, 2, 1);
-
-      // Add Footprint Chart and TPO Profile if needed
-      // These could be added as additional panels or accessible via menu
-      // For now, we'll add them to the layout as well
-      panel_mgr->add_panel(BTQuant::PanelType::FOOTPRINT_CHART, "Footprint Chart", 0, 5, 3, 2);
-      panel_mgr->add_panel(BTQuant::PanelType::TPO_PROFILE, "TPO Profile", 3, 5, 3, 2);
-
-      // Add Performance Monitor panel
-      panel_mgr->add_panel(BTQuant::PanelType::PERFORMANCE_MONITOR, "Performance Monitor", 0, 7, 6,
-                           2);
-
-      // Add Alerts panel
-      panel_mgr->add_panel(BTQuant::PanelType::ALERTS, "Alerts", 4, 5, 2, 2);
-
-      // Add Strategy Builder as footer panel
-      panel_mgr->add_panel(BTQuant::PanelType::STRATEGY_BUILDER, "Strategy Builder Footer", 0, 8, 6, 1);
-
-      panel_mgr->auto_arrange_panels();
-
-      // Load saved layout if available to override
-      // panel_mgr->load_layout("default_layout.json");
-    }
+    std::cout << "Configuring Default Layout..." << std::endl;
+    
+    workspace->set_layout(BTQuant::LayoutPreset::PRO_QUANT);
   }
 
   // 6. Setup Custom Menu Bar

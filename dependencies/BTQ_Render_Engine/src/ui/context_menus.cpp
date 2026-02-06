@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+#include <algorithm>
 
 #include "imgui.h"
 #include "implot.h"
@@ -37,6 +38,7 @@
 #include "components/historical_time_sales.hpp"
 #include "components/tape_panel.hpp"
 #include "components/status_bar_panel.hpp"
+#include "ui/screenshot_utility.hpp"
 namespace BTQuant {
 
 // Context menu manager implementation
@@ -1444,10 +1446,15 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
     }
     if (ImGui::MenuItem("Screenshot")) {
       // Take a screenshot of the current panel
-      // This would typically trigger screenshot functionality
       if (panel_manager_) {
-        // This would typically trigger screenshot functionality
-        // For now, we'll just log that the action was triggered
+        // Generate a unique filename based on panel type and timestamp
+        std::string panel_type_name = panel->get_config().title;
+        // Sanitize the panel name for use in filename
+        std::replace(panel_type_name.begin(), panel_type_name.end(), ' ', '_');
+        std::replace(panel_type_name.begin(), panel_type_name.end(), '/', '_');
+        
+        // Call the screenshot utility to capture the panel
+        ScreenshotUtility::capture_panel_screenshot(panel, panel_type_name);
       }
     }
     if (ImGui::MenuItem("Close Panel")) {

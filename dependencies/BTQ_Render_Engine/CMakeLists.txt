@@ -87,6 +87,7 @@ set(LIB_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
+    src/ui/screenshot_utility.cpp
     src/data/unified_data_pipeline.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp
@@ -232,6 +233,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/ui/context_menus.cpp
     src/ui/quick_actions.cpp
     src/ui/tutorial.cpp
+    src/ui/screenshot_utility.cpp
     src/data/unified_data_pipeline.cpp
     src/logging/logger.cpp
     src/error_handling/error_utils.cpp

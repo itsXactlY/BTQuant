@@ -102,6 +102,8 @@ std::vector<PriceLevel> generateMockPriceLevels(size_t count, double base_price 
         PriceLevel level;
         level.price = base_price + price_offset_dist(rng);
         level.size = size_dist(rng);
+        level.timestamp = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
         levels.push_back(level);
     }
     

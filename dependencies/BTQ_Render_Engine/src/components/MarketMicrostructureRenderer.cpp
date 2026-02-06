@@ -556,6 +556,7 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
         PriceLevel level;
         level.price = price;
         level.size = volumes.first + volumes.second; // Combined size
+        level.timestamp = orderbookData.timestamp;
 
         if (volumes.first > 0) { // Has bid volume
             orderbookData.bids.push_back(level);

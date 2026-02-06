@@ -498,22 +498,22 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
     - `double centerX;`
     - `double centerY;`
 - [x] In `src/vulkan_dashboard_advanced.cpp` and `src/components/footprint_panel.cpp`, use the fully qualified name `BTQuant::RenderEngine::CandleCluster` consistently.
-- [ ] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
+- [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 
 ### TASK 32: FIX FOOTPRINT_PANEL DATA STRUCTURES
-- [ ] In `src/components/footprint_panel.cpp`, fix the map declarations to use the correct type pointers:
+- [x] In `src/components/footprint_panel.cpp`, fix the map declarations to use the correct type pointers:
     - Change: `std::map<double, std::map<double, const RenderEngine::CandleCluster*>> visible_clusters;`
     - To: `std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;`
-- [ ] Update `clusters_by_time` declaration:
+- [x] Update `clusters_by_time` declaration:
     - Change: `std::map<double, std::vector<const RenderEngine::CandleCluster*>> clusters_by_time;`
     - To: `std::map<double, std::vector<const BTQuant::RenderEngine::CandleCluster*>> clusters_by_time;`
-- [ ] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
+- [x] Ensure all loops iterating over these maps use `const auto& [key, value]` to avoid accidental copies or type mismatches.
 - [x] Run `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build` and confirm `BTQuantTerminal` links successfully without the previous type / namespace errors.
 
 ### TASK 33: RESOLVE VULKAN_DASHBOARD_ADVANCED TYPE ERRORS
-- [ ] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
-- [ ] Fix the `PriceLevel` timestamp error:
+- [x] Open `src/vulkan_dashboard_advanced.cpp` and explicitly add `using namespace BTQuant::RenderEngine;` at the start of the `pollDataToRenderer` function to resolve `OrderbookData` and `TradeData` scope issues.
+- [x] Fix the `PriceLevel` timestamp error:
     - If `BTQuant::RenderEngine::PriceLevel` does not have a `timestamp`, remove the lines `level.timestamp = orderbookData.timestamp;` (Price levels in a snapshot typically share the snapshot's global timestamp).
 - [ ] Correct the `updateTradeData` and `updateFootprintClusters` calls:
     - Ensure `std::vector<TradeData> trades;` is properly typed.

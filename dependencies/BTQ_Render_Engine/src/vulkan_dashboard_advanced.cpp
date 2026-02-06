@@ -455,6 +455,7 @@ void VulkanDashboard::pollDataToRenderer() {
       PriceLevel level;
       level.price = price;
       level.size = size;
+      level.timestamp = orderbookData.timestamp;
       orderbookData.bids.push_back(level);
     }
 
@@ -463,6 +464,7 @@ void VulkanDashboard::pollDataToRenderer() {
       PriceLevel level;
       level.price = price;
       level.size = size;
+      level.timestamp = orderbookData.timestamp;
       orderbookData.asks.push_back(level);
     }
 

@@ -71,6 +71,7 @@ std::vector<PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
             PriceLevel new_level;
             new_level.price = aggregated_price;
             new_level.size = level.size;
+            new_level.timestamp = 0; // No specific timestamp for aggregated levels
             aggregated_levels[aggregated_price] = new_level;
         }
     }

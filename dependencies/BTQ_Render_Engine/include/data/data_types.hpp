@@ -7,6 +7,7 @@
 struct PriceLevel {
   double price;
   double size;
+  uint64_t timestamp = 0;
 };
 
 struct VolumeProfileLevel {

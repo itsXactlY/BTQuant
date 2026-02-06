@@ -78,7 +78,7 @@ make -j$(nproc)
 When you launch the BTQ Render Engine for the first time, you'll see the main dashboard with default panels. The interface follows a dark theme optimized for trading environments.
 
 ### Connecting to Data Sources
-The application connects to market data through the HotSpineDataBridge. Configure your data source connection in the Settings panel under the Data section.
+The application connects to market data through the modern data pipeline. Configure your data source connection in the Settings panel under the Data section.
 
 ### Basic Navigation
 - Click and drag to pan charts

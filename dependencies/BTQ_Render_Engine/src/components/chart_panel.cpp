@@ -116,11 +116,11 @@ static std::string timeframe_to_string(RenderEngine::TimeFrame tf) {
   }
 }
 
-ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+ChartPanel::ChartPanel(const PanelConfig& config,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                        ChartManager* chart_manager,
                        PanelManager* panel_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
+    : PanelBase(config), processor_(processor), chart_manager_(chart_manager), panel_manager_(panel_manager) {
   indicator_renderer_ = new IndicatorRenderer(nullptr, processor_);
   initialize_active_indicators();
 
@@ -132,7 +132,7 @@ ChartPanel::ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBr
     hts_config.position = ImVec2(100, 100);
     hts_config.size = ImVec2(600, 400);
 
-    historical_time_sales_panel_ = std::make_shared<HistoricalTimeSalesPanel>(hts_config, bridge_, processor_);
+    historical_time_sales_panel_ = std::make_shared<HistoricalTimeSalesPanel>(hts_config, processor_);
     historical_time_sales_panel_->set_symbol(chart_manager_->getSymbolId(symbol_).value_or(0), symbol_);
   }
 

@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/symbol_registry.hpp"
 
 namespace BTQuant {
 
@@ -18,9 +19,8 @@ double roundToNearest(double value, double multiple) {
 }
 
 OrderbookPanel::OrderbookPanel(const PanelConfig& config,
-                               std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor), selected_levels_count_(20),
+    : PanelBase(config), processor_(processor), selected_levels_count_(20),
       aggregation_mode_(OrderbookAggregationMode::NONE), custom_aggregation_value_(1.0),
       volume_delta_period_us_(5000000) {} // Initialize to 5 seconds (5,000,000 microseconds)
 
@@ -98,20 +98,21 @@ void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_na
 }
 
 void OrderbookPanel::update(float /*dt*/) {
-  // Request data update from data bridge
-  bridge_->sync();
+  // Process data updates from the processor
+  // The processor handles its own updates internally
 
-  if (bridge_) {
-    // Process trades to update volume profile and order flow
-    auto trades = bridge_->getTradeBuffer();
-    // Simple linear scan. In production, use monotonic index or similar.
-    for (const auto& trade : trades) {
+  if (processor_) {
+    // Get analytics for the current symbol
+    auto analytics = processor_->getSymbolAnalytics(symbol_id_);
+    
+    // Update volume profile based on recent trades
+    for (const auto& trade : analytics.recent_trades) {
       // Skip potential empty slots
-      if (trade.ts_local == 0) continue;
+      if (trade.timestamp == 0) continue;
 
-      if (trade.ts_local > last_processed_trade_ts_ && trade.symbol_id == symbol_id_) {
+      if (trade.timestamp > last_processed_trade_ts_ && trade.symbol_id == symbol_id_) {
         auto& vol = volume_profile_[trade.price];
-        if (trade.side == 0)
+        if (trade.is_buy)
           vol.bought += trade.size;  // Buy
         else
           vol.sold += trade.size;  // Sell
@@ -119,36 +120,36 @@ void OrderbookPanel::update(float /*dt*/) {
         // Track execution event for order flow
         auto& activity = order_flow_activity_[trade.price];
         activity.executions++;
-        activity.last_activity_ts = trade.ts_local;
+        activity.last_activity_ts = trade.timestamp;
 
-        if (trade.ts_local > last_processed_trade_ts_) {
-          last_processed_trade_ts_ = trade.ts_local;
+        if (trade.timestamp > last_processed_trade_ts_) {
+          last_processed_trade_ts_ = trade.timestamp;
         }
       }
     }
 
-    // Process orderbook snapshots to track additions and cancellations
-    auto books = bridge_->getBookBuffer();
-    for (const auto& book : books) {
-      if (book.ts_local == 0) continue;
+    // Process orderbook data to track additions and cancellations
+    auto book_opt = processor_->getOrderbookData(symbol_id_);
+    if (book_opt.has_value()) {
+      const auto& book = book_opt.value();
+      uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
-      if (book.ts_local > last_order_flow_update_ts_ && book.symbol_id == symbol_id_) {
+      if (current_time > last_order_flow_update_ts_) {
         // Get previous snapshot for comparison
-        auto prev_it = previous_snapshots_.find(book.symbol_id);
+        auto prev_it = previous_snapshots_.find(symbol_id_);
         if (prev_it != previous_snapshots_.end()) {
           // Compare current snapshot with previous to detect order flow events
           detectOrderFlowEvents(book, prev_it->second);
         }
 
         // Store current snapshot as previous for next comparison
-        previous_snapshots_[book.symbol_id] = book;
+        previous_snapshots_[symbol_id_] = book;
 
         // Track volume changes for delta calculation
-        trackVolumeChanges(book, book.ts_local);
+        trackVolumeChanges(book, current_time);
 
-        if (book.ts_local > last_order_flow_update_ts_) {
-          last_order_flow_update_ts_ = book.ts_local;
-        }
+        last_order_flow_update_ts_ = current_time;
       }
     }
 
@@ -172,53 +173,46 @@ void OrderbookPanel::update(float /*dt*/) {
   }
 }
 
-void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot) {
+void OrderbookPanel::detectOrderFlowEvents(const RenderEngine::OrderbookData& current_snapshot, const RenderEngine::OrderbookData& previous_snapshot) {
   // Map previous prices to sizes for quick lookup
   std::map<double, double> prev_bid_prices;
   std::map<double, double> prev_ask_prices;
 
   // Populate previous snapshot maps
-  for (int i = 0; i < previous_snapshot.bids_count && i < 200; ++i) {
-    if (previous_snapshot.bids[i].size > 0) {
-      prev_bid_prices[previous_snapshot.bids[i].price] = previous_snapshot.bids[i].size;
-    }
+  for (const auto& level : previous_snapshot.bids) {
+    prev_bid_prices[level.price] = level.size;
   }
-
-  for (int i = 0; i < previous_snapshot.asks_count && i < 200; ++i) {
-    if (previous_snapshot.asks[i].size > 0) {
-      prev_ask_prices[previous_snapshot.asks[i].price] = previous_snapshot.asks[i].size;
-    }
+  for (const auto& level : previous_snapshot.asks) {
+    prev_ask_prices[level.price] = level.size;
   }
 
   // Process current bids to detect additions and cancellations
-  for (int i = 0; i < current_snapshot.bids_count && i < 200; ++i) {
-    if (current_snapshot.bids[i].size > 0) {
-      auto prev_it = prev_bid_prices.find(current_snapshot.bids[i].price);
+  for (const auto& level : current_snapshot.bids) {
+    auto prev_it = prev_bid_prices.find(level.price);
 
-      if (prev_it == prev_bid_prices.end()) {
-        // New price level - this is an addition
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
-        activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.bids[i].size > prev_it->second) {
-        // Size increased - this indicates new orders added at this level
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
-        activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.bids[i].size < prev_it->second) {
-        // Size decreased - this indicates orders cancelled at this level
-        auto& activity = order_flow_activity_[current_snapshot.bids[i].price];
-        activity.cancellations++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      }
+    if (prev_it == prev_bid_prices.end()) {
+      // New price level - this is an addition
+      auto& activity = order_flow_activity_[level.price];
+      activity.additions++;
+      activity.last_activity_ts = current_snapshot.timestamp;
+    } else if (level.size > prev_it->second) {
+      // Size increased - this indicates new orders added at this level
+      auto& activity = order_flow_activity_[level.price];
+      activity.additions++;
+      activity.last_activity_ts = current_snapshot.timestamp;
+    } else if (level.size < prev_it->second) {
+      // Size decreased - this indicates orders cancelled at this level
+      auto& activity = order_flow_activity_[level.price];
+      activity.cancellations++;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 
   // Process previous bids to detect cancellations (prices that disappeared)
   for (const auto& [price, size] : prev_bid_prices) {
     bool found_in_current = false;
-    for (int i = 0; i < current_snapshot.bids_count && i < 200; ++i) {
-      if (current_snapshot.bids[i].price == price) {
+    for (const auto& level : current_snapshot.bids) {
+      if (level.price == price) {
         found_in_current = true;
         break;
       }
@@ -228,39 +222,37 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
       // Price level disappeared - this is a cancellation
       auto& activity = order_flow_activity_[price];
       activity.cancellations++;
-      activity.last_activity_ts = current_snapshot.ts_local;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 
   // Process current asks to detect additions and cancellations
-  for (int i = 0; i < current_snapshot.asks_count && i < 200; ++i) {
-    if (current_snapshot.asks[i].size > 0) {
-      auto prev_it = prev_ask_prices.find(current_snapshot.asks[i].price);
+  for (const auto& level : current_snapshot.asks) {
+    auto prev_it = prev_ask_prices.find(level.price);
 
-      if (prev_it == prev_ask_prices.end()) {
-        // New price level - this is an addition
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
-        activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.asks[i].size > prev_it->second) {
-        // Size increased - this indicates new orders added at this level
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
-        activity.additions++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      } else if (current_snapshot.asks[i].size < prev_it->second) {
-        // Size decreased - this indicates orders cancelled at this level
-        auto& activity = order_flow_activity_[current_snapshot.asks[i].price];
-        activity.cancellations++;
-        activity.last_activity_ts = current_snapshot.ts_local;
-      }
+    if (prev_it == prev_ask_prices.end()) {
+      // New price level - this is an addition
+      auto& activity = order_flow_activity_[level.price];
+      activity.additions++;
+      activity.last_activity_ts = current_snapshot.timestamp;
+    } else if (level.size > prev_it->second) {
+      // Size increased - this indicates new orders added at this level
+      auto& activity = order_flow_activity_[level.price];
+      activity.additions++;
+      activity.last_activity_ts = current_snapshot.timestamp;
+    } else if (level.size < prev_it->second) {
+      // Size decreased - this indicates orders cancelled at this level
+      auto& activity = order_flow_activity_[level.price];
+      activity.cancellations++;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 
   // Process previous asks to detect cancellations (prices that disappeared)
   for (const auto& [price, size] : prev_ask_prices) {
     bool found_in_current = false;
-    for (int i = 0; i < current_snapshot.asks_count && i < 200; ++i) {
-      if (current_snapshot.asks[i].price == price) {
+    for (const auto& level : current_snapshot.asks) {
+      if (level.price == price) {
         found_in_current = true;
         break;
       }
@@ -270,23 +262,23 @@ void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_s
       // Price level disappeared - this is a cancellation
       auto& activity = order_flow_activity_[price];
       activity.cancellations++;
-      activity.last_activity_ts = current_snapshot.ts_local;
+      activity.last_activity_ts = current_snapshot.timestamp;
     }
   }
 }
 
-void OrderbookPanel::trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp) {
+void OrderbookPanel::trackVolumeChanges(const RenderEngine::OrderbookData& snapshot, uint64_t timestamp) {
   // Process bids
-  for (int i = 0; i < snapshot.bids_count && i < 200; ++i) {
-    if (snapshot.bids[i].size > 0) {
-      volume_level_history_[snapshot.bids[i].price].addBidPoint(timestamp, snapshot.bids[i].size);
+  for (const auto& level : snapshot.bids) {
+    if (level.size > 0) {
+      volume_level_history_[level.price].addBidPoint(timestamp, level.size);
     }
   }
 
   // Process asks
-  for (int i = 0; i < snapshot.asks_count && i < 200; ++i) {
-    if (snapshot.asks[i].size > 0) {
-      volume_level_history_[snapshot.asks[i].price].addAskPoint(timestamp, snapshot.asks[i].size);
+  for (const auto& level : snapshot.asks) {
+    if (level.size > 0) {
+      volume_level_history_[level.price].addAskPoint(timestamp, level.size);
     }
   }
 }
@@ -321,7 +313,9 @@ void OrderbookPanel::render() {
         if (ob_opt.has_value()) {
           if (symbol_id_ != sym_id) {
             symbol_id_ = sym_id;
-            symbol_name_ = bridge_->getSymbolName(symbol_id_);
+            // For now, we'll use a default name since we don't have direct access to symbol names from processor
+            // In a real implementation, this would come from SymbolRegistry or similar
+            symbol_name_ = "SYMBOL_" + std::to_string(symbol_id_);
             config_.title = symbol_name_ + " Orderbook";
             std::cout << "[OrderbookPanel] Auto-selected: " << symbol_name_ << " (ID=" << symbol_id_
                       << ")" << std::endl;
@@ -332,7 +326,9 @@ void OrderbookPanel::render() {
       // If still 0, just pick first to show "waiting"
       if (symbol_id_ == 0 && !active_symbols.empty()) {
         symbol_id_ = active_symbols[0];
-        symbol_name_ = bridge_->getSymbolName(symbol_id_);
+        // For now, we'll use a default name since we don't have direct access to symbol names from processor
+        // In a real implementation, this would come from SymbolRegistry or similar
+        symbol_name_ = "SYMBOL_" + std::to_string(symbol_id_);
       }
     }
 
@@ -343,8 +339,15 @@ void OrderbookPanel::render() {
         uint32_t sym_id = active_symbols[i];
         ImGui::PushID(static_cast<int>(sym_id));
 
-        std::string sym_name = bridge_->getSymbolName(sym_id);
-        std::string exchange = bridge_->getExchangeName(sym_id);
+        // For now, we'll use a default name since we don't have direct access to symbol names from processor
+        // In a real implementation, this would come from SymbolRegistry or similar
+        std::string sym_name = "SYMBOL_" + std::to_string(sym_id);
+        // For now, get exchange from symbol registry since we don't have direct access to exchange name from processor
+        std::string exchange = "Unknown";
+        auto symbol_info = SymbolRegistry::instance().get_symbol_info(sym_id);
+        if (symbol_info.has_value()) {
+          exchange = symbol_info->exchange;
+        }
         std::string display_name = "[" + exchange + "] " + sym_name;
 
         bool is_selected = (sym_id == symbol_id_);

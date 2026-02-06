@@ -20,12 +20,10 @@
 namespace BTQuant {
 
 VulkanDashboard::VulkanDashboard(uint32_t width, uint32_t height,
-                                 std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                  const VulkanDashboardConfig& config)
     : width_(width),
       height_(height),
-      hotspine_bridge_(bridge),
       market_data_processor_(processor),
       config_(config) {}
 
@@ -69,18 +67,18 @@ std::expected<void, std::string> VulkanDashboard::initialize() {
 void VulkanDashboard::init_components() {
   std::println("[VulkanDashboard] Initializing Components...");
   micro_renderer_ = std::make_unique<RenderEngine::MarketMicrostructureRenderer>(
-      vulkan_core_.get(), hotspine_bridge_, market_data_processor_);
+      vulkan_core_.get(), market_data_processor_);
 
   if (auto result = micro_renderer_->initialize(); !result) [[unlikely]] {
     std::println("[VulkanDashboard] CRITICAL: Micro Renderer failed to initialize: {}",
                  RenderEngine::to_string(result.error()));
   }
 
-  workspace_ = std::make_unique<QuantWorkspaceComponent>(hotspine_bridge_, market_data_processor_,
+  workspace_ = std::make_unique<QuantWorkspaceComponent>(market_data_processor_,
                                                         micro_renderer_.get());
 
   modern_dashboard_ = std::make_unique<RealtimeDashboardComponent>(
-      hotspine_bridge_, market_data_processor_, micro_renderer_.get());
+      market_data_processor_, micro_renderer_.get());
   modern_dashboard_->initialize_vulkan_resources(vulkan_core_.get());
 
   // Register Hotkeys
@@ -406,7 +404,7 @@ void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, i
 }
 
 void VulkanDashboard::pollDataToRenderer() {
-  if (!micro_renderer_ || !hotspine_bridge_ || !market_data_processor_) {
+  if (!micro_renderer_ || !market_data_processor_) {
     return;
   }
 

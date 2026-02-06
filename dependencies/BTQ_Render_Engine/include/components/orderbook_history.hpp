@@ -6,7 +6,6 @@
 #include <deque>
 #include <chrono>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -36,8 +35,7 @@ struct OrderbookSnapshot {
 // Component for managing historical order book snapshots
 class OrderbookHistoryPanel : public PanelBase {
 public:
-    OrderbookHistoryPanel(const PanelConfig& config, 
-                         std::shared_ptr<HotSpineDataBridge> bridge,
+    OrderbookHistoryPanel(const PanelConfig& config,
                          std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
     void update(float dt) override;
@@ -71,7 +69,6 @@ public:
     bool isPlaying() const { return is_playing_; }
 
 private:
-    std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     
     // Snapshot storage

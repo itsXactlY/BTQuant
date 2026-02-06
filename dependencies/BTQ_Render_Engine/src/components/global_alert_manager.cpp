@@ -9,10 +9,9 @@
 
 namespace BTQuant {
 
-GlobalAlertManager::GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                                       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+GlobalAlertManager::GlobalAlertManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                        std::shared_ptr<AlertsPanel> alerts_panel)
-    : bridge_(bridge), processor_(processor), alerts_panel_(alerts_panel) {
+    : processor_(processor), alerts_panel_(alerts_panel) {
   // Initialize with empty callback
   on_alert_triggered_ = [](const GlobalAlert&, double) {};
 }
@@ -105,27 +104,23 @@ bool GlobalAlertManager::enable_alert(const std::string& alert_id, bool enable) 
 }
 
 void GlobalAlertManager::update_alerts() {
-  if (!bridge_) {
+  if (!processor_) {
     return;
   }
 
   std::lock_guard<std::mutex> lock(alerts_mutex_);
 
-  // Get all active symbols from the bridge
-  auto active_symbols = bridge_->getActiveSymbols();
+  // Get all active symbols from the processor
+  // For now, we'll iterate through all alerts and check their symbols
+  for (auto& [alert_id, alert] : alerts_) {
+    if (alert.status == AlertStatus::ACTIVE) {
+      auto [current_price, current_volume] = get_current_market_data(alert.symbol_id);
 
-  for (auto symbol_id : active_symbols) {
-    auto [current_price, current_volume] = get_current_market_data(symbol_id);
-
-    // Check all alerts for this symbol
-    for (auto& [alert_id, alert] : alerts_) {
-      if (alert.symbol_id == symbol_id && alert.status == AlertStatus::ACTIVE) {
-        if (should_trigger_alert(alert, current_price, current_volume)) {
-          trigger_alert(alert, alert.type == GlobalAlertType::PRICE_ABOVE ||
-                                       alert.type == GlobalAlertType::PRICE_BELOW
-                                   ? current_price
-                                   : current_volume);
-        }
+      if (should_trigger_alert(alert, current_price, current_volume)) {
+        trigger_alert(alert, alert.type == GlobalAlertType::PRICE_ABOVE ||
+                                     alert.type == GlobalAlertType::PRICE_BELOW
+                             ? current_price
+                             : current_volume);
       }
     }
   }

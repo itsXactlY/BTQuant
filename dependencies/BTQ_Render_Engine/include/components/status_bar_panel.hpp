@@ -3,7 +3,6 @@
 #include <chrono>
 #include <string>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -11,14 +10,13 @@ namespace BTQuant {
 
 class StatusBarPanel : public PanelBase {
  public:
-  StatusBarPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  StatusBarPanel(const PanelConfig& config,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt) override;
   void render() override;
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   // Status data

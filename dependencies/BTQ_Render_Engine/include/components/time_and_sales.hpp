@@ -6,7 +6,6 @@
 #include <memory>
 #include <fstream>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -26,8 +25,7 @@ namespace BTQuant {
  */
 class TimeAndSalesPanel : public PanelBase {
  public:
-  TimeAndSalesPanel(const PanelConfig& config, 
-                   std::shared_ptr<HotSpineDataBridge> bridge,
+  TimeAndSalesPanel(const PanelConfig& config,
                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~TimeAndSalesPanel() override;
@@ -36,7 +34,6 @@ class TimeAndSalesPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;

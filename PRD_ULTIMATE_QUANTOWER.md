@@ -3,7 +3,7 @@
 **Objective:** Pixel-perfect clone of Quantower trading terminal with ALL features  
 **Constraint:** Work ONLY in `dependencies/BTQ_Render_Engine/`  
 **Current State:** Basic panels exist (Chart, Footprint, Orderbook, Time&Sales), need completion  
-**Tech Stack:** C++17/20, Vulkan, ImGui, existing HotspineDataBridge  
+**Tech Stack:** C++17/20, Vulkan, ImGui, modern data pipeline  
 **Reference:** https://help.quantower.com/quantower/
 
 ---
@@ -297,7 +297,7 @@
 ## Notes
 
 - Work exclusively in `dependencies/BTQ_Render_Engine/`
-- Use existing Vulkan renderer, ImGui integration, HotspineDataBridge
+- Use existing Vulkan renderer, ImGui integration, modern data pipeline
 - Prioritize performance: profile frequently, optimize hot paths
 - Test incrementally: verify each feature before moving to next
 - Match Quantower behavior and visuals exactly

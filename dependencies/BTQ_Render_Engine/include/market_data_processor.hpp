@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "hotspine_data_bridge.hpp"
 #include "data/data_types.hpp"
 #include "cache_manager.hpp"
 // Lock-free queue (header-only, fetched by CMake)

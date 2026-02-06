@@ -5,7 +5,6 @@
 #include <format>
 #include <memory>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -31,7 +30,7 @@ enum class OrderbookAggregationMode {
 // Real-time orderbook ladder display
 class OrderbookPanel : public PanelBase {
  public:
-  OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  OrderbookPanel(const PanelConfig& config,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void update(float dt) override;
@@ -41,7 +40,6 @@ class OrderbookPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;
@@ -81,10 +79,10 @@ class OrderbookPanel : public PanelBase {
   void reset_depth();
 
   // Helper method to detect order flow events by comparing snapshots
-  void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
+  void detectOrderFlowEvents(const RenderEngine::OrderbookData& current_snapshot, const RenderEngine::OrderbookData& previous_snapshot);
 
   // Helper method to track volume changes for delta calculation
-  void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
+  void trackVolumeChanges(const RenderEngine::OrderbookData& snapshot, uint64_t timestamp);
 
   struct PriceLevelVolume {
     double bought = 0.0;
@@ -110,7 +108,7 @@ class OrderbookPanel : public PanelBase {
   std::map<double, OrderFlowActivity> order_flow_activity_;
 
   // Store previous snapshots for comparison
-  std::map<uint32_t, HotOrderbookSnapshot> previous_snapshots_;
+  std::map<uint32_t, RenderEngine::OrderbookData> previous_snapshots_;
 
   // Batched geometry for heatmap backgrounds
   std::vector<HeatmapRect> heatmap_rects_;

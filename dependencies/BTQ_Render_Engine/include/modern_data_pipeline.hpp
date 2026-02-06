@@ -12,7 +12,7 @@
 
 #include "market_data_processor.hpp"
 #include "symbol_manager.hpp"
-#include "ui_data_manager.hpp"
+#include "data/ui_data_manager.hpp"
 
 // Handle concurrentqueue include path variations for consistency across modules
 // This addresses the requirement to modify both files to handle FetchContent path variations
@@ -26,7 +26,7 @@ namespace BTQuant {
 namespace Data {
 
 // ============================================================================
-// Unified Data Pipeline
+// Modern Data Pipeline (Vulkan/ImGui compatible)
 // ============================================================================
 
 struct DataSubscription {
@@ -37,7 +37,7 @@ struct DataSubscription {
   std::function<void(const void*)> callback;
 };
 
-class UnifiedDataPipeline {
+class ModernDataPipeline {
  public:
   enum class DataType {
     OHLC,
@@ -68,9 +68,10 @@ class UnifiedDataPipeline {
     uint64_t timestamp;
   };
 
-  UnifiedDataPipeline(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
-                      std::shared_ptr<RenderEngine::SymbolManager> symbol_manager);
-  ~UnifiedDataPipeline();
+  ModernDataPipeline(
+      std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+      std::shared_ptr<RenderEngine::SymbolManager> symbol_manager);
+  ~ModernDataPipeline();
 
   // Initialize the pipeline
   bool initialize();
@@ -97,7 +98,6 @@ class UnifiedDataPipeline {
   std::shared_ptr<RenderEngine::MarketDataProcessor> get_market_processor() const {
     return processor_;
   }
-
 
   // Get symbol manager reference
   std::shared_ptr<RenderEngine::SymbolManager> get_symbol_manager() const {

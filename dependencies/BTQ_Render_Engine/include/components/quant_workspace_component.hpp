@@ -2,7 +2,6 @@
 
 #include <memory>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../symbol_registry.hpp"
 #include "../trading/order_manager.hpp"
@@ -19,7 +18,6 @@ namespace BTQuant {
 class QuantWorkspaceComponent : public UIComponent {
  public:
   explicit QuantWorkspaceComponent(
-      std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
       RenderEngine::MarketMicrostructureRenderer* micro_renderer = nullptr);
   virtual ~QuantWorkspaceComponent() = default;
@@ -36,7 +34,6 @@ class QuantWorkspaceComponent : public UIComponent {
 
  private:
   // Core systems
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   // Trading Systems

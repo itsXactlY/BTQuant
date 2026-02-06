@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "alert_common.hpp"
 #include "watchlist_alerts.hpp"
@@ -70,8 +69,7 @@ using GlobalAlertTriggeredCallback = std::function<void(const GlobalAlert&, doub
 
 class GlobalAlertManager {
  public:
-  GlobalAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+  GlobalAlertManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                      std::shared_ptr<AlertsPanel> alerts_panel);
   ~GlobalAlertManager() = default;
 
@@ -121,7 +119,6 @@ class GlobalAlertManager {
   size_t get_triggered_alerts_count() const;
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<AlertsPanel> alerts_panel_;
   std::map<std::string, GlobalAlert> alerts_;

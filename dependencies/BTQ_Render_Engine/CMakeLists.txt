@@ -97,7 +97,7 @@ set(DASHBOARD_SOURCES
     src/main_trading_terminal.cpp
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
+    src/data/modern_data_pipeline.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp
@@ -240,7 +240,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/main_trading_terminal.cpp
     src/vulkan_dashboard_advanced.cpp
     src/system/VulkanCore.cpp
-    src/data/hotspine_data_bridge.cpp
+    src/data/modern_data_pipeline.cpp
     src/components/quant_workspace_component.cpp
     src/components/panel_base.cpp
     src/components/chart_panel.cpp

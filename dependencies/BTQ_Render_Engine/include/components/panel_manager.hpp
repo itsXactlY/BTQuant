@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
@@ -37,8 +36,7 @@ class PanelManager {
   using PanelAddedCallback = std::function<void(uint32_t panel_id, PanelType type)>;
   using PanelRemovedCallback = std::function<void(uint32_t panel_id)>;
 
-  PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-               std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+  PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                std::shared_ptr<OrderManager> order_manager,
                std::shared_ptr<PositionManager> position_manager,
                std::shared_ptr<RiskAssessment> risk_assessment,
@@ -107,7 +105,6 @@ class PanelManager {
   void set_current_layout_name(const std::string& name) { current_layout_name_ = name; }
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<OrderManager> order_manager_;
   std::shared_ptr<PositionManager> position_manager_;

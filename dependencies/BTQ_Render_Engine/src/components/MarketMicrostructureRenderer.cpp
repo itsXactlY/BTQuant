@@ -28,7 +28,6 @@
 #include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
 #include "../../include/analytics/cluster_engine.hpp"
 #include "../../include/components/VulkanSynchronization.h"
-#include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/trading/HotspineData.h"
@@ -81,11 +80,10 @@ namespace {
 // ============================================
 
 MarketMicrostructureRenderer::MarketMicrostructureRenderer(
-    BTQuant::VulkanCore* vulkanCore, std::shared_ptr<BTQuant::HotSpineDataBridge> hotspineBridge,
+    BTQuant::VulkanCore* vulkanCore,
     std::shared_ptr<BTQuant::RenderEngine::MarketDataProcessor> marketDataProcessor,
     const RendererConfig& config)
     : vulkanCore_(vulkanCore),
-      hotspineBridge_(std::move(hotspineBridge)),
       marketDataProcessor_(std::move(marketDataProcessor)),
       config_(config),
       lastFrameTime_(std::chrono::high_resolution_clock::now()),

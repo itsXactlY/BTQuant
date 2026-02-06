@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "imgui.h"
+#include "../../include/symbol_registry.hpp"
 
 namespace BTQuant {
 
@@ -180,9 +181,8 @@ ImVec4 calculateChangeColor(double change_value, bool is_percentage) {
 }
 
 WatchlistPanel::WatchlistPanel(const PanelConfig& config,
-                               std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
   // Initialize the subscription to real-time market data updates
   // We'll subscribe to individual symbols when they're added to the watchlist
   subscription_id_ = 0;
@@ -224,7 +224,7 @@ WatchlistPanel::WatchlistPanel(const PanelConfig& config,
   validate_column_settings();
 
   // Initialize the alert manager
-  alert_manager_ = std::make_shared<WatchlistAlertManager>(bridge_, processor_, nullptr);
+  alert_manager_ = std::make_shared<WatchlistAlertManager>(processor_, nullptr);
 
   // Subscribe to all currently watched symbols using the new efficient method
   subscribe_to_all_watchlist_symbols();
@@ -377,15 +377,23 @@ void WatchlistPanel::render() {
   ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
   // Alternative symbol selector dropdown
-  if (bridge_) {
-    auto active_symbols = bridge_->getActiveSymbols();
+  if (processor_) {
+    auto active_symbols = processor_->getActiveSymbols();
     if (!active_symbols.empty()) {
       ImGui::SameLine();
       ImGui::SetNextItemWidth(200);
       if (ImGui::BeginCombo("##SymbolSelector", "Or select...")) {
         for (uint32_t sym_id : active_symbols) {
-          std::string sym_name = bridge_->getSymbolName(sym_id);
-          std::string exchange = bridge_->getExchangeName(sym_id);
+          // Get symbol name and exchange from SymbolRegistry since we don't have direct access from processor
+          std::string sym_name = "SYMBOL_" + std::to_string(sym_id);
+          std::string exchange = "Unknown";
+          
+          auto symbol_info = SymbolRegistry::instance().get_symbol_info(sym_id);
+          if (symbol_info.has_value()) {
+            sym_name = symbol_info->symbol;
+            exchange = symbol_info->exchange;
+          }
+          
           if (sym_name.empty()) continue;
 
           // Check if already in current watchlist group
@@ -413,7 +421,7 @@ void WatchlistPanel::render() {
 
   // Show error message if symbol not found
   std::string symbol_to_add = new_symbol_buffer_;
-  if ((add_clicked || input_entered) && !symbol_to_add.empty() && bridge_) {
+  if ((add_clicked || input_entered) && !symbol_to_add.empty() && processor_) {
     // Trim whitespace from input
     symbol_to_add.erase(0, symbol_to_add.find_first_not_of(" \t"));
     symbol_to_add.erase(symbol_to_add.find_last_not_of(" \t") + 1);
@@ -428,10 +436,17 @@ void WatchlistPanel::render() {
       std::transform(symbol_to_add.begin(), symbol_to_add.end(), symbol_to_add.begin(), ::toupper);
 
       bool symbol_found = false;
-      auto active_symbols = bridge_->getActiveSymbols();
+      auto active_symbols = processor_->getActiveSymbols();
       for (uint32_t sym_id : active_symbols) {
-        std::string sym_name = bridge_->getSymbolName(sym_id);
-        std::string exchange = bridge_->getExchangeName(sym_id);
+        // Get symbol name and exchange from SymbolRegistry since we don't have direct access from processor
+        std::string sym_name = "SYMBOL_" + std::to_string(sym_id);
+        std::string exchange = "Unknown";
+        
+        auto symbol_info = SymbolRegistry::instance().get_symbol_info(sym_id);
+        if (symbol_info.has_value()) {
+          sym_name = symbol_info->symbol;
+          exchange = symbol_info->exchange;
+        }
 
         // Compare the symbol name and check if it's already in the current watchlist group
         if (!sym_name.empty() && sym_name == symbol_to_add &&
@@ -508,10 +523,18 @@ void WatchlistPanel::render() {
   // Context menu for adding/removing symbols
   if (ImGui::BeginPopupContextWindow()) {
     if (ImGui::MenuItem("Add All Symbols")) {
-      if (bridge_) {
-        for (uint32_t sym_id : bridge_->getActiveSymbols()) {
-          std::string sym_name = bridge_->getSymbolName(sym_id);
-          std::string exchange = bridge_->getExchangeName(sym_id);
+      if (processor_) {
+        for (uint32_t sym_id : processor_->getActiveSymbols()) {
+          // Get symbol name and exchange from SymbolRegistry since we don't have direct access from processor
+          std::string sym_name = "SYMBOL_" + std::to_string(sym_id);
+          std::string exchange = "Unknown";
+          
+          auto symbol_info = SymbolRegistry::instance().get_symbol_info(sym_id);
+          if (symbol_info.has_value()) {
+            sym_name = symbol_info->symbol;
+            exchange = symbol_info->exchange;
+          }
+          
           if (!sym_name.empty() &&
               (get_current_watchlist().find(sym_id) == get_current_watchlist().end())) {
             add_symbol(sym_id, sym_name, exchange);

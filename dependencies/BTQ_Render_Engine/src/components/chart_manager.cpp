@@ -4,16 +4,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "imgui.h"
 
 namespace BTQuant {
 
-ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : bridge_(bridge), processor_(processor), next_chart_id_(0) {}
+ChartManager::ChartManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+    : processor_(processor), next_chart_id_(0) {}
 
 uint32_t ChartManager::create_chart(const std::string& symbol_name,
                                     const std::string& exchange_name, uint32_t symbol_id,
@@ -114,15 +112,17 @@ std::optional<uint32_t> ChartManager::getSymbolId(const std::string& symbol_name
 }
 
 void ChartManager::update() {
-  auto active_symbol_ids = bridge_->getActiveSymbols();
+  // Get active symbols from the processor instead of bridge
+  // For now, we'll use a default symbol or get from symbol registry
+  auto all_symbols = SymbolRegistry::instance().get_all_symbols();
 
-  for (uint32_t symbol_id : active_symbol_ids) {
-    std::string symbol_str = bridge_->getSymbolName(symbol_id);
+  for (const auto& symbol_info : all_symbols) {
+    std::string symbol_str = symbol_info.symbol;
 
     bool has_chart = false;
     uint32_t chart_id = 0;
     for (const auto& [id, chart] : charts_) {
-      if (chart.symbol_name == symbol_str && chart.symbol_id == symbol_id) {
+      if (chart.symbol_name == symbol_str && chart.symbol_id == symbol_info.id) {
         has_chart = true;
         chart_id = id;
         break;
@@ -130,13 +130,9 @@ void ChartManager::update() {
     }
 
     if (!has_chart) {
-      std::string exchange = "Unknown";
-      auto info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-      if (info) {
-        exchange = info->exchange;
-      }
-
-      chart_id = create_chart(symbol_str, exchange, symbol_id, RenderEngine::TimeFrame::TF_1SEC);
+      std::string exchange = symbol_info.exchange;
+      
+      chart_id = create_chart(symbol_str, exchange, symbol_info.id, RenderEngine::TimeFrame::TF_1SEC);
     }
 
     populate_chart_data(chart_id);

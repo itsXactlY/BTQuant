@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 #include "watchlist_alerts.hpp"
@@ -41,7 +40,7 @@ class WatchlistPanel : public PanelBase {
  public:
   using SymbolSelectedCallback = std::function<void(uint32_t symbol_id, const std::string& symbol)>;
 
-  WatchlistPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  WatchlistPanel(const PanelConfig& config,
                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
   ~WatchlistPanel();
 
@@ -102,7 +101,6 @@ class WatchlistPanel : public PanelBase {
   void set_sorting(int column_id, bool ascending);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<WatchlistAlertManager> alert_manager_;
 

@@ -12,10 +12,9 @@
 
 namespace BTQuant {
 
-ChartReplay::ChartReplay(std::shared_ptr<HotSpineDataBridge> bridge,
-                         std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+ChartReplay::ChartReplay(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                          ChartManager* chart_manager)
-    : bridge_(bridge), processor_(processor), chart_manager_(chart_manager) {
+    : processor_(processor), chart_manager_(chart_manager) {
     // Initialize with default configuration
     config_.playback_speed = 1.0;
     config_.loop_enabled = false;

@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../indicators/anchored_vwap.hpp"
 #include "../indicators/session_vwap.hpp"
 #include "../market_data_processor.hpp"
@@ -110,7 +109,7 @@ class ChartPanel : public PanelBase {
  public:
   using ScrollSyncCallback = std::function<void(uint64_t start_timestamp, uint64_t end_timestamp)>;
 
-  ChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  ChartPanel(const PanelConfig& config,
              std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
              ChartManager* chart_manager, PanelManager* panel_manager = nullptr);
 
@@ -156,7 +155,6 @@ class ChartPanel : public PanelBase {
   void render_context_menu() override;
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   ChartManager* chart_manager_;
   IndicatorRenderer* indicator_renderer_;

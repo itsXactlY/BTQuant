@@ -15,12 +15,13 @@
 #include "../../include/components/theme_manager.hpp"
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/symbol_registry.hpp"
 
 namespace BTQuant {
 
-TapePanel::TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+TapePanel::TapePanel(const PanelConfig& config,
                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
   // Initialize trade pace history vectors
@@ -750,7 +751,12 @@ void TapePanel::render_trade_table() {
     if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
     // Note: Price filters are not applied to the calculation since they're for search highlighting
     if (!exchange_filter_.empty()) {
-      std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+      // Get exchange from symbol registry since we don't have direct access to exchange name from processor
+      std::string exchange = "";
+      auto symbol_info = SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+      if (symbol_info.has_value()) {
+        exchange = symbol_info->exchange;
+      }
       if (exchange != exchange_filter_) continue;
     }
     if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
@@ -780,7 +786,12 @@ void TapePanel::render_trade_table() {
       if (trade.size < min_size_filter_) continue;
       if (max_size_filter_ > 0 && trade.size > max_size_filter_) continue;  // Add max size filter
       if (!exchange_filter_.empty()) {
-        std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+        // Get exchange from symbol registry since we don't have direct access to exchange name from processor
+      std::string exchange = "";
+      auto symbol_info = SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+      if (symbol_info.has_value()) {
+        exchange = symbol_info->exchange;
+      }
         if (exchange != exchange_filter_) continue;
       }
       if (start_time_filter_ > 0 && trade.timestamp < start_time_filter_) continue;
@@ -807,7 +818,12 @@ void TapePanel::render_trade_table() {
         if (!skip_trade && max_size_filter_ > 0 && trade.size > max_size_filter_)
           skip_trade = true;  // Add max size filter
         if (!skip_trade && !exchange_filter_.empty()) {
-          std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+          // Get exchange from symbol registry since we don't have direct access to exchange name from processor
+      std::string exchange = "";
+      auto symbol_info = SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+      if (symbol_info.has_value()) {
+        exchange = symbol_info->exchange;
+      }
           if (exchange != exchange_filter_) skip_trade = true;
         }
         if (!skip_trade && start_time_filter_ > 0 && trade.timestamp < start_time_filter_)
@@ -832,7 +848,12 @@ void TapePanel::render_trade_table() {
               is_search_match = false;
             if (search_end_time_ > 0 && trade.timestamp > search_end_time_) is_search_match = false;
             if (!search_exchange_.empty()) {
-              std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "";
+              // Get exchange from symbol registry since we don't have direct access to exchange name from processor
+      std::string exchange = "";
+      auto symbol_info = SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+      if (symbol_info.has_value()) {
+        exchange = symbol_info->exchange;
+      }
               if (exchange != search_exchange_) is_search_match = false;
             }
 
@@ -1265,7 +1286,12 @@ void BTQuant::TapePanel::exportTradesToCSV() {
     const auto& trade = cached_trades_[i];
 
     // Get exchange name from bridge
-    std::string exchange = bridge_ ? bridge_->getExchangeName(trade.symbol_id) : "Unknown";
+    // Get exchange from symbol registry since we don't have direct access to exchange name from processor
+    std::string exchange = "Unknown";
+    auto symbol_info = SymbolRegistry::instance().get_symbol_info(trade.symbol_id);
+    if (symbol_info.has_value()) {
+      exchange = symbol_info->exchange;
+    }
 
     // Get symbol name
     std::string symbol = trade.symbol.empty() ? symbol_name_ : trade.symbol;

@@ -20,7 +20,6 @@ The application is built with performance in mind, utilizing Vulkan graphics and
 - **Graphics**: Vulkan API with ImGui for UI
 - **Build System**: CMake
 - **Threading**: TBB (Threading Building Blocks) and custom thread schedulers
-- **Data Bridge**: HotSpineDataBridge for market data
 - **UI Framework**: ImGui with docking branch
 - **Plotting**: ImPlot for charting capabilities
 
@@ -126,7 +125,6 @@ The BTQ Render Engine follows a modular architecture with clear separation of co
 ### Core Components
 
 #### 1. Data Layer
-- **HotSpineDataBridge**: Handles real-time market data ingestion
 - **UnifiedDataPipeline**: Processes and normalizes incoming data streams
 - **CacheManager**: Manages data caching and retrieval
 - **SymbolRegistry**: Maintains available trading symbols and metadata

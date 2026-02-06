@@ -11,7 +11,6 @@
 #include "../data/VolumeDataTypes.h"
 #include "../vulkan_base_types.hpp"
 #include "VulkanSynchronization.h"
-#include "hotspine_data_bridge.hpp"
 #include "trading/HotspineData.h"
 
 namespace BTQuant {
@@ -60,7 +59,6 @@ enum class RendererError {
 class MarketMicrostructureRenderer {
  public:
   MarketMicrostructureRenderer(VulkanCore* vulkanCore,
-                               std::shared_ptr<HotSpineDataBridge> hotspineBridge,
                                std::shared_ptr<MarketDataProcessor> marketDataProcessor,
                                const RendererConfig& config = RendererConfig());
 
@@ -190,7 +188,6 @@ class MarketMicrostructureRenderer {
 
  private:
   VulkanCore* vulkanCore_ = nullptr;
-  std::shared_ptr<HotSpineDataBridge> hotspineBridge_;
   std::shared_ptr<MarketDataProcessor> marketDataProcessor_;
   RendererConfig config_;
   bool initialized_ = false;

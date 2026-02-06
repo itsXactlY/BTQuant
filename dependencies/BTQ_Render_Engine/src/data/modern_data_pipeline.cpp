@@ -1,4 +1,4 @@
-#include "../include/data/unified_data_pipeline.hpp"
+#include "../include/modern_data_pipeline.hpp"
 #include "../include/data/ui_data_manager.hpp"
 
 #include <chrono>
@@ -8,10 +8,10 @@ namespace BTQuant {
 namespace Data {
 
 // ============================================================================
-// UnifiedDataPipeline Implementation
+// ModernDataPipeline Implementation
 // ============================================================================
 
-UnifiedDataPipeline::UnifiedDataPipeline(
+ModernDataPipeline::ModernDataPipeline(
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     std::shared_ptr<RenderEngine::SymbolManager> symbol_manager)
     : processor_(processor), symbol_manager_(symbol_manager) {
@@ -37,28 +37,28 @@ UnifiedDataPipeline::UnifiedDataPipeline(
   }
 }
 
-UnifiedDataPipeline::~UnifiedDataPipeline() { shutdown(); }
+ModernDataPipeline::~ModernDataPipeline() { shutdown(); }
 
-bool UnifiedDataPipeline::initialize() {
+bool ModernDataPipeline::initialize() {
   running_ = true;
-  processing_thread_ = std::thread(&UnifiedDataPipeline::processing_loop, this);
+  processing_thread_ = std::thread(&ModernDataPipeline::processing_loop, this);
   return true;
 }
 
-uint32_t UnifiedDataPipeline::subscribe(const DataSubscription& subscription) {
+uint32_t ModernDataPipeline::subscribe(const DataSubscription& subscription) {
   std::lock_guard<std::mutex> lock(subscriptions_mutex_);
   uint32_t id = next_subscription_id_++;
   subscriptions_[id] = subscription;
   return id;
 }
 
-void UnifiedDataPipeline::unsubscribe(uint32_t subscription_id) {
+void ModernDataPipeline::unsubscribe(uint32_t subscription_id) {
   std::lock_guard<std::mutex> lock(subscriptions_mutex_);
   subscriptions_.erase(subscription_id);
 }
 
-void UnifiedDataPipeline::publish(DataType type, uint32_t symbol_id, const std::string& symbol_name,
-                                  const std::string& exchange, const void* data, size_t data_size) {
+void ModernDataPipeline::publish(DataType type, uint32_t symbol_id, const std::string& symbol_name,
+                                 const std::string& exchange, const void* data, size_t data_size) {
   DataEvent event;
   event.type = type;
   event.symbol_id = symbol_id;
@@ -79,11 +79,11 @@ void UnifiedDataPipeline::publish(DataType type, uint32_t symbol_id, const std::
   cv_.notify_one();
 }
 
-std::string UnifiedDataPipeline::get_current_symbol() const { return current_symbol_; }
+std::string ModernDataPipeline::get_current_symbol() const { return current_symbol_; }
 
-uint32_t UnifiedDataPipeline::get_current_symbol_id() const { return current_symbol_id_; }
+uint32_t ModernDataPipeline::get_current_symbol_id() const { return current_symbol_id_; }
 
-void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
+void ModernDataPipeline::set_current_symbol(const std::string& symbol_name) {
   current_symbol_ = symbol_name;
   ui_data_manager_->set_current_symbol(symbol_name);
 
@@ -119,7 +119,7 @@ void UnifiedDataPipeline::set_current_symbol(const std::string& symbol_name) {
   cv_.notify_one();
 }
 
-std::vector<std::string> UnifiedDataPipeline::get_available_symbols() const {
+std::vector<std::string> ModernDataPipeline::get_available_symbols() const {
   std::vector<std::string> symbols;
 
   if (symbol_manager_) {
@@ -132,7 +132,7 @@ std::vector<std::string> UnifiedDataPipeline::get_available_symbols() const {
   return symbols;
 }
 
-void UnifiedDataPipeline::process_events() {
+void ModernDataPipeline::process_events() {
   std::vector<DataEvent> local_queue;
 
   {
@@ -145,7 +145,7 @@ void UnifiedDataPipeline::process_events() {
   }
 }
 
-void UnifiedDataPipeline::dispatch_event(const DataEvent& event) {
+void ModernDataPipeline::dispatch_event(const DataEvent& event) {
   std::lock_guard<std::mutex> lock(subscriptions_mutex_);
 
   for (const auto& [id, subscription] : subscriptions_) {
@@ -172,7 +172,7 @@ void UnifiedDataPipeline::dispatch_event(const DataEvent& event) {
   }
 }
 
-void UnifiedDataPipeline::processing_loop() {
+void ModernDataPipeline::processing_loop() {
   while (running_) {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cv_.wait(lock, [this] { return !event_queue_.empty() || !running_; });
@@ -190,7 +190,7 @@ void UnifiedDataPipeline::processing_loop() {
   }
 }
 
-void UnifiedDataPipeline::shutdown() {
+void ModernDataPipeline::shutdown() {
   if (running_) {
     running_ = false;
     cv_.notify_all();

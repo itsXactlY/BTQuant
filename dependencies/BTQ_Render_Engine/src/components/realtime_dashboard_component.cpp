@@ -9,11 +9,9 @@
 namespace BTQuant {
 
 RealtimeDashboardComponent::RealtimeDashboardComponent(
-    std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     RenderEngine::MarketMicrostructureRenderer* renderer)
     : UIComponent({0, 0}, {0, 0}),
-      bridge_(std::move(bridge)),
       processor_(std::move(processor)),
       microstructure_renderer_(renderer) {
   // Initialize Trading Subsystems
@@ -28,7 +26,7 @@ RealtimeDashboardComponent::RealtimeDashboardComponent(
 
   // Initialize Panel Manager
   panel_manager_ =
-      std::make_unique<PanelManager>(bridge_, processor_, order_manager_, position_manager_,
+      std::make_unique<PanelManager>(processor_, order_manager_, position_manager_,
                                      risk_assessment_, microstructure_renderer_);
 
   panel_manager_->initialize();

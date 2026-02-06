@@ -6,13 +6,13 @@
 
 #include "imgui.h"
 #include "implot.h"
+#include "../../include/symbol_registry.hpp"
 
 namespace BTQuant {
 
 RiskAnalyzerPanel::RiskAnalyzerPanel(const PanelConfig& config,
-                                   std::shared_ptr<HotSpineDataBridge> bridge,
                                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
   // Initialize with some default data points
   config_.title = "Risk Analyzer - " + symbol_;
 }
@@ -37,10 +37,13 @@ void RiskAnalyzerPanel::render() {
 
   // Auto-select first available symbol if none set
   if (processor_ && symbol_.empty()) {
-    auto active_symbols = bridge_ ? bridge_->getActiveSymbols() : std::vector<uint32_t>{};
+    auto active_symbols = processor_ ? processor_->getActiveSymbols() : std::vector<uint32_t>{};
     if (!active_symbols.empty()) {
       auto symbol_id = active_symbols[0];
-      symbol_ = bridge_ ? bridge_->getSymbolName(symbol_id) : "BTC-USDT";
+      // For now, use a default name since we don't have direct access to symbol names from processor
+      // In a real implementation, this would come from SymbolRegistry or similar
+      auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+      symbol_ = symbol_info.has_value() ? symbol_info->symbol : "SYMBOL_" + std::to_string(symbol_id);
       config_.title = "Risk Analyzer - " + symbol_;
     }
   }
@@ -72,15 +75,17 @@ void RiskAnalyzerPanel::set_symbol(const std::string& symbol, const std::string&
 }
 
 void RiskAnalyzerPanel::update_current_price() {
-  if (!bridge_ || symbol_.empty()) return;
+  if (!processor_ || symbol_.empty()) return;
   
-  // Get symbol ID from bridge since processor doesn't have getSymbolId method
+  // Get symbol ID from SymbolRegistry since we don't have direct access through processor
   uint32_t symbol_id = 0;
   
-  // Find the symbol ID by iterating through active symbols
-  auto active_symbols = bridge_->getActiveSymbols();
+  // Find the symbol ID by iterating through active symbols from processor
+  auto active_symbols = processor_->getActiveSymbols();
   for (auto id : active_symbols) {
-    if (bridge_->getSymbolName(id) == symbol_) {
+    // Get symbol info from registry to match the symbol name
+    auto symbol_info = SymbolRegistry::instance().get_symbol_info(id);
+    if (symbol_info.has_value() && symbol_info->symbol == symbol_) {
       symbol_id = id;
       break;
     }

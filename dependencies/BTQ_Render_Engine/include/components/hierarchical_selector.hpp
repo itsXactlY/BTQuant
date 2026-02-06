@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../symbol_registry.hpp"
 #include "chart_manager.hpp"

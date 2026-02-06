@@ -5,7 +5,6 @@
 #include <memory>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -32,7 +31,7 @@ enum class DepthChartVisualizationMode {
  */
 class DepthChartPanel : public PanelBase {
  public:
-  DepthChartPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  DepthChartPanel(const PanelConfig& config,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~DepthChartPanel() override;
@@ -41,7 +40,6 @@ class DepthChartPanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;

@@ -12,34 +12,34 @@
 namespace BTQuant {
 
 OrderbookHistoryPanel::OrderbookHistoryPanel(const PanelConfig& config,
-                                           std::shared_ptr<HotSpineDataBridge> bridge,
                                            std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
     // Initialize with current time for last capture to prevent immediate capture
     last_capture_time_ = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 }
 
 void OrderbookHistoryPanel::update(float /*dt*/) {
-    // Request data update from data bridge
-    bridge_->sync();
-
     // Check if it's time to capture a new snapshot
     uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-        
+
     if (current_time - last_capture_time_ >= static_cast<uint64_t>(capture_interval_ms_ * 1000)) {
         // Get active symbols to determine which one to capture
-        auto active_symbols = processor_->getActiveSymbols();
-        if (!active_symbols.empty()) {
-            uint32_t sym_id = active_symbols[0]; // Use first active symbol
-            std::string sym_name = bridge_->getSymbolName(sym_id);
-            
-            // Capture snapshot if we have valid orderbook data
-            auto orderbook_opt = processor_->getOrderbookData(sym_id);
-            if (orderbook_opt.has_value()) {
-                captureSnapshot(sym_id, sym_name);
-                last_capture_time_ = current_time;
+        if (processor_) {
+            auto active_symbols = processor_->getActiveSymbols();
+            if (!active_symbols.empty()) {
+                uint32_t sym_id = active_symbols[0]; // Use first active symbol
+                // For now, we'll use a default name since we don't have direct access to symbol names from processor
+                // In a real implementation, this would come from SymbolRegistry or similar
+                std::string sym_name = "SYMBOL_" + std::to_string(sym_id);
+
+                // Capture snapshot if we have valid orderbook data
+                auto orderbook_opt = processor_->getOrderbookData(sym_id);
+                if (orderbook_opt.has_value()) {
+                    captureSnapshot(sym_id, sym_name);
+                    last_capture_time_ = current_time;
+                }
             }
         }
     }

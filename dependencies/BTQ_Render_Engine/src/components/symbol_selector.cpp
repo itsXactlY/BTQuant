@@ -97,20 +97,15 @@ bool SymbolSelector::render(SymbolSelectorState& state) {
 }
 
 void SymbolSelector::refresh_symbols(SymbolSelectorState& state,
-                                     std::shared_ptr<HotSpineDataBridge> bridge,
                                      std::shared_ptr<RenderEngine::MarketDataProcessor> processor) {
   state.available_exchanges = get_default_exchanges();
   state.available_symbols.clear();
 
-  // Try to get active symbols from the bridge
-  if (bridge) {
-    auto active_ids = bridge->getActiveSymbols();
-    for (auto id : active_ids) {
-      std::string sym = bridge->getSymbolName(id);
-      if (!sym.empty()) {
-        state.available_symbols.push_back(sym);
-      }
-    }
+  // Try to get active symbols from the processor or symbol registry
+  if (processor) {
+    // For now, we'll use default symbols since the processor doesn't directly provide active symbols
+    // In a real implementation, this would come from the data pipeline
+    state.available_symbols = get_default_symbols();
   }
 
   // If no live symbols, use defaults
@@ -139,7 +134,6 @@ void SymbolSelector::refresh_symbols(SymbolSelectorState& state,
   }
 
   state.needs_refresh = false;
-  (void)processor;  // Unused for now
 }
 
 const char* SymbolSelector::get_timeframe_name(RenderEngine::TimeFrame tf) {

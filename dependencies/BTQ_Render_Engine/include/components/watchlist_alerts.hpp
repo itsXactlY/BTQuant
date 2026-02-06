@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "alerts_panel.hpp"
 
@@ -42,8 +41,7 @@ class WatchlistAlertManager {
 public:
     using AlertTriggeredCallback = std::function<void(const WatchlistPriceAlert&, double current_price)>;
 
-    WatchlistAlertManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                         std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    WatchlistAlertManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                          std::shared_ptr<AlertsPanel> alerts_panel);
     ~WatchlistAlertManager() = default;
 
@@ -89,7 +87,6 @@ public:
     }
 
 private:
-    std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     std::shared_ptr<AlertsPanel> alerts_panel_;
     AlertsPanel* alerts_panel_raw_ = nullptr;  // Raw pointer for panel manager connections

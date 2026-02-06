@@ -4,7 +4,6 @@
 
 #include <memory>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -26,7 +25,7 @@ namespace BTQuant {
  */
 class TapePanel : public PanelBase {
  public:
-  TapePanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  TapePanel(const PanelConfig& config,
             std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   ~TapePanel() override;
@@ -35,7 +34,6 @@ class TapePanel : public PanelBase {
   void set_symbol(uint32_t symbol_id, const std::string& symbol_name);
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   uint32_t symbol_id_ = 0;

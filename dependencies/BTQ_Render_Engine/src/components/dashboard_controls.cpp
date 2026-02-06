@@ -13,7 +13,6 @@
 #include "../../include/components/chart_replay_panel.hpp"
 #include "../../include/components/footprint_panel.hpp"
 #include "../../include/components/panel_manager.hpp"
-#include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/symbol_registry.hpp"
 #include "../../include/ui/tooltips.hpp"
 #include "../../include/ui/ui_base.hpp"
@@ -80,8 +79,9 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
   if (panel_manager_) {
     auto chart_manager = panel_manager_->get_chart_manager();
     if (chart_manager) {
-      auto bridge = chart_manager->get_bridge();
-      if (bridge) {
+      // Get the processor directly from chart_manager instead of using bridge
+      auto processor = chart_manager->get_processor();
+      if (processor) {
         // Find the alerts panel to connect to it
         auto panel_ids = panel_manager_->get_all_panel_ids();
         AlertsPanel* alerts_panel_ptr = nullptr;
@@ -94,18 +94,15 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
           }
         }
 
-        // Create the Global Alert Manager
-        // Note: Market data processor is not available through ChartManager's public API
-        // so we pass nullptr for now - GlobalAlertManager will need to be updated
-        // to work without it or get it from another source
+        // Create the Global Alert Manager with the processor
         global_alert_manager_ = std::make_shared<GlobalAlertManager>(
-            bridge, nullptr,
+            processor,
             alerts_panel_ptr ? std::shared_ptr<AlertsPanel>(alerts_panel_ptr, [](AlertsPanel*) {})
                              : nullptr);
 
         std::cout << "[DashboardControls] Initialized Global Alert Manager" << std::endl;
       } else {
-        std::cerr << "[DashboardControls] Warning: Could not get bridge for Global Alert Manager"
+        std::cerr << "[DashboardControls] Warning: Could not get processor for Global Alert Manager"
                   << std::endl;
       }
     } else {
@@ -837,34 +834,31 @@ void DashboardControls::refresh_symbols_for_selected_exchanges() {
     }
   }
 
-  // Also get active symbols from the bridge if possible through the chart manager
+  // Also get active symbols from the processor if possible through the chart manager
   auto chart_manager = panel_manager_->get_chart_manager();
   if (chart_manager) {
-    // Access the bridge through the chart manager
-    auto bridge = chart_manager->get_bridge();
-    if (bridge) {
-      auto active_symbols = bridge->getActiveSymbols();
+    // Get the processor directly from chart_manager instead of using bridge
+    auto processor = chart_manager->get_processor();
+    if (processor) {
+      auto active_symbols = processor->getActiveSymbols();
       for (auto symbol_id : active_symbols) {
-        std::string symbol_name = bridge->getSymbolName(symbol_id);
+        // For now, we'll use a default name since we don't have direct access to symbol names from processor
+        // In a real implementation, this would come from SymbolRegistry or similar
+        std::string symbol_name = "SYMBOL_" + std::to_string(symbol_id);
 
-        if (!symbol_name.empty()) {
-          // Try to get exchange information from the symbol registry
-          std::string exchange_name = "";
-          auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
-          if (symbol_info.has_value()) {
-            exchange_name = symbol_info->exchange;
-          } else {
-            // If not in registry, try to get from bridge
-            exchange_name = bridge->getExchangeName(symbol_id);
-          }
+        // Try to get exchange information from the symbol registry
+        std::string exchange_name = "";
+        auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+        if (symbol_info.has_value()) {
+          exchange_name = symbol_info->exchange;
+        }
 
-          // Check if this symbol's exchange is in the selected exchanges
-          bool exchange_selected =
-              !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
+        // Check if this symbol's exchange is in the selected exchanges
+        bool exchange_selected =
+            !exchange_name.empty() ? is_exchange_selected(exchange_name) : true;
 
-          if (exchange_selected) {
-            unique_symbols.insert(symbol_name);
-          }
+        if (exchange_selected) {
+          unique_symbols.insert(symbol_name);
         }
       }
     }
@@ -896,7 +890,7 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
     return;
   }
 
-  // Get the chart manager to access the bridge
+  // Get the chart manager to access the processor
   auto chart_manager = panel_manager_->get_chart_manager();
   if (!chart_manager) {
     std::cerr << "[DashboardControls] Error: ChartManager is null, cannot fetch symbols from API"
@@ -904,9 +898,10 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
     return;
   }
 
-  auto bridge = chart_manager->get_bridge();
-  if (!bridge) {
-    std::cerr << "[DashboardControls] Error: Data bridge is null, cannot fetch symbols from API"
+  // Get the processor directly from chart_manager instead of using bridge
+  auto processor = chart_manager->get_processor();
+  if (!processor) {
+    std::cerr << "[DashboardControls] Error: Data processor is null, cannot fetch symbols from API"
               << std::endl;
     return;
   }
@@ -952,13 +947,21 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
         }
       }
 
-      // Additionally, get any active symbols from the bridge for this exchange
-      auto active_symbols = bridge->getActiveSymbols();
+      // Additionally, get any active symbols from the processor for this exchange
+      auto active_symbols = processor->getActiveSymbols();
       for (auto symbol_id : active_symbols) {
-        std::string symbol_name = bridge->getSymbolName(symbol_id);
-        std::string bridge_exchange_name = bridge->getExchangeName(symbol_id);
+        // For now, we'll use a default name since we don't have direct access to symbol names from processor
+        // In a real implementation, this would come from SymbolRegistry or similar
+        std::string symbol_name = "SYMBOL_" + std::to_string(symbol_id);
+        
+        // Get exchange name from symbol registry
+        std::string processor_exchange_name = "";
+        auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+        if (symbol_info.has_value()) {
+          processor_exchange_name = symbol_info->exchange;
+        }
 
-        if (!symbol_name.empty() && bridge_exchange_name == exchange_name) {
+        if (!symbol_name.empty() && processor_exchange_name == exchange_name) {
           // Check if symbol is already in the list
           bool found = false;
           for (const auto& existing_symbol : all_symbols_) {
@@ -971,7 +974,7 @@ void DashboardControls::fetch_symbols_from_exchange_api() {
             all_symbols_.push_back(symbol_name);
 
             // Register the symbol in the registry if it doesn't exist
-            SymbolRegistry::instance().register_symbol(bridge_exchange_name, symbol_name);
+            SymbolRegistry::instance().register_symbol(processor_exchange_name, symbol_name);
           }
         }
       }

@@ -13,9 +13,8 @@
 namespace BTQuant {
 
 VolumeProfilePanel::VolumeProfilePanel(const PanelConfig& config,
-                                       std::shared_ptr<HotSpineDataBridge> bridge,
                                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
   volume_profile_.reserve(NUM_PRICE_LEVELS);
 
   // Initialize predefined trading sessions

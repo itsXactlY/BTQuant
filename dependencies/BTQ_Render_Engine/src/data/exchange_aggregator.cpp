@@ -12,10 +12,10 @@
 namespace BTQuant {
 namespace Data {
 
-ExchangeAggregator::ExchangeAggregator(std::shared_ptr<HotSpineDataBridge> bridge,
+ExchangeAggregator::ExchangeAggregator(
                                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                        std::shared_ptr<RenderEngine::SymbolManager> symbol_manager)
-    : bridge_(bridge), processor_(processor), symbol_manager_(symbol_manager) {}
+    : processor_(processor), symbol_manager_(symbol_manager) {}
 
 ExchangeAggregator::~ExchangeAggregator() {
   if (running_) {

@@ -9,9 +9,8 @@
 namespace BTQuant {
 
 StatusBarPanel::StatusBarPanel(const PanelConfig& config,
-                               std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    : PanelBase(config), processor_(processor) {
   config_.resizable = false;
   config_.movable = false;
 }
@@ -74,15 +73,15 @@ void StatusBarPanel::render() {
 }
 
 void StatusBarPanel::update_connection_status() {
-  // Check bridge exists
-  if (!bridge_) {
+  // Check if processor exists
+  if (!processor_) {
     connection_status_ = false;
-    connection_text_ = "No Bridge";
+    connection_text_ = "No Processor";
     return;
   }
 
-  // Check if we have active symbols (SHM is readable)
-  auto active_symbols = bridge_->getActiveSymbols();
+  // Check if we have active symbols
+  auto active_symbols = processor_->getActiveSymbols();
   if (active_symbols.empty()) {
     connection_status_ = false;
     connection_text_ = "No Symbols";
@@ -90,15 +89,10 @@ void StatusBarPanel::update_connection_status() {
   }
 
   // Check data freshness via processor metrics
-  if (processor_) {
-    auto metrics = processor_->getPerformanceMetrics();
-    bool data_flowing = (metrics.trades_per_second > 0 || metrics.orderbooks_per_second > 0);
-    connection_status_ = data_flowing;
-    connection_text_ = data_flowing ? "Live" : "Stale";
-  } else {
-    connection_status_ = true;
-    connection_text_ = "Connected";
-  }
+  auto metrics = processor_->getPerformanceMetrics();
+  bool data_flowing = (metrics.trades_per_second > 0 || metrics.orderbooks_per_second > 0);
+  connection_status_ = data_flowing;
+  connection_text_ = data_flowing ? "Live" : "Stale";
 }
 
 void StatusBarPanel::update_performance_metrics() {

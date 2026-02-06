@@ -9,10 +9,9 @@
 namespace BTQuant {
 
 QuantWorkspaceComponent::QuantWorkspaceComponent(
-    std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     RenderEngine::MarketMicrostructureRenderer* micro_renderer)
-    : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), bridge_(bridge), processor_(processor) {
+    : UIComponent(::glm::vec2(0, 0), ::glm::vec2(0, 0)), processor_(processor) {
   // Initialize Trading Systems
   order_manager_ = std::make_shared<OrderManager>();
   position_manager_ = std::make_shared<PositionManager>();
@@ -25,7 +24,7 @@ QuantWorkspaceComponent::QuantWorkspaceComponent(
 
   // Initialize the new panel-based system
   panel_manager_ = std::make_unique<PanelManager>(
-      bridge_, processor_, order_manager_, position_manager_, risk_assessment_, micro_renderer);
+      processor_, order_manager_, position_manager_, risk_assessment_, micro_renderer);
   panel_manager_->initialize();
 
   // Load symbols from shared memory for hierarchical selector
@@ -41,10 +40,8 @@ void QuantWorkspaceComponent::initialize_vulkan_resources(VulkanCore* core) {
 }
 
 void QuantWorkspaceComponent::update(float dt) {
-  // Sync data from shared memory on every frame
-  if (bridge_) {
-    bridge_->sync();
-  }
+  // Process data events from the pipeline
+  // The processor handles its own updates internally
   panel_manager_->update(dt);
 }
 

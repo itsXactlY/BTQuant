@@ -10,7 +10,6 @@
 #include <fstream>
 #include <sstream>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "chart_manager.hpp"
 
@@ -45,8 +44,7 @@ struct BacktestMetrics {
 
 class ChartReplay {
 public:
-    ChartReplay(std::shared_ptr<HotSpineDataBridge> bridge,
-                std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    ChartReplay(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                 ChartManager* chart_manager);
 
     ~ChartReplay();
@@ -100,7 +98,6 @@ private:
     void update_performance_metrics();
 
     // Member variables
-    std::shared_ptr<HotSpineDataBridge> bridge_;
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
     ChartManager* chart_manager_;
 

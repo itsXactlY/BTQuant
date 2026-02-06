@@ -43,19 +43,17 @@ using json = nlohmann::json;
 
 namespace BTQuant {
 
-PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
-                           std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+PanelManager::PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                            std::shared_ptr<OrderManager> order_manager,
                            std::shared_ptr<PositionManager> position_manager,
                            std::shared_ptr<RiskAssessment> risk_assessment,
                            RenderEngine::MarketMicrostructureRenderer* micro_renderer)
-    : bridge_(bridge),
-      processor_(processor),
+    : processor_(processor),
       order_manager_(order_manager),
       position_manager_(position_manager),
       risk_assessment_(risk_assessment),
       micro_renderer_(micro_renderer) {
-  chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
+  chart_manager_ = std::make_unique<ChartManager>(processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
   strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
 }
@@ -88,27 +86,8 @@ void PanelManager::initialize() {
   add_panel(PanelType::HEATMAP, "DOM Surface", 0, 4, 2, 1);
   add_panel(PanelType::WATCHLIST, "Watchlist", 2, 4, 1, 1);
 
-  // Initialize orderbook with first active symbol
-  auto active_symbols = bridge_->getActiveSymbols();
-  if (!active_symbols.empty()) {
-    uint32_t symbol_id = active_symbols[0];
-    std::string symbol_name = bridge_->getSymbolName(symbol_id);
-    if (!symbol_name.empty()) {
-      set_active_symbol(symbol_id, symbol_name);
-
-      // Add initial symbol to watchlist (find watchlist panel dynamically)
-      for (auto& [id, panel] : panels_) {
-        if (panel->get_config().type == PanelType::WATCHLIST) {
-          auto watchlist_panel = dynamic_cast<WatchlistPanel*>(panel.get());
-          if (watchlist_panel) {
-            watchlist_panel->add_symbol(symbol_id, symbol_name,
-                                        bridge_->getExchangeName(symbol_id));
-          }
-          break;
-        }
-      }
-    }
-  }
+  // Initialize with default symbol
+  set_active_symbol(1, "BTC-USDT"); // Use a default symbol ID and name
 }
 
 void PanelManager::update(float dt) {
@@ -184,7 +163,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), this);
+      panel = std::make_unique<ChartPanel>(config, processor_, chart_manager_.get(), this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
@@ -238,11 +217,11 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       break;
     }
     case PanelType::TIME_AND_SALES: {
-      panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<TimeAndSalesPanel>(config, processor_);
       break;
     }
     case PanelType::HISTORICAL_TIME_SALES: {
-      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, processor_);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -256,16 +235,16 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<DomSurfacePanel>(processor_);
       break;
     case PanelType::ORDERBOOK:
-      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
+      panel = std::make_unique<OrderbookPanel>(config, processor_);
       break;
     case PanelType::PERFORMANCE_MONITOR:
       panel = std::make_unique<PerformanceMonitorPanel>(config);
       break;
     case PanelType::STATUS_BAR:
-      panel = std::make_unique<StatusBarPanel>(config, bridge_, processor_);
+      panel = std::make_unique<StatusBarPanel>(config, processor_);
       break;
     case PanelType::WATCHLIST: {
-      auto watchlist = std::make_unique<WatchlistPanel>(config, bridge_, processor_);
+      auto watchlist = std::make_unique<WatchlistPanel>(config, processor_);
       watchlist->set_symbol_selected_callback(
           [this](uint32_t symbol_id, const std::string& symbol_name) {
             this->set_active_symbol(symbol_id, symbol_name);
@@ -274,13 +253,13 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       break;
     }
     case PanelType::TAPE:
-      panel = std::make_unique<TapePanel>(config, bridge_, processor_);
+      panel = std::make_unique<TapePanel>(config, processor_);
       break;
     case PanelType::VOLUME_PROFILE:
-      panel = std::make_unique<VolumeProfilePanel>(config, bridge_, processor_);
+      panel = std::make_unique<VolumeProfilePanel>(config, processor_);
       break;
     case PanelType::DEPTH_CHART:
-      panel = std::make_unique<DepthChartPanel>(config, bridge_, processor_);
+      panel = std::make_unique<DepthChartPanel>(config, processor_);
       break;
     case PanelType::FOOTPRINT_CHART:
       panel = std::make_unique<FootprintPanel>(config, micro_renderer_);
@@ -319,10 +298,10 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       panel = std::make_unique<LogPanel>(config);
       break;
     case PanelType::CHART_REPLAY:
-      panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
+      panel = std::make_unique<ChartReplayPanel>(config, processor_, chart_manager_.get());
       break;
     case PanelType::RISK_ANALYZER:
-      panel = std::make_unique<RiskAnalyzerPanel>(config, bridge_, processor_);
+      panel = std::make_unique<RiskAnalyzerPanel>(config, processor_);
       break;
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
@@ -382,7 +361,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
   std::unique_ptr<PanelBase> panel;
   switch (type) {
     case PanelType::CHART:
-      panel = std::make_unique<ChartPanel>(config, bridge_, processor_, chart_manager_.get(), this);
+      panel = std::make_unique<ChartPanel>(config, processor_, chart_manager_.get(), this);
 
       // Set up scroll synchronization from Chart to TimeStats (reverse direction)
       if (auto* chart_panel = dynamic_cast<ChartPanel*>(panel.get())) {
@@ -399,11 +378,11 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       }
       break;
     case PanelType::TIME_AND_SALES: {
-      panel = std::make_unique<TimeAndSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<TimeAndSalesPanel>(config, processor_);
       break;
     }
     case PanelType::HISTORICAL_TIME_SALES: {
-      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, processor_);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -417,16 +396,16 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<DomSurfacePanel>(processor_);
       break;
     case PanelType::ORDERBOOK:
-      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
+      panel = std::make_unique<OrderbookPanel>(config, processor_);
       break;
     case PanelType::PERFORMANCE_MONITOR:
       panel = std::make_unique<PerformanceMonitorPanel>(config);
       break;
     case PanelType::STATUS_BAR:
-      panel = std::make_unique<StatusBarPanel>(config, bridge_, processor_);
+      panel = std::make_unique<StatusBarPanel>(config, processor_);
       break;
     case PanelType::WATCHLIST: {
-      auto watchlist = std::make_unique<WatchlistPanel>(config, bridge_, processor_);
+      auto watchlist = std::make_unique<WatchlistPanel>(config, processor_);
       watchlist->set_symbol_selected_callback(
           [this](uint32_t symbol_id, const std::string& symbol_name) {
             this->set_active_symbol(symbol_id, symbol_name);
@@ -435,13 +414,13 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     }
     case PanelType::TAPE:
-      panel = std::make_unique<TapePanel>(config, bridge_, processor_);
+      panel = std::make_unique<TapePanel>(config, processor_);
       break;
     case PanelType::VOLUME_PROFILE:
-      panel = std::make_unique<VolumeProfilePanel>(config, bridge_, processor_);
+      panel = std::make_unique<VolumeProfilePanel>(config, processor_);
       break;
     case PanelType::DEPTH_CHART:
-      panel = std::make_unique<DepthChartPanel>(config, bridge_, processor_);
+      panel = std::make_unique<DepthChartPanel>(config, processor_);
       break;
     case PanelType::FOOTPRINT_CHART:
       panel = std::make_unique<FootprintPanel>(config, micro_renderer_);
@@ -480,10 +459,10 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       panel = std::make_unique<LogPanel>(config);
       break;
     case PanelType::CHART_REPLAY:
-      panel = std::make_unique<ChartReplayPanel>(config, bridge_, processor_, chart_manager_.get());
+      panel = std::make_unique<ChartReplayPanel>(config, processor_, chart_manager_.get());
       break;
     case PanelType::RISK_ANALYZER:
-      panel = std::make_unique<RiskAnalyzerPanel>(config, bridge_, processor_);
+      panel = std::make_unique<RiskAnalyzerPanel>(config, processor_);
       break;
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
@@ -636,12 +615,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* orderbook = dynamic_cast<OrderbookPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             orderbook->set_symbol(symbol_id, symbol);
@@ -661,15 +638,19 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* watchlist = dynamic_cast<WatchlistPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
-            watchlist->add_symbol(symbol_id, symbol, bridge_->getExchangeName(symbol_id));
+            // Get exchange name from symbol registry
+            std::string exchange = "Unknown";
+            auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+            if (symbol_info.has_value()) {
+              exchange = symbol_info->exchange;
+            }
+            watchlist->add_symbol(symbol_id, symbol, exchange);
           }
         }
         break;
@@ -678,12 +659,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* tape = dynamic_cast<TapePanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             tape->set_symbol(symbol_id, symbol);
@@ -695,12 +674,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* vp = dynamic_cast<VolumeProfilePanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             vp->set_symbol(symbol_id, symbol);
@@ -712,12 +689,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* dc = dynamic_cast<DepthChartPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             dc->set_symbol(symbol_id, symbol);
@@ -729,12 +704,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* fp = dynamic_cast<FootprintPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             fp->set_symbol_id(symbol_id);
@@ -746,12 +719,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* tpo = dynamic_cast<TpoPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             tpo->set_symbol_id(symbol_id);
@@ -763,12 +734,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* dom = dynamic_cast<DomSurfacePanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             dom->setSymbol(symbol_id);
@@ -780,12 +749,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* tas = dynamic_cast<TimeAndSalesPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             tas->set_symbol(symbol_id, symbol);
@@ -797,12 +764,10 @@ void PanelManager::set_panel_symbol(uint32_t panel_id, const std::string& symbol
         if (auto* hts = dynamic_cast<HistoricalTimeSalesPanel*>(it->second.get())) {
           // Find the symbol ID for the given symbol name
           uint32_t symbol_id = 0;
-          if (bridge_) {
-            // Use SymbolRegistry to find the symbol ID
-            auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
-            if (symbol_info_opt) {
-              symbol_id = symbol_info_opt->id;
-            }
+          // Use SymbolRegistry to find the symbol ID
+          auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_name(symbol);
+          if (symbol_info_opt) {
+            symbol_id = symbol_info_opt->id;
           }
           if (symbol_id != 0) {
             hts->set_symbol(symbol_id, symbol);
@@ -1228,14 +1193,26 @@ void PanelManager::set_active_symbol(uint32_t symbol_id, const std::string& symb
       }
       case PanelType::CHART: {
         if (auto* chart = dynamic_cast<ChartPanel*>(panel.get())) {
-          chart->set_symbol(symbol_name, bridge_->getExchangeName(symbol_id));
+          // Get exchange name from symbol registry
+          std::string exchange = "Unknown";
+          auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+          if (symbol_info.has_value()) {
+            exchange = symbol_info->exchange;
+          }
+          chart->set_symbol(symbol_name, exchange);
         }
         break;
       }
       case PanelType::WATCHLIST: {
         // Update the symbol for all watchlist panels
         if (auto* watchlist = dynamic_cast<WatchlistPanel*>(panel.get())) {
-          watchlist->add_symbol(symbol_id, symbol_name, bridge_->getExchangeName(symbol_id));
+          // Get exchange name from symbol registry
+          std::string exchange = "Unknown";
+          auto symbol_info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+          if (symbol_info.has_value()) {
+            exchange = symbol_info->exchange;
+          }
+          watchlist->add_symbol(symbol_id, symbol_name, exchange);
         }
         break;
       }

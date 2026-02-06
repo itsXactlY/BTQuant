@@ -10,9 +10,8 @@
 namespace BTQuant {
 
 DepthChartPanel::DepthChartPanel(const PanelConfig& config,
-                                 std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor), visualization_mode_(DepthChartVisualizationMode::CUMULATIVE_AREA) {
+    : PanelBase(config), processor_(processor), visualization_mode_(DepthChartVisualizationMode::CUMULATIVE_AREA) {
   // Pre-allocate vectors for typical orderbook depth
   bid_prices_.reserve(50);
   bid_cumulative_.reserve(50);
@@ -58,13 +57,15 @@ void DepthChartPanel::render() {
   render_panel_header();
 
   // Auto-select first available symbol if none set (like OrderbookPanel)
-  if (processor_ && bridge_ && symbol_id_ == 0) {
+  if (processor_ && symbol_id_ == 0) {
     auto active_symbols = processor_->getActiveSymbols();
     for (uint32_t sym_id : active_symbols) {
       auto ob_opt = processor_->getOrderbookData(sym_id);
       if (ob_opt.has_value()) {
         symbol_id_ = sym_id;
-        symbol_name_ = bridge_->getSymbolName(sym_id);
+        // For now, we'll use a default name since we don't have direct access to symbol names from processor
+        // In a real implementation, this would come from SymbolRegistry or similar
+        symbol_name_ = "SYMBOL_" + std::to_string(sym_id);
         config_.title = "Depth Chart - " + symbol_name_;
         subscribe_to_updates();
         markDirty();

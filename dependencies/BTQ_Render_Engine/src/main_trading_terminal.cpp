@@ -15,7 +15,7 @@
 #include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
 #include "components/theme_manager.hpp"
-#include "hotspine_data_bridge.hpp"
+#include "data/unified_data_pipeline.hpp"
 #include "market_data_processor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
@@ -45,22 +45,23 @@ int main(int argc, char** argv) {
   // Market Processor
   auto market_processor = std::make_shared<BTQuant::RenderEngine::MarketDataProcessor>();
 
-  // Data Bridge
-  auto data_bridge = std::make_shared<BTQuant::HotSpineDataBridge>("/btquant_hotspine");
-  data_bridge->setMarketDataProcessor(market_processor);
+  // Symbol Manager
+  auto symbol_manager = std::make_shared<BTQuant::RenderEngine::SymbolManager>();
 
-  if (auto res = data_bridge->start(); !res) {
-    std::cerr << "✗ Failed to initialize HotSpine data bridge: " << res.error() << std::endl;
+  // Unified Data Pipeline (Vulkan/ImGui compatible)
+  auto data_pipeline = std::make_shared<BTQuant::Data::UnifiedDataPipeline>(market_processor, symbol_manager);
+
+  if (!data_pipeline->initialize()) {
+    std::cerr << "✗ Failed to initialize Modern Data Pipeline" << std::endl;
     return 1;
   }
-  std::cout << "✓ Data Pipeline active" << std::endl;
+  std::cout << "✓ Modern Data Pipeline active" << std::endl;
 
   // 3. Initialize Dashboard (Vulkan + ImGui)
   VulkanDashboardConfig dashboard_config;
   dashboard_config.enable_validation_layers = false;
 
-  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, data_bridge,
-                                                              market_processor, dashboard_config);
+  auto dashboard = std::make_unique<BTQuant::VulkanDashboard>(1920, 1080, market_processor, dashboard_config);
 
   if (auto res = dashboard->initialize(); !res) {
     std::cerr << "✗ Failed to initialize Vulkan dashboard: " << res.error() << std::endl;
@@ -210,7 +211,7 @@ int main(int argc, char** argv) {
     last_frame_time = frame_begin;
 
     // Data Sync
-    data_bridge->sync();
+    data_pipeline->process_events();
 
     // Event Handling
     dashboard->handle_events();
@@ -237,7 +238,7 @@ int main(int argc, char** argv) {
   }
 
   dashboard->shutdown();
-  data_bridge->stop();
+  data_pipeline->shutdown();
 
   std::cout << "Shutdown complete. Goodbye!" << std::endl;
   return 0;

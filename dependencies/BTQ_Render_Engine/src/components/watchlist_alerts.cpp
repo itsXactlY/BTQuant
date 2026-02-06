@@ -10,10 +10,9 @@
 namespace BTQuant {
 
 WatchlistAlertManager::WatchlistAlertManager(
-    std::shared_ptr<HotSpineDataBridge> bridge,
     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
     std::shared_ptr<AlertsPanel> alerts_panel)
-    : bridge_(bridge), processor_(processor), alerts_panel_(alerts_panel) {
+    : processor_(processor), alerts_panel_(alerts_panel) {
 
     // Set up default callback to handle alerts even when alerts_panel_ is nullptr initially
     on_alert_triggered_ = [this](const WatchlistPriceAlert& alert, double current_price) {

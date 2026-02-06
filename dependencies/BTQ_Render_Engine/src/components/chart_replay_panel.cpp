@@ -4,13 +4,12 @@
 
 namespace BTQuant {
 
-ChartReplayPanel::ChartReplayPanel(const PanelConfig& config, 
-                                   std::shared_ptr<HotSpineDataBridge> bridge,
+ChartReplayPanel::ChartReplayPanel(const PanelConfig& config,
                                    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                    ChartManager* chart_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor), chart_manager_(chart_manager) {
+    : PanelBase(config), processor_(processor), chart_manager_(chart_manager) {
     // Initialize the chart replay component
-    chart_replay_ = std::make_unique<ChartReplay>(bridge_, processor_, chart_manager_);
+    chart_replay_ = std::make_unique<ChartReplay>(processor_, chart_manager_);
 }
 
 void ChartReplayPanel::update(float dt) {

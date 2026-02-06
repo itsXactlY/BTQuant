@@ -38,7 +38,6 @@
 #include "analytics/technical_analysis.hpp"
 #include "components/VulkanSynchronization.h"
 #include "components/theme_manager.hpp"
-#include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "trading/order_manager.hpp"
 #include "trading/position_manager.hpp"
@@ -247,11 +246,10 @@ class VulkanDashboard {
    * @brief Construct a new VulkanDashboard object
    * @param width Window width in pixels
    * @param height Window height in pixels
-   * @param bridge Shared pointer to the data bridge for market data
    * @param processor Shared pointer to the market data processor
    * @param config Configuration object for dashboard settings
    */
-  VulkanDashboard(uint32_t width, uint32_t height, std::shared_ptr<HotSpineDataBridge> bridge,
+  VulkanDashboard(uint32_t width, uint32_t height,
                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                   const VulkanDashboardConfig& config);
 
@@ -313,7 +311,6 @@ class VulkanDashboard {
   void render_layout_indicator();
 
   uint32_t width_, height_;
-  std::shared_ptr<HotSpineDataBridge> hotspine_bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> market_data_processor_;
   VulkanDashboardConfig config_;
   std::string active_symbol_ = "BTC-USDT";

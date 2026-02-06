@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "data_types.hpp"
-#include "hotspine_data_bridge.hpp"
 #include "market_data_processor.hpp"
 #include "symbol_manager.hpp"
 #include "unified_data_pipeline.hpp"
@@ -233,8 +232,7 @@ struct ComprehensiveMultiExchangeView;
 // Exchange Aggregator for combining data from multiple exchanges
 class ExchangeAggregator {
  public:
-  ExchangeAggregator(std::shared_ptr<HotSpineDataBridge> bridge,
-                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+  ExchangeAggregator(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                      std::shared_ptr<RenderEngine::SymbolManager> symbol_manager);
   ~ExchangeAggregator();
 
@@ -665,7 +663,6 @@ class ExchangeAggregator {
       const std::string& symbol) const;
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   std::shared_ptr<RenderEngine::SymbolManager> symbol_manager_;
 

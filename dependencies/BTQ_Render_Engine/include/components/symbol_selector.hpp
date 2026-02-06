@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "imgui.h"
 
@@ -30,8 +29,8 @@ class SymbolSelector {
   // Returns true if selection changed
   bool render(SymbolSelectorState& state);
 
-  // Refresh available symbols from the data bridge
-  void refresh_symbols(SymbolSelectorState& state, std::shared_ptr<HotSpineDataBridge> bridge,
+  // Refresh available symbols from the data processor
+  void refresh_symbols(SymbolSelectorState& state,
                        std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   // Get timeframe display names

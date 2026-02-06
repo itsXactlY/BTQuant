@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "../trading/order_manager.hpp"
 #include "../trading/position_manager.hpp"
@@ -19,7 +18,6 @@ namespace BTQuant {
 class RealtimeDashboardComponent : public UIComponent {
  public:
   explicit RealtimeDashboardComponent(
-      std::shared_ptr<HotSpineDataBridge> bridge,
       std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
       RenderEngine::MarketMicrostructureRenderer* renderer = nullptr);
   virtual ~RealtimeDashboardComponent() = default;
@@ -35,7 +33,6 @@ class RealtimeDashboardComponent : public UIComponent {
 
  private:
   // Data sources
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   // Trading Subsystems

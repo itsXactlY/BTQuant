@@ -7,7 +7,6 @@
 #include <vector>
 #include <functional>
 
-#include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
 #include "panel_base.hpp"
 
@@ -21,7 +20,7 @@ namespace BTQuant {
  */
 class RiskAnalyzerPanel : public PanelBase {
  public:
-  RiskAnalyzerPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
+  RiskAnalyzerPanel(const PanelConfig& config,
                     std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
 
   void render() override;
@@ -29,7 +28,6 @@ class RiskAnalyzerPanel : public PanelBase {
   void set_symbol(const std::string& symbol, const std::string& exchange = "Binance");
 
  private:
-  std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
 
   std::string symbol_ = "BTC-USDT";

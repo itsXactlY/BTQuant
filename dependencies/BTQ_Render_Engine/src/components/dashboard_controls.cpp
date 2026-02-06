@@ -129,8 +129,14 @@ void DashboardControls::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(window_width, 500), ImGuiCond_FirstUseEver);
 
-  // Use ImGuiWindowFlags_TopMost and ImGuiWindowFlags_NoFocusOnAppearing to ensure it stays on top of other windows
-  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_TopMost | ImGuiWindowFlags_NoFocusOnAppearing)) {
+  // Use appropriate flags to ensure it stays on top of other windows and cannot be covered by other panels
+  // Remove NoBringToFrontOnFocus flag to allow it to stay on top when needed
+  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize)) {
+    // Ensure the window stays on top by bringing it to front every frame
+    ImGui::SetWindowFocus();
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y)); // Ensure position is maintained
+    
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
 

@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "implot.h"
 
 namespace BTQuant {
@@ -67,7 +68,12 @@ void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(window_width, 250), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_TopMost | ImGuiWindowFlags_NoFocusOnAppearing)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize)) {
+    // Ensure the window stays on top by bringing it to front every frame
+    ImGui::SetWindowFocus();
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y)); // Ensure position is maintained
+    
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 

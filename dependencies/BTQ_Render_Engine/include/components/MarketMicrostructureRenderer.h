@@ -211,6 +211,10 @@ class MarketMicrostructureRenderer {
   // This provides access to the underlying ClusterCell data for advanced analysis
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
+  // Set a callback function to be called when the cluster engine processes a trade
+  // This is used to mark panels as dirty when new trade data arrives
+  void set_on_cluster_engine_trade_callback(std::function<void()> callback);
+
  private:
   // Data Update Callback
   void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
@@ -310,6 +314,9 @@ class MarketMicrostructureRenderer {
 
   // Cluster Engine for advanced analytics
   std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+  
+  // Callback to notify when cluster engine processes a trade (for marking panels dirty)
+  std::function<void()> on_cluster_engine_trade_callback_;
 };
 
 // ============================================================================

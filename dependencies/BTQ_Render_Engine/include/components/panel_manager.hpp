@@ -111,6 +111,8 @@ class PanelManager {
   // Get all panels (for internal use)
   const std::unordered_map<uint32_t, std::unique_ptr<PanelBase>>& get_all_panels() const { return panels_; }
 
+  // Mark all panels that need to be updated when trades arrive as dirty
+  void mark_visualization_panels_dirty();
 
   // Serialization
   std::string serialize_layout() const;
@@ -128,6 +130,7 @@ class PanelManager {
   uint32_t create_panel_group(int grid_x, int grid_y, int width, int height, bool is_super_panel = false);
   uint32_t create_super_panel_group(int grid_x, int grid_y, int width, int height);  // Convenience method for creating super-panel groups
   uint32_t bind_panels_together(const std::vector<uint32_t>& panel_ids, int grid_x, int grid_y, int width, int height);  // Bind multiple panels into a super-panel
+  uint32_t create_tabbed_group(const std::vector<uint32_t>& panel_ids);  // Create a tabbed group from multiple panels
   bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
   bool remove_panel_from_group(uint32_t group_id, uint32_t panel_id);
   bool lock_panel_group(uint32_t group_id);

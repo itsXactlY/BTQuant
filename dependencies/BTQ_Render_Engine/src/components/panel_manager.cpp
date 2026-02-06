@@ -58,6 +58,13 @@ PanelManager::PanelManager(std::shared_ptr<RenderEngine::MarketDataProcessor> pr
   chart_manager_ = std::make_unique<ChartManager>(processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
   strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
+  
+  // Set up the callback to mark visualization panels as dirty when cluster engine processes a trade
+  if (micro_renderer_) {
+    micro_renderer_->set_on_cluster_engine_trade_callback([this]() {
+      this->mark_visualization_panels_dirty();
+    });
+  }
 }
 
 PanelManager::~PanelManager() {
@@ -1855,6 +1862,54 @@ std::vector<uint32_t> PanelManager::get_panels_in_group(uint32_t group_id) const
   return panel_ids;
 }
 
+uint32_t PanelManager::create_tabbed_group(const std::vector<uint32_t>& panel_ids) {
+  if (panel_ids.size() < 2) {
+    return 0; // Need at least 2 panels to create a group
+  }
+
+  // Get the first panel to determine the position for the tabbed panel
+  auto first_panel_it = panels_.find(panel_ids[0]);
+  if (first_panel_it == panels_.end()) {
+    return 0; // Panel doesn't exist
+  }
+
+  const auto& first_config = first_panel_it->second->get_config();
+
+  // Create a new tabbed panel at the same position as the first panel
+  uint32_t tabbed_panel_id = add_panel(PanelType::TABBED_PANEL, "Tabbed Group",
+                                       first_config.grid_x, first_config.grid_y,
+                                       first_config.grid_width, first_config.grid_height);
+
+  if (tabbed_panel_id == 0) {
+    return 0; // Failed to create tabbed panel
+  }
+
+  // Get the new tabbed panel
+  TabbedPanel* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_panel_id));
+  if (!tabbed_panel) {
+    return 0; // Failed to cast to TabbedPanel
+  }
+
+  // Add all panels to the tabbed panel
+  for (uint32_t panel_id : panel_ids) {
+    auto panel_it = panels_.find(panel_id);
+    if (panel_it != panels_.end()) {
+      tabbed_panel->add_panel(panel_id);
+
+      // Hide the original panel since it's now managed by the tabbed panel
+      panel_it->second->set_visible(false);
+
+      // Remove the panel from any existing groups
+      auto group_ids = get_panel_groups_for_panel(panel_id);
+      for (uint32_t group_id : group_ids) {
+        remove_panel_from_group(group_id, panel_id);
+      }
+    }
+  }
+
+  return tabbed_panel_id;
+}
+
 bool PanelManager::are_panels_bound_together(const std::vector<uint32_t>& panel_ids) const {
   if (panel_ids.empty()) {
     return false;
@@ -1865,9 +1920,9 @@ bool PanelManager::are_panels_bound_together(const std::vector<uint32_t>& panel_
   if (first_group_it == panel_to_group_map_.end()) {
     return false; // First panel is not in any group
   }
-  
+
   uint32_t expected_group_id = first_group_it->second;
-  
+
   // Check if all other panels are in the same group
   for (size_t i = 1; i < panel_ids.size(); ++i) {
     auto group_it = panel_to_group_map_.find(panel_ids[i]);
@@ -1875,13 +1930,13 @@ bool PanelManager::are_panels_bound_together(const std::vector<uint32_t>& panel_
       return false; // Panel is not in the same group
     }
   }
-  
+
   // Check if the group is locked (making it a true "Super-panel")
   auto panel_group_it = panel_groups_.find(expected_group_id);
   if (panel_group_it != panel_groups_.end()) {
     return panel_group_it->second.locked;
   }
-  
+
   return false;
 }
 
@@ -2058,6 +2113,15 @@ void PanelManager::process_panel_drag_and_drop(
                     for (uint32_t group_id : source_group_ids) {
                       remove_panel_from_group(group_id, source_panel_id);
                     }
+                    
+                    // Update the position and size of the tabbed panel to match the target panel
+                    auto& tabbed_config = tabbed_panel->get_config();
+                    tabbed_config.grid_x = target_config.grid_x;
+                    tabbed_config.grid_y = target_config.grid_y;
+                    tabbed_config.grid_width = target_config.grid_width;
+                    tabbed_config.grid_height = target_config.grid_height;
+                    tabbed_config.position = target_config.position;
+                    tabbed_config.size = target_config.size;
                   }
                 }
               }
@@ -2586,6 +2650,26 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
   }
   
   return std::make_pair(max_x, 0);
+}
+
+void PanelManager::mark_visualization_panels_dirty() {
+  for (auto& [id, panel] : panels_) {
+    // Only mark panels as dirty if they are visualization panels that need to update when trades arrive
+    switch (panel->get_config().type) {
+      case PanelType::FOOTPRINT_CHART:
+      case PanelType::TPO_PROFILE:
+      case PanelType::HEATMAP:
+      case PanelType::CHART:
+      case PanelType::VOLUME_PROFILE:
+      case PanelType::DEPTH_CHART:
+        // Mark these panels as dirty to trigger a redraw when new trade data arrives
+        panel->markDirty();
+        break;
+      default:
+        // Other panels don't need to be marked dirty for every trade
+        break;
+    }
+  }
 }
 
 }  // namespace BTQuant

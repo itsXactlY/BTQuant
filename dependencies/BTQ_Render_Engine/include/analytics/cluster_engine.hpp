@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -41,10 +42,10 @@ struct ClusterCell {
   double total_volume{0.0};
   double buy_volume{0.0};
   double sell_volume{0.0};
-  int trade_count{0};
-  int buy_trade_count{0};
-  int sell_trade_count{0};
-  double max_single_trade_volume{0.0};
+  std::atomic<int> trade_count{0};
+  std::atomic<int> buy_trade_count{0};
+  std::atomic<int> sell_trade_count{0};
+  std::atomic<double> max_single_trade_volume{0.0};
   double sum_of_volumes{0.0};  // for average calculations
 
   // Fields for statistical calculations
@@ -60,10 +61,10 @@ struct ClusterCell {
       : total_volume(other.total_volume),
         buy_volume(other.buy_volume),
         sell_volume(other.sell_volume),
-        trade_count(other.trade_count),
-        buy_trade_count(other.buy_trade_count),
-        sell_trade_count(other.sell_trade_count),
-        max_single_trade_volume(other.max_single_trade_volume),
+        trade_count(other.trade_count.load()),
+        buy_trade_count(other.buy_trade_count.load()),
+        sell_trade_count(other.sell_trade_count.load()),
+        max_single_trade_volume(other.max_single_trade_volume.load()),
         sum_of_volumes(other.sum_of_volumes),
         prices(other.prices),
         sum_of_prices(other.sum_of_prices),
@@ -78,10 +79,10 @@ struct ClusterCell {
       total_volume = other.total_volume;
       buy_volume = other.buy_volume;
       sell_volume = other.sell_volume;
-      trade_count = other.trade_count;
-      buy_trade_count = other.buy_trade_count;
-      sell_trade_count = other.sell_trade_count;
-      max_single_trade_volume = other.max_single_trade_volume;
+      trade_count.store(other.trade_count.load());
+      buy_trade_count.store(other.buy_trade_count.load());
+      sell_trade_count.store(other.sell_trade_count.load());
+      max_single_trade_volume.store(other.max_single_trade_volume.load());
       sum_of_volumes = other.sum_of_volumes;
       prices = other.prices;
       sum_of_prices = other.sum_of_prices;
@@ -213,6 +214,11 @@ class ClusterEngine {
     }
   }
 
+  // Method to set the callback function that gets called when a trade is processed
+  void set_on_trade_processed_callback(std::function<void()> callback) {
+    on_trade_processed_callback_ = std::move(callback);
+  }
+
  private:
   double tick_size_;
   int64_t min_tick_index_;
@@ -221,5 +227,8 @@ class ClusterEngine {
 
   // Additional data structure for cluster cells with time buckets
   std::vector<std::vector<ClusterCell>> cluster_canvas_;  // [price_level][time_bucket]
+  
+  // Callback to notify when a trade is processed (for marking panels dirty)
+  std::function<void()> on_trade_processed_callback_;
 };
 }  // namespace Analytics

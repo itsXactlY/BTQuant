@@ -555,8 +555,7 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
         PriceLevel level;
         level.price = price;
         level.size = volumes.first + volumes.second; // Combined size
-        level.timestamp = book.timestamp;
-        
+
         if (volumes.first > 0) { // Has bid volume
             orderbookData.bids.push_back(level);
         } else if (volumes.second > 0) { // Has ask volume
@@ -1248,6 +1247,15 @@ std::vector<std::vector<Analytics::ClusterCell>> MarketMicrostructureRenderer::g
 
   // Access the cluster canvas from the cluster engine using the getter method
   return cluster_engine_->getClusterCanvas();
+}
+
+void MarketMicrostructureRenderer::set_on_cluster_engine_trade_callback(std::function<void()> callback) {
+  on_cluster_engine_trade_callback_ = std::move(callback);
+  
+  // Set up the callback in the cluster engine to notify when a trade is processed
+  if (cluster_engine_ && on_cluster_engine_trade_callback_) {
+    cluster_engine_->set_on_trade_processed_callback(on_cluster_engine_trade_callback_);
+  }
 }
 
 }  // namespace BTQuant::RenderEngine

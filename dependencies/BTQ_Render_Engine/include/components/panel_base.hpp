@@ -112,6 +112,12 @@ class PanelBase {
   virtual bool handle_drop(uint32_t source_panel_id);    // Handle a dropped panel
   virtual bool is_drag_source() const { return true; }  // Whether this panel can be dragged
 
+  /**
+   * Called by MarketDataProcessor notification callback or other external systems
+   * Thread-safe: uses release memory ordering for proper visibility
+   */
+  void markDirty() noexcept { data_dirty_.store(true, std::memory_order_release); }
+
  protected:
   PanelConfig config_;
 
@@ -119,12 +125,6 @@ class PanelBase {
   // Set by processor callback when new data arrives - atomic for thread safety
   std::atomic<bool> data_dirty_{true};  // Start dirty to force initial load
   uint64_t subscription_id_ = 0;        // ID from processor->subscribe()
-
-  /**
-   * Called by MarketDataProcessor notification callback
-   * Thread-safe: uses release memory ordering for proper visibility
-   */
-  void markDirty() noexcept { data_dirty_.store(true, std::memory_order_release); }
 
   /**
    * Called in render() to check if data needs refresh

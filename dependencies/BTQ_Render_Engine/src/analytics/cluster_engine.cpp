@@ -87,6 +87,11 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
       break;
     }
   }
+
+  // Call the callback if it's set to notify that a trade has been processed
+  if (on_trade_processed_callback_) {
+    on_trade_processed_callback_();
+  }
 }
 
 std::vector<std::tuple<int64_t, int, double, double, double>>

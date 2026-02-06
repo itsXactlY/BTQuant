@@ -46,7 +46,7 @@ protected:
 };
 
 // More specific layout manager implementations could go here
-// For example: HorizontalLayoutManager, VerticalLayoutManager, GridLayoutmanager, etc.
+// For example: HorizontalLayoutManager, VerticalLayoutManager, GridLayoutManager, etc.
 
 /**
  * @brief Base class for UI widgets

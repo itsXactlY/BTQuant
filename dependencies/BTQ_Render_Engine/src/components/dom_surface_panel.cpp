@@ -788,6 +788,7 @@ void DomSurfacePanel::cleanupInactivePersistentLevels() {
                               .count();
 
   // Remove levels that haven't been updated within the timeout period
+  // This handles the "Persistent Level Tracking" requirement: liquidity levels that have remained static for more than 30 seconds
   persistent_levels_.erase(
       std::remove_if(persistent_levels_.begin(), persistent_levels_.end(),
                      [current_time, this](const PersistentLevel& level) {
@@ -812,7 +813,8 @@ void DomSurfacePanel::renderPersistentLevels() {
     if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
       ImU32 color = getPersistentLevelColor(level);
 
-      // Draw a "glow" effect around the persistent level
+      // Draw a "glow" effect around the persistent level as required by PRD
+      // This implements "draw a distinct border or 'glow' around liquidity levels that have remained static for more than 30 seconds"
       // First, draw a wider, more transparent line as the glow
       ImU32 glow_color = IM_COL32(
           (color >> 16) & 0xFF,  // R component
@@ -887,8 +889,8 @@ void DomSurfacePanel::renderPersistentLevels() {
 }
 
 ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) const {
-  // Color: Bright Cyan for Bids (with glow effect), Bright Orange for Asks (with glow effect)
-  // Use more vibrant colors to make persistent levels stand out with the glow effect
+  // Color: Distinct border/glow for persistent levels to highlight liquidity levels that have remained static for more than 30 seconds
+  // Use bright cyan for bids and bright orange for asks to make them stand out with the glow effect
   if (level.is_bid) {
     return IM_COL32(0, 255, 255, 255);  // Bright cyan for bid levels
   } else {

@@ -2009,11 +2009,11 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
   // Mark occupied cells based on existing panels
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
-    
+
     // Only consider visible panels that are not part of locked groups
     if (config.visible) {
       bool is_locked = false;
-      
+
       // Check if panel is part of a locked group
       auto group_it = panel_to_group_map_.find(id);
       if (group_it != panel_to_group_map_.end()) {
@@ -2023,7 +2023,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
           is_locked = true;
         }
       }
-      
+
       if (!is_locked) {
         // Mark the grid cells occupied by this panel
         for (int y = config.grid_y; y < config.grid_y + config.grid_height && y < max_rows; ++y) {
@@ -2037,7 +2037,7 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     }
   }
 
-  // Look for the first available spot that fits the new panel
+  // Priority 1: Look for the first available spot that fits the new panel in the grid
   for (int y = 0; y < max_rows; ++y) {
     for (int x = 0; x < max_cols; ++x) {
       // Check if the space starting at (x,y) is available for the panel size
@@ -2061,16 +2061,18 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
     }
   }
 
-  // If no space is found in the current grid, try to find adjacent positions
-  // to existing panels (docking behavior)
+  // Priority 2: Try to dock to the edges of existing panels in a preferred order
+  // Order: Right edge, Below, Left edge, Above (clockwise around existing panels)
   
-  // Check for potential docking positions around existing panels
+  // Collect all potential docking positions with priority
+  std::vector<std::pair<int, int>> potential_positions;
+  
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
-    
+
     // Only consider visible panels that are not part of locked groups
     if (!config.visible) continue;
-    
+
     bool is_locked = false;
     auto group_it = panel_to_group_map_.find(id);
     if (group_it != panel_to_group_map_.end()) {
@@ -2080,10 +2082,10 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         is_locked = true;
       }
     }
-    
+
     if (is_locked) continue;
 
-    // Try placing to the right of the current panel
+    // Try placing to the right of the current panel (priority 1)
     int right_x = config.grid_x + config.grid_width;
     int right_y = config.grid_y;
     if (right_x + width <= max_cols) {  // Check if it fits horizontally
@@ -2104,11 +2106,11 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         }
       }
       if (can_place_right) {
-        return std::make_pair(right_x, right_y);
+        potential_positions.push_back({right_x, right_y});
       }
     }
 
-    // Try placing below the current panel
+    // Try placing below the current panel (priority 2)
     int below_x = config.grid_x;
     int below_y = config.grid_y + config.grid_height;
     if (below_y + height <= max_rows) {  // Check if it fits vertically
@@ -2129,11 +2131,11 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         }
       }
       if (can_place_below) {
-        return std::make_pair(below_x, below_y);
+        potential_positions.push_back({below_x, below_y});
       }
     }
 
-    // Try placing to the left of the current panel
+    // Try placing to the left of the current panel (priority 3)
     int left_x = config.grid_x - width;
     int left_y = config.grid_y;
     if (left_x >= 0) {  // Check if it fits horizontally
@@ -2154,11 +2156,11 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         }
       }
       if (can_place_left) {
-        return std::make_pair(left_x, left_y);
+        potential_positions.push_back({left_x, left_y});
       }
     }
 
-    // Try placing above the current panel
+    // Try placing above the current panel (priority 4)
     int above_x = config.grid_x;
     int above_y = config.grid_y - height;
     if (above_y >= 0) {  // Check if it fits vertically
@@ -2179,7 +2181,92 @@ std::pair<int, int> PanelManager::find_best_docking_position(int width, int heig
         }
       }
       if (can_place_above) {
-        return std::make_pair(above_x, above_y);
+        potential_positions.push_back({above_x, above_y});
+      }
+    }
+  }
+
+  // If we found any potential docking positions, return the first one (which follows our priority order)
+  if (!potential_positions.empty()) {
+    return potential_positions[0];
+  }
+
+  // Priority 3: If still no space found, try to expand the grid by looking for positions
+  // just adjacent to existing panels even if they go beyond the original grid bounds
+  // (within reason - we don't want to place too far away)
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+
+    // Only consider visible panels that are not part of locked groups
+    if (!config.visible) continue;
+
+    bool is_locked = false;
+    auto group_it = panel_to_group_map_.find(id);
+    if (group_it != panel_to_group_map_.end()) {
+      uint32_t group_id = group_it->second;
+      auto panel_group_it = panel_groups_.find(group_id);
+      if (panel_group_it != panel_groups_.end() && panel_group_it->second.locked) {
+        is_locked = true;
+      }
+    }
+
+    if (is_locked) continue;
+
+    // Try expanding to the right (within reasonable bounds)
+    int expand_right_x = config.grid_x + config.grid_width;
+    int expand_right_y = config.grid_y;
+    if (expand_right_x + width <= max_cols * 2) {  // Allow expansion up to 2x the column count
+      bool can_expand_right = true;
+      for (int dy = 0; dy < height && can_expand_right; ++dy) {
+        for (int dx = 0; dx < width && can_expand_right; ++dx) {
+          int check_x = expand_right_x + dx;
+          int check_y = expand_right_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_y < max_rows * 2) {  // Allow expansion up to 2x the row count
+            if (check_x < max_cols && check_y < max_rows) {
+              // Within original grid - check occupation
+              if (occupied[check_y][check_x]) {
+                can_expand_right = false;
+                break;
+              }
+            }
+            // For expanded areas beyond original grid, just check if coordinates are reasonable
+          } else {
+            can_expand_right = false;  // Out of reasonable bounds
+            break;
+          }
+        }
+      }
+      if (can_expand_right) {
+        return std::make_pair(expand_right_x, expand_right_y);
+      }
+    }
+
+    // Try expanding below (within reasonable bounds)
+    int expand_below_x = config.grid_x;
+    int expand_below_y = config.grid_y + config.grid_height;
+    if (expand_below_y + height <= max_rows * 2) {  // Allow expansion up to 2x the row count
+      bool can_expand_below = true;
+      for (int dy = 0; dy < height && can_expand_below; ++dy) {
+        for (int dx = 0; dx < width && can_expand_below; ++dx) {
+          int check_x = expand_below_x + dx;
+          int check_y = expand_below_y + dy;
+          if (check_x >= 0 && check_y >= 0 && check_x < max_cols * 2) {  // Allow expansion up to 2x the column count
+            if (check_x < max_cols && check_y < max_rows) {
+              // Within original grid - check occupation
+              if (occupied[check_y][check_x]) {
+                can_expand_below = false;
+                break;
+              }
+            }
+            // For expanded areas beyond original grid, just check if coordinates are reasonable
+          } else {
+            can_expand_below = false;  // Out of reasonable bounds
+            break;
+          }
+        }
+      }
+      if (can_expand_below) {
+        return std::make_pair(expand_below_x, expand_below_y);
       }
     }
   }

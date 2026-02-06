@@ -594,7 +594,7 @@ void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y)
 
         // Check if group is locked
         if (group.locked) {
-          return; // Cannot move a locked group
+          return; // Cannot move a locked group or any panel within it
         }
 
         // Update the group's position
@@ -628,7 +628,7 @@ void PanelManager::resize_panel(uint32_t panel_id, int new_width, int new_height
 
         // Check if group is locked
         if (group.locked) {
-          return; // Cannot resize a locked group
+          return; // Cannot resize a locked group or any panel within it
         }
 
         // Update the group's size
@@ -1753,6 +1753,89 @@ void PanelManager::update_group_size(uint32_t group_id) {
       idx++;
     }
   }
+}
+
+bool PanelManager::validate_panel_placement(uint32_t panel_id, int grid_x, int grid_y, int width, int height) const {
+  // Check if the panel is part of a locked group
+  auto group_it = panel_to_group_map_.find(panel_id);
+  if (group_it != panel_to_group_map_.end()) {
+    uint32_t group_id = group_it->second;
+    auto panel_group_it = panel_groups_.find(group_id);
+    if (panel_group_it != panel_groups_.end() && panel_group_it->second.locked) {
+      // If panel is part of a locked group, placement must respect group constraints
+      return false; // Cannot move individual panels in a locked group
+    }
+  }
+
+  // Check for overlaps with other panels
+  for (const auto& [id, panel] : panels_) {
+    if (id == panel_id) continue; // Skip the panel we're checking
+
+    const auto& config = panel->get_config();
+    
+    // Check if the new position overlaps with existing panel
+    if (grid_x < config.grid_x + config.grid_width &&
+        grid_x + width > config.grid_x &&
+        grid_y < config.grid_y + config.grid_height &&
+        grid_y + height > config.grid_y) {
+      // Overlap detected
+      return false;
+    }
+  }
+
+  // Check if the placement is within grid bounds
+  if (grid_x < 0 || grid_y < 0 || 
+      grid_x + width > grid_layout_.columns || 
+      grid_y + height > grid_layout_.rows) {
+    return false;
+  }
+
+  return true;
+}
+
+std::vector<uint32_t> PanelManager::get_panels_in_group(uint32_t group_id) const {
+  auto group_it = panel_groups_.find(group_id);
+  if (group_it == panel_groups_.end()) {
+    return {}; // Group doesn't exist
+  }
+
+  std::vector<uint32_t> panel_ids;
+  panel_ids.reserve(group_it->second.panel_ids.size());
+  for (uint32_t panel_id : group_it->second.panel_ids) {
+    panel_ids.push_back(panel_id);
+  }
+  
+  return panel_ids;
+}
+
+bool PanelManager::are_panels_bound_together(const std::vector<uint32_t>& panel_ids) const {
+  if (panel_ids.empty()) {
+    return false;
+  }
+
+  // Get the group of the first panel
+  auto first_group_it = panel_to_group_map_.find(panel_ids[0]);
+  if (first_group_it == panel_to_group_map_.end()) {
+    return false; // First panel is not in any group
+  }
+  
+  uint32_t expected_group_id = first_group_it->second;
+  
+  // Check if all other panels are in the same group
+  for (size_t i = 1; i < panel_ids.size(); ++i) {
+    auto group_it = panel_to_group_map_.find(panel_ids[i]);
+    if (group_it == panel_to_group_map_.end() || group_it->second != expected_group_id) {
+      return false; // Panel is not in the same group
+    }
+  }
+  
+  // Check if the group is locked (making it a true "Super-panel")
+  auto panel_group_it = panel_groups_.find(expected_group_id);
+  if (panel_group_it != panel_groups_.end()) {
+    return panel_group_it->second.locked;
+  }
+  
+  return false;
 }
 
 }  // namespace BTQuant

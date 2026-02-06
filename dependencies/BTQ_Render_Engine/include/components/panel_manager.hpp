@@ -176,6 +176,9 @@ class PanelManager {
   // Helper methods for panel binding
   void update_group_position(uint32_t group_id);
   void update_group_size(uint32_t group_id);
+  bool validate_panel_placement(uint32_t panel_id, int grid_x, int grid_y, int width, int height) const;
+  std::vector<uint32_t> get_panels_in_group(uint32_t group_id) const;
+  bool are_panels_bound_together(const std::vector<uint32_t>& panel_ids) const;
 
   // Helper method for deserialization
   uint32_t find_panel_by_type_and_position(PanelType type, int grid_x, int grid_y) const;

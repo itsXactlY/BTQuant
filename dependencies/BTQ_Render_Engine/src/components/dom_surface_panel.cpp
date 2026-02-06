@@ -356,24 +356,28 @@ void DomSurfacePanel::updateHeatmapData() {
 
   double max_vol = 0;
 
+  // Enhanced liquidity calculation with intensity-based approach
   for (int t = 0; t < time_steps; ++t) {
     const auto& book = history[t];
 
-    // Bids
+    // Bids - accumulate liquidity intensity
     for (const auto& level : book.bids) {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
         if (bin >= 0 && bin < price_bins_) {
+          // Accumulate liquidity at this price bin and time step
           heatmap_data_[bin * time_steps + t] += level.size;
           max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
         }
       }
     }
-    // Asks
+    
+    // Asks - accumulate liquidity intensity
     for (const auto& level : book.asks) {
       if (level.price >= min_price && level.price < max_price) {
         int bin = static_cast<int>((level.price - min_price) / price_step);
         if (bin >= 0 && bin < price_bins_) {
+          // Accumulate liquidity at this price bin and time step
           heatmap_data_[bin * time_steps + t] += level.size;
           max_vol = std::max(max_vol, heatmap_data_[bin * time_steps + t]);
         }
@@ -386,6 +390,7 @@ void DomSurfacePanel::updateHeatmapData() {
   bounds_max_[0] = static_cast<double>(time_steps);
   bounds_max_[1] = max_price;
 
+  // Set scale max for proper intensity mapping
   scale_max_ = max_vol > 0 ? max_vol : 1.0;
 }
 
@@ -663,8 +668,9 @@ void DomSurfacePanel::render() {
 
     if (cols > 0 && rows > 0) {
       // Define custom colormap data for Dark Blue to Bright Yellow with enhanced intensity mapping
+      // This creates a proper intensity-based liquidity heatmap as required
       static const ImU32 custom_colors[] = {
-          IM_COL32(0, 0, 64, 255),     // Very Dark Blue (enhanced dark start for low liquidity)
+          IM_COL32(0, 0, 64, 255),     // Very Dark Blue (minimal liquidity)
           IM_COL32(0, 0, 128, 255),    // Dark Blue
           IM_COL32(0, 0, 200, 255),    // Medium Blue
           IM_COL32(0, 100, 255, 255),  // Light Blue

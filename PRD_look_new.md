@@ -439,8 +439,8 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 
 ### TASK 24: STRUCTURAL LAYOUT (BINDS & GROUPS)
 - [x] Implement "Panel Binds": add logic in `src/components/panel_manager.cpp` to lock panels together into a single "Super-panel" grid, preventing them from overlapping or floating independently.
-- [ ] Create "Panel Groups": allow dragging one panel into another to create a "Tabbed Group" (e.g., merging Chart and Time & Sales into one window with tabs at the bottom).
-- [ ] Implement "Auto-Docking": update the panel spawn logic so new panels automatically snap to empty edges of existing panels rather than spawning at `(0,0)`.
+- [x] Create "Panel Groups": allow dragging one panel into another to create a "Tabbed Group" (e.g., merging Chart and Time & Sales into one window with tabs at the bottom).
+- [x] Implement "Auto-Docking": update the panel spawn logic so new panels automatically snap to empty edges of existing panels rather than spawning at `(0,0)`.
 - [ ] Fix Z-index and focus: ensure `Dashboard Controls` always stays in the top-right corner and cannot be covered by other panels.
 
 ### TASK 25: VISUAL REFINEMENT & DATA PLUG-INS

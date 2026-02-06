@@ -49,21 +49,25 @@ void QuantWorkspaceComponent::render_gui() {
   // Docking not supported in this branch of ImGui.
   // We'll just render the panels normally.
 
-  // Render dashboard controls
+  // Render all panels through the panel manager first
+  panel_manager_->render();
+
+  // Render dashboard controls last to ensure they stay on top
   if (show_dashboard_controls_) {
     render_dashboard_controls();
   }
-
-  // Render all panels through the panel manager
-  panel_manager_->render();
 }
 
 void QuantWorkspaceComponent::render_dashboard_controls() {
   ImGuiIO& io = ImGui::GetIO();
-  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 320, 20), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(300, 250), ImGuiCond_FirstUseEver);
+  // Calculate position to ensure it stays in the top-right corner with consistent padding
+  float window_width = 300.0f;  // Width of the window
+  float padding_x = 20.0f;      // Padding from the right edge
+  float padding_y = 20.0f;      // Padding from the top edge
+  ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - window_width - padding_x, padding_y), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(window_width, 250), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_TopMost)) {
+  if (ImGui::Begin("Dashboard Controls", &show_dashboard_controls_, ImGuiWindowFlags_TopMost | ImGuiWindowFlags_NoFocusOnAppearing)) {
     ImGui::Text("Ultra-Quantitative Dashboard");
     ImGui::Separator();
 

@@ -79,6 +79,46 @@ void TabbedPanel::render_tab_bar() {
         ImGui::EndTabBar();
     }
 
+    // Make the tab bar area a drop target for adding more panels to the tabbed panel
+    std::string tab_drop_target_id = "TAB_DROP_TARGET_" + std::to_string(get_config().grid_x) + "_" + std::to_string(get_config().grid_y);
+    ImGui::PushID(tab_drop_target_id.c_str());
+    
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PANEL_ID")) {
+            if (payload->DataSize == sizeof(uint32_t)) {
+                uint32_t source_panel_id = *(static_cast<const uint32_t*>(payload->Data));
+
+                // Check if the source panel is already in this tabbed panel
+                bool already_exists = false;
+                for (uint32_t existing_id : tabbed_panels_) {
+                    if (existing_id == source_panel_id) {
+                        already_exists = true;
+                        break;
+                    }
+                }
+
+                if (!already_exists) {
+                    // Add the dragged panel to this tabbed panel
+                    add_panel(source_panel_id);
+
+                    // Hide the source panel since it's now managed by this tabbed panel
+                    PanelBase* source_panel = panel_manager_ ? panel_manager_->get_panel_by_id(source_panel_id) : nullptr;
+                    if (source_panel) {
+                        source_panel->set_visible(false);
+
+                        // Remove the source panel from any existing groups
+                        auto group_ids = panel_manager_->get_panel_groups_for_panel(source_panel_id);
+                        for (uint32_t group_id : group_ids) {
+                            panel_manager_->remove_panel_from_group(group_id, source_panel_id);
+                        }
+                    }
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    ImGui::PopID();
+
     ImGui::EndChild();
 }
 

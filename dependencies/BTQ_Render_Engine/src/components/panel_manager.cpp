@@ -2129,9 +2129,9 @@ void PanelManager::process_panel_drag_and_drop(
                     tabbed_config.grid_height = target_config.grid_height;
                     tabbed_config.position = target_config.position;
                     tabbed_config.size = target_config.size;
-                    
+
                     // Log the successful creation of the tabbed group
-                    std::cout << "Successfully created tabbed group with panels: " 
+                    std::cout << "Successfully created tabbed group with panels: "
                               << target_id << " and " << source_panel_id << std::endl;
                   }
                 }
@@ -2139,10 +2139,21 @@ void PanelManager::process_panel_drag_and_drop(
             }
           }
         }
+      } else {
+        // Provide visual feedback when hovering over a potential drop target
+        // Check if we're hovering over this drop target with a payload but haven't dropped yet
+        ImGuiDragDropFlags target_flags = ImGuiDragDropFlags_AcceptBeforeDelivery;
+        if (ImGui::AcceptDragDropPayload("PANEL_ID", target_flags)) {
+          // This means we're hovering over the target with a payload
+          // Provide visual feedback that this is a valid drop target for creating a tabbed group
+          ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(255, 255, 0, 255)); // Yellow border
+          ImGui::Separator(); // Just to trigger a visual change
+          ImGui::PopStyleColor();
+        }
       }
       ImGui::PopStyleVar(); // FrameBorderSize
       ImGui::PopStyleColor(); // DragDropTarget
-      
+
       ImGui::EndDragDropTarget();
     }
     ImGui::PopID();

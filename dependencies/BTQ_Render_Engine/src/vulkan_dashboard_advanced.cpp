@@ -411,6 +411,7 @@ void VulkanDashboard::framebuffer_size_callback(GLFWwindow* window, int width, i
 }
 
 void VulkanDashboard::pollDataToRenderer() {
+  using namespace BTQuant::RenderEngine;
   if (!micro_renderer_ || !market_data_processor_) {
     return;
   }

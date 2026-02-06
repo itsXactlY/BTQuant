@@ -40,45 +40,45 @@ void TabbedPanel::render_tab_bar() {
     }
 
     // Create a child window for the tab bar to handle scrolling if needed
-    ImGui::BeginChild("TabBarContainer", ImVec2(0, ImGui::GetFrameHeight()), false, 
+    ImGui::BeginChild("TabBarContainer", ImVec2(0, ImGui::GetFrameHeight()), false,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    
+
     // Use ImGui's tab bar functionality
-    if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll)) {
-        
+    if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_FittingPolicyScroll | ImGuiTabBarFlags_TabListPopupButton)) {
+
         for (int i = 0; i < static_cast<int>(tabbed_panels_.size()); ++i) {
             uint32_t panel_id = tabbed_panels_[i];
-            
+
             // Get the panel from panel manager to get its title
             PanelBase* panel = panel_manager_ ? panel_manager_->get_panel_by_id(panel_id) : nullptr;
             std::string tab_label = panel ? panel->get_title() : "Panel " + std::to_string(panel_id);
-            
+
             // Add close button to the tab
             bool tab_closed = false;
             ImGuiTabItemFlags flags = (i == active_tab_index_) ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
-            
+
             if (ImGui::BeginTabItem(tab_label.c_str(), &tab_closed, flags)) {
                 // Tab is selected, update active index
                 active_tab_index_ = i;
-                
+
                 ImGui::EndTabItem();
             }
-            
+
             // Handle tab closing
             if (tab_closed) {
                 remove_panel(panel_id);
             }
-            
+
             // Handle right-click context menu for the tab
             if (ImGui::BeginPopupContextItem(("TabContextMenu" + std::to_string(i)).c_str())) {
                 handle_tab_context_menu(i);
                 ImGui::EndPopup();
             }
         }
-        
+
         ImGui::EndTabBar();
     }
-    
+
     ImGui::EndChild();
 }
 
@@ -270,6 +270,10 @@ bool TabbedPanel::handle_drop(uint32_t source_panel_id) {
         if (source_panel) {
             // Hide the source panel since it's now shown inside this tabbed panel
             source_panel->set_visible(false);
+            
+            // Log the successful addition of the panel to the tabbed panel
+            std::cout << "Successfully added panel " << source_panel_id 
+                      << " to tabbed panel with title: " << source_panel->get_title() << std::endl;
         }
     }
 

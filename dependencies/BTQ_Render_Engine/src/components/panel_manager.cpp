@@ -1954,12 +1954,15 @@ void PanelManager::process_panel_drag_and_drop(
 
     // Make the panel a drag source
     std::string drag_source_id = "PANEL_DRAG_SOURCE_" + std::to_string(source_id);
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover | ImGuiDragDropFlags_SourceAllowNullID)) {
       // Set the payload to the panel ID
       ImGui::SetDragDropPayload("PANEL_ID", &source_id, sizeof(uint32_t));
 
       // Show a preview of what's being dragged
-      ImGui::Text("Moving panel: %s", source_panel->get_title().c_str());
+      ImGui::Text("Dragging panel: %s", source_panel->get_title().c_str());
+      
+      // Add visual indicator for the drag operation
+      ImGui::TextDisabled("(Drag to another panel to create tabbed group)");
 
       ImGui::EndDragDropSource();
     }
@@ -1972,6 +1975,10 @@ void PanelManager::process_panel_drag_and_drop(
     ImGui::PushID(drop_target_id.c_str());
 
     if (ImGui::BeginDragDropTarget()) {
+      // Visual feedback when a panel can accept a drop
+      ImGui::PushStyleColor(ImGuiCol_DragDropTarget, IM_COL32(100, 150, 255, 200));
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
+      
       if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("PANEL_ID")) {
         if (payload->DataSize == sizeof(uint32_t)) {
           uint32_t source_panel_id = *(static_cast<const uint32_t*>(payload->Data));
@@ -2008,23 +2015,23 @@ void PanelManager::process_panel_drag_and_drop(
                 // Merge the source tabbed panel into the target tabbed panel
                 TabbedPanel* source_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id));
                 TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
-                
+
                 if (source_tabbed && target_tabbed) {
                   // Transfer all panels from source tabbed panel to target tabbed panel
                   auto source_panels = source_tabbed->get_tabbed_panels();
                   for (uint32_t panel_id : source_panels) {
                     target_tabbed->add_panel(panel_id);
-                    
+
                     // Hide the transferred panel
                     PanelBase* panel = get_panel_by_id(panel_id);
                     if (panel) {
                       panel->set_visible(false);
                     }
                   }
-                  
+
                   // Hide the source tabbed panel since it's now merged
                   set_panel_visible(source_panel_id, false);
-                  
+
                   // Remove the source tabbed panel from any groups
                   auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
                   for (uint32_t group_id : source_group_ids) {
@@ -2037,23 +2044,23 @@ void PanelManager::process_panel_drag_and_drop(
                 // Add the source tabbed panel to the target tabbed panel
                 TabbedPanel* source_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(source_panel_id));
                 TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
-                
+
                 if (source_tabbed && target_tabbed) {
                   // Transfer all panels from source tabbed panel to target tabbed panel
                   auto source_panels = source_tabbed->get_tabbed_panels();
                   for (uint32_t panel_id : source_panels) {
                     target_tabbed->add_panel(panel_id);
-                    
+
                     // Hide the transferred panel
                     PanelBase* panel = get_panel_by_id(panel_id);
                     if (panel) {
                       panel->set_visible(false);
                     }
                   }
-                  
+
                   // Hide the source tabbed panel since it's now merged
                   set_panel_visible(source_panel_id, false);
-                  
+
                   // Remove the source tabbed panel from any groups
                   auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
                   for (uint32_t group_id : source_group_ids) {
@@ -2067,13 +2074,13 @@ void PanelManager::process_panel_drag_and_drop(
                 TabbedPanel* target_tabbed = dynamic_cast<TabbedPanel*>(get_panel_by_id(target_id));
                 if (target_tabbed) {
                   target_tabbed->add_panel(source_panel_id);
-                  
+
                   // Hide the source panel since it's now managed by the tabbed panel
                   PanelBase* source_panel = get_panel_by_id(source_panel_id);
                   if (source_panel) {
                     source_panel->set_visible(false);
                   }
-                  
+
                   // Remove the source panel from any existing groups
                   auto source_group_ids = get_panel_groups_for_panel(source_panel_id);
                   for (uint32_t group_id : source_group_ids) {
@@ -2113,7 +2120,7 @@ void PanelManager::process_panel_drag_and_drop(
                     for (uint32_t group_id : source_group_ids) {
                       remove_panel_from_group(group_id, source_panel_id);
                     }
-                    
+
                     // Update the position and size of the tabbed panel to match the target panel
                     auto& tabbed_config = tabbed_panel->get_config();
                     tabbed_config.grid_x = target_config.grid_x;
@@ -2122,6 +2129,10 @@ void PanelManager::process_panel_drag_and_drop(
                     tabbed_config.grid_height = target_config.grid_height;
                     tabbed_config.position = target_config.position;
                     tabbed_config.size = target_config.size;
+                    
+                    // Log the successful creation of the tabbed group
+                    std::cout << "Successfully created tabbed group with panels: " 
+                              << target_id << " and " << source_panel_id << std::endl;
                   }
                 }
               }
@@ -2129,6 +2140,9 @@ void PanelManager::process_panel_drag_and_drop(
           }
         }
       }
+      ImGui::PopStyleVar(); // FrameBorderSize
+      ImGui::PopStyleColor(); // DragDropTarget
+      
       ImGui::EndDragDropTarget();
     }
     ImGui::PopID();

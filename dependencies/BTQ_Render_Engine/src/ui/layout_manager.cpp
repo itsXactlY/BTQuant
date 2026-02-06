@@ -29,6 +29,11 @@ LayoutManager::LayoutManager() {
 
 LayoutManager::~LayoutManager() = default;
 
+LayoutManager& LayoutManager::getInstance() {
+    static LayoutManager instance;
+    return instance;
+}
+
 void LayoutManager::initialize_presets_directory() {
     // Create presets directory if it doesn't exist
     presets_directory_ = "presets";

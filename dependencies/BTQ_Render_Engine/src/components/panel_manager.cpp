@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <tuple>
 #include <unordered_map>
 
 #include "../../include/components/time_and_sales.hpp"
@@ -59,6 +60,11 @@ PanelManager::PanelManager(std::shared_ptr<HotSpineDataBridge> bridge,
   chart_manager_ = std::make_unique<ChartManager>(bridge, processor);
   context_menu_manager_ = std::make_unique<ContextMenuManager>(this);
   strategy_builder_ = std::make_unique<RenderEngine::StrategyBuilder>(PanelConfig{.title = "Strategy Builder", .type = PanelType::STRATEGY_BUILDER});
+
+  // Set the panel manager reference in the MarketMicrostructureRenderer for dirty state updates
+  if (micro_renderer_) {
+    micro_renderer_->set_panel_manager(this);
+  }
 }
 
 PanelManager::~PanelManager() {
@@ -2475,12 +2481,12 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
   }
 
   // Priority order for docking: Right, Below, Left, Above (most intuitive for users)
-  // Store potential positions with priority
-  std::vector<std::pair<int, int>> potential_positions;
+  // Store potential positions with priority scores
+  std::vector<std::tuple<int, int, int>> potential_positions; // x, y, score
 
   // Look for adjacent empty spaces to existing panels in priority order
-  
-  // 1. Try placing to the right of existing panels (priority 1)
+
+  // 1. Try placing to the right of existing panels (priority 1 - highest)
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
 
@@ -2511,7 +2517,9 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
 
         if (full_fit) {
-          potential_positions.push_back({right_edge, config.grid_y});
+          // Score based on adjacency (higher is better) and position (prefer top-left areas)
+          int score = 1000 - (right_edge + config.grid_y * 10); // Prefer positions closer to top-left
+          potential_positions.push_back({right_edge, config.grid_y, score});
         }
       }
     }
@@ -2548,7 +2556,9 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
 
         if (full_fit) {
-          potential_positions.push_back({config.grid_x, bottom_edge});
+          // Score based on adjacency (medium-high) and position (prefer top-left areas)
+          int score = 800 - (config.grid_x + bottom_edge * 10); // Prefer positions closer to top-left
+          potential_positions.push_back({config.grid_x, bottom_edge, score});
         }
       }
     }
@@ -2585,13 +2595,15 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
 
         if (full_fit) {
-          potential_positions.push_back({left_edge, config.grid_y});
+          // Score based on adjacency (medium) and position (prefer top-left areas)
+          int score = 600 - (left_edge + config.grid_y * 10); // Prefer positions closer to top-left
+          potential_positions.push_back({left_edge, config.grid_y, score});
         }
       }
     }
   }
 
-  // 4. Try placing above existing panels (priority 4)
+  // 4. Try placing above existing panels (priority 4 - lowest among adjacent)
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
 
@@ -2622,15 +2634,22 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
 
         if (full_fit) {
-          potential_positions.push_back({config.grid_x, top_edge});
+          // Score based on adjacency (lower) and position (prefer top-left areas)
+          int score = 400 - (config.grid_x + top_edge * 10); // Prefer positions closer to top-left
+          potential_positions.push_back({config.grid_x, top_edge, score});
         }
       }
     }
   }
 
-  // If we found any potential positions, return the first one (highest priority)
+  // If we found any adjacent positions, return the one with the highest score
   if (!potential_positions.empty()) {
-    return potential_positions[0];
+    // Find the position with the highest score
+    auto best_pos = std::max_element(potential_positions.begin(), potential_positions.end(),
+                                     [](const auto& a, const auto& b) {
+                                       return std::get<2>(a) < std::get<2>(b);
+                                     });
+    return {std::get<0>(*best_pos), std::get<1>(*best_pos)};
   }
 
   // If no adjacent position found, try to find any empty space in the grid
@@ -2759,11 +2778,25 @@ void PanelManager::handle_panel_drag_drop() {
           if (can_drag_panel_to_target(dragged_panel_id_, panel_id)) {
               drag_target_panel_id_ = panel_id;
 
-              // Highlight the target panel (visual feedback)
+              // Enhanced visual feedback for drop target
               ImDrawList* draw_list = ImGui::GetForegroundDrawList();
-              ImVec2 p_min = ImVec2(panel_pos.x + 2, panel_pos.y + 2);
-              ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x - 2, panel_pos.y + panel_size.y - 2);
-              draw_list->AddRect(p_min, p_max, IM_COL32(255, 215, 0, 255), 0.0f, 0, 4.0f);
+              
+              // Draw a thick border around the target panel
+              ImVec2 p_min = ImVec2(panel_pos.x, panel_pos.y);
+              ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x, panel_pos.y + panel_size.y);
+              draw_list->AddRect(p_min, p_max, IM_COL32(0, 255, 0, 255), 0.0f, 0, 6.0f); // Thicker green border
+              
+              // Draw a semi-transparent overlay to highlight the area
+              draw_list->AddRectFilled(p_min, p_max, IM_COL32(0, 255, 0, 50)); // Semi-transparent green fill
+              
+              // Draw a label indicating this is a valid drop zone
+              std::string label = "Drop to create tabbed group";
+              ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
+              ImVec2 label_pos = ImVec2(
+                  panel_pos.x + (panel_size.x - label_size.x) * 0.5f,
+                  panel_pos.y + (panel_size.y - label_size.y) * 0.5f
+              );
+              draw_list->AddText(label_pos, IM_COL32(255, 255, 255, 255), label.c_str());
 
               break;
           }

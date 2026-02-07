@@ -156,6 +156,12 @@ class MarketMicrostructureRenderer {
   // This provides access to the underlying ClusterCell data for advanced analysis
   std::vector<std::vector<Analytics::ClusterCell>> getClusterCells() const;
 
+  // Method to set panel manager reference for dirty state updates
+  void set_panel_manager(class PanelManager* panel_manager) { panel_manager_ = panel_manager; }
+
+  // Method to mark all active panels as dirty to trigger visual updates
+  void mark_all_panels_dirty();
+
  private:
   // Data Update Callback
   void onMarketDataUpdate(uint32_t symbol_id, NotificationType type);
@@ -256,6 +262,9 @@ class MarketMicrostructureRenderer {
 
   // Cluster Engine for advanced analytics
   std::unique_ptr<Analytics::ClusterEngine> cluster_engine_;
+
+  // Panel manager reference for dirty state updates
+  class PanelManager* panel_manager_ = nullptr;
 };
 
 // ============================================================================

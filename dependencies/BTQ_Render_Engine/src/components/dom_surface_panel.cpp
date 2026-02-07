@@ -146,36 +146,70 @@ void DomSurfacePanel::processRecentTrades() {
 }
 
 void DomSurfacePanel::cleanupOldTradeBubbles() {
-  // Remove bubbles that are outside the current view range
+  // Get current time to calculate age of the trades
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Remove bubbles that are outside the current view range OR completely faded out
   // This helps keep the vector size manageable
-  
   trade_bubbles_.erase(
       std::remove_if(trade_bubbles_.begin(), trade_bubbles_.end(),
-                     [this](const TradeBubble& bubble) {
-                       // Remove if outside the current view bounds by a margin
+                     [this, current_time](const TradeBubble& bubble) {
+                       // Check if bubble is outside the current view bounds by a margin
                        double margin = (bounds_max_[0] - bounds_min_[0]) * 0.1; // 10% margin
-                       return (bubble.x < bounds_min_[0] - margin || bubble.x > bounds_max_[0] + margin);
+                       bool outside_bounds = (bubble.x < bounds_min_[0] - margin || bubble.x > bounds_max_[0] + margin);
+                       
+                       // Check if bubble has completely faded out
+                       uint64_t age_ms = current_time - bubble.timestamp;
+                       bool fully_faded = age_ms >= TRADE_BUBBLE_FADE_DURATION_MS;
+                       
+                       return outside_bounds || fully_faded;
                      }),
       trade_bubbles_.end());
 }
 
 float DomSurfacePanel::calculateBubbleRadius(double volume) const {
-  if (max_trade_volume_ <= 0.0) return 5.0f;  // Default radius
+  if (volume <= 0.0) return 3.0f;  // Minimum radius for invalid volumes
+
+  // Use logarithmic scaling: log(volume + 1) to handle volume = 0 gracefully
+  // This prevents massive trades from covering the entire price axis
+  float log_volume = std::log(volume + 1.0f);
   
-  // Calculate radius: base_radius * sqrt(volume / max_volume) to make differences more visible
-  float base_radius = 8.0f;  // Base radius for smallest trades
-  float calculated_radius = base_radius * std::sqrt(volume / max_trade_volume_) * 3.0f;  // Amplify effect
+  // Normalize using a reference maximum log volume to scale appropriately
+  float max_log_volume = std::log(1000.0f + 1.0f); // Reference max volume of 1000
+  float normalized_log_volume = log_volume / max_log_volume;
   
-  // Clamp to reasonable range
-  return std::clamp(calculated_radius, 3.0f, 20.0f);
+  // Scale to desired radius range
+  float min_radius = 3.0f;
+  float max_radius = 20.0f;
+  float calculated_radius = min_radius + (max_radius - min_radius) * normalized_log_volume;
+
+  return calculated_radius;
 }
 
 ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
-  // Color: Green for Buys, Red for Sells
+  // Get current time to calculate age of the trade
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+  
+  // Calculate age of the trade in milliseconds
+  uint64_t age_ms = current_time - bubble.timestamp;
+  
+  // Calculate fade ratio (0.0 = fully faded, 1.0 = fully opaque)
+  float fade_ratio = 1.0f - static_cast<float>(age_ms) / static_cast<float>(TRADE_BUBBLE_FADE_DURATION_MS);
+  fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
+  
+  // Calculate alpha based on fade ratio
+  uint8_t base_alpha = 180;  // Base alpha value
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * fade_ratio);
+  
+  // Color: Green for Buys, Red for Sells with fade-out effect
   if (bubble.is_buy) {
-    return IM_COL32(0, 255, 0, 180);  // Green with transparency
+    return IM_COL32(0, 255, 0, alpha);  // Green with fade-out transparency
   } else {
-    return IM_COL32(255, 0, 0, 180);  // Red with transparency
+    return IM_COL32(255, 0, 0, alpha);  // Red with fade-out transparency
   }
 }
 

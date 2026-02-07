@@ -147,6 +147,7 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float TRADE_BUBBLE_MAX_RADIUS = 50.0f;  // Maximum radius for trade bubbles
   static constexpr float TRADE_BUBBLE_MIN_VOLUME = 0.01f;  // Minimum volume for visible bubble
   static constexpr float TRADE_BUBBLE_MAX_VOLUME = 1000.0f; // Maximum volume for scaling
+  static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_US = 30'000'000;  // 30 seconds fade-out duration in microseconds
 
   // Vulkan resources for accelerated rendering
   VulkanCore* vulkan_core_ = nullptr;

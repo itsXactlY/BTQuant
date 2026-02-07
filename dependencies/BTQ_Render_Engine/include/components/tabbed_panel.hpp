@@ -34,10 +34,10 @@ class TabbedPanel : public PanelBase {
   bool remove_panel_from_tab(uint32_t panel_id);
   bool set_active_tab(uint32_t panel_id);
   uint32_t get_active_tab() const { return active_tab_id_; }
-  
+
   // Get the number of tabs in this panel
   size_t get_tab_count() const { return tabbed_panel_ids_.size(); }
-  
+
   // Get all panel IDs in tabs
   const std::vector<uint32_t>& get_tabbed_panels() const { return tabbed_panel_ids_; }
 
@@ -50,7 +50,7 @@ class TabbedPanel : public PanelBase {
   std::vector<uint32_t> tabbed_panel_ids_;  // IDs of panels contained in tabs
   uint32_t active_tab_id_ = 0;              // ID of currently active tab
   std::string tab_bar_id_;                  // Unique ID for the tab bar
-  
+
   void render_tab_bar();
   void render_active_tab_content();
 };

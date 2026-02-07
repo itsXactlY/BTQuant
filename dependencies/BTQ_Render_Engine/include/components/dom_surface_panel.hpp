@@ -135,6 +135,7 @@ class DomSurfacePanel : public PanelBase {
   std::vector<TradeBubble> trade_bubbles_;
   double max_trade_volume_ = 1.0;                      // For scaling bubble sizes
   static constexpr size_t TRADE_HISTORY_SIZE = 10000;  // Number of recent trades to track
+  static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_MS = 30000;  // 30 seconds fade-out duration
 
   // Large Order Marker System
   std::vector<LargeOrderMarker> large_order_markers_;

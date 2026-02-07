@@ -478,6 +478,9 @@ void MarketMicrostructureRenderer::onMarketDataUpdate(uint32_t symbol_id, Notifi
 
     updateTradeData(ticks);
 
+    // Mark all panels as dirty to trigger visual updates when new trades arrive
+    mark_all_panels_dirty();
+
     // Also update Footprint Clusters?
     // If we don't have a cluster logic here, we rely on someone else calling
     // `updateFootprintClusters`. NOTE: Current footprint impl might need
@@ -1114,6 +1117,23 @@ std::vector<std::vector<Analytics::ClusterCell>> MarketMicrostructureRenderer::g
 
   // Access the cluster canvas from the cluster engine using the getter method
   return cluster_engine_->getClusterCanvas();
+}
+
+void MarketMicrostructureRenderer::mark_all_panels_dirty() {
+  if (!panel_manager_) {
+    return;  // No panel manager set, nothing to do
+  }
+
+  // Get all panel IDs from the panel manager
+  auto all_panel_ids = panel_manager_->get_all_panel_ids();
+
+  // Iterate through all panels and mark them as dirty
+  for (uint32_t panel_id : all_panel_ids) {
+    PanelBase* panel = panel_manager_->get_panel_by_id(panel_id);
+    if (panel) {
+      panel->markDirty();
+    }
+  }
 }
 
 }  // namespace BTQuant::RenderEngine

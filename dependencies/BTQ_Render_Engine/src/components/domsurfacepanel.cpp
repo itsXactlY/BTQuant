@@ -1064,6 +1064,19 @@ void DomSurfacePanel::updateTradeBubbles() {
       last_trade_timestamp_ = trade.timestamp;
     }
   }
+  
+  // Clean up fully faded out trade bubbles
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+  
+  trade_bubbles_.erase(
+      std::remove_if(trade_bubbles_.begin(), trade_bubbles_.end(),
+                     [current_time](const BTQuant::Data::TradeData& trade) {
+                       uint64_t age_us = current_time - trade.timestamp;
+                       return age_us >= TRADE_BUBBLE_FADE_DURATION_US;
+                     }),
+      trade_bubbles_.end());
 }
 
 void DomSurfacePanel::renderTradeBubbles() {
@@ -1128,20 +1141,42 @@ void DomSurfacePanel::renderTradeBubbles() {
 }
 
 float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
-  // Normalize volume to a 0-1 range based on min/max volume thresholds
-  float normalized_volume = std::clamp((volume - TRADE_BUBBLE_MIN_VOLUME) / 
-                                     (TRADE_BUBBLE_MAX_VOLUME - TRADE_BUBBLE_MIN_VOLUME), 0.0f, 1.0f);
+  if (volume <= 0.0f) return TRADE_BUBBLE_BASE_RADIUS;  // Base radius for invalid volumes
+
+  // Use logarithmic scaling: log(volume + 1) to handle volume = 0 gracefully
+  // This prevents massive trades from covering the entire price axis
+  float log_volume = std::log(volume + 1.0f);
   
-  // Scale radius from base to max based on normalized volume
-  return TRADE_BUBBLE_BASE_RADIUS + (TRADE_BUBBLE_MAX_RADIUS - TRADE_BUBBLE_BASE_RADIUS) * normalized_volume;
+  // Normalize using a reference maximum log volume to scale appropriately
+  float max_log_volume = std::log(TRADE_BUBBLE_MAX_VOLUME + 1.0f);
+  float normalized_log_volume = log_volume / max_log_volume;
+  
+  // Scale radius from base to max based on normalized log volume
+  return TRADE_BUBBLE_BASE_RADIUS + (TRADE_BUBBLE_MAX_RADIUS - TRADE_BUBBLE_BASE_RADIUS) * normalized_log_volume;
 }
 
 ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade) const {
-  // Color based on trade side: Green for BUY, Red for SELL
+  // Get current time to calculate age of the trade
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+  
+  // Calculate age of the trade in microseconds
+  uint64_t age_us = current_time - trade.timestamp;
+  
+  // Calculate fade ratio (0.0 = fully faded, 1.0 = fully opaque)
+  float fade_ratio = 1.0f - static_cast<float>(age_us) / static_cast<float>(TRADE_BUBBLE_FADE_DURATION_US);
+  fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
+  
+  // Calculate alpha based on fade ratio
+  uint8_t base_alpha = 180;  // Base alpha value
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * fade_ratio);
+  
+  // Color based on trade side: Green for BUY, Red for SELL with fade-out effect
   if (trade.side == BTQuant::Data::TradeSide::BUY) {
-    return IM_COL32(0, 255, 0, 180);  // Green with transparency
+    return IM_COL32(0, 255, 0, alpha);  // Green with fade-out transparency
   } else {
-    return IM_COL32(255, 0, 0, 180);  // Red with transparency
+    return IM_COL32(255, 0, 0, alpha);  // Red with fade-out transparency
   }
 }
 

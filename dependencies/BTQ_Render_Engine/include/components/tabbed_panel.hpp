@@ -6,7 +6,11 @@
 #include <string>
 
 #include "panel_base.hpp"
-#include "panel_manager.hpp"
+
+// Forward declaration to avoid circular dependency
+namespace BTQuant {
+    class PanelManager;
+}
 
 namespace BTQuant {
 

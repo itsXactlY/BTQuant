@@ -59,6 +59,9 @@ class PanelManager {
   uint32_t add_panel_with_symbol(PanelType type, const std::string& title,
                                  const std::string& symbol, int grid_x, int grid_y, int width,
                                  int height);
+  
+  // Auto-dock functionality - finds empty edges of existing panels
+  std::pair<int, int> find_auto_dock_position(int width, int height) const;
   void remove_panel(uint32_t panel_id);
   void clear_panels();
   void move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y);

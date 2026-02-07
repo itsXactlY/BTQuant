@@ -216,6 +216,19 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
                                  int width, int height) {
   uint32_t panel_id = next_panel_id_++;
 
+  // If grid coordinates are not specified (-1), use auto-dock to find an appropriate position
+  if (grid_x == -1 || grid_y == -1) {
+    auto [auto_x, auto_y] = find_auto_dock_position(width, height);
+    if (auto_x != -1 && auto_y != -1) {
+      grid_x = auto_x;
+      grid_y = auto_y;
+    } else {
+      // If no suitable dock position found, default to (0, 0)
+      grid_x = 0;
+      grid_y = 0;
+    }
+  }
+
   PanelConfig config = create_panel_config(type, title, grid_x, grid_y, width, height);
 
   std::unique_ptr<PanelBase> panel;
@@ -415,6 +428,19 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
                                              const std::string& symbol, int grid_x, int grid_y,
                                              int width, int height) {
   uint32_t panel_id = next_panel_id_++;
+
+  // If grid coordinates are not specified (-1), use auto-dock to find an appropriate position
+  if (grid_x == -1 || grid_y == -1) {
+    auto [auto_x, auto_y] = find_auto_dock_position(width, height);
+    if (auto_x != -1 && auto_y != -1) {
+      grid_x = auto_x;
+      grid_y = auto_y;
+    } else {
+      // If no suitable dock position found, default to (0, 0)
+      grid_x = 0;
+      grid_y = 0;
+    }
+  }
 
   PanelConfig config =
       create_panel_config_with_symbol(type, title, symbol, grid_x, grid_y, width, height);
@@ -2416,6 +2442,198 @@ bool PanelManager::can_drag_panel_to_target(uint32_t source_panel_id, uint32_t t
   return true;
 }
 
+std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height) const {
+  // If no panels exist, return (0, 0) as the default position
+  if (panels_.empty()) {
+    return {0, 0};
+  }
+
+  // Define the grid boundaries
+  int max_cols = grid_layout_.columns;
+  int max_rows = grid_layout_.rows;
+
+  // Create a 2D grid to represent occupied cells
+  std::vector<std::vector<bool>> occupied(max_rows, std::vector<bool>(max_cols, false));
+
+  // Mark cells occupied by existing panels
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    
+    // Mark the grid cells occupied by this panel
+    for (int x = config.grid_x; x < config.grid_x + config.grid_width && x < max_cols; ++x) {
+      for (int y = config.grid_y; y < config.grid_y + config.grid_height && y < max_rows; ++y) {
+        if (x >= 0 && y >= 0) {  // Ensure valid indices
+          occupied[y][x] = true;
+        }
+      }
+    }
+  }
+
+  // Look for adjacent empty spaces to existing panels
+  // Check for positions to the right of existing panels
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    
+    // Try placing to the right of this panel
+    int right_edge = config.grid_x + config.grid_width;
+    if (right_edge + width <= max_cols) {
+      bool can_place = true;
+      for (int x = right_edge; x < right_edge + width; ++x) {
+        for (int y = config.grid_y; y < config.grid_y + std::min(height, config.grid_height); ++y) {
+          if (y >= 0 && y < max_rows && occupied[y][x]) {
+            can_place = false;
+            break;
+          }
+        }
+        if (!can_place) break;
+      }
+      
+      if (can_place) {
+        // Check if the entire panel can fit vertically
+        bool full_fit = true;
+        for (int x = right_edge; x < right_edge + width; ++x) {
+          for (int y = config.grid_y; y < config.grid_y + height; ++y) {
+            if (y >= max_rows || (y >= 0 && occupied[y][x])) {
+              full_fit = false;
+              break;
+            }
+          }
+          if (!full_fit) break;
+        }
+        
+        if (full_fit) {
+          return {right_edge, config.grid_y};
+        }
+      }
+    }
+    
+    // Try placing below this panel
+    int bottom_edge = config.grid_y + config.grid_height;
+    if (bottom_edge + height <= max_rows) {
+      bool can_place = true;
+      for (int y = bottom_edge; y < bottom_edge + height; ++y) {
+        for (int x = config.grid_x; x < config.grid_x + std::min(width, config.grid_width); ++x) {
+          if (x >= 0 && x < max_cols && occupied[y][x]) {
+            can_place = false;
+            break;
+          }
+        }
+        if (!can_place) break;
+      }
+      
+      if (can_place) {
+        // Check if the entire panel can fit horizontally
+        bool full_fit = true;
+        for (int y = bottom_edge; y < bottom_edge + height; ++y) {
+          for (int x = config.grid_x; x < config.grid_x + width; ++x) {
+            if (x >= max_cols || (x >= 0 && occupied[y][x])) {
+              full_fit = false;
+              break;
+            }
+          }
+          if (!full_fit) break;
+        }
+        
+        if (full_fit) {
+          return {config.grid_x, bottom_edge};
+        }
+      }
+    }
+    
+    // Try placing to the left of this panel
+    int left_edge = config.grid_x - width;
+    if (left_edge >= 0) {
+      bool can_place = true;
+      for (int x = left_edge; x < config.grid_x; ++x) {
+        for (int y = config.grid_y; y < config.grid_y + std::min(height, config.grid_height); ++y) {
+          if (y >= 0 && y < max_rows && occupied[y][x]) {
+            can_place = false;
+            break;
+          }
+        }
+        if (!can_place) break;
+      }
+      
+      if (can_place) {
+        // Check if the entire panel can fit vertically
+        bool full_fit = true;
+        for (int x = left_edge; x < config.grid_x; ++x) {
+          for (int y = config.grid_y; y < config.grid_y + height; ++y) {
+            if (y >= max_rows || (y >= 0 && occupied[y][x])) {
+              full_fit = false;
+              break;
+            }
+          }
+          if (!full_fit) break;
+        }
+        
+        if (full_fit) {
+          return {left_edge, config.grid_y};
+        }
+      }
+    }
+    
+    // Try placing above this panel
+    int top_edge = config.grid_y - height;
+    if (top_edge >= 0) {
+      bool can_place = true;
+      for (int y = top_edge; y < config.grid_y; ++y) {
+        for (int x = config.grid_x; x < config.grid_x + std::min(width, config.grid_width); ++x) {
+          if (x >= 0 && x < max_cols && occupied[y][x]) {
+            can_place = false;
+            break;
+          }
+        }
+        if (!can_place) break;
+      }
+      
+      if (can_place) {
+        // Check if the entire panel can fit horizontally
+        bool full_fit = true;
+        for (int y = top_edge; y < config.grid_y; ++y) {
+          for (int x = config.grid_x; x < config.grid_x + width; ++x) {
+            if (x >= max_cols || (x >= 0 && occupied[y][x])) {
+              full_fit = false;
+              break;
+            }
+          }
+          if (!full_fit) break;
+        }
+        
+        if (full_fit) {
+          return {config.grid_x, top_edge};
+        }
+      }
+    }
+  }
+
+  // If no adjacent position found, try to find any empty space in the grid
+  for (int y = 0; y < max_rows; ++y) {
+    for (int x = 0; x < max_cols; ++x) {
+      // Check if we can place the panel at this position
+      if (x + width <= max_cols && y + height <= max_rows) {
+        bool can_place = true;
+        for (int dy = 0; dy < height; ++dy) {
+          for (int dx = 0; dx < width; ++dx) {
+            if (occupied[y + dy][x + dx]) {
+              can_place = false;
+              break;
+            }
+          }
+          if (!can_place) break;
+        }
+        
+        if (can_place) {
+          return {x, y};
+        }
+      }
+    }
+  }
+
+  // If no space found, return (-1, -1) indicating failure
+  return {-1, -1};
+}
+
 void PanelManager::handle_panel_drag_drop() {
   // Check if we're currently dragging a panel
   if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -2431,19 +2649,19 @@ void PanelManager::handle_panel_drag_drop() {
         // Get the panel's window rectangle
         ImVec2 panel_pos = panel->get_config().position;
         ImVec2 panel_size = panel->get_config().size;
-        
+
         // Check if mouse is over this panel
         ImVec2 mouse_pos = ImGui::GetMousePos();
         if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
             mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
-            
+
             // Check if this is the title bar area (top portion of the window)
             // Usually the title bar height is around 20-30 pixels
             if (mouse_pos.y <= panel_pos.y + 30) {  // Approximate title bar height
                 if (!is_dragging_) {
                     dragged_panel_id_ = panel_id;
                     is_dragging_ = true;
-                    
+
                     // Print debug info
                     printf("Started dragging panel ID: %u\n", panel_id);
                 }
@@ -2470,7 +2688,7 @@ void PanelManager::handle_panel_drag_drop() {
           }
         }
       }
-      
+
       // Reset drag state
       is_dragging_ = false;
       dragged_panel_id_ = 0;
@@ -2487,7 +2705,7 @@ void PanelManager::handle_panel_drag_drop() {
   if (is_dragging_ && dragged_panel_id_ != 0) {
     ImVec2 mouse_pos = ImGui::GetMousePos();
     drag_target_panel_id_ = 0;  // Reset target
-    
+
     // Find which panel we might be dropping onto
     for (auto& [panel_id, panel] : panels_) {
       // Skip if panel is not visible, is the dragged panel, or is in a tabbed group
@@ -2498,21 +2716,21 @@ void PanelManager::handle_panel_drag_drop() {
       // Get the panel's window rectangle
       ImVec2 panel_pos = panel->get_config().position;
       ImVec2 panel_size = panel->get_config().size;
-      
+
       // Check if mouse is over this panel
       if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
           mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
-          
+
           // Check if this panel supports being a drop target
           if (can_drag_panel_to_target(dragged_panel_id_, panel_id)) {
               drag_target_panel_id_ = panel_id;
-              
+
               // Highlight the target panel (visual feedback)
               ImDrawList* draw_list = ImGui::GetForegroundDrawList();
               ImVec2 p_min = panel_pos;
               ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x, panel_pos.y + panel_size.y);
               draw_list->AddRect(p_min, p_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 3.0f);
-              
+
               break;
           }
       }

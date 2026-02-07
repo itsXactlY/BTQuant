@@ -1346,6 +1346,7 @@ std::string PanelManager::serialize_layout() const {
     group_json["total_width"] = group->total_width;
     group_json["total_height"] = group->total_height;
     group_json["locked"] = group->locked;
+    group_json["prevent_overlap"] = group->prevent_overlap;
 
     json panel_ids_json = json::array();
     for (uint32_t panel_id : group->panel_ids) {
@@ -1562,6 +1563,7 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
         int total_width = g["total_width"].get<int>();
         int total_height = g["total_height"].get<int>();
         bool locked = g["locked"].get<bool>();
+        bool prevent_overlap = g.value("prevent_overlap", true); // Default to true for backward compatibility
 
         // Get the panel IDs for this group
         std::vector<uint32_t> panel_ids;
@@ -1591,7 +1593,8 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
               group->total_width = total_width;
               group->total_height = total_height;
               group->locked = locked;
-              
+              group->prevent_overlap = prevent_overlap;
+
               // Update next_group_id if needed
               if (new_group_id >= next_group_id_) {
                 next_group_id_ = new_group_id + 1;
@@ -2111,6 +2114,15 @@ bool PanelManager::can_place_group_at(uint32_t group_id, int grid_x, int grid_y)
     return false;
   }
 
+  // If the group doesn't prevent overlap, allow placement anywhere within bounds
+  if (!group->prevent_overlap) {
+    int group_right = grid_x + group->total_width;
+    int group_bottom = grid_y + group->total_height;
+
+    // Just check if the group fits within grid bounds
+    return (group_right <= grid_layout_.columns && group_bottom <= grid_layout_.rows);
+  }
+
   // Check if the group fits within grid bounds at the specified position
   int group_right = grid_x + group->total_width;
   int group_bottom = grid_y + group->total_height;
@@ -2155,11 +2167,109 @@ const PanelManager::PanelGroup* PanelManager::get_panel_group(uint32_t group_id)
   return nullptr;
 }
 
+uint32_t PanelManager::create_super_panel_from_adjacent(uint32_t panel1_id, uint32_t panel2_id) {
+  // Check if both panels exist
+  if (panels_.find(panel1_id) == panels_.end() || 
+      panels_.find(panel2_id) == panels_.end()) {
+    return 0;
+  }
+
+  // Check if panels are already in a group
+  if (is_panel_in_group(panel1_id) || is_panel_in_group(panel2_id)) {
+    return 0; // Cannot create super-panel from panels already in groups
+  }
+
+  // Check if panels are adjacent (share a common edge)
+  const auto& config1 = panels_[panel1_id]->get_config();
+  const auto& config2 = panels_[panel2_id]->get_config();
+
+  bool adjacent = false;
+
+  // Check horizontal adjacency (same row, touching sides)
+  if (config1.grid_y == config2.grid_y) {
+    if (config1.grid_x + config1.grid_width == config2.grid_x || 
+        config2.grid_x + config2.grid_width == config1.grid_x) {
+      adjacent = true;
+    }
+  }
+  // Check vertical adjacency (same column, touching sides)
+  else if (config1.grid_x == config2.grid_x) {
+    if (config1.grid_y + config1.grid_height == config2.grid_y || 
+        config2.grid_y + config2.grid_height == config1.grid_y) {
+      adjacent = true;
+    }
+  }
+
+  if (!adjacent) {
+    return 0; // Panels are not adjacent
+  }
+
+  // Create a group with both panels
+  std::vector<uint32_t> panel_ids = {panel1_id, panel2_id};
+  return create_panel_group(panel_ids);
+}
+
+uint32_t PanelManager::create_super_panel_from_rectangular_region(int start_x, int start_y, int width, int height) {
+  // Validate region bounds
+  if (start_x < 0 || start_y < 0 || 
+      start_x + width > grid_layout_.columns || 
+      start_y + height > grid_layout_.rows) {
+    return 0; // Region is out of bounds
+  }
+
+  // Find all panels that are completely within the specified region
+  std::vector<uint32_t> panel_ids;
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+    
+    // Check if panel is completely within the region
+    if (config.grid_x >= start_x && 
+        config.grid_y >= start_y && 
+        config.grid_x + config.grid_width <= start_x + width && 
+        config.grid_y + config.grid_height <= start_y + height) {
+      
+      // Check if panel is not already in a group
+      if (!is_panel_in_group(id)) {
+        panel_ids.push_back(id);
+      }
+    }
+  }
+
+  if (panel_ids.empty()) {
+    return 0; // No panels found in the region
+  }
+
+  // Create a group with all panels in the region
+  uint32_t group_id = create_panel_group(panel_ids);
+  
+  // Set the group's position and size to match the specified region
+  if (auto* group = get_panel_group(group_id)) {
+    group->min_grid_x = start_x;
+    group->min_grid_y = start_y;
+    group->total_width = width;
+    group->total_height = height;
+  }
+
+  return group_id;
+}
+
 void PanelManager::lock_panel_group(uint32_t group_id, bool locked) {
   auto* group = get_panel_group(group_id);
   if (group) {
     group->locked = locked;
   }
+}
+
+void PanelManager::set_prevent_overlap_for_group(uint32_t group_id, bool prevent) {
+  auto* group = get_panel_group(group_id);
+  if (group) {
+    group->prevent_overlap = prevent;
+  }
+}
+
+bool PanelManager::does_group_prevent_overlap(uint32_t group_id) const {
+  const auto* group = get_panel_group(group_id);
+  return group ? group->prevent_overlap : false;
 }
 
 bool PanelManager::is_panel_group_locked(uint32_t group_id) const {

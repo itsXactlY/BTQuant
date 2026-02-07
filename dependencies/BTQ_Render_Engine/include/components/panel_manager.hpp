@@ -126,6 +126,7 @@ class PanelManager {
     int total_width = 0;              // Total width of the group in grid units
     int total_height = 0;             // Total height of the group in grid units
     bool locked = true;               // Whether the group is locked (non-resizable as a unit)
+    bool prevent_overlap = true;      // Whether the group prevents overlapping with other panels/groups
 
     PanelGroup(uint32_t id) : group_id(id) {}
   };
@@ -142,10 +143,18 @@ class PanelManager {
   uint32_t get_panel_group_id(uint32_t panel_id) const;
   PanelGroup* get_panel_group(uint32_t group_id);
   const PanelGroup* get_panel_group(uint32_t group_id) const;
+
+  // Super-panel creation methods - create a "super-panel" from adjacent panels
+  uint32_t create_super_panel_from_adjacent(uint32_t panel1_id, uint32_t panel2_id);
+  uint32_t create_super_panel_from_rectangular_region(int start_x, int start_y, int width, int height);
   
   // Lock/unlock panel groups to control whether they behave as a single unit
   void lock_panel_group(uint32_t group_id, bool locked = true);
   bool is_panel_group_locked(uint32_t group_id) const;
+
+  // Control overlap prevention for panel groups
+  void set_prevent_overlap_for_group(uint32_t group_id, bool prevent = true);
+  bool does_group_prevent_overlap(uint32_t group_id) const;
 
   // Tabbed group functionality - allowing panels to be combined into tabs
   uint32_t create_tabbed_group(uint32_t target_panel_id);

@@ -2463,7 +2463,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
   // Mark cells occupied by existing panels
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
-    
+
     // Mark the grid cells occupied by this panel
     for (int x = config.grid_x; x < config.grid_x + config.grid_width && x < max_cols; ++x) {
       for (int y = config.grid_y; y < config.grid_y + config.grid_height && y < max_rows; ++y) {
@@ -2474,12 +2474,16 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
     }
   }
 
-  // Look for adjacent empty spaces to existing panels
-  // Check for positions to the right of existing panels
+  // Priority order for docking: Right, Below, Left, Above (most intuitive for users)
+  // Store potential positions with priority
+  std::vector<std::pair<int, int>> potential_positions;
+
+  // Look for adjacent empty spaces to existing panels in priority order
+  
+  // 1. Try placing to the right of existing panels (priority 1)
   for (const auto& [id, panel] : panels_) {
     const auto& config = panel->get_config();
-    
-    // Try placing to the right of this panel
+
     int right_edge = config.grid_x + config.grid_width;
     if (right_edge + width <= max_cols) {
       bool can_place = true;
@@ -2492,7 +2496,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
         if (!can_place) break;
       }
-      
+
       if (can_place) {
         // Check if the entire panel can fit vertically
         bool full_fit = true;
@@ -2505,14 +2509,18 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
           }
           if (!full_fit) break;
         }
-        
+
         if (full_fit) {
-          return {right_edge, config.grid_y};
+          potential_positions.push_back({right_edge, config.grid_y});
         }
       }
     }
-    
-    // Try placing below this panel
+  }
+
+  // 2. Try placing below existing panels (priority 2)
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+
     int bottom_edge = config.grid_y + config.grid_height;
     if (bottom_edge + height <= max_rows) {
       bool can_place = true;
@@ -2525,7 +2533,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
         if (!can_place) break;
       }
-      
+
       if (can_place) {
         // Check if the entire panel can fit horizontally
         bool full_fit = true;
@@ -2538,14 +2546,18 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
           }
           if (!full_fit) break;
         }
-        
+
         if (full_fit) {
-          return {config.grid_x, bottom_edge};
+          potential_positions.push_back({config.grid_x, bottom_edge});
         }
       }
     }
-    
-    // Try placing to the left of this panel
+  }
+
+  // 3. Try placing to the left of existing panels (priority 3)
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+
     int left_edge = config.grid_x - width;
     if (left_edge >= 0) {
       bool can_place = true;
@@ -2558,7 +2570,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
         if (!can_place) break;
       }
-      
+
       if (can_place) {
         // Check if the entire panel can fit vertically
         bool full_fit = true;
@@ -2571,14 +2583,18 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
           }
           if (!full_fit) break;
         }
-        
+
         if (full_fit) {
-          return {left_edge, config.grid_y};
+          potential_positions.push_back({left_edge, config.grid_y});
         }
       }
     }
-    
-    // Try placing above this panel
+  }
+
+  // 4. Try placing above existing panels (priority 4)
+  for (const auto& [id, panel] : panels_) {
+    const auto& config = panel->get_config();
+
     int top_edge = config.grid_y - height;
     if (top_edge >= 0) {
       bool can_place = true;
@@ -2591,7 +2607,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
         }
         if (!can_place) break;
       }
-      
+
       if (can_place) {
         // Check if the entire panel can fit horizontally
         bool full_fit = true;
@@ -2604,15 +2620,21 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
           }
           if (!full_fit) break;
         }
-        
+
         if (full_fit) {
-          return {config.grid_x, top_edge};
+          potential_positions.push_back({config.grid_x, top_edge});
         }
       }
     }
   }
 
+  // If we found any potential positions, return the first one (highest priority)
+  if (!potential_positions.empty()) {
+    return potential_positions[0];
+  }
+
   // If no adjacent position found, try to find any empty space in the grid
+  // Start from top-left and scan row by row for the first available spot
   for (int y = 0; y < max_rows; ++y) {
     for (int x = 0; x < max_cols; ++x) {
       // Check if we can place the panel at this position
@@ -2627,7 +2649,7 @@ std::pair<int, int> PanelManager::find_auto_dock_position(int width, int height)
           }
           if (!can_place) break;
         }
-        
+
         if (can_place) {
           return {x, y};
         }

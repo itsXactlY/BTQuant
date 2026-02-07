@@ -20,7 +20,7 @@
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
 using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::CandleCluster;
+// Note: CandleCluster is used with full qualification for consistency
 
 namespace BTQuant {
 

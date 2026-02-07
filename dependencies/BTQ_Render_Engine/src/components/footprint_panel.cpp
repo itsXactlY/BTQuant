@@ -18,7 +18,7 @@
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
 using BTQuant::RenderEngine::TradeData;
-using BTQuant::RenderEngine::CandleCluster;
+// Note: CandleCluster is used with full qualification for consistency
 
 namespace BTQuant {
 
@@ -1059,7 +1059,7 @@ void FootprintPanel::render() {
     // value
 
     // First, collect all visible clusters and organize them by time and price levels
-    std::map<double, std::map<double, const CandleCluster*>> visible_clusters;
+    std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;
 
     // Calculate max volume across all visible clusters for adaptive alpha calculation
     // This is done in the same loop to avoid a second iteration

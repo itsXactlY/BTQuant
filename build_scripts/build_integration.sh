@@ -130,36 +130,7 @@ fi
 echo -e "${GREEN}Cleaning and configuring build directory: $BUILD_DIR${NC}"
 
 # Configure and build with Ninja for faster iteration
-if [ "$SANITIZE_CODE" = true ]; then
-    echo -e "${BLUE}Enabling sanitizers for error detection...${NC}"
-    rm -rf "$BUILD_DIR" && cmake -B "$BUILD_DIR" -G Ninja \
-        -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-        -DCMAKE_CXX_COMPILER=g++ \
-        -DCMAKE_CXX_STANDARD=26 \
-        -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror" \
-        -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -flto -ffunction-sections -fdata-sections" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -Wl,--no-as-needed" \
-        -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined -Wl,--no-as-needed" \
-        -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR:-/usr/local}" \
-        -DBUILD_TESTS=ON
-else
-    rm -rf "$BUILD_DIR" && cmake -B "$BUILD_DIR" -G Ninja \
-        -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-        -DCMAKE_CXX_COMPILER=g++ \
-        -DCMAKE_CXX_STANDARD=26 \
-        -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -Wextra -Werror" \
-        -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -flto -ffunction-sections -fdata-sections" \
-        -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR:-/usr/local}" \
-        -DBUILD_TESTS=ON
-fi
-
-if [ $? -ne 0 ]; then
-    echo -e "${RED}CMake configuration failed${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}Compiling with Ninja for faster iteration...${NC}"
-ninja $MAKE_VERBOSE_FLAG -C "$BUILD_DIR"
+rm -rf "$BUILD_DIR" && cmake -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=$BUILD_TYPE && ninja -C "$BUILD_DIR"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed${NC}"

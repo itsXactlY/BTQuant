@@ -7,7 +7,7 @@
  */
 
 // Include the main layout manager from the render engine
-#include "ui/layout_manager.hpp"
+#include "../../dependencies/BTQ_Render_Engine/include/ui/layout_manager.hpp"
 
 namespace BTQuant {
 /**
@@ -22,6 +22,11 @@ namespace UI {
     }
 
 } // namespace UI
+
+// Add RenderEngine namespace to avoid conflicts
+namespace RenderEngine {
+    using LayoutManager = BTQuant::UI::LayoutManager;
+} // namespace RenderEngine
 } // namespace BTQuant
 
 #endif // BTQUANT_UI_LAYOUT_MANAGER_HPP

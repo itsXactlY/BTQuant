@@ -183,7 +183,7 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   // Use the tracked maximum volume for normalization to adapt to actual market conditions
   // Add a small epsilon to prevent division by zero if max_trade_volume_ is somehow 0
   float max_log_volume = std::log(max_trade_volume_ + 1.0f);
-  
+
   // Handle edge case where max_trade_volume_ is extremely small
   if (max_log_volume <= 0.0f) {
     max_log_volume = std::log(1000.0f + 1.0f); // Default to 1000 as reference max volume
@@ -197,11 +197,12 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   // Apply additional curve to make the scaling more gradual at low volumes
   // and steeper at high volumes for better visual distinction
   // Using a power function to adjust the distribution of bubble sizes
-  normalized_log_volume = std::pow(normalized_log_volume, 0.6f);
+  // Reduced the exponent to make the scaling even more conservative for large trades
+  normalized_log_volume = std::pow(normalized_log_volume, 0.5f);
 
-  // Scale to desired radius range - increased max radius for better visibility
-  float min_radius = 2.0f;
-  float max_radius = 25.0f;
+  // Scale to desired radius range - using calibrated max radius for log scaling
+  float min_radius = MIN_RADIUS;
+  float max_radius = MAX_RADIUS;
   float calculated_radius = min_radius + (max_radius - min_radius) * normalized_log_volume;
 
   return calculated_radius;
@@ -221,12 +222,20 @@ ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
 
   // Apply smooth easing function for more natural fade-out
+  // Using exponential decay for smoother initial fade with more gradual tail-off
+  // This creates a more natural fade that starts slowly and accelerates toward the end
+  float eased_fade_ratio = std::exp(-2.0f * (1.0f - fade_ratio)) * fade_ratio;
+
+  // Alternative: Enhanced quintic easing for even smoother transitions
   // Using smoother quintic easing function: 6t⁵ - 15t⁴ + 10t³ for even smoother transitions
-  float eased_fade_ratio = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
+  float quintic_ease = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
+  
+  // Blend both easing functions for optimal smoothness
+  float final_fade_ratio = 0.7f * eased_fade_ratio + 0.3f * quintic_ease;
 
   // Calculate alpha based on fade ratio
   uint8_t base_alpha = 200;  // Increased base alpha value for better visibility
-  uint8_t alpha = static_cast<uint8_t>(base_alpha * eased_fade_ratio);
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * final_fade_ratio);
 
   // Color: Green for Buys, Red for Sells with fade-out effect
   if (bubble.is_buy) {

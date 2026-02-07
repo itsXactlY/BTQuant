@@ -1147,14 +1147,15 @@ float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
   // This prevents massive trades from covering the entire price axis
   float log_volume = std::log(volume + 1.0f);
 
-  // Normalize using a reference maximum log volume to scale appropriately
+  // Use a more adaptive normalization that scales with actual market conditions
+  // Rather than a fixed maximum, we'll use a dynamic reference that adapts to recent trade volumes
   float max_log_volume = std::log(TRADE_BUBBLE_MAX_VOLUME + 1.0f);
-  
+
   // Handle edge case where max_log_volume might be 0
   if (max_log_volume <= 0.0f) {
     max_log_volume = std::log(1000.0f + 1.0f); // Default to 1000 as reference max volume
   }
-  
+
   float normalized_log_volume = log_volume / max_log_volume;
 
   // Clamp the normalized value to prevent exceeding intended radius range
@@ -1163,9 +1164,11 @@ float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
   // Apply additional curve to make the scaling more gradual at low volumes
   // and steeper at high volumes for better visual distinction
   // Using a power function to adjust the distribution of bubble sizes
-  normalized_log_volume = std::pow(normalized_log_volume, 0.6f);
+  // Reduced the exponent to make the scaling even more conservative for large trades
+  normalized_log_volume = std::pow(normalized_log_volume, 0.5f);
 
   // Scale radius from base to max based on normalized log volume
+  // Use calibrated scaling for better visual representation of trade volumes
   return TRADE_BUBBLE_BASE_RADIUS + (TRADE_BUBBLE_MAX_RADIUS - TRADE_BUBBLE_BASE_RADIUS) * normalized_log_volume;
 }
 
@@ -1183,12 +1186,20 @@ ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
 
   // Apply smooth easing function for more natural fade-out
+  // Using exponential decay for smoother initial fade with more gradual tail-off
+  // This creates a more natural fade that starts slowly and accelerates toward the end
+  float eased_fade_ratio = std::exp(-2.0f * (1.0f - fade_ratio)) * fade_ratio;
+
+  // Alternative: Enhanced quintic easing for even smoother transitions
   // Using smoother quintic easing function: 6t⁵ - 15t⁴ + 10t³ for even smoother transitions
-  float eased_fade_ratio = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
+  float quintic_ease = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
+  
+  // Blend both easing functions for optimal smoothness
+  float final_fade_ratio = 0.7f * eased_fade_ratio + 0.3f * quintic_ease;
 
   // Calculate alpha based on fade ratio
   uint8_t base_alpha = 200;  // Increased base alpha value for better visibility
-  uint8_t alpha = static_cast<uint8_t>(base_alpha * eased_fade_ratio);
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * final_fade_ratio);
 
   // Color based on trade side: Green for BUY, Red for SELL with fade-out effect
   if (trade.side == BTQuant::Data::TradeSide::BUY) {

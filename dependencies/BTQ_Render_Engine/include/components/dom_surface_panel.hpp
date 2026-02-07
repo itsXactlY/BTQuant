@@ -152,7 +152,7 @@ class DomSurfacePanel : public PanelBase {
   // Marker Rendering Configuration
   static constexpr float BASE_RADIUS = 8.0f;  // Base radius in pixels
   static constexpr float MIN_RADIUS = 6.0f;   // Minimum radius
-  static constexpr float MAX_RADIUS = 40.0f;  // Maximum radius
+  static constexpr float MAX_RADIUS = 30.0f;  // Maximum radius (calibrated for log scaling)
 
   // Persistent Liquidity Level Tracker (for levels that remain static for more than 30 seconds)
   struct StaticLiquidityLevel {

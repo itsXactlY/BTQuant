@@ -144,7 +144,7 @@ class DomSurfacePanel : public PanelBase {
   uint64_t last_trade_timestamp_ = 0;  // Track the most recent trade timestamp
   static constexpr size_t TRADE_HISTORY_SIZE = 1000;  // Number of recent trades to keep
   static constexpr float TRADE_BUBBLE_BASE_RADIUS = 5.0f;  // Base radius for trade bubbles
-  static constexpr float TRADE_BUBBLE_MAX_RADIUS = 50.0f;  // Maximum radius for trade bubbles
+  static constexpr float TRADE_BUBBLE_MAX_RADIUS = 40.0f;  // Maximum radius for trade bubbles (calibrated for log scaling)
   static constexpr float TRADE_BUBBLE_MIN_VOLUME = 0.01f;  // Minimum volume for visible bubble
   static constexpr float TRADE_BUBBLE_MAX_VOLUME = 1000.0f; // Maximum volume for scaling
   static constexpr uint64_t TRADE_BUBBLE_FADE_DURATION_US = 30'000'000;  // 30 seconds fade-out duration in microseconds

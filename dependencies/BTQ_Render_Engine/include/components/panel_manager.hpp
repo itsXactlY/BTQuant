@@ -125,9 +125,12 @@ class PanelManager {
     int total_width = 0;              // Total width of the group in grid units
     int total_height = 0;             // Total height of the group in grid units
     bool locked = true;               // Whether the group is locked (non-resizable as a unit)
-    
+
     PanelGroup(uint32_t id) : group_id(id) {}
   };
+  
+  // Helper method to check if there's space for a panel group at a specific location
+  bool can_place_group_at(uint32_t group_id, int grid_x, int grid_y) const;
   
   // Panel grouping methods
   uint32_t create_panel_group(const std::vector<uint32_t>& panel_ids);
@@ -138,6 +141,10 @@ class PanelManager {
   uint32_t get_panel_group_id(uint32_t panel_id) const;
   PanelGroup* get_panel_group(uint32_t group_id);
   const PanelGroup* get_panel_group(uint32_t group_id) const;
+  
+  // Lock/unlock panel groups to control whether they behave as a single unit
+  void lock_panel_group(uint32_t group_id, bool locked = true);
+  bool is_panel_group_locked(uint32_t group_id) const;
 
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;

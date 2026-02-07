@@ -620,10 +620,44 @@ void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y)
     // Moving a panel in a group means moving the entire group
     auto* group = get_panel_group(group_id);
     if (group) {
+      // Validate the new position to ensure the entire group fits within grid bounds
+      int new_group_right = new_grid_x + group->total_width;
+      int new_group_bottom = new_grid_y + group->total_height;
+      
+      if (new_group_right > grid_layout_.columns || new_group_bottom > grid_layout_.rows) {
+        // Position would put the group outside the grid bounds, reject the move
+        return;
+      }
+      
+      // Check for collisions with other panels that are not in this group
+      for (int x = new_grid_x; x < new_group_right; x++) {
+        for (int y = new_grid_y; y < new_group_bottom; y++) {
+          // Check if this grid cell is occupied by a panel not in this group
+          for (const auto& [id, panel] : panels_) {
+            const auto& config = panel->get_config();
+            
+            // Skip panels in the same group
+            if (get_panel_group_id(id) == group_id) {
+              continue;
+            }
+            
+            // Check if this panel occupies the grid cell
+            int panel_right = config.grid_x + config.grid_width;
+            int panel_bottom = config.grid_y + config.grid_height;
+            
+            if (x >= config.grid_x && x < panel_right && 
+                y >= config.grid_y && y < panel_bottom) {
+              // Collision detected, reject the move
+              return;
+            }
+          }
+        }
+      }
+
       // Calculate the offset between the current position and the new position
       int offset_x = new_grid_x - group->min_grid_x;
       int offset_y = new_grid_y - group->min_grid_y;
-      
+
       // Move all panels in the group by the same offset
       for (uint32_t id : group->panel_ids) {
         auto panel_it = panels_.find(id);
@@ -634,19 +668,43 @@ void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y)
           config.position = calculate_panel_position(config.grid_x, config.grid_y);
         }
       }
-      
+
       // Update the group's position
       group->min_grid_x = new_grid_x;
       group->min_grid_y = new_grid_y;
     }
   } else {
-    // Panel is not in a group, move normally
+    // Panel is not in a group, move normally but validate the position
     auto it = panels_.find(panel_id);
     if (it != panels_.end()) {
       auto& config = it->second->get_config();
-      config.grid_x = new_grid_x;
-      config.grid_y = new_grid_y;
-      config.position = calculate_panel_position(new_grid_x, new_grid_y);
+      
+      // Check if the new position would cause overlap with other panels
+      int new_right = new_grid_x + config.grid_width;
+      int new_bottom = new_grid_y + config.grid_height;
+      
+      if (new_right <= grid_layout_.columns && new_bottom <= grid_layout_.rows) {
+        // Check for collisions with other panels
+        for (const auto& [id, panel] : panels_) {
+          if (id == panel_id) continue; // Skip the panel being moved
+          
+          const auto& other_config = panel->get_config();
+          int other_right = other_config.grid_x + other_config.grid_width;
+          int other_bottom = other_config.grid_y + other_config.grid_height;
+          
+          // Check if rectangles overlap
+          if (!(new_grid_x >= other_right || new_right <= other_config.grid_x ||
+                new_grid_y >= other_bottom || new_bottom <= other_config.grid_y)) {
+            // Collision detected, reject the move
+            return;
+          }
+        }
+        
+        // No collision, proceed with the move
+        config.grid_x = new_grid_x;
+        config.grid_y = new_grid_y;
+        config.position = calculate_panel_position(new_grid_x, new_grid_y);
+      }
     }
   }
 }
@@ -661,26 +719,26 @@ void PanelManager::resize_panel(uint32_t panel_id, int new_width, int new_height
       // Calculate the scale factor for resizing
       float width_scale = static_cast<float>(new_width) / static_cast<float>(group->total_width);
       float height_scale = static_cast<float>(new_height) / static_cast<float>(group->total_height);
-      
+
       // Resize all panels in the group proportionally
       for (uint32_t id : group->panel_ids) {
         auto panel_it = panels_.find(id);
         if (panel_it != panels_.end()) {
           auto& config = panel_it->second->get_config();
-          
+
           // Calculate new dimensions based on the original proportions
           int orig_width = config.grid_width;
           int orig_height = config.grid_height;
-          
+
           int new_panel_width = std::max(1, static_cast<int>(orig_width * width_scale));
           int new_panel_height = std::max(1, static_cast<int>(orig_height * height_scale));
-          
+
           config.grid_width = new_panel_width;
           config.grid_height = new_panel_height;
           config.size = calculate_panel_size(new_panel_width, new_panel_height);
         }
       }
-      
+
       // Update the group's total dimensions
       group->total_width = new_width;
       group->total_height = new_height;
@@ -689,9 +747,33 @@ void PanelManager::resize_panel(uint32_t panel_id, int new_width, int new_height
       auto it = panels_.find(panel_id);
       if (it != panels_.end()) {
         auto& config = it->second->get_config();
-        config.grid_width = new_width;
-        config.grid_height = new_height;
-        config.size = calculate_panel_size(new_width, new_height);
+        
+        // Validate the new size to ensure it fits within grid bounds
+        int new_right = config.grid_x + new_width;
+        int new_bottom = config.grid_y + new_height;
+        
+        if (new_right <= grid_layout_.columns && new_bottom <= grid_layout_.rows) {
+          // Check for collisions with other panels
+          for (const auto& [id, panel] : panels_) {
+            if (id == panel_id) continue; // Skip the panel being resized
+            
+            const auto& other_config = panel->get_config();
+            int other_right = other_config.grid_x + other_config.grid_width;
+            int other_bottom = other_config.grid_y + other_config.grid_height;
+            
+            // Check if rectangles overlap after resize
+            if (!(new_right <= other_config.grid_x || new_bottom <= other_config.grid_y ||
+                  config.grid_x >= other_right || config.grid_y >= other_bottom)) {
+              // Collision detected, reject the resize
+              return;
+            }
+          }
+          
+          // No collision, proceed with the resize
+          config.grid_width = new_width;
+          config.grid_height = new_height;
+          config.size = calculate_panel_size(new_width, new_height);
+        }
       }
     }
   } else {
@@ -699,9 +781,33 @@ void PanelManager::resize_panel(uint32_t panel_id, int new_width, int new_height
     auto it = panels_.find(panel_id);
     if (it != panels_.end()) {
       auto& config = it->second->get_config();
-      config.grid_width = new_width;
-      config.grid_height = new_height;
-      config.size = calculate_panel_size(new_width, new_height);
+      
+      // Validate the new size to ensure it fits within grid bounds
+      int new_right = config.grid_x + new_width;
+      int new_bottom = config.grid_y + new_height;
+      
+      if (new_right <= grid_layout_.columns && new_bottom <= grid_layout_.rows) {
+        // Check for collisions with other panels
+        for (const auto& [id, panel] : panels_) {
+          if (id == panel_id) continue; // Skip the panel being resized
+          
+          const auto& other_config = panel->get_config();
+          int other_right = other_config.grid_x + other_config.grid_width;
+          int other_bottom = other_config.grid_y + other_config.grid_height;
+          
+          // Check if rectangles overlap after resize
+          if (!(new_right <= other_config.grid_x || new_bottom <= other_config.grid_y ||
+                config.grid_x >= other_right || config.grid_y >= other_bottom)) {
+            // Collision detected, reject the resize
+            return;
+          }
+        }
+        
+        // No collision, proceed with the resize
+        config.grid_width = new_width;
+        config.grid_height = new_height;
+        config.size = calculate_panel_size(new_width, new_height);
+      }
     }
   }
 }
@@ -1784,6 +1890,37 @@ bool PanelManager::add_panel_to_group(uint32_t group_id, uint32_t panel_id) {
   group->total_width = new_max_x - new_min_x;
   group->total_height = new_max_y - new_min_y;
 
+  // Validate that the expanded group still fits within grid bounds
+  if (group->min_grid_x + group->total_width > grid_layout_.columns ||
+      group->min_grid_y + group->total_height > grid_layout_.rows) {
+    // Group would exceed grid bounds, remove the panel and return false
+    group->panel_ids.pop_back();
+    panel_to_group_map_.erase(panel_id);
+    
+    // Recalculate bounds without the added panel
+    if (!group->panel_ids.empty()) {
+      int min_x = INT_MAX, min_y = INT_MAX;
+      int max_x = -1, max_y = -1;
+
+      for (uint32_t id : group->panel_ids) {
+        const auto& config = panels_[id]->get_config();
+        min_x = std::min(min_x, config.grid_x);
+        min_y = std::min(min_y, config.grid_y);
+        max_x = std::max(max_x, config.grid_x + config.grid_width);
+        max_y = std::max(max_y, config.grid_y + config.grid_height);
+      }
+
+      group->min_grid_x = min_x;
+      group->min_grid_y = min_y;
+      group->total_width = max_x - min_x;
+      group->total_height = max_y - min_y;
+    } else {
+      // Group is now empty, could remove it, but we'll leave it for now
+    }
+    
+    return false;
+  }
+
   return true;
 }
 
@@ -1876,12 +2013,66 @@ PanelManager::PanelGroup* PanelManager::get_panel_group(uint32_t group_id) {
   return nullptr;
 }
 
+bool PanelManager::can_place_group_at(uint32_t group_id, int grid_x, int grid_y) const {
+  const auto* group = get_panel_group(group_id);
+  if (!group) {
+    return false;
+  }
+
+  // Check if the group fits within grid bounds at the specified position
+  int group_right = grid_x + group->total_width;
+  int group_bottom = grid_y + group->total_height;
+
+  if (group_right > grid_layout_.columns || group_bottom > grid_layout_.rows) {
+    return false;
+  }
+
+  // Check for collisions with other panels that are not in this group
+  for (int x = grid_x; x < group_right; x++) {
+    for (int y = grid_y; y < group_bottom; y++) {
+      // Check if this grid cell is occupied by a panel not in this group
+      for (const auto& [id, panel] : panels_) {
+        const auto& config = panel->get_config();
+
+        // Skip panels in the same group
+        if (get_panel_group_id(id) == group_id) {
+          continue;
+        }
+
+        // Check if this panel occupies the grid cell
+        int panel_right = config.grid_x + config.grid_width;
+        int panel_bottom = config.grid_y + config.grid_height;
+
+        if (x >= config.grid_x && x < panel_right &&
+            y >= config.grid_y && y < panel_bottom) {
+          // Collision detected
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
 const PanelManager::PanelGroup* PanelManager::get_panel_group(uint32_t group_id) const {
   auto it = panel_groups_.find(group_id);
   if (it != panel_groups_.end()) {
     return it->second.get();
   }
   return nullptr;
+}
+
+void PanelManager::lock_panel_group(uint32_t group_id, bool locked) {
+  auto* group = get_panel_group(group_id);
+  if (group) {
+    group->locked = locked;
+  }
+}
+
+bool PanelManager::is_panel_group_locked(uint32_t group_id) const {
+  const auto* group = get_panel_group(group_id);
+  return group ? group->locked : false;
 }
 
 }  // namespace BTQuant

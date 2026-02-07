@@ -717,6 +717,7 @@ void FootprintPanel::detectImbalances(const std::vector<FootprintCell>& cells,
 }
 
 void FootprintPanel::render() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   begin_panel_window();
 
   if (!renderer_) {
@@ -1059,7 +1060,8 @@ void FootprintPanel::render() {
     // value
 
     // First, collect all visible clusters and organize them by time and price levels
-    std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>> visible_clusters;
+    std::map<double, std::map<double, const BTQuant::RenderEngine::CandleCluster*>>
+        visible_clusters;
 
     // Calculate max volume across all visible clusters for adaptive alpha calculation
     // This is done in the same loop to avoid a second iteration

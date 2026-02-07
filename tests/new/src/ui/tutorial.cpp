@@ -9,11 +9,11 @@ namespace BTQuant {
 namespace UI {
 
 // TutorialStep implementation
-TutorialStep::TutorialStep(const std::string& title, 
-                          const std::string& description, 
+TutorialStep::TutorialStep(const std::string& title,
+                          const std::string& description,
                           const std::string& target_control_id,
-                          const glm::vec2& highlight_position,
-                          const glm::vec2& highlight_size)
+                          const Vec2& highlight_position,
+                          const Vec2& highlight_size)
     : title(title)
     , description(description)
     , target_control_id(target_control_id)
@@ -37,8 +37,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "This guided tour will help you get started with the platform. "
         "Click 'Next' to continue learning about key features.",
         "",
-        glm::vec2(0.0f, 0.0f),
-        glm::vec2(0.0f, 0.0f)
+        Vec2(0.0f, 0.0f),
+        Vec2(0.0f, 0.0f)
     );
 
     // Dashboard Overview
@@ -48,8 +48,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "to monitor markets, analyze charts, and execute trades. The top toolbar "
         "contains exchange selectors, symbol search, and panel creation options.",
         "dashboard_overview",
-        glm::vec2(0.0f, 0.0f),
-        glm::vec2(800.0f, 100.0f)
+        Vec2(0.0f, 0.0f),
+        Vec2(800.0f, 100.0f)
     );
 
     // Exchange Selection
@@ -58,8 +58,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "Select which cryptocurrency exchanges to include in your trading view. "
         "You can connect to multiple exchanges simultaneously for comprehensive market coverage.",
         "exchange_selector_button",
-        glm::vec2(10.0f, 10.0f),
-        glm::vec2(150.0f, 30.0f)
+        Vec2(10.0f, 10.0f),
+        Vec2(150.0f, 30.0f)
     );
 
     // Symbol Search
@@ -68,8 +68,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "Search for trading symbols across all selected exchanges. "
         "You can quickly find and add symbols to your watchlist or charts.",
         "symbol_search_top",
-        glm::vec2(170.0f, 10.0f),
-        glm::vec2(200.0f, 30.0f)
+        Vec2(170.0f, 10.0f),
+        Vec2(200.0f, 30.0f)
     );
 
     // Panel Creation
@@ -79,8 +79,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "Volume profiles, Order books, Time & Sales, and Watchlists. Each panel can be "
         "customized for your specific trading needs.",
         "add_chart_panel",
-        glm::vec2(380.0f, 10.0f),
-        glm::vec2(200.0f, 30.0f)
+        Vec2(380.0f, 10.0f),
+        Vec2(200.0f, 30.0f)
     );
 
     // Chart Features
@@ -90,8 +90,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "add indicators (RSI, MACD, Bollinger Bands, etc.), adjust drawing tools, "
         "and use crosshairs for precise price/time readings.",
         "chart_timeframe_selector",
-        glm::vec2(10.0f, 50.0f),
-        glm::vec2(300.0f, 40.0f)
+        Vec2(10.0f, 50.0f),
+        Vec2(300.0f, 40.0f)
     );
 
     // Trading Controls
@@ -101,8 +101,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "set take-profit and stop-loss levels, and monitor your open positions. "
         "All trading controls are designed for speed and accuracy.",
         "place_buy_order",
-        glm::vec2(10.0f, 100.0f),
-        glm::vec2(200.0f, 60.0f)
+        Vec2(10.0f, 100.0f),
+        Vec2(200.0f, 60.0f)
     );
 
     // Indicators and Analysis
@@ -112,8 +112,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "Customize indicator settings, create custom studies, and backtest strategies "
         "using historical data.",
         "indicator_selector",
-        glm::vec2(320.0f, 100.0f),
-        glm::vec2(250.0f, 60.0f)
+        Vec2(320.0f, 100.0f),
+        Vec2(250.0f, 60.0f)
     );
 
     // Alerts and Notifications
@@ -122,8 +122,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "Set up custom alerts for price movements, volume spikes, technical signals, "
         "and news events. Receive notifications via sound, visual cues, or email.",
         "alerts_menu",
-        glm::vec2(10.0f, 170.0f),
-        glm::vec2(150.0f, 40.0f)
+        Vec2(10.0f, 170.0f),
+        Vec2(150.0f, 40.0f)
     );
 
     // Settings and Customization
@@ -133,8 +133,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "fonts, colors, panel layouts, and performance settings to optimize "
         "your trading experience.",
         "settings_menu",
-        glm::vec2(170.0f, 170.0f),
-        glm::vec2(140.0f, 40.0f)
+        Vec2(170.0f, 170.0f),
+        Vec2(140.0f, 40.0f)
     );
 
     // Completion
@@ -144,8 +144,8 @@ void TutorialManager::initialize_tutorial_steps() {
         "from the Help menu. Continue exploring the platform and customize it "
         "for your trading strategy. Happy trading!",
         "",
-        glm::vec2(0.0f, 0.0f),
-        glm::vec2(0.0f, 0.0f)
+        Vec2(0.0f, 0.0f),
+        Vec2(0.0f, 0.0f)
     );
 }
 
@@ -265,28 +265,28 @@ void TutorialManager::draw_highlight_overlay() {
     }
 
     const auto& current = steps_[current_step_];
-    
+
     // Only draw highlight if we have position and size info
     if (current.highlight_size.x > 0 && current.highlight_size.y > 0) {
         ImDrawList* draw_list = ImGui::GetForegroundDrawList();
-        
+
         // Calculate screen position based on the highlight coordinates
         ImVec2 pos = ImVec2(current.highlight_position.x, current.highlight_position.y);
         ImVec2 size = ImVec2(current.highlight_size.x, current.highlight_size.y);
         ImVec2 min_pos = pos;
         ImVec2 max_pos = ImVec2(pos.x + size.x, pos.y + size.y);
-        
+
         // Draw a semi-transparent overlay to dim the rest of the screen
         ImVec2 display_size = ImGui::GetIO().DisplaySize;
-        draw_list->AddRectFilled(ImVec2(0, 0), display_size, 
+        draw_list->AddRectFilled(ImVec2(0, 0), display_size,
                                 IM_COL32(0, 0, 0, 180)); // Semi-transparent black
-        
+
         // Clear the highlight area to make it stand out
-        draw_list->AddRectFilled(min_pos, max_pos, 
+        draw_list->AddRectFilled(min_pos, max_pos,
                                 IM_COL32(30, 30, 30, 220)); // Slightly transparent gray
-        
+
         // Draw a bright border around the highlighted area
-        draw_list->AddRect(min_pos, max_pos, 
+        draw_list->AddRect(min_pos, max_pos,
                           IM_COL32(0, 150, 255, 255), 0.0f, 0, 3.0f); // Bright blue border
     }
 }

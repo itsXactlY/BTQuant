@@ -143,16 +143,24 @@ private:
         }
     }
 
-    void populateMetadata(LogMetadata& metadata, LogLevel level, 
+    void populateMetadata(LogMetadata& metadata, LogLevel level,
                           const char* file, int line, const char* function) {
         // Timestamp
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             now.time_since_epoch()) % 1000;
-        
+
+        // Use thread-safe time conversion
+        std::tm tm_buf{};
+#ifdef _WIN32
+        localtime_s(&tm_buf, &time_t);
+#else
+        localtime_r(&time_t, &tm_buf);
+#endif
+
         std::ostringstream ts_stream;
-        ts_stream << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+        ts_stream << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
         ts_stream << '.' << std::setfill('0') << std::setw(3) << ms.count();
         metadata.timestamp = ts_stream.str();
 

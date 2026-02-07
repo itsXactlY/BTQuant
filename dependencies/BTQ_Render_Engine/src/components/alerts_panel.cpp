@@ -1,4 +1,5 @@
 #include "../../include/components/alerts_panel.hpp"
+#include <iostream>
 
 #include <ctime>
 #include <format>
@@ -83,7 +84,7 @@ void AlertsPanel::render_rules_table() {
     ImGui::TableSetupColumn("Actions");
     ImGui::TableHeadersRow();
 
-    for (size_t i = 0; i < rules_.size(); ++i) {
+    for (size_t i = 0; i < rules_.size(); ) {
       auto& rule = rules_[i];
       ImGui::TableNextRow();
       ImGui::PushID(static_cast<int>(i));
@@ -123,13 +124,25 @@ void AlertsPanel::render_rules_table() {
 
       ImGui::TableSetColumnIndex(4);
       if (ImGui::Button("Edit")) {
-        // TODO: Edit logic
+        // Copy the rule data to the edit fields
+        strncpy(new_rule_name_, rule.name.c_str(), sizeof(new_rule_name_) - 1);
+        strncpy(new_rule_expr_, rule.expression.c_str(), sizeof(new_rule_expr_) - 1);
+        strncpy(new_rule_symbol_, rule.target_symbol.c_str(), sizeof(new_rule_symbol_) - 1);
+        
+        // For now, we'll just flag that we're editing this rule
+        // In a real implementation, we'd have an editing UI
+        std::cout << "[AlertsPanel] Editing rule: " << rule.name << std::endl;
       }
       ImGui::SameLine();
       if (ImGui::Button("Del")) {
-        // TODO: Delete logic (would need iterator handling)
+        // Remove the rule at index i
+        rules_.erase(rules_.begin() + i);
+        // Don't increment i, since we removed an element and the next element moved to this position
+        continue; // Skip the increment
       }
+      
       ImGui::PopID();
+      ++i; // Only increment if we didn't delete an element
     }
     ImGui::EndTable();
   }

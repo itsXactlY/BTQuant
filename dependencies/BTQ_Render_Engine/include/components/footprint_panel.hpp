@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "../data/VolumeDataTypes.h"          // For VolumeAnalysisType and VolumeDataType enums
@@ -67,9 +68,10 @@ class FootprintPanel : public PanelBase {
 
   uint32_t get_symbol_id() const { return symbol_id_; }
   void set_symbol_id(uint32_t id) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
     symbol_id_ = id;
     if (renderer_) renderer_->setSymbol(id);
-    
+
     // Notify the panel manager about the symbol change to trigger symbol linking
     auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(id);
     if (symbol_info_opt && get_panel_manager()) {
@@ -188,6 +190,8 @@ class FootprintPanel : public PanelBase {
 
   // Cell Data (CPU-side aggregation)
   std::vector<FootprintCell> cells_;
+
+  mutable std::mutex data_mutex_;
 
   // Level of Detail (LOD) system for footprint rendering
   BTQuant::Rendering::FootprintLOD lod_system_;

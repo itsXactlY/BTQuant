@@ -26,26 +26,28 @@ struct ClusterCell {
   double sum_of_volumes{0.0};  // for average calculations
 
   // Fields for statistical calculations
-  std::vector<double> prices;  // Store prices for statistical calculations
-  double sum_of_prices{0.0};   // Sum of all prices for mean calculation
+  std::vector<double> prices;         // Store prices for statistical calculations
+  double sum_of_prices{0.0};          // Sum of all prices for mean calculation
   double sum_of_squared_prices{0.0};  // Sum of squared prices for variance calculation
 
   // Define copy constructor and assignment operator to handle mutex properly
   ClusterCell() = default;
 
   // Copy constructor - only copies the data values, not the mutex
-  ClusterCell(const ClusterCell& other)
-      : total_volume(other.total_volume),
-        buy_volume(other.buy_volume),
-        sell_volume(other.sell_volume),
-        trade_count(other.trade_count.load()),
-        buy_trade_count(other.buy_trade_count.load()),
-        sell_trade_count(other.sell_trade_count.load()),
-        max_single_trade_volume(other.max_single_trade_volume.load()),
-        sum_of_volumes(other.sum_of_volumes),
-        prices(other.prices),
-        sum_of_prices(other.sum_of_prices),
-        sum_of_squared_prices(other.sum_of_squared_prices) {}
+  ClusterCell(const ClusterCell& other) {
+    std::lock_guard<std::mutex> lock(other.volume_mutex);
+    total_volume = other.total_volume;
+    buy_volume = other.buy_volume;
+    sell_volume = other.sell_volume;
+    trade_count.store(other.trade_count.load());
+    buy_trade_count.store(other.buy_trade_count.load());
+    sell_trade_count.store(other.sell_trade_count.load());
+    max_single_trade_volume.store(other.max_single_trade_volume.load());
+    sum_of_volumes = other.sum_of_volumes;
+    prices = other.prices;
+    sum_of_prices = other.sum_of_prices;
+    sum_of_squared_prices = other.sum_of_squared_prices;
+  }
 
   // Assignment operator
   ClusterCell& operator=(const ClusterCell& other) {
@@ -84,8 +86,19 @@ class ClusterEngine {
 
   void set_session_start(int64_t start_us) { session_start_us_ = start_us; }
 
+  void set_tick_size(double tick_size) { tick_size_ = tick_size; }
+
+  void clear() {
+    std::lock_guard<std::mutex> lock(engine_mutex_);
+    canvas_.clear();
+    cluster_canvas_.clear();
+    min_tick_index_ = 0;
+    session_start_us_ = 0;
+  }
+
   // O(1) mostly, amortized
   void process_trade(const MarketData::Trade& trade) {
+    std::lock_guard<std::mutex> lock(engine_mutex_);
     if (session_start_us_ == 0) {
       session_start_us_ = trade.timestamp_us;
     }
@@ -158,7 +171,10 @@ class ClusterEngine {
       double threshold = 3.0) const;
 
   // Getter method to access the cluster canvas for visualization
-  const std::vector<std::vector<ClusterCell>>& getClusterCanvas() const { return cluster_canvas_; }
+  std::vector<std::vector<ClusterCell>> getClusterCanvas() const {
+    std::lock_guard<std::mutex> lock(engine_mutex_);
+    return cluster_canvas_;
+  }
 
   // Calculate standard deviation for a specific price level and time bucket
   double calculateStandardDeviation(int64_t price_level, int time_bucket) const;
@@ -191,10 +207,12 @@ class ClusterEngine {
     }
   }
 
- private:
+  void processTradeInternal(const MarketData::Trade& trade, int time_bucket);
+
   double tick_size_;
   int64_t min_tick_index_;
   int64_t session_start_us_;
+  mutable std::mutex engine_mutex_;
   std::vector<HotSpine::V3::VolumeNode> canvas_;
 
   // Additional data structure for cluster cells with time buckets

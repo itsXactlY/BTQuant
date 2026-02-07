@@ -8,6 +8,11 @@
 namespace Analytics {
 
 void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket) {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
+  processTradeInternal(trade, time_bucket);
+}
+
+void ClusterEngine::processTradeInternal(const MarketData::Trade& trade, int time_bucket) {
   if (session_start_us_ == 0) {
     session_start_us_ = trade.timestamp_us;
   }
@@ -91,6 +96,7 @@ void ClusterEngine::processTrade(const MarketData::Trade& trade, int time_bucket
 
 std::vector<std::tuple<int64_t, int, double, double, double>>
 ClusterEngine::detect_diagonal_imbalances(double threshold) const {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
   std::vector<std::tuple<int64_t, int, double, double, double>> imbalances;
 
   // Iterate through price levels (rows) and time buckets (columns)
@@ -158,6 +164,7 @@ ClusterEngine::detect_diagonal_imbalances(double threshold) const {
 
 std::vector<std::tuple<int64_t, int, double, double, double>>
 ClusterEngine::detect_stacked_imbalances(double threshold) const {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
   std::vector<std::tuple<int64_t, int, double, double, double>> imbalances;
 
   // Vertical analysis comparing buy/sell at same price across consecutive bars
@@ -325,6 +332,7 @@ ClusterEngine::detect_stacked_imbalances(double threshold) const {
 void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& trade,
                                                     BTQuant::Data::TimeAggregationType agg_type,
                                                     int n_contracts, int n_ticks) {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
   int64_t abs_tick_index = static_cast<int64_t>(std::round(trade.price / tick_size_));
 
   // Initialize session start time if not already set
@@ -407,13 +415,14 @@ void ClusterEngine::processTradeWithTimeAggregation(const MarketData::Trade& tra
   }
 
   // Process the trade with the determined time bucket
-  processTrade(trade, time_bucket);
+  processTradeInternal(trade, time_bucket);
 }
 
 // Calculate standard deviation for a specific price level and time bucket
 double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_bucket) const {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
   // Check if the price level and time bucket are valid
-  if (price_level < min_tick_index_ || 
+  if (price_level < min_tick_index_ ||
       static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
       time_bucket < 0 || time_bucket >= 16) {
     return 0.0;  // Return 0 if invalid indices
@@ -422,11 +431,8 @@ double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_b
   int64_t relative_index = price_level - min_tick_index_;
   const auto& cell = cluster_canvas_[relative_index][time_bucket];
 
-  // Lock the mutex to safely access the price data
-  std::lock_guard<std::mutex> lock(cell.volume_mutex);
-
   int n = static_cast<int>(cell.prices.size());
-  
+
   if (n <= 1) {
     return 0.0;  // Standard deviation is undefined for 0 or 1 data points
   }
@@ -436,7 +442,7 @@ double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_b
 
   // Calculate variance using the formula: variance = E[X^2] - (E[X])^2
   double variance = (cell.sum_of_squared_prices / n) - (mean * mean);
-  
+
   // Ensure variance is not negative due to floating-point precision issues
   if (variance < 0.0) {
     variance = 0.0;
@@ -448,8 +454,9 @@ double ClusterEngine::calculateStandardDeviation(int64_t price_level, int time_b
 
 // Calculate median price for a specific price level and time bucket
 double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket) const {
+  std::lock_guard<std::mutex> lock(engine_mutex_);
   // Check if the price level and time bucket are valid
-  if (price_level < min_tick_index_ || 
+  if (price_level < min_tick_index_ ||
       static_cast<size_t>(price_level - min_tick_index_) >= cluster_canvas_.size() ||
       time_bucket < 0 || time_bucket >= 16) {
     return 0.0;  // Return 0 if invalid indices
@@ -457,9 +464,6 @@ double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket)
 
   int64_t relative_index = price_level - min_tick_index_;
   const auto& cell = cluster_canvas_[relative_index][time_bucket];
-
-  // Lock the mutex to safely access the price data
-  std::lock_guard<std::mutex> lock(cell.volume_mutex);
 
   if (cell.prices.empty()) {
     return 0.0;  // Return 0 if no prices recorded
@@ -472,10 +476,10 @@ double ClusterEngine::calculateMedianPrice(int64_t price_level, int time_bucket)
   size_t n = sorted_prices.size();
   if (n % 2 == 0) {
     // Even number of elements: average of the two middle elements
-    return (sorted_prices[n/2 - 1] + sorted_prices[n/2]) / 2.0;
+    return (sorted_prices[n / 2 - 1] + sorted_prices[n / 2]) / 2.0;
   } else {
     // Odd number of elements: return the middle element
-    return sorted_prices[n/2];
+    return sorted_prices[n / 2];
   }
 }
 

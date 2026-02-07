@@ -20,6 +20,7 @@ void TpoPanel::update(float /*dt*/) {
 }
 
 void TpoPanel::render() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   begin_panel_window();
 
   if (!renderer_) {
@@ -59,18 +60,19 @@ void TpoPanel::render() {
     // Convert clusters to PriceTicks and feed to TPO engine
     for (const auto& cluster : clusters) {
       // Create a timestamp based on the cluster's time
-      auto timestamp = std::chrono::system_clock::time_point(std::chrono::nanoseconds(stats.lastUpdateTimeNs));
-      
+      auto timestamp =
+          std::chrono::system_clock::time_point(std::chrono::nanoseconds(stats.lastUpdateTimeNs));
+
       // Create PriceTick from cluster data
       PriceTick tick;
       tick.timestamp = timestamp;
       tick.price = cluster.centerY;  // Use center Y as the price
       tick.volume = static_cast<double>(cluster.askVolume + cluster.bidVolume);  // Total volume
-      
+
       // Process the tick with the TPO engine
       tpo_engine_.process_tick(tick);
     }
-    
+
     // Update the last processed timestamp
     last_processed_timestamp_ns_ = stats.lastUpdateTimeNs;
   }
@@ -175,21 +177,22 @@ void TpoPanel::render() {
       double va_x[] = {0.0, time_window_, time_window_, 0.0};
       double va_y[] = {value_area_low, value_area_low, value_area_high, value_area_high};
 
-      ImPlot::PushStyleColor(ImPlotCol_Fill, ImVec4(1.0f, 0.84f, 0.0f, 0.2f)); // Semi-transparent gold
+      ImPlot::PushStyleColor(ImPlotCol_Fill,
+                             ImVec4(1.0f, 0.84f, 0.0f, 0.2f));  // Semi-transparent gold
       ImPlot::PlotShaded("Value Area", va_x, va_y, 4);
       ImPlot::PopStyleColor();
 
       // Draw Value Area High (VAH) line
       double vah_line_x[2] = {0, time_window_};
       double vah_line_y[2] = {value_area_high, value_area_high};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));  // Orange
       ImPlot::PlotLine("VAH", vah_line_x, vah_line_y, 2);
       ImPlot::PopStyleColor();
 
       // Draw Value Area Low (VAL) line
       double val_line_x[2] = {0, time_window_};
       double val_line_y[2] = {value_area_low, value_area_low};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f)); // Orange
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));  // Orange
       ImPlot::PlotLine("VAL", val_line_x, val_line_y, 2);
       ImPlot::PopStyleColor();
     }
@@ -198,8 +201,8 @@ void TpoPanel::render() {
     if (poc_price > 0) {
       double poc_line_x[2] = {0, time_window_};
       double poc_line_y[2] = {poc_price, poc_price};
-      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
+      ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Bright yellow
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f);  // 1px line as requested
       ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
       ImPlot::PopStyleVar();
       ImPlot::PopStyleColor();
@@ -210,10 +213,9 @@ void TpoPanel::render() {
 
   // Enhanced Overlay Info
   ImGui::SetCursorPos(ImVec2(10, 45));
-  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f",
-                     clusters.size(),
-                     poc_price > 0 ? poc_price : 0.0,
-                     value_area_low > 0 ? value_area_low : 0.0,
+  ImGui::TextColored(ImVec4(1, 1, 0, 0.5f),
+                     "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f", clusters.size(),
+                     poc_price > 0 ? poc_price : 0.0, value_area_low > 0 ? value_area_low : 0.0,
                      value_area_high > 0 ? value_area_high : 0.0);
 
   end_panel_window();

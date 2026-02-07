@@ -23,7 +23,7 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("add_time_sales_panel", "Add a time and sales panel showing recent trades");
     register_tooltip("add_watchlist_panel", "Add a watchlist panel to monitor multiple symbols");
     register_tooltip("add_news_panel", "Add a news and alerts panel for market updates");
-    
+
     // Chart Panel tooltips
     register_tooltip("chart_timeframe_selector", "Select the timeframe for the chart data (1m, 5m, 1h, etc.)");
     register_tooltip("chart_window_size", "Set the size of the auto-follow window in data points");
@@ -38,7 +38,7 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("chart_crosshair_toggle", "Toggle crosshair cursor for precise price/time readings");
     register_tooltip("chart_grid_toggle", "Toggle visibility of grid lines on the chart");
     register_tooltip("chart_legend_toggle", "Toggle visibility of the chart legend");
-    
+
     // Trading Controls tooltips
     register_tooltip("place_buy_order", "Place a market buy order for the selected symbol");
     register_tooltip("place_sell_order", "Place a market sell order for the selected symbol");
@@ -47,7 +47,7 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("order_type_selector", "Choose order type: Market, Limit, Stop, Stop-Limit");
     register_tooltip("take_profit_level", "Set the price level for automatic profit taking");
     register_tooltip("stop_loss_level", "Set the price level for automatic loss prevention");
-    
+
     // Indicator Settings tooltips
     register_tooltip("enable_sma_9", "Enable Simple Moving Average with 9-period length");
     register_tooltip("enable_sma_20", "Enable Simple Moving Average with 20-period length");
@@ -65,7 +65,7 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("enable_fibonacci", "Enable Fibonacci retracement and extension levels");
     register_tooltip("enable_volume_profile", "Enable volume profile showing volume distribution by price");
     register_tooltip("enable_crosshair_info", "Enable crosshair information panel with price/time details");
-    
+
     // Appearance Settings tooltips
     register_tooltip("theme_selector", "Choose between Dark, Light, or High Contrast themes");
     register_tooltip("font_family_selector", "Select the primary font family for the interface");
@@ -75,13 +75,13 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("border_width_slider", "Set the thickness of panel borders in pixels");
     register_tooltip("border_style_selector", "Choose the visual style of panel borders");
     register_tooltip("corner_radius_slider", "Set the radius for rounded corners on panels");
-    
+
     // Data Settings tooltips
     register_tooltip("refresh_interval", "Set how often market data is updated from the feed");
     register_tooltip("historical_depth", "Amount of historical data to load for analysis");
     register_tooltip("data_compression", "Level of data compression to reduce memory usage");
     register_tooltip("cache_retention", "How long to keep cached data before purging");
-    
+
     // Performance Settings tooltips
     register_tooltip("target_fps", "Maximum frames per second to render (affects CPU usage)");
     register_tooltip("adaptive_sync", "Enable adaptive synchronization for smoother rendering");
@@ -89,19 +89,19 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("burst_reduction", "Reduce frame rate bursts for consistent performance");
     register_tooltip("lod_enabled", "Enable Level of Detail to improve performance with large datasets");
     register_tooltip("lod_distance", "Distance threshold for applying level of detail reductions");
-    
+
     // Alert Settings tooltips
     register_tooltip("price_alert_threshold", "Price change percentage that triggers an alert");
     register_tooltip("volume_spike_multiplier", "Volume multiplier that triggers a spike alert");
     register_tooltip("news_notification_toggle", "Enable/disable news notifications");
     register_tooltip("email_alerts_toggle", "Send email notifications for important alerts");
     register_tooltip("sound_alerts_toggle", "Play sound notifications for alerts");
-    
+
     // Keyboard Shortcuts tooltips
     register_tooltip("shortcut_key_binding", "Press keys to set a new keyboard shortcut");
     register_tooltip("reset_shortcut_button", "Reset this shortcut to its default binding");
     register_tooltip("disable_shortcut_button", "Disable this keyboard shortcut");
-    
+
     // Panel Management tooltips
     register_tooltip("panel_minimize", "Minimize this panel to save screen space");
     register_tooltip("panel_maximize", "Maximize this panel to fill available space");
@@ -109,7 +109,7 @@ void TooltipManager::initialize_default_tooltips() {
     register_tooltip("panel_duplicate", "Create a copy of this panel with the same settings");
     register_tooltip("panel_export", "Export this panel's configuration to a file");
     register_tooltip("panel_import", "Import a panel configuration from a file");
-    
+
     // Time & Sales tooltips
     register_tooltip("trade_direction_filter", "Filter trades by direction (buy/sell/initiator)");
     register_tooltip("volume_filter_min", "Show only trades with volume greater than this value");

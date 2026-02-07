@@ -19,7 +19,9 @@
 #include "market_data_processor.hpp"
 #include "performance/debug_overlay.hpp"
 #include "system/system_optimizer.hpp"
+#include "ui/haptic_feedback.hpp"
 #include "ui/layout_manager.hpp"
+#include "ui/tutorial.hpp"
 #include "vulkan_dashboard_advanced.hpp"
 
 using namespace BTQuant;
@@ -39,6 +41,9 @@ int main(int argc, char** argv) {
   // 1. System Optimization
   auto system_optimizer = std::make_unique<BTQuant::System::SystemOptimizer>();
   system_optimizer->optimize();
+
+  // 1.5 Initialize haptic feedback system
+  BTQuant::UI::HapticFeedback::getInstance().initialize();
 
   // 2. Data Layer Initialization
   std::cout << "Initializing Data Layer..." << std::endl;
@@ -76,11 +81,11 @@ int main(int argc, char** argv) {
   // We access the internal components to set up the default trading layout
   if (auto* workspace = dashboard->get_workspace_component()) {
     std::cout << "Configuring Default Layout..." << std::endl;
-    
+
     workspace->set_layout(BTQuant::LayoutPreset::PRO_QUANT);
   }
 
-  // 6. Setup Custom Menu Bar
+  // 5.5 Setup Custom Menu Bar
   dashboard->set_custom_menubar_callback([&dashboard]() {
     if (ImGui::BeginMenu("File")) {
       auto* workspace = dashboard->get_workspace_component();
@@ -159,6 +164,7 @@ int main(int argc, char** argv) {
   const auto target_frame_time = std::chrono::microseconds(6944);
 
   auto last_frame_time = std::chrono::steady_clock::now();
+  bool tutorial_checked = false;  // Flag to check tutorial only on first frame
 
   while (!dashboard->should_close()) {
     auto frame_begin = std::chrono::steady_clock::now();
@@ -174,6 +180,15 @@ int main(int argc, char** argv) {
 
     // Render
     dashboard->render_frame();
+
+    // Check for tutorial on first frame only (after frame is rendered to ensure ImGui context is ready)
+    if (!tutorial_checked) {
+      BTQuant::UI::show_tutorial_if_first_run();
+      tutorial_checked = true;
+    }
+
+    // Render tutorial if active
+    BTQuant::UI::render_tutorial();
 
     // FPS Limiter
     auto frame_end = std::chrono::steady_clock::now();

@@ -291,10 +291,10 @@ class ChartPanel : public PanelBase {
     double price;
     double volume;
     bool is_bid;  // true for bid, false for ask
-    
+
     LiquidityLevel(double p, double v, bool bid) : price(p), volume(v), is_bid(bid) {}
   };
-  
+
   std::vector<LiquidityLevel> liquidity_levels_;
   double max_liquidity_volume_ = 1.0;  // Track max volume for scaling
 
@@ -376,6 +376,14 @@ class ChartPanel : public PanelBase {
   // Method to sync active indicators with current configuration
   void sync_active_indicators_with_config();
 
+ public:
+  // Method to get the count of active indicators
+  size_t get_active_indicators_count() const { return active_indicators_.size(); }
+
+  // Public access to active indicators for external components
+  const std::vector<IndicatorItem>& get_active_indicators() const { return active_indicators_; }
+
+ private:
   // Multi-timeframe indicator methods
   void add_multi_timeframe_indicator(const std::string& name, bool visible, ImVec4 color,
                                      int period, RenderEngine::TimeFrame source_timeframe);
@@ -422,13 +430,15 @@ class ChartPanel : public PanelBase {
   // Liquidity bars functionality
   void render_liquidity_bars(const ChartInstance& chart);
   void update_liquidity_data();
-  
+
   // Configuration for liquidity bars
   bool show_liquidity_bars_ = true;
-  float liquidity_bar_width_ = 10.0f;  // Width of liquidity bars in pixels
-  float liquidity_bar_opacity_ = 0.7f; // Opacity of liquidity bars
+  float liquidity_bar_width_ = 10.0f;   // Width of liquidity bars in pixels
+  float liquidity_bar_opacity_ = 0.7f;  // Opacity of liquidity bars
   ImVec4 liquidity_bids_color_ = ImVec4(0.0f, 1.0f, 0.0f, 0.7f);  // Green for bids
   ImVec4 liquidity_asks_color_ = ImVec4(1.0f, 0.0f, 0.0f, 0.7f);  // Red for asks
+
+  mutable std::mutex data_mutex_;
 };
 
 }  // namespace BTQuant

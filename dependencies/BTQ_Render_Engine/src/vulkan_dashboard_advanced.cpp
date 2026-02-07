@@ -10,6 +10,7 @@
 #include "components/MarketMicrostructureRenderer.h"
 #include "components/panel_manager.hpp"
 #include "components/quant_workspace_component.hpp"
+#include "components/chart_panel.hpp"
 #include "components/tpo_panel.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -281,9 +282,12 @@ void VulkanDashboard::render_frame() {
   }
 
   // Start ImGui frame
+  std::cout << "[VulkanDashboard] Before ImGui::NewFrame()" << std::endl;
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
+  std::cout << "[VulkanDashboard] Before ImGui::NewFrame() - After" << std::endl;
   ImGui::NewFrame();
+  std::cout << "[VulkanDashboard] After ImGui::NewFrame()" << std::endl;
 
   // Update Interaction Manager
   InteractionManager::getInstance().update();
@@ -671,9 +675,30 @@ void VulkanDashboard::render_performance_overlay() {
                                       stats.tradeUpdates, stats.footprintCellsRendered);
   }
 
-  // TODO: Update active indicators and alerts counts when available
-  g_debug_overlay.set_active_indicators_count(0); // Placeholder - update when indicator system is integrated
-  g_debug_overlay.set_active_alerts_count(0);     // Placeholder - update when alert system is integrated
+  // Get active indicators count from the workspace components
+  size_t active_indicators_count = 0;
+  if (auto* workspace = get_workspace_component()) {
+    if (auto* panel_manager = workspace->getPanelManager()) {
+      // For each panel, if it's a chart panel, count its active indicators
+      auto all_panel_ids = panel_manager->get_all_panel_ids();
+      for (auto panel_id : all_panel_ids) {
+        auto* panel = panel_manager->get_panel_by_id(panel_id);
+        if (panel && panel->get_config().type == PanelType::CHART) {
+          // Cast to ChartPanel to access its active indicators
+          auto* chart_panel = dynamic_cast<ChartPanel*>(panel);
+          if (chart_panel) {
+            active_indicators_count += chart_panel->get_active_indicators_count();
+          }
+        }
+      }
+    }
+  }
+  g_debug_overlay.set_active_indicators_count(active_indicators_count);
+
+  // For alerts count, we'll set it to 0 for now since accessing it requires
+  // restructuring how GlobalAlertManager is instantiated and accessed
+  // This addresses the TODO but with a temporary solution
+  g_debug_overlay.set_active_alerts_count(0);
 }
 
 void VulkanDashboard::render_layout_indicator() {

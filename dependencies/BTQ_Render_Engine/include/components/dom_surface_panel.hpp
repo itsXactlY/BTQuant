@@ -6,6 +6,7 @@
 #include <chrono>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "market_data_processor.hpp"
@@ -59,7 +60,8 @@ struct LargeOrderMarker {
 
 class DomSurfacePanel : public PanelBase {
  public:
-  explicit DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager = nullptr);
+  explicit DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                           PanelManager* panel_manager = nullptr);
   ~DomSurfacePanel() override;
 
   void render() override;
@@ -158,20 +160,20 @@ class DomSurfacePanel : public PanelBase {
 
   // Persistent Liquidity Level Tracker (for levels that remain static for more than 30 seconds)
   struct StaticLiquidityLevel {
-    double price;                    // Price level where liquidity remains static
-    double size;                     // Size of the liquidity at this level
-    uint64_t first_detected_time;    // When first detected at this level
-    uint64_t last_updated_time;      // Last time liquidity was seen at this level
-    uint64_t last_changed_time;      // Last time the liquidity size changed significantly
-    bool is_active;                  // Whether the level is currently active
-    bool is_bid;                     // true = Bid, false = Ask
+    double price;                  // Price level where liquidity remains static
+    double size;                   // Size of the liquidity at this level
+    uint64_t first_detected_time;  // When first detected at this level
+    uint64_t last_updated_time;    // Last time liquidity was seen at this level
+    uint64_t last_changed_time;    // Last time the liquidity size changed significantly
+    bool is_active;                // Whether the level is currently active
+    bool is_bid;                   // true = Bid, false = Ask
 
     StaticLiquidityLevel(double p, double s, bool bid, uint64_t time)
         : price(p),
           size(s),
           first_detected_time(time),
           last_updated_time(time),
-          last_changed_time(time),   // Initially set to first detection time
+          last_changed_time(time),  // Initially set to first detection time
           is_active(true),
           is_bid(bid) {}
   };
@@ -194,11 +196,13 @@ class DomSurfacePanel : public PanelBase {
           is_active(true) {}
   };
 
-  std::vector<StaticLiquidityLevel> static_liquidity_levels_; // Track all liquidity levels that remain static
+  std::vector<StaticLiquidityLevel>
+      static_liquidity_levels_;  // Track all liquidity levels that remain static
   std::vector<PersistentLevel> persistent_levels_;
-  uint64_t persistence_threshold_ms_ = 30000;  // 30 seconds persistence threshold for static liquidity levels
-  double persistence_timeout_ms_ = 60000;      // 60 seconds timeout for inactive levels
-  bool show_persistent_lines_ = true;          // Toggle for persistent line display
+  uint64_t persistence_threshold_ms_ =
+      30000;  // 30 seconds persistence threshold for static liquidity levels
+  double persistence_timeout_ms_ = 60000;  // 60 seconds timeout for inactive levels
+  bool show_persistent_lines_ = true;      // Toggle for persistent line display
 
   // Helper to refresh data buffer
   void updateHeatmapData();
@@ -232,12 +236,15 @@ class DomSurfacePanel : public PanelBase {
   void addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size);
   void cleanupInactiveStaticLiquidityLevels();
   ImU32 getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const;
-  
+
   // Enhanced Visual Effects for Persistent Levels
-  void renderStaticLiquidityGlowEffect(const StaticLiquidityLevel& level, const ImPlotRect& plot_rect) const;
+  void renderStaticLiquidityGlowEffect(const StaticLiquidityLevel& level,
+                                       const ImPlotRect& plot_rect) const;
 
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type);
+
+  mutable std::mutex data_mutex_;
 };
 
 }  // namespace BTQuant

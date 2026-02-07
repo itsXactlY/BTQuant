@@ -6,10 +6,9 @@
 #include <sstream>
 #include <vector>
 
+#include "../../include/trading/HotspineData.h"
 #include "imgui.h"
 #include "implot.h"
-
-#include "../../include/trading/HotspineData.h"
 
 // Shorter aliases for commonly used types
 using BTQuant::RenderEngine::OrderbookData;
@@ -20,92 +19,99 @@ namespace BTQuant {
 
 // Helper function to round to nearest multiple
 double roundToNearest(double value, double multiple) {
-    if (multiple == 0.0) return value;
-    return std::round(value / multiple) * multiple;
+  if (multiple == 0.0) return value;
+  return std::round(value / multiple) * multiple;
 }
 
 OrderbookPanel::OrderbookPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
                                std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
                                PanelManager* panel_manager)
-    : PanelBase(config), bridge_(bridge), processor_(processor), panel_manager_(panel_manager), selected_levels_count_(20),
-      aggregation_mode_(OrderbookAggregationMode::NONE), custom_aggregation_value_(1.0),
-      volume_delta_period_us_(5000000) {} // Initialize to 5 seconds (5,000,000 microseconds)
+    : PanelBase(config),
+      bridge_(bridge),
+      processor_(processor),
+      panel_manager_(panel_manager),
+      selected_levels_count_(20),
+      aggregation_mode_(OrderbookAggregationMode::NONE),
+      custom_aggregation_value_(1.0),
+      volume_delta_period_us_(5000000) {}  // Initialize to 5 seconds (5,000,000 microseconds)
 
 double OrderbookPanel::getAggregationValue(double price) const {
-    switch (aggregation_mode_) {
-        case OrderbookAggregationMode::TICK_SIZE:
-            // For tick size aggregation, we need to get the tick size for the symbol
-            // Since we don't have direct access to tick size, we'll use a default of 0.01 for now
-            // In a real implementation, this would come from market data
-            return roundToNearest(price, 0.01);
-        case OrderbookAggregationMode::PERCENT_0_1:
-            // Group by 0.1% of the price
-            return roundToNearest(price, price * 0.001);
-        case OrderbookAggregationMode::PERCENT_0_5:
-            // Group by 0.5% of the price
-            return roundToNearest(price, price * 0.005);
-        case OrderbookAggregationMode::PERCENT_1:
-            // Group by 1% of the price
-            return roundToNearest(price, price * 0.01);
-        case OrderbookAggregationMode::CUSTOM_VALUE:
-            // Group by custom value
-            return roundToNearest(price, custom_aggregation_value_);
-        case OrderbookAggregationMode::NONE:
-        default:
-            // No aggregation, return the original price
-            return price;
-    }
+  switch (aggregation_mode_) {
+    case OrderbookAggregationMode::TICK_SIZE:
+      // For tick size aggregation, we need to get the tick size for the symbol
+      // Since we don't have direct access to tick size, we'll use a default of 0.01 for now
+      // In a real implementation, this would come from market data
+      return roundToNearest(price, 0.01);
+    case OrderbookAggregationMode::PERCENT_0_1:
+      // Group by 0.1% of the price
+      return roundToNearest(price, price * 0.001);
+    case OrderbookAggregationMode::PERCENT_0_5:
+      // Group by 0.5% of the price
+      return roundToNearest(price, price * 0.005);
+    case OrderbookAggregationMode::PERCENT_1:
+      // Group by 1% of the price
+      return roundToNearest(price, price * 0.01);
+    case OrderbookAggregationMode::CUSTOM_VALUE:
+      // Group by custom value
+      return roundToNearest(price, custom_aggregation_value_);
+    case OrderbookAggregationMode::NONE:
+    default:
+      // No aggregation, return the original price
+      return price;
+  }
 }
 
 std::vector<RenderEngine::PriceLevel> OrderbookPanel::aggregateOrderbookLevels(
     const std::vector<RenderEngine::PriceLevel>& levels) const {
+  if (aggregation_mode_ == OrderbookAggregationMode::NONE) {
+    return levels;  // Return original levels if no aggregation
+  }
 
-    if (aggregation_mode_ == OrderbookAggregationMode::NONE) {
-        return levels; // Return original levels if no aggregation
+  std::map<double, RenderEngine::PriceLevel> aggregated_levels;
+
+  for (const auto& level : levels) {
+    double aggregated_price = getAggregationValue(level.price);
+
+    auto it = aggregated_levels.find(aggregated_price);
+    if (it != aggregated_levels.end()) {
+      // Aggregate with existing level
+      it->second.size += level.size;
+    } else {
+      // Create new aggregated level
+      RenderEngine::PriceLevel new_level;
+      new_level.price = aggregated_price;
+      new_level.size = level.size;
+      aggregated_levels[aggregated_price] = new_level;
     }
+  }
 
-    std::map<double, RenderEngine::PriceLevel> aggregated_levels;
+  // Convert map back to vector
+  std::vector<RenderEngine::PriceLevel> result;
+  result.reserve(aggregated_levels.size());
 
-    for (const auto& level : levels) {
-        double aggregated_price = getAggregationValue(level.price);
+  for (const auto& pair : aggregated_levels) {
+    result.push_back(pair.second);
+  }
 
-        auto it = aggregated_levels.find(aggregated_price);
-        if (it != aggregated_levels.end()) {
-            // Aggregate with existing level
-            it->second.size += level.size;
-        } else {
-            // Create new aggregated level
-            RenderEngine::PriceLevel new_level;
-            new_level.price = aggregated_price;
-            new_level.size = level.size;
-            aggregated_levels[aggregated_price] = new_level;
-        }
-    }
+  // Sort by price (ascending for asks, descending for bids in the UI)
+  std::sort(result.begin(), result.end(),
+            [](const RenderEngine::PriceLevel& a, const RenderEngine::PriceLevel& b) {
+              return a.price < b.price;
+            });
 
-    // Convert map back to vector
-    std::vector<RenderEngine::PriceLevel> result;
-    result.reserve(aggregated_levels.size());
-
-    for (const auto& pair : aggregated_levels) {
-        result.push_back(pair.second);
-    }
-
-    // Sort by price (ascending for asks, descending for bids in the UI)
-    std::sort(result.begin(), result.end(), [](const RenderEngine::PriceLevel& a, const RenderEngine::PriceLevel& b) {
-        return a.price < b.price;
-    });
-
-    return result;
+  return result;
 }
 
 void OrderbookPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   config_.title = symbol_name + " Orderbook";
 }
 
 void OrderbookPanel::update(float /*dt*/) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   // Request data update from data bridge
   bridge_->sync();
 
@@ -162,7 +168,8 @@ void OrderbookPanel::update(float /*dt*/) {
 
     // Clean up old order flow activity data periodically
     uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+                                std::chrono::high_resolution_clock::now().time_since_epoch())
+                                .count();
 
     if (current_time - last_order_flow_update_ts_ > order_flow_reset_interval_) {
       // Decay the activity counts over time
@@ -172,7 +179,8 @@ void OrderbookPanel::update(float /*dt*/) {
         } else {
           // Apply decay to the activity counts
           activity.additions = static_cast<int>(activity.additions * order_flow_decay_factor_);
-          activity.cancellations = static_cast<int>(activity.cancellations * order_flow_decay_factor_);
+          activity.cancellations =
+              static_cast<int>(activity.cancellations * order_flow_decay_factor_);
           activity.executions = static_cast<int>(activity.executions * order_flow_decay_factor_);
         }
       }
@@ -180,7 +188,8 @@ void OrderbookPanel::update(float /*dt*/) {
   }
 }
 
-void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot) {
+void OrderbookPanel::detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot,
+                                           const HotOrderbookSnapshot& previous_snapshot) {
   // Map previous prices to sizes for quick lookup
   std::map<double, double> prev_bid_prices;
   std::map<double, double> prev_ask_prices;
@@ -300,6 +309,7 @@ void OrderbookPanel::trackVolumeChanges(const HotOrderbookSnapshot& snapshot, ui
 }
 
 void OrderbookPanel::render() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   begin_panel_window();
 
   // If panel is hidden via X button, we still need to call end
@@ -361,7 +371,7 @@ void OrderbookPanel::render() {
           symbol_name_ = sym_name;
           config_.title = symbol_name_ + " Orderbook";
           std::cout << "[OrderbookPanel] Title updated to: " << config_.title << std::endl;
-          
+
           // Notify the panel manager about the symbol change to trigger symbol linking
           if (panel_manager_) {
             panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
@@ -397,31 +407,29 @@ void OrderbookPanel::render() {
     ImGui::SameLine();
     ImGui::PushItemWidth(120);
 
-    const char* aggregation_modes[] = {
-        "None", "Tick Size", "0.1%", "0.5%", "1%", "Custom"
-    };
+    const char* aggregation_modes[] = {"None", "Tick Size", "0.1%", "0.5%", "1%", "Custom"};
 
     int current_aggregation_mode = static_cast<int>(aggregation_mode_);
     if (ImGui::BeginCombo("##AggregationMode", aggregation_modes[current_aggregation_mode])) {
-        for (int i = 0; i < 6; ++i) {
-            bool is_selected = (current_aggregation_mode == i);
-            if (ImGui::Selectable(aggregation_modes[i], is_selected)) {
-                aggregation_mode_ = static_cast<OrderbookAggregationMode>(i);
-            }
-            if (is_selected) ImGui::SetItemDefaultFocus();
+      for (int i = 0; i < 6; ++i) {
+        bool is_selected = (current_aggregation_mode == i);
+        if (ImGui::Selectable(aggregation_modes[i], is_selected)) {
+          aggregation_mode_ = static_cast<OrderbookAggregationMode>(i);
         }
-        ImGui::EndCombo();
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
     }
     ImGui::PopItemWidth();
 
     // Show custom value input if custom aggregation mode is selected
     if (aggregation_mode_ == OrderbookAggregationMode::CUSTOM_VALUE) {
-        ImGui::SameLine();
-        ImGui::Text("Value:");
-        ImGui::SameLine();
-        ImGui::PushItemWidth(80);
-        ImGui::InputDouble("##CustomAggValue", &custom_aggregation_value_, 0.01f, 1.0f, "%.4f");
-        ImGui::PopItemWidth();
+      ImGui::SameLine();
+      ImGui::Text("Value:");
+      ImGui::SameLine();
+      ImGui::PushItemWidth(80);
+      ImGui::InputDouble("##CustomAggValue", &custom_aggregation_value_, 0.01f, 1.0f, "%.4f");
+      ImGui::PopItemWidth();
     }
   } else {
     const auto& colors = ThemeManager::getInstance().getColors();
@@ -433,7 +441,8 @@ void OrderbookPanel::render() {
   ImGui::Text("Heatmap Intensity:");
   ImGui::SameLine();
   ImGui::PushItemWidth(200);
-  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f",
+                     ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
   ImGui::SameLine();
   if (ImGui::Button("Reset##HeatmapIntensity")) {
@@ -492,15 +501,15 @@ void OrderbookPanel::render() {
   // Order Flow Legend
   ImGui::Text("Order Flow:");
   ImGui::SameLine();
-  ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "●"); // Green dot for additions
+  ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "●");  // Green dot for additions
   ImGui::SameLine();
   ImGui::Text("Additions ");
   ImGui::SameLine();
-  ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "●"); // Red dot for cancellations
+  ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "●");  // Red dot for cancellations
   ImGui::SameLine();
   ImGui::Text("Cancellations ");
   ImGui::SameLine();
-  ImGui::TextColored(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), "●"); // Blue dot for executions
+  ImGui::TextColored(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), "●");  // Blue dot for executions
   ImGui::SameLine();
   ImGui::Text("Executions");
 
@@ -521,7 +530,7 @@ int OrderbookPanel::get_level_option_index() {
       return i;
     }
   }
-  return 1; // Default to 20 if not found
+  return 1;  // Default to 20 if not found
 }
 
 void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook) {
@@ -565,9 +574,11 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
   }
 
   // Find max cumulative volume for scaling
-  double max_cumulative_vol = max_vol; // fallback to individual max if no cumulative data
-  if (!cumulative_bids.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_bids.back());
-  if (!cumulative_asks.empty()) max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
+  double max_cumulative_vol = max_vol;  // fallback to individual max if no cumulative data
+  if (!cumulative_bids.empty())
+    max_cumulative_vol = std::max(max_cumulative_vol, cumulative_bids.back());
+  if (!cumulative_asks.empty())
+    max_cumulative_vol = std::max(max_cumulative_vol, cumulative_asks.back());
 
   // Use Table instead of Columns for modern layout (C++26 style UI)
   if (ImGui::BeginTable("OrderbookTable", 8,
@@ -580,20 +591,21 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
     ImGui::TableSetupColumn("Bought", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Ask", ImGuiTableColumnFlags_WidthStretch);
     ImGui::TableSetupColumn("Delta", ImGuiTableColumnFlags_WidthFixed, 40);
-    ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed, 60); // New column for volume delta over last 5 seconds
+    ImGui::TableSetupColumn("Δ Last 5s", ImGuiTableColumnFlags_WidthFixed,
+                            60);  // New column for volume delta over last 5 seconds
     ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableHeadersRow();
 
     const auto& colors = ThemeManager::getInstance().getColors();
 
     // Determine how many levels to show based on selected_levels_count_
-    int max_levels_to_show = selected_levels_count_ == -1 ?
-                             std::max(aggregated_asks.size(), aggregated_bids.size()) :
-                             selected_levels_count_;
+    int max_levels_to_show = selected_levels_count_ == -1
+                                 ? std::max(aggregated_asks.size(), aggregated_bids.size())
+                                 : selected_levels_count_;
 
     // Use channel splitting to draw backgrounds before text content
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_list->ChannelsSplit(2); // Split into 2 channels: 0 for backgrounds, 1 for text (default)
+    draw_list->ChannelsSplit(2);  // Split into 2 channels: 0 for backgrounds, 1 for text (default)
 
     // Switch to background channel (0) to draw heatmap backgrounds first
     draw_list->ChannelsSetCurrent(0);
@@ -609,7 +621,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       // Calculate heatmap intensity for this level with adjustable sensitivity
       float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
+      float adjusted_intensity =
+          std::pow(raw_intensity, 1.0f / heatmap_intensity_);  // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
@@ -641,7 +654,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       // Calculate heatmap intensity for this level with adjustable sensitivity
       float raw_intensity = std::clamp((float)(level.size / max_vol), 0.0f, 1.0f);
-      float adjusted_intensity = std::pow(raw_intensity, 1.0f / heatmap_intensity_); // Adjust sensitivity
+      float adjusted_intensity =
+          std::pow(raw_intensity, 1.0f / heatmap_intensity_);  // Adjust sensitivity
       if (adjusted_intensity > 0.05f) {
         // Calculate position for the entire row background
         ImVec2 row_pos = ImGui::GetCursorScreenPos();
@@ -675,8 +689,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       ImGui::PushID(i);  // Unique ID for this row/side
 
       // Check if this is a large order
-      bool is_large_order = average_order_size_ > 0 &&
-                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = average_order_size_ > 0 && (level.size / average_order_size_) * 100.0 >=
+                                                           large_order_threshold_percentage_;
 
       // 1. Bid (Empty)
       ImGui::TableSetColumnIndex(0);
@@ -691,12 +705,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", sold).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
             ImGui::PopStyleColor();
           } else {
@@ -714,36 +728,32 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Draw small activity indicator dots
-          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f); // Scale dot size with activity
+          float dot_size =
+              std::min(4.0f + (total_activity / 10.0f), 8.0f);  // Scale dot size with activity
 
           // Addition activity (green)
           if (activity.additions > 0) {
-            float intensity = std::min(activity.additions / 10.0f, 1.0f); // Normalize intensity
+            float intensity = std::min(activity.additions / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 2),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 2), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity)));
           }
 
           // Cancellation activity (red)
           if (activity.cancellations > 0) {
-            float intensity = std::min(activity.cancellations / 10.0f, 1.0f); // Normalize intensity
+            float intensity =
+                std::min(activity.cancellations / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 8),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 8), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity)));
           }
 
           // Execution activity (blue)
           if (activity.executions > 0) {
-            float intensity = std::min(activity.executions / 10.0f, 1.0f); // Normalize intensity
+            float intensity = std::min(activity.executions / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 14),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 14), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity)));
           }
         }
       }
@@ -760,11 +770,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       if (is_large_order) {
         // Draw yellow background for the entire price cell
         ImVec2 cell_pos = ImGui::GetCursorScreenPos();
-        ImVec2 cell_size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
+        ImVec2 cell_size =
+            ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
         ImGui::GetWindowDrawList()->AddRectFilled(
-            cell_pos,
-            ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f))); // Semi-transparent yellow background
+            cell_pos, ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
+            ImGui::GetColorU32(
+                ImVec4(1.0f, 1.0f, 0.0f, 0.3f)));  // Semi-transparent yellow background
       }
 
       ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
@@ -777,16 +788,17 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       // Draw cumulative volume bar extending from price column to the right
       if (i < static_cast<int>(cumulative_asks.size())) {
-          float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
-          ImVec2 pos = ImGui::GetCursorScreenPos();
+        float width = ImGui::GetContentRegionAvail().x;
+        float bar_width = width * (float)(cumulative_asks[i] / max_cumulative_vol) *
+                          0.7f;  // Scale to fit in column
+        ImVec2 pos = ImGui::GetCursorScreenPos();
 
-          // Position the bar to start from the left edge of the price column and extend right
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              ImVec2(pos.x, pos.y),
-              ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f, colors.accent_red.z * 0.6f, 0.3f)));
+        // Position the bar to start from the left edge of the price column and extend right
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(pos.x, pos.y),
+            ImVec2(pos.x + bar_width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(ImVec4(colors.accent_red.x * 0.6f, colors.accent_red.y * 0.6f,
+                                      colors.accent_red.z * 0.6f, 0.3f)));
       }
 
       ImGui::SameLine();
@@ -795,12 +807,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImVec2 text_pos = ImGui::GetCursorScreenPos();
         ImVec2 text_size = ImGui::CalcTextSize(std::format("%.2f", level.price).c_str());
         ImGui::GetWindowDrawList()->AddRectFilled(
-            text_pos,
-            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+            text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
         // Draw text with increased weight effect
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
         ImGui::TextColored(colors.accent_red, "%.2f", level.price);
         ImGui::PopStyleColor();
       } else {
@@ -817,12 +829,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", bought).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
             ImGui::PopStyleColor();
           } else {
@@ -848,13 +860,13 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           ImVec2 text_pos = ImGui::GetCursorScreenPos();
           ImVec2 text_size = ImGui::CalcTextSize(std::format("%.4f", level.size).c_str());
           ImGui::GetWindowDrawList()->AddRectFilled(
-              text_pos,
-              ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+              text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
           // Draw text with increased weight effect by drawing it multiple times slightly offset
           // ImVec4 original_col = ImGui::GetStyle().Colors[ImGuiCol_Text];  // Unused variable
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+          ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
           ImGui::Text("%.4f", level.size);
           ImGui::PopStyleColor();
         } else {
@@ -874,12 +886,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.0f", delta).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(color, "%+.0f", delta);
             ImGui::PopStyleColor();
           } else {
@@ -893,13 +905,15 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       {
         // Get the current time for delta calculation
         uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+                                    std::chrono::high_resolution_clock::now().time_since_epoch())
+                                    .count();
 
         // Look up the volume delta for this price level
         auto hist_it = volume_level_history_.find(level.price);
         if (hist_it != volume_level_history_.end()) {
           // For asks, we want the ask delta
-          double volume_delta = hist_it->second.getAskDeltaOverPeriod(current_time, volume_delta_period_us_);
+          double volume_delta =
+              hist_it->second.getAskDeltaOverPeriod(current_time, volume_delta_period_us_);
 
           if (volume_delta != 0) {
             ImVec4 color = volume_delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
@@ -909,12 +923,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
               ImVec2 text_pos = ImGui::GetCursorScreenPos();
               ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.2f", volume_delta).c_str());
               ImGui::GetWindowDrawList()->AddRectFilled(
-                  text_pos,
-                  ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                  text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
               // Draw text with increased weight effect
-              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+              ImGui::PushStyleColor(
+                  ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
               ImGui::TextColored(color, "%+.2f", volume_delta);
               ImGui::PopStyleColor();
             } else {
@@ -935,12 +949,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", total).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::Text("%.0f", total);
             ImGui::PopStyleColor();
           } else {
@@ -964,8 +978,8 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       ImGui::PushID(i + 1000);  // Offset to ensure uniqueness from Asks
 
       // Check if this is a large order
-      bool is_large_order = average_order_size_ > 0 &&
-                           (level.size / average_order_size_) * 100.0 >= large_order_threshold_percentage_;
+      bool is_large_order = average_order_size_ > 0 && (level.size / average_order_size_) * 100.0 >=
+                                                           large_order_threshold_percentage_;
 
       // 1. Bid Size (with Bar)
       ImGui::TableSetColumnIndex(0);
@@ -995,12 +1009,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           ImVec2 text_pos = ImGui::GetCursorScreenPos();
           ImVec2 text_size = ImGui::CalcTextSize(text.c_str());
           ImGui::GetWindowDrawList()->AddRectFilled(
-              text_pos,
-              ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+              text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+              ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
           // Draw text with increased weight effect
-          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+          ImGui::PushStyleColor(ImGuiCol_Text,
+                                ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
           ImGui::TextUnformatted(text.c_str());
           ImGui::PopStyleColor();
         } else {
@@ -1018,12 +1032,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", sold).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(ImVec4(1, 0.5f, 0.5f, 1), "%.0f", sold);
             ImGui::PopStyleColor();
           } else {
@@ -1041,36 +1055,32 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
           ImVec2 pos = ImGui::GetCursorScreenPos();
 
           // Draw small activity indicator dots
-          float dot_size = std::min(4.0f + (total_activity / 10.0f), 8.0f); // Scale dot size with activity
+          float dot_size =
+              std::min(4.0f + (total_activity / 10.0f), 8.0f);  // Scale dot size with activity
 
           // Addition activity (green)
           if (activity.additions > 0) {
-            float intensity = std::min(activity.additions / 10.0f, 1.0f); // Normalize intensity
+            float intensity = std::min(activity.additions / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 2),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 2), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(0.0f, 1.0f, 0.0f, intensity)));
           }
 
           // Cancellation activity (red)
           if (activity.cancellations > 0) {
-            float intensity = std::min(activity.cancellations / 10.0f, 1.0f); // Normalize intensity
+            float intensity =
+                std::min(activity.cancellations / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 8),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 8), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(1.0f, 0.0f, 0.0f, intensity)));
           }
 
           // Execution activity (blue)
           if (activity.executions > 0) {
-            float intensity = std::min(activity.executions / 10.0f, 1.0f); // Normalize intensity
+            float intensity = std::min(activity.executions / 10.0f, 1.0f);  // Normalize intensity
             ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + 2, pos.y + 14),
-                dot_size * 0.5f,
-                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity))
-            );
+                ImVec2(pos.x + 2, pos.y + 14), dot_size * 0.5f,
+                ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 1.0f, intensity)));
           }
         }
       }
@@ -1086,11 +1096,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       if (is_large_order) {
         // Draw yellow background for the entire price cell
         ImVec2 cell_pos = ImGui::GetCursorScreenPos();
-        ImVec2 cell_size = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
+        ImVec2 cell_size =
+            ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
         ImGui::GetWindowDrawList()->AddRectFilled(
-            cell_pos,
-            ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.3f))); // Semi-transparent yellow background
+            cell_pos, ImVec2(cell_pos.x + cell_size.x, cell_pos.y + cell_size.y),
+            ImGui::GetColorU32(
+                ImVec4(1.0f, 1.0f, 0.0f, 0.3f)));  // Semi-transparent yellow background
       }
 
       ImGui::Selectable(std::format("{:.2f}", level.price).c_str(), false,
@@ -1103,16 +1114,17 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
 
       // Draw cumulative volume bar extending from price column to the left
       if (i < static_cast<int>(cumulative_bids.size())) {
-          float width = ImGui::GetContentRegionAvail().x;
-          float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) * 0.7f; // Scale to fit in column
-          ImVec2 pos = ImGui::GetCursorScreenPos();
+        float width = ImGui::GetContentRegionAvail().x;
+        float bar_width = width * (float)(cumulative_bids[i] / max_cumulative_vol) *
+                          0.7f;  // Scale to fit in column
+        ImVec2 pos = ImGui::GetCursorScreenPos();
 
-          // Position the bar to start from the right edge of the price column and extend left
-          ImGui::GetWindowDrawList()->AddRectFilled(
-              ImVec2(pos.x + width - bar_width, pos.y),
-              ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
-              ImGui::GetColorU32(
-                  ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f, colors.accent_green.z * 0.6f, 0.3f)));
+        // Position the bar to start from the right edge of the price column and extend left
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            ImVec2(pos.x + width - bar_width, pos.y),
+            ImVec2(pos.x + width, pos.y + ImGui::GetTextLineHeightWithSpacing()),
+            ImGui::GetColorU32(ImVec4(colors.accent_green.x * 0.6f, colors.accent_green.y * 0.6f,
+                                      colors.accent_green.z * 0.6f, 0.3f)));
       }
 
       ImGui::SameLine();
@@ -1121,12 +1133,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
         ImVec2 text_pos = ImGui::GetCursorScreenPos();
         ImVec2 text_size = ImGui::CalcTextSize(std::format("%.2f", level.price).c_str());
         ImGui::GetWindowDrawList()->AddRectFilled(
-            text_pos,
-            ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+            text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+            ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
         // Draw text with increased weight effect
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
         ImGui::TextColored(colors.accent_green, "%.2f",
                            level.price);  // Green for Bid Price
         ImGui::PopStyleColor();
@@ -1145,12 +1157,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", bought).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(ImVec4(0.5f, 1, 0.5f, 1), "%.0f", bought);
             ImGui::PopStyleColor();
           } else {
@@ -1174,12 +1186,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.0f", delta).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::TextColored(color, "%+.0f", delta);
             ImGui::PopStyleColor();
           } else {
@@ -1193,13 +1205,15 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
       {
         // Get the current time for delta calculation
         uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+                                    std::chrono::high_resolution_clock::now().time_since_epoch())
+                                    .count();
 
         // Look up the volume delta for this price level
         auto hist_it = volume_level_history_.find(level.price);
         if (hist_it != volume_level_history_.end()) {
           // For bids, we want the bid delta
-          double volume_delta = hist_it->second.getBidDeltaOverPeriod(current_time, volume_delta_period_us_);
+          double volume_delta =
+              hist_it->second.getBidDeltaOverPeriod(current_time, volume_delta_period_us_);
 
           if (volume_delta != 0) {
             ImVec4 color = volume_delta > 0 ? ImVec4(0.5f, 1, 0.5f, 1) : ImVec4(1, 0.5f, 0.5f, 1);
@@ -1209,12 +1223,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
               ImVec2 text_pos = ImGui::GetCursorScreenPos();
               ImVec2 text_size = ImGui::CalcTextSize(std::format("%+.2f", volume_delta).c_str());
               ImGui::GetWindowDrawList()->AddRectFilled(
-                  text_pos,
-                  ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                  text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                  ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
               // Draw text with increased weight effect
-              ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+              ImGui::PushStyleColor(
+                  ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
               ImGui::TextColored(color, "%+.2f", volume_delta);
               ImGui::PopStyleColor();
             } else {
@@ -1235,12 +1249,12 @@ void OrderbookPanel::render_orderbook_ladder(const RenderEngine::OrderbookData& 
             ImVec2 text_pos = ImGui::GetCursorScreenPos();
             ImVec2 text_size = ImGui::CalcTextSize(std::format("%.0f", total).c_str());
             ImGui::GetWindowDrawList()->AddRectFilled(
-                text_pos,
-                ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
-                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f))); // Yellow background
+                text_pos, ImVec2(text_pos.x + text_size.x, text_pos.y + text_size.y),
+                ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 0.0f, 0.5f)));  // Yellow background
 
             // Draw text with increased weight effect
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Yellow text for large orders
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImVec4(1.0f, 1.0f, 0.0f, 1.0f));  // Yellow text for large orders
             ImGui::Text("%.0f", total);
             ImGui::PopStyleColor();
           } else {
@@ -1364,7 +1378,8 @@ void OrderbookPanel::render_panel_header() {
   ImGui::Text("Heatmap Intensity:");
   ImGui::SameLine();
   ImGui::PushItemWidth(200);
-  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+  ImGui::SliderFloat("##HeatmapIntensity", &heatmap_intensity_, 0.1f, 5.0f, "%.2f",
+                     ImGuiSliderFlags_Logarithmic);
   ImGui::PopItemWidth();
   ImGui::SameLine();
   if (ImGui::Button("Reset##HeatmapIntensity")) {

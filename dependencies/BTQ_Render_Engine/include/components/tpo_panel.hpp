@@ -1,12 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 
-#include "MarketMicrostructureRenderer.h"
-#include "panel_base.hpp"
-#include "analytics/tpoengine.h"
-#include "panel_manager.hpp"  // Include for PanelManager methods
 #include "../symbol_registry.hpp"  // Include for SymbolRegistry
+#include "MarketMicrostructureRenderer.h"
+#include "analytics/tpoengine.h"
+#include "panel_base.hpp"
+#include "panel_manager.hpp"  // Include for PanelManager methods
 
 namespace BTQuant {
 
@@ -19,9 +20,10 @@ class TpoPanel : public PanelBase {
 
   uint32_t get_symbol_id() const { return symbol_id_; }
   void set_symbol_id(uint32_t id) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
     symbol_id_ = id;
     if (renderer_) renderer_->setSymbol(id);
-    
+
     // Notify the panel manager about the symbol change to trigger symbol linking
     auto symbol_info_opt = SymbolRegistry::instance().get_symbol_info(id);
     if (symbol_info_opt && get_panel_manager()) {
@@ -42,11 +44,12 @@ class TpoPanel : public PanelBase {
   void set_time_window(float window) { time_window_ = window; }
 
  private:
+  mutable std::mutex data_mutex_;
   RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
 
   // TPO Engine for processing market data
-  TPOEngine tpo_engine_{0.25}; // Default price bucket size of 0.25
+  TPOEngine tpo_engine_{0.25};  // Default price bucket size of 0.25
 
   // Track the last processed timestamp to avoid duplicate processing
   uint64_t last_processed_timestamp_ns_ = 0;

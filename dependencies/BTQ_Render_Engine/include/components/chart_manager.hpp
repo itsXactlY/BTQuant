@@ -58,6 +58,7 @@ class ChartManager {
 
   void update();
   void populate_chart_data(uint32_t chart_id);
+  std::optional<ChartInstance> get_chart_instance(uint32_t chart_id) const;
 
   // Helper to map symbol name to ID
   std::optional<uint32_t> getSymbolId(const std::string& symbol_name) const;
@@ -74,9 +75,12 @@ class ChartManager {
   std::unordered_map<uint32_t, ChartInstance> charts_;
   uint32_t next_chart_id_ = 0;
 
+  void populate_chart_data_internal(uint32_t chart_id);
+
   // Symbol name to ID mapping (cached for performance)
   mutable std::unordered_map<std::string, uint32_t> symbol_id_map_;
   mutable std::mutex id_map_mutex_;
+  mutable std::mutex data_mutex_;
 };
 
 }  // namespace BTQuant

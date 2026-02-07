@@ -1,82 +1,124 @@
-    cmake_minimum_required(VERSION 3.15)
-project(BTQuantManipulationDetector VERSION 2.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.10)
+project(BTQuantUITests)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Optimization flags
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -flto")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-literal-operator")
+# Find required packages
+find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
+
+# OpenGL
+find_package(OpenGL REQUIRED)
+
+if(NOT OPENGL_FOUND)
+    message(FATAL_ERROR "OpenGL not found")
+endif()
+
+# GLFW
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(GLFW REQUIRED glfw3>=3.3)
+else()
+    find_library(GLFW_LIBRARIES glfw3 REQUIRED)
+    find_path(GLFW_INCLUDE_DIRS GL/glfw3.h REQUIRED)
+endif()
+
+# GLM - try multiple approaches
+find_path(GLM_INCLUDE_DIR glm/glm.hpp
+    PATHS
+        /usr/include
+        /usr/local/include
+        /opt/local/include
+        /sw/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/glm
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/glm
+    PATH_SUFFIXES
+        glm
+)
+if(NOT GLM_INCLUDE_DIR)
+    # If GLM is not found, we'll define it as a subdirectory or download it
+    message(WARNING "GLM not found, using fallback approach")
+    # For now, just continue without GLM check since it might be in the dependencies
+    set(GLM_INCLUDE_DIR "")
+endif()
+
+# imgui
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/imgui-src)
+set(IMGUI_BACKENDS_DIR ${CMAKE_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/imgui-src/backends)
 
 # Include directories
 include_directories(
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/include/config
-    ${PROJECT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/include
-    ${PROJECT_SOURCE_DIR}/../../dependencies/ccapi/example/src/market_data_collector
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/ccapi/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/imgui-src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/imgui-src/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../dependencies/BTQ_Render_Engine/_deps/implot-src
+    ${OPENGL_INCLUDE_DIRS}
+    ${GLFW_INCLUDE_DIRS}
 )
 
-# Source files - Core
-set(CORE_SOURCES
-    src/hotspine_reader.cpp
-    src/hotspine_extended_reader.cpp
-    src/symbol_registry.cpp
-    src/config/config_loader.cpp
-    src/utils/dynamic_logger.cpp
-    src/utils/shm_health_monitor.cpp
-    src/utils/alert_manager.cpp
-    src/utils/recovery_controller.cpp
-    ../../dependencies/BTQ_Render_Engine/src/analytics/cluster_engine.cpp
-    ../../dependencies/BTQ_Render_Engine/src/analytics/cumulative_delta_tracker.cpp
+# Conditionally add GLM if found
+if(GLM_INCLUDE_DIR)
+    include_directories(${GLM_INCLUDE_DIR})
+endif()
+
+# Source files
+set(SOURCES
+    src/ui_main.cpp
+    src/ui/haptic_feedback.cpp
+    src/ui/tooltips.cpp
+    src/ui/tutorial.cpp
+    src/ui_components_test.cpp
+    # Include other source files as needed
 )
 
-# Source files - Detectors
-set(DETECTOR_SOURCES
-    src/detectors/stop_hunt_detector.cpp
-    src/detectors/liquidity_imbalance_detector.cpp
-    src/detectors/whale_frontrun_detector.cpp
-    src/detectors/spread_arbitrage_detector.cpp
-    src/detectors/spoofing_detector.cpp
-    src/detectors/detector_plugin.cpp
+# Define imgui sources
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
 )
 
-# Core library
-add_library(btquant_core STATIC ${CORE_SOURCES})
-target_link_libraries(btquant_core PUBLIC pthread rt)
+# imgui opengl3 and glfw bindings
+set(IMGUI_GLFW_BINDING
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
 
-# Detector library
-add_library(btquant_detectors STATIC ${DETECTOR_SOURCES})
-target_link_libraries(btquant_detectors PUBLIC btquant_core)
+# Add executable
+add_executable(ui_main
+    src/ui_main.cpp
+    src/ui/haptic_feedback.cpp
+    src/ui/tooltips.cpp
+    src/ui/tutorial.cpp
+    ${IMGUI_SOURCES}
+    ${IMGUI_GLFW_BINDING}
+)
 
-# Main monitor executable
-add_executable(manipulation_monitor src/main_monitor.cpp)
-target_link_libraries(manipulation_monitor PRIVATE btquant_detectors btquant_core)
+add_executable(haptic_feedback_test
+    src/haptic_feedback_test.cpp
+    src/ui/haptic_feedback.cpp
+)
 
-# Examples
-add_executable(simple_monitor examples/simple_monitor.cpp)
-target_link_libraries(simple_monitor PRIVATE btquant_detectors btquant_core)
+# Link libraries
+target_link_libraries(ui_main
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${OPENGL_LIBRARIES}
+    ${GLFW_LIBRARIES}
+)
 
-add_executable(multi_exchange_monitor examples/multi_exchange_monitor.cpp)
-target_link_libraries(multi_exchange_monitor PRIVATE btquant_detectors btquant_core)
 
-# Analytics test
-add_executable(analytics_test src/analytics_test.cpp)
-target_link_libraries(analytics_test PRIVATE btquant_core)
-
-# Cumulative delta tracker test
-add_executable(cumulative_delta_tracker_test src/cumulative_delta_tracker_test.cpp)
-target_link_libraries(cumulative_delta_tracker_test PRIVATE btquant_core)
-
-# Install targets
-install(TARGETS manipulation_monitor simple_monitor multi_exchange_monitor
-        RUNTIME DESTINATION bin)
-install(DIRECTORY include/ DESTINATION include/btquant)
-install(DIRECTORY config/ DESTINATION etc/btquant)
-
-# Print build info
-message(STATUS "BTQuant Manipulation Detector v${PROJECT_VERSION}")
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "CXX Compiler: ${CMAKE_CXX_COMPILER}")
+# Compiler-specific options
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(ui_main PRIVATE -Wall -Wextra)
+    target_compile_options(haptic_feedback_test PRIVATE -Wall -Wextra)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(ui_main PRIVATE /W4)
+    target_compile_options(haptic_feedback_test PRIVATE /W4)
+endif()

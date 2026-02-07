@@ -7,7 +7,7 @@
 #include "performance/debug_overlay.hpp"
 #include "../include/performance_monitor.hpp"
 #include "../include/performance/memory_tracker.hpp"
-#include "../src/imgui/imgui.h"
+#include "imgui.h"
 #include <sstream>
 #include <iomanip>
 #include <chrono>

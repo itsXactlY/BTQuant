@@ -20,7 +20,6 @@
 #include <cstring>
 
 // Include the panel manager header for the implementation
-#include "../../include/components/panel_manager.hpp"
 #include <fstream>
 #include <iostream>
 #include <print>
@@ -31,6 +30,7 @@
 #include "../../../ccapi/example/src/market_data_collector/market_data_types.h"
 #include "../../include/analytics/cluster_engine.hpp"
 #include "../../include/components/VulkanSynchronization.h"
+#include "../../include/components/panel_manager.hpp"
 #include "../../include/hotspine_data_bridge.hpp"
 #include "../../include/market_data_processor.hpp"
 #include "../../include/symbol_registry.hpp"
@@ -347,6 +347,7 @@ void MarketMicrostructureRenderer::resetStats() {
 // ============================================
 
 void MarketMicrostructureRenderer::setSymbol(uint32_t symbol_id) {
+  std::lock_guard lock(dataMutex_);
   if (symbol_id == current_symbol_id_) return;
 
   // Unsubscribe previous
@@ -360,6 +361,15 @@ void MarketMicrostructureRenderer::setSymbol(uint32_t symbol_id) {
   }
 
   current_symbol_id_ = symbol_id;
+
+  // Update cluster engine for new symbol
+  if (cluster_engine_) {
+    auto info = SymbolRegistry::instance().get_symbol_info(symbol_id);
+    if (info) {
+      cluster_engine_->set_tick_size(info->tick_size > 0 ? info->tick_size : 0.01);
+    }
+    cluster_engine_->clear();
+  }
 
   // Clear buffers
   {

@@ -1841,11 +1841,11 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       break;
 
     case LayoutPreset::MODERN_TRADING:
-      // Modern Trading layout: Based on RealtimeDashboardComponent setup
+      // Modern Trading layout: Based on "old" RealtimeDashboardComponent setup
       set_grid_layout(6, 5);
 
       // 1. Chart (Top Left, Large) - 4x3
-      add_panel(PanelType::CHART, "BTCUSDT Chart", 0, 0, 4, 3);
+      add_panel(PanelType::CHART, "Candlestick Chart", 0, 0, 4, 3);
 
       // 2. DOM Surface (Top Right) - 2x2
       add_panel(PanelType::HEATMAP, "DOM Surface", 4, 0, 2, 2);
@@ -1868,7 +1868,7 @@ void PanelManager::apply_layout_preset(LayoutPreset preset) {
       set_grid_layout(6, 10);
 
       // 1. Main Chart (Top Left, large)
-      add_panel(PanelType::CHART, "BTC/USDT Chart", 0, 0, 4, 3);
+      add_panel(PanelType::CHART, "Candlestick Chart", 0, 0, 4, 3);
 
       // 2. Orderbook / DOM (Right side)
       // DOM Surface (Heatmap)

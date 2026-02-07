@@ -3,6 +3,8 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -19,22 +21,23 @@ struct WatchlistEntry {
   std::string symbol;
   std::string exchange;
   double price = 0.0;
-  double change_pct = 0.0;      // Change %
-  double change_dollar = 0.0;   // Change $
+  double change_pct = 0.0;     // Change %
+  double change_dollar = 0.0;  // Change $
   double volume_24h = 0.0;
   double vwap = 0.0;
   double high_24h = 0.0;
   double low_24h = 0.0;
-  double open_24h = 0.0;        // Opening price
+  double open_24h = 0.0;  // Opening price
   uint64_t last_update_ts = 0;
   bool is_active = true;
 
   // Animation state for price changes
   double previous_price = 0.0;
-  double previous_vwap = 0.0;  // Previous VWAP for animation
+  double previous_vwap = 0.0;    // Previous VWAP for animation
   double previous_volume = 0.0;  // Previous volume for change calculation
   float animation_timer = 0.0f;
-  static constexpr float ANIMATION_DURATION = 0.8f; // Animation duration in seconds - optimized for smooth visual feedback
+  static constexpr float ANIMATION_DURATION =
+      0.8f;  // Animation duration in seconds - optimized for smooth visual feedback
 };
 
 class WatchlistPanel : public PanelBase {
@@ -54,7 +57,8 @@ class WatchlistPanel : public PanelBase {
   void clear_watchlist();
 
   // Watchlist group management
-  void add_symbol_to_group(const std::string& group_name, uint32_t symbol_id, const std::string& symbol, const std::string& exchange);
+  void add_symbol_to_group(const std::string& group_name, uint32_t symbol_id,
+                           const std::string& symbol, const std::string& exchange);
   void remove_symbol_from_group(const std::string& group_name, uint32_t symbol_id);
   void clear_group(const std::string& group_name);
   void create_group(const std::string& group_name);
@@ -91,8 +95,8 @@ class WatchlistPanel : public PanelBase {
   // Alert management methods
   void set_alerts_panel(std::shared_ptr<AlertsPanel> alerts_panel);
   void set_alerts_panel_raw(AlertsPanel* alerts_panel);
-  void add_price_alert(uint32_t symbol_id, const std::string& symbol_name,
-                      double target_price, WatchlistPriceAlert::Direction direction);
+  void add_price_alert(uint32_t symbol_id, const std::string& symbol_name, double target_price,
+                       WatchlistPriceAlert::Direction direction);
   void remove_alerts_for_symbol(uint32_t symbol_id);
   void ensure_default_groups_order();
 
@@ -118,7 +122,8 @@ class WatchlistPanel : public PanelBase {
   std::map<std::string, std::vector<uint32_t>> group_display_orders_;
 
   // UI state
-  int sort_column_ = 0;  // 0=symbol, 1=exchange, 2=last price, 3=change%, 4=change$, 5=volume, 6=high, 7=low, 8=open, 9=vwap
+  int sort_column_ = 0;  // 0=symbol, 1=exchange, 2=last price, 3=change%, 4=change$, 5=volume,
+                         // 6=high, 7=low, 8=open, 9=vwap
   bool sort_ascending_ = true;
   char filter_buffer_[256] = {0};
   char new_symbol_buffer_[128] = {0};  // Buffer for new symbol input
@@ -151,7 +156,7 @@ class WatchlistPanel : public PanelBase {
     int order;  // Position in the table
 
     ColumnInfo(const std::string& n, bool v, float w, int o)
-      : name(n), visible(v), width(w), order(o) {}
+        : name(n), visible(v), width(w), order(o) {}
   };
 
   // Get reference to current watchlist based on selected group
@@ -203,6 +208,7 @@ class WatchlistPanel : public PanelBase {
   void ensure_all_symbols_subscribed();
   void process_pending_updates();
   void subscribe_to_all_watchlist_symbols();
+  void process_pending_subscriptions();
 
   // Alerts management UI
   void render_alerts_management();
@@ -216,10 +222,20 @@ class WatchlistPanel : public PanelBase {
   // Alerts management UI state
   char new_alert_symbol_buffer_[128] = {0};
   char new_alert_price_buffer_[64] = {0};
-  int new_alert_direction_ = 0; // 0 for ABOVE, 1 for BELOW
+  int new_alert_direction_ = 0;  // 0 for ABOVE, 1 for BELOW
 
   // Focus management
   bool should_focus_symbol_input_ = false;
+
+  // Pending subscriptions queue
+  struct PendingSubscription {
+    uint32_t symbol_id;
+    std::string symbol;
+    std::string exchange;
+  };
+  std::queue<PendingSubscription> pending_subscriptions_;
+
+  mutable std::mutex watchlist_mutex_;
 };
 
 }  // namespace BTQuant

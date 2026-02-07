@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <memory>
+#include <mutex>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -38,6 +39,7 @@ class TapePanel : public PanelBase {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  mutable std::mutex data_mutex_;
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";

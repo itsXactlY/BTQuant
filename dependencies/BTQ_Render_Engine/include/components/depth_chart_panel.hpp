@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "../hotspine_data_bridge.hpp"
@@ -15,7 +16,7 @@ namespace BTQuant {
 enum class DepthChartVisualizationMode {
   CUMULATIVE_AREA,  // Current mode: cumulative depth as area chart
   SEPARATE_SIDES,   // Alternative mode: bid area on left, ask area on right (negative values)
-  BID_ASK_SPLIT      // New mode: bid area on left, ask area on right as separate areas
+  BID_ASK_SPLIT     // New mode: bid area on left, ask area on right as separate areas
 };
 
 /**
@@ -44,6 +45,7 @@ class DepthChartPanel : public PanelBase {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  mutable std::mutex data_mutex_;
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";

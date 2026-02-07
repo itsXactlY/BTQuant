@@ -18,6 +18,7 @@ ChartManager::ChartManager(std::shared_ptr<HotSpineDataBridge> bridge,
 uint32_t ChartManager::create_chart(const std::string& symbol_name,
                                     const std::string& exchange_name, uint32_t symbol_id,
                                     RenderEngine::TimeFrame timeframe) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   ChartInstance chart;
   chart.symbol_name = symbol_name;
   chart.exchange_name = exchange_name;
@@ -37,9 +38,13 @@ uint32_t ChartManager::create_chart(const std::string& symbol_name,
   return chart.chart_id;
 }
 
-void ChartManager::destroy_chart(uint32_t chart_id) { charts_.erase(chart_id); }
+void ChartManager::destroy_chart(uint32_t chart_id) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  charts_.erase(chart_id);
+}
 
 void ChartManager::toggle_chart_visibility(uint32_t chart_id) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.visible = !it->second.visible;
@@ -47,6 +52,7 @@ void ChartManager::toggle_chart_visibility(uint32_t chart_id) {
 }
 
 void ChartManager::toggle_chart_minimization(uint32_t chart_id) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.minimized = !it->second.minimized;
@@ -54,6 +60,7 @@ void ChartManager::toggle_chart_minimization(uint32_t chart_id) {
 }
 
 void ChartManager::update_chart_position(uint32_t chart_id, const ImVec2& position) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.position = position;
@@ -61,6 +68,7 @@ void ChartManager::update_chart_position(uint32_t chart_id, const ImVec2& positi
 }
 
 void ChartManager::update_chart_size(uint32_t chart_id, const ImVec2& size) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   auto it = charts_.find(chart_id);
   if (it != charts_.end()) {
     it->second.size = size;
@@ -68,10 +76,12 @@ void ChartManager::update_chart_size(uint32_t chart_id, const ImVec2& size) {
 }
 
 const std::unordered_map<uint32_t, ChartInstance>& ChartManager::get_charts() const {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   return charts_;
 }
 
 std::vector<ChartInstance> ChartManager::get_visible_charts() const {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   std::vector<ChartInstance> visible_charts;
   visible_charts.reserve(charts_.size());
   for (const auto& [id, chart] : charts_) {
@@ -84,6 +94,7 @@ std::vector<ChartInstance> ChartManager::get_visible_charts() const {
 
 std::vector<ChartInstance> ChartManager::get_charts_for_symbol(
     const std::string& symbol_name) const {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   std::vector<ChartInstance> symbol_charts;
   for (const auto& [id, chart] : charts_) {
     if (chart.symbol_name == symbol_name) {
@@ -114,6 +125,7 @@ std::optional<uint32_t> ChartManager::getSymbolId(const std::string& symbol_name
 }
 
 void ChartManager::update() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   auto active_symbol_ids = bridge_->getActiveSymbols();
 
   for (uint32_t symbol_id : active_symbol_ids) {
@@ -139,11 +151,25 @@ void ChartManager::update() {
       chart_id = create_chart(symbol_str, exchange, symbol_id, RenderEngine::TimeFrame::TF_1SEC);
     }
 
-    populate_chart_data(chart_id);
+    populate_chart_data_internal(chart_id);
   }
 }
 
 void ChartManager::populate_chart_data(uint32_t chart_id) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  populate_chart_data_internal(chart_id);
+}
+
+std::optional<ChartInstance> ChartManager::get_chart_instance(uint32_t chart_id) const {
+  std::lock_guard<std::mutex> lock(data_mutex_);
+  auto it = charts_.find(chart_id);
+  if (it != charts_.end()) {
+    return it->second;
+  }
+  return std::nullopt;
+}
+
+void ChartManager::populate_chart_data_internal(uint32_t chart_id) {
   auto it = charts_.find(chart_id);
   if (it == charts_.end()) return;
 
@@ -227,6 +253,7 @@ void ChartManager::populate_chart_data(uint32_t chart_id) {
 }
 
 void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timeframe) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   // Update the timeframe for all charts
   for (auto& [chart_id, chart] : charts_) {
     // Store the old timeframe to compare
@@ -245,7 +272,7 @@ void ChartManager::update_all_chart_timeframes(RenderEngine::TimeFrame new_timef
     chart.volumes.clear();
 
     // Repopulate the chart data with the new timeframe
-    populate_chart_data(chart_id);
+    populate_chart_data_internal(chart_id);
   }
 }
 

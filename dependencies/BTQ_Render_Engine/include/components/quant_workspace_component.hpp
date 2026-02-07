@@ -57,11 +57,12 @@ class QuantWorkspaceComponent : public UIComponent {
   const HierarchicalSelector& getHierarchicalSelector() const { return hierarchical_selector_; }
 
   // Layout management
-  void set_layout(LayoutPreset preset) { 
+  void set_layout(LayoutPreset preset) {
     if (panel_manager_) {
       panel_manager_->apply_layout_preset(preset);
     }
   }
+
 
   void initialize_vulkan_resources(VulkanCore* core) override;
   void clear_data() override;

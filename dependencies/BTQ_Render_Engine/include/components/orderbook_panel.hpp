@@ -4,6 +4,7 @@
 
 #include <format>
 #include <memory>
+#include <mutex>
 
 #include "../hotspine_data_bridge.hpp"
 #include "../market_data_processor.hpp"
@@ -21,19 +22,20 @@ struct HeatmapRect {
 
 // Aggregation modes for order book
 enum class OrderbookAggregationMode {
-  NONE,           // No aggregation
-  TICK_SIZE,      // Group by tick size
-  PERCENT_0_1,    // Group by 0.1%
-  PERCENT_0_5,    // Group by 0.5%
-  PERCENT_1,      // Group by 1%
-  CUSTOM_VALUE    // Group by custom value
+  NONE,         // No aggregation
+  TICK_SIZE,    // Group by tick size
+  PERCENT_0_1,  // Group by 0.1%
+  PERCENT_0_5,  // Group by 0.5%
+  PERCENT_1,    // Group by 1%
+  CUSTOM_VALUE  // Group by custom value
 };
 
 // Real-time orderbook ladder display
 class OrderbookPanel : public PanelBase {
  public:
   OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager = nullptr);
+                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                 PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
   void render() override;
@@ -45,6 +47,7 @@ class OrderbookPanel : public PanelBase {
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
   PanelManager* panel_manager_ = nullptr;  // Pointer to the panel manager for symbol linking
+  mutable std::mutex data_mutex_;
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";
@@ -59,19 +62,24 @@ class OrderbookPanel : public PanelBase {
   double custom_aggregation_value_ = 1.0;  // Custom aggregation value when mode is CUSTOM_VALUE
 
   // Heatmap intensity configuration
-  float heatmap_intensity_ = 1.0f;  // Sensitivity of color mapping for resting limit orders (default 1.0)
-  
+  float heatmap_intensity_ =
+      1.0f;  // Sensitivity of color mapping for resting limit orders (default 1.0)
+
   int get_level_option_index();  // Helper to find the index of the current selection
   void render_orderbook_ladder(const RenderEngine::OrderbookData& orderbook);
   void render_market_depth_chart(const RenderEngine::OrderbookData& orderbook);
 
   // Getter and setter for large order threshold
   double getLargeOrderThresholdPercentage() const { return large_order_threshold_percentage_; }
-  void setLargeOrderThresholdPercentage(double percentage) { large_order_threshold_percentage_ = percentage; }
+  void setLargeOrderThresholdPercentage(double percentage) {
+    large_order_threshold_percentage_ = percentage;
+  }
 
   // Getter and setter for volume delta period
   uint64_t getVolumeDeltaPeriodMicroseconds() const { return volume_delta_period_us_; }
-  void setVolumeDeltaPeriodMicroseconds(uint64_t microseconds) { volume_delta_period_us_ = microseconds; }
+  void setVolumeDeltaPeriodMicroseconds(uint64_t microseconds) {
+    volume_delta_period_us_ = microseconds;
+  }
 
   // Aggregation functions
   double getAggregationValue(double price) const;
@@ -83,7 +91,8 @@ class OrderbookPanel : public PanelBase {
   void reset_depth();
 
   // Helper method to detect order flow events by comparing snapshots
-  void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot, const HotOrderbookSnapshot& previous_snapshot);
+  void detectOrderFlowEvents(const HotOrderbookSnapshot& current_snapshot,
+                             const HotOrderbookSnapshot& previous_snapshot);
 
   // Helper method to track volume changes for delta calculation
   void trackVolumeChanges(const HotOrderbookSnapshot& snapshot, uint64_t timestamp);
@@ -95,9 +104,9 @@ class OrderbookPanel : public PanelBase {
 
   // Structure to track order flow events per price level
   struct OrderFlowActivity {
-    int additions = 0;      // Number of order additions
-    int cancellations = 0;  // Number of order cancellations
-    int executions = 0;     // Number of order executions
+    int additions = 0;              // Number of order additions
+    int cancellations = 0;          // Number of order cancellations
+    int executions = 0;             // Number of order executions
     uint64_t last_activity_ts = 0;  // Timestamp of last activity
 
     // Reset counters after a certain period
@@ -129,11 +138,11 @@ class OrderbookPanel : public PanelBase {
 
   // Large order detection
   double average_order_size_ = 0.0;
-  double large_order_threshold_percentage_ = 200.0; // 200% means 2x the average size
+  double large_order_threshold_percentage_ = 200.0;  // 200% means 2x the average size
 
   // Order flow visualization settings
-  float order_flow_decay_factor_ = 0.95f;  // Decay factor for activity intensity over time
-  uint64_t order_flow_reset_interval_ = 5000000; // Reset interval in microseconds (5 seconds)
+  float order_flow_decay_factor_ = 0.95f;         // Decay factor for activity intensity over time
+  uint64_t order_flow_reset_interval_ = 5000000;  // Reset interval in microseconds (5 seconds)
 
   // Volume delta tracking for order book changes over time
   struct VolumeDeltaPoint {
@@ -157,7 +166,8 @@ class OrderbookPanel : public PanelBase {
       cleanupOldData(ts);
     }
 
-    double getBidDeltaOverPeriod(uint64_t current_time, uint64_t period_us = 5000000) const { // 5 seconds default
+    double getBidDeltaOverPeriod(uint64_t current_time,
+                                 uint64_t period_us = 5000000) const {  // 5 seconds default
       uint64_t start_time = current_time >= period_us ? current_time - period_us : 0;
 
       // Find the size at the start of the period (closest point at or before start_time)
@@ -187,7 +197,8 @@ class OrderbookPanel : public PanelBase {
       return final_size - initial_size;
     }
 
-    double getAskDeltaOverPeriod(uint64_t current_time, uint64_t period_us = 5000000) const { // 5 seconds default
+    double getAskDeltaOverPeriod(uint64_t current_time,
+                                 uint64_t period_us = 5000000) const {  // 5 seconds default
       uint64_t start_time = current_time >= period_us ? current_time - period_us : 0;
 
       // Find the size at the start of the period (closest point at or before start_time)
@@ -217,27 +228,27 @@ class OrderbookPanel : public PanelBase {
       return final_size - initial_size;
     }
 
-    void cleanupOldData(uint64_t current_time, uint64_t retention_period_us = 10000000) { // 10 seconds retention
-      uint64_t cutoff_time = current_time >= retention_period_us ? current_time - retention_period_us : 0;
+    void cleanupOldData(uint64_t current_time,
+                        uint64_t retention_period_us = 10000000) {  // 10 seconds retention
+      uint64_t cutoff_time =
+          current_time >= retention_period_us ? current_time - retention_period_us : 0;
 
       // Remove old bid history points
-      auto bid_it = std::remove_if(bid_history.begin(), bid_history.end(),
-                                  [cutoff_time](const VolumeDeltaPoint& p) {
-                                    return p.timestamp < cutoff_time;
-                                  });
+      auto bid_it = std::remove_if(
+          bid_history.begin(), bid_history.end(),
+          [cutoff_time](const VolumeDeltaPoint& p) { return p.timestamp < cutoff_time; });
       bid_history.erase(bid_it, bid_history.end());
 
       // Remove old ask history points
-      auto ask_it = std::remove_if(ask_history.begin(), ask_history.end(),
-                                  [cutoff_time](const VolumeDeltaPoint& p) {
-                                    return p.timestamp < cutoff_time;
-                                  });
+      auto ask_it = std::remove_if(
+          ask_history.begin(), ask_history.end(),
+          [cutoff_time](const VolumeDeltaPoint& p) { return p.timestamp < cutoff_time; });
       ask_history.erase(ask_it, ask_history.end());
     }
   };
 
   std::map<double, VolumeLevelHistory> volume_level_history_;
-  uint64_t volume_delta_period_us_ = 5000000; // 5 seconds in microseconds
+  uint64_t volume_delta_period_us_ = 5000000;  // 5 seconds in microseconds
 };
 
 }  // namespace BTQuant

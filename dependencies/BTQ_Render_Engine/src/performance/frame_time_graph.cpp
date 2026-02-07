@@ -1,6 +1,6 @@
 #include "../include/performance/frame_time_graph.hpp"
-#include "../src/imgui/implot.h"
-#include "../src/imgui/imgui.h"
+#include "implot.h"
+#include "imgui.h"
 
 #include <algorithm>
 #include <numeric>

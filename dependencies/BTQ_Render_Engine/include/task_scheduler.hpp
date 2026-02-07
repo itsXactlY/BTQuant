@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <queue>
 #include <vector>
@@ -42,6 +43,9 @@ public:
     // Delete copy constructor and assignment operator
     TaskScheduler(const TaskScheduler&) = delete;
     TaskScheduler& operator=(const TaskScheduler&) = delete;
+    
+    // Thread-safe method to check if scheduler is stopping
+    bool is_stopping() const;
 
     // Volume Calculations
     std::future<std::vector<double>> calculate_volume_profile_async(
@@ -248,6 +252,7 @@ private:
     std::queue<std::function<void()>> tasks_;
 
     std::mutex queue_mutex_;
+    mutable std::shared_mutex stop_mutex_;  // For thread-safe access to stop_ flag
     std::condition_variable condition_;
     size_t num_threads_;
     bool stop_;

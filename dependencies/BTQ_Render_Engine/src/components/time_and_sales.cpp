@@ -67,6 +67,7 @@ void TimeAndSalesPanel::subscribe_to_updates() {
 }
 
 void TimeAndSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   cached_trades_.clear();
@@ -74,7 +75,7 @@ void TimeAndSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol
   // Re-subscribe to new symbol
   subscribe_to_updates();
   markDirty();  // Force immediate refresh
-  
+
   // Notify the panel manager about the symbol change to trigger symbol linking
   if (get_panel_manager()) {
     get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
@@ -82,6 +83,7 @@ void TimeAndSalesPanel::set_symbol(uint32_t symbol_id, const std::string& symbol
 }
 
 void TimeAndSalesPanel::render() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   begin_panel_window();
 
   if (!is_visible()) {

@@ -12,7 +12,10 @@ namespace BTQuant {
 DepthChartPanel::DepthChartPanel(const PanelConfig& config,
                                  std::shared_ptr<HotSpineDataBridge> bridge,
                                  std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor), visualization_mode_(DepthChartVisualizationMode::CUMULATIVE_AREA) {
+    : PanelBase(config),
+      bridge_(bridge),
+      processor_(processor),
+      visualization_mode_(DepthChartVisualizationMode::CUMULATIVE_AREA) {
   // Pre-allocate vectors for typical orderbook depth
   bid_prices_.reserve(50);
   bid_cumulative_.reserve(50);
@@ -48,6 +51,7 @@ void DepthChartPanel::subscribe_to_updates() {
 }
 
 void DepthChartPanel::render() {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   begin_panel_window();
 
   if (!is_visible()) {
@@ -216,6 +220,7 @@ void DepthChartPanel::compute_depth_data() {
 }
 
 void DepthChartPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
+  std::lock_guard<std::mutex> lock(data_mutex_);
   symbol_id_ = symbol_id;
   symbol_name_ = symbol_name;
   cached_orderbook_ = {};
@@ -227,7 +232,7 @@ void DepthChartPanel::set_symbol(uint32_t symbol_id, const std::string& symbol_n
   // Re-subscribe to new symbol
   subscribe_to_updates();
   markDirty();  // Force immediate rebuild
-  
+
   // Notify the panel manager about the symbol change to trigger symbol linking
   if (get_panel_manager()) {
     get_panel_manager()->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
@@ -344,7 +349,7 @@ void DepthChartPanel::render_visualization_mode_selector() {
   ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12);
   if (ImGui::Combo("##DepthChartMode", &current_item, items, IM_ARRAYSIZE(items))) {
     visualization_mode_ = static_cast<DepthChartVisualizationMode>(current_item);
-    markDirty(); // Trigger recomputation if needed
+    markDirty();  // Trigger recomputation if needed
   }
 
   ImGui::SameLine();
@@ -367,10 +372,10 @@ void DepthChartPanel::render_depth_chart_separate_sides() {
   double price_max = mid_price_ * 1.005;
 
   if (!bid_prices_.empty()) {
-    price_min = std::min(price_min, bid_prices_.front()); // Use front for min bid price
+    price_min = std::min(price_min, bid_prices_.front());  // Use front for min bid price
   }
   if (!ask_prices_.empty()) {
-    price_max = std::max(price_max, ask_prices_.back()); // Use back for max ask price
+    price_max = std::max(price_max, ask_prices_.back());  // Use back for max ask price
   }
 
   // Unique plot ID
@@ -445,8 +450,8 @@ void DepthChartPanel::render_depth_chart_separate_sides() {
       // Annotation for mid price
       char mid_label[32];
       snprintf(mid_label, sizeof(mid_label), "Mid: %.2f", mid_price_);
-      ImPlot::Annotation(mid_price_, max_depth_for_axis * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5), true,
-                         "%s", mid_label);
+      ImPlot::Annotation(mid_price_, max_depth_for_axis * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5),
+                         true, "%s", mid_label);
     }
 
     ImPlot::EndPlot();
@@ -469,10 +474,10 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
   double price_max = mid_price_ * 1.005;
 
   if (!bid_prices_.empty()) {
-    price_min = std::min(price_min, bid_prices_.front()); // Use front for min bid price
+    price_min = std::min(price_min, bid_prices_.front());  // Use front for min bid price
   }
   if (!ask_prices_.empty()) {
-    price_max = std::max(price_max, ask_prices_.back()); // Use back for max ask price
+    price_max = std::max(price_max, ask_prices_.back());  // Use back for max ask price
   }
 
   // Unique plot ID
@@ -509,8 +514,8 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
       // Transform bid prices to the left half of the chart
       std::vector<double> transformed_bid_prices(bid_prices_.size());
       // Bids are typically sorted in descending order (highest bid first)
-      double bid_min = bid_prices_.back();  // Lowest bid price
-      double bid_max = bid_prices_.front(); // Highest bid price
+      double bid_min = bid_prices_.back();   // Lowest bid price
+      double bid_max = bid_prices_.front();  // Highest bid price
 
       for (size_t i = 0; i < bid_prices_.size(); ++i) {
         // Map bid prices from their original range to the left half of the chart
@@ -535,8 +540,8 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
       // Transform ask prices to the right half of the chart
       std::vector<double> transformed_ask_prices(ask_prices_.size());
       // Asks are typically sorted in ascending order (lowest ask first)
-      double ask_min = ask_prices_.front(); // Lowest ask price
-      double ask_max = ask_prices_.back();  // Highest ask price
+      double ask_min = ask_prices_.front();  // Lowest ask price
+      double ask_max = ask_prices_.back();   // Highest ask price
 
       for (size_t i = 0; i < ask_prices_.size(); ++i) {
         // Map ask prices from their original range to the right half of the chart
@@ -564,8 +569,8 @@ void DepthChartPanel::render_depth_chart_bid_ask_split() {
       // Annotation for mid price
       char mid_label[32];
       snprintf(mid_label, sizeof(mid_label), "Mid: %.2f", mid_price_);
-      ImPlot::Annotation(mid_price_, max_depth_for_axis * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5), true,
-                         "%s", mid_label);
+      ImPlot::Annotation(mid_price_, max_depth_for_axis * 0.9, ImVec4(1, 1, 1, 1), ImVec2(5, -5),
+                         true, "%s", mid_label);
     }
 
     ImPlot::EndPlot();

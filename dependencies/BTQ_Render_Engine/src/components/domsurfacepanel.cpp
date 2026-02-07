@@ -1146,11 +1146,15 @@ float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
   // Use logarithmic scaling: log(volume + 1) to handle volume = 0 gracefully
   // This prevents massive trades from covering the entire price axis
   float log_volume = std::log(volume + 1.0f);
-  
+
   // Normalize using a reference maximum log volume to scale appropriately
   float max_log_volume = std::log(TRADE_BUBBLE_MAX_VOLUME + 1.0f);
   float normalized_log_volume = log_volume / max_log_volume;
-  
+
+  // Apply additional curve to make the scaling more gradual at low volumes
+  // and steeper at high volumes for better visual distinction
+  normalized_log_volume = std::pow(normalized_log_volume, 0.7f);
+
   // Scale radius from base to max based on normalized log volume
   return TRADE_BUBBLE_BASE_RADIUS + (TRADE_BUBBLE_MAX_RADIUS - TRADE_BUBBLE_BASE_RADIUS) * normalized_log_volume;
 }
@@ -1160,18 +1164,22 @@ ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade
   uint64_t current_time = std::chrono::duration_cast<std::chrono::microseconds>(
                               std::chrono::steady_clock::now().time_since_epoch())
                               .count();
-  
+
   // Calculate age of the trade in microseconds
   uint64_t age_us = current_time - trade.timestamp;
-  
+
   // Calculate fade ratio (0.0 = fully faded, 1.0 = fully opaque)
   float fade_ratio = 1.0f - static_cast<float>(age_us) / static_cast<float>(TRADE_BUBBLE_FADE_DURATION_US);
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
-  
+
+  // Apply smooth easing function for more natural fade-out
+  // Using smoothstep function: 3t² - 2t³, where t is fade_ratio
+  float eased_fade_ratio = fade_ratio * fade_ratio * (3.0f - 2.0f * fade_ratio);
+
   // Calculate alpha based on fade ratio
   uint8_t base_alpha = 180;  // Base alpha value
-  uint8_t alpha = static_cast<uint8_t>(base_alpha * fade_ratio);
-  
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * eased_fade_ratio);
+
   // Color based on trade side: Green for BUY, Red for SELL with fade-out effect
   if (trade.side == BTQuant::Data::TradeSide::BUY) {
     return IM_COL32(0, 255, 0, alpha);  // Green with fade-out transparency

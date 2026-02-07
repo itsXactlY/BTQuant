@@ -187,6 +187,10 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   // Clamp the normalized value to prevent exceeding intended radius range
   normalized_log_volume = std::clamp(normalized_log_volume, 0.0f, 1.0f);
 
+  // Apply additional curve to make the scaling more gradual at low volumes
+  // and steeper at high volumes for better visual distinction
+  normalized_log_volume = std::pow(normalized_log_volume, 0.7f);
+
   // Scale to desired radius range
   float min_radius = 3.0f;
   float max_radius = 20.0f;

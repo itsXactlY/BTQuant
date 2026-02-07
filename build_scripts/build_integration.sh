@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}Starting integration build process for PubBTQuant...${NC}"
 
 # Default values
-BUILD_DIR="build_integration"
+BUILD_DIR="build"  # Changed to match required command for faster iteration
 SOURCE_DIR="."
 INSTALL_DIR=""
 NUM_CORES=$(nproc)
@@ -25,7 +25,7 @@ VERBOSE=false
 SANITIZE_CODE=true
 RUN_TESTS=true
 STATIC_ANALYSIS=true
-BUILD_TYPE="Debug"  # Debug build for better error detection
+BUILD_TYPE="Release"  # Changed to match required command for faster iteration
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -130,6 +130,7 @@ fi
 echo -e "${GREEN}Cleaning and configuring build directory: $BUILD_DIR${NC}"
 
 # Configure and build with Ninja for faster iteration
+# Using the exact command format as required: rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build
 rm -rf "$BUILD_DIR" && cmake -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=$BUILD_TYPE && ninja -C "$BUILD_DIR"
 
 if [ $? -ne 0 ]; then

@@ -44,7 +44,8 @@ enum class PanelType {
   CHART_REPLAY,
   RISK_ANALYZER,
   STRATEGY_BUILDER,
-  OPTION_ANALYTICS
+  OPTION_ANALYTICS,
+  TABBED_GROUP
 };
 
 struct PanelConfig {

@@ -166,6 +166,8 @@ const char* PanelBase::get_panel_type_name(PanelType type) {
       return "Time Statistics";
     case PanelType::TIME_AND_SALES:
       return "Time & Sales";
+    case PanelType::TABBED_GROUP:
+      return "Tabbed Group";
     default:
       return "Unknown";
   }

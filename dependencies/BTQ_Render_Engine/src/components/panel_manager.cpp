@@ -24,6 +24,7 @@
 #include "../../include/components/screener_panel.hpp"
 #include "../../include/components/status_bar_panel.hpp"
 #include "../../include/components/tape_panel.hpp"
+#include "../../include/components/tabbed_panel.hpp"
 #include "../../include/components/time_series_panel.hpp"
 #include "../../include/components/time_statistics_panel.hpp"
 #include "../../include/components/time_histogram_panel.hpp"
@@ -160,6 +161,9 @@ void PanelManager::render() {
     const_cast<BTQuant::PanelBase*>(panel)->handle_context_menu(*context_menu_manager_);
   }
 
+  // Handle drag and drop for tabbed groups
+  handle_panel_drag_drop();
+
   // Render only the visible panels
   // Grouped panels should be rendered together to ensure proper positioning
   std::unordered_set<uint32_t> processed_groups;
@@ -168,7 +172,7 @@ void PanelManager::render() {
 
     // Check if this panel is part of a group
     uint32_t group_id = get_panel_group_id(panel_id);
-    
+
     if (group_id != 0 && processed_groups.find(group_id) == processed_groups.end()) {
       // This panel belongs to a group that hasn't been processed yet
       // Render all panels in this group together
@@ -178,7 +182,7 @@ void PanelManager::render() {
           auto group_panel_it = panels_.find(group_panel_id);
           if (group_panel_it != panels_.end()) {
             auto* group_panel = group_panel_it->second.get();
-            
+
             // Start timing the panel render
             BTQuant::g_panel_profiler.start_panel_render(group_panel_id, group_panel->get_title());
 
@@ -189,13 +193,13 @@ void PanelManager::render() {
             BTQuant::g_panel_profiler.end_panel_render(group_panel_id);
           }
         }
-        
+
         // Mark this group as processed to avoid duplicate rendering
         processed_groups.insert(group_id);
       }
     } else if (group_id == 0) {
       // This panel is not part of a group, render it individually
-      
+
       // Start timing the panel render
       BTQuant::g_panel_profiler.start_panel_render(panel_id, panel->get_title());
 
@@ -360,6 +364,9 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
       break;
+    case PanelType::TABBED_GROUP:
+      panel = std::make_unique<TabbedPanel>(config, this);
+      break;
     default:
       return 0;
   }
@@ -520,6 +527,9 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     case PanelType::STRATEGY_BUILDER:
       panel = std::make_unique<BTQuant::RenderEngine::StrategyBuilder>(config);
+      break;
+    case PanelType::TABBED_GROUP:
+      panel = std::make_unique<TabbedPanel>(config, this);
       break;
     default:
       return 0;
@@ -1269,6 +1279,12 @@ std::string PanelManager::serialize_layout() const {
       panel_json["group_id"] = group_it->second;
     }
 
+    // Check if this panel is part of a tabbed group and add tabbed group info
+    uint32_t tabbed_group_id = get_containing_tabbed_group_id(id);
+    if (tabbed_group_id != 0) {
+      panel_json["tabbed_group_id"] = tabbed_group_id;
+    }
+
     // Serialize panel-specific settings
     json settings_json;
 
@@ -1297,6 +1313,18 @@ std::string PanelManager::serialize_layout() const {
     // Option Analytics Panel specific settings
     else if (auto* option_panel = dynamic_cast<BTQuant::RenderEngine::OptionAnalyticsPanel*>(panel.get())) {
         settings_json["active_tab"] = option_panel->get_active_tab();
+    }
+    // Tabbed Panel specific settings
+    else if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel.get())) {
+        if (tabbed_panel->get_tab_count() > 0) {
+            json tabbed_panels_json = json::array();
+            const auto& tabbed_panel_ids = tabbed_panel->get_tabbed_panels();
+            for (uint32_t tabbed_id : tabbed_panel_ids) {
+                tabbed_panels_json.push_back(tabbed_id);
+            }
+            settings_json["tabbed_panels"] = tabbed_panels_json;
+            settings_json["active_tab_id"] = tabbed_panel->get_active_tab();
+        }
     }
 
     // Add settings if any were captured
@@ -1454,11 +1482,75 @@ void PanelManager::deserialize_layout(const std::string& layout_json) {
                         option_panel->set_active_tab(settings["active_tab"].get<int>());
                     }
                 }
+                // Tabbed Panel specific settings
+                else if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel)) {
+                    if (settings.contains("tabbed_panels")) {
+                        auto tabbed_panels_array = settings["tabbed_panels"];
+                        for (const auto& tabbed_id_val : tabbed_panels_array) {
+                            uint32_t original_tabbed_id = tabbed_id_val.get<uint32_t>();
+                            // Map the original ID to the new ID
+                            auto id_it = original_to_new_id_map.find(original_tabbed_id);
+                            if (id_it != original_to_new_id_map.end()) {
+                                uint32_t new_tabbed_id = id_it->second;
+                                // Add the panel to the tabbed panel
+                                tabbed_panel->add_panel_to_tab(new_tabbed_id);
+                                
+                                // Set the panel as invisible since it's now in a tab
+                                if (auto* contained_panel = get_panel_by_id(new_tabbed_id)) {
+                                    contained_panel->set_visible(false);
+                                }
+                            } else {
+                                // If we can't find the mapping, try using the ID directly (for backward compatibility)
+                                tabbed_panel->add_panel_to_tab(original_tabbed_id);
+                            }
+                        }
+                        
+                        // Set the active tab if specified
+                        if (settings.contains("active_tab_id")) {
+                            uint32_t original_active_tab_id = settings["active_tab_id"].get<uint32_t>();
+                            auto id_it = original_to_new_id_map.find(original_active_tab_id);
+                            if (id_it != original_to_new_id_map.end()) {
+                                tabbed_panel->set_active_tab(id_it->second);
+                            } else {
+                                // If we can't find the mapping, try using the ID directly (for backward compatibility)
+                                tabbed_panel->set_active_tab(original_active_tab_id);
+                            }
+                        }
+                    }
+                }
             }
         }
 
         set_panel_visible(id, visible);
       }
+    }
+
+    // Third, restore tabbed groups if they exist in the layout
+    // We need to process tabbed groups after all panels are created
+    if (j.contains("panels")) {
+        for (const auto& p : j["panels"]) {
+            if (p.contains("tabbed_group_id")) {
+                uint32_t original_tabbed_group_id = p["tabbed_group_id"].get<uint32_t>();
+                uint32_t original_panel_id = p["original_id"].get<int>();
+                
+                // Map the original IDs to new IDs
+                auto tabbed_group_it = original_to_new_id_map.find(original_tabbed_group_id);
+                auto panel_it = original_to_new_id_map.find(original_panel_id);
+                
+                if (tabbed_group_it != original_to_new_id_map.end() && panel_it != original_to_new_id_map.end()) {
+                    uint32_t new_tabbed_group_id = tabbed_group_it->second;
+                    uint32_t new_panel_id = panel_it->second;
+                    
+                    // Add the panel to the tabbed group
+                    add_panel_to_tabbed_group(new_tabbed_group_id, new_panel_id);
+                    
+                    // Set the panel as invisible since it's now in a tab
+                    if (auto* contained_panel = get_panel_by_id(new_panel_id)) {
+                        contained_panel->set_visible(false);
+                    }
+                }
+            }
+        }
     }
 
     // Second, restore panel groups if they exist in the layout
@@ -2073,6 +2165,249 @@ void PanelManager::lock_panel_group(uint32_t group_id, bool locked) {
 bool PanelManager::is_panel_group_locked(uint32_t group_id) const {
   const auto* group = get_panel_group(group_id);
   return group ? group->locked : false;
+}
+
+uint32_t PanelManager::create_tabbed_group(uint32_t target_panel_id) {
+  // Check if the target panel exists
+  if (panels_.find(target_panel_id) == panels_.end()) {
+    return 0;
+  }
+
+  // Create a new tabbed panel to contain the target panel
+  PanelConfig config = get_panel_config(target_panel_id);
+  config.type = PanelType::TABBED_GROUP;
+  config.title = "Tabbed Group";
+  
+  uint32_t tabbed_group_id = add_panel(PanelType::TABBED_GROUP, "Tabbed Group", 
+                                       config.grid_x, config.grid_y, 
+                                       config.grid_width, config.grid_height);
+
+  if (tabbed_group_id != 0) {
+    // Move the target panel into the tabbed group
+    if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_group_id))) {
+      // Add the target panel to the tabbed group
+      if (tabbed_panel->add_panel_to_tab(target_panel_id)) {
+        // Update the target panel's position to match the tabbed group
+        auto& target_config = panels_[target_panel_id]->get_config();
+        target_config.position = config.position;
+        target_config.size = ImVec2(config.size.x, config.size.y - 30); // Account for tab bar height
+        
+        return tabbed_group_id;
+      } else {
+        // If adding to tab failed, remove the tabbed panel we just created
+        remove_panel(tabbed_group_id);
+        return 0;
+      }
+    }
+  }
+
+  return 0;
+}
+
+bool PanelManager::add_panel_to_tabbed_group(uint32_t tabbed_group_id, uint32_t panel_to_add_id) {
+  // Check if both panels exist
+  if (panels_.find(tabbed_group_id) == panels_.end() || 
+      panels_.find(panel_to_add_id) == panels_.end()) {
+    return false;
+  }
+
+  // Check if the target panel is actually a tabbed panel
+  auto* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_group_id));
+  if (!tabbed_panel) {
+    return false;
+  }
+
+  // Add the panel to the tabbed group
+  return tabbed_panel->add_panel_to_tab(panel_to_add_id);
+}
+
+bool PanelManager::remove_panel_from_tabbed_group(uint32_t tabbed_group_id, uint32_t panel_to_remove_id) {
+  // Check if both panels exist
+  if (panels_.find(tabbed_group_id) == panels_.end() || 
+      panels_.find(panel_to_remove_id) == panels_.end()) {
+    return false;
+  }
+
+  // Check if the target panel is actually a tabbed panel
+  auto* tabbed_panel = dynamic_cast<TabbedPanel*>(get_panel_by_id(tabbed_group_id));
+  if (!tabbed_panel) {
+    return false;
+  }
+
+  // Remove the panel from the tabbed group
+  return tabbed_panel->remove_panel_from_tab(panel_to_remove_id);
+}
+
+bool PanelManager::is_panel_in_tabbed_group(uint32_t panel_id) const {
+  // Check if the panel exists
+  if (panels_.find(panel_id) == panels_.end()) {
+    return false;
+  }
+
+  // Check if the panel is contained within a tabbed panel
+  for (const auto& [id, panel] : panels_) {
+    if (panel->get_config().type == PanelType::TABBED_GROUP) {
+      if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel.get())) {
+        const auto& tabbed_panels = tabbed_panel->get_tabbed_panels();
+        if (std::find(tabbed_panels.begin(), tabbed_panels.end(), panel_id) != tabbed_panels.end()) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+uint32_t PanelManager::get_containing_tabbed_group_id(uint32_t panel_id) const {
+  // Check if the panel exists
+  if (panels_.find(panel_id) == panels_.end()) {
+    return 0;
+  }
+
+  // Find which tabbed panel contains this panel
+  for (const auto& [id, panel] : panels_) {
+    if (panel->get_config().type == PanelType::TABBED_GROUP) {
+      if (auto* tabbed_panel = dynamic_cast<TabbedPanel*>(panel.get())) {
+        const auto& tabbed_panels = tabbed_panel->get_tabbed_panels();
+        if (std::find(tabbed_panels.begin(), tabbed_panels.end(), panel_id) != tabbed_panels.end()) {
+          return id;
+        }
+      }
+    }
+  }
+
+  return 0;
+}
+
+bool PanelManager::can_drag_panel_to_target(uint32_t source_panel_id, uint32_t target_panel_id) const {
+  // Check if both panels exist
+  if (panels_.find(source_panel_id) == panels_.end() || 
+      panels_.find(target_panel_id) == panels_.end()) {
+    return false;
+  }
+
+  // Prevent dragging a panel onto itself
+  if (source_panel_id == target_panel_id) {
+    return false;
+  }
+
+  // Prevent dragging a panel that's already in a tabbed group
+  if (is_panel_in_tabbed_group(source_panel_id)) {
+    return false;
+  }
+
+  // Check if target is already a tabbed group (we can add to existing tabbed groups)
+  if (panels_.at(target_panel_id)->get_config().type == PanelType::TABBED_GROUP) {
+    return true;
+  }
+
+  // Otherwise, we can create a new tabbed group with these two panels
+  return true;
+}
+
+void PanelManager::handle_panel_drag_drop() {
+  // Check if we're currently dragging a panel
+  if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+    // Check if any panel window is being dragged
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
+      // Find which panel is being dragged by checking if the mouse is over any panel window
+      for (auto& [panel_id, panel] : panels_) {
+        // Skip if panel is not visible or is in a tabbed group already
+        if (!panel->is_visible() || is_panel_in_tabbed_group(panel_id)) {
+          continue;
+        }
+
+        // Get the panel's window rectangle
+        ImVec2 panel_pos = panel->get_config().position;
+        ImVec2 panel_size = panel->get_config().size;
+        
+        // Check if mouse is over this panel
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
+            mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
+            
+            // Check if this is the title bar area (top portion of the window)
+            // Usually the title bar height is around 20-30 pixels
+            if (mouse_pos.y <= panel_pos.y + 30) {  // Approximate title bar height
+                if (!is_dragging_) {
+                    dragged_panel_id_ = panel_id;
+                    is_dragging_ = true;
+                    
+                    // Print debug info
+                    printf("Started dragging panel ID: %u\n", panel_id);
+                }
+                break;
+            }
+        }
+      }
+    }
+  } else {
+    // Mouse button is released - end drag operation
+    if (is_dragging_ && dragged_panel_id_ != 0) {
+      // Check if we're dropping onto another panel
+      if (drag_target_panel_id_ != 0) {
+        // Attempt to create a tabbed group or add to existing tabbed group
+        if (panels_.at(drag_target_panel_id_)->get_config().type == PanelType::TABBED_GROUP) {
+          // Add the dragged panel to the existing tabbed group
+          add_panel_to_tabbed_group(drag_target_panel_id_, dragged_panel_id_);
+        } else {
+          // Create a new tabbed group with both panels
+          uint32_t tabbed_group_id = create_tabbed_group(drag_target_panel_id_);
+          if (tabbed_group_id != 0) {
+            // Add the originally dragged panel to the new tabbed group
+            add_panel_to_tabbed_group(tabbed_group_id, dragged_panel_id_);
+          }
+        }
+      }
+      
+      // Reset drag state
+      is_dragging_ = false;
+      dragged_panel_id_ = 0;
+      drag_target_panel_id_ = 0;
+    } else {
+      // Reset drag state even if no drop occurred
+      is_dragging_ = false;
+      dragged_panel_id_ = 0;
+      drag_target_panel_id_ = 0;
+    }
+  }
+
+  // During drag, check for potential drop targets
+  if (is_dragging_ && dragged_panel_id_ != 0) {
+    ImVec2 mouse_pos = ImGui::GetMousePos();
+    drag_target_panel_id_ = 0;  // Reset target
+    
+    // Find which panel we might be dropping onto
+    for (auto& [panel_id, panel] : panels_) {
+      // Skip if panel is not visible, is the dragged panel, or is in a tabbed group
+      if (!panel->is_visible() || panel_id == dragged_panel_id_ || is_panel_in_tabbed_group(panel_id)) {
+        continue;
+      }
+
+      // Get the panel's window rectangle
+      ImVec2 panel_pos = panel->get_config().position;
+      ImVec2 panel_size = panel->get_config().size;
+      
+      // Check if mouse is over this panel
+      if (mouse_pos.x >= panel_pos.x && mouse_pos.x <= panel_pos.x + panel_size.x &&
+          mouse_pos.y >= panel_pos.y && mouse_pos.y <= panel_pos.y + panel_size.y) {
+          
+          // Check if this panel supports being a drop target
+          if (can_drag_panel_to_target(dragged_panel_id_, panel_id)) {
+              drag_target_panel_id_ = panel_id;
+              
+              // Highlight the target panel (visual feedback)
+              ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+              ImVec2 p_min = panel_pos;
+              ImVec2 p_max = ImVec2(panel_pos.x + panel_size.x, panel_pos.y + panel_size.y);
+              draw_list->AddRect(p_min, p_max, IM_COL32(255, 255, 0, 200), 0.0f, 0, 3.0f);
+              
+              break;
+          }
+      }
+    }
+  }
 }
 
 }  // namespace BTQuant

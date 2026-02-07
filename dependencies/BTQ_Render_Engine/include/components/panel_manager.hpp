@@ -16,6 +16,7 @@
 #include "chart_manager.hpp"
 #include "panel_base.hpp"
 #include "strategy_builder.hpp"
+#include "tabbed_panel.hpp"
 #include "../ui/context_menus.hpp"
 
 // Forward declarations
@@ -146,6 +147,17 @@ class PanelManager {
   void lock_panel_group(uint32_t group_id, bool locked = true);
   bool is_panel_group_locked(uint32_t group_id) const;
 
+  // Tabbed group functionality - allowing panels to be combined into tabs
+  uint32_t create_tabbed_group(uint32_t target_panel_id);
+  bool add_panel_to_tabbed_group(uint32_t tabbed_group_id, uint32_t panel_to_add_id);
+  bool remove_panel_from_tabbed_group(uint32_t tabbed_group_id, uint32_t panel_to_remove_id);
+  bool is_panel_in_tabbed_group(uint32_t panel_id) const;
+  uint32_t get_containing_tabbed_group_id(uint32_t panel_id) const;
+  bool can_drag_panel_to_target(uint32_t source_panel_id, uint32_t target_panel_id) const;
+
+  // Drag and drop for tabbed groups
+  void handle_panel_drag_drop();
+
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
@@ -177,6 +189,11 @@ class PanelManager {
   std::unordered_map<uint32_t, std::unique_ptr<PanelGroup>> panel_groups_;
   std::unordered_map<uint32_t, uint32_t> panel_to_group_map_;  // Maps panel ID to group ID
   uint32_t next_group_id_ = 1;
+
+  // Drag and drop state for tabbed groups
+  uint32_t dragged_panel_id_ = 0;
+  uint32_t drag_target_panel_id_ = 0;
+  bool is_dragging_ = false;
 
   // Callbacks
   std::vector<PanelAddedCallback> panel_added_callbacks_;

@@ -617,7 +617,28 @@ void DomSurfacePanel::render() {
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
     if (cols > 0 && rows > 0) {
-      ImPlot::PushColormap(ImPlotColormap_Viridis);
+      // Create a custom colormap for Dark Blue to Bright Yellow gradient
+      static const ImVec4 blue_yellow_colormap[] = {
+        // Dark Blue (0, 0, 139) to Bright Yellow (255, 255, 0)
+        ImVec4(0.0f, 0.0f, 0.545f, 1.0f),    // Dark Blue (approx)
+        ImVec4(0.0f, 0.2f, 0.6f, 1.0f),      // Blue to Cyan transition
+        ImVec4(0.0f, 0.5f, 0.8f, 1.0f),      // More Cyan
+        ImVec4(0.0f, 0.8f, 1.0f, 1.0f),      // Cyan
+        ImVec4(0.2f, 1.0f, 0.8f, 1.0f),      // Cyan to Greenish
+        ImVec4(0.5f, 1.0f, 0.5f, 1.0f),      // Greenish
+        ImVec4(0.8f, 1.0f, 0.2f, 1.0f),      // Yellowish
+        ImVec4(1.0f, 1.0f, 0.0f, 1.0f)       // Bright Yellow
+      };
+      
+      // Register the custom colormap with ImPlot if not already registered
+      static ImPlotColormap registered_colormap = -1;
+      if (registered_colormap == -1) {
+        registered_colormap = ImPlot::AddColormap("BlueYellow", blue_yellow_colormap, 8);
+      }
+      
+      // Apply the custom colormap
+      ImPlot::PushColormap(registered_colormap);
+      
       // Apply heatmap intensity to adjust color mapping sensitivity
       double adjusted_scale_max = scale_max_ / heatmap_intensity_;
       ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
@@ -640,16 +661,31 @@ void DomSurfacePanel::render() {
     ImPlot::EndPlot();
   }
 
-  // Debug Overlay for DOM troubleshooting
+  // Information Overlay for DOM Surface
   if (heatmap_data_.size() > 0) {
+    // Position information overlay in the top-left corner
     ImGui::SetCursorPos(ImVec2(10, 30));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
-                       heatmap_data_.size() / price_bins_, price_bins_);
-    ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Large Orders: %zu (Median: %.2f)", large_order_markers_.size(),
-                median_order_size_);
-    ImGui::Text("Trade Bubbles: %zu (MaxVol: %.2f)", trade_bubbles_.size(), max_trade_volume_);
+    
+    // Create a visually appealing info box with liquidity statistics
+    ImGui::BeginGroup();
+    ImGui::TextColored(ImVec4(0.2f, 0.7f, 1.0f, 1.0f), "Liquidity Stats:");
+    ImGui::Indent(10.0f);
+    ImGui::Text("Max Volume: %.2f", scale_max_);
+    ImGui::Text("History Depth: %zu", heatmap_data_.size() / price_bins_);
+    ImGui::Text("Price Bins: %d", price_bins_);
+    ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
+    ImGui::Unindent(10.0f);
+    
+    ImGui::Spacing();
+    
+    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Active Elements:");
+    ImGui::Indent(10.0f);
+    ImGui::Text("Large Orders: %zu", large_order_markers_.size());
+    ImGui::Text("Median Size: %.2f", median_order_size_);
+    ImGui::Text("Trade Bubbles: %zu", trade_bubbles_.size());
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
+    ImGui::Unindent(10.0f);
+    ImGui::EndGroup();
   }
 
   end_panel_window();

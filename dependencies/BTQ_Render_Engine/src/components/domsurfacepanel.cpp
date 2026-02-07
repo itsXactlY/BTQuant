@@ -608,14 +608,30 @@ void DomSurfacePanel::render() {
     ImPlot::EndPlot();
   }
 
-  // Debug Overlay for DOM troubleshooting
+  // Information Overlay for DOM Surface
   if (heatmap_data_.size() > 0) {
+    // Position information overlay in the top-left corner
     ImGui::SetCursorPos(ImVec2(10, 30));
-    ImGui::TextColored(ImVec4(1, 1, 0, 1), "Debug: MaxVol=%.2f, Hist=%zu, Bins=%d", scale_max_,
-                       heatmap_data_.size() / price_bins_, price_bins_);
-    ImGui::Text("Bounds: Y=%.4f - %.4f", bounds_min_[1], bounds_max_[1]);
-    ImGui::Text("Large Orders: %zu (Median: %.2f), Trades: %zu", large_order_markers_.size(),
-                median_order_size_, trade_bubbles_.size());
+    
+    // Create a visually appealing info box with liquidity statistics
+    ImGui::BeginGroup();
+    ImGui::TextColored(ImVec4(0.2f, 0.7f, 1.0f, 1.0f), "Liquidity Stats:");
+    ImGui::Indent(10.0f);
+    ImGui::Text("Max Volume: %.2f", scale_max_);
+    ImGui::Text("History Depth: %zu", heatmap_data_.size() / price_bins_);
+    ImGui::Text("Price Bins: %d", price_bins_);
+    ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
+    ImGui::Unindent(10.0f);
+    
+    ImGui::Spacing();
+    
+    ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Active Elements:");
+    ImGui::Indent(10.0f);
+    ImGui::Text("Large Orders: %zu", large_order_markers_.size());
+    ImGui::Text("Median Size: %.2f", median_order_size_);
+    ImGui::Text("Trade Bubbles: %zu", trade_bubbles_.size());
+    ImGui::Unindent(10.0f);
+    ImGui::EndGroup();
   }
 
   end_panel_window();
@@ -868,37 +884,27 @@ void DomSurfacePanel::updateVulkanTexture() {
       // Clamp normalized value to [0, 1] range
       normalized = std::clamp(normalized, 0.0f, 1.0f);
 
-      // Apply colormap (Viridis-like gradient)
+      // Apply colormap (Dark Blue to Bright Yellow gradient)
       uint8_t r, g, b, a = 255;
 
-      // Improved Viridis-like mapping for better visualization
+      // Dark Blue (0, 0, 139) to Bright Yellow (255, 255, 0) gradient
       if (normalized <= 0.0f) {
-        r = 68; g = 1; b = 84; // Dark purple
-      } else if (normalized <= 0.125f) {
-        float t = normalized / 0.125f;
-        r = static_cast<uint8_t>(68 + (t * (253 - 68))); // Purple to blue transition
-        g = static_cast<uint8_t>(1 + (t * (71 - 1)));
-        b = static_cast<uint8_t>(84 + (t * (194 - 84)));
-      } else if (normalized <= 0.25f) {
-        float t = (normalized - 0.125f) / 0.25f;
-        r = static_cast<uint8_t>(253 + (t * (244 - 253))); // Blue to light blue
-        g = static_cast<uint8_t>(71 + (t * (172 - 71)));
-        b = static_cast<uint8_t>(194 + (t * (248 - 194)));
-      } else if (normalized <= 0.5f) {
-        float t = (normalized - 0.25f) / 0.25f;
-        r = static_cast<uint8_t>(244 + (t * (58 - 244))); // Light blue to green
-        g = static_cast<uint8_t>(172 + (t * (204 - 172)));
-        b = static_cast<uint8_t>(248 + (t * (22 - 248)));
-      } else if (normalized <= 0.75f) {
-        float t = (normalized - 0.5f) / 0.25f;
-        r = static_cast<uint8_t>(58 + (t * (128 - 58))); // Green to yellow
-        g = static_cast<uint8_t>(204 + (t * (253 - 204)));
-        b = static_cast<uint8_t>(22 + (t * (220 - 22)));
+        r = 0; g = 0; b = 139; // Dark Blue
+      } else if (normalized < 0.5f) {
+        // Transition from Dark Blue to Cyan
+        float t = normalized * 2.0f; // Scale to 0-1 range for this segment
+        r = static_cast<uint8_t>(0 + (t * (0 - 0)));   // Stay at 0
+        g = static_cast<uint8_t>(0 + (t * (255 - 0))); // Go from 0 to 255
+        b = static_cast<uint8_t>(139 + (t * (255 - 139))); // Go from 139 to 255
+      } else if (normalized < 1.0f) {
+        // Transition from Cyan to Bright Yellow
+        float t = (normalized - 0.5f) * 2.0f; // Scale to 0-1 range for this segment
+        r = static_cast<uint8_t>(0 + (t * (255 - 0))); // Go from 0 to 255
+        g = static_cast<uint8_t>(255 + (t * (255 - 255))); // Stay at 255
+        b = static_cast<uint8_t>(255 + (t * (0 - 255))); // Go from 255 to 0
       } else {
-        float t = (normalized - 0.75f) / 0.25f;
-        r = static_cast<uint8_t>(128 + (t * (244 - 128))); // Yellow to red
-        g = static_cast<uint8_t>(253 + (t * (255 - 253)));
-        b = static_cast<uint8_t>(220 + (t * (29 - 220)));
+        // At maximum intensity - Bright Yellow
+        r = 255; g = 255; b = 0; // Bright Yellow
       }
 
       // Store in row-major order for texture (x = column, y = row)

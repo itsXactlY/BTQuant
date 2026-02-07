@@ -63,6 +63,12 @@ class ContextMenuManager {
    */
   void show_context_menu(PanelBase* panel);
 
+  /**
+   * @brief Get the panel manager associated with this context menu manager
+   * @return Pointer to the panel manager
+   */
+  PanelManager* get_panel_manager() const { return panel_manager_; }
+
  private:
   void initialize_context_menus();
 

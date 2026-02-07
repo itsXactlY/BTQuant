@@ -95,6 +95,11 @@ class PanelManager {
   // Get panel by ID
   PanelBase* get_panel_by_id(uint32_t panel_id) const;
 
+  // Active panel management
+  uint32_t get_active_panel_id() const { return active_panel_id_; }
+  void set_active_panel_id(uint32_t panel_id) { active_panel_id_ = panel_id; }
+  PanelBase* get_active_panel() const { return active_panel_id_ != 0 ? get_panel_by_id(active_panel_id_) : nullptr; }
+
 
   // Serialization
   std::string serialize_layout() const;
@@ -131,6 +136,9 @@ class PanelManager {
   // Active symbol tracking for cross-panel propagation
   uint32_t active_symbol_id_ = 0;
   std::string active_symbol_name_;
+
+  // Active panel tracking for context menu and focus
+  uint32_t active_panel_id_ = 0;
 
   // Current layout tracking
   std::string current_layout_name_ = "default";

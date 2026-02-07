@@ -36,6 +36,14 @@ class QuantWorkspaceComponent : public UIComponent {
   HotSpineDataBridge* getDataBridge() const { return bridge_.get(); }
   RenderEngine::MarketDataProcessor* getMarketDataProcessor() const { return processor_.get(); }
   
+  // Pass-through methods for panel management
+  uint32_t get_active_panel_id() const { 
+    return panel_manager_ ? panel_manager_->get_active_panel_id() : 0; 
+  }
+  PanelBase* get_active_panel() const { 
+    return panel_manager_ ? panel_manager_->get_active_panel() : nullptr; 
+  }
+  
   // UI state getters
   const std::string& getSelectedSymbol() const { return selected_symbol_; }
   double getOrderQuantity() const { return order_quantity_; }

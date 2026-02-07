@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "ui/context_menus.hpp"
+#include "components/panel_manager.hpp"
 
 namespace BTQuant {
 
@@ -98,6 +99,19 @@ void PanelBase::handle_context_menu(ContextMenuManager& manager) {
   if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     // Set focus to this panel so that hotkeys (e.g., Delete) apply to the correct panel
     ImGui::SetWindowFocus();
+    
+    // If the manager has access to the panel manager, set this panel as the active panel
+    if (auto* panel_manager = manager.get_panel_manager()) {
+      // Find the panel ID by comparing with all panels in the manager
+      auto all_panel_ids = panel_manager->get_all_panel_ids();
+      for (uint32_t id : all_panel_ids) {
+        PanelBase* manager_panel = panel_manager->get_panel_by_id(id);
+        if (manager_panel == this) {
+          panel_manager->set_active_panel_id(id);
+          break;
+        }
+      }
+    }
   }
 
   // Show the context menu for this panel

@@ -51,14 +51,14 @@ cd "$BUILD_DIR"
 # Configure
 echo -e "${GREEN}⚙️  Configuring CMake...${NC}"
 if [ "$BUILD_TYPE" = "debug" ]; then
-    cmake -DCMAKE_BUILD_TYPE=Debug ..
+    cmake -B . -G Ninja -DCMAKE_BUILD_TYPE=Debug ..
 else
-    cmake -DCMAKE_BUILD_TYPE=Release ..
+    cmake -B . -G Ninja -DCMAKE_BUILD_TYPE=Release ..
 fi
 
 # Build
 echo -e "${GREEN}🔨 Building...${NC}"
-make -j$(nproc)
+ninja
 
 echo ""
 echo -e "${GREEN}✅ Build completed successfully!${NC}"

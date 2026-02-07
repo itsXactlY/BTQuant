@@ -124,7 +124,7 @@ if [ ! -f "CMakeCache.txt" ] || [ "$CLEAN_BUILD" = true ]; then
     echo -e "${GREEN}Configuring CMake with release settings...${NC}"
 
     # Configure with release flags for optimization and size reduction
-    cmake "$SOURCE_DIR" \
+    cmake -B . -G Ninja "$SOURCE_DIR" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_COMPILER=g++ \
         -DCMAKE_CXX_STANDARD=26 \
@@ -143,7 +143,7 @@ else
 fi
 
 echo -e "${GREEN}Compiling with optimizations...${NC}"
-make $MAKE_VERBOSE_FLAG -j"$NUM_CORES"
+ninja $MAKE_VERBOSE_FLAG
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed${NC}"

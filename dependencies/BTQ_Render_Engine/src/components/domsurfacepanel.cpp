@@ -1330,8 +1330,9 @@ float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
   // Apply additional curve to make the scaling more gradual at low volumes
   // and steeper at high volumes for better visual distinction
   // Using a power function to adjust the distribution of bubble sizes
-  // Reduced the exponent to make the scaling even more conservative for large trades
-  normalized_log_volume = std::pow(normalized_log_volume, 0.5f);
+  // Made the exponent more conservative (0.3f instead of 0.5f) to prevent large trades
+  // from dominating the visualization even with log scaling
+  normalized_log_volume = std::pow(normalized_log_volume, 0.3f);
 
   // Scale radius from base to max based on normalized log volume
   // Use calibrated scaling for better visual representation of trade volumes
@@ -1351,17 +1352,16 @@ ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade
   float fade_ratio = 1.0f - static_cast<float>(age_us) / static_cast<float>(TRADE_BUBBLE_FADE_DURATION_US);
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
 
-  // Apply smooth easing function for more natural fade-out
-  // Using exponential decay for smoother initial fade with more gradual tail-off
-  // This creates a more natural fade that starts slowly and accelerates toward the end
-  float eased_fade_ratio = std::exp(-2.0f * (1.0f - fade_ratio)) * fade_ratio;
-
-  // Alternative: Enhanced quintic easing for even smoother transitions
-  // Using smoother quintic easing function: 6t⁵ - 15t⁴ + 10t³ for even smoother transitions
-  float quintic_ease = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
+  // Apply enhanced smooth easing function for more natural fade-out
+  // Using a combination of cubic and sinusoidal easing for ultra-smooth transitions
+  // This creates a more natural fade that starts gradually and accelerates toward the end
+  float cubic_ease = fade_ratio * fade_ratio * fade_ratio;
+  float sine_ease = 0.5f * (1.0f - std::cos(fade_ratio * 3.14159265358979323846f)); // Smooth sine-based easing
   
-  // Blend both easing functions for optimal smoothness
-  float final_fade_ratio = 0.7f * eased_fade_ratio + 0.3f * quintic_ease;
+  // Blend multiple easing functions for optimal smoothness
+  // Weighted blend: 40% cubic, 40% sinusoidal, 20% original exponential
+  float exp_ease = std::exp(-2.0f * (1.0f - fade_ratio)) * fade_ratio;
+  float final_fade_ratio = 0.4f * cubic_ease + 0.4f * sine_ease + 0.2f * exp_ease;
 
   // Calculate alpha based on fade ratio
   uint8_t base_alpha = 200;  // Increased base alpha value for better visibility

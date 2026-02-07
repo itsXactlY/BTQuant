@@ -883,75 +883,8 @@ void DomSurfacePanel::renderPersistentLevels() {
     // Check if the level has remained static for more than 30 seconds
     // This means the size hasn't changed significantly since last_changed_time
     if ((current_time - level.last_changed_time) >= persistence_threshold_ms_) {
-      // Use a distinct color for static liquidity levels with glow effect
-      ImU32 color = getStaticLiquidityLevelColor(level);
-
-      // Draw a glowing border around the level
-      // First, draw a wider, more transparent line to create the "glow" effect
-      ImVec4 glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      glow_color_vec.w = 0.2f; // Lower transparency for stronger glow
-      ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(glow_color_vec);
-
-      ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 12.0f); // Even thicker for stronger glow effect
-
-      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double ys[2] = {level.price, level.price};
-      ImPlot::PlotLine("##StaticLiquidityGlow", xs, ys, 2);
-
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
-
-      // Then draw the main line
-      ImPlot::PushStyleColor(ImPlotCol_Line, color);
-      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 6.0f); // Thicker line for better visibility
-
-      ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
-
-      ImPlot::PopStyleVar();
-      ImPlot::PopStyleColor();
-
-      // Draw a highlighted rectangle around the level to make it stand out
-      ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      rect_color_vec.w = 0.15f; // 15% transparency for the rectangle
-      ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
-
-      // Calculate a vertical range around the price level for the rectangle
-      // Make it proportional to the zoom level for better visibility
-      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
-      double price_range = visible_price_range * 0.02; // 2% of the visible price range for rectangle height (increased for better visibility)
-      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
-
-      double y_min = level.price - price_range/2.0;
-      double y_max = level.price + price_range/2.0;
-
-      // Draw a horizontal shaded area spanning the full time axis
-      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double shade_y1[2] = {y_min, y_min};
-      double shade_y2[2] = {y_max, y_max};
-      ImPlot::PlotShaded("##StaticLiquidityRect", shade_x, shade_y1, shade_y2, 2);
-
-      ImPlot::PopStyleColor();
-      
-      // Add a pulsing animation effect for extra visibility
-      float pulse_factor = 0.5f + 0.5f * std::sin(current_time / 500.0f); // Pulsing every 1 second
-      ImVec4 pulse_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-      pulse_color_vec.w = 0.1f * pulse_factor; // Pulsing transparency
-      ImU32 pulse_color = ImGui::ColorConvertFloat4ToU32(pulse_color_vec);
-      ImPlot::PushStyleColor(ImPlotCol_Fill, pulse_color);
-
-      // Draw a pulsing outer rectangle
-      double outer_price_range = price_range * 1.8f; // 1.8x the inner rectangle
-      double y_outer_min = level.price - outer_price_range/2.0;
-      double y_outer_max = level.price + outer_price_range/2.0;
-
-      double outer_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
-      double outer_shade_y1[2] = {y_outer_min, y_outer_min};
-      double outer_shade_y2[2] = {y_outer_max, y_outer_max};
-      ImPlot::PlotShaded("##StaticLiquidityPulse", outer_shade_x, outer_shade_y1, outer_shade_y2, 2);
-
-      ImPlot::PopStyleColor();
+      // Use the enhanced glow effect for static liquidity levels
+      renderStaticLiquidityGlowEffect(level, plot_rect);
     }
   }
 
@@ -1024,12 +957,12 @@ void DomSurfacePanel::renderPersistentLevels() {
 
 ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
   // Use a distinct color scheme for static liquidity levels to differentiate from large orders
-  // Bright cyan for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
+  // Electric blue for bids (buy-side liquidity), electric yellow for asks (sell-side liquidity)
   // These colors provide better contrast against the heatmap and stand out more distinctly
   if (level.is_bid) {
-    return IM_COL32(0, 255, 255, 240);  // Bright cyan with high visibility
+    return IM_COL32(0, 255, 255, 255);  // Electric cyan with full visibility for bid levels
   } else {
-    return IM_COL32(255, 165, 0, 240);   // Bright orange with high visibility
+    return IM_COL32(255, 255, 0, 255);   // Electric yellow with full visibility for ask levels
   }
 }
 
@@ -1037,10 +970,113 @@ ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) con
   // Color: Bright Green for Bids, Bright Red for Asks
   // Use brighter colors than the markers to distinguish persistent levels
   if (level.is_bid) {
-    return IM_COL32(0, 255, 150, 220);  // Brighter green with higher transparency
+    return IM_COL32(0, 255, 150, 180);  // Brighter green with moderate transparency
   } else {
-    return IM_COL32(255, 100, 150, 220);  // Brighter red with higher transparency
+    return IM_COL32(255, 100, 150, 180);  // Brighter red with moderate transparency
   }
+}
+
+void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel& level, const ImPlotRect& plot_rect) const {
+  // Get current time for pulsing animation
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+  
+  // Use the static liquidity level color
+  ImU32 color = getStaticLiquidityLevelColor(level);
+
+  // Draw multiple layers for enhanced glow effect
+  // Layer 1: Outer glow (largest and most transparent)
+  ImVec4 outer_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+  outer_glow_color_vec.w = 0.1f; // Very low transparency for wide glow
+  ImU32 outer_glow_color = ImGui::ColorConvertFloat4ToU32(outer_glow_color_vec);
+
+  ImPlot::PushStyleColor(ImPlotCol_Line, outer_glow_color);
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 16.0f); // Extra thick for outer glow
+
+  double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+  double ys[2] = {level.price, level.price};
+  ImPlot::PlotLine("##StaticLiquidityOuterGlow", xs, ys, 2);
+
+  ImPlot::PopStyleVar();
+  ImPlot::PopStyleColor();
+
+  // Layer 2: Middle glow
+  ImVec4 middle_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+  middle_glow_color_vec.w = 0.2f; // Lower transparency for stronger glow
+  ImU32 middle_glow_color = ImGui::ColorConvertFloat4ToU32(middle_glow_color_vec);
+
+  ImPlot::PushStyleColor(ImPlotCol_Line, middle_glow_color);
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 12.0f); // Thick for middle glow
+
+  ImPlot::PlotLine("##StaticLiquidityMiddleGlow", xs, ys, 2);
+
+  ImPlot::PopStyleVar();
+  ImPlot::PopStyleColor();
+
+  // Layer 3: Inner glow
+  ImVec4 inner_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+  inner_glow_color_vec.w = 0.4f; // Moderate transparency for inner glow
+  ImU32 inner_glow_color = ImGui::ColorConvertFloat4ToU32(inner_glow_color_vec);
+
+  ImPlot::PushStyleColor(ImPlotCol_Line, inner_glow_color);
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Medium thickness for inner glow
+
+  ImPlot::PlotLine("##StaticLiquidityInnerGlow", xs, ys, 2);
+
+  ImPlot::PopStyleVar();
+  ImPlot::PopStyleColor();
+
+  // Layer 4: Main line (bright and solid)
+  ImPlot::PushStyleColor(ImPlotCol_Line, color);
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 4.0f); // Standard thickness for main line
+
+  ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
+
+  ImPlot::PopStyleVar();
+  ImPlot::PopStyleColor();
+
+  // Draw a highlighted rectangle around the level to make it stand out
+  ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+  rect_color_vec.w = 0.1f; // 10% transparency for the rectangle
+  ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
+  ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
+
+  // Calculate a vertical range around the price level for the rectangle
+  // Make it proportional to the zoom level for better visibility
+  double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+  double price_range = visible_price_range * 0.015; // 1.5% of the visible price range for rectangle height
+  if (price_range < 0.001) price_range = 0.001; // Minimum thickness
+
+  double y_min = level.price - price_range/2.0;
+  double y_max = level.price + price_range/2.0;
+
+  // Draw a horizontal shaded area spanning the full time axis
+  double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+  double shade_y1[2] = {y_min, y_min};
+  double shade_y2[2] = {y_max, y_max};
+  ImPlot::PlotShaded("##StaticLiquidityRect", shade_x, shade_y1, shade_y2, 2);
+
+  ImPlot::PopStyleColor();
+
+  // Add a pulsing animation effect for extra visibility
+  float pulse_factor = 0.5f + 0.3f * std::sin((current_time % 2000) * 0.001f * 3.14159f * 2.0f); // Pulsing every 2 seconds
+  ImVec4 pulse_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+  pulse_color_vec.w = 0.08f * pulse_factor; // Pulsing transparency
+  ImU32 pulse_color = ImGui::ColorConvertFloat4ToU32(pulse_color_vec);
+  ImPlot::PushStyleColor(ImPlotCol_Fill, pulse_color);
+
+  // Draw a pulsing outer rectangle
+  double outer_price_range = price_range * 2.0f; // 2x the inner rectangle
+  double y_outer_min = level.price - outer_price_range/2.0;
+  double y_outer_max = level.price + outer_price_range/2.0;
+
+  double outer_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+  double outer_shade_y1[2] = {y_outer_min, y_outer_min};
+  double outer_shade_y2[2] = {y_outer_max, y_outer_max};
+  ImPlot::PlotShaded("##StaticLiquidityPulse", outer_shade_x, outer_shade_y1, outer_shade_y2, 2);
+
+  ImPlot::PopStyleColor();
 }
 
 void DomSurfacePanel::render_panel_header() {

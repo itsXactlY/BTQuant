@@ -196,6 +196,9 @@ class DomSurfacePanel : public PanelBase {
   void addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size);
   void cleanupInactiveStaticLiquidityLevels();
   ImU32 getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const;
+  
+  // Enhanced Visual Effects for Persistent Levels
+  void renderStaticLiquidityGlowEffect(const StaticLiquidityLevel& level, const ImPlotRect& plot_rect) const;
 
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, NotificationType type);

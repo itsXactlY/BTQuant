@@ -15,7 +15,10 @@ namespace RenderEngine {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
-      processor_(processor) {}
+      processor_(processor),
+      persistence_threshold_ms_(30000),  // 30 seconds for static liquidity detection
+      persistence_timeout_ms_(60000),    // 60 seconds timeout for inactive levels
+      show_persistent_lines_(true) {}    // Show persistent lines by default
 
 DomSurfacePanel::~DomSurfacePanel() {
   cleanupVulkanResources();
@@ -23,7 +26,7 @@ DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
     processor_->unsubscribe(subscription_id_);
   }
-  
+
   // Clear trade bubbles to ensure proper cleanup
   trade_bubbles_.clear();
 }
@@ -84,6 +87,105 @@ void DomSurfacePanel::onDataUpdate(uint32_t symbol_id, NotificationType type) {
     }
     markDirty();
   }
+}
+
+void DomSurfacePanel::updatePersistentLevels(const OrderbookData& orderbook) {
+  // Get current time
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Process all bid levels (not just large orders) to track static liquidity
+  for (const auto& level : orderbook.bids) {
+    addOrUpdateStaticLiquidityLevel(level.price, true, level.size);
+  }
+
+  // Process all ask levels (not just large orders) to track static liquidity
+  for (const auto& level : orderbook.asks) {
+    addOrUpdateStaticLiquidityLevel(level.price, false, level.size);
+  }
+
+  // Clean up inactive levels
+  cleanupInactiveStaticLiquidityLevels();
+
+  // Also clean up inactive persistent levels (legacy)
+  cleanupInactivePersistentLevels();
+}
+
+void DomSurfacePanel::addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size) {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Check if this price level already exists
+  for (auto& level : static_liquidity_levels_) {
+    // Use a small epsilon for price comparison
+    if (std::abs(level.price - price) < 0.0001) {
+      // Check if the size has changed significantly (more than 1% difference or absolute threshold)
+      double size_change_threshold = std::max(level.size * 0.01, 0.01); // 1% threshold or 0.01 minimum
+      if (std::abs(level.size - size) > size_change_threshold) {
+        // Size has changed significantly, update the change time
+        level.last_changed_time = current_time;
+        level.size = size; // Update to the new size
+      }
+      // Update the last seen time regardless of size change
+      level.last_updated_time = current_time;
+      level.is_active = true;
+      return;
+    }
+  }
+
+  // Add new static liquidity level
+  static_liquidity_levels_.emplace_back(price, size, is_bid, current_time);
+}
+
+void DomSurfacePanel::cleanupInactiveStaticLiquidityLevels() {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Remove levels that haven't been updated within the timeout period
+  static_liquidity_levels_.erase(
+      std::remove_if(static_liquidity_levels_.begin(), static_liquidity_levels_.end(),
+                     [current_time, this](const StaticLiquidityLevel& level) {
+                       return (current_time - level.last_updated_time) > persistence_timeout_ms_;
+                     }),
+      static_liquidity_levels_.end());
+}
+
+void DomSurfacePanel::addOrUpdatePersistentLevel(double price, bool is_bid, double size) {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Check if this price level already exists
+  for (auto& level : persistent_levels_) {
+    // Use a small epsilon for price comparison
+    if (std::abs(level.price - price) < 0.0001) {
+      // Update existing level
+      level.last_updated_time = current_time;
+      level.size = std::max(level.size, size); // Keep the largest size seen
+      level.is_active = true;
+      return;
+    }
+  }
+
+  // Add new persistent level
+  persistent_levels_.emplace_back(price, is_bid, size, current_time);
+}
+
+void DomSurfacePanel::cleanupInactivePersistentLevels() {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Remove levels that haven't been updated within the timeout period
+  persistent_levels_.erase(
+      std::remove_if(persistent_levels_.begin(), persistent_levels_.end(),
+                     [current_time, this](const PersistentLevel& level) {
+                       return (current_time - level.last_updated_time) > persistence_timeout_ms_;
+                     }),
+      persistent_levels_.end());
 }
 
 void DomSurfacePanel::updateHeatmapData() {
@@ -529,6 +631,12 @@ void DomSurfacePanel::render() {
     updateHeatmapData();
     updateLargeOrderMarkers();
     updateTradeBubbles();
+
+    // Update persistent levels if we have current orderbook data
+    auto orderbook_opt = processor_ ? processor_->getOrderbookData(current_symbol_id_) : std::nullopt;
+    if (orderbook_opt) {
+      updatePersistentLevels(*orderbook_opt);
+    }
   }
 
   begin_panel_window();
@@ -544,12 +652,14 @@ void DomSurfacePanel::render() {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
+  ImGui::Checkbox("Show Persistent Lines", &show_persistent_lines_);
+  ImGui::SameLine();
   if (!current_symbol_name_.empty()) {
-    ImGui::Text(" | Symbol: %s (%u) | Bins: %d | Orders: %zu", current_symbol_name_.c_str(), 
-                current_symbol_id_, price_bins_, large_order_markers_.size());
+    ImGui::Text(" | Symbol: %s (%u) | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_name_.c_str(),
+                current_symbol_id_, price_bins_, large_order_markers_.size(), trade_bubbles_.size());
   } else {
-    ImGui::Text(" | Symbol ID: %u | Bins: %d | Orders: %zu", current_symbol_id_, price_bins_,
-                large_order_markers_.size());
+    ImGui::Text(" | Symbol ID: %u | Bins: %d | Orders: %zu | Trades: %zu", current_symbol_id_, price_bins_,
+                large_order_markers_.size(), trade_bubbles_.size());
   }
 
   // Enable Pan/Zoom for DOM Surface
@@ -578,28 +688,45 @@ void DomSurfacePanel::render() {
     int cols = static_cast<int>(heatmap_data_.size()) / rows;
 
     if (cols > 0 && rows > 0) {
-      ImPlot::PushColormap(ImPlotColormap_Viridis);
+      // Create a custom colormap for Dark Blue to Bright Yellow gradient
+      static const ImVec4 blue_yellow_colormap[] = {
+        // Dark Blue (0, 0, 139) to Bright Yellow (255, 255, 0)
+        ImVec4(0.0f, 0.0f, 0.545f, 1.0f),    // Dark Blue (approx)
+        ImVec4(0.0f, 0.2f, 0.6f, 1.0f),      // Blue to Cyan transition
+        ImVec4(0.0f, 0.5f, 0.8f, 1.0f),      // More Cyan
+        ImVec4(0.0f, 0.8f, 1.0f, 1.0f),      // Cyan
+        ImVec4(0.2f, 1.0f, 0.8f, 1.0f),      // Cyan to Greenish
+        ImVec4(0.5f, 1.0f, 0.5f, 1.0f),      // Greenish
+        ImVec4(0.8f, 1.0f, 0.2f, 1.0f),      // Yellowish
+        ImVec4(1.0f, 1.0f, 0.0f, 1.0f)       // Bright Yellow
+      };
 
-      // Use the Vulkan-accelerated texture if available
-      if (vulkan_texture_id_ != nullptr) {
-        // Render using the Vulkan texture
-        // The texture represents the liquidity heatmap where X=Time, Y=Price
-        ImPlot::PlotImage("Liquidity", vulkan_texture_id_,
-                         ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                         ImPlotPoint(bounds_max_[0], bounds_max_[1]));
-      } else {
-        // Fallback to CPU rendering
-        ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, scale_max_, nullptr,
-                            ImPlotPoint(bounds_min_[0], bounds_min_[1]),
-                            ImPlotPoint(bounds_max_[0], bounds_max_[1]));
+      // Register the custom colormap with ImPlot if not already registered
+      static ImPlotColormap registered_colormap = -1;
+      if (registered_colormap == -1) {
+        registered_colormap = ImPlot::AddColormap("BlueYellow", blue_yellow_colormap, 8);
       }
+
+      // Apply the custom colormap
+      ImPlot::PushColormap(registered_colormap);
+
+      // Apply heatmap intensity to adjust color mapping sensitivity
+      double adjusted_scale_max = scale_max_ / heatmap_intensity_;
+      ImPlot::PlotHeatmap("Liquidity", heatmap_data_.data(), rows, cols, 0, adjusted_scale_max, nullptr,
+                          ImPlotPoint(bounds_min_[0], bounds_min_[1]),
+                          ImPlotPoint(bounds_max_[0], bounds_max_[1]));
       ImPlot::PopColormap();
     }
 
-    // Render Large Order Markers OVER the heatmap
+    // Render Persistent Level Lines OVER the heatmap
+    if (show_persistent_lines_) {
+      renderPersistentLevels();
+    }
+
+    // Render Large Order Markers OVER the heatmap and persistent lines
     renderLargeOrderMarkers();
 
-    // Render Trade Bubbles OVER the heatmap and large order markers
+    // Render Trade Bubbles OVER the heatmap, persistent lines, and large order markers
     renderTradeBubbles();
 
     // Render Liquidity Bars on the right-hand price axis
@@ -612,7 +739,7 @@ void DomSurfacePanel::render() {
   if (heatmap_data_.size() > 0) {
     // Position information overlay in the top-left corner
     ImGui::SetCursorPos(ImVec2(10, 30));
-    
+
     // Create a visually appealing info box with liquidity statistics
     ImGui::BeginGroup();
     ImGui::TextColored(ImVec4(0.2f, 0.7f, 1.0f, 1.0f), "Liquidity Stats:");
@@ -622,14 +749,27 @@ void DomSurfacePanel::render() {
     ImGui::Text("Price Bins: %d", price_bins_);
     ImGui::Text("Price Range: %.4f - %.4f", bounds_min_[1], bounds_max_[1]);
     ImGui::Unindent(10.0f);
-    
+
     ImGui::Spacing();
-    
+
     ImGui::TextColored(ImVec4(0.5f, 1.0f, 0.5f, 1.0f), "Active Elements:");
     ImGui::Indent(10.0f);
     ImGui::Text("Large Orders: %zu", large_order_markers_.size());
     ImGui::Text("Median Size: %.2f", median_order_size_);
     ImGui::Text("Trade Bubbles: %zu", trade_bubbles_.size());
+    ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
+
+    // Count static liquidity levels that have been persistent for more than 30 seconds
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+    size_t persistent_static_count = 0;
+    for (const auto& level : static_liquidity_levels_) {
+        if ((current_time - level.last_changed_time) >= persistence_threshold_ms_) {
+            persistent_static_count++;
+        }
+    }
+    ImGui::Text("Static Liquidity Levels: %zu", persistent_static_count);
     ImGui::Unindent(10.0f);
     ImGui::EndGroup();
   }
@@ -652,6 +792,32 @@ void DomSurfacePanel::render_panel_header() {
   if (ImGui::Button("Reset##HeatmapIntensity")) {
     heatmap_intensity_ = 1.0f;
   }
+  ImGui::Separator();
+
+  // Add Large Order Tracker controls
+  ImGui::Text("Large Order Tracker:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderFloat("##Threshold", &large_order_threshold_, 1.0f, 50.0f, "Threshold: %.1fx", ImGuiSliderFlags_Logarithmic);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Max Markers", &max_large_order_markers_, 10, 500);
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::Checkbox("Fade Out", &enable_fade_out_);
+  ImGui::Separator();
+
+  // Add Persistent Level controls
+  ImGui::Text("Persistent Levels:");
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 30000, 60000, "%d ms");
+  ImGui::PopItemWidth();
+  ImGui::SameLine();
+  ImGui::PushItemWidth(150);
+  ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 30000, 120000, "%d ms");
+  ImGui::PopItemWidth();
   ImGui::Separator();
 }
 
@@ -1212,6 +1378,181 @@ ImU32 DomSurfacePanel::getTradeBubbleColor(const BTQuant::Data::TradeData& trade
 std::string DomSurfacePanel::getTradeBubbleTooltip(const BTQuant::Data::TradeData& trade) const {
   std::string side = (trade.side == BTQuant::Data::TradeSide::BUY) ? "Buy" : "Sell";
   return std::format("Trade {}: {} @ ${:.2f}", side, trade.volume, trade.price);
+}
+
+void DomSurfacePanel::renderPersistentLevels() {
+  // Get plot area bounds
+  ImPlotRect plot_rect = ImPlot::GetPlotLimits();
+
+  // Render static liquidity levels (all levels that have remained static for more than 30 seconds)
+  // with a distinct border or "glow" effect
+  for (const auto& level : static_liquidity_levels_) {
+    // Only render if the level is considered "persistent" (has been present for threshold time)
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+
+    // Check if the level has remained static for more than 30 seconds
+    // This means the size hasn't changed significantly since last_changed_time
+    if ((current_time - level.last_changed_time) >= persistence_threshold_ms_) {
+      // Use a distinct color for static liquidity levels with glow effect
+      ImU32 color = getStaticLiquidityLevelColor(level);
+
+      // Draw a glowing border around the level
+      // First, draw a wider, more transparent line to create the "glow" effect
+      ImVec4 glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      glow_color_vec.w = 0.2f; // Lower transparency for stronger glow
+      ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(glow_color_vec);
+
+      ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 12.0f); // Even thicker for stronger glow effect
+
+      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double ys[2] = {level.price, level.price};
+      ImPlot::PlotLine("##StaticLiquidityGlow", xs, ys, 2);
+
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Then draw the main line
+      ImPlot::PushStyleColor(ImPlotCol_Line, color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 6.0f); // Thicker line for better visibility
+
+      ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
+
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Draw a highlighted rectangle around the level to make it stand out
+      ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      rect_color_vec.w = 0.15f; // 15% transparency for the rectangle
+      ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
+
+      // Calculate a vertical range around the price level for the rectangle
+      // Make it proportional to the zoom level for better visibility
+      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+      double price_range = visible_price_range * 0.02; // 2% of the visible price range for rectangle height (increased for better visibility)
+      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
+
+      double y_min = level.price - price_range/2.0;
+      double y_max = level.price + price_range/2.0;
+
+      // Draw a horizontal shaded area spanning the full time axis
+      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double shade_y1[2] = {y_min, y_min};
+      double shade_y2[2] = {y_max, y_max};
+      ImPlot::PlotShaded("##StaticLiquidityRect", shade_x, shade_y1, shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+
+      // Add a pulsing animation effect for extra visibility
+      float pulse_factor = 0.5f + 0.5f * std::sin(current_time / 500.0f); // Pulsing every 1 second
+      ImVec4 pulse_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      pulse_color_vec.w = 0.1f * pulse_factor; // Pulsing transparency
+      ImU32 pulse_color = ImGui::ColorConvertFloat4ToU32(pulse_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, pulse_color);
+
+      // Draw a pulsing outer rectangle
+      double outer_price_range = price_range * 1.8f; // 1.8x the inner rectangle
+      double y_outer_min = level.price - outer_price_range/2.0;
+      double y_outer_max = level.price + outer_price_range/2.0;
+
+      double outer_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double outer_shade_y1[2] = {y_outer_min, y_outer_min};
+      double outer_shade_y2[2] = {y_outer_max, y_outer_max};
+      ImPlot::PlotShaded("##StaticLiquidityPulse", outer_shade_x, outer_shade_y1, outer_shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+    }
+  }
+
+  // Also render the legacy persistent levels (large orders) for compatibility
+  for (const auto& level : persistent_levels_) {
+    // Only render if the level is considered "persistent" (has been present for threshold time)
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+
+    if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+      ImU32 color = getPersistentLevelColor(level);
+
+      // Draw horizontal line across the entire time axis
+      ImPlot::PushStyleColor(ImPlotCol_Line, color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 3.0f); // Thicker line for better visibility
+
+      // Draw horizontal line at the price level from left to right of the plot
+      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double ys[2] = {level.price, level.price};
+      ImPlot::PlotLine("##PersistentLevel", xs, ys, 2);
+
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Draw a more prominent rectangle to highlight the level
+      // Extract the RGB components and set alpha to 15% transparency for better visibility
+      ImVec4 color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      color_vec.w = 0.15f; // Set alpha to 15% transparency
+      ImU32 transparent_color = ImGui::ColorConvertFloat4ToU32(color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, transparent_color);
+
+      // Calculate a vertical range around the price level for the rectangle
+      // Make it proportional to the zoom level for better visibility
+      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+      double price_range = visible_price_range * 0.005; // 0.5% of the visible price range (adjustable)
+      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
+
+      double y_min = level.price - price_range/2.0;
+      double y_max = level.price + price_range/2.0;
+
+      // Draw a horizontal shaded area spanning the full time axis
+      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double shade_y1[2] = {y_min, y_min};
+      double shade_y2[2] = {y_max, y_max};
+      ImPlot::PlotShaded("##PersistentLevelRect", shade_x, shade_y1, shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+
+      // Add a subtle highlight effect above the main line
+      ImVec4 highlight_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      highlight_color_vec.w = 0.08f; // Even more transparent for highlight
+      ImU32 highlight_color = ImGui::ColorConvertFloat4ToU32(highlight_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Line, highlight_color);
+
+      // Draw highlight slightly above the main line
+      double highlight_y_min = level.price + price_range/2.0;
+      double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
+
+      // Draw highlight shaded area
+      double highlight_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
+      double highlight_shade_y2[2] = {highlight_y_max, highlight_y_max};
+      ImPlot::PlotShaded("##PersistentLevelHighlight", highlight_shade_x, highlight_shade_y1, highlight_shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+    }
+  }
+}
+
+ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
+  // Use a distinct color scheme for static liquidity levels to differentiate from large orders
+  // Bright cyan for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
+  // These colors provide better contrast against the heatmap and stand out more distinctly
+  if (level.is_bid) {
+    return IM_COL32(0, 255, 255, 240);  // Bright cyan with high visibility
+  } else {
+    return IM_COL32(255, 165, 0, 240);   // Bright orange with high visibility
+  }
+}
+
+ImU32 DomSurfacePanel::getPersistentLevelColor(const PersistentLevel& level) const {
+  // Color: Bright Green for Bids, Bright Red for Asks
+  // Use brighter colors than the markers to distinguish persistent levels
+  if (level.is_bid) {
+    return IM_COL32(0, 255, 150, 220);  // Brighter green with higher transparency
+  } else {
+    return IM_COL32(255, 100, 150, 220);  // Brighter red with higher transparency
+  }
 }
 
 }  // namespace RenderEngine

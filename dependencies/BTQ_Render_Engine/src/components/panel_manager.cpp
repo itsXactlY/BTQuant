@@ -659,8 +659,11 @@ void PanelManager::clear_panels() {
   panels_.clear();
   panel_groups_.clear();
   panel_to_group_map_.clear();
+  symbol_link_groups_.clear();
+  panel_to_symbol_link_group_map_.clear();
   next_panel_id_ = 1;
   next_group_id_ = 1;
+  next_symbol_link_group_id_ = 1000;  // Reset to initial value
 }
 
 void PanelManager::move_panel(uint32_t panel_id, int new_grid_x, int new_grid_y) {

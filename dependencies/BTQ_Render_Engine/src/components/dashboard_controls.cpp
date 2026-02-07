@@ -757,6 +757,22 @@ void DashboardControls::render_dashboard_controls() {
 
       ImGui::Spacing();
 
+      if (ImGui::Button("Reset to Factory Layout")) {
+        if (panel_manager_) {
+          // Apply the default layout preset which clears all panels, groups, and tabbed groups
+          // and returns to a clean, grid-aligned factory state
+          panel_manager_->apply_layout_preset(LayoutPreset::DEFAULT);
+        }
+      }
+      // Add tooltip for the factory reset button
+      if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text("Reset to Factory Layout:\nClears all panel overlaps, groups, and tabbed groups.\nReturns to a clean, grid-aligned default state.");
+        ImGui::EndTooltip();
+      }
+
+      ImGui::Spacing();
+
       if (ImGui::Button("Auto Arrange")) {
         if (panel_manager_) {
           panel_manager_->auto_arrange_panels();

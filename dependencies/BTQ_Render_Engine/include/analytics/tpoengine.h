@@ -172,6 +172,28 @@ public:
 
     // Print TPO profile for debugging purposes
     void print_tpo_profile() const;
+
+    // Get POC and Value Area data for visualization
+    std::pair<double, std::pair<double, double>> get_poc_and_value_area(double percent = 70.0) const {
+        double poc = tpo_profile.get_poc();
+        auto va = tpo_profile.get_value_area(percent);
+        return std::make_pair(poc, va);
+    }
+
+    // Get all price levels with their TPO counts for visualization
+    std::vector<std::pair<double, int>> get_price_level_counts() const {
+        std::vector<std::pair<double, int>> result;
+        auto counts = tpo_profile.get_touch_counts();
+        for (const auto& [price, count] : counts) {
+            result.emplace_back(price, count);
+        }
+        return result;
+    }
+
+    // Get all single print levels
+    std::vector<double> get_single_print_levels() const {
+        return tpo_profile.get_single_print_levels();
+    }
 };
 
 #endif // BTQRENDERENGINE_TPOENGINE_H

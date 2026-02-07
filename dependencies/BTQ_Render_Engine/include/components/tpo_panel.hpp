@@ -4,6 +4,7 @@
 
 #include "MarketMicrostructureRenderer.h"
 #include "panel_base.hpp"
+#include "analytics/tpoengine.h"
 
 namespace BTQuant {
 
@@ -35,6 +36,12 @@ class TpoPanel : public PanelBase {
  private:
   RenderEngine::MarketMicrostructureRenderer* renderer_;
   uint32_t symbol_id_ = 0;
+
+  // TPO Engine for processing market data
+  TPOEngine tpo_engine_{0.25}; // Default price bucket size of 0.25
+
+  // Track the last processed timestamp to avoid duplicate processing
+  uint64_t last_processed_timestamp_ns_ = 0;
 
   // UI state variables that should be persisted
   bool show_text_ = true;

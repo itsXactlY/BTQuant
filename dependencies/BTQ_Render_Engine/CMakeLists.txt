@@ -191,6 +191,7 @@ set(DASHBOARD_SOURCES
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp
     src/analytics/volume_calculator.cpp
+    src/analytics/tpoengine.cpp
     src/indicators/session_vwap.cpp
     src/indicators/rolling_vwap.cpp
     src/indicators/anchored_vwap.cpp
@@ -334,6 +335,7 @@ set(BTQUANT_TERMINAL_SOURCES
     src/analytics/trading_analytics.cpp
     src/analytics/cluster_engine.cpp
     src/analytics/volume_calculator.cpp
+    src/analytics/tpoengine.cpp
     src/indicators/session_vwap.cpp
     src/indicators/rolling_vwap.cpp
     src/indicators/anchored_vwap.cpp

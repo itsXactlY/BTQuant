@@ -16,6 +16,7 @@ TpoPanel::TpoPanel(const PanelConfig& config, RenderEngine::MarketMicrostructure
 
 void TpoPanel::update(float /*dt*/) {
   // Update logic if needed
+  // Data processing is handled in the render method to avoid duplication
 }
 
 void TpoPanel::render() {
@@ -32,6 +33,11 @@ void TpoPanel::render() {
     ImPlot::SetNextAxesToFit();
   }
   ImGui::SameLine();
+  if (ImGui::Button("Clear TPO Data")) {
+    tpo_engine_.clear();
+    last_processed_timestamp_ns_ = 0;  // Reset the tracking timestamp
+  }
+  ImGui::SameLine();
   ImGui::Checkbox("Delta Labels", &show_text_);
   ImGui::SameLine();
   ImGui::Checkbox("Grid", &show_grid_);
@@ -43,75 +49,36 @@ void TpoPanel::render() {
   ImGui::SetNextItemWidth(100);
   ImGui::SliderFloat("Time Window", &time_window_, 10.0f, 300.0f, "%.0f s");
 
+  // Get clusters and process them with the TPO engine
   auto clusters = renderer_->getFootprintClusters();
   auto stats = renderer_->getStats();
 
-  // Calculate TPO statistics
-  double local_poc_price = 0.0;
-  double max_volume = 0.0;
-  std::unordered_map<double, double> price_volumes;
-  std::unordered_map<double, int> tpo_counts; // Track TPO counts per price level
-
-  // Pre-calculate POC data and TPO counts
-  for (const auto& cluster : clusters) {
-    // Accumulate volume by price level for POC calculation
-    price_volumes[cluster.centerY] += cluster.askVolume + cluster.bidVolume;
-    
-    // Count TPO occurrences per price level (simulating TPO counts)
-    // In a real implementation, this would come from the TPO engine
-    tpo_counts[cluster.centerY]++;
-  }
-
-  // Find Point of Control (POC) - price level with highest volume
-  for (const auto& [price, volume] : price_volumes) {
-    if (volume > max_volume) {
-      max_volume = volume;
-      local_poc_price = price;
-    }
-  }
-  
-  // Calculate Value Area (70% of TPOs) - simplified implementation
-  // In a real implementation, this would use the TPO engine's get_value_area method
-  double value_area_low = local_poc_price - 5.0;  // Placeholder calculation
-  double value_area_high = local_poc_price + 5.0; // Placeholder calculation
-  
-  // More accurate calculation based on TPO counts
-  if (!tpo_counts.empty()) {
-    // Calculate total TPO count
-    int total_tpo_count = 0;
-    for (const auto& [price, count] : tpo_counts) {
-        total_tpo_count += count;
+  // Only process new data if the timestamp has changed
+  if (stats.lastUpdateTimeNs > last_processed_timestamp_ns_) {
+    // Process clusters with TPO engine to generate TPO data
+    // Convert clusters to PriceTicks and feed to TPO engine
+    for (const auto& cluster : clusters) {
+      // Create a timestamp based on the cluster's time
+      auto timestamp = std::chrono::system_clock::time_point(std::chrono::nanoseconds(stats.lastUpdateTimeNs));
+      
+      // Create PriceTick from cluster data
+      PriceTick tick;
+      tick.timestamp = timestamp;
+      tick.price = cluster.centerY;  // Use center Y as the price
+      tick.volume = static_cast<double>(cluster.askVolume + cluster.bidVolume);  // Total volume
+      
+      // Process the tick with the TPO engine
+      tpo_engine_.process_tick(tick);
     }
     
-    if (total_tpo_count > 0) {
-        // Target 70% of total TPOs for value area
-        int target_count = static_cast<int>(total_tpo_count * 0.70);
-        
-        // Sort price levels by distance from POC
-        std::vector<std::pair<double, int>> sorted_by_distance;
-        for (const auto& [price, count] : tpo_counts) {
-            sorted_by_distance.emplace_back(price, count);
-        }
-        
-        std::sort(sorted_by_distance.begin(), sorted_by_distance.end(),
-                  [local_poc_price](const auto& a, const auto& b) {
-                      return std::abs(a.first - local_poc_price) < std::abs(b.first - local_poc_price);
-                  });
-        
-        // Expand from POC until we reach 70% of TPOs
-        int accumulated_count = 0;
-        value_area_low = local_poc_price;
-        value_area_high = local_poc_price;
-        
-        for (const auto& [price, count] : sorted_by_distance) {
-            if (accumulated_count >= target_count) break;
-            
-            accumulated_count += count;
-            value_area_low = std::min(value_area_low, price);
-            value_area_high = std::max(value_area_high, price);
-        }
-    }
+    // Update the last processed timestamp
+    last_processed_timestamp_ns_ = stats.lastUpdateTimeNs;
   }
+
+  // Get POC and Value Area from the TPO engine
+  auto [poc_price, value_area] = tpo_engine_.get_poc_and_value_area(70.0);
+  double value_area_low = value_area.first;
+  double value_area_high = value_area.second;
 
   // Base time for labeling (relative to time window)
   double base_time_sec =
@@ -227,10 +194,10 @@ void TpoPanel::render() {
       ImPlot::PopStyleColor();
     }
 
-    // Draw POC line if found (using pre-calculated value)
-    if (local_poc_price > 0) {
+    // Draw POC line if found (using TPO engine calculated value)
+    if (poc_price > 0) {
       double poc_line_x[2] = {0, time_window_};
-      double poc_line_y[2] = {local_poc_price, local_poc_price};
+      double poc_line_y[2] = {poc_price, poc_price};
       ImPlot::PushStyleColor(ImPlotCol_Line, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Bright yellow
       ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 1.0f); // 1px line as requested
       ImPlot::PlotLine("POC", poc_line_x, poc_line_y, 2);
@@ -244,8 +211,8 @@ void TpoPanel::render() {
   // Enhanced Overlay Info
   ImGui::SetCursorPos(ImVec2(10, 45));
   ImGui::TextColored(ImVec4(1, 1, 0, 0.5f), "TPO Profile | Clusters: %zu | POC: %.4f | VA: %.4f-%.4f",
-                     clusters.size(), 
-                     local_poc_price > 0 ? local_poc_price : 0.0,
+                     clusters.size(),
+                     poc_price > 0 ? poc_price : 0.0,
                      value_area_low > 0 ? value_area_low : 0.0,
                      value_area_high > 0 ? value_area_high : 0.0);
 

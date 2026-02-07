@@ -555,12 +555,12 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 
 - [x] **TPO Profile Engine:** Finalize `tpoengine.cpp` and integration into `TpoPanel`.
 - [x] **DOM Surface Heatmap:** Connect `domsurfacepanel.cpp` to the now-unified `active_symbol_` data feed.
-- [ ] **Options Analytics:** Wire `optionanalyticspanel.cpp` to the unified `MarketDataProcessor`.
-- [ ] **Context Menus:** Ensure the unified `ContextMenuManager` correctly triggers actions on the active panel in the unified workspace.
+- [x] **Options Analytics:** Wire `optionanalyticspanel.cpp` to the unified `MarketDataProcessor`.
+- [x] **Context Menus:** Ensure the unified `ContextMenuManager` correctly triggers actions on the active panel in the unified workspace.
 
 
 ### TASK 23: COMPILE FIXES & BUILD OPTIMIZATION
-- [ ] Implement missing `get_active_tab()` and `set_active_tab(int)` in `dependencies/BTQRenderEngine/include/components/optionanalyticspanel.hpp` to resolve the current `panel_manager.cpp` build errors.
+- [x] Implement missing `get_active_tab()` and `set_active_tab(int)` in `dependencies/BTQRenderEngine/include/components/optionanalyticspanel.hpp` to resolve the current `panel_manager.cpp` build errors.
 - [ ] Update `build_integration.sh` to use the Ninja generator for faster iteration: `rm -rf build && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build`.
 - [ ] Address C++23 deprecation warnings: fix the `deprecated-literal-operator` warnings in `nlohmann/json.hpp` by updating the header or adding `-Wno-deprecated-literal-operator` to `CMakeLists.txt`.
 

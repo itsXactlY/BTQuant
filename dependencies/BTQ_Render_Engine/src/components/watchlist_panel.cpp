@@ -8,6 +8,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "../../include/ui/haptic_feedback.hpp"
+#include "../../include/ui/tooltips.hpp"
 #include "imgui.h"
 
 namespace BTQuant {
@@ -343,12 +345,13 @@ void WatchlistPanel::render() {
 
   bool add_clicked = ImGui::Button("Add Symbol");
 
-  // Add tooltip to explain the button
-  if (ImGui::IsItemHovered()) {
-    ImGui::BeginTooltip();
-    ImGui::Text("Add the symbol entered above to the %s watchlist", current_group_name_.c_str());
-    ImGui::EndTooltip();
+  // Add haptic feedback for button interaction
+  if (add_clicked) {
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("watchlist_add_symbol");
 
   ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
@@ -366,18 +369,17 @@ void WatchlistPanel::render() {
                         ImVec4(1.0f, 0.0f, 0.0f, 1.0f));  // Even brighter when active
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
-  if (ImGui::Button("Clear All")) {
+  bool clear_all_clicked = ImGui::Button("Clear All");
+  if (clear_all_clicked) {
     if (!get_current_watchlist().empty()) {
       show_clear_all_confirmation_ = true;
     }
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
   }
 
-  // Add tooltip to explain the clear all button
-  if (ImGui::IsItemHovered()) {
-    ImGui::BeginTooltip();
-    ImGui::Text("Remove all symbols from the %s watchlist", current_group_name_.c_str());
-    ImGui::EndTooltip();
-  }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("watchlist_clear_all");
 
   ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
@@ -1065,20 +1067,20 @@ void WatchlistPanel::render_group_tabs() {
                           ImVec4(0.45f, 0.55f, 0.45f, 1.0f));  // Even lighter when active
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));  // White text
 
-    if (ImGui::Button("+##AddGroup")) {
+    bool add_group_clicked = ImGui::Button("+##AddGroup");
+    if (add_group_clicked) {
       // Create a new group with a default name
       static int new_group_counter = 1;
       std::string new_group_name = "Group " + std::to_string(new_group_counter++);
       create_group(new_group_name);
       switch_to_group(new_group_name);
+
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
 
-    // Add tooltip to the add group button
-    if (ImGui::IsItemHovered()) {
-      ImGui::BeginTooltip();
-      ImGui::Text("Create a new watchlist group");
-      ImGui::EndTooltip();
-    }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("watchlist_add_group");
 
     ImGui::PopStyleColor(4);  // Pop all 4 color styles
 
@@ -2054,18 +2056,19 @@ void WatchlistPanel::render_table_row(const WatchlistEntry& entry) {
         ImVec2(8.0f, 4.0f));  // Small padding but slightly larger for better click area
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));  // Smaller spacing
 
-    if (ImGui::Button("✕##DeleteBtn")) {  // Use ✕ symbol for better visual representation
+    bool delete_clicked =
+        ImGui::Button("✕##DeleteBtn");  // Use ✕ symbol for better visual representation
+    if (delete_clicked) {
       // Show confirmation dialog before deleting
       symbol_to_delete_ = entry.symbol_id;
       show_delete_confirmation_ = true;
+
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
     }
 
-    // Add tooltip to explain the delete button
-    if (ImGui::IsItemHovered()) {
-      ImGui::BeginTooltip();
-      ImGui::Text("Remove '%s' from watchlist", entry.symbol.c_str());
-      ImGui::EndTooltip();
-    }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("watchlist_remove_symbol");
 
     ImGui::PopStyleVar(2);    // Pop the style variables
     ImGui::PopStyleColor(4);  // Pop all 4 color styles
@@ -3561,7 +3564,8 @@ void WatchlistPanel::render_alerts_management() {
   ImGui::SameLine();
 
   // Add alert button
-  if (ImGui::Button("Add Alert")) {
+  bool add_alert_clicked = ImGui::Button("Add Alert");
+  if (add_alert_clicked) {
     std::string symbol = new_alert_symbol_buffer_;
     std::string price_str = new_alert_price_buffer_;
 
@@ -3596,15 +3600,33 @@ void WatchlistPanel::render_alerts_management() {
 
           std::cout << "[WatchlistPanel] Added alert for " << found_symbol_name << " "
                     << directions[new_alert_direction_] << " " << target_price << std::endl;
+
+          // Add haptic feedback for successful alert addition
+          BTQuant::UI::HapticFeedback::getInstance().trigger(
+              BTQuant::UI::HapticFeedback::FeedbackType::Success);
         } else {
           std::cout << "[WatchlistPanel] Symbol '" << symbol << "' not found in current watchlist"
                     << std::endl;
+
+          // Add haptic feedback for error
+          BTQuant::UI::HapticFeedback::getInstance().trigger(
+              BTQuant::UI::HapticFeedback::FeedbackType::Error);
         }
       } catch (const std::exception& e) {
         std::cout << "[WatchlistPanel] Invalid price format: " << price_str << std::endl;
+
+        // Add haptic feedback for error
+        BTQuant::UI::HapticFeedback::getInstance().trigger(
+            BTQuant::UI::HapticFeedback::FeedbackType::Error);
       }
+    } else {
+      // Add haptic feedback for button interaction even if validation fails
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
   }
+
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("watchlist_add_alert");
 
   // Display existing alerts
   ImGui::Spacing();

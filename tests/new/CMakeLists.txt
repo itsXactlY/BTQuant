@@ -73,6 +73,7 @@ set(SOURCES
     src/ui/tooltips.cpp
     src/ui/tutorial.cpp
     src/ui_components_test.cpp
+    src/ui_enhancement_integration_test.cpp
     # Include other source files as needed
 )
 
@@ -104,6 +105,12 @@ add_executable(ui_main
 add_executable(haptic_feedback_test
     src/haptic_feedback_test.cpp
     src/ui/haptic_feedback.cpp
+)
+
+add_executable(ui_enhancement_integration_test
+    src/ui_enhancement_integration_test.cpp
+    src/ui/haptic_feedback.cpp
+    src/ui/tooltips.cpp
 )
 
 # Link libraries

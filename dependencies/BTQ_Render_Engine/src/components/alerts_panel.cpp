@@ -1,9 +1,11 @@
 #include "../../include/components/alerts_panel.hpp"
-#include <iostream>
 
 #include <ctime>
 #include <format>
+#include <iostream>
 
+#include "../../include/ui/haptic_feedback.hpp"
+#include "../../include/ui/tooltips.hpp"
 #include "imgui.h"
 
 namespace BTQuant {
@@ -43,13 +45,24 @@ void AlertsPanel::render() {
   begin_panel_window();
 
   // Top Bar
-  if (ImGui::Button("+ New Rule")) {
+  bool new_rule_clicked = ImGui::Button("+ New Rule");
+  if (new_rule_clicked) {
     show_create_modal_ = true;
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("alerts_menu");
+
   ImGui::SameLine();
-  if (ImGui::Button("Clear Logs")) {
+  bool clear_logs_clicked = ImGui::Button("Clear Logs");
+  if (clear_logs_clicked) {
     logs_.clear();
+    // Add haptic feedback for button interaction
+    BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
   }
+  // Show standardized tooltip for the button
+  BTQuant::UI::show_control_tooltip("alerts_menu");
 
   ImGui::Separator();
 
@@ -84,7 +97,7 @@ void AlertsPanel::render_rules_table() {
     ImGui::TableSetupColumn("Actions");
     ImGui::TableHeadersRow();
 
-    for (size_t i = 0; i < rules_.size(); ) {
+    for (size_t i = 0; i < rules_.size();) {
       auto& rule = rules_[i];
       ImGui::TableNextRow();
       ImGui::PushID(static_cast<int>(i));
@@ -123,26 +136,40 @@ void AlertsPanel::render_rules_table() {
       ImGui::TextColored(status_col, "%s", status_str);
 
       ImGui::TableSetColumnIndex(4);
-      if (ImGui::Button("Edit")) {
+      bool edit_clicked = ImGui::Button("Edit");
+      if (edit_clicked) {
         // Copy the rule data to the edit fields
         strncpy(new_rule_name_, rule.name.c_str(), sizeof(new_rule_name_) - 1);
         strncpy(new_rule_expr_, rule.expression.c_str(), sizeof(new_rule_expr_) - 1);
         strncpy(new_rule_symbol_, rule.target_symbol.c_str(), sizeof(new_rule_symbol_) - 1);
-        
+
         // For now, we'll just flag that we're editing this rule
         // In a real implementation, we'd have an editing UI
         std::cout << "[AlertsPanel] Editing rule: " << rule.name << std::endl;
+
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
       }
+      // Show standardized tooltip for the button
+      BTQuant::UI::show_control_tooltip("alerts_menu");
+
       ImGui::SameLine();
-      if (ImGui::Button("Del")) {
+      bool del_clicked = ImGui::Button("Del");
+      if (del_clicked) {
         // Remove the rule at index i
         rules_.erase(rules_.begin() + i);
-        // Don't increment i, since we removed an element and the next element moved to this position
-        continue; // Skip the increment
+        // Don't increment i, since we removed an element and the next element moved to this
+        // position
+
+        // Add haptic feedback for button interaction
+        BTQuant::UI::HapticFeedback::getInstance().triggerForImportantInteraction();
+        continue;  // Skip the increment
       }
-      
+      // Show standardized tooltip for the button
+      BTQuant::UI::show_control_tooltip("alerts_menu");
+
       ImGui::PopID();
-      ++i; // Only increment if we didn't delete an element
+      ++i;  // Only increment if we didn't delete an element
     }
     ImGui::EndTable();
   }
@@ -198,7 +225,8 @@ void AlertsPanel::render_create_rule_modal() {
 
     ImGui::Separator();
 
-    if (ImGui::Button("Create", ImVec2(120, 0))) {
+    bool create_clicked = ImGui::Button("Create", ImVec2(120, 0));
+    if (create_clicked) {
       rules_.push_back({.id = std::format("rule_{}", std::rand()),  // Simple ID generation
                         .name = new_rule_name_,
                         .expression = new_rule_expr_,
@@ -208,12 +236,25 @@ void AlertsPanel::render_create_rule_modal() {
                         .last_triggered = std::chrono::system_clock::now()});
       show_create_modal_ = false;
       ImGui::CloseCurrentPopup();
+
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().trigger(
+          BTQuant::UI::HapticFeedback::FeedbackType::Success);
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("alerts_menu");
+
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+    bool cancel_clicked = ImGui::Button("Cancel", ImVec2(120, 0));
+    if (cancel_clicked) {
       show_create_modal_ = false;
       ImGui::CloseCurrentPopup();
+
+      // Add haptic feedback for button interaction
+      BTQuant::UI::HapticFeedback::getInstance().triggerForSubtleInteraction();
     }
+    // Show standardized tooltip for the button
+    BTQuant::UI::show_control_tooltip("alerts_menu");
 
     ImGui::EndPopup();
   }

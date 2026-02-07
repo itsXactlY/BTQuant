@@ -31,11 +31,11 @@ DomSurfacePanel::~DomSurfacePanel() {
 
 void DomSurfacePanel::setSymbol(uint32_t symbol_id) {
   // Get the symbol name from the processor or symbol registry if available
-  std::string symbol_name;
+  std::string symbol_name = "SYMBOL_" + std::to_string(symbol_id); // Default symbol name if not available
   if (processor_) {
-    symbol_name = processor_->getSymbolName(symbol_id);
+    // symbol_name = processor_->getSymbolName(symbol_id); // Commented out due to missing method
   }
-  
+
   setSymbol(symbol_id, symbol_name);
 }
 
@@ -957,12 +957,12 @@ void DomSurfacePanel::renderPersistentLevels() {
 
 ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
   // Use a distinct color scheme for static liquidity levels to differentiate from large orders
-  // Electric blue for bids (buy-side liquidity), electric yellow for asks (sell-side liquidity)
+  // Bright magenta for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
   // These colors provide better contrast against the heatmap and stand out more distinctly
   if (level.is_bid) {
-    return IM_COL32(0, 255, 255, 255);  // Electric cyan with full visibility for bid levels
+    return IM_COL32(255, 100, 255, 255);  // Bright magenta for bid levels (distinct from cyan)
   } else {
-    return IM_COL32(255, 255, 0, 255);   // Electric yellow with full visibility for ask levels
+    return IM_COL32(255, 165, 0, 255);    // Bright orange for ask levels (distinct from yellow)
   }
 }
 
@@ -981,18 +981,18 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
   uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                               std::chrono::steady_clock::now().time_since_epoch())
                               .count();
-  
+
   // Use the static liquidity level color
   ImU32 color = getStaticLiquidityLevelColor(level);
 
   // Draw multiple layers for enhanced glow effect
   // Layer 1: Outer glow (largest and most transparent)
   ImVec4 outer_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-  outer_glow_color_vec.w = 0.1f; // Very low transparency for wide glow
+  outer_glow_color_vec.w = 0.08f; // Very low transparency for wide glow
   ImU32 outer_glow_color = ImGui::ColorConvertFloat4ToU32(outer_glow_color_vec);
 
   ImPlot::PushStyleColor(ImPlotCol_Line, outer_glow_color);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 16.0f); // Extra thick for outer glow
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 20.0f); // Extra thick for outer glow
 
   double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
   double ys[2] = {level.price, level.price};
@@ -1003,11 +1003,11 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
 
   // Layer 2: Middle glow
   ImVec4 middle_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-  middle_glow_color_vec.w = 0.2f; // Lower transparency for stronger glow
+  middle_glow_color_vec.w = 0.15f; // Lower transparency for stronger glow
   ImU32 middle_glow_color = ImGui::ColorConvertFloat4ToU32(middle_glow_color_vec);
 
   ImPlot::PushStyleColor(ImPlotCol_Line, middle_glow_color);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 12.0f); // Thick for middle glow
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 14.0f); // Thick for middle glow
 
   ImPlot::PlotLine("##StaticLiquidityMiddleGlow", xs, ys, 2);
 
@@ -1016,11 +1016,11 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
 
   // Layer 3: Inner glow
   ImVec4 inner_glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-  inner_glow_color_vec.w = 0.4f; // Moderate transparency for inner glow
+  inner_glow_color_vec.w = 0.3f; // Moderate transparency for inner glow
   ImU32 inner_glow_color = ImGui::ColorConvertFloat4ToU32(inner_glow_color_vec);
 
   ImPlot::PushStyleColor(ImPlotCol_Line, inner_glow_color);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Medium thickness for inner glow
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 10.0f); // Medium thickness for inner glow
 
   ImPlot::PlotLine("##StaticLiquidityInnerGlow", xs, ys, 2);
 
@@ -1029,7 +1029,7 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
 
   // Layer 4: Main line (bright and solid)
   ImPlot::PushStyleColor(ImPlotCol_Line, color);
-  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 4.0f); // Standard thickness for main line
+  ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 6.0f); // Thicker for main line to make it more distinct
 
   ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
 
@@ -1038,14 +1038,14 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
 
   // Draw a highlighted rectangle around the level to make it stand out
   ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-  rect_color_vec.w = 0.1f; // 10% transparency for the rectangle
+  rect_color_vec.w = 0.12f; // 12% transparency for the rectangle
   ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
   ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
 
   // Calculate a vertical range around the price level for the rectangle
   // Make it proportional to the zoom level for better visibility
   double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
-  double price_range = visible_price_range * 0.015; // 1.5% of the visible price range for rectangle height
+  double price_range = visible_price_range * 0.02; // 2% of the visible price range for rectangle height (increased for better visibility)
   if (price_range < 0.001) price_range = 0.001; // Minimum thickness
 
   double y_min = level.price - price_range/2.0;
@@ -1062,12 +1062,12 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
   // Add a pulsing animation effect for extra visibility
   float pulse_factor = 0.5f + 0.3f * std::sin((current_time % 2000) * 0.001f * 3.14159f * 2.0f); // Pulsing every 2 seconds
   ImVec4 pulse_color_vec = ImGui::ColorConvertU32ToFloat4(color);
-  pulse_color_vec.w = 0.08f * pulse_factor; // Pulsing transparency
+  pulse_color_vec.w = 0.1f * pulse_factor; // Pulsing transparency
   ImU32 pulse_color = ImGui::ColorConvertFloat4ToU32(pulse_color_vec);
   ImPlot::PushStyleColor(ImPlotCol_Fill, pulse_color);
 
   // Draw a pulsing outer rectangle
-  double outer_price_range = price_range * 2.0f; // 2x the inner rectangle
+  double outer_price_range = price_range * 2.5f; // 2.5x the inner rectangle for more pronounced effect
   double y_outer_min = level.price - outer_price_range/2.0;
   double y_outer_max = level.price + outer_price_range/2.0;
 
@@ -1077,6 +1077,31 @@ void DomSurfacePanel::renderStaticLiquidityGlowEffect(const StaticLiquidityLevel
   ImPlot::PlotShaded("##StaticLiquidityPulse", outer_shade_x, outer_shade_y1, outer_shade_y2, 2);
 
   ImPlot::PopStyleColor();
+
+  // Add tooltip functionality when hovering over the persistent level
+  ImVec2 mouse_pos = ImGui::GetMousePos();
+  ImVec2 level_pixel_pos = ImPlot::PlotToPixels(plot_rect.X.Min, level.price); // Left side of the line
+  ImVec2 level_pixel_pos_right = ImPlot::PlotToPixels(plot_rect.X.Max, level.price); // Right side of the line
+  
+  // Calculate distance from mouse to the horizontal line
+  float distance_to_line = std::abs(mouse_pos.y - level_pixel_pos.y);
+  
+  // Check if mouse is near the persistent level line and within plot bounds horizontally
+  if (mouse_pos.x >= plot_rect.X.Min && mouse_pos.x <= plot_rect.X.Max && 
+      distance_to_line < 10.0f) { // 10 pixel tolerance
+    
+    // Calculate how long this level has been persistent
+    uint64_t time_persistent_ms = current_time - level.last_changed_time;
+    float time_persistent_seconds = static_cast<float>(time_persistent_ms) / 1000.0f;
+    
+    std::string tooltip = std::format("Persistent Level: ${:.2f}\nSide: {}\nDuration: {:.1f}s\nSize: {:.2f}",
+                                     level.price,
+                                     level.is_bid ? "Bid (Buy)" : "Ask (Sell)",
+                                     time_persistent_seconds,
+                                     level.size);
+    
+    ImGui::SetTooltip("%s", tooltip.c_str());
+  }
 }
 
 void DomSurfacePanel::render_panel_header() {

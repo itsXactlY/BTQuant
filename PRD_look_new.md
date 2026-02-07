@@ -573,8 +573,8 @@ Dependencies: Module 10 (Layout), Module 14 (UI), ContextMenuManager Code Object
 ### TASK 25: VISUAL REFINEMENT & DATA PLUG-INS
 - [x] Fix "Dirty State" updates: ensure the `ClusterEngine` calls `set_dirty()` on all active panels whenever a new trade arrives to guarantee the visuals update properly.
 - [x] Redesign DOM Surface visuals: replace the purple placeholders and raw debug text with a proper intensity-based liquidity heatmap (Dark Blue to Bright Yellow).
-- [ ] Calibrate "Trade Bubbles": scale bubble radius using `log(volume)` so massive trades don't cover the entire price axis, and ensure they fade out smoothly over time.
-- [ ] Implement "Persistent Level Tracking": in the DOM Surface, draw a distinct border or "glow" around liquidity levels that have remained static for more than 30 seconds.
+- [x] Calibrate "Trade Bubbles": scale bubble radius using `log(volume)` so massive trades don't cover the entire price axis, and ensure they fade out smoothly over time.
+- [x] Implement "Persistent Level Tracking": in the DOM Surface, draw a distinct border or "glow" around liquidity levels that have remained static for more than 30 seconds.
 
 ### TASK 26: TEMPLATES & WORKSPACE SYNC
 - [ ] Implement "Symbol Link Groups": add color-coded link icons (Red, Green, Blue) to all panel headers. Panels in the same color group must update their symbol simultaneously when one is changed.

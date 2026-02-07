@@ -29,12 +29,18 @@ AutoQualityController::AutoQualityController(const AutoQualityConfig& config)
     , current_quality_index_(0)  // Start at highest quality
     , performance_score_(100.0)
     , target_performance_threshold_(config.performance_threshold)
-    , adaptive_performance_threshold_(config.performance_threshold)
-    , peak_performance_score_(100.0)
     , last_adjustment_time_(std::chrono::high_resolution_clock::now())
-    , cumulative_performance_score_(0.0)
     , adjustment_cooldown_(std::chrono::milliseconds(static_cast<int>(config.adjustment_cooldown_ms)))
+    , adaptive_performance_threshold_(config.performance_threshold)
+    , performance_history_()
+    , performance_history_index_(0)
+    , performance_history_full_(false)
+    , peak_performance_score_(100.0)
+    , cumulative_performance_score_(0.0)
     , performance_sample_count_(0)
+    , recent_performance_trend_()
+    , trend_index_(0)
+    , trend_buffer_full_(false)
 {
     initializeQualityLevels();
 

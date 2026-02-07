@@ -615,7 +615,7 @@ void ChartReplay::render_replay_controls() {
 
         auto metrics = get_performance_metrics();
         ImGui::Text("Progress: %.2f%%", metrics.progress_percentage);
-        ImGui::Text("Bars Processed: %llu/%llu", metrics.total_bars_processed, metrics.total_bars);
+        ImGui::Text("Bars Processed: %zu/%zu", metrics.total_bars_processed, metrics.total_bars);
         ImGui::Text("Elapsed Time: %.2fs", metrics.elapsed_seconds);
         ImGui::Text("Actual Speed: %.2f bars/sec", metrics.replay_speed_actual);
     }

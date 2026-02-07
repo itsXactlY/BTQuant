@@ -8,13 +8,22 @@ namespace RenderEngine {
 
 FramePacer::FramePacer(const Config& config)
     : config_(config)
-    , frame_time_history_(FRAME_HISTORY_SIZE, 1000.0 / config.target_fps)  // Initialize with target frame time
+    , stats_()
+    , stats_mutex_()
+    , frame_start_time_(std::chrono::high_resolution_clock::now())
     , last_frame_time_(std::chrono::high_resolution_clock::now())
+    , frame_time_history_(FRAME_HISTORY_SIZE, 1000.0 / config.target_fps)  // Initialize with target frame time
+    , accumulated_frame_time_(0.0)
+    , frame_count_(0)
+    , recent_avg_frame_time_(0.0)
+    , recent_frame_count_(0)
+    , smoothed_frame_times_(SMOOTHING_WINDOW, 1000.0 / config.target_fps)
     , frame_timer_()
     , spike_detector_()
     , dropped_frame_counter_(0)
     , adaptive_target_fps_(config.target_fps)
     , last_adaptive_update_(std::chrono::high_resolution_clock::now())
+    , pid_controller_()
     , frame_prediction_error_(0.0)
     , prediction_integral_(0.0)
     , prediction_derivative_(0.0)
@@ -24,7 +33,6 @@ FramePacer::FramePacer(const Config& config)
     , frame_stability_score_(1.0)
     , frame_phase_lock_(false)
     , phase_reference_time_(std::chrono::high_resolution_clock::now())
-    , smoothed_frame_times_(SMOOTHING_WINDOW, 1000.0 / config.target_fps)
 {
     // Initialize stats
     stats_.avg_frame_time_ms = 1000.0 / config.target_fps;

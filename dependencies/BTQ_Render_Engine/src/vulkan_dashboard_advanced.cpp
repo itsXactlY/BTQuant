@@ -343,10 +343,10 @@ void VulkanDashboard::render_frame() {
       }
       
       // Sync order state if any changes occurred in the UI
-      double order_qty = workspace_->getOrderQuantity();
-      double order_price = workspace_->getOrderPrice();
-      int order_side = workspace_->getSelectedOrderSide();  // 0 = Buy, 1 = Sell
-      int order_type = workspace_->getSelectedOrderType();  // 0 = Market, 1 = Limit
+      // double order_qty = workspace_->getOrderQuantity();
+      // double order_price = workspace_->getOrderPrice();
+      // int order_side = workspace_->getSelectedOrderSide();  // 0 = Buy, 1 = Sell
+      // int order_type = workspace_->getSelectedOrderType();  // 0 = Market, 1 = Limit
       
       // If there are pending orders from UI, submit them to the order manager
       auto order_manager = workspace_->getOrderManager();

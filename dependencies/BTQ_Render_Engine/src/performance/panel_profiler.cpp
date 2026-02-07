@@ -42,14 +42,14 @@ void PanelProfiler::end_panel_render(uint32_t panel_id) {
     it->second.total_render_time_us += duration;
     it->second.render_count++;
 
-    if (duration < it->second.min_render_time_us || it->second.min_render_time_us == 0) {
+    if (static_cast<int64_t>(duration) < static_cast<int64_t>(it->second.min_render_time_us) || it->second.min_render_time_us == 0) {
       it->second.min_render_time_us = duration;
     }
-    if (duration > it->second.max_render_time_us) {
+    if (static_cast<int64_t>(duration) > static_cast<int64_t>(it->second.max_render_time_us)) {
       it->second.max_render_time_us = duration;
     }
 
-    if (duration > it->second.slow_render_threshold_us) {
+    if (static_cast<int64_t>(duration) > static_cast<int64_t>(it->second.slow_render_threshold_us)) {
       it->second.slow_render_count++;
       if (slow_render_callback_) {
         slow_render_callback_(panel_id, it->second.panel_title, duration);

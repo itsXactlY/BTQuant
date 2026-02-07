@@ -66,6 +66,8 @@ namespace {
 [[nodiscard]] std::expected<VkShaderModule, RendererError> create_shader_module(
     VkDevice device, std::span<const uint32_t> code) noexcept {
   VkShaderModuleCreateInfo createInfo{.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                      .pNext = nullptr,
+                                      .flags = 0,
                                       .codeSize = code.size() * sizeof(uint32_t),
                                       .pCode = code.data()};
 
@@ -522,15 +524,22 @@ MarketMicrostructureRenderer::createComputePipelines() {
 
     VkPipelineShaderStageCreateInfo lobHeatmapStage{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
         .module = lobHeatmapModule,
-        .pName = "main"};
+        .pName = "main",
+        .pSpecializationInfo = nullptr};
 
     std::vector<VkDescriptorSetLayout> lobLayouts = {lobHeatmapDescriptorSetLayout_};
     VkPipelineLayoutCreateInfo lobLayoutInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .setLayoutCount = static_cast<uint32_t>(lobLayouts.size()),
-        .pSetLayouts = lobLayouts.data()};
+        .pSetLayouts = lobLayouts.data(),
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = nullptr};
 
     if (vkCreatePipelineLayout(device, &lobLayoutInfo, nullptr, &lobHeatmapPipelineLayout_) !=
         VK_SUCCESS) {
@@ -539,8 +548,12 @@ MarketMicrostructureRenderer::createComputePipelines() {
 
     VkComputePipelineCreateInfo lobPipelineInfo{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .stage = lobHeatmapStage,
-        .layout = lobHeatmapPipelineLayout_};
+        .layout = lobHeatmapPipelineLayout_,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1};
 
     if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &lobPipelineInfo, nullptr,
                                  &lobHeatmapPipeline_) != VK_SUCCESS) {
@@ -557,15 +570,22 @@ MarketMicrostructureRenderer::createComputePipelines() {
 
     VkPipelineShaderStageCreateInfo tpoProfileStage{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
         .module = tpoProfileModule,
-        .pName = "main"};
+        .pName = "main",
+        .pSpecializationInfo = nullptr};
 
     std::vector<VkDescriptorSetLayout> tpoLayouts = {tpoProfileDescriptorSetLayout_};
     VkPipelineLayoutCreateInfo tpoLayoutInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .setLayoutCount = static_cast<uint32_t>(tpoLayouts.size()),
-        .pSetLayouts = tpoLayouts.data()};
+        .pSetLayouts = tpoLayouts.data(),
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = nullptr};
 
     if (vkCreatePipelineLayout(device, &tpoLayoutInfo, nullptr, &tpoProfilePipelineLayout_) !=
         VK_SUCCESS) {
@@ -574,8 +594,12 @@ MarketMicrostructureRenderer::createComputePipelines() {
 
     VkComputePipelineCreateInfo tpoPipelineInfo{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .stage = tpoProfileStage,
-        .layout = tpoProfilePipelineLayout_};
+        .layout = tpoProfilePipelineLayout_,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1};
 
     if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &tpoPipelineInfo, nullptr,
                                  &tpoProfilePipeline_) != VK_SUCCESS) {
@@ -616,13 +640,19 @@ MarketMicrostructureRenderer::createGraphicsPipelines() {
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {
         {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+         .pNext = nullptr,
+         .flags = 0,
          .stage = VK_SHADER_STAGE_VERTEX_BIT,
          .module = vertModule,
-         .pName = "main"},
+         .pName = "main",
+         .pSpecializationInfo = nullptr},
         {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+         .pNext = nullptr,
+         .flags = 0,
          .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
          .module = fragModule,
-         .pName = "main"}};
+         .pName = "main",
+         .pSpecializationInfo = nullptr}};
 
     // 2. Pipeline Layout
     std::vector<VkDescriptorSetLayout> layouts = {
@@ -631,8 +661,12 @@ MarketMicrostructureRenderer::createGraphicsPipelines() {
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .setLayoutCount = static_cast<uint32_t>(layouts.size()),
-        .pSetLayouts = layouts.data()};
+        .pSetLayouts = layouts.data(),
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = nullptr};
 
     if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &footprintPipelineLayout_) !=
         VK_SUCCESS) {
@@ -641,10 +675,18 @@ MarketMicrostructureRenderer::createGraphicsPipelines() {
 
     // 3. Pipeline State
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .vertexBindingDescriptionCount = 0,
+        .pVertexBindingDescriptions = nullptr,
+        .vertexAttributeDescriptionCount = 0,
+        .pVertexAttributeDescriptions = nullptr};
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .primitiveRestartEnable = VK_FALSE};
 
@@ -659,6 +701,8 @@ MarketMicrostructureRenderer::createGraphicsPipelines() {
 
     VkPipelineViewportStateCreateInfo viewportState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .viewportCount = 1,
         .pViewports = &viewport,
         .scissorCount = 1,
@@ -713,17 +757,24 @@ MarketMicrostructureRenderer::createGraphicsPipelines() {
 
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
         .stageCount = 2,
         .pStages = shaderStages,
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssembly,
+        .pTessellationState = nullptr,
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
+        .pDepthStencilState = nullptr,
         .pColorBlendState = &colorBlending,
+        .pDynamicState = nullptr,
         .layout = footprintPipelineLayout_,
         .renderPass = vulkanCore_->get_render_pass(),
-        .subpass = 0};
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1};
 
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
                                   &footprintPipeline_) != VK_SUCCESS) {
@@ -756,6 +807,8 @@ MarketMicrostructureRenderer::createDescriptorSets() {
 
   VkDescriptorSetLayoutCreateInfo lobLayoutInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .bindingCount = static_cast<uint32_t>(lobBindings.size()),
       .pBindings = lobBindings.data()};
 
@@ -765,6 +818,7 @@ MarketMicrostructureRenderer::createDescriptorSets() {
   }
 
   VkDescriptorSetAllocateInfo lobAllocInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                           .pNext = nullptr,
                                            .descriptorPool = descriptorPool,
                                            .descriptorSetCount = 1,
                                            .pSetLayouts = &lobHeatmapDescriptorSetLayout_};
@@ -779,6 +833,8 @@ MarketMicrostructureRenderer::createDescriptorSets() {
 
   VkDescriptorSetLayoutCreateInfo footprintLayoutInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .bindingCount = static_cast<uint32_t>(footprintBindings.size()),
       .pBindings = footprintBindings.data()};
 
@@ -789,6 +845,7 @@ MarketMicrostructureRenderer::createDescriptorSets() {
 
   VkDescriptorSetAllocateInfo footprintAllocInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .pNext = nullptr,
       .descriptorPool = descriptorPool,
       .descriptorSetCount = 1,
       .pSetLayouts = &footprintDescriptorSetLayout_};
@@ -801,6 +858,8 @@ MarketMicrostructureRenderer::createDescriptorSets() {
 
   VkDescriptorSetLayoutCreateInfo tpoLayoutInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
       .bindingCount = static_cast<uint32_t>(tpoBindings.size()),
       .pBindings = tpoBindings.data()};
 
@@ -810,6 +869,7 @@ MarketMicrostructureRenderer::createDescriptorSets() {
   }
 
   VkDescriptorSetAllocateInfo tpoAllocInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                                           .pNext = nullptr,
                                            .descriptorPool = descriptorPool,
                                            .descriptorSetCount = 1,
                                            .pSetLayouts = &tpoProfileDescriptorSetLayout_};
@@ -824,54 +884,78 @@ MarketMicrostructureRenderer::createDescriptorSets() {
                                      VK_IMAGE_LAYOUT_GENERAL};
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = lobHeatmapDescriptorSet_,
                     .dstBinding = 0,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &lobBufferInfo});
+                    .pImageInfo = nullptr,
+                    .pBufferInfo = &lobBufferInfo,
+                    .pTexelBufferView = nullptr});
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = lobHeatmapDescriptorSet_,
                     .dstBinding = 1,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                    .pImageInfo = &lobImageInfo});
+                    .pImageInfo = &lobImageInfo,
+                    .pBufferInfo = nullptr,
+                    .pTexelBufferView = nullptr});
 
   // Footprint Updates
   VkDescriptorBufferInfo footprintSSBOInfo{footprintSSBO_.buffer, 0, VK_WHOLE_SIZE};
   VkDescriptorBufferInfo footprintUBOInfo{footprintUBO_.buffer, 0, VK_WHOLE_SIZE};
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = footprintDescriptorSet_,
                     .dstBinding = 0,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &footprintSSBOInfo});
+                    .pImageInfo = nullptr,
+                    .pBufferInfo = &footprintSSBOInfo,
+                    .pTexelBufferView = nullptr});
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = footprintDescriptorSet_,
                     .dstBinding = 1,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .pBufferInfo = &footprintUBOInfo});
+                    .pImageInfo = nullptr,
+                    .pBufferInfo = &footprintUBOInfo,
+                    .pTexelBufferView = nullptr});
 
   // TPO Profile Updates
   VkDescriptorBufferInfo tpoInInfo{tpoProfileSSBO_.buffer, 0, VK_WHOLE_SIZE};
   VkDescriptorBufferInfo tpoOutInfo{tpoProfileHistogram_.buffer, 0, VK_WHOLE_SIZE};
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = tpoProfileDescriptorSet_,
                     .dstBinding = 0,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &tpoInInfo});
+                    .pImageInfo = nullptr,
+                    .pBufferInfo = &tpoInInfo,
+                    .pTexelBufferView = nullptr});
 
   writes.push_back({.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .pNext = nullptr,
                     .dstSet = tpoProfileDescriptorSet_,
                     .dstBinding = 1,
+                    .dstArrayElement = 0,
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &tpoOutInfo});
+                    .pImageInfo = nullptr,
+                    .pBufferInfo = &tpoOutInfo,
+                    .pTexelBufferView = nullptr});
 
   vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
   return {};
@@ -916,6 +1000,8 @@ MarketMicrostructureRenderer::createTextureResources() {
 
   // 1. Create LOB Heatmap Texture
   VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                              .pNext = nullptr,
+                              .flags = 0,
                               .imageType = VK_IMAGE_TYPE_2D,
                               .format = VK_FORMAT_R8G8B8A8_UNORM,
                               .extent = {.width = config_.lobHeatmap.width,
@@ -928,6 +1014,8 @@ MarketMicrostructureRenderer::createTextureResources() {
                               .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                               .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                              .queueFamilyIndexCount = 0,
+                              .pQueueFamilyIndices = nullptr,
                               .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
 
   if (vkCreateImage(device, &imageInfo, nullptr, &lobHeatmapImage_) != VK_SUCCESS) {
@@ -939,6 +1027,7 @@ MarketMicrostructureRenderer::createTextureResources() {
 
   VkMemoryAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .pNext = nullptr,
       .allocationSize = memRequirements.size,
       .memoryTypeIndex = vulkanCore_->find_memory_type(memRequirements.memoryTypeBits,
                                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)};
@@ -951,9 +1040,13 @@ MarketMicrostructureRenderer::createTextureResources() {
 
   // 2. Create Image View
   VkImageViewCreateInfo viewInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                                 .pNext = nullptr,
+                                 .flags = 0,
                                  .image = lobHeatmapImage_,
                                  .viewType = VK_IMAGE_VIEW_TYPE_2D,
                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                 .components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, 
+                                                VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
                                  .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                                                       .baseMipLevel = 0,
                                                       .levelCount = 1,
@@ -966,12 +1059,21 @@ MarketMicrostructureRenderer::createTextureResources() {
 
   // 3. Create Sampler
   VkSamplerCreateInfo samplerInfo{.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                                  .pNext = nullptr,
+                                  .flags = 0,
                                   .magFilter = VK_FILTER_LINEAR,
                                   .minFilter = VK_FILTER_LINEAR,
                                   .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
                                   .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                                   .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                                   .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                                  .mipLodBias = 0.0f,
+                                  .anisotropyEnable = VK_FALSE,
+                                  .maxAnisotropy = 1.0f,
+                                  .compareEnable = VK_FALSE,
+                                  .compareOp = VK_COMPARE_OP_NEVER,
+                                  .minLod = 0.0f,
+                                  .maxLod = 0.0f,
                                   .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
                                   .unnormalizedCoordinates = VK_FALSE};
 
@@ -1048,14 +1150,14 @@ void MarketMicrostructureRenderer::renderFootprintChart(VkCommandBuffer cmdBuffe
   vkCmdDraw(cmdBuffer, VERTICES_PER_QUAD, currentClusterCount_, 0, 0);
 }
 
-void MarketMicrostructureRenderer::renderHeatmapTexture(VkCommandBuffer cmdBuffer) {
+void MarketMicrostructureRenderer::renderHeatmapTexture(VkCommandBuffer /*cmdBuffer*/) {
   // Heatmap is drawn as a fullscreen quad or panel quad
   // We'll use a specialized graphics pipeline that reads from the compute
   // output image.
   // For now, assume it's part of the main UI overlay if not bound elsewhere.
 }
 
-void MarketMicrostructureRenderer::renderTPOProfile(VkCommandBuffer cmdBuffer) {
+void MarketMicrostructureRenderer::renderTPOProfile(VkCommandBuffer /*cmdBuffer*/) {
   if (tpoProfilePipeline_ == VK_NULL_HANDLE) [[unlikely]] {
     return;
   }
@@ -1063,7 +1165,7 @@ void MarketMicrostructureRenderer::renderTPOProfile(VkCommandBuffer cmdBuffer) {
   // Draw TPO Histogram
 }
 
-void MarketMicrostructureRenderer::updateUniformBuffers(uint32_t currentFrame) {
+void MarketMicrostructureRenderer::updateUniformBuffers(uint32_t /*currentFrame*/) {
   if (!initialized_) return;
 
   // Placeholder for updating view matrices and configuration
@@ -1091,6 +1193,12 @@ void MarketMicrostructureRenderer::updateStorageBuffers() {
 
     TPOInputHeader header{
         .tickCount = static_cast<uint32_t>(currentTradeData_.size()),
+        .startTimeL = 0,
+        .startTimeH = 0,
+        .endTimeL = 0,
+        .endTimeH = 0,
+        .minPrice = 0.0f,
+        .maxPrice = 0.0f,
     };
 
     std::memcpy(tpoProfileSSBO_.mapped_ptr, &header, sizeof(header));

@@ -736,7 +736,7 @@ bool DataQualityMonitor::is_duplicate_trade(const TradeData& trade, const std::s
 
                     // If intervals are approximately equal, it suggests systematic duplication
                     if (std::abs(static_cast<int64_t>(interval1) - static_cast<int64_t>(interval2)) <=
-                        duplicate_check_window_ms_) {
+                        static_cast<int64_t>(duplicate_check_window_ms_)) {
                         return true;
                     }
                 }
@@ -1149,7 +1149,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
         auto now = std::chrono::high_resolution_clock::now();
         auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second).count();
 
-        if (latency > latency_alert_threshold_ms_) {
+        if (latency > static_cast<int64_t>(latency_alert_threshold_ms_)) {
             std::ostringstream oss;
             oss << "High processing latency detected: " << latency << "ms, exceeding threshold of "
                 << latency_alert_threshold_ms_ << "ms";
@@ -1178,7 +1178,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
     if (current_time > trade.timestamp) {
         int64_t delay_ms = current_time - trade.timestamp;
 
-        if (delay_ms > latency_alert_threshold_ms_ * 2) {  // More stringent threshold for data feed delay
+        if (delay_ms > static_cast<int64_t>(latency_alert_threshold_ms_ * 2)) {  // More stringent threshold for data feed delay
             std::ostringstream oss;
             oss << "Significant data feed delay detected: " << delay_ms << "ms";
 
@@ -1201,7 +1201,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
                 // If the delay is significantly larger than the typical interval between trades,
                 // it might indicate a problem with the data feed
                 // Only check if delay_ms is positive and reasonable to avoid overflow issues
-                if (delay_ms > 0 && delay_ms > avg_interval * 20 && avg_interval > 0) { // 20x typical interval
+                if (delay_ms > 0 && delay_ms > static_cast<int64_t>(avg_interval * 20) && static_cast<int64_t>(avg_interval) > 0) { // 20x typical interval
                     std::ostringstream oss;
                     oss << "Data feed appears to be significantly behind schedule: " << delay_ms
                         << "ms delay vs typical interval of " << avg_interval << "ms";
@@ -1234,7 +1234,7 @@ void DataQualityMonitor::check_latency_issue(const TradeData& trade, const std::
             int64_t current_delay = (current_time > trade.timestamp) ? (current_time - trade.timestamp) : 0;
 
             // If current delay is significantly higher than recent average, flag as latency issue
-            if (recent_avg > 0 && current_delay > recent_avg * 5) { // 5x higher than recent average
+            if (static_cast<int64_t>(recent_avg) > 0 && current_delay > static_cast<int64_t>(recent_avg * 5)) { // 5x higher than recent average
                 std::ostringstream oss;
                 oss << "Latency spike detected: " << current_delay << "ms vs recent average of "
                     << recent_avg << "ms";
@@ -1720,7 +1720,7 @@ void DataQualityMonitor::check_missing_fields(const TradeData& trade, const std:
     }
 
     // Check for timestamp that is significantly in the future (more than 10 seconds ahead)
-    if (timestamp > current_time + 10000) {  // 10 seconds in the future
+    if (timestamp > current_time + static_cast<uint64_t>(10000)) {  // 10 seconds in the future
         std::ostringstream oss;
         oss << "Timestamp is significantly in the future: " << (timestamp - current_time) << "ms ahead";
 
@@ -4191,7 +4191,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
         uint64_t p95_latency = sorted_delays[p95_idx];
 
         // If current delay is approaching the 95th percentile, issue early warning
-        if (processing_delay > p90_latency * 0.8 && processing_delay < p95_latency) {
+        if (processing_delay > static_cast<int64_t>(p90_latency * 0.8) && processing_delay < static_cast<int64_t>(p95_latency)) {
             std::ostringstream oss;
             oss << "LATENCY APPROACHING CRITICAL LEVELS for " << symbol
                 << ". Current: " << processing_delay << "ms, "
@@ -4228,7 +4228,7 @@ void DataQualityMonitor::enhanced_latency_monitoring(const TradeData& trade, con
             }
 
             // Placeholder for more sophisticated correlation analysis
-            if (processing_delay > latency_alert_threshold_ms_ && trade.volume > 1000.0f) {
+            if (processing_delay > static_cast<int64_t>(latency_alert_threshold_ms_) && trade.volume > 1000.0f) {
                 // High latency combined with high volume might indicate system stress
                 std::ostringstream oss;
                 oss << "HIGH LATENCY WITH HIGH VOLUME for " << symbol

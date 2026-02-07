@@ -89,6 +89,9 @@ int main(int argc, char** argv) {
       if (ImGui::MenuItem("Save Layout")) {
         if (panel_mgr) panel_mgr->save_layout("default_layout.json");
       }
+      if (ImGui::MenuItem("Save as Default")) {
+        if (panel_mgr) panel_mgr->save_default_layout();
+      }
       if (ImGui::MenuItem("Load Layout")) {
         if (panel_mgr) panel_mgr->load_layout("default_layout.json");
       }

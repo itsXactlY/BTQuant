@@ -1266,6 +1266,24 @@ void PanelManager::save_layout(const std::string& filename) {
   }
 }
 
+void PanelManager::save_default_layout() {
+  try {
+    std::ofstream file("default_layout.json");
+    if (file.is_open()) {
+      file << serialize_layout();
+      file.close();
+      std::cout << "[Layout] Current panel arrangement saved as default startup layout" << std::endl;
+      
+      // Update current layout name to reflect it's the default
+      set_current_layout_name("default");
+    } else {
+      std::cerr << "Failed to open default_layout.json for saving default layout" << std::endl;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "Error saving default layout: " << e.what() << std::endl;
+  }
+}
+
 void PanelManager::load_layout(const std::string& filename) {
   try {
     std::ifstream file(filename);

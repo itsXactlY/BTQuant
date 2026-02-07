@@ -1477,7 +1477,7 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
       if (panel_manager_ && !panel->get_config().symbol.empty()) {
         // Get the current symbol from this panel
         std::string current_symbol = panel->get_config().symbol;
-        
+
         // Iterate through all panels and update their symbols
         auto all_panel_ids = panel_manager_->get_all_panel_ids();
         for (uint32_t id : all_panel_ids) {
@@ -1488,14 +1488,10 @@ void ContextMenuManager::render_generic_context_menu(PanelBase* panel, const cha
               PanelConfig updated_config = other_panel->get_config();
               updated_config.symbol = current_symbol;
               panel_manager_->update_panel_config(id, updated_config);
-              
-              // If the panel has a specific method to set symbol, call it
-              // This would require casting to specific panel types, but for now we'll update the config
             }
           }
         }
       }
-    }
     /*
     if (ImGui::MenuItem("Screenshot")) {
       // Take a screenshot of the current panel

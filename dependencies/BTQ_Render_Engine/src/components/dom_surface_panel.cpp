@@ -18,7 +18,10 @@ namespace BTQuant {
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
       processor_(processor),
-      max_trade_volume_(1.0) {}  // Initialize with a default minimum volume
+      max_trade_volume_(1.0),  // Initialize with a default minimum volume
+      persistence_threshold_ms_(30000),  // 30 seconds for static liquidity detection
+      persistence_timeout_ms_(60000),    // 60 seconds timeout for inactive levels
+      show_persistent_lines_(true) {}   // Show persistent lines by default
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {

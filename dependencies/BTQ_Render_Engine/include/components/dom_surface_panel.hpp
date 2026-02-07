@@ -224,6 +224,11 @@ class DomSurfacePanel : public PanelBase {
   void renderPersistentLevels();
   ImU32 getPersistentLevelColor(const PersistentLevel& level) const;
 
+  // Static Liquidity Level Tracking Methods
+  void addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size);
+  void cleanupInactiveStaticLiquidityLevels();
+  ImU32 getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const;
+
   // Callback for reactive updates
   void onDataUpdate(uint32_t symbol_id, RenderEngine::NotificationType type);
 };

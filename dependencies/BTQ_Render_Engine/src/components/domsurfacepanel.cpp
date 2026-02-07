@@ -1309,30 +1309,23 @@ void DomSurfacePanel::renderTradeBubbles() {
 float DomSurfacePanel::calculateTradeBubbleRadius(float volume) const {
   if (volume <= 0.0f) return TRADE_BUBBLE_BASE_RADIUS;  // Base radius for invalid volumes
 
-  // Use logarithmic scaling: log(volume + 1) to handle volume = 0 gracefully
-  // This prevents massive trades from covering the entire price axis
-  float log_volume = std::log(volume + 1.0f);
+  // Use logarithmic scaling: log(volume) to prevent massive trades from covering the entire price axis
+  // Using log(volume) directly instead of log(volume + 1) to better reflect the actual volume differences
+  float log_volume = std::log(volume);
+  
+  // Calculate the maximum possible log volume based on TRADE_BUBBLE_MAX_VOLUME
+  float max_log_volume = std::log(TRADE_BUBBLE_MAX_VOLUME);
 
-  // Use a more adaptive normalization that scales with actual market conditions
-  // Rather than a fixed maximum, we'll use a dynamic reference that adapts to recent trade volumes
-  float max_log_volume = std::log(TRADE_BUBBLE_MAX_VOLUME + 1.0f);
-
-  // Handle edge case where max_log_volume might be 0
+  // Handle edge case where max_log_volume might be 0 or negative
   if (max_log_volume <= 0.0f) {
-    max_log_volume = std::log(1000.0f + 1.0f); // Default to 1000 as reference max volume
+    max_log_volume = std::log(10000.0f); // Default to 10000 as reference max volume
   }
 
+  // Normalize the log volume to a 0-1 range
   float normalized_log_volume = log_volume / max_log_volume;
 
   // Clamp the normalized value to prevent exceeding intended radius range
   normalized_log_volume = std::clamp(normalized_log_volume, 0.0f, 1.0f);
-
-  // Apply additional curve to make the scaling more gradual at low volumes
-  // and steeper at high volumes for better visual distinction
-  // Using a power function to adjust the distribution of bubble sizes
-  // Made the exponent more conservative (0.3f instead of 0.5f) to prevent large trades
-  // from dominating the visualization even with log scaling
-  normalized_log_volume = std::pow(normalized_log_volume, 0.3f);
 
   // Scale radius from base to max based on normalized log volume
   // Use calibrated scaling for better visual representation of trade volumes

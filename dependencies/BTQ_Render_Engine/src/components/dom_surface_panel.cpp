@@ -17,7 +17,8 @@ namespace BTQuant {
 
 DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
-      processor_(processor) {}
+      processor_(processor),
+      max_trade_volume_(1.0) {}  // Initialize with a default minimum volume
 
 DomSurfacePanel::~DomSurfacePanel() {
   if (subscription_id_ > 0 && processor_) {
@@ -175,11 +176,14 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   // Use logarithmic scaling: log(volume + 1) to handle volume = 0 gracefully
   // This prevents massive trades from covering the entire price axis
   float log_volume = std::log(volume + 1.0f);
-  
-  // Normalize using a reference maximum log volume to scale appropriately
-  float max_log_volume = std::log(1000.0f + 1.0f); // Reference max volume of 1000
+
+  // Use the tracked maximum volume for normalization to adapt to actual market conditions
+  float max_log_volume = std::log(max_trade_volume_ + 1.0f);
   float normalized_log_volume = log_volume / max_log_volume;
-  
+
+  // Clamp the normalized value to prevent exceeding intended radius range
+  normalized_log_volume = std::clamp(normalized_log_volume, 0.0f, 1.0f);
+
   // Scale to desired radius range
   float min_radius = 3.0f;
   float max_radius = 20.0f;
@@ -193,18 +197,22 @@ ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
   uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                               std::chrono::steady_clock::now().time_since_epoch())
                               .count();
-  
+
   // Calculate age of the trade in milliseconds
   uint64_t age_ms = current_time - bubble.timestamp;
-  
+
   // Calculate fade ratio (0.0 = fully faded, 1.0 = fully opaque)
   float fade_ratio = 1.0f - static_cast<float>(age_ms) / static_cast<float>(TRADE_BUBBLE_FADE_DURATION_MS);
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
-  
+
+  // Apply smooth easing function for more natural fade-out
+  // Using smoothstep function: 3t² - 2t³, where t is fade_ratio
+  float eased_fade_ratio = fade_ratio * fade_ratio * (3.0f - 2.0f * fade_ratio);
+
   // Calculate alpha based on fade ratio
   uint8_t base_alpha = 180;  // Base alpha value
-  uint8_t alpha = static_cast<uint8_t>(base_alpha * fade_ratio);
-  
+  uint8_t alpha = static_cast<uint8_t>(base_alpha * eased_fade_ratio);
+
   // Color: Green for Buys, Red for Sells with fade-out effect
   if (bubble.is_buy) {
     return IM_COL32(0, 255, 0, alpha);  // Green with fade-out transparency

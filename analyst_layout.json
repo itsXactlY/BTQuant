@@ -1,0 +1,169 @@
+{
+    "grid": {
+        "columns": 6,
+        "rows": 10
+    },
+    "panels": [
+        {
+            "grid_height": 5,
+            "grid_width": 4,
+            "grid_x": 0,
+            "grid_y": 0,
+            "position": [
+                0.0,
+                30.0
+            ],
+            "size": [
+                1280.0,
+                525.0
+            ],
+            "symbol": "",
+            "title": "Main Price Chart",
+            "type": 0,
+            "visible": true,
+            "settings": {
+                "chart_style": "candlestick",
+                "timeframe": "1m",
+                "indicators": ["ema", "rsi", "macd"]
+            }
+        },
+        {
+            "grid_height": 5,
+            "grid_width": 2,
+            "grid_x": 4,
+            "grid_y": 0,
+            "position": [
+                1280.0,
+                30.0
+            ],
+            "size": [
+                640.0,
+                525.0
+            ],
+            "symbol": "",
+            "title": "Market Depth",
+            "type": 10,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 0,
+            "grid_y": 5,
+            "position": [
+                0.0,
+                555.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Volume Profile",
+            "type": 14,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 2,
+            "grid_y": 5,
+            "position": [
+                640.0,
+                555.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "TPO Profile",
+            "type": 19,
+            "visible": true,
+            "settings": {
+                "show_grid": true,
+                "show_heatmap": true,
+                "show_text": true,
+                "symbol_id": 0,
+                "time_window": 30.0
+            }
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 2,
+            "grid_x": 4,
+            "grid_y": 5,
+            "position": [
+                1280.0,
+                555.0
+            ],
+            "size": [
+                640.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Footprint Chart",
+            "type": 18,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 3,
+            "grid_x": 0,
+            "grid_y": 7,
+            "position": [
+                0.0,
+                765.0
+            ],
+            "size": [
+                960.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Market Statistics",
+            "type": 20,
+            "visible": true
+        },
+        {
+            "grid_height": 1,
+            "grid_width": 3,
+            "grid_x": 3,
+            "grid_y": 7,
+            "position": [
+                960.0,
+                765.0
+            ],
+            "size": [
+                960.0,
+                105.0
+            ],
+            "symbol": "",
+            "title": "Watchlist",
+            "type": 11,
+            "visible": true
+        },
+        {
+            "grid_height": 2,
+            "grid_width": 6,
+            "grid_x": 0,
+            "grid_y": 8,
+            "position": [
+                0.0,
+                870.0
+            ],
+            "size": [
+                1920.0,
+                210.0
+            ],
+            "symbol": "",
+            "title": "Multi-Timeframe Analysis",
+            "type": 0,
+            "visible": true,
+            "settings": {
+                "chart_style": "line",
+                "timeframe": "5m",
+                "indicators": ["sma", "bollinger_bands"]
+            }
+        }
+    ]
+}

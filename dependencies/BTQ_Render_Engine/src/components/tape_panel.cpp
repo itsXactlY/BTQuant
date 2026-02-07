@@ -120,6 +120,11 @@ void TapePanel::set_symbol(uint32_t symbol_id, const std::string& symbol_name) {
   // Re-subscribe to new symbol
   subscribe_to_updates();
   markDirty();  // Force immediate refresh
+  
+  // Notify the panel manager about the symbol change to trigger symbol linking
+  if (panel_manager_) {
+    panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
+  }
 }
 
 // Helper function to parse time string in HH:MM:SS format to microseconds since epoch

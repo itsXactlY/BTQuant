@@ -26,8 +26,9 @@ double roundToNearest(double value, double multiple) {
 
 OrderbookPanel::OrderbookPanel(const PanelConfig& config,
                                std::shared_ptr<HotSpineDataBridge> bridge,
-                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor), selected_levels_count_(20),
+                               std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                               PanelManager* panel_manager)
+    : PanelBase(config), bridge_(bridge), processor_(processor), panel_manager_(panel_manager), selected_levels_count_(20),
       aggregation_mode_(OrderbookAggregationMode::NONE), custom_aggregation_value_(1.0),
       volume_delta_period_us_(5000000) {} // Initialize to 5 seconds (5,000,000 microseconds)
 
@@ -360,6 +361,11 @@ void OrderbookPanel::render() {
           symbol_name_ = sym_name;
           config_.title = symbol_name_ + " Orderbook";
           std::cout << "[OrderbookPanel] Title updated to: " << config_.title << std::endl;
+          
+          // Notify the panel manager about the symbol change to trigger symbol linking
+          if (panel_manager_) {
+            panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name_);
+          }
         }
         if (is_selected) ImGui::SetItemDefaultFocus();
         ImGui::PopID();

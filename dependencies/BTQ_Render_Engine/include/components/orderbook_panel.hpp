@@ -32,7 +32,7 @@ enum class OrderbookAggregationMode {
 class OrderbookPanel : public PanelBase {
  public:
   OrderbookPanel(const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+                 std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager = nullptr);
 
   void update(float dt) override;
   void render() override;
@@ -43,6 +43,7 @@ class OrderbookPanel : public PanelBase {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  PanelManager* panel_manager_ = nullptr;  // Pointer to the panel manager for symbol linking
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";

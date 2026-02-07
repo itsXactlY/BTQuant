@@ -58,7 +58,7 @@ struct LargeOrderMarker {
 
 class DomSurfacePanel : public PanelBase {
  public:
-  explicit DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+  explicit DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager = nullptr);
   ~DomSurfacePanel() override;
 
   void render() override;
@@ -106,6 +106,7 @@ class DomSurfacePanel : public PanelBase {
 
  private:
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  PanelManager* panel_manager_ = nullptr;  // Pointer to the panel manager for symbol linking
   uint32_t current_symbol_id_ = 0;
   std::string current_symbol_name_;
 

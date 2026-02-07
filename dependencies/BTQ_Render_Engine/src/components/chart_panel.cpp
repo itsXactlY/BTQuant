@@ -387,6 +387,11 @@ void ChartPanel::set_symbol(const std::string& symbol, const std::string& exchan
       historical_time_sales_panel_->set_symbol(*symbol_id_opt, symbol_);
     }
   }
+
+  // Notify the panel manager about the symbol change to trigger symbol linking
+  if (panel_manager_) {
+    panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_);
+  }
 }
 
 void ChartPanel::set_timeframe(RenderEngine::TimeFrame timeframe) {

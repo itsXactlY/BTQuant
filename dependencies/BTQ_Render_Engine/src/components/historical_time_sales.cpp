@@ -25,8 +25,9 @@ namespace BTQuant {
 
 HistoricalTimeSalesPanel::HistoricalTimeSalesPanel(
     const PanelConfig& config, std::shared_ptr<HotSpineDataBridge> bridge,
-    std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
-    : PanelBase(config), bridge_(bridge), processor_(processor) {
+    std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+    PanelManager* panel_manager)
+    : PanelBase(config), bridge_(bridge), processor_(processor), panel_manager_(panel_manager) {
   cached_trades_.reserve(MAX_VISIBLE_TRADES);
 
   // Initialize trade pace history vectors
@@ -75,6 +76,11 @@ void HistoricalTimeSalesPanel::set_symbol(uint32_t symbol_id, const std::string&
   // Re-subscribe to new symbol
   subscribe_to_updates();
   markDirty();  // Force immediate refresh
+  
+  // Notify the panel manager about the symbol change to trigger symbol linking
+  if (panel_manager_) {
+    panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name);
+  }
 }
 
 void HistoricalTimeSalesPanel::set_trades_for_time_range(uint64_t start_time, uint64_t end_time) {

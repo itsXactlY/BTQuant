@@ -27,7 +27,8 @@ class HistoricalTimeSalesPanel : public PanelBase {
  public:
   HistoricalTimeSalesPanel(const PanelConfig& config,
                    std::shared_ptr<HotSpineDataBridge> bridge,
-                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor);
+                   std::shared_ptr<RenderEngine::MarketDataProcessor> processor,
+                   PanelManager* panel_manager = nullptr);
 
   ~HistoricalTimeSalesPanel() override;
 
@@ -43,6 +44,7 @@ class HistoricalTimeSalesPanel : public PanelBase {
  private:
   std::shared_ptr<HotSpineDataBridge> bridge_;
   std::shared_ptr<RenderEngine::MarketDataProcessor> processor_;
+  PanelManager* panel_manager_ = nullptr;  // Pointer to the panel manager for symbol linking
 
   uint32_t symbol_id_ = 0;
   std::string symbol_name_ = "BTC-USDT";

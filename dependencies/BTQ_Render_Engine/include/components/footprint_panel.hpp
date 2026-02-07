@@ -68,6 +68,15 @@ class FootprintPanel : public PanelBase {
   void set_symbol_id(uint32_t id) {
     symbol_id_ = id;
     if (renderer_) renderer_->setSymbol(id);
+    
+    // Notify the panel manager about the symbol change to trigger symbol linking
+    if (panel_manager_) {
+      // Get the symbol name from the registry to pass to the linking system
+      auto symbol_info_opt = SymbolRegistry::instance().get_symbol_by_id(id);
+      if (symbol_info_opt) {
+        panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_info_opt->name);
+      }
+    }
   }
 
   // Configuration

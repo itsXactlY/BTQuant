@@ -15,9 +15,10 @@ using BTQuant::RenderEngine::TradeData;
 
 namespace BTQuant {
 
-DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor)
+DomSurfacePanel::DomSurfacePanel(std::shared_ptr<RenderEngine::MarketDataProcessor> processor, PanelManager* panel_manager)
     : PanelBase(PanelConfig{.title = "DOM Surface", .type = PanelType::HEATMAP}),
       processor_(processor),
+      panel_manager_(panel_manager),
       max_trade_volume_(1.0),  // Initialize with a default minimum volume
       persistence_threshold_ms_(30000),  // 30 seconds for static liquidity detection
       persistence_timeout_ms_(60000),    // 60 seconds timeout for inactive levels
@@ -74,6 +75,11 @@ void DomSurfacePanel::setSymbol(uint32_t symbol_id, const std::string& symbol_na
     recent_order_sizes_.clear();
     median_order_size_ = 0.0;
     markDirty();
+  }
+  
+  // Notify the panel manager about the symbol change to trigger symbol linking
+  if (panel_manager_) {
+    panel_manager_->propagate_symbol_to_linked_panels(get_panel_id(), symbol_name);
   }
 }
 

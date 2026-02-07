@@ -298,7 +298,7 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
       break;
     }
     case PanelType::HISTORICAL_TIME_SALES: {
-      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_, this);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -309,10 +309,10 @@ uint32_t PanelManager::add_panel(PanelType type, const std::string& title, int g
           std::make_unique<MetricsPanel>(config, position_manager_, risk_assessment_, processor_);
       break;
     case PanelType::HEATMAP:
-      panel = std::make_unique<DomSurfacePanel>(processor_);
+      panel = std::make_unique<DomSurfacePanel>(processor_, this);
       break;
     case PanelType::ORDERBOOK:
-      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
+      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_, this);
       break;
     case PanelType::PERFORMANCE_MONITOR:
       panel = std::make_unique<PerformanceMonitorPanel>(config);
@@ -479,7 +479,7 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
       break;
     }
     case PanelType::HISTORICAL_TIME_SALES: {
-      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_);
+      panel = std::make_unique<HistoricalTimeSalesPanel>(config, bridge_, processor_, this);
       break;
     }
     case PanelType::TIME_HISTOGRAM:
@@ -490,10 +490,10 @@ uint32_t PanelManager::add_panel_with_symbol(PanelType type, const std::string& 
           std::make_unique<MetricsPanel>(config, position_manager_, risk_assessment_, processor_);
       break;
     case PanelType::HEATMAP:
-      panel = std::make_unique<DomSurfacePanel>(processor_);
+      panel = std::make_unique<DomSurfacePanel>(processor_, this);
       break;
     case PanelType::ORDERBOOK:
-      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_);
+      panel = std::make_unique<OrderbookPanel>(config, bridge_, processor_, this);
       break;
     case PanelType::PERFORMANCE_MONITOR:
       panel = std::make_unique<PerformanceMonitorPanel>(config);

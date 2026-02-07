@@ -181,7 +181,14 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
   float log_volume = std::log(volume + 1.0f);
 
   // Use the tracked maximum volume for normalization to adapt to actual market conditions
+  // Add a small epsilon to prevent division by zero if max_trade_volume_ is somehow 0
   float max_log_volume = std::log(max_trade_volume_ + 1.0f);
+  
+  // Handle edge case where max_trade_volume_ is extremely small
+  if (max_log_volume <= 0.0f) {
+    max_log_volume = std::log(1000.0f + 1.0f); // Default to 1000 as reference max volume
+  }
+
   float normalized_log_volume = log_volume / max_log_volume;
 
   // Clamp the normalized value to prevent exceeding intended radius range
@@ -189,11 +196,12 @@ float DomSurfacePanel::calculateBubbleRadius(double volume) const {
 
   // Apply additional curve to make the scaling more gradual at low volumes
   // and steeper at high volumes for better visual distinction
-  normalized_log_volume = std::pow(normalized_log_volume, 0.7f);
+  // Using a power function to adjust the distribution of bubble sizes
+  normalized_log_volume = std::pow(normalized_log_volume, 0.6f);
 
-  // Scale to desired radius range
-  float min_radius = 3.0f;
-  float max_radius = 20.0f;
+  // Scale to desired radius range - increased max radius for better visibility
+  float min_radius = 2.0f;
+  float max_radius = 25.0f;
   float calculated_radius = min_radius + (max_radius - min_radius) * normalized_log_volume;
 
   return calculated_radius;
@@ -213,11 +221,11 @@ ImU32 DomSurfacePanel::getBubbleColor(const TradeBubble& bubble) const {
   fade_ratio = std::clamp(fade_ratio, 0.0f, 1.0f);
 
   // Apply smooth easing function for more natural fade-out
-  // Using smoothstep function: 3t² - 2t³, where t is fade_ratio
-  float eased_fade_ratio = fade_ratio * fade_ratio * (3.0f - 2.0f * fade_ratio);
+  // Using smoother quintic easing function: 6t⁵ - 15t⁴ + 10t³ for even smoother transitions
+  float eased_fade_ratio = fade_ratio * fade_ratio * fade_ratio * (fade_ratio * (fade_ratio * 6.0f - 15.0f) + 10.0f);
 
   // Calculate alpha based on fade ratio
-  uint8_t base_alpha = 180;  // Base alpha value
+  uint8_t base_alpha = 200;  // Increased base alpha value for better visibility
   uint8_t alpha = static_cast<uint8_t>(base_alpha * eased_fade_ratio);
 
   // Color: Green for Buys, Red for Sells with fade-out effect

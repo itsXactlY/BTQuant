@@ -51,6 +51,20 @@ public:
     void load_layout(const std::string& filename);
     void auto_arrange_panels();
 
+    // Panel binding functionality - "Super-panel" grid locking
+    uint32_t create_panel_group(const std::vector<uint32_t>& panel_ids);
+    bool add_panel_to_group(uint32_t group_id, uint32_t panel_id);
+    bool remove_panel_from_group(uint32_t group_id, uint32_t panel_id);
+    bool destroy_panel_group(uint32_t group_id);
+    bool is_panel_in_group(uint32_t panel_id) const;
+    uint32_t get_panel_group_id(uint32_t panel_id) const;
+    uint32_t create_super_panel_from_adjacent(uint32_t panel1_id, uint32_t panel2_id);
+    uint32_t create_super_panel_from_rectangular_region(int start_x, int start_y, int width, int height);
+    void lock_panel_group(uint32_t group_id, bool locked = true);
+    bool is_panel_group_locked(uint32_t group_id) const;
+    void set_prevent_overlap_for_group(uint32_t group_id, bool prevent = true);
+    bool does_group_prevent_overlap(uint32_t group_id) const;
+
     // Access to underlying render engine panel manager
     BTQuant::PanelManager* get_render_engine_panel_manager() { return render_engine_panel_manager_.get(); }
 

@@ -1,5 +1,6 @@
 #include "panel_manager.hpp"
 #include <iostream>
+#include <vector>
 
 // Include required headers for the render engine panel manager
 #include "../../dependencies/BTQ_Render_Engine/include/hotspine_data_bridge.hpp"
@@ -143,6 +144,88 @@ void PanelManager::auto_arrange_panels() {
     if (render_engine_panel_manager_) {
         render_engine_panel_manager_->auto_arrange_panels();
     }
+}
+
+uint32_t PanelManager::create_panel_group(const std::vector<uint32_t>& panel_ids) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->create_panel_group(panel_ids);
+    }
+    return 0;
+}
+
+bool PanelManager::add_panel_to_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->add_panel_to_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::remove_panel_from_group(uint32_t group_id, uint32_t panel_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->remove_panel_from_group(group_id, panel_id);
+    }
+    return false;
+}
+
+bool PanelManager::destroy_panel_group(uint32_t group_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->destroy_panel_group(group_id);
+    }
+    return false;
+}
+
+bool PanelManager::is_panel_in_group(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->is_panel_in_group(panel_id);
+    }
+    return false;
+}
+
+uint32_t PanelManager::get_panel_group_id(uint32_t panel_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->get_panel_group_id(panel_id);
+    }
+    return 0;
+}
+
+uint32_t PanelManager::create_super_panel_from_adjacent(uint32_t panel1_id, uint32_t panel2_id) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->create_super_panel_from_adjacent(panel1_id, panel2_id);
+    }
+    return 0;
+}
+
+uint32_t PanelManager::create_super_panel_from_rectangular_region(int start_x, int start_y, int width, int height) {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->create_super_panel_from_rectangular_region(start_x, start_y, width, height);
+    }
+    return 0;
+}
+
+void PanelManager::lock_panel_group(uint32_t group_id, bool locked) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->lock_panel_group(group_id, locked);
+    }
+}
+
+bool PanelManager::is_panel_group_locked(uint32_t group_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->is_panel_group_locked(group_id);
+    }
+    return false;
+}
+
+void PanelManager::set_prevent_overlap_for_group(uint32_t group_id, bool prevent) {
+    if (render_engine_panel_manager_) {
+        render_engine_panel_manager_->set_prevent_overlap_for_group(group_id, prevent);
+    }
+}
+
+bool PanelManager::does_group_prevent_overlap(uint32_t group_id) const {
+    if (render_engine_panel_manager_) {
+        return render_engine_panel_manager_->does_group_prevent_overlap(group_id);
+    }
+    return false;
 }
 
 } // namespace ui

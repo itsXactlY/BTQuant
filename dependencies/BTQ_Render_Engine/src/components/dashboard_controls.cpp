@@ -123,11 +123,14 @@ DashboardControls::DashboardControls(PanelManager* panel_manager)
 void DashboardControls::render_gui() { render_dashboard_controls(); }
 
 void DashboardControls::render_dashboard_controls() {
-  // Floating Dashboard Controls Panel
-  ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+  // Floating Dashboard Controls Panel - positioned in top-right corner and always on top
+  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 360, 10), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
 
-  if (ImGui::Begin("Dashboard Controls", nullptr)) {
+  // Ensure the window stays on top by bringing it to front when rendered
+  ImGui::SetNextWindowFocus();
+  
+  if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();
 

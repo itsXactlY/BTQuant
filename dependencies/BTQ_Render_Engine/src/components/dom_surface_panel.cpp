@@ -718,6 +718,18 @@ void DomSurfacePanel::render() {
     ImGui::Text("Median Size: %.2f", median_order_size_);
     ImGui::Text("Trade Bubbles: %zu", trade_bubbles_.size());
     ImGui::Text("Persistent Levels: %zu", persistent_levels_.size());
+    
+    // Count static liquidity levels that have been persistent for more than 30 seconds
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+    size_t persistent_static_count = 0;
+    for (const auto& level : static_liquidity_levels_) {
+        if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+            persistent_static_count++;
+        }
+    }
+    ImGui::Text("Static Liquidity Levels: %zu", persistent_static_count);
     ImGui::Unindent(10.0f);
     ImGui::EndGroup();
   }
@@ -731,26 +743,53 @@ void DomSurfacePanel::updatePersistentLevels(const RenderEngine::OrderbookData& 
                               std::chrono::steady_clock::now().time_since_epoch())
                               .count();
 
-  // Process bids
+  // Process all bid levels (not just large orders) to track static liquidity
   for (const auto& level : orderbook.bids) {
-    // Check if this level has a large order (using the same threshold as markers)
-    double threshold = large_order_threshold_ * median_order_size_;
-    if (level.size > threshold) {
-      addOrUpdatePersistentLevel(level.price, true, level.size);
-    }
+    addOrUpdateStaticLiquidityLevel(level.price, true, level.size);
   }
 
-  // Process asks
+  // Process all ask levels (not just large orders) to track static liquidity
   for (const auto& level : orderbook.asks) {
-    // Check if this level has a large order (using the same threshold as markers)
-    double threshold = large_order_threshold_ * median_order_size_;
-    if (level.size > threshold) {
-      addOrUpdatePersistentLevel(level.price, false, level.size);
-    }
+    addOrUpdateStaticLiquidityLevel(level.price, false, level.size);
   }
 
   // Clean up inactive levels
-  cleanupInactivePersistentLevels();
+  cleanupInactiveStaticLiquidityLevels();
+}
+
+void DomSurfacePanel::addOrUpdateStaticLiquidityLevel(double price, bool is_bid, double size) {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Check if this price level already exists
+  for (auto& level : static_liquidity_levels_) {
+    // Use a small epsilon for price comparison
+    if (std::abs(level.price - price) < 0.0001) {
+      // Update existing level
+      level.last_updated_time = current_time;
+      level.size = std::max(level.size, size); // Keep the largest size seen
+      level.is_active = true;
+      return;
+    }
+  }
+
+  // Add new static liquidity level
+  static_liquidity_levels_.emplace_back(price, size, is_bid, current_time);
+}
+
+void DomSurfacePanel::cleanupInactiveStaticLiquidityLevels() {
+  uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now().time_since_epoch())
+                              .count();
+
+  // Remove levels that haven't been updated within the timeout period
+  static_liquidity_levels_.erase(
+      std::remove_if(static_liquidity_levels_.begin(), static_liquidity_levels_.end(),
+                     [current_time, this](const StaticLiquidityLevel& level) {
+                       return (current_time - level.last_updated_time) > persistence_timeout_ms_;
+                     }),
+      static_liquidity_levels_.end());
 }
 
 void DomSurfacePanel::addOrUpdatePersistentLevel(double price, bool is_bid, double size) {
@@ -789,12 +828,72 @@ void DomSurfacePanel::cleanupInactivePersistentLevels() {
 }
 
 void DomSurfacePanel::renderPersistentLevels() {
-  if (persistent_levels_.empty()) return;
-
   // Get plot area bounds
   ImPlotRect plot_rect = ImPlot::GetPlotLimits();
 
-  // Render each persistent level as a horizontal line or rectangle
+  // Render static liquidity levels (all levels that have remained static for more than 30 seconds)
+  // with a distinct border or "glow" effect
+  for (const auto& level : static_liquidity_levels_) {
+    // Only render if the level is considered "persistent" (has been present for threshold time)
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
+
+    if ((current_time - level.first_detected_time) >= persistence_threshold_ms_) {
+      // Use a distinct color for static liquidity levels with glow effect
+      ImU32 color = getStaticLiquidityLevelColor(level);
+
+      // Draw a glowing border around the level
+      // First, draw a wider, more transparent line to create the "glow" effect
+      ImVec4 glow_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      glow_color_vec.w = 0.3f; // Higher transparency for glow
+      ImU32 glow_color = ImGui::ColorConvertFloat4ToU32(glow_color_vec);
+      
+      ImPlot::PushStyleColor(ImPlotCol_Line, glow_color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 8.0f); // Very thick for glow effect
+      
+      double xs[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double ys[2] = {level.price, level.price};
+      ImPlot::PlotLine("##StaticLiquidityGlow", xs, ys, 2);
+      
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Then draw the main line
+      ImPlot::PushStyleColor(ImPlotCol_Line, color);
+      ImPlot::PushStyleVar(ImPlotStyleVar_LineWeight, 4.0f); // Thicker line for better visibility
+      
+      ImPlot::PlotLine("##StaticLiquidityMain", xs, ys, 2);
+      
+      ImPlot::PopStyleVar();
+      ImPlot::PopStyleColor();
+
+      // Draw a highlighted rectangle around the level to make it stand out
+      ImVec4 rect_color_vec = ImGui::ColorConvertU32ToFloat4(color);
+      rect_color_vec.w = 0.2f; // 20% transparency for the rectangle
+      ImU32 rect_color = ImGui::ColorConvertFloat4ToU32(rect_color_vec);
+      ImPlot::PushStyleColor(ImPlotCol_Fill, rect_color);
+
+      // Calculate a vertical range around the price level for the rectangle
+      // Make it proportional to the zoom level for better visibility
+      double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
+      double price_range = visible_price_range * 0.01; // 1% of the visible price range for rectangle height
+      if (price_range < 0.001) price_range = 0.001; // Minimum thickness
+
+      double y_min = level.price - price_range/2.0;
+      double y_max = level.price + price_range/2.0;
+
+      // Draw a horizontal shaded area spanning the full time axis
+      double shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
+      double shade_y1[2] = {y_min, y_min};
+      double shade_y2[2] = {y_max, y_max};
+      ImPlot::PlotShaded("##StaticLiquidityRect", shade_x, shade_y1, shade_y2, 2);
+
+      ImPlot::PopStyleColor();
+    }
+  }
+
+  // Also render the legacy persistent levels (large orders) for compatibility
   for (const auto& level : persistent_levels_) {
     // Only render if the level is considered "persistent" (has been present for threshold time)
     uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -828,7 +927,7 @@ void DomSurfacePanel::renderPersistentLevels() {
       double visible_price_range = plot_rect.Y.Max - plot_rect.Y.Min;
       double price_range = visible_price_range * 0.005; // 0.5% of the visible price range (adjustable)
       if (price_range < 0.001) price_range = 0.001; // Minimum thickness
-      
+
       double y_min = level.price - price_range/2.0;
       double y_max = level.price + price_range/2.0;
 
@@ -849,7 +948,7 @@ void DomSurfacePanel::renderPersistentLevels() {
       // Draw highlight slightly above the main line
       double highlight_y_min = level.price + price_range/2.0;
       double highlight_y_max = level.price + price_range/2.0 + price_range*0.5;
-      
+
       // Draw highlight shaded area
       double highlight_shade_x[2] = {plot_rect.X.Min, plot_rect.X.Max};
       double highlight_shade_y1[2] = {highlight_y_min, highlight_y_min};
@@ -858,6 +957,16 @@ void DomSurfacePanel::renderPersistentLevels() {
 
       ImPlot::PopStyleColor();
     }
+  }
+}
+
+ImU32 DomSurfacePanel::getStaticLiquidityLevelColor(const StaticLiquidityLevel& level) const {
+  // Use a distinct color scheme for static liquidity levels to differentiate from large orders
+  // Bright cyan for bids (buy-side liquidity), bright orange for asks (sell-side liquidity)
+  if (level.is_bid) {
+    return IM_COL32(0, 255, 255, 200);  // Bright cyan with good visibility
+  } else {
+    return IM_COL32(255, 165, 0, 200);   // Bright orange with good visibility
   }
 }
 
@@ -906,11 +1015,11 @@ void DomSurfacePanel::render_panel_header() {
   ImGui::Text("Persistent Levels:");
   ImGui::SameLine();
   ImGui::PushItemWidth(150);
-  ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 1000, 30000, "%d ms");
+  ImGui::SliderInt("Persistence (ms)", reinterpret_cast<int*>(&persistence_threshold_ms_), 30000, 60000, "%d ms");
   ImGui::PopItemWidth();
   ImGui::SameLine();
   ImGui::PushItemWidth(150);
-  ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 10000, 120000, "%d ms");
+  ImGui::SliderInt("Timeout (ms)", reinterpret_cast<int*>(&persistence_timeout_ms_), 30000, 120000, "%d ms");
   ImGui::PopItemWidth();
   ImGui::Separator();
 }

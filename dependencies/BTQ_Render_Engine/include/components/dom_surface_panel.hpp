@@ -154,6 +154,24 @@ class DomSurfacePanel : public PanelBase {
   static constexpr float MIN_RADIUS = 6.0f;   // Minimum radius
   static constexpr float MAX_RADIUS = 40.0f;  // Maximum radius
 
+  // Persistent Liquidity Level Tracker (for levels that remain static for more than 30 seconds)
+  struct StaticLiquidityLevel {
+    double price;                    // Price level where liquidity remains static
+    double size;                     // Size of the liquidity at this level
+    uint64_t first_detected_time;    // When first detected at this level
+    uint64_t last_updated_time;      // Last time liquidity was seen at this level
+    bool is_active;                  // Whether the level is currently active
+    bool is_bid;                     // true = Bid, false = Ask
+
+    StaticLiquidityLevel(double p, double s, bool bid, uint64_t time)
+        : price(p),
+          size(s),
+          first_detected_time(time),
+          last_updated_time(time),
+          is_active(true),
+          is_bid(bid) {}
+  };
+
   // Persistent Large Order Tracker (Horizontal Lines/Rectangles)
   struct PersistentLevel {
     double price;                  // Price level where large order persists
@@ -172,10 +190,11 @@ class DomSurfacePanel : public PanelBase {
           is_active(true) {}
   };
 
+  std::vector<StaticLiquidityLevel> static_liquidity_levels_; // Track all liquidity levels that remain static
   std::vector<PersistentLevel> persistent_levels_;
-  uint64_t persistence_threshold_ms_ = 5000;  // 5 seconds persistence threshold
-  double persistence_timeout_ms_ = 30000;     // 30 seconds timeout for inactive levels
-  bool show_persistent_lines_ = true;         // Toggle for persistent line display
+  uint64_t persistence_threshold_ms_ = 30000;  // 30 seconds persistence threshold for static liquidity levels
+  double persistence_timeout_ms_ = 60000;      // 60 seconds timeout for inactive levels
+  bool show_persistent_lines_ = true;          // Toggle for persistent line display
 
   // Helper to refresh data buffer
   void updateHeatmapData();

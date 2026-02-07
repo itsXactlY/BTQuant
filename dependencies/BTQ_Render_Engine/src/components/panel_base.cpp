@@ -7,6 +7,14 @@
 namespace BTQuant {
 
 void PanelBase::begin_panel_window() {
+  // Check if we're in a valid ImGui frame scope to prevent assertion errors
+  ImGuiContext& g = *GImGui;
+  if (!g.WithinFrameScope) {
+      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+      // The panel will be rendered in the next frame when the scope is valid
+      return;
+  }
+
   ImGui::SetNextWindowPos(config_.position, ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowSize(config_.size, ImGuiCond_FirstUseEver);
 

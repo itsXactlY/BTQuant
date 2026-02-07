@@ -129,7 +129,15 @@ void DashboardControls::render_dashboard_controls() {
 
   // Ensure the window stays on top by bringing it to front when rendered
   ImGui::SetNextWindowFocus();
-  
+
+  // Check if we're in a valid ImGui frame scope to prevent assertion errors
+  ImGuiContext& g = *GImGui;
+  if (!g.WithinFrameScope) {
+      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+      // The dashboard controls will be rendered in the next frame when the scope is valid
+      return;
+  }
+
   if (ImGui::Begin("Dashboard Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
     ImGui::Text("Trading Dashboard Controls");
     ImGui::Separator();

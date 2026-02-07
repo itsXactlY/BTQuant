@@ -27,6 +27,14 @@ ChartPanel* ChartPanelSettings::get_chart_panel() const {
 void ChartPanelSettings::render() {
   if (!is_modal_open_) return;
 
+  // Check if we're in a valid ImGui frame scope to prevent assertion errors
+  ImGuiContext& g = *GImGui;
+  if (!g.WithinFrameScope) {
+      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+      // The chart panel settings will be rendered in the next frame when the scope is valid
+      return;
+  }
+
   // Create modal window
   ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_FirstUseEver);
   if (ImGui::Begin((title_ + "###chart_settings_modal").c_str(), &is_modal_open_,

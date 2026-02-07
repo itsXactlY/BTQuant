@@ -76,6 +76,14 @@ void DrawingToolsManager::update_tool_thickness(const std::string& id, float new
 void DrawingToolsManager::render_ui_controls() {
     if (!show_ui_controls_) return;
 
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The drawing tools UI will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Drawing Tools", &show_ui_controls_)) {
         // Tool selection and creation

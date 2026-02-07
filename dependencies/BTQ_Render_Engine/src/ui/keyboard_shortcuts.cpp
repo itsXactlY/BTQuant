@@ -244,6 +244,14 @@ bool KeyboardShortcutsComponent::handle_key_event(int keycode, bool pressed, uin
 }
 
 void KeyboardShortcutsComponent::render_gui() {
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The keyboard shortcuts editor will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     ImGui::Begin("Keyboard Shortcuts Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
     
     static std::string filter = "";

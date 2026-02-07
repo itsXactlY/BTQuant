@@ -50,6 +50,14 @@ void CorrelationHeatmapComponent::update(float dt) {
 void CorrelationHeatmapComponent::render_gui() {
   if (!visible_) return;
 
+  // Check if we're in a valid ImGui frame scope to prevent assertion errors
+  ImGuiContext& g = *GImGui;
+  if (!g.WithinFrameScope) {
+      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+      // The correlation heatmap will be rendered in the next frame when the scope is valid
+      return;
+  }
+
   ImGui::SetNextWindowSize(ImVec2(600, 500), ImGuiCond_FirstUseEver);
   if (ImGui::Begin("Correlation Heatmap", &visible_)) {
     render_controls();

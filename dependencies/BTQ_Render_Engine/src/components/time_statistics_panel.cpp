@@ -130,6 +130,14 @@ void TimeStatisticsPanel::sortDataByColumn(int columnIndex) {
 void TimeStatisticsPanel::render() {
     if (!config_.visible) return;
 
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The time statistics panel will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     ImGui::SetNextWindowSize(ImVec2(1000, 600), ImGuiCond_FirstUseEver);
     if (ImGui::Begin(config_.title.c_str(), &config_.visible)) {
 

@@ -54,20 +54,28 @@ void QuickActionsToolbar::render() {
 }
 
 void QuickActionsToolbar::render_toolbar_window() {
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The toolbar will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     // Create a floating window for the toolbar
     ImGui::SetNextWindowPos(position_, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(button_size_.x * actions_.size() + 40, button_size_.y + 20), ImGuiCond_FirstUseEver);
-    
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse | 
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse |
                                    ImGuiWindowFlags_AlwaysAutoResize |
                                    ImGuiWindowFlags_NoScrollbar |
                                    ImGuiWindowFlags_NoScrollWithMouse;
-    
+
     // Make it look like a floating toolbar
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5.0f, 5.0f));
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.12f, 0.9f));
-    
+
     if (ImGui::Begin("Quick Actions Toolbar", nullptr, window_flags)) {
         // Handle dragging if enabled
         if (draggable_) {

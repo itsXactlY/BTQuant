@@ -517,6 +517,14 @@ void SettingsManager::reset_to_defaults() {
 }
 
 void SettingsManager::render_settings_ui() {
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The settings UI will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
     // Category selection

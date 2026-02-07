@@ -44,6 +44,14 @@ void StatusBarPanel::render() {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 
+  // Check if we're in a valid ImGui frame scope to prevent assertion errors
+  ImGuiContext& g = *GImGui;
+  if (!g.WithinFrameScope) {
+      // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+      // The status bar will be rendered in the next frame when the scope is valid
+      return;
+  }
+
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                            ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;

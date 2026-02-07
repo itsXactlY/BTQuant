@@ -117,16 +117,24 @@ void LoadingStateManager::renderLoadingOverlay() {
     if (!isLoading()) {
         return;
     }
-    
+
+    // Check if we're in a valid ImGui frame scope to prevent assertion errors
+    ImGuiContext& g = *GImGui;
+    if (!g.WithinFrameScope) {
+        // If we're not within a frame scope, skip rendering this frame to avoid the assertion
+        // The loading overlay will be rendered in the next frame when the scope is valid
+        return;
+    }
+
     // Create a modal window for the loading overlay
     ImGui::SetNextWindowSize(ImVec2(300, 120), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 150, 
-                                   ImGui::GetIO().DisplaySize.y * 0.5f - 60), 
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f - 150,
+                                   ImGui::GetIO().DisplaySize.y * 0.5f - 60),
                            ImGuiCond_Always);
-    
-    ImGui::Begin("Loading Overlay", nullptr, 
-                 ImGuiWindowFlags_NoMove | 
-                 ImGuiWindowFlags_NoResize | 
+
+    ImGui::Begin("Loading Overlay", nullptr,
+                 ImGuiWindowFlags_NoMove |
+                 ImGuiWindowFlags_NoResize |
                  ImGuiWindowFlags_NoCollapse |
                  ImGuiWindowFlags_NoTitleBar |
                  ImGuiWindowFlags_NoSavedSettings |

@@ -128,7 +128,7 @@ if [ ! -f "CMakeCache.txt" ] || [ "$CLEAN_BUILD" = true ]; then
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_CXX_COMPILER=g++ \
         -DCMAKE_CXX_STANDARD=26 \
-        -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -flto -ffunction-sections -fdata-sections -fno-rtti -fno-exceptions" \
+        -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -march=native -flto -ffunction-sections -fdata-sections" \
         -DCMAKE_EXE_LINKER_FLAGS_RELEASE="-Wl,--gc-sections -Wl,-strip-all -Wl,--exclude-libs,ALL -Wl,--as-needed" \
         -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--gc-sections -Wl,-strip-all -Wl,--as-needed" \
         -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR:-/usr/local}" \
